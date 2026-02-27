@@ -1,4 +1,4 @@
-vector.yourdomain.com {
+bytebrew.yourdomain.com {
     # API reverse proxy
     handle /api/* {
         reverse_proxy 127.0.0.1:8080
@@ -9,7 +9,7 @@ vector.yourdomain.com {
 
     # SPA (React + Vite)
     handle {
-        root * /var/www/vector-cloud-web
+        root * /var/www/bytebrew-cloud-web
         try_files {path} /index.html
         file_server
     }

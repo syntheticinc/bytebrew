@@ -2,7 +2,7 @@ server:
   port: 8080  # Caddy reverse-proxies to this port
 
 database:
-  url: "postgres://vector:CHANGE_ME_DB_PASSWORD@localhost:5432/vector?sslmode=disable"
+  url: "postgres://bytebrew:CHANGE_ME_DB_PASSWORD@localhost:5432/bytebrew?sslmode=disable"
 
 auth:
   jwt_secret: "CHANGE_ME_64_RANDOM_CHARS"  # openssl rand -hex 32
@@ -15,7 +15,7 @@ license:
 
 cors:
   allowed_origins:
-    - "https://vector.yourdomain.com"
+    - "https://bytebrew.yourdomain.com"
 
 trial:
   steps_per_hour: 20
@@ -23,8 +23,8 @@ trial:
 stripe:
   secret_key: "sk_live_CHANGE_ME"            # Stripe live secret key
   webhook_secret: "whsec_CHANGE_ME"          # Stripe webhook signing secret
-  success_url: "https://vector.yourdomain.com/billing/success"
-  cancel_url: "https://vector.yourdomain.com/billing/cancel"
+  success_url: "https://bytebrew.yourdomain.com/billing/success"
+  cancel_url: "https://bytebrew.yourdomain.com/billing/cancel"
   trial_days: 14
   prices:
     personal_monthly: "price_CHANGE_ME"
@@ -38,8 +38,8 @@ deepinfra:
 
 email:
   resend_api_key: "CHANGE_ME"                         # Resend API key (leave empty to disable emails)
-  from_email: "Vector <noreply@yourdomain.com>"
-  frontend_url: "https://vector.yourdomain.com"
+  from_email: "ByteBrew <noreply@yourdomain.com>"
+  frontend_url: "https://bytebrew.yourdomain.com"
 
 model_routing:
   default_model: "zai-org/GLM-5"
