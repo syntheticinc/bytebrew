@@ -19,6 +19,7 @@ eggs/
 .eggs/
 lib/
 !bytebrew-cli/src/lib/
+!bytebrew-cloud-web/src/lib/
 lib64/
 parts/
 sdist/
