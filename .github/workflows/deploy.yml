@@ -18,7 +18,7 @@ concurrency:
 #   VPS_SSH_KEY  - Private SSH key for the 'deploy' user on VPS
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +44,32 @@ jobs:
           npm ci
           npm run build
 
-      # --- Deploy to VPS ---
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ secrets.VPS_HOST != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Build API binary
+        run: |
+          cd bytebrew-cloud-api
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../build/bytebrew-cloud-api ./cmd/server
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build frontend
+        run: |
+          cd bytebrew-cloud-web
+          npm ci
+          npm run build
+
       - name: Stop service
         uses: appleboy/ssh-action@v1
         with:
