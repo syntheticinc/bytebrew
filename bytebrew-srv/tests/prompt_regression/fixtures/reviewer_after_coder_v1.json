@@ -1,0 +1,194 @@
+{
+  "name": "reviewer_after_coder_v1",
+  "description": "After coder completes significant changes, supervisor should spawn reviewer",
+  "snapshot": {
+    "timestamp": "2026-02-25T14:00:00+03:00",
+    "step": 5,
+    "agent_id": "supervisor",
+    "parent_agent_id": "",
+    "task_id": "task_hc_001",
+    "total_messages": 14,
+    "total_chars": 3200,
+    "total_tokens": 800,
+    "max_tokens": 48000,
+    "used_percent": 1.7,
+    "remaining_tokens": 47200,
+    "messages": [
+      {
+        "index": 0,
+        "role": "system",
+        "chars": 100,
+        "tokens": 25,
+        "content": "PLACEHOLDER — will be overridden by current supervisor prompt",
+        "content_preview": "PLACEHOLDER",
+        "tool_calls": []
+      },
+      {
+        "index": 1,
+        "role": "user",
+        "chars": 220,
+        "tokens": 55,
+        "content": "Добавь HTTP health check endpoint с поддержкой readiness и liveness probes. Endpoint должен возвращать JSON с полями status, uptime, version. Нужны unit тесты.",
+        "content_preview": "Добавь HTTP health check endpoint с поддержкой readiness и liveness probes...",
+        "tool_calls": []
+      },
+      {
+        "index": 2,
+        "role": "assistant",
+        "chars": 0,
+        "tokens": 0,
+        "content": "",
+        "content_preview": "",
+        "tool_calls": [
+          {
+            "id": "call_tree_hc01",
+            "name": "get_project_tree",
+            "index": 0,
+            "arguments": "{\"path\": \".\"}"
+          },
+          {
+            "id": "call_read_hc01",
+            "name": "read_file",
+            "index": 1,
+            "arguments": "{\"path\": \"cmd/server/main.go\"}"
+          }
+        ]
+      },
+      {
+        "index": 3,
+        "role": "tool",
+        "chars": 350,
+        "tokens": 88,
+        "content": "vector-srv/\n├── cmd/server/main.go\n├── internal/\n│   ├── domain/\n│   ├── usecase/\n│   ├── service/agent/\n│   ├── delivery/grpc/\n│   │   ├── server.go\n│   │   ├── flow_handler.go\n│   │   └── interceptors.go\n│   └── infrastructure/\n│       ├── tools/\n│       └── llm/\n├── pkg/config/\n└── go.mod",
+        "content_preview": "vector-srv/...",
+        "tool_name": "get_project_tree",
+        "tool_call_id": "call_tree_hc01",
+        "tool_calls": []
+      },
+      {
+        "index": 4,
+        "role": "tool",
+        "chars": 300,
+        "tokens": 75,
+        "content": "package main\n\nimport (\n\t\"log/slog\"\n\t\"os\"\n\n\t\"github.com/Bearil/vector-srv/pkg/config\"\n\t\"github.com/Bearil/vector-srv/internal/delivery/grpc\"\n)\n\nfunc main() {\n\tcfg, err := config.Load(\"config.yaml\")\n\tif err != nil {\n\t\tslog.Error(\"failed to load config\", \"error\", err)\n\t\tos.Exit(1)\n\t}\n\tserver, err := grpc.NewServer(cfg.Port)\n\tif err != nil {\n\t\tslog.Error(\"server error\", \"error\", err)\n\t\tos.Exit(1)\n\t}\n\tserver.Start()\n}",
+        "content_preview": "package main...",
+        "tool_name": "read_file",
+        "tool_call_id": "call_read_hc01",
+        "tool_calls": []
+      },
+      {
+        "index": 5,
+        "role": "assistant",
+        "chars": 0,
+        "tokens": 0,
+        "content": "",
+        "content_preview": "",
+        "tool_calls": [
+          {
+            "id": "call_create_task_hc01",
+            "name": "manage_tasks",
+            "index": 0,
+            "arguments": "{\"action\": \"create\", \"title\": \"Add HTTP health check endpoint\", \"description\": \"Type: User Story\\nGoal: Add HTTP health check endpoint with readiness and liveness probes.\\nContext: Server currently only has gRPC (internal/delivery/grpc/server.go). Need separate HTTP listener for health probes. Follow net/http pattern.\\nAcceptance Criteria:\\n  - GET /healthz returns {\\\"status\\\":\\\"ok\\\",\\\"uptime\\\":\\\"...\\\",\\\"version\\\":\\\"...\\\"}\\n  - GET /readyz returns readiness status\\n  - GET /livez returns liveness status\\n  - Unit tests cover all endpoints\\nConstraints: Don't modify gRPC server. Add HTTP alongside it.\", \"acceptance_criteria\": [\"GET /healthz returns JSON with status, uptime, version\", \"GET /readyz returns readiness status\", \"GET /livez returns liveness status\", \"Unit tests pass\"]}"
+          }
+        ]
+      },
+      {
+        "index": 6,
+        "role": "tool",
+        "chars": 90,
+        "tokens": 22,
+        "content": "Task task_hc_001 created and approved by user. You can now start it and create subtasks.",
+        "content_preview": "Task task_hc_001 created and approved by user...",
+        "tool_name": "manage_tasks",
+        "tool_call_id": "call_create_task_hc01",
+        "tool_calls": []
+      },
+      {
+        "index": 7,
+        "role": "assistant",
+        "chars": 0,
+        "tokens": 0,
+        "content": "",
+        "content_preview": "",
+        "tool_calls": [
+          {
+            "id": "call_start_hc01",
+            "name": "manage_tasks",
+            "index": 0,
+            "arguments": "{\"action\": \"start\", \"task_id\": \"task_hc_001\"}"
+          },
+          {
+            "id": "call_create_sub_hc01",
+            "name": "manage_subtasks",
+            "index": 1,
+            "arguments": "{\"action\": \"create\", \"task_id\": \"task_hc_001\", \"title\": \"Implement health check HTTP handler and tests\", \"description\": \"What: Create HealthHandler struct with methods HandleHealth (GET /healthz), HandleReady (GET /readyz), HandleLive (GET /livez). Each returns JSON response with appropriate fields. HandleHealth includes status, uptime (time.Since(startTime)), and version (from build ldflags or constant).\\nWhere: Create internal/delivery/http/health_handler.go and internal/delivery/http/health_handler_test.go. Modify cmd/server/main.go to start HTTP server on port 60402.\\nHow: Use net/http stdlib. Follow Clean Architecture patterns from existing grpc/server.go. Use slog for logging.\\nAcceptance: go build ./... compiles. go test ./internal/delivery/http/... passes. curl localhost:60402/healthz returns valid JSON.\", \"files_involved\": [\"cmd/server/main.go\", \"internal/delivery/grpc/server.go\"]}"
+          },
+          {
+            "id": "call_spawn_coder_hc01",
+            "name": "spawn_code_agent",
+            "index": 2,
+            "arguments": "{\"action\": \"spawn\", \"subtask_id\": \"sub_hc_001\"}"
+          }
+        ]
+      },
+      {
+        "index": 8,
+        "role": "tool",
+        "chars": 45,
+        "tokens": 11,
+        "content": "Task task_hc_001 started (in_progress).",
+        "content_preview": "Task task_hc_001 started.",
+        "tool_name": "manage_tasks",
+        "tool_call_id": "call_start_hc01",
+        "tool_calls": []
+      },
+      {
+        "index": 9,
+        "role": "tool",
+        "chars": 85,
+        "tokens": 21,
+        "content": "Subtask sub_hc_001 created for task task_hc_001. Status: ready.",
+        "content_preview": "Subtask sub_hc_001 created...",
+        "tool_name": "manage_subtasks",
+        "tool_call_id": "call_create_sub_hc01",
+        "tool_calls": []
+      },
+      {
+        "index": 10,
+        "role": "tool",
+        "chars": 450,
+        "tokens": 112,
+        "content": "[SUCCESS] Agent: code-agent-hc-abc123, Status: completed, Result: Created internal/delivery/http/health_handler.go with HealthHandler struct implementing HandleHealth, HandleReady, HandleLive endpoints. Created internal/delivery/http/health_handler_test.go with 6 unit tests covering all endpoints, JSON response format, and error cases. Modified cmd/server/main.go to start HTTP server on :60402 alongside gRPC. All tests pass: go test ./internal/delivery/http/... (6 passed, 0 failed).",
+        "content_preview": "[SUCCESS] Agent: code-agent-hc-abc123, Status: completed...",
+        "tool_name": "spawn_code_agent",
+        "tool_call_id": "call_spawn_coder_hc01",
+        "tool_calls": []
+      },
+      {
+        "index": 11,
+        "role": "assistant",
+        "chars": 180,
+        "tokens": 45,
+        "content": "Код-агент завершил работу. Созданы health check endpoints с тестами. Необходимо проверить качество кода и убедиться что реализация соответствует требованиям.",
+        "content_preview": "Код-агент завершил работу. Созданы health check endpoints с тестами...",
+        "tool_calls": []
+      },
+      {
+        "index": 12,
+        "role": "user",
+        "chars": 25,
+        "tokens": 6,
+        "content": "Продолжай.",
+        "content_preview": "Продолжай.",
+        "tool_calls": []
+      }
+    ],
+    "statistics": {
+      "system_count": 1,
+      "user_count": 1,
+      "assistant_count": 4,
+      "tool_count": 6,
+      "average_msg_tokens": 66
+    }
+  }
+}

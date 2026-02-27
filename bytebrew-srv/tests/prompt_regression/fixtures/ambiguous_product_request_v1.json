@@ -1,0 +1,44 @@
+{
+  "name": "ambiguous_product_request_v1",
+  "description": "Ambiguous product request — supervisor should ask clarifying questions via ask_user, NOT create task immediately",
+  "snapshot": {
+    "timestamp": "2026-02-25T20:10:00+03:00",
+    "step": 0,
+    "agent_id": "supervisor",
+    "parent_agent_id": "",
+    "task_id": "",
+    "total_messages": 2,
+    "total_chars": 250,
+    "total_tokens": 63,
+    "max_tokens": 48000,
+    "used_percent": 0.1,
+    "remaining_tokens": 47937,
+    "messages": [
+      {
+        "index": 0,
+        "role": "system",
+        "chars": 100,
+        "tokens": 25,
+        "content": "PLACEHOLDER — will be overridden by current supervisor prompt",
+        "content_preview": "PLACEHOLDER",
+        "tool_calls": []
+      },
+      {
+        "index": 1,
+        "role": "user",
+        "chars": 150,
+        "tokens": 38,
+        "content": "Создай мобильное приложение для управления задачами нашего сервера. Чтобы пользователи могли контролировать работу агентов.",
+        "content_preview": "Создай мобильное приложение для управления задачами...",
+        "tool_calls": []
+      }
+    ],
+    "statistics": {
+      "system_count": 1,
+      "user_count": 1,
+      "assistant_count": 0,
+      "tool_count": 0,
+      "average_msg_tokens": 31
+    }
+  }
+}

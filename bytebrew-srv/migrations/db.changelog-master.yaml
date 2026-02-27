@@ -1,0 +1,17 @@
+databaseChangeLog:
+  - include:
+      file: migrations/001_create_enums.yaml
+  - include:
+      file: migrations/002_create_user_and_project.yaml
+  - include:
+      file: migrations/003_create_reference_data.yaml
+  - include:
+      file: migrations/004_create_core_domain.yaml
+  - include:
+      file: migrations/005_create_session_aggregate.yaml
+  - include:
+      file: migrations/006_create_task_aggregate.yaml
+  - include:
+      file: migrations/007_create_workflow.yaml
+  - include:
+      file: migrations/008_create_indexes.yaml

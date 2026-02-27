@@ -1,0 +1,80 @@
+name: Deploy Cloud
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'vector-cloud-api/**'
+      - 'vector-cloud-web/**'
+      - '.github/workflows/deploy.yml'
+
+# Cancel in-progress deployments when a new push arrives
+concurrency:
+  group: deploy-cloud
+  cancel-in-progress: true
+
+# Required secrets (configure in GitHub repo settings):
+#   VPS_HOST     - IP address of the Hetzner VPS
+#   VPS_SSH_KEY  - Private SSH key for the 'deploy' user on VPS
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Build API ---
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Build API binary
+        run: |
+          cd vector-cloud-api
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../build/vector-cloud-api ./cmd/server
+
+      # --- Build Frontend ---
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build frontend
+        run: |
+          cd vector-cloud-web
+          npm ci
+          npm run build
+
+      # --- Deploy to VPS ---
+      - name: Stop service
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: sudo systemctl stop vector-cloud-api || true
+
+      - name: Copy files to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "build/vector-cloud-api,vector-cloud-web/dist/*"
+          target: "/tmp/vector-deploy"
+
+      - name: Install and restart
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            sudo mv /tmp/vector-deploy/build/vector-cloud-api /usr/local/bin/vector-cloud-api
+            sudo chmod +x /usr/local/bin/vector-cloud-api
+            sudo rm -rf /var/www/vector-cloud-web
+            sudo mv /tmp/vector-deploy/vector-cloud-web/dist /var/www/vector-cloud-web
+            sudo systemctl start vector-cloud-api
+            rm -rf /tmp/vector-deploy
+            # Verify service started successfully
+            sleep 3
+            curl -sf http://127.0.0.1:8080/health || { echo "Health check failed!"; sudo journalctl -u vector-cloud-api --no-pager -n 30; exit 1; }

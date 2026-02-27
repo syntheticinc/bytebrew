@@ -1,0 +1,52 @@
+version: 2
+project_name: bytebrew-srv
+
+before:
+  hooks:
+    - go mod tidy
+    - go install mvdan.cc/garble@latest
+
+builds:
+  - id: bytebrew-srv
+    gobinary: ../scripts/garble-wrapper.sh
+    main: ./cmd/server
+    binary: bytebrew-srv
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: "bytebrew-srv_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+
+# GoReleaser only builds artifacts; the publish job in release.yml
+# creates a unified GitHub Release with both server and client binaries.
+release:
+  disable: true

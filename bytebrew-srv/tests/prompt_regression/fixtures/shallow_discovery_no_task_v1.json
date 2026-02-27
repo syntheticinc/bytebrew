@@ -1,0 +1,88 @@
+{
+  "name": "shallow_discovery_no_task_v1",
+  "description": "Complex task after reading only tree + go.mod — supervisor should continue researching, NOT create task yet",
+  "snapshot": {
+    "timestamp": "2026-02-25T20:20:00+03:00",
+    "step": 1,
+    "agent_id": "supervisor",
+    "parent_agent_id": "",
+    "task_id": "",
+    "total_messages": 6,
+    "total_chars": 1200,
+    "total_tokens": 300,
+    "max_tokens": 48000,
+    "used_percent": 0.6,
+    "remaining_tokens": 47700,
+    "messages": [
+      {
+        "index": 0,
+        "role": "system",
+        "chars": 100,
+        "tokens": 25,
+        "content": "PLACEHOLDER — will be overridden by current supervisor prompt",
+        "content_preview": "PLACEHOLDER",
+        "tool_calls": []
+      },
+      {
+        "index": 1,
+        "role": "user",
+        "chars": 180,
+        "tokens": 45,
+        "content": "Мигрируй аутентификацию на OAuth2. Сейчас используется JWT, нужно перейти на OAuth2 с поддержкой Google и GitHub providers. Рефакторинг всего auth слоя.",
+        "content_preview": "Мигрируй аутентификацию на OAuth2...",
+        "tool_calls": []
+      },
+      {
+        "index": 2,
+        "role": "assistant",
+        "chars": 0,
+        "tokens": 0,
+        "content": "",
+        "content_preview": "",
+        "tool_calls": [
+          {
+            "id": "call_tree_sd01",
+            "name": "get_project_tree",
+            "index": 0,
+            "arguments": "{\"path\": \".\"}"
+          },
+          {
+            "id": "call_read_sd01",
+            "name": "read_file",
+            "index": 1,
+            "arguments": "{\"path\": \"go.mod\"}"
+          }
+        ]
+      },
+      {
+        "index": 3,
+        "role": "tool",
+        "chars": 400,
+        "tokens": 100,
+        "content": "vector-srv/\n├── cmd/server/main.go\n├── internal/\n│   ├── domain/\n│   │   ├── user.go\n│   │   └── session.go\n│   ├── usecase/\n│   │   ├── authenticate/\n│   │   │   └── usecase.go\n│   │   └── answer_question/\n│   ├── service/\n│   │   └── agent/\n│   ├── delivery/grpc/\n│   │   ├── server.go\n│   │   ├── flow_handler.go\n│   │   └── interceptors.go\n│   └── infrastructure/\n│       ├── auth/\n│       │   ├── jwt_validator.go\n│       │   └── token_service.go\n│       ├── tools/\n│       └── agents/\n├── pkg/config/\n└── go.mod",
+        "content_preview": "vector-srv/...",
+        "tool_name": "get_project_tree",
+        "tool_call_id": "call_tree_sd01",
+        "tool_calls": []
+      },
+      {
+        "index": 4,
+        "role": "tool",
+        "chars": 300,
+        "tokens": 75,
+        "content": "module github.com/Bearil/vector-srv\n\ngo 1.22\n\nrequire (\n\tgoogle.golang.org/grpc v1.63.0\n\tgoogle.golang.org/protobuf v1.33.0\n\tgithub.com/golang-jwt/jwt/v5 v5.2.0\n\tgithub.com/stretchr/testify v1.9.0\n)",
+        "content_preview": "module github.com/Bearil/vector-srv...",
+        "tool_name": "read_file",
+        "tool_call_id": "call_read_sd01",
+        "tool_calls": []
+      }
+    ],
+    "statistics": {
+      "system_count": 1,
+      "user_count": 1,
+      "assistant_count": 1,
+      "tool_count": 2,
+      "average_msg_tokens": 55
+    }
+  }
+}

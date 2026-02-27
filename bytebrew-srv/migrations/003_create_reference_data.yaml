@@ -1,0 +1,53 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-create-agent-type-table
+      author: system
+      changes:
+        - createTable:
+            tableName: agent_type
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: code
+                  type: varchar(100)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: name
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: text
+              - column:
+                  name: system_prompt
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: tools
+                  type: jsonb
+
+  - changeSet:
+      id: 003-insert-core-agents
+      author: system
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO agent_type (code, name, description, system_prompt, tools) VALUES
+              ('coordinator', 'Coordinator', 'Orchestrates tasks and context', 'You are a coordinator agent responsible for task orchestration and context management.', '[]'),
+              ('business_analyst', 'Business Analyst', 'Conducts interviews and defines acceptance criteria', 'You are a business analyst responsible for gathering requirements and defining acceptance criteria.', '[]'),
+              ('ux_architect', 'UX Architect', 'Designs UX/UI concepts', 'You are a UX architect responsible for designing user experience and interface concepts.', '[]'),
+              ('ui_component_builder', 'UI Component Builder', 'Implements UI components', 'You are a UI component builder responsible for implementing user interface components.', '[]'),
+              ('tech_lead', 'Tech Lead', 'Designs architecture and decomposes tasks', 'You are a tech lead responsible for architecture design and task decomposition.', '[]'),
+              ('developer', 'Developer', 'Implements code and refactoring', 'You are a developer responsible for code implementation and refactoring.', '[]'),
+              ('tester', 'Tester', 'Performs manual and E2E testing', 'You are a tester responsible for manual and end-to-end testing.', '[]'),
+              ('architect_reviewer', 'Architect Reviewer', 'Reviews architecture decisions', 'You are an architect reviewer responsible for reviewing architectural decisions.', '[]');

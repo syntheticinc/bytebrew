@@ -1,0 +1,48 @@
+server:
+  port: 8080  # Caddy reverse-proxies to this port
+
+database:
+  url: "postgres://vector:CHANGE_ME_DB_PASSWORD@localhost:5432/vector?sslmode=disable"
+
+auth:
+  jwt_secret: "CHANGE_ME_64_RANDOM_CHARS"  # openssl rand -hex 32
+  access_token_ttl: 15m
+  refresh_token_ttl: 168h   # 7 days
+  password_reset_ttl: 1h
+
+license:
+  private_key_hex: "CHANGE_ME"  # Generate with: go run ./cmd/keygen
+
+cors:
+  allowed_origins:
+    - "https://vector.yourdomain.com"
+
+trial:
+  steps_per_hour: 20
+
+stripe:
+  secret_key: "sk_live_CHANGE_ME"            # Stripe live secret key
+  webhook_secret: "whsec_CHANGE_ME"          # Stripe webhook signing secret
+  success_url: "https://vector.yourdomain.com/billing/success"
+  cancel_url: "https://vector.yourdomain.com/billing/cancel"
+  trial_days: 14
+  prices:
+    personal_monthly: "price_CHANGE_ME"
+    personal_annual: "price_CHANGE_ME"
+    teams_monthly: "price_CHANGE_ME"
+    teams_annual: "price_CHANGE_ME"
+
+deepinfra:
+  api_key: "CHANGE_ME"                                # DeepInfra API key (leave empty to disable proxy)
+  base_url: "https://api.deepinfra.com/v1/openai"
+
+email:
+  resend_api_key: "CHANGE_ME"                         # Resend API key (leave empty to disable emails)
+  from_email: "Vector <noreply@yourdomain.com>"
+  frontend_url: "https://vector.yourdomain.com"
+
+model_routing:
+  default_model: "zai-org/GLM-5"
+  role_overrides:
+    reviewer: "zai-org/GLM-4.7"
+    tester: "zai-org/GLM-4.7"

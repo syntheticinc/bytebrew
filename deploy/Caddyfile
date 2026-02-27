@@ -1,0 +1,16 @@
+vector.yourdomain.com {
+    # API reverse proxy
+    handle /api/* {
+        reverse_proxy 127.0.0.1:8080
+    }
+    handle /health {
+        reverse_proxy 127.0.0.1:8080
+    }
+
+    # SPA (React + Vite)
+    handle {
+        root * /var/www/vector-cloud-web
+        try_files {path} /index.html
+        file_server
+    }
+}

@@ -1,0 +1,106 @@
+syntax = "proto3";
+
+package vector.v1;
+
+import "common.proto";
+
+// FlowService handles AI agent flow execution
+service FlowService {
+  // ExecuteFlow executes an AI agent flow with streaming responses
+  rpc ExecuteFlow(stream FlowRequest) returns (stream FlowResponse);
+}
+
+// FlowRequest represents a request to execute a flow
+message FlowRequest {
+  string session_id = 1;
+  string user_id = 2;
+  string project_key = 3;
+  string task = 4;
+  map<string, string> context = 5;
+  bool is_first_message = 6;
+  bool cancel = 7;
+  PingRequest ping = 8;
+  ToolResult tool_result = 9;
+}
+
+// PingRequest represents a ping message for keep-alive
+message PingRequest {
+  int64 timestamp = 1;
+}
+
+// ToolResult represents the result of a tool invocation
+message ToolResult {
+  string call_id = 1;
+  string result = 2;
+  Error error = 3;
+  repeated SubResult sub_results = 4;  // Results from sub-queries (for grouped operations like smart_search)
+  string summary = 5;                  // Server-computed display summary (P0 Tool Contract)
+}
+
+// SubQuery represents a sub-query for grouped tool operations
+message SubQuery {
+  string type = 1;    // "vector" | "grep" | "symbol"
+  string query = 2;   // Search query or pattern
+  int32 limit = 3;    // Max results
+}
+
+// SubResult represents a result from a sub-query
+message SubResult {
+  string type = 1;    // "vector" | "grep" | "symbol"
+  string result = 2;  // Result data (text format)
+  int32 count = 3;    // Number of matches found
+  string error = 4;   // Error message if failed
+}
+
+// FlowResponse represents a streaming response from flow execution
+message FlowResponse {
+  string session_id = 1;
+  ResponseType type = 2;
+  string content = 3;
+  ToolCall tool_call = 4;
+  ThoughtStep thought = 5;
+  ReasoningContent reasoning = 6;
+  Error error = 7;
+  bool is_final = 8;
+  PongResponse pong = 9;
+  int32 step = 10;
+  ToolResult tool_result = 11;  // Tool execution result for server-side tools
+  string agent_id = 12;         // Agent identifier: "supervisor" or "code-agent-{uuid}"
+}
+
+// PongResponse represents a pong message for keep-alive
+message PongResponse {
+  string status = 1;
+  int64 timestamp = 2;
+}
+
+// ResponseType indicates the type of response
+enum ResponseType {
+  RESPONSE_TYPE_UNSPECIFIED = 0;
+  RESPONSE_TYPE_ANSWER = 1;
+  RESPONSE_TYPE_REASONING = 2;
+  RESPONSE_TYPE_TOOL_CALL = 3;
+  RESPONSE_TYPE_TOOL_RESULT = 4;
+  RESPONSE_TYPE_ANSWER_CHUNK = 5;
+  RESPONSE_TYPE_ERROR = 6;
+}
+
+// ToolCall represents a tool invocation
+message ToolCall {
+  string tool_name = 1;
+  map<string, string> arguments = 2;
+  string call_id = 3;
+  repeated SubQuery sub_queries = 4;  // Sub-queries for grouped operations (e.g., smart_search)
+}
+
+// ThoughtStep represents agent's intermediate thought
+message ThoughtStep {
+  string content = 1;
+  string action = 2;
+}
+
+// ReasoningContent represents reasoning from models like GLM 4.7
+message ReasoningContent {
+  string thinking = 1;
+  bool is_complete = 2;
+}

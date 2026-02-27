@@ -1,0 +1,24 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-enums
+      author: system
+      changes:
+        - sql:
+            sql: |
+              CREATE TYPE memory_level AS ENUM ('conversation', 'session', 'user');
+              CREATE TYPE message_type AS ENUM ('user', 'agent', 'system');
+              CREATE TYPE task_type AS ENUM ('epic', 'story', 'task', 'bug');
+              CREATE TYPE task_status AS ENUM ('pending', 'in_progress', 'waiting_for_input', 'completed', 'cancelled');
+              CREATE TYPE artifact_type AS ENUM ('interview_notes', 'lean_canvas', 'ux_concept', 'ui_components', 'architecture', 'entity_model', 'task_breakdown', 'implementation', 'test_results', 'code_review');
+              CREATE TYPE workflow_type AS ENUM ('full_discovery', 'from_stories', 'from_architecture', 'bugfix');
+              CREATE TYPE workflow_status AS ENUM ('pending', 'in_progress', 'completed', 'cancelled', 'failed');
+      rollback:
+        - sql:
+            sql: |
+              DROP TYPE IF EXISTS workflow_status;
+              DROP TYPE IF EXISTS workflow_type;
+              DROP TYPE IF EXISTS artifact_type;
+              DROP TYPE IF EXISTS task_status;
+              DROP TYPE IF EXISTS task_type;
+              DROP TYPE IF EXISTS message_type;
+              DROP TYPE IF EXISTS memory_level;

@@ -1,0 +1,184 @@
+{
+  "name": "task_structure_req3_v1",
+  "description": "After thorough research, supervisor should create a task with structured description (Type/Goal/Context/Acceptance/Constraints) — not a flat paragraph",
+  "snapshot": {
+    "timestamp": "2026-02-25T20:00:00+03:00",
+    "step": 3,
+    "agent_id": "supervisor",
+    "parent_agent_id": "",
+    "task_id": "",
+    "total_messages": 12,
+    "total_chars": 3500,
+    "total_tokens": 875,
+    "max_tokens": 48000,
+    "used_percent": 1.8,
+    "remaining_tokens": 47125,
+    "messages": [
+      {
+        "index": 0,
+        "role": "system",
+        "chars": 100,
+        "tokens": 25,
+        "content": "PLACEHOLDER — will be overridden by current supervisor prompt",
+        "content_preview": "PLACEHOLDER",
+        "tool_calls": []
+      },
+      {
+        "index": 1,
+        "role": "user",
+        "chars": 150,
+        "tokens": 38,
+        "content": "Добавь WebSocket notifications для real-time обновлений статуса задач. Когда агент завершает subtask, клиент должен получать уведомление.",
+        "content_preview": "Добавь WebSocket notifications для real-time обновлений...",
+        "tool_calls": []
+      },
+      {
+        "index": 2,
+        "role": "assistant",
+        "chars": 0,
+        "tokens": 0,
+        "content": "",
+        "content_preview": "",
+        "tool_calls": [
+          {
+            "id": "call_tree_ts01",
+            "name": "get_project_tree",
+            "index": 0,
+            "arguments": "{\"path\": \".\"}"
+          },
+          {
+            "id": "call_read_ts01",
+            "name": "read_file",
+            "index": 1,
+            "arguments": "{\"path\": \"internal/delivery/grpc/server.go\"}"
+          },
+          {
+            "id": "call_read_ts02",
+            "name": "read_file",
+            "index": 2,
+            "arguments": "{\"path\": \"internal/delivery/grpc/flow_handler.go\"}"
+          }
+        ]
+      },
+      {
+        "index": 3,
+        "role": "tool",
+        "chars": 400,
+        "tokens": 100,
+        "content": "vector-srv/\n├── cmd/server/main.go\n├── internal/\n│   ├── domain/\n│   │   ├── task.go\n│   │   └── subtask.go\n│   ├── usecase/\n│   │   └── answer_question/\n│   ├── service/\n│   │   └── agent/\n│   │       ├── service.go\n│   │       ├── agent_pool.go\n│   │       └── agent_events.go\n│   ├── delivery/grpc/\n│   │   ├── server.go\n│   │   ├── flow_handler.go\n│   │   └── interceptors.go\n│   └── infrastructure/\n│       ├── tools/\n│       └── agents/\n├── pkg/config/\n└── go.mod",
+        "content_preview": "vector-srv/...",
+        "tool_name": "get_project_tree",
+        "tool_call_id": "call_tree_ts01",
+        "tool_calls": []
+      },
+      {
+        "index": 4,
+        "role": "tool",
+        "chars": 500,
+        "tokens": 125,
+        "content": "package grpc\n\nimport (\n\t\"fmt\"\n\t\"net\"\n\n\t\"google.golang.org/grpc\"\n)\n\ntype Server struct {\n\tgrpcServer *grpc.Server\n\tlistener   net.Listener\n\tport       int\n}\n\nfunc NewServer(port int, opts ...grpc.ServerOption) (*Server, error) {\n\tlis, err := net.Listen(\"tcp\", fmt.Sprintf(\":%d\", port))\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"listen: %w\", err)\n\t}\n\ts := grpc.NewServer(opts...)\n\treturn &Server{grpcServer: s, listener: lis, port: port}, nil\n}\n\nfunc (s *Server) Start() error {\n\treturn s.grpcServer.Serve(s.listener)\n}\n\nfunc (s *Server) Stop() {\n\ts.grpcServer.GracefulStop()\n}",
+        "content_preview": "package grpc...",
+        "tool_name": "read_file",
+        "tool_call_id": "call_read_ts01",
+        "tool_calls": []
+      },
+      {
+        "index": 5,
+        "role": "tool",
+        "chars": 600,
+        "tokens": 150,
+        "content": "package grpc\n\nimport (\n\t\"context\"\n\t\"log/slog\"\n\n\tpb \"github.com/Bearil/vector-srv/api/proto\"\n\t\"github.com/Bearil/vector-srv/internal/usecase/answer_question\"\n)\n\ntype FlowHandler struct {\n\tpb.UnimplementedFlowServiceServer\n\tusecase *answer_question.Usecase\n}\n\nfunc NewFlowHandler(uc *answer_question.Usecase) *FlowHandler {\n\treturn &FlowHandler{usecase: uc}\n}\n\nfunc (h *FlowHandler) Stream(req *pb.StreamRequest, stream pb.FlowService_StreamServer) error {\n\tctx := stream.Context()\n\tslog.InfoContext(ctx, \"stream started\", \"session_id\", req.GetSessionId())\n\t// ... streaming implementation\n\treturn nil\n}",
+        "content_preview": "package grpc...",
+        "tool_name": "read_file",
+        "tool_call_id": "call_read_ts02",
+        "tool_calls": []
+      },
+      {
+        "index": 6,
+        "role": "assistant",
+        "chars": 0,
+        "tokens": 0,
+        "content": "",
+        "content_preview": "",
+        "tool_calls": [
+          {
+            "id": "call_read_ts03",
+            "name": "read_file",
+            "index": 0,
+            "arguments": "{\"path\": \"internal/service/agent/agent_events.go\"}"
+          },
+          {
+            "id": "call_grep_ts01",
+            "name": "grep_search",
+            "index": 1,
+            "arguments": "{\"pattern\": \"websocket|gorilla/websocket|nhooyr.io/websocket\", \"limit\": 10}"
+          },
+          {
+            "id": "call_read_ts04",
+            "name": "read_file",
+            "index": 2,
+            "arguments": "{\"path\": \"go.mod\"}"
+          }
+        ]
+      },
+      {
+        "index": 7,
+        "role": "tool",
+        "chars": 350,
+        "tokens": 88,
+        "content": "package agent\n\nimport \"context\"\n\n// AgentEvent represents an event from agent execution\ntype AgentEvent struct {\n\tType    string\n\tPayload interface{}\n}\n\n// EventEmitter interface for sending agent events\ntype EventEmitter interface {\n\tEmit(ctx context.Context, event AgentEvent) error\n}\n\n// CallbackEventEmitter implements EventEmitter using callback functions\ntype CallbackEventEmitter struct {\n\tcallbacks []func(AgentEvent)\n}\n\nfunc (e *CallbackEventEmitter) Emit(ctx context.Context, event AgentEvent) error {\n\tfor _, cb := range e.callbacks {\n\t\tcb(event)\n\t}\n\treturn nil\n}",
+        "content_preview": "package agent...",
+        "tool_name": "read_file",
+        "tool_call_id": "call_read_ts03",
+        "tool_calls": []
+      },
+      {
+        "index": 8,
+        "role": "tool",
+        "chars": 80,
+        "tokens": 20,
+        "content": "No results found for pattern \"websocket|gorilla/websocket|nhooyr.io/websocket\" in the project.",
+        "content_preview": "No results found...",
+        "tool_name": "grep_search",
+        "tool_call_id": "call_grep_ts01",
+        "tool_calls": []
+      },
+      {
+        "index": 9,
+        "role": "tool",
+        "chars": 300,
+        "tokens": 75,
+        "content": "module github.com/Bearil/vector-srv\n\ngo 1.22\n\nrequire (\n\tgoogle.golang.org/grpc v1.63.0\n\tgoogle.golang.org/protobuf v1.33.0\n\tgithub.com/golang-jwt/jwt/v5 v5.2.0\n\tgithub.com/stretchr/testify v1.9.0\n)",
+        "content_preview": "module github.com/Bearil/vector-srv...",
+        "tool_name": "read_file",
+        "tool_call_id": "call_read_ts04",
+        "tool_calls": []
+      },
+      {
+        "index": 10,
+        "role": "assistant",
+        "chars": 300,
+        "tokens": 75,
+        "content": "Исследование завершено. Ключевые факты:\n- Текущая архитектура: gRPC streaming (FlowHandler.Stream), нет HTTP/WebSocket слоя\n- События агента: EventEmitter interface в agent_events.go с callback-based реализацией\n- WebSocket нигде не используется, зависимости нет в go.mod\n- Нужно: добавить WebSocket endpoint + подписку на AgentEvent\n\nСоздаю задачу.",
+        "content_preview": "Исследование завершено...",
+        "tool_calls": []
+      },
+      {
+        "index": 11,
+        "role": "user",
+        "chars": 30,
+        "tokens": 8,
+        "content": "Создавай.",
+        "content_preview": "Создавай.",
+        "tool_calls": []
+      }
+    ],
+    "statistics": {
+      "system_count": 1,
+      "user_count": 2,
+      "assistant_count": 3,
+      "tool_count": 7,
+      "average_msg_tokens": 67
+    }
+  }
+}

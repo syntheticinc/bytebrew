@@ -1,0 +1,152 @@
+databaseChangeLog:
+  - changeSet:
+      id: 008-create-indexes
+      author: system
+      changes:
+        # User & Project indexes
+        - createIndex:
+            tableName: project
+            indexName: idx_project_user_id
+            columns:
+              - column:
+                  name: user_id
+        - createIndex:
+            tableName: project
+            indexName: idx_project_user_name
+            columns:
+              - column:
+                  name: user_id
+              - column:
+                  name: name
+        
+        # ProjectFile indexes
+        - createIndex:
+            tableName: project_file
+            indexName: idx_project_file_project_id
+            columns:
+              - column:
+                  name: project_id
+        - createIndex:
+            tableName: project_file
+            indexName: idx_project_file_language
+            columns:
+              - column:
+                  name: language
+        
+        # Memory indexes
+        - createIndex:
+            tableName: memory
+            indexName: idx_memory_level
+            columns:
+              - column:
+                  name: level
+        - createIndex:
+            tableName: memory
+            indexName: idx_memory_created_at
+            columns:
+              - column:
+                  name: created_at
+        
+        # ChatSession indexes
+        - createIndex:
+            tableName: chat_session
+            indexName: idx_chat_session_user_id
+            columns:
+              - column:
+                  name: user_id
+        - createIndex:
+            tableName: chat_session
+            indexName: idx_chat_session_project_id
+            columns:
+              - column:
+                  name: project_id
+        
+        # Message indexes
+        - createIndex:
+            tableName: message
+            indexName: idx_message_session_id
+            columns:
+              - column:
+                  name: session_id
+        - createIndex:
+            tableName: message
+            indexName: idx_message_session_created
+            columns:
+              - column:
+                  name: session_id
+              - column:
+                  name: created_at
+        
+        # Task indexes
+        - createIndex:
+            tableName: task
+            indexName: idx_task_type
+            columns:
+              - column:
+                  name: task_type
+        - createIndex:
+            tableName: task
+            indexName: idx_task_parent_id
+            columns:
+              - column:
+                  name: parent_task_id
+        - createIndex:
+            tableName: task
+            indexName: idx_task_session_id
+            columns:
+              - column:
+                  name: session_id
+        - createIndex:
+            tableName: task
+            indexName: idx_task_status
+            columns:
+              - column:
+                  name: status
+        
+        # TaskArtifact indexes
+        - createIndex:
+            tableName: task_artifact
+            indexName: idx_task_artifact_task_id
+            columns:
+              - column:
+                  name: task_id
+        - createIndex:
+            tableName: task_artifact
+            indexName: idx_task_artifact_type
+            columns:
+              - column:
+                  name: task_id
+              - column:
+                  name: artifact_type
+        - createIndex:
+            tableName: task_artifact
+            indexName: idx_task_artifact_created
+            columns:
+              - column:
+                  name: task_id
+              - column:
+                  name: created_at
+        
+        # WorkflowExecution indexes
+        - createIndex:
+            tableName: workflow_execution
+            indexName: idx_workflow_execution_type
+            columns:
+              - column:
+                  name: workflow_type
+        
+        # WorkflowStep indexes
+        - createIndex:
+            tableName: workflow_step
+            indexName: idx_workflow_step_workflow_id
+            columns:
+              - column:
+                  name: workflow_id
+        - createIndex:
+            tableName: workflow_step
+            indexName: idx_workflow_step_status
+            columns:
+              - column:
+                  name: workflow_id
+              - column:
+                  name: status

@@ -1,0 +1,24 @@
+[Unit]
+Description=Vector Cloud API
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=vector
+Group=vector
+WorkingDirectory=/etc/vector
+ExecStart=/usr/local/bin/vector-cloud-api --config /etc/vector/config.yaml
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=15s
+KillSignal=SIGTERM
+StandardOutput=journal
+StandardError=journal
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

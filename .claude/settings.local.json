@@ -1,0 +1,46 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Edit",
+      "Write",
+      "Grep",
+      "Glob",
+      "WebSearch",
+      "WebFetch",
+      "Bash(*)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf C:/*)",
+      "Bash(del /s /q C:/)",
+      "Bash(del /s /q C:/Windows/*)",
+      "Bash(del /s /q C:/Program Files/*)",
+      "Bash(format *)",
+      "Bash(diskpart *)",
+      "Bash(reg delete *)",
+      "Bash(shutdown *)",
+      "Bash(taskkill /f /im explorer*)",
+      "Bash(*> C:/Windows/*)",
+      "Bash(chmod 777 /*)",
+      "Bash(chown root /*)",
+      "Bash(git push *)",
+      "Bash(git commit *)",
+      "Bash(git reset *)",
+      "Bash(git checkout *)",
+      "Bash(git rebase *)",
+      "Bash(git merge *)",
+      "Bash(git cherry-pick *)",
+      "Bash(git revert *)",
+      "Bash(git stash *)",
+      "Bash(git clean *)",
+      "Bash(git branch -d *)",
+      "Bash(git branch -D *)",
+      "Bash(git tag -d *)",
+      "Bash(git remote add *)",
+      "Bash(git remote remove *)"
+    ]
+  }
+}

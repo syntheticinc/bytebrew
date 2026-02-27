@@ -1,0 +1,13 @@
+services:
+  relay:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.yaml:/etc/bytebrew-relay/config.yaml
+      - relay-data:/var/lib/bytebrew-relay
+    environment:
+      - RELAY_CONFIG=/etc/bytebrew-relay/config.yaml
+
+volumes:
+  relay-data:

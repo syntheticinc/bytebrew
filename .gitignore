@@ -1,0 +1,97 @@
+# Windsurf / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+!bytebrew-cli/src/lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+.env
+.venv/
+.venv
+env/
+venv/
+ENV/
+**/.venv/
+
+# GetTrace specific
+.gettrace/
+*.db
+*.sqlite
+
+# ByteBrew CLI - local indexing storage
+.bytebrew/
+
+# Test fixtures - Qdrant local storage
+gettrace-server/tests/manual/code_analysis/fixtures/qdrant/
+gettrace-server/tests/manual/code_analysis/fixtures/snapshot.pkl
+
+# Temporary clone directories (nested git repos)
+gettrace-cli/
+gettrace-srv/
+
+# Docs - защита от восстановления удаленных файлов
+docs/ARCHITECTURE-AUDIT-REPORT.md
+docs/README.md
+docs/analysis/
+docs/dependencies-review.md
+docs/discovery-plan.md
+docs/entity-model-*.dbml
+docs/interfaces-and-use-cases.md
+docs/lean-canvas-to-user-stories-mapping.md
+docs/normalization-decisions.md
+docs/traceability-matrix.md
+docs/validation-checklist.md
+docs/tasks-v2/
+docs/tasks/0*.md
+docs/tasks/1*.md
+docs/tasks/README.md
+docs/architecture/poc-architecture.md
+docs/processes/README.md
+docs/processes/agent-prompts-overview.md
+docs/processes/coordinator-decision-logic.md
+docs/processes/scenario-*.md
+docs/processes/session-context-management.md
+
+/docs/agreement.*
+/docs/context/*
+*.exe
+# Compiled Go server binary (not the source directory)
+/server
+bytebrew-srv/server
+
+/docs/*
+
+test-output
+test-project
+
+*.bun-build
+bytebrew-cloud-web/node_modules
+
+query.txt

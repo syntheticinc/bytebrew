@@ -1,0 +1,141 @@
+package tools
+
+import (
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+)
+
+// Pre-compiled regex for performance (staticcheck SA6000)
+var webSearchResultPattern = regexp.MustCompile(`^\d+\.`)
+
+// SummarizeToolResult вычисляет краткое описание результата tool для UI.
+// Чистая функция: детерминистический парсинг строки, без I/O, без LLM.
+// Возвращает пустую строку если summary не может быть вычислен.
+func SummarizeToolResult(toolName, result string) string {
+	if result == "" {
+		return ""
+	}
+
+	switch toolName {
+	case "manage_plan":
+		return summarizeManagePlan(result)
+	case "smart_search":
+		return summarizeSmartSearch(result)
+	case "web_search":
+		return summarizeWebSearch(result)
+	case "web_fetch":
+		return summarizeWebFetch(result)
+	case "manage_tasks":
+		return firstLine(result)
+	case "manage_subtasks":
+		return firstLine(result)
+	case "spawn_code_agent":
+		return firstLine(result)
+	case "lsp":
+		return firstLine(result)
+	default:
+		return ""
+	}
+}
+
+// summarizeManagePlan парсит первую строку результата manage_plan
+func summarizeManagePlan(result string) string {
+	fl := firstLine(result)
+	lower := strings.ToLower(fl)
+
+	if strings.Contains(lower, "created") {
+		return "plan created"
+	}
+	return "plan updated"
+}
+
+// summarizeSmartSearch парсит формат "Found N results:\n\n1. path:line [source] ..."
+func summarizeSmartSearch(result string) string {
+	// Real format: "Found N results:\n\n1. file:10 [vector] ..."
+	if strings.HasPrefix(result, "Found ") {
+		parts := strings.Fields(result)
+		if len(parts) >= 2 {
+			if count, err := strconv.Atoi(parts[1]); err == nil {
+				if count == 1 {
+					return "1 citation"
+				}
+				return fmt.Sprintf("%d citations", count)
+			}
+		}
+	}
+
+	// Fallback: count numbered lines
+	count := 0
+	for _, line := range strings.SplitN(result, "\n", 200) {
+		if webSearchResultPattern.MatchString(strings.TrimSpace(line)) {
+			count++
+		}
+	}
+	if count == 0 {
+		return "0 citations"
+	}
+	if count == 1 {
+		return "1 citation"
+	}
+	return fmt.Sprintf("%d citations", count)
+}
+
+// summarizeWebSearch подсчитывает результаты поиска
+func summarizeWebSearch(result string) string {
+	if strings.HasPrefix(result, "No results") {
+		return "0 results"
+	}
+
+	// Count numbered lines with safety limit (avoid OOM on huge results)
+	count := 0
+	for _, line := range strings.SplitN(result, "\n", 500) {
+		if webSearchResultPattern.MatchString(strings.TrimSpace(line)) {
+			count++
+		}
+	}
+
+	if count == 1 {
+		return "1 result"
+	}
+	return fmt.Sprintf("%d results", count)
+}
+
+// summarizeWebFetch возвращает размер загруженного контента
+func summarizeWebFetch(result string) string {
+	size := len(result)
+	return fmt.Sprintf("fetched (%s)", humanizeBytes(size))
+}
+
+// firstLine возвращает первую строку, обрезанную до 60 рун (UTF-8 safe)
+func firstLine(s string) string {
+	lines := strings.SplitN(s, "\n", 2)
+	if len(lines) == 0 {
+		return ""
+	}
+	line := strings.TrimSpace(lines[0])
+	runes := []rune(line)
+	if len(runes) > 60 {
+		return string(runes[:60]) + "..."
+	}
+	return line
+}
+
+// humanizeBytes преобразует байты в читаемый формат (bytes/KB/MB)
+func humanizeBytes(n int) string {
+	if n < 1024 {
+		return fmt.Sprintf("%d bytes", n)
+	}
+	kb := float64(n) / 1024.0
+	if kb < 1024 {
+		return fmt.Sprintf("%.1f KB", kb)
+	}
+	mb := kb / 1024.0
+	return fmt.Sprintf("%.1f MB", mb)
+}
+
+// countOccurrences подсчитывает количество вхождений подстроки
+func countOccurrences(s, substr string) int {
+	return strings.Count(s, substr)
+}

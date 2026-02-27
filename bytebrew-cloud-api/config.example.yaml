@@ -1,0 +1,42 @@
+server:
+  port: 8080
+
+database:
+  url: "postgres://bytebrew:bytebrew@localhost:5432/bytebrew?sslmode=disable"
+
+auth:
+  jwt_secret: "CHANGE-ME-generate-a-random-secret"
+  access_token_ttl: 15m
+  refresh_token_ttl: 168h # 7 days
+
+license:
+  # Generate with: go run ./cmd/keygen
+  private_key_hex: "PASTE-YOUR-PRIVATE-KEY-HEX-HERE"
+
+cors:
+  allowed_origins:
+    - "http://localhost:3000"
+    - "http://localhost:5173"
+
+trial:
+  steps_per_hour: 20
+
+deepinfra:
+  api_key: ""  # DeepInfra API key (optional -- proxy disabled if empty)
+  base_url: "https://api.deepinfra.com/v1/openai"
+
+stripe:
+  secret_key: "sk_test_..."  # Stripe secret key (test mode)
+  webhook_secret: "whsec_..."  # Stripe webhook signing secret
+  success_url: "http://localhost:3000/billing/success"
+  cancel_url: "http://localhost:3000/billing/cancel"
+  trial_days: 14
+  prices:
+    personal_monthly: "price_xxx"
+    personal_annual: "price_xxx"
+    teams_monthly: "price_xxx"
+    teams_annual: "price_xxx"
+
+email:
+  resend_api_key: ""  # Resend API key (optional -- noop sender if empty)
+  from_email: "ByteBrew <noreply@yourdomain.com>"
