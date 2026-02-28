@@ -21,7 +21,8 @@ export type DomainEventType =
   | 'ProcessingStopped'
   | 'ErrorOccurred'
   | 'AgentLifecycle'
-  | 'AskUserRequested';
+  | 'AskUserRequested'
+  | 'AskUserResolved';
 
 export interface MessageCompletedEvent {
   type: 'MessageCompleted';
@@ -77,6 +78,10 @@ export interface AskUserRequestedEvent {
   questions: Question[];
 }
 
+export interface AskUserResolvedEvent {
+  type: 'AskUserResolved';
+}
+
 export type DomainEvent =
   | MessageCompletedEvent
   | MessageStartedEvent
@@ -87,7 +92,8 @@ export type DomainEvent =
   | ProcessingStoppedEvent
   | ErrorOccurredEvent
   | AgentLifecycleEvent
-  | AskUserRequestedEvent;
+  | AskUserRequestedEvent
+  | AskUserResolvedEvent;
 
 export type EventHandler<T extends DomainEvent = DomainEvent> = (event: T) => void;
 

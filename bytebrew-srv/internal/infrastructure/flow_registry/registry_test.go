@@ -1,8 +1,11 @@
 package flow_registry
 
 import (
+	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
 )
 
@@ -10,137 +13,190 @@ func TestRegister_Success(t *testing.T) {
 	registry := NewInMemoryRegistry()
 
 	flow, err := domain.NewActiveFlow("session-1", "project-1", "user-1", "test task")
-	if err != nil {
-		t.Fatalf("failed to create flow: %v", err)
-	}
+	require.NoError(t, err)
 
-	err = registry.Register(flow.SessionID, flow)
-	if err != nil {
-		t.Fatalf("failed to register flow: %v", err)
-	}
+	err = registry.Register(flow.SessionID, flow, nil)
+	require.NoError(t, err)
 
-	if !registry.IsActive(flow.SessionID) {
-		t.Error("flow should be active")
-	}
+	assert.True(t, registry.IsActive(flow.SessionID))
 }
 
-func TestRegister_AlreadyExists(t *testing.T) {
+func TestRegister_ReplacesExisting(t *testing.T) {
 	registry := NewInMemoryRegistry()
 
-	flow, err := domain.NewActiveFlow("session-1", "project-1", "user-1", "test task")
-	if err != nil {
-		t.Fatalf("failed to create flow: %v", err)
-	}
+	ctx1, cancel1 := context.WithCancel(context.Background())
 
-	err = registry.Register(flow.SessionID, flow)
-	if err != nil {
-		t.Fatalf("failed to register flow: %v", err)
-	}
+	flow1, err := domain.NewActiveFlow("session-1", "project-1", "user-1", "task 1")
+	require.NoError(t, err)
 
-	err = registry.Register(flow.SessionID, flow)
-	if err == nil {
-		t.Error("expected error when registering existing flow")
-	}
+	err = registry.Register(flow1.SessionID, flow1, cancel1)
+	require.NoError(t, err)
+
+	flow2, err := domain.NewActiveFlow("session-1", "project-1", "user-1", "task 2")
+	require.NoError(t, err)
+
+	err = registry.Register(flow2.SessionID, flow2, nil)
+	require.NoError(t, err)
+
+	// Old flow's context should be cancelled
+	assert.Error(t, ctx1.Err(), "expected old flow's context to be cancelled")
+
+	retrieved, found := registry.Get("session-1")
+	require.True(t, found)
+	assert.Equal(t, flow2, retrieved, "expected registry to contain the new flow")
+}
+
+func TestRegister_ReplacesExisting_NilCancel(t *testing.T) {
+	registry := NewInMemoryRegistry()
+
+	flow1, err := domain.NewActiveFlow("session-1", "project-1", "user-1", "task 1")
+	require.NoError(t, err)
+
+	// Register with nil cancel -- should not panic on replacement
+	err = registry.Register(flow1.SessionID, flow1, nil)
+	require.NoError(t, err)
+
+	flow2, err := domain.NewActiveFlow("session-1", "project-1", "user-1", "task 2")
+	require.NoError(t, err)
+
+	err = registry.Register(flow2.SessionID, flow2, nil)
+	require.NoError(t, err)
+
+	retrieved, found := registry.Get("session-1")
+	require.True(t, found)
+	assert.Equal(t, flow2, retrieved)
 }
 
 func TestUnregister_Success(t *testing.T) {
 	registry := NewInMemoryRegistry()
 
 	flow, err := domain.NewActiveFlow("session-1", "project-1", "user-1", "test task")
-	if err != nil {
-		t.Fatalf("failed to create flow: %v", err)
-	}
+	require.NoError(t, err)
 
-	err = registry.Register(flow.SessionID, flow)
-	if err != nil {
-		t.Fatalf("failed to register flow: %v", err)
-	}
+	err = registry.Register(flow.SessionID, flow, nil)
+	require.NoError(t, err)
 
 	err = registry.Unregister(flow.SessionID)
-	if err != nil {
-		t.Fatalf("failed to unregister flow: %v", err)
-	}
+	require.NoError(t, err)
 
-	if registry.IsActive(flow.SessionID) {
-		t.Error("flow should not be active after unregister")
-	}
+	assert.False(t, registry.IsActive(flow.SessionID))
+}
+
+func TestUnregister_Idempotent(t *testing.T) {
+	registry := NewInMemoryRegistry()
+
+	// Unregister non-existent session -- no error
+	err := registry.Unregister("nonexistent")
+	assert.NoError(t, err)
+
+	// Register and unregister twice
+	flow, err := domain.NewActiveFlow("s1", "p1", "u1", "t1")
+	require.NoError(t, err)
+
+	err = registry.Register("s1", flow, nil)
+	require.NoError(t, err)
+
+	err = registry.Unregister("s1")
+	assert.NoError(t, err)
+
+	err = registry.Unregister("s1") // second call
+	assert.NoError(t, err)
+}
+
+func TestUnregisterIfCurrent(t *testing.T) {
+	registry := NewInMemoryRegistry()
+
+	flow1, err := domain.NewActiveFlow("s1", "p1", "u1", "t1")
+	require.NoError(t, err)
+
+	flow2, err := domain.NewActiveFlow("s1", "p1", "u1", "t2")
+	require.NoError(t, err)
+
+	err = registry.Register("s1", flow1, nil)
+	require.NoError(t, err)
+
+	// Replace with flow2
+	err = registry.Register("s1", flow2, nil)
+	require.NoError(t, err)
+
+	// UnregisterIfCurrent with flow1 should NOT unregister (replaced)
+	removed := registry.UnregisterIfCurrent("s1", flow1)
+	assert.False(t, removed, "stale flow should not be unregistered")
+
+	// flow2 should still be there
+	current, exists := registry.Get("s1")
+	assert.True(t, exists)
+	assert.Equal(t, flow2, current)
+
+	// UnregisterIfCurrent with flow2 should succeed
+	removed = registry.UnregisterIfCurrent("s1", flow2)
+	assert.True(t, removed, "current flow should be unregistered")
+
+	_, exists = registry.Get("s1")
+	assert.False(t, exists)
+}
+
+func TestUnregisterIfCurrent_NonExistent(t *testing.T) {
+	registry := NewInMemoryRegistry()
+
+	flow, err := domain.NewActiveFlow("s1", "p1", "u1", "t1")
+	require.NoError(t, err)
+
+	removed := registry.UnregisterIfCurrent("nonexistent", flow)
+	assert.False(t, removed)
 }
 
 func TestGet_Found(t *testing.T) {
 	registry := NewInMemoryRegistry()
 
 	flow, err := domain.NewActiveFlow("session-1", "project-1", "user-1", "test task")
-	if err != nil {
-		t.Fatalf("failed to create flow: %v", err)
-	}
+	require.NoError(t, err)
 
-	err = registry.Register(flow.SessionID, flow)
-	if err != nil {
-		t.Fatalf("failed to register flow: %v", err)
-	}
+	err = registry.Register(flow.SessionID, flow, nil)
+	require.NoError(t, err)
 
 	retrieved, found := registry.Get(flow.SessionID)
-	if !found {
-		t.Fatal("flow not found")
-	}
-	if retrieved.SessionID != flow.SessionID {
-		t.Error("session_id mismatch")
-	}
+	require.True(t, found)
+	assert.Equal(t, flow.SessionID, retrieved.SessionID)
 }
 
 func TestGet_NotFound(t *testing.T) {
 	registry := NewInMemoryRegistry()
 
 	_, found := registry.Get("non-existent")
-	if found {
-		t.Error("expected not found")
-	}
+	assert.False(t, found)
 }
 
 func TestIsActive_True(t *testing.T) {
 	registry := NewInMemoryRegistry()
 
 	flow, err := domain.NewActiveFlow("session-1", "project-1", "user-1", "test task")
-	if err != nil {
-		t.Fatalf("failed to create flow: %v", err)
-	}
+	require.NoError(t, err)
 
-	err = registry.Register(flow.SessionID, flow)
-	if err != nil {
-		t.Fatalf("failed to register flow: %v", err)
-	}
+	err = registry.Register(flow.SessionID, flow, nil)
+	require.NoError(t, err)
 
-	if !registry.IsActive(flow.SessionID) {
-		t.Error("flow should be active")
-	}
+	assert.True(t, registry.IsActive(flow.SessionID))
 }
 
 func TestIsActive_False(t *testing.T) {
 	registry := NewInMemoryRegistry()
 
-	if registry.IsActive("non-existent") {
-		t.Error("flow should not be active")
-	}
+	assert.False(t, registry.IsActive("non-existent"))
 }
 
 func TestSubscribe_Success(t *testing.T) {
 	registry := NewInMemoryRegistry()
 
 	flow, err := domain.NewActiveFlow("session-1", "project-1", "user-1", "test task")
-	if err != nil {
-		t.Fatalf("failed to create flow: %v", err)
-	}
+	require.NoError(t, err)
 
-	err = registry.Register(flow.SessionID, flow)
-	if err != nil {
-		t.Fatalf("failed to register flow: %v", err)
-	}
+	err = registry.Register(flow.SessionID, flow, nil)
+	require.NoError(t, err)
 
 	subscriber := &mockSubscriber{id: "sub-1"}
 	err = registry.Subscribe(flow.SessionID, subscriber)
-	if err != nil {
-		t.Fatalf("failed to subscribe: %v", err)
-	}
+	require.NoError(t, err)
 }
 
 func TestSubscribe_FlowNotFound(t *testing.T) {
@@ -148,34 +204,24 @@ func TestSubscribe_FlowNotFound(t *testing.T) {
 
 	subscriber := &mockSubscriber{id: "sub-1"}
 	err := registry.Subscribe("non-existent", subscriber)
-	if err == nil {
-		t.Error("expected error when subscribing to non-existent flow")
-	}
+	assert.Error(t, err)
 }
 
 func TestUnsubscribe_Success(t *testing.T) {
 	registry := NewInMemoryRegistry()
 
 	flow, err := domain.NewActiveFlow("session-1", "project-1", "user-1", "test task")
-	if err != nil {
-		t.Fatalf("failed to create flow: %v", err)
-	}
+	require.NoError(t, err)
 
-	err = registry.Register(flow.SessionID, flow)
-	if err != nil {
-		t.Fatalf("failed to register flow: %v", err)
-	}
+	err = registry.Register(flow.SessionID, flow, nil)
+	require.NoError(t, err)
 
 	subscriber := &mockSubscriber{id: "sub-1"}
 	err = registry.Subscribe(flow.SessionID, subscriber)
-	if err != nil {
-		t.Fatalf("failed to subscribe: %v", err)
-	}
+	require.NoError(t, err)
 
 	err = registry.Unsubscribe(flow.SessionID, subscriber.ID())
-	if err != nil {
-		t.Fatalf("failed to unsubscribe: %v", err)
-	}
+	require.NoError(t, err)
 }
 
 func TestConcurrentAccess(t *testing.T) {
@@ -198,7 +244,7 @@ func TestConcurrentAccess(t *testing.T) {
 				return
 			}
 
-			registry.Register(flow.SessionID, flow)
+			registry.Register(flow.SessionID, flow, nil)
 			registry.IsActive(flow.SessionID)
 			registry.Get(flow.SessionID)
 			done <- true
@@ -239,27 +285,19 @@ func TestBroadcastEvent(t *testing.T) {
 	registry := NewInMemoryRegistry()
 
 	flow, err := domain.NewActiveFlow("session-1", "project-1", "user-1", "test task")
-	if err != nil {
-		t.Fatalf("failed to create flow: %v", err)
-	}
+	require.NoError(t, err)
 
-	err = registry.Register(flow.SessionID, flow)
-	if err != nil {
-		t.Fatalf("failed to register flow: %v", err)
-	}
+	err = registry.Register(flow.SessionID, flow, nil)
+	require.NoError(t, err)
 
 	subscriber1 := &mockSubscriber{id: "sub-1"}
 	subscriber2 := &mockSubscriber{id: "sub-2"}
 
 	err = registry.Subscribe(flow.SessionID, subscriber1)
-	if err != nil {
-		t.Fatalf("failed to subscribe: %v", err)
-	}
+	require.NoError(t, err)
 
 	err = registry.Subscribe(flow.SessionID, subscriber2)
-	if err != nil {
-		t.Fatalf("failed to subscribe: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Broadcast event
 	event := &domain.AgentEvent{
@@ -267,9 +305,7 @@ func TestBroadcastEvent(t *testing.T) {
 	}
 
 	err = registry.BroadcastEvent(flow.SessionID, event)
-	if err != nil {
-		t.Fatalf("failed to broadcast event: %v", err)
-	}
+	require.NoError(t, err)
 }
 
 // TestBroadcastEvent_FlowNotFound tests broadcasting to non-existent flow
@@ -281,7 +317,5 @@ func TestBroadcastEvent_FlowNotFound(t *testing.T) {
 	}
 
 	err := registry.BroadcastEvent("non-existent", event)
-	if err == nil {
-		t.Error("expected error when broadcasting to non-existent flow")
-	}
+	assert.Error(t, err)
 }

@@ -23,9 +23,10 @@ export const App: React.FC<AppProps> = ({ config, initialQuestion }) => {
       serverAddress: config.serverAddress,
       projectKey: config.projectKey,
       sessionId: config.sessionId,
+      mobileProxyPort: config.mobileProxyPort,
       askUserCallback: createInteractiveAskUserCallback(),
     });
-  }, [config.projectRoot, config.serverAddress, config.projectKey, config.sessionId]);
+  }, [config.projectRoot, config.serverAddress, config.projectKey, config.sessionId, config.mobileProxyPort]);
 
   // Cleanup container on unmount
   useEffect(() => {

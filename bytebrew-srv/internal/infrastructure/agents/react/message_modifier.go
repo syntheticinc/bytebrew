@@ -94,7 +94,7 @@ func (m *MessageModifier) Modify(ctx context.Context, input []*schema.Message) [
 	// Add task reminder to system prompt after several steps
 	// Uses the LATEST user message to keep focus on current question
 	if currentStep >= 2 && userQuestion != "" {
-		currentSystemPrompt += fmt.Sprintf("\n\n**CURRENT TASK (Step %d):** Answer the user's question: \"%s\"\nDo NOT get distracted - answer THIS question!", currentStep, userQuestion)
+		currentSystemPrompt += fmt.Sprintf("\n\n**CURRENT TASK (Step %d):** Answer the user's question: \"%s\"\nDo NOT get distracted - answer THIS question!", currentStep, sanitizeForSystemPrompt(userQuestion, 500))
 	}
 
 	// Add system prompt at the beginning
@@ -199,4 +199,19 @@ func (m *MessageModifier) ResetStep() {
 // BuildModifierFunc returns a function suitable for use as AgentConfig.MessageModifier
 func (m *MessageModifier) BuildModifierFunc() func(ctx context.Context, input []*schema.Message) []*schema.Message {
 	return m.Modify
+}
+
+// sanitizeForSystemPrompt cleans user input before injecting into system prompt.
+// Truncates to maxLen runes and replaces newlines to prevent format injection.
+func sanitizeForSystemPrompt(input string, maxLen int) string {
+	// Replace newlines with spaces to prevent format injection
+	result := strings.NewReplacer("\n", " ", "\r", " ").Replace(input)
+
+	// Truncate to maxLen runes
+	runes := []rune(result)
+	if len(runes) > maxLen {
+		result = string(runes[:maxLen]) + "..."
+	}
+
+	return result
 }

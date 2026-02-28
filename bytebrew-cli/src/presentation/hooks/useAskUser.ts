@@ -36,9 +36,14 @@ export function useAskUser(options: UseAskUserOptions): UseAskUserResult {
       setQuestions(null);
     });
 
+    const unsubResolved = eventBus.subscribe('AskUserResolved', () => {
+      setQuestions(null);
+    });
+
     return () => {
       unsubAskUser();
       unsubStopped();
+      unsubResolved();
       setAskUserEventBus(null!);
     };
   }, [eventBus]);

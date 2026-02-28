@@ -167,13 +167,13 @@ func (h *FlowHandler) runSupervisorMode(
 	turnExecutor := h.turnExecutorFactory.CreateForSession(proxy, req.SessionId, req.ProjectKey)
 	slog.InfoContext(ctx, "[Supervisor] using Engine-based TurnExecutor", "session_id", req.SessionId)
 
-	// 7. Register active flow
-	activeFlow, err := h.registerActiveFlow(req.SessionId, req.ProjectKey, req.UserId, req.Task)
+	// 7. Register active flow (cancel func stored in registry, not in domain entity)
+	activeFlow, err := h.registerActiveFlow(req.SessionId, req.ProjectKey, req.UserId, req.Task, cancel)
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to register active flow", "error", err)
 		return err
 	}
-	defer h.flowRegistry.Unregister(req.SessionId)
+	defer h.flowRegistry.UnregisterIfCurrent(req.SessionId, activeFlow)
 
 	// 8. Publish initial user message
 	if req.Task != "" {

@@ -126,7 +126,10 @@ export class GrpcStreamGateway implements IStreamGateway {
    * Send a user message
    */
   sendMessage(message: string): void {
-    this.stream?.sendMessage(message);
+    if (!this.stream) {
+      throw new Error('Cannot send message: gateway not connected');
+    }
+    this.stream.sendMessage(message);
   }
 
   /**

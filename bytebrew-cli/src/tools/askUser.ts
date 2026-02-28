@@ -141,5 +141,10 @@ export function resolveAskUser(answers: QuestionAnswer[]): void {
   if (pendingResolve) {
     pendingResolve(answers);
     pendingResolve = null;
+    // Notify UI to clear questions immediately (important for mobile-originated answers
+    // where handleComplete() is not called and ProcessingStopped may arrive late)
+    if (eventBusRef) {
+      eventBusRef.publish({ type: 'AskUserResolved' });
+    }
   }
 }

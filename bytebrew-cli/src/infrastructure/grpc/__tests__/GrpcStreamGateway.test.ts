@@ -138,9 +138,8 @@ describe('GrpcStreamGateway', () => {
   });
 
   describe('sendMessage', () => {
-    it('should handle sendMessage when not connected', () => {
-      // Should not throw when disconnected
-      expect(() => gateway.sendMessage('test')).not.toThrow();
+    it('should throw when not connected', () => {
+      expect(() => gateway.sendMessage('test')).toThrow('Cannot send message: gateway not connected');
     });
   });
 

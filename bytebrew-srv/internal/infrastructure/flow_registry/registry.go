@@ -1,35 +1,13 @@
 package flow_registry
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
 )
-
-// ActiveFlowRegistry отслеживает активные flow сессии
-type ActiveFlowRegistry interface {
-	// Register регистрирует активный flow
-	Register(sessionID string, flow *domain.ActiveFlow) error
-
-	// Unregister удаляет flow из реестра
-	Unregister(sessionID string) error
-
-	// Get возвращает активный flow по session_id
-	Get(sessionID string) (*domain.ActiveFlow, bool)
-
-	// IsActive проверяет, есть ли активный flow для сессии
-	IsActive(sessionID string) bool
-
-	// Subscribe подписывает клиента на события flow
-	Subscribe(sessionID string, subscriber FlowSubscriber) error
-
-	// Unsubscribe отписывает клиента от событий flow
-	Unsubscribe(sessionID string, subscriberID string) error
-
-	// BroadcastEvent отправляет событие всем подписчикам
-	BroadcastEvent(sessionID string, event *domain.AgentEvent) error
-}
 
 // FlowSubscriber подписчик на события flow
 type FlowSubscriber interface {
@@ -46,44 +24,54 @@ type FlowSubscriber interface {
 	OnError(err error) error
 }
 
-// InMemoryRegistry in-memory реализация ActiveFlowRegistry
+// flowEntry holds a flow and its associated cancel function.
+// The cancel func is stored here (not in domain) to keep ActiveFlow pure.
+type flowEntry struct {
+	flow   *domain.ActiveFlow
+	cancel context.CancelFunc
+}
+
+// InMemoryRegistry in-memory реализация flow registry
 type InMemoryRegistry struct {
 	mu    sync.RWMutex
-	flows map[string]*domain.ActiveFlow
+	flows map[string]*flowEntry
 	subs  map[string]map[string]FlowSubscriber // sessionID -> subscriberID -> subscriber
 }
 
 // NewInMemoryRegistry создает новый InMemoryRegistry
 func NewInMemoryRegistry() *InMemoryRegistry {
 	return &InMemoryRegistry{
-		flows: make(map[string]*domain.ActiveFlow),
+		flows: make(map[string]*flowEntry),
 		subs:  make(map[string]map[string]FlowSubscriber),
 	}
 }
 
-// Register регистрирует активный flow
-func (r *InMemoryRegistry) Register(sessionID string, flow *domain.ActiveFlow) error {
+// Register регистрирует активный flow с его cancel function.
+// If a flow already exists for this session, its cancel func is called and the flow is replaced.
+// cancel may be nil if cancellation is not needed.
+func (r *InMemoryRegistry) Register(sessionID string, flow *domain.ActiveFlow, cancel context.CancelFunc) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if _, exists := r.flows[sessionID]; exists {
-		return fmt.Errorf("flow already exists for session: %s", sessionID)
+	if existing, exists := r.flows[sessionID]; exists {
+		if existing.cancel != nil {
+			existing.cancel()
+		}
+		slog.Info("replacing existing flow", "session_id", sessionID)
 	}
 
-	r.flows[sessionID] = flow
-	r.subs[sessionID] = make(map[string]FlowSubscriber)
+	r.flows[sessionID] = &flowEntry{flow: flow, cancel: cancel}
+	if _, exists := r.subs[sessionID]; !exists {
+		r.subs[sessionID] = make(map[string]FlowSubscriber)
+	}
 
 	return nil
 }
 
-// Unregister удаляет flow из реестра
+// Unregister удаляет flow из реестра (idempotent — no error if not found)
 func (r *InMemoryRegistry) Unregister(sessionID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
-	if _, exists := r.flows[sessionID]; !exists {
-		return fmt.Errorf("flow not found for session: %s", sessionID)
-	}
 
 	delete(r.flows, sessionID)
 	delete(r.subs, sessionID)
@@ -91,13 +79,36 @@ func (r *InMemoryRegistry) Unregister(sessionID string) error {
 	return nil
 }
 
+// UnregisterIfCurrent atomically unregisters the flow only if the currently
+// registered flow matches the expected one (pointer equality).
+// This prevents a stale defer from removing a replacement flow.
+func (r *InMemoryRegistry) UnregisterIfCurrent(sessionID string, expected *domain.ActiveFlow) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	entry, exists := r.flows[sessionID]
+	if !exists {
+		return false
+	}
+	if entry.flow != expected {
+		return false
+	}
+
+	delete(r.flows, sessionID)
+	delete(r.subs, sessionID)
+	return true
+}
+
 // Get возвращает активный flow по session_id
 func (r *InMemoryRegistry) Get(sessionID string) (*domain.ActiveFlow, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	flow, exists := r.flows[sessionID]
-	return flow, exists
+	entry, exists := r.flows[sessionID]
+	if !exists {
+		return nil, false
+	}
+	return entry.flow, true
 }
 
 // IsActive проверяет, есть ли активный flow для сессии
@@ -105,12 +116,12 @@ func (r *InMemoryRegistry) IsActive(sessionID string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	flow, exists := r.flows[sessionID]
+	entry, exists := r.flows[sessionID]
 	if !exists {
 		return false
 	}
 
-	return flow.IsRunning()
+	return entry.flow.IsRunning()
 }
 
 // Subscribe подписывает клиента на события flow

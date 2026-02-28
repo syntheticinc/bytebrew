@@ -163,6 +163,33 @@ stripe trigger invoice.payment_succeeded
 |--------|------|-------------|
 | POST | `/api/v1/proxy/llm` | LLM proxy gateway (DeepInfra) |
 
+## License Generation (Dev)
+
+```bash
+go run ./cmd/genlicense <private_key_hex> <email> [tier] [days]
+```
+
+| Parameter | Required | Description | Default |
+|-----------|:---:|-------------|:---:|
+| `private_key_hex` | yes | Ed25519 private key (128 hex chars) | — |
+| `email` | yes | User email | — |
+| `tier` | no | `personal`, `teams`, `trial` | `personal` |
+| `days` | no | License duration in days | `365` |
+
+```bash
+# Personal license, 1 year (key from config.yaml → license.private_key_hex)
+go run ./cmd/genlicense "PRIVATE_KEY_HEX" "user@example.com"
+
+# Teams license, 90 days
+go run ./cmd/genlicense "PRIVATE_KEY_HEX" "user@example.com" "teams" "90"
+
+# Save to file
+go run ./cmd/genlicense "KEY" "user@example.com" > ~/.bytebrew/license.jwt         # Linux/macOS
+go run ./cmd/genlicense "KEY" "user@example.com" > %APPDATA%/bytebrew/license.jwt  # Windows
+```
+
+`bytebrew-srv` reads `license.jwt` on startup and verifies the Ed25519 signature with the public key.
+
 ## Project Structure
 
 ```
@@ -170,6 +197,7 @@ bytebrew-cloud-api/
 ├── cmd/
 │   ├── server/         # Entry point
 │   ├── keygen/         # Ed25519 key generator
+│   ├── genlicense/     # License JWT generator (dev)
 │   └── stripe-setup/   # Stripe Products/Prices setup
 ├── internal/
 │   ├── domain/         # Entities (User, Subscription, Team, License)

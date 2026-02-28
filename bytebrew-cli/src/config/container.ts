@@ -1,4 +1,5 @@
 // DI Container - dependency injection setup for the application
+import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { getStoreFactory, ChunkStoreFactory } from '../indexing/storeFactory.js';
 
@@ -26,6 +27,7 @@ import { LspService } from '../infrastructure/lsp/LspService.js';
 import { AgentStateManager } from '../infrastructure/state/AgentStateManager.js';
 import { ShellSessionManager } from '../infrastructure/shell/ShellSessionManager.js';
 import type { AskUserCallback } from '../tools/askUser.js';
+import { MobileProxyServer } from '../infrastructure/mobile/MobileProxyServer.js';
 
 // Tools layer (singleton)
 import { ToolManager } from '../tools/ToolManager.js';
@@ -38,6 +40,8 @@ export interface ContainerConfig {
   sessionId?: string; // Optional: reuse specific session, otherwise generate new
   headlessMode?: boolean;
   askUserCallback?: AskUserCallback;
+  /** Port for WebSocket proxy to mobile clients. */
+  mobileProxyPort?: number;
   /** Disable LSP server spawning (for tests that don't need real LSP servers). */
   disableLspServers?: boolean;
   overrides?: {
@@ -67,6 +71,7 @@ export class Container {
   private _storeFactory: ChunkStoreFactory;
   private _chunkStore: IChunkStore | null = null;
   private _embeddingsClient: IEmbeddingsClient | null = null;
+  private _mobileProxy: MobileProxyServer | null = null;
 
   // Application layer
   private _accumulator: MessageAccumulatorService;
@@ -130,6 +135,29 @@ export class Container {
     }).catch((error) => {
       getLogger().error('Store initialization failed', { error: error?.message || error });
     });
+    // Start mobile proxy if port is configured
+    if (this._config.mobileProxyPort) {
+      this._mobileProxy = new MobileProxyServer(
+        this._messageRepository,
+        this._eventBus,
+        {
+          projectName: path.basename(this._config.projectRoot),
+          projectPath: this._config.projectRoot,
+          sessionId: this._sessionId,
+        },
+        this._streamProcessor,
+      );
+      try {
+        this._mobileProxy.start(this._config.mobileProxyPort);
+      } catch (error) {
+        getLogger().error('Failed to start mobile proxy', {
+          port: this._config.mobileProxyPort,
+          error: (error as Error).message,
+        });
+        this._mobileProxy = null;
+      }
+    }
+
     this._initialized = true;
   }
 
@@ -137,6 +165,8 @@ export class Container {
    * Dispose of all resources
    */
   async dispose(): Promise<void> {
+    this._mobileProxy?.stop();
+    this._mobileProxy = null;
     this._streamProcessor.dispose();
     this._streamGateway.disconnect();
     await this._diagnosticsService.dispose();

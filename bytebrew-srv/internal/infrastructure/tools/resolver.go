@@ -37,6 +37,8 @@ func (r *DefaultToolResolver) Resolve(ctx context.Context, toolNames []string, d
 			return nil, fmt.Errorf("resolve tool %s: %w", name, err)
 		}
 		if t != nil { // nil = optional tool not available
+			riskLevel := GetContentRiskLevel(name)
+			t = NewSafeToolWrapper(t, name, riskLevel)
 			resolved = append(resolved, t)
 		}
 	}

@@ -141,8 +141,12 @@ export class StreamProcessorService {
           this.executeSend(content);
         }
       })
-      .catch(() => {
-        // Reconnect failed — message cannot be sent
+      .catch((err) => {
+        this.eventBus.publish({
+          type: 'ErrorOccurred',
+          error: err instanceof Error ? err : new Error(String(err)),
+          context: 'reconnectAndSend',
+        });
       });
   }
 
@@ -163,7 +167,7 @@ export class StreamProcessorService {
       // Interrupt: complete partial messages so new server response starts fresh.
       // Server cancels current REACT turn and processes this message as a new turn.
       this.completePartialMessages();
-      this.streamGateway.sendMessage(content);
+      this.safeSendMessage(content);
       return;
     }
 
@@ -175,7 +179,22 @@ export class StreamProcessorService {
     this._isProcessing = true;
     this.eventBus.publish({ type: 'ProcessingStarted' });
 
-    this.streamGateway.sendMessage(content);
+    this.safeSendMessage(content);
+  }
+
+  /**
+   * Send message to gateway, publishing ErrorOccurred on failure.
+   */
+  private safeSendMessage(content: string): void {
+    try {
+      this.streamGateway.sendMessage(content);
+    } catch (err) {
+      this.eventBus.publish({
+        type: 'ErrorOccurred',
+        error: err instanceof Error ? err : new Error(String(err)),
+        context: 'sendMessage',
+      });
+    }
   }
 
   /**

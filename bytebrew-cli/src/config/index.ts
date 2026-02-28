@@ -9,6 +9,7 @@ export interface AppConfig {
   projectRoot: string;
   sessionId?: string; // Optional: reuse specific session
   debug: boolean;
+  mobileProxyPort?: number; // Optional: WebSocket proxy port for mobile clients
 }
 
 export interface ConfigValidationError {
@@ -90,6 +91,7 @@ export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     projectRoot: overrides.projectRoot || process.cwd(),
     sessionId: overrides.sessionId, // Optional: pass through if provided
     debug: overrides.debug ?? process.env.BYTEBREW_DEBUG === 'true',
+    mobileProxyPort: overrides.mobileProxyPort,
   };
 
   // Normalize project root to absolute path

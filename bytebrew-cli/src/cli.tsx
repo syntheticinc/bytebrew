@@ -58,6 +58,8 @@ interface CommandOptions {
   server?: string;
   project: string;
   debug: boolean;
+  mobilePort?: string;
+  noMobile?: boolean;
 }
 
 /**
@@ -75,12 +77,29 @@ async function connectAndConfigure(
   const orchestrator = new ServerConnectionOrchestrator();
   const connection = await orchestrator.connect(externalAddress || undefined);
 
+  // Mobile proxy is always enabled (default port 8765).
+  // Can be overridden with --mobile-port or disabled with --no-mobile.
+  const DEFAULT_MOBILE_PORT = 8765;
+  let mobileProxyPort: number | undefined;
+  if (options.noMobile) {
+    mobileProxyPort = undefined;
+  } else if (options.mobilePort) {
+    mobileProxyPort = parseInt(options.mobilePort, 10);
+    if (Number.isNaN(mobileProxyPort)) {
+      console.error(`Error: Invalid --mobile-port value: "${options.mobilePort}" (must be a number)`);
+      process.exit(1);
+    }
+  } else {
+    mobileProxyPort = DEFAULT_MOBILE_PORT;
+  }
+
   const config = loadAndValidateConfig({
     serverAddress: connection.address,
     projectKey: options.project,
     projectRoot,
     sessionId,
     debug: options.debug,
+    mobileProxyPort,
   });
 
   return { config, connection };
@@ -135,6 +154,8 @@ program
   .option('-s, --server <address>', 'Server address (connect to external server)')
   .option('-p, --project <key>', 'Project key', 'default')
   .option('-d, --debug', 'Enable debug mode', false)
+  .option('--mobile-port <port>', 'Override mobile proxy port (default: 8765)')
+  .option('--no-mobile', 'Disable mobile proxy')
   .action(async (options) => {
     const globalOpts = program.opts();
     initLogger(options.debug);
@@ -198,6 +219,8 @@ program
   .option('-s, --server <address>', 'Server address (connect to external server)')
   .option('-p, --project <key>', 'Project key', 'default')
   .option('-d, --debug', 'Enable debug mode', false)
+  .option('--mobile-port <port>', 'Override mobile proxy port (default: 8765)')
+  .option('--no-mobile', 'Disable mobile proxy')
   .option('--headless', 'Run in headless mode (no UI, plain text output)', false)
   .option('-o, --output <file>', 'Write output to file (headless mode only)')
   .option(
@@ -266,6 +289,8 @@ program
   .option('-s, --server <address>', 'Server address (connect to external server)')
   .option('-p, --project <key>', 'Project key', 'default')
   .option('-d, --debug', 'Enable debug mode', false)
+  .option('--mobile-port <port>', 'Override mobile proxy port (default: 8765)')
+  .option('--no-mobile', 'Disable mobile proxy')
   .option('-o, --output <file>', 'Write output to file (in addition to console)')
   .action(async (options) => {
     const globalOpts = program.opts();

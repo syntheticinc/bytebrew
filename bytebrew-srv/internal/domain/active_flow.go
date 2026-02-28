@@ -11,8 +11,8 @@ type ActiveFlow struct {
 	ProjectKey string
 	UserID     string
 	Task       string
-	Status     FlowStatus
-	StartedAt  time.Time
+	Status    FlowStatus
+	StartedAt time.Time
 }
 
 // FlowStatus represents the status of a flow

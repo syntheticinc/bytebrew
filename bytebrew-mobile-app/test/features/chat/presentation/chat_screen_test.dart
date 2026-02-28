@@ -1,14 +1,13 @@
-import 'dart:async';
-
 import 'package:bytebrew_mobile/core/domain/chat_message.dart';
 import 'package:bytebrew_mobile/core/domain/session.dart';
 import 'package:bytebrew_mobile/features/chat/application/chat_provider.dart';
-import 'package:bytebrew_mobile/features/chat/domain/chat_repository.dart';
 import 'package:bytebrew_mobile/features/chat/presentation/chat_screen.dart';
 import 'package:bytebrew_mobile/features/sessions/application/sessions_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../../helpers/fakes.dart';
 
 final _testSession = Session(
   id: 'test-session',
@@ -53,10 +52,10 @@ void main() {
       ProviderScope(
         overrides: [
           chatRepositoryProvider.overrideWithValue(
-            _FakeChatRepository(_testMessages),
+            FakeChatRepository(_testMessages),
           ),
           sessionsProvider.overrideWith(
-            () => _FakeSessionsNotifier([_testSession]),
+            () => FakeSessionsNotifier([_testSession]),
           ),
         ],
         child: const MaterialApp(home: ChatScreen(sessionId: 'test-session')),
@@ -77,10 +76,10 @@ void main() {
       ProviderScope(
         overrides: [
           chatRepositoryProvider.overrideWithValue(
-            _FakeChatRepository(_testMessages),
+            FakeChatRepository(_testMessages),
           ),
           sessionsProvider.overrideWith(
-            () => _FakeSessionsNotifier([_testSession]),
+            () => FakeSessionsNotifier([_testSession]),
           ),
         ],
         child: const MaterialApp(home: ChatScreen(sessionId: 'test-session')),
@@ -97,10 +96,10 @@ void main() {
       ProviderScope(
         overrides: [
           chatRepositoryProvider.overrideWithValue(
-            _FakeChatRepository(_testMessages),
+            FakeChatRepository(_testMessages),
           ),
           sessionsProvider.overrideWith(
-            () => _FakeSessionsNotifier([_testSession]),
+            () => FakeSessionsNotifier([_testSession]),
           ),
         ],
         child: const MaterialApp(home: ChatScreen(sessionId: 'test-session')),
@@ -118,10 +117,10 @@ void main() {
       ProviderScope(
         overrides: [
           chatRepositoryProvider.overrideWithValue(
-            _FakeChatRepository(_testMessages),
+            FakeChatRepository(_testMessages),
           ),
           sessionsProvider.overrideWith(
-            () => _FakeSessionsNotifier([_testSession]),
+            () => FakeSessionsNotifier([_testSession]),
           ),
         ],
         child: const MaterialApp(home: ChatScreen(sessionId: 'test-session')),
@@ -138,9 +137,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(_FakeChatRepository([])),
+          chatRepositoryProvider.overrideWithValue(FakeChatRepository([])),
           sessionsProvider.overrideWith(
-            () => _FakeSessionsNotifier([_testSession]),
+            () => FakeSessionsNotifier([_testSession]),
           ),
         ],
         child: const MaterialApp(home: ChatScreen(sessionId: 'test-session')),
@@ -150,43 +149,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Start a conversation'), findsOneWidget);
-    expect(
-      find.text('Send a message to your agent'),
-      findsOneWidget,
-    );
+    expect(find.text('Send a message to your agent'), findsOneWidget);
   });
-}
-
-class _FakeChatRepository implements ChatRepository {
-  _FakeChatRepository(this._messages);
-
-  final List<ChatMessage> _messages;
-
-  @override
-  Future<List<ChatMessage>> getMessages(String sessionId) async => _messages;
-
-  @override
-  Future<void> sendMessage(String sessionId, String text) async {}
-
-  @override
-  Future<void> answerAskUser(
-    String sessionId,
-    String askUserId,
-    String answer,
-  ) async {}
-
-  @override
-  Future<void> cancel(String sessionId) async {}
-}
-
-class _FakeSessionsNotifier extends Sessions {
-  _FakeSessionsNotifier(this._sessions);
-
-  final List<Session> _sessions;
-
-  @override
-  FutureOr<List<Session>> build() => _sessions;
-
-  @override
-  Future<void> refresh() async {}
 }

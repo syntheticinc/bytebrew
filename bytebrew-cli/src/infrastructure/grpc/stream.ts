@@ -119,7 +119,7 @@ export class StreamManager extends EventEmitter {
    */
   sendMessage(task: string): void {
     if (!this.stream || !this.isConnected) {
-      return;
+      throw new Error('Cannot send message: stream not connected');
     }
 
     const request: FlowRequest = {

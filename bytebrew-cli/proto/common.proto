@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package vector.v1;
+package bytebrew.v1;
 
 // Error represents an error response
 message Error {

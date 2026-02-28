@@ -129,6 +129,13 @@ func (t *ExecuteCommandTool) InvokableRun(ctx context.Context, argumentsInJSON s
 			return "[ERROR] The command parameter contains source code. Do NOT use execute_command to create files. " +
 				"Use write_file tool instead to create or overwrite files with source code content.", nil
 		}
+
+		// Check for dangerous commands (data exfiltration, destructive operations)
+		if dangerous, reason := isDangerousCommand(args.Command); dangerous {
+			slog.WarnContext(ctx, "ExecuteCommandTool: dangerous command blocked",
+				"command", args.Command, "reason", reason)
+			return fmt.Sprintf("[SECURITY] Command blocked: %s. Reason: %s.", args.Command, reason), nil
+		}
 	}
 
 	if t.proxy == nil {
@@ -254,6 +261,97 @@ func looksLikeSourceCode(command string) bool {
 
 	// 3+ code patterns in a long command = almost certainly source code
 	return patternCount >= 3
+}
+
+// isDangerousCommand detects potentially dangerous commands that could be used
+// for data exfiltration or destructive operations.
+// Returns (isDangerous bool, reason string).
+func isDangerousCommand(command string) (bool, string) {
+	cmdLower := strings.ToLower(command)
+
+	// Data exfiltration: piping to network tools (case-insensitive)
+	exfilPatterns := []struct {
+		pattern string
+		reason  string
+	}{
+		{"| curl", "piping output to curl (potential data exfiltration)"},
+		{"| wget", "piping output to wget (potential data exfiltration)"},
+		{"| nc ", "piping output to netcat (potential data exfiltration)"},
+		{"| nc\n", "piping output to netcat (potential data exfiltration)"},
+		{"|curl", "piping output to curl (potential data exfiltration)"},
+		{"|wget", "piping output to wget (potential data exfiltration)"},
+		{"curl -d ", "sending data with curl (potential data exfiltration)"},
+		{"curl --data", "sending data with curl (potential data exfiltration)"},
+		{"curl --form", "uploading file with curl (potential data exfiltration)"},
+		{"curl --upload", "uploading with curl (potential data exfiltration)"},
+	}
+
+	for _, p := range exfilPatterns {
+		if strings.Contains(cmdLower, p.pattern) {
+			return true, p.reason
+		}
+	}
+
+	// Case-sensitive exfiltration patterns (curl -F is --form, -f is --fail)
+	caseSensitivePatterns := []struct {
+		pattern string
+		reason  string
+	}{
+		{"curl -F ", "uploading file with curl (potential data exfiltration)"},
+	}
+
+	for _, p := range caseSensitivePatterns {
+		if strings.Contains(command, p.pattern) {
+			return true, p.reason
+		}
+	}
+
+	// Destructive patterns — check with boundary awareness
+	// "rm -rf /" must not match "rm -rf /tmp/build" (legitimate path)
+	if isDestructiveRm(cmdLower) {
+		return true, "recursive deletion of critical directory"
+	}
+
+	simpleDestructivePatterns := []struct {
+		pattern string
+		reason  string
+	}{
+		{"mkfs.", "filesystem formatting"},
+		{"mkfs ", "filesystem formatting"},
+		{"dd if=/dev/zero", "disk overwrite with zeros"},
+		{":(){ :|:& };:", "fork bomb"},
+	}
+
+	for _, p := range simpleDestructivePatterns {
+		if strings.Contains(cmdLower, p.pattern) {
+			return true, p.reason
+		}
+	}
+
+	return false, ""
+}
+
+// isDestructiveRm checks for dangerous rm -rf patterns while avoiding false positives.
+// "rm -rf /" is dangerous, but "rm -rf /tmp/build" is legitimate.
+func isDestructiveRm(cmdLower string) bool {
+	dangerousTargets := []string{"rm -rf /", "rm -rf ~", "rm -rf $home"}
+	for _, target := range dangerousTargets {
+		idx := strings.Index(cmdLower, target)
+		if idx == -1 {
+			continue
+		}
+		endIdx := idx + len(target)
+		// Pattern must be at end of string or followed by space/semicolon/pipe/newline
+		// NOT followed by a path character (letter, digit, dot, underscore, dash)
+		if endIdx >= len(cmdLower) {
+			return true
+		}
+		next := cmdLower[endIdx]
+		if next == ' ' || next == '\n' || next == '\t' || next == ';' || next == '&' || next == '|' {
+			return true
+		}
+	}
+	return false
 }
 
 // truncateForLog truncates a string for logging purposes.

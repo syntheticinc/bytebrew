@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/agents"
 	licenseinfra "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/license"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/persistence"
@@ -106,14 +107,18 @@ func NewInfraComponents(cfg config.Config) (*InfraComponents, error) {
 	// 7b. Create plan manager for AgentService
 	planManager := createPlanStorage(cfg)
 
-	// 8. Create AgentService
+	// 8. Add security reminder (highest priority -- last in context for max recency bias)
+	contextReminders := storageCmp.ContextReminders
+	contextReminders = append(contextReminders, agents.NewSecurityReminderProvider())
+
+	// 9. Create AgentService
 	agentService, err := agentservice.New(agentservice.Config{
 		ChatModel:        chatModel,
 		PlanManager:      planManager,
 		TaskManager:      storageCmp.WorkManager,
 		SubtaskManager:   storageCmp.WorkManager,
 		AgentPool:        agentPool,
-		ContextReminders: storageCmp.ContextReminders,
+		ContextReminders: contextReminders,
 		WebSearchTool:    webSearchTool,
 		WebFetchTool:     webFetchTool,
 		MaxSteps:         cfg.Agent.MaxSteps,

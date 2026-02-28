@@ -1,11 +1,11 @@
-import 'dart:async';
-
 import 'package:bytebrew_mobile/core/domain/session.dart';
 import 'package:bytebrew_mobile/features/sessions/application/sessions_provider.dart';
 import 'package:bytebrew_mobile/features/sessions/presentation/sessions_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../../helpers/fakes.dart';
 
 void main() {
   final testSessions = [
@@ -52,7 +52,7 @@ void main() {
       ProviderScope(
         overrides: [
           sessionsProvider.overrideWith(
-            () => _FakeSessionsNotifier(testSessions),
+            () => FakeSessionsNotifier(testSessions),
           ),
           groupedSessionsProvider.overrideWithValue(testGrouped),
         ],
@@ -83,7 +83,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          sessionsProvider.overrideWith(() => _FakeSessionsNotifier([])),
+          sessionsProvider.overrideWith(() => FakeSessionsNotifier([])),
           groupedSessionsProvider.overrideWithValue({}),
         ],
         child: const MaterialApp(home: SessionsScreen()),
@@ -102,7 +102,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          sessionsProvider.overrideWith(() => _FakeSessionsNotifier([])),
+          sessionsProvider.overrideWith(() => FakeSessionsNotifier([])),
           groupedSessionsProvider.overrideWithValue({}),
         ],
         child: const MaterialApp(home: SessionsScreen()),
@@ -113,17 +113,4 @@ void main() {
 
     expect(find.text('Activity'), findsOneWidget);
   });
-}
-
-/// A fake notifier that immediately returns the given sessions.
-class _FakeSessionsNotifier extends Sessions {
-  _FakeSessionsNotifier(this._sessions);
-
-  final List<Session> _sessions;
-
-  @override
-  FutureOr<List<Session>> build() => _sessions;
-
-  @override
-  Future<void> refresh() async {}
 }

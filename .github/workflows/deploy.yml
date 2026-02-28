@@ -44,39 +44,47 @@ jobs:
           npm ci
           npm run build
 
+      # --- Upload artifacts ---
+      - name: Upload API binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-binary
+          path: build/bytebrew-cloud-api
+          retention-days: 1
+
+      - name: Upload frontend bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-bundle
+          path: bytebrew-cloud-web/dist/
+          retention-days: 1
+
   deploy:
     needs: build
     runs-on: ubuntu-latest
     if: ${{ secrets.VPS_HOST != '' }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
+      - name: Download API binary
+        uses: actions/download-artifact@v4
         with:
-          go-version: '1.24'
+          name: api-binary
+          path: build/
 
-      - name: Build API binary
-        run: |
-          cd bytebrew-cloud-api
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../build/bytebrew-cloud-api ./cmd/server
-
-      - uses: actions/setup-node@v4
+      - name: Download frontend bundle
+        uses: actions/download-artifact@v4
         with:
-          node-version: '22'
+          name: frontend-bundle
+          path: bytebrew-cloud-web/dist/
 
-      - name: Build frontend
-        run: |
-          cd bytebrew-cloud-web
-          npm ci
-          npm run build
-
-      - name: Stop service
+      - name: Backup and stop service
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: deploy
           key: ${{ secrets.VPS_SSH_KEY }}
-          script: sudo systemctl stop bytebrew-cloud-api || true
+          script: |
+            sudo cp /usr/local/bin/bytebrew-cloud-api /usr/local/bin/bytebrew-cloud-api.bak 2>/dev/null || true
+            sudo systemctl stop bytebrew-cloud-api || true
 
       - name: Copy files to VPS
         uses: appleboy/scp-action@v0.1.7
@@ -87,7 +95,7 @@ jobs:
           source: "build/bytebrew-cloud-api,bytebrew-cloud-web/dist/*"
           target: "/tmp/bytebrew-deploy"
 
-      - name: Install and restart
+      - name: Install and verify
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -100,6 +108,18 @@ jobs:
             sudo mv /tmp/bytebrew-deploy/bytebrew-cloud-web/dist /var/www/bytebrew-cloud-web
             sudo systemctl start bytebrew-cloud-api
             rm -rf /tmp/bytebrew-deploy
-            # Verify service started successfully
+
+            # Health check with rollback
             sleep 3
-            curl -sf http://127.0.0.1:8080/health || { echo "Health check failed!"; sudo journalctl -u bytebrew-cloud-api --no-pager -n 30; exit 1; }
+            if ! curl -sf http://127.0.0.1:8080/health; then
+              echo "Health check failed! Rolling back..."
+              sudo systemctl stop bytebrew-cloud-api
+              sudo mv /usr/local/bin/bytebrew-cloud-api.bak /usr/local/bin/bytebrew-cloud-api
+              sudo systemctl start bytebrew-cloud-api
+              sleep 3
+              sudo journalctl -u bytebrew-cloud-api --no-pager -n 50
+              exit 1
+            fi
+
+            # Cleanup backup on success
+            sudo rm -f /usr/local/bin/bytebrew-cloud-api.bak

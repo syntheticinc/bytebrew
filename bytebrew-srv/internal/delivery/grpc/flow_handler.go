@@ -22,8 +22,9 @@ type AgentService interface {
 
 // ActiveFlowRegistry defines interface for managing active flows
 type ActiveFlowRegistry interface {
-	Register(sessionID string, flow *domain.ActiveFlow) error
+	Register(sessionID string, flow *domain.ActiveFlow, cancel context.CancelFunc) error
 	Unregister(sessionID string) error
+	UnregisterIfCurrent(sessionID string, expected *domain.ActiveFlow) bool
 	Get(sessionID string) (*domain.ActiveFlow, bool)
 	IsActive(sessionID string) bool
 	BroadcastEvent(sessionID string, event *domain.AgentEvent) error
@@ -186,29 +187,34 @@ func (h *FlowHandler) ExecuteFlow(stream pb.FlowService_ExecuteFlowServer) error
 
 	// Check if there's an active flow for this session
 	if h.flowRegistry.IsActive(req.SessionId) {
-		slog.InfoContext(ctx, "active flow found, client will receive events via broadcast", "session_id", req.SessionId)
+		if req.Task == "" {
+			// Passive observer mode: no new task, subscribe to events
+			slog.InfoContext(ctx, "active flow found, client will receive events via broadcast", "session_id", req.SessionId)
 
-		// Start ping service
-		err = h.pingService.Start(ctx, req.SessionId, func(pong *pb.PongResponse) error {
-			return stream.Send(&pb.FlowResponse{
-				SessionId: req.SessionId,
-				Pong:      pong,
+			err = h.pingService.Start(ctx, req.SessionId, func(pong *pb.PongResponse) error {
+				return stream.Send(&pb.FlowResponse{
+					SessionId: req.SessionId,
+					Pong:      pong,
+				})
 			})
-		})
-		if err != nil {
-			slog.ErrorContext(ctx, "failed to start ping service", "error", err)
-			return status.Errorf(codes.Internal, "failed to start ping service: %v", err)
-		}
-		defer h.pingService.Stop(req.SessionId)
+			if err != nil {
+				slog.ErrorContext(ctx, "failed to start ping service", "error", err)
+				return status.Errorf(codes.Internal, "failed to start ping service: %v", err)
+			}
+			defer h.pingService.Stop(req.SessionId)
 
-		// Wait for context cancellation
-		<-ctx.Done()
-		slog.InfoContext(ctx, "client disconnected from active flow")
-		return nil
+			<-ctx.Done()
+			slog.InfoContext(ctx, "client disconnected from active flow")
+			return nil
+		}
+
+		// New task received while flow is active — old flow will be replaced during registration
+		slog.InfoContext(ctx, "active flow exists but new task received, replacing",
+			"session_id", req.SessionId, "task", req.Task)
 	}
 
-	// No active flow - wait for task from client
-	slog.InfoContext(ctx, "no active flow, waiting for task", "session_id", req.SessionId)
+	// Proceed with flow setup (either no prior flow, or replacing an existing one)
+	slog.InfoContext(ctx, "proceeding with flow setup", "session_id", req.SessionId)
 
 	// Create thread-safe StreamWriter for all stream.Send() operations
 	streamWriter := NewStreamWriter(stream)
@@ -264,14 +270,15 @@ func (h *FlowHandler) ExecuteFlow(stream pb.FlowService_ExecuteFlowServer) error
 	return h.runSingleAgentMode(ctx, req, stream, proxy, streamWriter, agentEventStream, cancel)
 }
 
-// registerActiveFlow creates and registers an active flow
-func (h *FlowHandler) registerActiveFlow(sessionID, projectKey, userID, task string) (*domain.ActiveFlow, error) {
+// registerActiveFlow creates and registers an active flow with its cancel function.
+// The cancel func is stored in the registry (not in the domain entity) to keep ActiveFlow pure.
+func (h *FlowHandler) registerActiveFlow(sessionID, projectKey, userID, task string, cancel context.CancelFunc) (*domain.ActiveFlow, error) {
 	activeFlow, err := domain.NewActiveFlow(sessionID, projectKey, userID, task)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := h.flowRegistry.Register(sessionID, activeFlow); err != nil {
+	if err := h.flowRegistry.Register(sessionID, activeFlow, cancel); err != nil {
 		return nil, err
 	}
 

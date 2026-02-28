@@ -57,11 +57,11 @@ func (h *FlowHandler) runSingleAgentMode(
 	}()
 
 	executeTask := func(task string) error {
-		activeFlow, err := h.registerActiveFlow(req.SessionId, req.ProjectKey, req.UserId, task)
+		activeFlow, err := h.registerActiveFlow(req.SessionId, req.ProjectKey, req.UserId, task, cancel)
 		if err != nil {
 			return err
 		}
-		defer h.flowRegistry.Unregister(req.SessionId)
+		defer h.flowRegistry.UnregisterIfCurrent(req.SessionId, activeFlow)
 
 		// Create TurnExecutor via Engine (same path as supervisor mode)
 		turnExecutor := h.turnExecutorFactory.CreateForSession(proxy, req.SessionId, req.ProjectKey)
