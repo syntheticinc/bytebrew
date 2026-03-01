@@ -292,6 +292,7 @@ func (p *AgentPool) Spawn(ctx context.Context, sessionID, projectKey, subtaskID 
 
 	// Launch goroutine
 	go func() {
+		defer cancel() // Release context resources on goroutine exit
 		defer func() {
 			if r := recover(); r != nil {
 				slog.Error("[AgentPool] Code Agent panicked",
@@ -513,6 +514,7 @@ func (p *AgentPool) SpawnWithDescription(ctx context.Context, sessionID, project
 	})
 
 	go func() {
+		defer cancel() // Release context resources on goroutine exit
 		defer func() {
 			if r := recover(); r != nil {
 				slog.Error("[AgentPool] Agent panicked",

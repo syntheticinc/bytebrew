@@ -77,10 +77,6 @@ func NewContextRewriterWithLogging(maxContextTokens int, contextLogger *ContextL
 		if totalChars <= maxContextChars {
 			slog.DebugContext(ctx, "context within limit, no compression needed",
 				"tokens", totalTokens, "limit_tokens", maxContextTokens)
-			// Log context as-is (no compression needed)
-			if contextLogger != nil {
-				contextLogger.LogContext(ctx, input, -1)
-			}
 			return input
 		}
 

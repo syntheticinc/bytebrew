@@ -37,6 +37,11 @@ type AgentPoolProxy interface {
 	RemoveSession(sessionID string)
 }
 
+// ToolCallHistoryCleaner defines interface for clearing tool call history per session (consumer-side)
+type ToolCallHistoryCleaner interface {
+	ClearSession(sessionID string)
+}
+
 // WorkManagerForOrchestrator provides active work status for the Orchestrator (consumer-side)
 type WorkManagerForOrchestrator interface {
 	GetTasks(ctx context.Context, sessionID string) ([]*domain.Task, error)
@@ -58,26 +63,28 @@ type TurnExecutorFactory interface {
 // FlowHandler handles FlowService gRPC requests
 type FlowHandler struct {
 	pb.UnimplementedFlowServiceServer
-	agentService         AgentService
-	agentPoolProxy       AgentPoolProxy              // For setting proxy/callback on agent pool
-	agentPoolAdapter     tools.AgentPoolForTool      // Adapter for spawn_code_agent tool registration
-	workManager          WorkManagerForOrchestrator  // For active work checking in Orchestrator
-	sessionStorage       SessionStorage              // For session persistence (optional)
-	turnExecutorFactory  TurnExecutorFactory         // Engine-based TurnExecutor factory (required)
-	pingService          *infragrpc.PingService
-	flowRegistry         ActiveFlowRegistry
+	agentService          AgentService
+	agentPoolProxy        AgentPoolProxy              // For setting proxy/callback on agent pool
+	agentPoolAdapter      tools.AgentPoolForTool      // Adapter for spawn_code_agent tool registration
+	workManager           WorkManagerForOrchestrator  // For active work checking in Orchestrator
+	sessionStorage        SessionStorage              // For session persistence (optional)
+	turnExecutorFactory   TurnExecutorFactory         // Engine-based TurnExecutor factory (required)
+	toolCallHistoryCleaner ToolCallHistoryCleaner     // For clearing tool call history on cleanup (optional)
+	pingService           *infragrpc.PingService
+	flowRegistry          ActiveFlowRegistry
 }
 
 // FlowHandlerConfig holds configuration for FlowHandler
 type FlowHandlerConfig struct {
-	AgentService        AgentService
-	AgentPoolProxy      AgentPoolProxy              // Optional: for multi-agent mode
-	AgentPoolAdapter    tools.AgentPoolForTool      // Optional: for spawn_code_agent tool
-	WorkManager         WorkManagerForOrchestrator  // Optional: for Orchestrator active work checks
-	SessionStorage      SessionStorage              // Optional: for session persistence
-	TurnExecutorFactory TurnExecutorFactory         // Engine-based TurnExecutor factory (required)
-	PingInterval        time.Duration
-	FlowRegistry        ActiveFlowRegistry
+	AgentService           AgentService
+	AgentPoolProxy         AgentPoolProxy              // Optional: for multi-agent mode
+	AgentPoolAdapter       tools.AgentPoolForTool      // Optional: for spawn_code_agent tool
+	WorkManager            WorkManagerForOrchestrator  // Optional: for Orchestrator active work checks
+	SessionStorage         SessionStorage              // Optional: for session persistence
+	TurnExecutorFactory    TurnExecutorFactory         // Engine-based TurnExecutor factory (required)
+	ToolCallHistoryCleaner ToolCallHistoryCleaner      // Optional: for clearing tool call history on cleanup
+	PingInterval           time.Duration
+	FlowRegistry           ActiveFlowRegistry
 }
 
 // NewFlowHandler creates a new Flow handler
@@ -110,14 +117,15 @@ func NewFlowHandlerWithConfig(cfg FlowHandlerConfig) (*FlowHandler, error) {
 	}
 
 	return &FlowHandler{
-		agentService:        cfg.AgentService,
-		agentPoolProxy:      cfg.AgentPoolProxy,
-		agentPoolAdapter:    cfg.AgentPoolAdapter,
-		workManager:         cfg.WorkManager,
-		sessionStorage:      cfg.SessionStorage,
-		turnExecutorFactory: cfg.TurnExecutorFactory,
-		pingService:         pingService,
-		flowRegistry:        cfg.FlowRegistry,
+		agentService:           cfg.AgentService,
+		agentPoolProxy:         cfg.AgentPoolProxy,
+		agentPoolAdapter:       cfg.AgentPoolAdapter,
+		workManager:            cfg.WorkManager,
+		sessionStorage:         cfg.SessionStorage,
+		turnExecutorFactory:    cfg.TurnExecutorFactory,
+		toolCallHistoryCleaner: cfg.ToolCallHistoryCleaner,
+		pingService:            pingService,
+		flowRegistry:           cfg.FlowRegistry,
 	}, nil
 }
 
@@ -224,10 +232,11 @@ func (h *FlowHandler) ExecuteFlow(stream pb.FlowService_ExecuteFlowServer) error
 	proxy := NewStreamBasedClientOperationsProxy(stream, req.SessionId, req.ProjectKey, streamWriter)
 	defer proxy.CleanupPendingCalls()
 
-	// Set proxy on AgentPool if available (for Code Agent tool calls)
+	// Set proxy on AgentPool if available (for Code Agent tool calls).
+	// NOTE: RemoveSession is NOT deferred here — it's called from cleanupFlowResources
+	// to avoid stale defers from replaced flows cleaning up the new flow's resources.
 	if h.agentPoolProxy != nil {
 		h.agentPoolProxy.SetProxyForSession(req.SessionId, proxy)
-		defer h.agentPoolProxy.RemoveSession(req.SessionId)
 	}
 
 	// Create agent event stream for sending events to client (uses StreamWriter)
@@ -283,6 +292,20 @@ func (h *FlowHandler) registerActiveFlow(sessionID, projectKey, userID, task str
 	}
 
 	return activeFlow, nil
+}
+
+// cleanupFlowResources cleans up resources only if this flow is still the current one.
+// Prevents stale defer from cleaning up a replacement flow's resources.
+func (h *FlowHandler) cleanupFlowResources(sessionID string, activeFlow *domain.ActiveFlow) {
+	if !h.flowRegistry.UnregisterIfCurrent(sessionID, activeFlow) {
+		return
+	}
+	if h.agentPoolProxy != nil {
+		h.agentPoolProxy.RemoveSession(sessionID)
+	}
+	if h.toolCallHistoryCleaner != nil {
+		h.toolCallHistoryCleaner.ClearSession(sessionID)
+	}
 }
 
 // createChunkCallback creates a callback for sending answer chunks to the client.

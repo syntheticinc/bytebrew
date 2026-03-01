@@ -171,6 +171,12 @@ export class Container {
     this._streamGateway.disconnect();
     await this._diagnosticsService.dispose();
     await this._shellSessionManager.disposeAll();
+    // Close SQLite database to release WAL file locks
+    if (this._chunkStore && 'close' in this._chunkStore) {
+      (this._chunkStore as { close(): void }).close();
+    }
+    this._chunkStore = null;
+    this._embeddingsClient = null;
     this._eventBus.clear();
     this._initialized = false;
   }

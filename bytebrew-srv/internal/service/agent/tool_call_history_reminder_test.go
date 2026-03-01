@@ -260,13 +260,14 @@ func TestRecordToolResult_ResetOnSuccess(t *testing.T) {
 	r.RecordToolResult("session-1", "read_file", "[ERROR] file not found")
 	r.RecordToolResult("session-1", "read_file", "file contents here")
 
-	// Verify no warning (count reset by success)
+	// Verify no error-loop warning (count reset by success)
+	// Note: consecutive same-tool warning may still appear since we called read_file 3x in a row
 	content, _, ok := r.GetContextReminder(context.Background(), "session-1")
 	if !ok {
 		t.Fatal("expected reminder")
 	}
-	if strings.Contains(content, "⚠️ WARNING") {
-		t.Errorf("expected no warning after success: %s", content)
+	if strings.Contains(content, "STUCK in a loop") {
+		t.Errorf("expected no error-loop warning after success: %s", content)
 	}
 
 	// Now record 3 more errors
@@ -274,13 +275,13 @@ func TestRecordToolResult_ResetOnSuccess(t *testing.T) {
 	r.RecordToolResult("session-1", "read_file", "[ERROR] file not found")
 	r.RecordToolResult("session-1", "read_file", "[ERROR] file not found")
 
-	// Verify warning appears again
+	// Verify error-loop warning appears again
 	content, _, ok = r.GetContextReminder(context.Background(), "session-1")
 	if !ok {
 		t.Fatal("expected reminder")
 	}
-	if !strings.Contains(content, "⚠️ WARNING") {
-		t.Errorf("expected warning after new error sequence: %s", content)
+	if !strings.Contains(content, "STUCK in a loop") {
+		t.Errorf("expected error-loop warning after new error sequence: %s", content)
 	}
 }
 
@@ -318,6 +319,142 @@ func TestRecordToolResult_MixedTools(t *testing.T) {
 				t.Errorf("expected no warning for write_file (only 1 error): %s", content)
 			}
 		}
+	}
+}
+
+func TestConsecutiveSameTool_Warning(t *testing.T) {
+	r := NewToolCallHistoryReminder()
+
+	// 3 consecutive calls to the same tool
+	r.RecordToolCall("session-1", "read_file")
+	r.RecordToolCall("session-1", "read_file")
+	r.RecordToolCall("session-1", "read_file")
+
+	content, _, ok := r.GetContextReminder(context.Background(), "session-1")
+	if !ok {
+		t.Fatal("expected reminder")
+	}
+	if !strings.Contains(content, "You called \"read_file\" 3 times in a row") {
+		t.Errorf("expected consecutive same-tool warning: %s", content)
+	}
+}
+
+func TestConsecutiveSameTool_ResetOnDifferentTool(t *testing.T) {
+	r := NewToolCallHistoryReminder()
+
+	// 2 calls to read_file, then 1 to search_code
+	r.RecordToolCall("session-1", "read_file")
+	r.RecordToolCall("session-1", "read_file")
+	r.RecordToolCall("session-1", "search_code")
+
+	content, _, ok := r.GetContextReminder(context.Background(), "session-1")
+	if !ok {
+		t.Fatal("expected reminder")
+	}
+	// Should NOT have consecutive same-tool warning (count reset to 1 by search_code)
+	if strings.Contains(content, "times in a row") {
+		t.Errorf("expected no consecutive same-tool warning after different tool: %s", content)
+	}
+}
+
+func TestConsecutiveSameTool_ResumesAfterReset(t *testing.T) {
+	r := NewToolCallHistoryReminder()
+
+	// read_file x2, search_code x1, read_file x3
+	r.RecordToolCall("session-1", "read_file")
+	r.RecordToolCall("session-1", "read_file")
+	r.RecordToolCall("session-1", "search_code")
+	r.RecordToolCall("session-1", "read_file")
+	r.RecordToolCall("session-1", "read_file")
+	r.RecordToolCall("session-1", "read_file")
+
+	content, _, ok := r.GetContextReminder(context.Background(), "session-1")
+	if !ok {
+		t.Fatal("expected reminder")
+	}
+	// Should have warning for 3 consecutive read_file after the reset
+	if !strings.Contains(content, "You called \"read_file\" 3 times in a row") {
+		t.Errorf("expected consecutive same-tool warning: %s", content)
+	}
+}
+
+func TestConsecutiveSameTool_BelowThreshold(t *testing.T) {
+	r := NewToolCallHistoryReminder()
+
+	// Only 2 consecutive calls (below threshold of 3)
+	r.RecordToolCall("session-1", "read_file")
+	r.RecordToolCall("session-1", "read_file")
+	r.RecordToolCall("session-1", "search_code") // third call to trigger reminder
+
+	content, _, ok := r.GetContextReminder(context.Background(), "session-1")
+	if !ok {
+		t.Fatal("expected reminder")
+	}
+	if strings.Contains(content, "times in a row") {
+		t.Errorf("expected no warning for 2 consecutive calls: %s", content)
+	}
+}
+
+func TestConsecutiveSameTool_SessionIsolation(t *testing.T) {
+	r := NewToolCallHistoryReminder()
+
+	// session-1: 3 consecutive read_file
+	r.RecordToolCall("session-1", "read_file")
+	r.RecordToolCall("session-1", "read_file")
+	r.RecordToolCall("session-1", "read_file")
+
+	// session-2: 3 different tools
+	r.RecordToolCall("session-2", "read_file")
+	r.RecordToolCall("session-2", "search_code")
+	r.RecordToolCall("session-2", "write_file")
+
+	// session-1 should have warning
+	content1, _, ok := r.GetContextReminder(context.Background(), "session-1")
+	if !ok {
+		t.Fatal("expected reminder for session-1")
+	}
+	if !strings.Contains(content1, "times in a row") {
+		t.Errorf("expected consecutive same-tool warning for session-1: %s", content1)
+	}
+
+	// session-2 should NOT have warning
+	content2, _, ok := r.GetContextReminder(context.Background(), "session-2")
+	if !ok {
+		t.Fatal("expected reminder for session-2")
+	}
+	if strings.Contains(content2, "times in a row") {
+		t.Errorf("expected no consecutive same-tool warning for session-2: %s", content2)
+	}
+}
+
+func TestConsecutiveSameTool_ClearSession(t *testing.T) {
+	r := NewToolCallHistoryReminder()
+
+	// 3 consecutive calls
+	r.RecordToolCall("session-1", "read_file")
+	r.RecordToolCall("session-1", "read_file")
+	r.RecordToolCall("session-1", "read_file")
+
+	// Clear session
+	r.ClearSession("session-1")
+
+	// No reminder after clear
+	_, _, ok := r.GetContextReminder(context.Background(), "session-1")
+	if ok {
+		t.Error("expected no reminder after clear")
+	}
+
+	// Start fresh: 1 call should not trigger warning
+	r.RecordToolCall("session-1", "read_file")
+	r.RecordToolCall("session-1", "search_code")
+	r.RecordToolCall("session-1", "write_file")
+
+	content, _, ok := r.GetContextReminder(context.Background(), "session-1")
+	if !ok {
+		t.Fatal("expected reminder after re-adding calls")
+	}
+	if strings.Contains(content, "times in a row") {
+		t.Errorf("expected no consecutive warning after clear and fresh calls: %s", content)
 	}
 }
 

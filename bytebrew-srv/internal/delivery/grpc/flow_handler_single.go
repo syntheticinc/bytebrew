@@ -61,7 +61,7 @@ func (h *FlowHandler) runSingleAgentMode(
 		if err != nil {
 			return err
 		}
-		defer h.flowRegistry.UnregisterIfCurrent(req.SessionId, activeFlow)
+		defer h.cleanupFlowResources(req.SessionId, activeFlow)
 
 		// Create TurnExecutor via Engine (same path as supervisor mode)
 		turnExecutor := h.turnExecutorFactory.CreateForSession(proxy, req.SessionId, req.ProjectKey)

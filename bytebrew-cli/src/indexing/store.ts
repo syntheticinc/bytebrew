@@ -50,6 +50,7 @@ export class ChunkStore implements IChunkStore {
     // Initialize SQLite database
     this.db = new Database(this.dbPath);
     this.db.exec('PRAGMA journal_mode = WAL');
+    this.db.exec('PRAGMA busy_timeout = 5000');
 
     // Create metadata table (base schema without file_mtime for compatibility)
     this.db.exec(`

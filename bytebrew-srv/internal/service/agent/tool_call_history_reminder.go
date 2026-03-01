@@ -18,18 +18,22 @@ type ToolCallRecorder interface {
 // ToolCallHistoryReminder tracks tool calls per session and reminds the agent
 // to avoid redundant calls. Implements ContextReminderProvider.
 type ToolCallHistoryReminder struct {
-	mu                sync.Mutex
-	callsPerTool      map[string]map[string]int  // sessionID -> toolName -> count
-	consecutiveErrors map[string]map[string]int  // sessionID -> toolName -> consecutive error count
-	lastToolResult    map[string]map[string]bool // sessionID -> toolName -> was last result an error?
+	mu                   sync.Mutex
+	callsPerTool         map[string]map[string]int  // sessionID -> toolName -> count
+	consecutiveErrors    map[string]map[string]int  // sessionID -> toolName -> consecutive error count
+	lastToolResult       map[string]map[string]bool // sessionID -> toolName -> was last result an error?
+	lastToolName         map[string]string           // sessionID -> last tool name called
+	consecutiveSameTool  map[string]int              // sessionID -> consecutive same-tool call count
 }
 
 // NewToolCallHistoryReminder creates a new ToolCallHistoryReminder
 func NewToolCallHistoryReminder() *ToolCallHistoryReminder {
 	return &ToolCallHistoryReminder{
-		callsPerTool:      make(map[string]map[string]int),
-		consecutiveErrors: make(map[string]map[string]int),
-		lastToolResult:    make(map[string]map[string]bool),
+		callsPerTool:        make(map[string]map[string]int),
+		consecutiveErrors:   make(map[string]map[string]int),
+		lastToolResult:      make(map[string]map[string]bool),
+		lastToolName:        make(map[string]string),
+		consecutiveSameTool: make(map[string]int),
 	}
 }
 
@@ -46,6 +50,14 @@ func (r *ToolCallHistoryReminder) RecordToolCall(sessionID, toolName string) {
 		r.callsPerTool[sessionID] = make(map[string]int)
 	}
 	r.callsPerTool[sessionID][toolName]++
+
+	// Track consecutive same-tool calls
+	if r.lastToolName[sessionID] == toolName {
+		r.consecutiveSameTool[sessionID]++
+	} else {
+		r.consecutiveSameTool[sessionID] = 1
+		r.lastToolName[sessionID] = toolName
+	}
 }
 
 // RecordToolResult records a tool result and detects error loops
@@ -98,6 +110,8 @@ func (r *ToolCallHistoryReminder) ClearSession(sessionID string) {
 	delete(r.callsPerTool, sessionID)
 	delete(r.consecutiveErrors, sessionID)
 	delete(r.lastToolResult, sessionID)
+	delete(r.lastToolName, sessionID)
+	delete(r.consecutiveSameTool, sessionID)
 }
 
 // GetContextReminder returns a reminder if the session has >= 3 tool calls.
@@ -145,6 +159,12 @@ func (r *ToolCallHistoryReminder) GetContextReminder(_ context.Context, sessionI
 	}
 
 	reminder := fmt.Sprintf("**TOOL HISTORY:** You called: %s.\nResults are in conversation above. Re-read only if file was modified since last read.", strings.Join(parts, ", "))
+
+	// Check for consecutive same-tool calls
+	if sameToolCount := r.consecutiveSameTool[sessionID]; sameToolCount >= 3 {
+		lastTool := r.lastToolName[sessionID]
+		reminder += fmt.Sprintf("\n\n⚠️ WARNING: You called \"%s\" %d times in a row. You may be stuck in a loop. Try a DIFFERENT tool or approach. If waiting for subtasks — use spawn_code_agent to start them.", lastTool, sameToolCount)
+	}
 
 	// Check for error loops
 	errorLoops := r.consecutiveErrors[sessionID]

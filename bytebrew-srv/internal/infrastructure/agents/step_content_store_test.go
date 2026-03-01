@@ -152,6 +152,78 @@ func TestStepContentStore_ThreadSafety(t *testing.T) {
 	// Should complete without race condition
 }
 
+func TestStepContentStore_ClearBefore(t *testing.T) {
+	store := NewStepContentStore()
+
+	// Populate store with several steps
+	store.Append(0, "step 0")
+	store.Append(1, "step 1")
+	store.Append(2, "step 2")
+	store.Append(3, "step 3")
+	store.Append(4, "step 4")
+
+	// ClearBefore(3) should remove steps 0 and 1 (< 3-1=2), keep 2,3,4
+	store.ClearBefore(3)
+
+	if got := store.Get(0); got != "" {
+		t.Errorf("ClearBefore: step 0 should be cleared, got %q", got)
+	}
+	if got := store.Get(1); got != "" {
+		t.Errorf("ClearBefore: step 1 should be cleared, got %q", got)
+	}
+	if got := store.Get(2); got != "step 2" {
+		t.Errorf("ClearBefore: step 2 should be kept, got %q", got)
+	}
+	if got := store.Get(3); got != "step 3" {
+		t.Errorf("ClearBefore: step 3 should be kept, got %q", got)
+	}
+	if got := store.Get(4); got != "step 4" {
+		t.Errorf("ClearBefore: step 4 should be kept, got %q", got)
+	}
+
+	if store.Count() != 3 {
+		t.Errorf("ClearBefore: expected 3 remaining steps, got %d", store.Count())
+	}
+}
+
+func TestStepContentStore_ClearBefore_EmptyStore(t *testing.T) {
+	store := NewStepContentStore()
+
+	// Should not panic on empty store
+	store.ClearBefore(5)
+
+	if store.Count() != 0 {
+		t.Errorf("ClearBefore empty: expected 0 steps, got %d", store.Count())
+	}
+}
+
+func TestStepContentStore_ClearBefore_ThreadSafety(t *testing.T) {
+	store := NewStepContentStore()
+
+	// Populate store
+	for i := 0; i < 100; i++ {
+		store.Append(i, "content")
+	}
+
+	var wg sync.WaitGroup
+	// Concurrent ClearBefore and Append
+	wg.Add(200)
+	for i := 0; i < 100; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			store.ClearBefore(idx)
+		}(i)
+		go func(idx int) {
+			defer wg.Done()
+			store.Append(idx+200, "new content")
+		}(i)
+	}
+	wg.Wait()
+
+	// Should complete without race condition
+	_ = store.GetAll()
+}
+
 func TestNewStepContentStore(t *testing.T) {
 	store := NewStepContentStore()
 

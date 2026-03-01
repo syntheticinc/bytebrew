@@ -499,5 +499,227 @@ void main() {
         repo.dispose();
       });
     });
+
+    // TC-WS-CLI-FILTER: CLI-only messages are filtered out
+    group('TC-WS-CLI-FILTER: CLI-only visual elements are filtered', () {
+      test('separator line "─── Supervisor ───" is filtered', () async {
+        final (:repo, :channel) = await _createConnectedRepo();
+
+        // Send a real assistant message first so we have something to compare.
+        channel.receive(
+          jsonEncode({
+            'type': 'event',
+            'event': {
+              'type': 'MessageCompleted',
+              'message': {
+                'id': 'msg-real',
+                'role': 'assistant',
+                'content': 'Real response',
+                'timestamp': _fixedTimestampIso,
+              },
+            },
+          }),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        // Now send a separator line -- should be silently dropped.
+        channel.receive(
+          jsonEncode({
+            'type': 'event',
+            'event': {
+              'type': 'MessageCompleted',
+              'message': {
+                'id': 'msg-sep',
+                'role': 'assistant',
+                'content': '─── Supervisor ───',
+                'timestamp': _fixedTimestampIso,
+              },
+            },
+          }),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        final messages = await repo.getMessages('s1');
+        expect(messages, hasLength(1));
+        expect(messages[0].content, 'Real response');
+        repo.dispose();
+      });
+
+      test(
+        'agent separator "─── Code Agent [abc]: Task ───" is filtered',
+        () async {
+          final (:repo, :channel) = await _createConnectedRepo();
+
+          channel.receive(
+            jsonEncode({
+              'type': 'event',
+              'event': {
+                'type': 'MessageCompleted',
+                'message': {
+                  'id': 'msg-agent-sep',
+                  'role': 'assistant',
+                  'content': '─── Code Agent [abc123]: Implement feature ───',
+                  'timestamp': _fixedTimestampIso,
+                },
+              },
+            }),
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+
+          final messages = await repo.getMessages('s1');
+          expect(messages, isEmpty);
+          repo.dispose();
+        },
+      );
+
+      test('lifecycle "+ Agent spawned" is filtered', () async {
+        final (:repo, :channel) = await _createConnectedRepo();
+
+        channel.receive(
+          jsonEncode({
+            'type': 'event',
+            'event': {
+              'type': 'MessageCompleted',
+              'message': {
+                'id': 'msg-spawned',
+                'role': 'assistant',
+                'content': '+ Code Agent [abc] spawned: "Task"',
+                'timestamp': _fixedTimestampIso,
+              },
+            },
+          }),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        final messages = await repo.getMessages('s1');
+        expect(messages, isEmpty);
+        repo.dispose();
+      });
+
+      test('lifecycle "\u2713 Agent completed" is filtered', () async {
+        final (:repo, :channel) = await _createConnectedRepo();
+
+        channel.receive(
+          jsonEncode({
+            'type': 'event',
+            'event': {
+              'type': 'MessageCompleted',
+              'message': {
+                'id': 'msg-completed',
+                'role': 'assistant',
+                'content': '\u2713 Code Agent completed: "Task"',
+                'timestamp': _fixedTimestampIso,
+              },
+            },
+          }),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        final messages = await repo.getMessages('s1');
+        expect(messages, isEmpty);
+        repo.dispose();
+      });
+
+      test('lifecycle "\u2717 Agent failed" is filtered', () async {
+        final (:repo, :channel) = await _createConnectedRepo();
+
+        channel.receive(
+          jsonEncode({
+            'type': 'event',
+            'event': {
+              'type': 'MessageCompleted',
+              'message': {
+                'id': 'msg-failed',
+                'role': 'assistant',
+                'content': '\u2717 Agent failed',
+                'timestamp': _fixedTimestampIso,
+              },
+            },
+          }),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        final messages = await repo.getMessages('s1');
+        expect(messages, isEmpty);
+        repo.dispose();
+      });
+
+      test('lifecycle "\u21BB Agent retrying" is filtered', () async {
+        final (:repo, :channel) = await _createConnectedRepo();
+
+        channel.receive(
+          jsonEncode({
+            'type': 'event',
+            'event': {
+              'type': 'MessageCompleted',
+              'message': {
+                'id': 'msg-retry',
+                'role': 'assistant',
+                'content': '\u21BB Agent retrying',
+                'timestamp': _fixedTimestampIso,
+              },
+            },
+          }),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        final messages = await repo.getMessages('s1');
+        expect(messages, isEmpty);
+        repo.dispose();
+      });
+
+      test('normal assistant message is NOT filtered', () async {
+        final (:repo, :channel) = await _createConnectedRepo();
+
+        final messagesFuture = repo.watchMessages().first;
+
+        channel.receive(
+          jsonEncode({
+            'type': 'event',
+            'event': {
+              'type': 'MessageCompleted',
+              'message': {
+                'id': 'msg-normal',
+                'role': 'assistant',
+                'content': 'Here is the analysis of your code.',
+                'timestamp': _fixedTimestampIso,
+              },
+            },
+          }),
+        );
+
+        final messages = await messagesFuture;
+        expect(messages, hasLength(1));
+        expect(messages[0].content, 'Here is the analysis of your code.');
+        repo.dispose();
+      });
+
+      test('user message starting with "+ " is NOT filtered', () async {
+        final (:repo, :channel) = await _createConnectedRepo();
+
+        final messagesFuture = repo.watchMessages().first;
+
+        channel.receive(
+          jsonEncode({
+            'type': 'event',
+            'event': {
+              'type': 'MessageCompleted',
+              'message': {
+                'id': 'msg-user-plus',
+                'role': 'user',
+                'content': '+ some user text',
+                'timestamp': _fixedTimestampIso,
+              },
+            },
+          }),
+        );
+
+        final messages = await messagesFuture;
+        expect(messages, hasLength(1));
+        expect(messages[0].type, ChatMessageType.userMessage);
+        expect(messages[0].content, '+ some user text');
+        repo.dispose();
+      });
+    });
   });
 }

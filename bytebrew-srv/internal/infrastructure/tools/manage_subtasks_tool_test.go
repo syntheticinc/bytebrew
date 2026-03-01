@@ -434,8 +434,34 @@ func TestManageSubtasks_GetReady(t *testing.T) {
 	}
 }
 
-func TestManageSubtasks_GetReady_None(t *testing.T) {
+func TestManageSubtasks_GetReady_NoSubtasksExist(t *testing.T) {
 	mgr := newMockSubtaskManager()
+	tool := NewManageSubtasksTool(mgr, "sess-1")
+
+	args := makeSubtaskArgs(t, manageSubtasksArgs{
+		Action: "get_ready",
+		TaskID: "task-1",
+	})
+
+	result, err := tool.InvokableRun(context.Background(), args)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(result, "No subtasks exist") {
+		t.Errorf("expected 'No subtasks exist' message, got: %s", result)
+	}
+	if !strings.Contains(result, "Create subtasks first") {
+		t.Errorf("expected hint to create subtasks, got: %s", result)
+	}
+}
+
+func TestManageSubtasks_GetReady_AllBlocked(t *testing.T) {
+	mgr := newMockSubtaskManager()
+	mgr.byTask["task-1"] = []*domain.Subtask{
+		{ID: "sub-1", TaskID: "task-1", Status: domain.SubtaskStatusPending, BlockedBy: []string{"sub-0"}},
+		{ID: "sub-2", TaskID: "task-1", Status: domain.SubtaskStatusPending, BlockedBy: []string{"sub-1"}},
+	}
 	tool := NewManageSubtasksTool(mgr, "sess-1")
 
 	args := makeSubtaskArgs(t, manageSubtasksArgs{
@@ -450,6 +476,93 @@ func TestManageSubtasks_GetReady_None(t *testing.T) {
 
 	if !strings.Contains(result, "No ready subtasks") {
 		t.Errorf("expected 'No ready subtasks' message, got: %s", result)
+	}
+	if !strings.Contains(result, "2 pending (blocked)") {
+		t.Errorf("expected pending count, got: %s", result)
+	}
+	if !strings.Contains(result, "Check blocked_by dependencies") {
+		t.Errorf("expected hint about blocked dependencies, got: %s", result)
+	}
+}
+
+func TestManageSubtasks_GetReady_InProgressRunning(t *testing.T) {
+	mgr := newMockSubtaskManager()
+	mgr.byTask["task-1"] = []*domain.Subtask{
+		{ID: "sub-1", TaskID: "task-1", Status: domain.SubtaskStatusInProgress},
+		{ID: "sub-2", TaskID: "task-1", Status: domain.SubtaskStatusPending, BlockedBy: []string{"sub-1"}},
+	}
+	tool := NewManageSubtasksTool(mgr, "sess-1")
+
+	args := makeSubtaskArgs(t, manageSubtasksArgs{
+		Action: "get_ready",
+		TaskID: "task-1",
+	})
+
+	result, err := tool.InvokableRun(context.Background(), args)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(result, "1 in_progress") {
+		t.Errorf("expected in_progress count, got: %s", result)
+	}
+	if !strings.Contains(result, "Wait for running subtasks") {
+		t.Errorf("expected wait hint, got: %s", result)
+	}
+	if !strings.Contains(result, "Do NOT call get_ready again") {
+		t.Errorf("expected anti-loop hint, got: %s", result)
+	}
+}
+
+func TestManageSubtasks_GetReady_HasFailed(t *testing.T) {
+	mgr := newMockSubtaskManager()
+	mgr.byTask["task-1"] = []*domain.Subtask{
+		{ID: "sub-1", TaskID: "task-1", Status: domain.SubtaskStatusFailed},
+		{ID: "sub-2", TaskID: "task-1", Status: domain.SubtaskStatusCompleted},
+	}
+	tool := NewManageSubtasksTool(mgr, "sess-1")
+
+	args := makeSubtaskArgs(t, manageSubtasksArgs{
+		Action: "get_ready",
+		TaskID: "task-1",
+	})
+
+	result, err := tool.InvokableRun(context.Background(), args)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(result, "1 failed") {
+		t.Errorf("expected failed count, got: %s", result)
+	}
+	if !strings.Contains(result, "Review failed subtasks") {
+		t.Errorf("expected review failed hint, got: %s", result)
+	}
+}
+
+func TestManageSubtasks_GetReady_AllCompleted(t *testing.T) {
+	mgr := newMockSubtaskManager()
+	mgr.byTask["task-1"] = []*domain.Subtask{
+		{ID: "sub-1", TaskID: "task-1", Status: domain.SubtaskStatusCompleted},
+		{ID: "sub-2", TaskID: "task-1", Status: domain.SubtaskStatusCompleted},
+	}
+	tool := NewManageSubtasksTool(mgr, "sess-1")
+
+	args := makeSubtaskArgs(t, manageSubtasksArgs{
+		Action: "get_ready",
+		TaskID: "task-1",
+	})
+
+	result, err := tool.InvokableRun(context.Background(), args)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(result, "2 completed") {
+		t.Errorf("expected completed count, got: %s", result)
+	}
+	if !strings.Contains(result, "All subtasks are completed") {
+		t.Errorf("expected all completed hint, got: %s", result)
 	}
 }
 

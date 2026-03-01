@@ -164,9 +164,10 @@ func main() {
 	// Create FlowHandler with multi-agent support
 	pingInterval := 2 * time.Second
 	flowHandlerCfg := grpc.FlowHandlerConfig{
-		AgentService: components.AgentService,
-		PingInterval: pingInterval,
-		FlowRegistry: flowRegistry,
+		AgentService:           components.AgentService,
+		ToolCallHistoryCleaner: components.AgentService.GetToolCallHistoryReminder(),
+		PingInterval:           pingInterval,
+		FlowRegistry:           flowRegistry,
 	}
 
 	// Engine components are always available (server fails to start otherwise)

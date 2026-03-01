@@ -135,7 +135,7 @@ void _sendToolStarted(
           'callId': callId,
           'toolName': toolName,
           'arguments': arguments ?? <String, String>{},
-          if (agentId != null) 'agentId': agentId,
+          'agentId': ?agentId,
         },
       },
     }),

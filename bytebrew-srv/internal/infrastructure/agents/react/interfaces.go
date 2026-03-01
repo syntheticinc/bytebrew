@@ -25,6 +25,9 @@ type StepContentStoreInterface interface {
 
 	// GetAll returns a copy of all step content
 	GetAll() map[int]string
+
+	// ClearBefore removes all content for steps before the given step
+	ClearBefore(step int)
 }
 
 // ContextReminderProvider is implemented by components that need to inject

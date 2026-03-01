@@ -173,7 +173,7 @@ func (h *FlowHandler) runSupervisorMode(
 		slog.ErrorContext(ctx, "failed to register active flow", "error", err)
 		return err
 	}
-	defer h.flowRegistry.UnregisterIfCurrent(req.SessionId, activeFlow)
+	defer h.cleanupFlowResources(req.SessionId, activeFlow)
 
 	// 8. Publish initial user message
 	if req.Task != "" {

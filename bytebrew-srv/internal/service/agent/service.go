@@ -225,6 +225,11 @@ func (s *Service) GetToolCallRecorder() ToolCallRecorder {
 	return s.toolCallHistory
 }
 
+// GetToolCallHistoryReminder returns the tool call history reminder for session cleanup
+func (s *Service) GetToolCallHistoryReminder() *ToolCallHistoryReminder {
+	return s.toolCallHistory
+}
+
 // GetContextReminders returns the context reminders for Engine integration
 func (s *Service) GetContextReminders() []turn_executor.ContextReminderProvider {
 	return s.contextReminders

@@ -44,6 +44,18 @@ func (s *StepContentStore) GetAll() map[int]string {
 	return result
 }
 
+// ClearBefore removes all content for steps before the given step.
+// Keeps step-1 as it may still be referenced by the message modifier.
+func (s *StepContentStore) ClearBefore(step int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k := range s.content {
+		if k < step-1 {
+			delete(s.content, k)
+		}
+	}
+}
+
 // Clear removes all stored content
 func (s *StepContentStore) Clear() {
 	s.mu.Lock()

@@ -128,7 +128,7 @@ func (cl *ContextLogger) LogContext(ctx context.Context, messages []*schema.Mess
 			Role:           string(msg.Role),
 			Chars:          chars,
 			Tokens:         tokens,
-			Content:        msg.Content, // Store full content
+			Content:        truncateString(msg.Content, 500), // Truncate to avoid memory bloat in logs
 			ContentPreview: truncateString(msg.Content, 200),
 		}
 

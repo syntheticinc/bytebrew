@@ -177,7 +177,41 @@ Example: {"action": "create", "task_id": "abc", "title": "Fix imports", "descrip
 			return fmt.Sprintf("[ERROR] %v", err), nil
 		}
 		if len(subtasks) == 0 {
-			return "No ready subtasks (all pending subtasks have unfinished blockers, or no pending subtasks left).", nil
+			allSubtasks, listErr := t.manager.GetSubtasksByTask(ctx, args.TaskID)
+			if listErr != nil || len(allSubtasks) == 0 {
+				return "No subtasks exist for this task. Create subtasks first with action 'create', then use spawn_code_agent to execute them.", nil
+			}
+
+			var pending, inProgress, completed, failed int
+			for _, st := range allSubtasks {
+				switch st.Status {
+				case domain.SubtaskStatusPending:
+					pending++
+				case domain.SubtaskStatusInProgress:
+					inProgress++
+				case domain.SubtaskStatusCompleted:
+					completed++
+				case domain.SubtaskStatusFailed:
+					failed++
+				}
+			}
+
+			msg := fmt.Sprintf("No ready subtasks.\nStatus: %d pending (blocked), %d in_progress, %d completed, %d failed.\n", pending, inProgress, completed, failed)
+
+			switch {
+			case inProgress > 0:
+				msg += "Action: Wait for running subtasks to complete. Do NOT call get_ready again — you will be notified when agents finish."
+			case failed > 0:
+				msg += "Action: Review failed subtasks with 'get' action, fix the issues, and create new subtasks to retry."
+			case pending > 0 && completed == 0 && failed == 0:
+				msg += "Action: Check blocked_by dependencies — some subtasks may have incorrect blockers. Use 'list' to see details, then fix dependencies or create unblocked subtasks."
+			case completed > 0 && pending == 0 && inProgress == 0:
+				msg += "Action: All subtasks are completed! Report results to user."
+			default:
+				msg += "Action: Review subtask dependencies with 'list' action."
+			}
+
+			return msg, nil
 		}
 		result := fmt.Sprintf("Ready subtasks (%d):\n", len(subtasks))
 		for _, subtask := range subtasks {

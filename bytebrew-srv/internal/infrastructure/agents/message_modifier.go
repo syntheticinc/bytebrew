@@ -116,6 +116,11 @@ func (m *MessageModifier) Modify(ctx context.Context, input []*schema.Message) [
 		}
 	}
 
+	// Clean up old step content to prevent memory growth
+	if m.stepContentStore != nil && currentStep > 2 {
+		m.stepContentStore.ClearBefore(currentStep)
+	}
+
 	// Log the full context that will be sent to the model
 	if m.contextLogger != nil {
 		m.contextLogger.LogContext(ctx, result, currentStep)

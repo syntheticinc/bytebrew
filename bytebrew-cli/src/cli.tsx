@@ -654,29 +654,35 @@ function printProgress(progress: IndexProgress): void {
 
 function runChatApp(config: AppConfig, initialQuestion?: string) {
   // Ink 6 options to reduce flickering
-  const { waitUntilExit } = render(<App config={config} initialQuestion={initialQuestion} />, {
+  const { waitUntilExit, unmount } = render(<App config={config} initialQuestion={initialQuestion} />, {
     // Only update changed lines instead of redrawing entire output
     incrementalRendering: true,
   });
 
-  // Handle process signals
-  process.on('SIGINT', () => {
-    process.exit(0);
-  });
+  let isExiting = false;
 
-  process.on('SIGTERM', () => {
-    process.exit(0);
-  });
+  const gracefulExit = (code: number) => {
+    if (isExiting) return;
+    isExiting = true;
+    // Unmount Ink app — triggers React cleanup (useEffect returns)
+    unmount();
+    // Give React cleanup a moment, then force exit
+    setTimeout(() => process.exit(code), 300);
+  };
+
+  // Handle process signals
+  process.on('SIGINT', () => gracefulExit(0));
+  process.on('SIGTERM', () => gracefulExit(0));
 
   // Catch unhandled errors to prevent silent crashes (e.g. native addon failures)
   process.on('uncaughtException', (err) => {
     console.error('[FATAL] Uncaught exception:', err.message);
-    process.exit(1);
+    gracefulExit(1);
   });
 
   process.on('unhandledRejection', (reason) => {
     console.error('[FATAL] Unhandled rejection:', reason);
-    process.exit(1);
+    gracefulExit(1);
   });
 
   waitUntilExit().then(() => {

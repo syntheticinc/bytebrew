@@ -45,6 +45,16 @@ func (m *mockStepContentStore) GetAll() map[int]string {
 	return result
 }
 
+func (m *mockStepContentStore) ClearBefore(step int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for k := range m.content {
+		if k < step-1 {
+			delete(m.content, k)
+		}
+	}
+}
+
 // mockContextLogger implements ContextLoggerInterface for testing
 type mockContextLogger struct {
 	mu                     sync.Mutex
