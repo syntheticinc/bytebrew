@@ -3,6 +3,8 @@ import 'package:bytebrew_mobile/features/auth/application/auth_provider.dart';
 import 'package:bytebrew_mobile/features/sessions/application/sessions_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+// ignore: depend_on_referenced_packages
+import 'package:riverpod/misc.dart' show Override;
 
 import 'fakes.dart';
 
@@ -24,7 +26,7 @@ Widget buildTestApp({
   AuthState? authState,
   List<Session>? sessions,
   // ignore: depend_on_referenced_packages
-  List<Object> overrides = const [],
+  List<Override> overrides = const [],
 }) {
   final allOverrides = [
     if (authState != null) authProvider.overrideWithValue(authState),

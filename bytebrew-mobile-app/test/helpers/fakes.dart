@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bytebrew_mobile/core/domain/agent_info.dart';
 import 'package:bytebrew_mobile/core/domain/auth_tokens.dart';
 import 'package:bytebrew_mobile/core/domain/chat_message.dart';
 import 'package:bytebrew_mobile/core/domain/session.dart';
@@ -105,6 +106,9 @@ class FakeChatRepository implements ChatRepository {
 
   @override
   Stream<List<ChatMessage>>? watchMessages() => null;
+
+  @override
+  Stream<List<AgentInfo>>? watchAgents() => null;
 }
 
 /// Extended fake [ChatRepository] with a [StreamController] for real-time
@@ -152,6 +156,33 @@ class StreamableFakeChatRepository implements ChatRepository {
 
   @override
   Stream<List<ChatMessage>> watchMessages() => _controller.stream;
+
+  @override
+  Stream<List<AgentInfo>>? watchAgents() => null;
+}
+
+/// Extended [StreamableFakeChatRepository] with agent stream support.
+///
+/// Use [emitAgents] to push agent lists into the [watchAgents] stream.
+/// Useful for testing multi-agent UI components (e.g. AgentSelectorBar).
+class StreamableFakeAgentChatRepository extends StreamableFakeChatRepository {
+  StreamableFakeAgentChatRepository({super.initialMessages});
+
+  final _agentsController = StreamController<List<AgentInfo>>.broadcast();
+
+  /// Pushes a new agent list into the [watchAgents] stream.
+  void emitAgents(List<AgentInfo> agents) {
+    _agentsController.add(agents);
+  }
+
+  @override
+  Stream<List<AgentInfo>> watchAgents() => _agentsController.stream;
+
+  @override
+  void dispose() {
+    _agentsController.close();
+    super.dispose();
+  }
 }
 
 /// Fake [WsConnection] notifier that allows setting [WsConnectionStatus]

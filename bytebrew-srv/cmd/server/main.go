@@ -7,6 +7,8 @@ import (
 	"log"
 	"log/slog"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -119,6 +121,15 @@ func main() {
 
 	// Set default slog logger to use our configured logger
 	slog.SetDefault(loggerInstance.Logger)
+
+	// Start pprof HTTP server for diagnostics (heap, goroutines, CPU profiling)
+	go func() {
+		pprofAddr := "localhost:6060"
+		slog.Info("pprof server started", "addr", pprofAddr)
+		if err := http.ListenAndServe(pprofAddr, nil); err != nil {
+			slog.Error("pprof server failed", "error", err)
+		}
+	}()
 
 	ctx := context.Background()
 	loggerInstance.InfoContext(ctx, "Starting ByteBrew Server",
