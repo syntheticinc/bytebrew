@@ -1,3 +1,4 @@
+import 'package:bytebrew_mobile/core/domain/server.dart';
 import 'package:bytebrew_mobile/core/domain/session.dart';
 import 'package:bytebrew_mobile/core/router/app_router.dart';
 import 'package:bytebrew_mobile/features/auth/application/auth_provider.dart';
@@ -11,6 +12,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import '../helpers/fakes.dart';
+
+/// Dummy server so that SplashScreen._navigateAuthenticated sees a non-empty
+/// server list and navigates to /sessions instead of /add-server.
+final _dummyServer = Server(
+  id: 'srv-test',
+  name: 'Test',
+  lanAddress: '127.0.0.1',
+  connectionMode: ConnectionMode.lan,
+  isOnline: true,
+  latencyMs: 1,
+  pairedAt: DateTime(2026),
+);
 
 /// Builds a test app with GoRouter for navigation tests.
 ///
@@ -27,7 +40,9 @@ Widget _buildNavApp({
       authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
       sessionsProvider.overrideWith(() => FakeSessionsNotifier(sessions ?? [])),
       groupedSessionsProvider.overrideWithValue({}),
-      serversProvider.overrideWithValue([]),
+      settingsRepositoryProvider
+          .overrideWithValue(FakeSettingsRepository([_dummyServer])),
+      serversProvider.overrideWithValue([_dummyServer]),
     ],
     child: const _NavTestApp(),
   );

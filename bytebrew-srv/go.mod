@@ -14,6 +14,8 @@ require (
 	github.com/ollama/ollama v0.14.2
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
+	github.com/syntheticinc/bytebrew/bytebrew-bridge v0.0.0
+	golang.org/x/crypto v0.47.0
 	google.golang.org/grpc v1.70.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
@@ -65,7 +67,6 @@ require (
 	github.com/yargevad/filepathx v1.0.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/arch v0.11.0 // indirect
-	golang.org/x/crypto v0.47.0 // indirect
 	golang.org/x/exp v0.0.0-20250218142911-aa4b98e5adaa // indirect
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
@@ -74,3 +75,5 @@ require (
 	gorm.io/driver/mysql v1.5.6 // indirect
 	gorm.io/driver/postgres v1.6.0 // indirect
 )
+
+replace github.com/syntheticinc/bytebrew/bytebrew-bridge => ../bytebrew-bridge

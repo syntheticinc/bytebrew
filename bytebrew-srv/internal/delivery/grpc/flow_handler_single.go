@@ -18,6 +18,7 @@ func (h *FlowHandler) runSingleAgentMode(
 	streamWriter *StreamWriter,
 	agentEventStream *GrpcAgentEventStream,
 	cancel context.CancelFunc,
+	projectRoot, platform string,
 ) error {
 	taskChan := make(chan string, 10)
 
@@ -57,14 +58,14 @@ func (h *FlowHandler) runSingleAgentMode(
 	}()
 
 	executeTask := func(task string) error {
-		activeFlow, err := h.registerActiveFlow(req.SessionId, req.ProjectKey, req.UserId, task, cancel)
+		activeFlow, err := h.registerActiveFlow(req.SessionId, req.ProjectKey, req.UserId, task, projectRoot, platform, cancel)
 		if err != nil {
 			return err
 		}
 		defer h.cleanupFlowResources(req.SessionId, activeFlow)
 
 		// Create TurnExecutor via Engine (same path as supervisor mode)
-		turnExecutor := h.turnExecutorFactory.CreateForSession(proxy, req.SessionId, req.ProjectKey)
+		turnExecutor := h.turnExecutorFactory.CreateForSession(proxy, req.SessionId, req.ProjectKey, projectRoot, platform)
 
 		err = turnExecutor.ExecuteTurn(ctx, req.SessionId, req.ProjectKey, task,
 			createChunkCallback(ctx, streamWriter, req.SessionId),

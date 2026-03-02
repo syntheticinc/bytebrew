@@ -17,7 +17,8 @@ deps: ## Install dependencies
 proto: ## Generate protobuf code
 	@echo "Generating protobuf code..."
 	@mkdir -p $(PROTO_OUT_DIR)
-	protoc --go_out=$(PROTO_OUT_DIR) --go_opt=paths=source_relative \
+	protoc --proto_path=$(PROTO_DIR) \
+		--go_out=$(PROTO_OUT_DIR) --go_opt=paths=source_relative \
 		--go-grpc_out=$(PROTO_OUT_DIR) --go-grpc_opt=paths=source_relative \
 		$(PROTO_DIR)/*.proto
 

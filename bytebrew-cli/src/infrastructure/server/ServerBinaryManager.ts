@@ -4,7 +4,7 @@ import { execSync } from 'child_process';
 import { ByteBrewHome } from '../config/ByteBrewHome.js';
 
 /**
- * Finds the vector-srv binary in known locations.
+ * Finds the bytebrew-srv binary in known locations.
  *
  * Search order:
  * 1. Same directory as CLI binary (co-located install)
@@ -18,13 +18,13 @@ export class ServerBinaryManager {
 
   constructor() {
     const ext = process.platform === 'win32' ? '.exe' : '';
-    const binaryName = `vector-srv${ext}`;
+    const binaryName = `bytebrew-srv${ext}`;
 
     this.searchPaths = [
       // Same directory as CLI binary
       path.join(path.dirname(process.execPath), binaryName),
       // User data dir (managed installs)
-      path.join(ByteBrewHome.dataDir(), 'vector', 'bin', binaryName),
+      path.join(ByteBrewHome.dataDir(), 'bytebrew', 'bin', binaryName),
     ];
   }
 
@@ -42,7 +42,7 @@ export class ServerBinaryManager {
   }
 
   /**
-   * Get installed version by running `vector-srv --version`.
+   * Get installed version by running `bytebrew-srv --version`.
    */
   getVersion(binaryPath: string): string | null {
     try {
@@ -58,7 +58,7 @@ export class ServerBinaryManager {
 
   private findInPath(): string | null {
     try {
-      const cmd = process.platform === 'win32' ? 'where vector-srv' : 'which vector-srv';
+      const cmd = process.platform === 'win32' ? 'where bytebrew-srv' : 'which bytebrew-srv';
       const result = execSync(cmd, {
         encoding: 'utf-8',
         stdio: ['pipe', 'pipe', 'pipe'],

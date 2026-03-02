@@ -1,5 +1,6 @@
 import { ServerBinaryManager } from './ServerBinaryManager.js';
 import { ServerProcessManager } from './ServerProcessManager.js';
+import { PortFileReader, isServerReachable } from './PortFileReader.js';
 
 export interface ServerConnection {
   /** host:port address to connect gRPC client to */
@@ -9,9 +10,11 @@ export interface ServerConnection {
 }
 
 /**
- * Decides how to connect to the server:
- * - If externalAddress is provided (--server flag or BYTEBREW_SERVER env) -> use it directly
- * - Otherwise -> find server binary and start it in managed mode
+ * Decides how to connect to the server (chain of discovery):
+ * 1. Explicit address (--server flag or BYTEBREW_SERVER env) -> use directly
+ * 2. Port file discovery -> check if standalone server is already running
+ * 3. Managed mode -> find binary and start server
+ * 4. Error -> throw with actionable message
  */
 export class ServerConnectionOrchestrator {
   private processManager: ServerProcessManager | null = null;
@@ -23,23 +26,25 @@ export class ServerConnectionOrchestrator {
    * @returns connection with address and cleanup function
    */
   async connect(externalAddress?: string): Promise<ServerConnection> {
-    // External server mode — user specified an address
+    // 1. Explicit address — user specified via --server or BYTEBREW_SERVER
     if (externalAddress) {
-      return {
-        address: externalAddress,
-        cleanup: async () => {},
-      };
+      return { address: externalAddress, cleanup: async () => {} };
     }
 
-    // Managed mode — find binary and start server
+    // 2. Port file discovery — check if a standalone server is already running
+    const portFileConnection = await this.tryPortFile();
+    if (portFileConnection) return portFileConnection;
+
+    // 3. Managed mode — find binary and start server
     const binaryManager = new ServerBinaryManager();
     const binaryPath = binaryManager.findBinary();
     if (!binaryPath) {
-      // Fallback: try connecting to default address (server may already be running)
-      return {
-        address: 'localhost:60401',
-        cleanup: async () => {},
-      };
+      throw new Error(
+        'ByteBrew server not found. Either:\n' +
+          '  - Start the server manually (go run ./cmd/server)\n' +
+          '  - Use --server flag to specify address\n' +
+          '  - Install bytebrew-srv binary',
+      );
     }
 
     this.processManager = new ServerProcessManager();
@@ -50,6 +55,22 @@ export class ServerConnectionOrchestrator {
       cleanup: async () => {
         await this.processManager?.stop();
       },
+    };
+  }
+
+  private async tryPortFile(): Promise<ServerConnection | null> {
+    const reader = new PortFileReader();
+    const info = reader.read();
+    if (!info) return null;
+
+    // 0.0.0.0 means "all interfaces" on the server side, but clients must connect to localhost
+    const host = (!info.host || info.host === '0.0.0.0') ? '127.0.0.1' : info.host;
+    const reachable = await isServerReachable(host, info.port);
+    if (!reachable) return null;
+
+    return {
+      address: `${host}:${info.port}`,
+      cleanup: async () => {},
     };
   }
 }

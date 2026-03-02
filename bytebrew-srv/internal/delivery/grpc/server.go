@@ -76,9 +76,10 @@ func NewServer(cfg config.ServerConfig, log *logger.Logger, licenseInfo *domain.
 }
 
 // NewServerWithListener creates a gRPC server with a pre-existing listener.
-// Used in managed mode where the OS assigns a random port.
-func NewServerWithListener(listener net.Listener, log *logger.Logger, licenseInfo *domain.LicenseInfo) *Server {
-	return newServerFromListener(listener, log, config.ServerConfig{}, licenseInfo)
+// Used in managed mode and port fallback where the OS assigns a random port.
+// cfg provides gRPC options (keepalive, message sizes, timeouts).
+func NewServerWithListener(listener net.Listener, cfg config.ServerConfig, log *logger.Logger, licenseInfo *domain.LicenseInfo) *Server {
+	return newServerFromListener(listener, log, cfg, licenseInfo)
 }
 
 // ActualPort returns the port the server is listening on.
@@ -92,11 +93,18 @@ func (s *Server) RegisterServices(
 	flowHandler FlowServiceHandler,
 	indexingHandler IndexingServiceHandler,
 	clientOpsHandler ClientOperationsServiceHandler,
+	mobileHandler MobileServiceHandler,
 ) {
 	// Register FlowService
 	if flowHandler != nil {
 		pb.RegisterFlowServiceServer(s.grpcServer, flowHandler)
 		s.logger.Info("FlowService registered")
+	}
+
+	// Register MobileService
+	if mobileHandler != nil {
+		pb.RegisterMobileServiceServer(s.grpcServer, mobileHandler)
+		s.logger.Info("MobileService registered")
 	}
 
 	// IndexingService will be implemented as separate gRPC service (see task 003)
@@ -153,3 +161,8 @@ type FlowServiceHandler interface {
 }
 type IndexingServiceHandler interface{}
 type ClientOperationsServiceHandler interface{}
+
+// MobileServiceHandler defines the interface for MobileService gRPC handler
+type MobileServiceHandler interface {
+	pb.MobileServiceServer
+}

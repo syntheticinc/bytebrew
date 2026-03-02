@@ -204,7 +204,7 @@ func TestEngineTurnExecutorFactory_CreateForSession(t *testing.T) {
 
 	// Execute
 	proxy := &mockClientProxy{}
-	executor := factory.CreateForSession(proxy, "session-1", "project-1")
+	executor := factory.CreateForSession(proxy, "session-1", "project-1", "", "")
 
 	// Verify
 	require.NotNil(t, executor, "TurnExecutor should not be nil")
@@ -243,14 +243,14 @@ func TestEngineTurnExecutorFactory_CreateForSession_WithProxy(t *testing.T) {
 
 	// Execute
 	proxy := &mockClientProxy{}
-	executor := factory.CreateForSession(proxy, "session-1", "project-1")
+	executor := factory.CreateForSession(proxy, "session-1", "project-1", "", "")
 
 	require.NotNil(t, executor)
 
 	// Verify that proxy is used by executing a turn
 	// This will internally create tools with the proxy
 	ctx := context.Background()
-	err = executor.ExecuteTurn(
+	_ = executor.ExecuteTurn(
 		ctx,
 		"session-1",
 		"project-1",
@@ -296,7 +296,7 @@ func TestEngineTurnExecutorFactory_CreateForSession_NilProxy(t *testing.T) {
 	)
 
 	// Execute with nil proxy
-	executor := factory.CreateForSession(nil, "session-1", "project-1")
+	executor := factory.CreateForSession(nil, "session-1", "project-1", "", "")
 
 	// Verify
 	require.NotNil(t, executor, "TurnExecutor should not be nil even with nil proxy")
@@ -336,7 +336,7 @@ func TestEngineTurnExecutorFactory_CreateForSession_WithWebTools(t *testing.T) {
 		nil, // contextRemindersGetter
 	)
 
-	executor := factory.CreateForSession(&mockClientProxy{}, "session-1", "project-1")
+	executor := factory.CreateForSession(&mockClientProxy{}, "session-1", "project-1", "", "")
 
 	require.NotNil(t, executor)
 }
@@ -415,7 +415,7 @@ func TestEngineTurnExecutorFactory_CreateForSession_WithContextReminders(t *test
 
 	// Execute
 	proxy := &mockClientProxy{}
-	executor := factory.CreateForSession(proxy, "session-1", "project-1")
+	executor := factory.CreateForSession(proxy, "session-1", "project-1", "", "")
 
 	// Verify
 	require.NotNil(t, executor, "TurnExecutor should not be nil")
@@ -450,7 +450,7 @@ func TestEngineTurnExecutorFactory_CreateForSession_NilContextRemindersGetter(t 
 
 	// Execute — should not panic
 	proxy := &mockClientProxy{}
-	executor := factory.CreateForSession(proxy, "session-1", "project-1")
+	executor := factory.CreateForSession(proxy, "session-1", "project-1", "", "")
 
 	require.NotNil(t, executor, "TurnExecutor should not be nil even with nil contextRemindersGetter")
 }

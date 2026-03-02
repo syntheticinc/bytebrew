@@ -70,7 +70,7 @@ type mockTurnExecutorFactory struct {
 	executeTurnFunc func(ctx context.Context, sessionID, projectKey, question string, chunkCb func(string) error, eventCb func(*domain.AgentEvent) error) error
 }
 
-func (f *mockTurnExecutorFactory) CreateForSession(proxy tools.ClientOperationsProxy, sessionID, projectKey string) orchestrator.TurnExecutor {
+func (f *mockTurnExecutorFactory) CreateForSession(proxy tools.ClientOperationsProxy, sessionID, projectKey, projectRoot, platform string) orchestrator.TurnExecutor {
 	return &mockTurnExecutor{
 		executeTurnFunc: f.executeTurnFunc,
 	}

@@ -162,6 +162,23 @@ export class Container {
   }
 
   /**
+   * Synchronously close the SQLite database to release WAL file locks.
+   * Must be called BEFORE process.exit() to prevent stale locks on next launch.
+   * Safe to call multiple times.
+   */
+  closeDatabaseSync(): void {
+    if (this._chunkStore && 'close' in this._chunkStore) {
+      try {
+        (this._chunkStore as { close(): void }).close();
+      } catch {
+        // Already closed or failed — ignore
+      }
+    }
+    this._chunkStore = null;
+    this._embeddingsClient = null;
+  }
+
+  /**
    * Dispose of all resources
    */
   async dispose(): Promise<void> {
@@ -169,14 +186,10 @@ export class Container {
     this._mobileProxy = null;
     this._streamProcessor.dispose();
     this._streamGateway.disconnect();
+    // Close SQLite FIRST (synchronous) — before slow async operations
+    this.closeDatabaseSync();
     await this._diagnosticsService.dispose();
     await this._shellSessionManager.disposeAll();
-    // Close SQLite database to release WAL file locks
-    if (this._chunkStore && 'close' in this._chunkStore) {
-      (this._chunkStore as { close(): void }).close();
-    }
-    this._chunkStore = null;
-    this._embeddingsClient = null;
     this._eventBus.clear();
     this._initialized = false;
   }

@@ -8,7 +8,26 @@ import 'package:bytebrew_mobile/features/auth/domain/auth_repository.dart';
 import 'package:bytebrew_mobile/features/auth/infrastructure/token_storage.dart';
 import 'package:bytebrew_mobile/features/chat/application/connection_provider.dart';
 import 'package:bytebrew_mobile/features/chat/domain/chat_repository.dart';
+import 'package:bytebrew_mobile/core/domain/server.dart';
 import 'package:bytebrew_mobile/features/sessions/application/sessions_provider.dart';
+import 'package:bytebrew_mobile/features/settings/domain/settings_repository.dart';
+
+/// Fake [SettingsRepository] that returns an empty server list and does
+/// nothing on removal.
+///
+/// Prevents tests from reaching [sharedPreferencesProvider] (which throws
+/// [UnimplementedError] when not overridden).
+class FakeSettingsRepository implements SettingsRepository {
+  FakeSettingsRepository([this._servers = const []]);
+
+  final List<Server> _servers;
+
+  @override
+  List<Server> getServers() => _servers;
+
+  @override
+  Future<void> removeServer(String id) async {}
+}
 
 /// Fake [TokenStorage] that stores nothing (no SharedPreferences needed).
 ///

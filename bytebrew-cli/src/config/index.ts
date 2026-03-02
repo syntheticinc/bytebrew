@@ -85,7 +85,7 @@ export function validateConfig(config: AppConfig): ConfigValidationError[] {
  */
 export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   const config: AppConfig = {
-    serverAddress: overrides.serverAddress || process.env.BYTEBREW_SERVER || 'localhost:60401',
+    serverAddress: overrides.serverAddress || process.env.BYTEBREW_SERVER || '',
     projectKey: overrides.projectKey || process.env.BYTEBREW_PROJECT || 'default',
     userId: overrides.userId || process.env.BYTEBREW_USER || `cli-user-${process.pid}`,
     projectRoot: overrides.projectRoot || process.cwd(),

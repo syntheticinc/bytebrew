@@ -7,12 +7,14 @@ import (
 
 // ActiveFlow represents an active flow session
 type ActiveFlow struct {
-	SessionID  string
-	ProjectKey string
-	UserID     string
-	Task       string
-	Status    FlowStatus
-	StartedAt time.Time
+	SessionID   string
+	ProjectKey  string
+	UserID      string
+	Task        string
+	Status      FlowStatus
+	StartedAt   time.Time
+	ProjectRoot string // Absolute path to the project directory
+	Platform    string // "windows", "linux", "darwin"
 }
 
 // FlowStatus represents the status of a flow

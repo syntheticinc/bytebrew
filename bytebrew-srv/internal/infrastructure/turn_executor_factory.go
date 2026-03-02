@@ -63,6 +63,7 @@ func NewEngineTurnExecutorFactory(
 func (f *EngineTurnExecutorFactory) CreateForSession(
 	proxy tools.ClientOperationsProxy,
 	sessionID, projectKey string,
+	projectRoot, platform string,
 ) orchestrator.TurnExecutor {
 	// Create per-session ToolDepsProvider with proxy for this session
 	toolDeps := tools.NewDefaultToolDepsProvider(
@@ -78,6 +79,18 @@ func (f *EngineTurnExecutorFactory) CreateForSession(
 	var contextReminders []turn_executor.ContextReminderProvider
 	if f.contextRemindersGetter != nil {
 		contextReminders = f.contextRemindersGetter()
+	}
+
+	// Create per-request EnvironmentContextReminder (replaces any global one from getter)
+	if projectRoot != "" || platform != "" {
+		envReminder := agentservice.NewEnvironmentContextReminder(projectRoot, platform)
+		var filtered []turn_executor.ContextReminderProvider
+		for _, r := range contextReminders {
+			if _, ok := r.(*agentservice.EnvironmentContextReminder); !ok {
+				filtered = append(filtered, r)
+			}
+		}
+		contextReminders = append(filtered, envReminder)
 	}
 
 	// Create EngineAdapter (implements TurnExecutor interface)

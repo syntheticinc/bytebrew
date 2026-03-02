@@ -1,12 +1,22 @@
 import 'package:bytebrew_mobile/core/domain/server.dart';
 import 'package:bytebrew_mobile/features/settings/infrastructure/local_settings_repository.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late LocalSettingsRepository repo;
 
   setUp(() async {
+    // Mock FlutterSecureStorage method channel so delete/write/read work in tests.
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+      (methodCall) async => null,
+    );
+
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     repo = LocalSettingsRepository(prefs);

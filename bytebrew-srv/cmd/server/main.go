@@ -16,12 +16,22 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/delivery/grpc"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure"
+	bbconfig "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/config"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/flow_registry"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/mobile"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/portfile"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/usecase/list_mobile_sessions"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/usecase/mobile_command"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/usecase/pair_device"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/logger"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 // Build info is set via ldflags at build time.
@@ -53,10 +63,14 @@ func main() {
 		}
 	})
 
-	// In managed mode, resolve data dir and override paths
-	var dataDir string
+	// Always resolve data dir (needed for port file discovery)
+	dataDir := userDataDir()
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		log.Fatalf("Failed to create data directory: %v", err)
+	}
+
+	// In managed mode, create additional subdirs and override paths
 	if *managed {
-		dataDir = userDataDir()
 		if err := ensureManagedDirs(dataDir); err != nil {
 			log.Fatalf("Failed to create managed directories: %v", err)
 		}
@@ -92,6 +106,25 @@ func main() {
 	}
 
 	log.Printf("Config loaded: default_provider=%s, ollama_model=%s", cfg.LLM.DefaultProvider, cfg.LLM.Ollama.Model)
+
+	// Check for already running server BEFORE touching log files.
+	// If log file is locked by the running server, logger.New will fail
+	// with an unhelpful error. Give the user a clear message instead.
+	portReader := portfile.NewReader(dataDir)
+	existingInfo, _ := portReader.Read()
+	if existingInfo != nil {
+		if portfile.IsProcessAlive(existingInfo.PID) {
+			log.Fatalf("Server already running (PID %d, port %d). Kill it first or use a different config.",
+				existingInfo.PID, existingInfo.Port)
+		}
+		// Stale port file from a crashed/killed server — clean up.
+		stalePortFile := filepath.Join(dataDir, "server.port")
+		if err := os.Remove(stalePortFile); err != nil && !os.IsNotExist(err) {
+			log.Printf("Warning: failed to remove stale port file: %v", err)
+		} else {
+			log.Printf("Removed stale port file (PID %d no longer running)", existingInfo.PID)
+		}
+	}
 
 	// Apply managed mode overrides
 	if *managed {
@@ -201,7 +234,92 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create flow handler: %v", err)
 	}
-	grpcServer.RegisterServices(flowHandler, nil, nil)
+
+	// Create MobileService components
+	serverName := getServerName()
+	serverID := getOrCreateServerID(dataDir)
+
+	tokenStore := mobile.NewInMemoryPairingTokenStore()
+
+	// Persistent device store (SQLite) — survives server restarts
+	mobileDBPath := filepath.Join(dataDir, "mobile.db")
+	mobileDB, err := gormOpen(mobileDBPath)
+	if err != nil {
+		log.Fatalf("Failed to open mobile database: %v", err)
+	}
+	deviceStore, err := mobile.NewSQLiteDeviceStore(mobileDB)
+	if err != nil {
+		log.Fatalf("Failed to create device store: %v", err)
+	}
+
+	eventBuffer := mobile.NewEventBuffer(0) // default 1000 events
+	eventBroadcaster := mobile.NewEventBroadcaster(eventBuffer)
+
+	cryptoService := mobile.NewCryptoService()
+	pairDeviceUC, err := pair_device.New(tokenStore, deviceStore, cryptoService, serverName, serverID)
+	if err != nil {
+		log.Fatalf("Failed to create pair_device usecase: %v", err)
+	}
+
+	listSessionsUC, err := list_mobile_sessions.New(flowRegistry)
+	if err != nil {
+		log.Fatalf("Failed to create list_mobile_sessions usecase: %v", err)
+	}
+
+	mobileCommandUC, err := mobile_command.New(flowRegistry, flowRegistry, flowRegistry)
+	if err != nil {
+		log.Fatalf("Failed to create mobile_command usecase: %v", err)
+	}
+
+	pairLimiter := mobile.NewSlidingWindowRateLimiter(5, time.Minute)
+	tokenLimiter := mobile.NewSlidingWindowRateLimiter(2, 30*time.Second)
+	go pairLimiter.StartCleanup(ctx)
+	go tokenLimiter.StartCleanup(ctx)
+
+	pairingWaiter := mobile.NewPairingWaiter()
+
+	mobileHandler, err := grpc.NewMobileHandler(grpc.MobileHandlerConfig{
+		PairDevice:    pairDeviceUC,
+		ListSessions:  listSessionsUC,
+		MobileCommand: mobileCommandUC,
+		EventSub:      eventBroadcaster,
+		DeviceAuth:    deviceStore,
+		PairLimiter:   pairLimiter,
+		TokenLimiter:  tokenLimiter,
+		PairingWaiter: pairingWaiter,
+		ServerName:    serverName,
+		ServerID:      serverID,
+		ServerPort:    int32(grpcServer.ActualPort()),
+	})
+	if err != nil {
+		log.Fatalf("Failed to create mobile handler: %v", err)
+	}
+
+	grpcServer.RegisterServices(flowHandler, nil, nil, mobileHandler)
+
+	// Bridge connector: outbound connection to bridge relay (optional).
+	// Enabled via BRIDGE_URL environment variable.
+	bridgeURL := os.Getenv("BRIDGE_URL")
+	if bridgeURL == "" {
+		bridgeURL = bbconfig.ReadBridgeURL()
+	}
+	if bridgeURL != "" {
+		connector := grpc.NewBridgeConnector(bridgeURL, serverID, serverName, cfg.Security.BridgeToken)
+		go func() {
+			if err := connector.Connect(ctx); err != nil {
+				slog.Error("bridge connector failed", "error", err)
+			}
+		}()
+		defer func() {
+			if err := connector.Close(); err != nil {
+				slog.Error("bridge connector close error", "error", err)
+			}
+		}()
+		loggerInstance.InfoContext(ctx, "Bridge connector enabled",
+			"bridge_url", bridgeURL,
+			"server_id", serverID,
+		)
+	}
 
 	// In managed mode, emit READY protocol before starting
 	if *managed {
@@ -222,6 +340,24 @@ func main() {
 		"port", grpcServer.ActualPort(),
 	)
 
+	// Write port file for CLI discovery.
+	// Always write 127.0.0.1 — clients connect via loopback, not 0.0.0.0.
+	portFileHost := cfg.Server.Host
+	if portFileHost == "" || portFileHost == "0.0.0.0" {
+		portFileHost = "127.0.0.1"
+	}
+	portWriter := portfile.NewWriter(dataDir)
+	if err := portWriter.Write(portfile.PortInfo{
+		PID:       os.Getpid(),
+		Port:      grpcServer.ActualPort(),
+		Host:      portFileHost,
+		StartedAt: time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		slog.Warn("Failed to write port file", "error", err)
+	} else {
+		slog.Info("Port file written", "path", portWriter.Path())
+	}
+
 	// Wait for shutdown signal or server error
 	select {
 	case sig := <-sigChan:
@@ -233,6 +369,11 @@ func main() {
 	}
 
 	loggerInstance.InfoContext(ctx, "Shutting down ByteBrew Server...")
+
+	// Remove port file on shutdown
+	if err := portWriter.Remove(); err != nil {
+		slog.Warn("Failed to remove port file", "error", err)
+	}
 
 	// Graceful shutdown
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -247,15 +388,32 @@ func main() {
 
 // initializeGRPCServer creates the gRPC server, choosing between config-based
 // listener and OS-assigned port based on managed mode.
+// If the configured port is busy, falls back to a random OS-assigned port.
 func initializeGRPCServer(cfg *config.Config, log *logger.Logger, licenseInfo *domain.LicenseInfo, managed bool) (*grpc.Server, error) {
 	if managed && cfg.Server.Port == 0 {
-		listener, err := net.Listen("tcp", ":0")
+		listener, err := net.Listen("tcp4", "127.0.0.1:0")
 		if err != nil {
 			return nil, fmt.Errorf("listen on random port: %w", err)
 		}
-		return grpc.NewServerWithListener(listener, log, licenseInfo), nil
+		return grpc.NewServerWithListener(listener, cfg.Server, log, licenseInfo), nil
 	}
-	return grpc.NewServer(cfg.Server, log, licenseInfo)
+
+	server, err := grpc.NewServer(cfg.Server, log, licenseInfo)
+	if err != nil {
+		// Port busy — fallback to random port (use tcp4 to avoid IPv6 issues with gRPC clients)
+		slog.Warn("Configured port busy, using random port",
+			"port", cfg.Server.Port, "error", err)
+		host := cfg.Server.Host
+		if host == "" {
+			host = "0.0.0.0"
+		}
+		listener, listenErr := net.Listen("tcp4", fmt.Sprintf("%s:0", host))
+		if listenErr != nil {
+			return nil, fmt.Errorf("listen on random port after fallback: %w", listenErr)
+		}
+		return grpc.NewServerWithListener(listener, cfg.Server, log, licenseInfo), nil
+	}
+	return server, nil
 }
 
 // userDataDir returns the platform-specific user data directory for ByteBrew.
@@ -330,4 +488,43 @@ llm:
     timeout: 300s
 `
 	return os.WriteFile(path, []byte(content), 0644)
+}
+
+// getServerName returns a human-readable name for this server (hostname).
+func getServerName() string {
+	name, err := os.Hostname()
+	if err != nil {
+		return "ByteBrew Server"
+	}
+	return name
+}
+
+// getOrCreateServerID returns a persistent server ID.
+// If dataDir is set (managed mode), it reads/creates from file.
+// Otherwise generates a new UUID per startup.
+func getOrCreateServerID(dataDir string) string {
+	if dataDir == "" {
+		return uuid.New().String()
+	}
+
+	idFile := filepath.Join(dataDir, "server_id")
+	data, err := os.ReadFile(idFile)
+	if err == nil && len(data) > 0 {
+		return string(data)
+	}
+
+	id := uuid.New().String()
+	_ = os.WriteFile(idFile, []byte(id), 0644)
+	return id
+}
+
+// gormOpen opens a SQLite database with GORM using sensible defaults.
+func gormOpen(dbPath string) (*gorm.DB, error) {
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+		Logger: gormlogger.Discard,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite %s: %w", dbPath, err)
+	}
+	return db, nil
 }

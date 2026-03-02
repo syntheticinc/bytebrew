@@ -57,7 +57,7 @@ type SessionStorage interface {
 // TurnExecutorFactory creates a TurnExecutor for the given proxy/session.
 // Consumer-side interface defined in FlowHandler.
 type TurnExecutorFactory interface {
-	CreateForSession(proxy tools.ClientOperationsProxy, sessionID, projectKey string) orchestrator.TurnExecutor
+	CreateForSession(proxy tools.ClientOperationsProxy, sessionID, projectKey, projectRoot, platform string) orchestrator.TurnExecutor
 }
 
 // FlowHandler handles FlowService gRPC requests
@@ -176,11 +176,11 @@ func (h *FlowHandler) ExecuteFlow(stream pb.FlowService_ExecuteFlowServer) error
 		"task", req.Task)
 
 	// Extract environment context from client (project root, platform)
+	var projectRoot, platform string
 	if len(req.Context) > 0 {
-		projectRoot := req.Context["project_root"]
-		platform := req.Context["platform"]
+		projectRoot = req.Context["project_root"]
+		platform = req.Context["platform"]
 		if projectRoot != "" || platform != "" {
-			h.agentService.SetEnvironmentContext(projectRoot, platform)
 			slog.InfoContext(ctx, "environment context set",
 				"project_root", projectRoot,
 				"platform", platform)
@@ -272,20 +272,22 @@ func (h *FlowHandler) ExecuteFlow(stream pb.FlowService_ExecuteFlowServer) error
 
 	// Supervisor mode uses event-driven Orchestrator
 	if h.agentPoolAdapter != nil {
-		return h.runSupervisorMode(ctx, req, stream, proxy, streamWriter, agentEventStream, cancel)
+		return h.runSupervisorMode(ctx, req, stream, proxy, streamWriter, agentEventStream, cancel, projectRoot, platform)
 	}
 
 	// Single-agent mode uses direct task execution
-	return h.runSingleAgentMode(ctx, req, stream, proxy, streamWriter, agentEventStream, cancel)
+	return h.runSingleAgentMode(ctx, req, stream, proxy, streamWriter, agentEventStream, cancel, projectRoot, platform)
 }
 
 // registerActiveFlow creates and registers an active flow with its cancel function.
 // The cancel func is stored in the registry (not in the domain entity) to keep ActiveFlow pure.
-func (h *FlowHandler) registerActiveFlow(sessionID, projectKey, userID, task string, cancel context.CancelFunc) (*domain.ActiveFlow, error) {
+func (h *FlowHandler) registerActiveFlow(sessionID, projectKey, userID, task, projectRoot, platform string, cancel context.CancelFunc) (*domain.ActiveFlow, error) {
 	activeFlow, err := domain.NewActiveFlow(sessionID, projectKey, userID, task)
 	if err != nil {
 		return nil, err
 	}
+	activeFlow.ProjectRoot = projectRoot
+	activeFlow.Platform = platform
 
 	if err := h.flowRegistry.Register(sessionID, activeFlow, cancel); err != nil {
 		return nil, err

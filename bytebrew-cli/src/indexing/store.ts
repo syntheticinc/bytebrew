@@ -1,11 +1,25 @@
 // USearch + SQLite vector store for code chunks
-import { Index, MetricKind, ScalarKind } from 'usearch';
+// USearch is loaded lazily — native addon may not be available on all platforms.
+import type { Index as USearchIndex } from 'usearch';
 import { Database } from 'bun:sqlite';
 import fs from 'fs';
 import path from 'path';
 import { CodeChunk, IndexStatus, SearchResult } from '../domain/chunk.js';
 import { IChunkStore, IEmbeddingsClient, ChunkMetadataRow } from '../domain/store.js';
 import { getLogger } from '../lib/logger.js';
+
+let usearchModule: typeof import('usearch') | null = null;
+
+function loadUSearch(): typeof import('usearch') | null {
+  if (usearchModule) return usearchModule;
+  try {
+    // Dynamic require — fails gracefully if native binary not available
+    usearchModule = require('usearch');
+    return usearchModule;
+  } catch {
+    return null;
+  }
+}
 
 const DEFAULT_BYTEBREW_DIR = '.bytebrew';
 const DEFAULT_DIMENSION = 768;
@@ -16,7 +30,7 @@ export interface ChunkStoreConfig {
 }
 
 export class ChunkStore implements IChunkStore {
-  private index: Index | null = null;
+  private index: USearchIndex | null = null;
   private db: Database | null = null;
   private bytebrewDir: string;
   private indexPath: string;
@@ -47,10 +61,47 @@ export class ChunkStore implements IChunkStore {
     // Check if index file exists before loading
     const indexFileExisted = fs.existsSync(this.indexPath);
 
-    // Initialize SQLite database
-    this.db = new Database(this.dbPath);
-    this.db.exec('PRAGMA journal_mode = WAL');
-    this.db.exec('PRAGMA busy_timeout = 5000');
+    // Initialize SQLite database with retry for stale WAL locks.
+    // When the previous process exits without closing the DB (e.g. killed during
+    // embedding), WAL/SHM files may remain locked. Deleting them and retrying
+    // allows the new process to open the database cleanly.
+    const maxRetries = 3;
+    const retryDelayMs = 300;
+    let db: Database | null = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        db = new Database(this.dbPath);
+        db.exec('PRAGMA journal_mode = WAL');
+        db.exec('PRAGMA busy_timeout = 5000');
+        break;
+      } catch (err) {
+        const logger = getLogger();
+        logger.warn(`SQLite open failed (attempt ${attempt}/${maxRetries})`, {
+          error: (err as Error).message,
+        });
+        // Close partial connection if it was opened
+        try { db?.close(); } catch { /* ignore */ }
+        db = null;
+
+        if (attempt < maxRetries) {
+          // Remove stale WAL/SHM files that may hold locks from a dead process
+          for (const suffix of ['-wal', '-shm']) {
+            const lockFile = this.dbPath + suffix;
+            try {
+              if (fs.existsSync(lockFile)) fs.unlinkSync(lockFile);
+            } catch { /* ignore */ }
+          }
+          await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+        }
+      }
+    }
+
+    if (!db) {
+      throw new Error(`Failed to open SQLite database at ${this.dbPath} after ${maxRetries} attempts`);
+    }
+
+    this.db = db;
 
     // Create metadata table (base schema without file_mtime for compatibility)
     this.db.exec(`
@@ -97,11 +148,18 @@ export class ChunkStore implements IChunkStore {
     const maxKey = this.db.prepare('SELECT MAX(key) as max_key FROM chunks').get() as { max_key: number | null };
     this.nextKey = (maxKey?.max_key || 0) + 1;
 
-    // Initialize or load USearch index (native addon — can crash on corruption)
+    // Initialize or load USearch index (native addon — may not be available)
+    const usearch = loadUSearch();
+    if (!usearch) {
+      const logger = getLogger();
+      logger.warn('USearch native module not available, vector search disabled');
+      return;
+    }
+
     try {
-      this.index = new Index({
-        metric: MetricKind.Cos,
-        quantization: ScalarKind.F32,
+      this.index = new usearch.Index({
+        metric: usearch.MetricKind.Cos,
+        quantization: usearch.ScalarKind.F32,
         connectivity: 16,
         dimensions: this.dimension,
         expansion_add: 128,
@@ -123,6 +181,12 @@ export class ChunkStore implements IChunkStore {
       const logger = getLogger();
       logger.error('USearch index initialization failed, vector search disabled', { error });
       this.index = null;
+      // Close database on total USearch failure to prevent WAL lock leak
+      if (this.db) {
+        try { this.db.close(); } catch { /* ignore */ }
+        this.db = null;
+      }
+      return;
     }
 
     // After DB and index are ready: if index file was missing, reset has_embedding
@@ -326,27 +390,13 @@ export class ChunkStore implements IChunkStore {
 
   async deleteByFilePath(filePath: string): Promise<void> {
     await this.ensureCollection();
-    if (!this.index || !this.db) throw new Error('Store not initialized');
+    if (!this.db) throw new Error('Store not initialized');
 
-    // Get keys to delete
-    const rows = this.db.prepare('SELECT key FROM chunks WHERE file_path = ?').all(filePath) as { key: number }[];
-
-    if (rows.length === 0) return;
-
-    // Delete from USearch index
-    for (const row of rows) {
-      try {
-        this.index.remove(BigInt(row.key));
-      } catch {
-        // Key might not exist in index
-      }
-    }
-
-    // Delete from SQLite
+    // Delete from SQLite only. Do NOT call index.remove() — USearch's native
+    // remove() corrupts the index structure, causing segfaults on subsequent
+    // add() calls. Orphaned vectors in USearch are harmless: search() already
+    // filters results by checking key existence in SQLite.
     this.db.prepare('DELETE FROM chunks WHERE file_path = ?').run(filePath);
-
-    // Save index
-    this.index.save(this.indexPath);
   }
 
   async getStatus(): Promise<IndexStatus> {
@@ -468,6 +518,47 @@ export class ChunkStore implements IChunkStore {
       const logger = getLogger();
       logger.warn('USearch index.save() failed', { error });
     }
+  }
+
+  /**
+   * Rebuild the USearch index from scratch.
+   * Deletes the existing index file, creates a fresh empty index, and resets
+   * has_embedding=0 for all chunks so embeddingSync will re-embed everything.
+   * This is the safe way to handle index corruption — never use index.remove().
+   */
+  rebuildIndex(): void {
+    if (!this.db) return;
+
+    const logger = getLogger();
+    logger.info('Rebuilding USearch index from scratch');
+
+    // Delete corrupted index file
+    try { if (fs.existsSync(this.indexPath)) fs.unlinkSync(this.indexPath); } catch { /* ignore */ }
+
+    // Create fresh USearch index
+    const usearch = loadUSearch();
+    if (!usearch) {
+      logger.warn('USearch native module not available, cannot rebuild index');
+      this.index = null;
+    } else {
+      try {
+        this.index = new usearch.Index({
+          metric: usearch.MetricKind.Cos,
+          quantization: usearch.ScalarKind.F32,
+          connectivity: 16,
+          dimensions: this.dimension,
+          expansion_add: 128,
+          expansion_search: 64,
+          multi: false,
+        });
+      } catch (error) {
+        logger.error('Failed to create fresh USearch index', { error });
+        this.index = null;
+      }
+    }
+
+    // Reset all embeddings — they'll be regenerated by embeddingSync
+    this.db.exec('UPDATE chunks SET has_embedding = 0');
   }
 
   close(): void {

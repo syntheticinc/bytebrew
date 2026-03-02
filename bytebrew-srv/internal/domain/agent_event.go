@@ -32,6 +32,7 @@ type AgentError struct {
 // AgentEvent represents an event from the agent execution
 type AgentEvent struct {
 	Type       AgentEventType         `json:"type"`
+	EventID    string                 `json:"event_id,omitempty"`   // Unique event ID: "{sessionID}-{counter}", assigned at broadcast
 	Timestamp  time.Time              `json:"timestamp"`
 	Step       int                    `json:"step"`
 	Content    string                 `json:"content"`

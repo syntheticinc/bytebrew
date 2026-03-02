@@ -58,6 +58,7 @@ func (h *FlowHandler) runSupervisorMode(
 	streamWriter *StreamWriter,
 	agentEventStream *GrpcAgentEventStream,
 	cancel context.CancelFunc,
+	projectRoot, platform string,
 ) error {
 	slog.InfoContext(ctx, "[Supervisor] starting event-driven mode", "session_id", req.SessionId)
 
@@ -164,11 +165,11 @@ func (h *FlowHandler) runSupervisorMode(
 	eventCallback := h.createEventCallback(ctx, agentEventStream, req.SessionId, workChecker)
 
 	// 6. Create TurnExecutor (Engine-based, always available)
-	turnExecutor := h.turnExecutorFactory.CreateForSession(proxy, req.SessionId, req.ProjectKey)
+	turnExecutor := h.turnExecutorFactory.CreateForSession(proxy, req.SessionId, req.ProjectKey, projectRoot, platform)
 	slog.InfoContext(ctx, "[Supervisor] using Engine-based TurnExecutor", "session_id", req.SessionId)
 
 	// 7. Register active flow (cancel func stored in registry, not in domain entity)
-	activeFlow, err := h.registerActiveFlow(req.SessionId, req.ProjectKey, req.UserId, req.Task, cancel)
+	activeFlow, err := h.registerActiveFlow(req.SessionId, req.ProjectKey, req.UserId, req.Task, projectRoot, platform, cancel)
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to register active flow", "error", err)
 		return err

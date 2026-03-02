@@ -11,6 +11,7 @@ import { Indexer, IndexProgress } from './indexing/indexer.js';
 import { initLogger } from './lib/logger.js';
 import { initOutputWriter, stopOutputWriter } from './lib/outputWriter.js';
 import { runHeadless, runHeadlessInteractive } from './headless/index.js';
+import { getContainer } from './config/container.js';
 import { SessionStore } from './infrastructure/persistence/SessionStore.js';
 import { AuthStorage } from './infrastructure/auth/AuthStorage.js';
 import { LicenseStorage } from './infrastructure/license/LicenseStorage.js';
@@ -18,7 +19,10 @@ import { CloudApiClient, CloudApiError } from './infrastructure/api/CloudApiClie
 import { parseJwtPayload, showLicenseInfo } from './infrastructure/license/parseJwt.js';
 import { prompt, promptPassword } from './infrastructure/auth/prompt.js';
 import { startBackgroundLicenseRefresh } from './infrastructure/license/backgroundRefresh.js';
-import { runOnboardingWizard, checkLicenseStatus } from './presentation/onboarding/OnboardingWizard.js';
+import { checkLicenseStatus } from './presentation/onboarding/OnboardingWizard.js';
+import { OnboardingOrchestrator } from './presentation/onboarding/OnboardingOrchestrator.js';
+import { LicenseBlock } from './presentation/onboarding/blocks/LicenseBlock.js';
+import { MobilePairingBlock } from './presentation/onboarding/blocks/MobilePairingBlock.js';
 import { openBrowser } from './infrastructure/shell/openBrowser.js';
 import { ServerConnectionOrchestrator, ServerConnection } from './infrastructure/server/ServerConnectionOrchestrator.js';
 import { UpdateChecker } from './infrastructure/server/UpdateChecker.js';
@@ -106,22 +110,32 @@ async function connectAndConfigure(
 }
 
 /**
- * Check license status and run onboarding if needed.
- * Exits process if license is expired or user cancels onboarding.
+ * Run adaptive onboarding — checks which blocks need configuration
+ * and runs them in priority order. Skips all in headless mode.
  */
-async function enforceLicense(connection: ServerConnection): Promise<void> {
-  const licenseStatus = checkLicenseStatus();
+async function runOnboarding(connection: ServerConnection, headless: boolean): Promise<void> {
+  const orchestrator = new OnboardingOrchestrator();
+  orchestrator.register(new LicenseBlock());
+  orchestrator.register(new MobilePairingBlock());
 
-  if (licenseStatus === 'missing') {
-    const activated = await runOnboardingWizard();
-    if (!activated) {
-      await connection.cleanup();
-      process.exit(0);
-    }
-    return;
+  const result = await orchestrator.run({
+    serverAddress: connection.address,
+    headless,
+  });
+
+  if (!result.canProceed) {
+    await connection.cleanup();
+    process.exit(0);
   }
+}
 
-  if (licenseStatus === 'expired') {
+/**
+ * Check if license is expired and exit if so.
+ * Separate from onboarding — runs after onboarding completes.
+ */
+async function enforceExpiredLicense(connection: ServerConnection): Promise<void> {
+  const status = checkLicenseStatus();
+  if (status === 'expired') {
     console.log('');
     console.log('Your subscription has expired.');
     console.log('Renew at https://app.bytebrew.ai or run "bytebrew login".');
@@ -183,7 +197,8 @@ program
       const result = await connectAndConfigure(options, globalOpts);
       connection = result.connection;
 
-      await enforceLicense(connection);
+      await runOnboarding(connection, false);
+      await enforceExpiredLicense(connection);
       startBackgroundLicenseRefresh();
 
       // Background: check for updates, download silently
@@ -244,7 +259,8 @@ program
       const result = await connectAndConfigure(options, globalOpts);
       connection = result.connection;
 
-      await enforceLicense(connection);
+      await runOnboarding(connection, options.headless ?? false);
+      await enforceExpiredLicense(connection);
       startBackgroundLicenseRefresh();
       registerExitCleanup(connection);
 
@@ -615,6 +631,165 @@ program
     }
   });
 
+// Mobile pair command - generate pairing code for mobile app
+program
+  .command('mobile-pair')
+  .description('Generate pairing code for mobile app')
+  .option('-s, --server <address>', 'Server address')
+  .option('-p, --project <key>', 'Project key', 'default')
+  .option('-d, --debug', 'Enable debug mode', false)
+  .option('--mobile-port <port>', 'Override mobile proxy port (default: 8765)')
+  .option('--no-mobile', 'Disable mobile proxy')
+  .option('--lan', 'Use direct LAN connection (no bridge)')
+  .action(async (options) => {
+    const orchestrator = new ServerConnectionOrchestrator();
+    const connection = await orchestrator.connect(options.server || process.env.BYTEBREW_SERVER);
+    const { MobileServiceClient } = await import('./infrastructure/grpc/mobile_client.js');
+    const client = new MobileServiceClient(connection.address);
+
+    let transitionedToChat = false;
+
+    try {
+      const result = await client.generatePairingToken();
+
+      const { ByteBrewConfig } = await import('./infrastructure/config/ByteBrewConfig.js');
+      const { QrPairingCodeGenerator } = await import('./infrastructure/mobile/QrPairingCodeGenerator.js');
+
+      const config = new ByteBrewConfig();
+      const generator = new QrPairingCodeGenerator();
+
+      console.log('\nMobile Pairing');
+      console.log('\u2500'.repeat(40));
+      console.log(`Server: ${result.serverName}`);
+      console.log('');
+
+      let bridgeUrl: string | undefined;
+      if (options.lan) {
+        bridgeUrl = undefined;
+        console.log('Direct LAN mode \u2014 phone must be on same network.');
+        console.log('');
+      } else {
+        bridgeUrl = config.getBridgeUrl();
+        if (!bridgeUrl) {
+          console.log('Note: Bridge not configured. QR will work for LAN only.');
+          console.log('Run onboarding or set bridge_url in ~/.bytebrew/config.json');
+          console.log('');
+        }
+      }
+
+      generator.displayPairingInfo({ response: result, bridgeUrl });
+      console.log('');
+      console.log('Waiting for mobile device to scan... (token expires in 5 minutes)');
+
+      try {
+        const event = await client.waitForPairing(result.token);
+        console.log('');
+        console.log(`\u2713 Device "${event.deviceName}" paired successfully!`);
+        console.log('');
+        console.log('Starting chat session...');
+        console.log('');
+
+        // Close mobile-specific gRPC client before starting chat.
+        client.close();
+
+        // Build full AppConfig and start interactive chat.
+        const globalOpts = program.opts();
+        const projectRoot = path.resolve(globalOpts.directory || process.cwd());
+        const sessionId = resolveSessionId(globalOpts, projectRoot);
+
+        const DEFAULT_MOBILE_PORT = 8765;
+        let mobileProxyPort: number | undefined;
+        if (options.noMobile) {
+          mobileProxyPort = undefined;
+        } else if (options.mobilePort) {
+          mobileProxyPort = parseInt(options.mobilePort, 10);
+        } else {
+          mobileProxyPort = DEFAULT_MOBILE_PORT;
+        }
+
+        const chatConfig = loadAndValidateConfig({
+          serverAddress: connection.address,
+          projectKey: options.project || 'default',
+          projectRoot,
+          sessionId,
+          debug: options.debug || false,
+          mobileProxyPort,
+        });
+
+        transitionedToChat = true;
+        registerExitCleanup(connection);
+        runChatApp(chatConfig);
+        return; // Don't fall through to finally { client.close() }
+      } catch (waitErr) {
+        const msg = (waitErr as Error).message;
+        if (msg.includes('timed out')) {
+          console.log('\nPairing timed out. Run mobile-pair again to generate a new code.');
+        } else {
+          console.log(`\nPairing wait ended: ${msg}`);
+        }
+      }
+    } catch (err) {
+      console.error(`Failed to generate pairing token: ${(err as Error).message}`);
+      process.exit(1);
+    } finally {
+      if (!transitionedToChat) {
+        client.close();
+      }
+    }
+  });
+
+// Mobile devices command - list/revoke paired devices
+program
+  .command('mobile-devices')
+  .description('List paired mobile devices')
+  .option('-s, --server <address>', 'Server address')
+  .option('--revoke <device-id>', 'Revoke a paired device')
+  .action(async (options) => {
+    const orchestrator = new ServerConnectionOrchestrator();
+    const connection = await orchestrator.connect(options.server || process.env.BYTEBREW_SERVER);
+    const { MobileServiceClient } = await import('./infrastructure/grpc/mobile_client.js');
+    const client = new MobileServiceClient(connection.address);
+
+    try {
+      if (options.revoke) {
+        const result = await client.revokeDevice(options.revoke);
+        if (result.success) {
+          console.log(`Device ${options.revoke} revoked.`);
+        } else {
+          console.error('Failed to revoke device.');
+          process.exit(1);
+        }
+        return;
+      }
+
+      const result = await client.listDevices();
+
+      if (result.devices.length === 0) {
+        console.log('No paired devices. Run "bytebrew mobile-pair" to pair a device.');
+        return;
+      }
+
+      console.log('\nPaired Devices');
+      console.log('\u2500'.repeat(60));
+      for (const device of result.devices) {
+        const pairedDate = new Date(Number(device.pairedAt) * 1000).toLocaleString();
+        const lastSeen = new Date(Number(device.lastSeenAt) * 1000).toLocaleString();
+        console.log(`  ${device.deviceName}`);
+        console.log(`    ID:        ${device.deviceId}`);
+        console.log(`    Paired:    ${pairedDate}`);
+        console.log(`    Last seen: ${lastSeen}`);
+        console.log('');
+      }
+
+      console.log('To revoke: bytebrew mobile-devices --revoke <device-id>');
+    } catch (err) {
+      console.error(`Failed: ${(err as Error).message}`);
+      process.exit(1);
+    } finally {
+      client.close();
+    }
+  });
+
 function printProgress(progress: IndexProgress): void {
   const { phase, filesScanned, totalFiles, chunksProcessed, totalChunks, error } = progress;
 
@@ -653,6 +828,22 @@ function printProgress(progress: IndexProgress): void {
 }
 
 function runChatApp(config: AppConfig, initialQuestion?: string) {
+  // Crash diagnostics — write exit info to file for post-mortem analysis.
+  // This handler fires on ANY exit (process.exit, signal, native crash that triggers cleanup).
+  const diagPath = path.join(config.projectRoot, '.bytebrew', 'crash-diag.log');
+  const diagStart = Date.now();
+  const writeDiag = (msg: string) => {
+    try {
+      const elapsed = Date.now() - diagStart;
+      fs.appendFileSync(diagPath, `[${elapsed}ms] ${msg}\n`);
+    } catch { /* ignore */ }
+  };
+  // Clear previous diagnostics
+  try { fs.writeFileSync(diagPath, `=== CLI start ${new Date().toISOString()} ===\n`); } catch { /* ignore */ }
+  process.on('exit', (code) => {
+    writeDiag(`process.on('exit') code=${code}`);
+  });
+
   // Ink 6 options to reduce flickering
   const { waitUntilExit, unmount } = render(<App config={config} initialQuestion={initialQuestion} />, {
     // Only update changed lines instead of redrawing entire output
@@ -666,6 +857,15 @@ function runChatApp(config: AppConfig, initialQuestion?: string) {
     isExiting = true;
     // Unmount Ink app — triggers React cleanup (useEffect returns)
     unmount();
+    // Close SQLite synchronously BEFORE exit to release WAL file locks.
+    // Container.dispose() is async and may not complete before process.exit(),
+    // so we explicitly close the chunk store here.
+    try {
+      const container = getContainer();
+      container.closeDatabaseSync();
+    } catch {
+      // Container may not exist yet — ignore
+    }
     // Give React cleanup a moment, then force exit
     setTimeout(() => process.exit(code), 300);
   };
