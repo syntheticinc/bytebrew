@@ -2,11 +2,15 @@
     acme_ca https://acme-v02.api.letsencrypt.org/directory
 }
 
-bytebrew.ai, www.bytebrew.ai, app.bytebrew.ai {
+bytebrew.ai, www.bytebrew.ai {
     root * /var/www/bytebrew-cloud-web
     try_files {path} /index.html
     file_server
     encode gzip
+}
+
+app.bytebrew.ai {
+    redir https://bytebrew.ai{uri}
 }
 
 api.bytebrew.ai {
