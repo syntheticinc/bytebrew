@@ -83,7 +83,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    if: ${{ secrets.VPS_HOST != '' }}
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     steps:
       - name: Download API binary
         uses: actions/download-artifact@v4
