@@ -98,10 +98,10 @@ export function LandingPage() {
 }
 
 const installCommands = {
-  macOS: 'curl -fsSL https://raw.githubusercontent.com/Bearil/usm-epicsmasher/main/scripts/install.sh | sh',
-  Linux: 'curl -fsSL https://raw.githubusercontent.com/Bearil/usm-epicsmasher/main/scripts/install.sh | sh',
+  macOS: 'curl -fsSL https://raw.githubusercontent.com/syntheticinc/bytebrew/main/scripts/install.sh | sh',
+  Linux: 'curl -fsSL https://raw.githubusercontent.com/syntheticinc/bytebrew/main/scripts/install.sh | sh',
   Windows:
-    'irm https://raw.githubusercontent.com/Bearil/usm-epicsmasher/main/scripts/install.ps1 | iex',
+    'irm https://raw.githubusercontent.com/syntheticinc/bytebrew/main/scripts/install.ps1 | iex',
 } as const;
 
 type Platform = keyof typeof installCommands;
