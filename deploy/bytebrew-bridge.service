@@ -1,22 +1,19 @@
 [Unit]
-Description=ByteBrew Cloud API
-After=network.target postgresql.service
+Description=ByteBrew Bridge (gRPC relay)
+After=network.target
 
 [Service]
 Type=simple
 User=bytebrew
 Group=bytebrew
-WorkingDirectory=/etc/bytebrew
-EnvironmentFile=/etc/bytebrew/cloud-api.env
-ExecStart=/usr/local/bin/bytebrew-cloud-api --config /etc/bytebrew/config.yaml
+EnvironmentFile=/etc/bytebrew/bridge.env
+ExecStart=/usr/local/bin/bytebrew-bridge
 Restart=on-failure
 RestartSec=5s
 TimeoutStopSec=15s
 KillSignal=SIGTERM
 StandardOutput=journal
 StandardError=journal
-
-# Hardening
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true

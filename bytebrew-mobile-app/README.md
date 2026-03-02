@@ -63,7 +63,7 @@ flutter run -d <device-id>
 
 В **debug** режиме приложение автоматически использует `http://localhost:9700` (см. `lib/main.dart`).
 
-В **release** режиме используется `https://api.bytebrew.io`.
+В **release** режиме используется `https://api.bytebrew.ai`.
 
 ### Полная цепочка сервисов
 

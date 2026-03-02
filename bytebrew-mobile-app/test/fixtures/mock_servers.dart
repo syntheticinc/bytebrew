@@ -14,7 +14,7 @@ final mockServers = [
     id: 'server-2',
     name: 'Desktop PC',
     lanAddress: '192.168.1.100',
-    bridgeUrl: 'bytebrew.io',
+    bridgeUrl: 'bridge.bytebrew.ai',
     connectionMode: ConnectionMode.bridge,
     isOnline: true,
     latencyMs: 45,

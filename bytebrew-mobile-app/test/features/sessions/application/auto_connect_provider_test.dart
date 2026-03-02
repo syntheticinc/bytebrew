@@ -131,7 +131,7 @@ void main() {
 
       final container = ProviderContainer(
         overrides: [
-          connectionManagerProvider.overrideWithValue(manager),
+          connectionManagerProvider.overrideWith((ref) => manager),
         ],
       );
       addTearDown(container.dispose);

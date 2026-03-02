@@ -39,4 +39,4 @@ stripe:
 
 email:
   resend_api_key: ""  # Resend API key (optional -- noop sender if empty)
-  from_email: "ByteBrew <noreply@yourdomain.com>"
+  from_email: "ByteBrew <noreply@bytebrew.ai>"

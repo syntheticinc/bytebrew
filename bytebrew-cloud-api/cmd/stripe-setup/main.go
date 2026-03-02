@@ -31,20 +31,36 @@ type productDef struct {
 
 var products = []productDef{
 	{
-		productKey:   "personal",
+		productKey:  "personal",
 		name:        "ByteBrew Personal",
 		description: "AI coding agent for individual developers. 1 seat, 300 proxy steps/month + unlimited BYOK.",
-		priceAmount: 2000, // $20
+		priceAmount: 2000, // $20/mo
 		interval:    "month",
 		configKey:   "personal_monthly",
 	},
 	{
-		productKey:   "teams",
+		productKey:  "personal",
+		name:        "ByteBrew Personal",
+		description: "AI coding agent for individual developers. 1 seat, 300 proxy steps/month + unlimited BYOK.",
+		priceAmount: 20000, // $200/yr (~17% off)
+		interval:    "year",
+		configKey:   "personal_annual",
+	},
+	{
+		productKey:  "teams",
 		name:        "ByteBrew Teams",
 		description: "AI coding agent for teams. N seats, 300 proxy steps per user/month + unlimited BYOK + admin panel.",
-		priceAmount: 3000, // $30
+		priceAmount: 3000, // $30/mo
 		interval:    "month",
 		configKey:   "teams_monthly",
+	},
+	{
+		productKey:  "teams",
+		name:        "ByteBrew Teams",
+		description: "AI coding agent for teams. N seats, 300 proxy steps per user/month + unlimited BYOK + admin panel.",
+		priceAmount: 30000, // $300/seat/yr (~17% off)
+		interval:    "year",
+		configKey:   "teams_annual",
 	},
 }
 

@@ -93,7 +93,7 @@ void main() {
       id: 'srv-bridge',
       name: 'Bridge Server',
       lanAddress: '10.0.0.1',
-      bridgeUrl: 'https://bytebrew.io/bridge',
+      bridgeUrl: 'https://bridge.bytebrew.ai',
       connectionMode: ConnectionMode.bridge,
       isOnline: false,
       latencyMs: 42,
@@ -104,7 +104,7 @@ void main() {
 
     final restored = repo.getServers().first;
     expect(restored.id, 'srv-bridge');
-    expect(restored.bridgeUrl, 'https://bytebrew.io/bridge');
+    expect(restored.bridgeUrl, 'https://bridge.bytebrew.ai');
     expect(restored.connectionMode, ConnectionMode.bridge);
     expect(restored.isOnline, false);
     expect(restored.latencyMs, 42);

@@ -27,7 +27,7 @@ final _bridgeServer = Server(
   id: 'srv-2',
   name: 'Desktop PC',
   lanAddress: '192.168.1.100',
-  bridgeUrl: 'bytebrew.io',
+  bridgeUrl: 'bridge.bytebrew.ai',
   connectionMode: ConnectionMode.bridge,
   isOnline: true,
   latencyMs: 45,
@@ -45,7 +45,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          connectionManagerProvider.overrideWithValue(manager),
+          connectionManagerProvider.overrideWith((ref) => manager),
         ],
         child: MaterialApp(
           home: Scaffold(
@@ -66,7 +66,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          connectionManagerProvider.overrideWithValue(manager),
+          connectionManagerProvider.overrideWith((ref) => manager),
         ],
         child: MaterialApp(
           home: Scaffold(
@@ -87,7 +87,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          connectionManagerProvider.overrideWithValue(manager),
+          connectionManagerProvider.overrideWith((ref) => manager),
         ],
         child: MaterialApp(
           home: Scaffold(
@@ -109,7 +109,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          connectionManagerProvider.overrideWithValue(manager),
+          connectionManagerProvider.overrideWith((ref) => manager),
         ],
         child: MaterialApp(
           home: Scaffold(
@@ -130,7 +130,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          connectionManagerProvider.overrideWithValue(manager),
+          connectionManagerProvider.overrideWith((ref) => manager),
         ],
         child: MaterialApp(
           home: Scaffold(
@@ -152,7 +152,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          connectionManagerProvider.overrideWithValue(manager),
+          connectionManagerProvider.overrideWith((ref) => manager),
         ],
         child: MaterialApp(
           home: Scaffold(
@@ -176,7 +176,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          connectionManagerProvider.overrideWithValue(manager),
+          connectionManagerProvider.overrideWith((ref) => manager),
         ],
         child: MaterialApp(
           home: Scaffold(
@@ -202,7 +202,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          connectionManagerProvider.overrideWithValue(manager),
+          connectionManagerProvider.overrideWith((ref) => manager),
         ],
         child: MaterialApp(
           home: Scaffold(

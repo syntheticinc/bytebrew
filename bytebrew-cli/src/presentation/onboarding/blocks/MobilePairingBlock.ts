@@ -5,7 +5,7 @@ import { QrPairingCodeGenerator } from '../../../infrastructure/mobile/QrPairing
 import { prompt } from '../../../infrastructure/auth/prompt.js';
 import type { GeneratePairingTokenResponse, ListDevicesResponse } from '../../../infrastructure/grpc/mobile_client.js';
 
-const DEFAULT_BRIDGE_URL = 'bridge.bytebrew.io:8443';
+const DEFAULT_BRIDGE_URL = 'bridge.bytebrew.ai:443';
 
 /** Consumer-side interface for mobile service operations needed by pairing. */
 interface MobilePairingClient {
@@ -95,7 +95,7 @@ export class MobilePairingBlock implements OnboardingBlock {
   private async selectBridgeEndpoint(): Promise<string | undefined> {
     console.log('');
     console.log('Remote access when not on same network:');
-    console.log('  1) ByteBrew Cloud \u2014 bridge.bytebrew.io (default)');
+    console.log('  1) ByteBrew Cloud \u2014 bridge.bytebrew.ai (default)');
     console.log('  2) Self-hosted \u2014 enter your bridge URL');
     console.log('  3) Direct LAN \u2014 same network, no bridge');
     console.log('');

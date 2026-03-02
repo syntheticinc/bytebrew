@@ -124,6 +124,24 @@ func Load(configPath string) (*Config, error) {
 	v.AutomaticEnv()
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
+	// Explicit env var bindings for secrets (Viper Unmarshal doesn't
+	// check env vars for keys missing from YAML, so we bind them explicitly).
+	for _, b := range []struct{ key, env string }{
+		{"database.url", "DATABASE_URL"},
+		{"auth.jwt_secret", "AUTH_JWT_SECRET"},
+		{"license.private_key_hex", "LICENSE_PRIVATE_KEY_HEX"},
+		{"stripe.secret_key", "STRIPE_SECRET_KEY"},
+		{"stripe.webhook_secret", "STRIPE_WEBHOOK_SECRET"},
+		{"stripe.prices.personal_monthly", "STRIPE_PRICES_PERSONAL_MONTHLY"},
+		{"stripe.prices.personal_annual", "STRIPE_PRICES_PERSONAL_ANNUAL"},
+		{"stripe.prices.teams_monthly", "STRIPE_PRICES_TEAMS_MONTHLY"},
+		{"stripe.prices.teams_annual", "STRIPE_PRICES_TEAMS_ANNUAL"},
+		{"deepinfra.api_key", "DEEPINFRA_API_KEY"},
+		{"email.resend_api_key", "EMAIL_RESEND_API_KEY"},
+	} {
+		_ = v.BindEnv(b.key, b.env)
+	}
+
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
