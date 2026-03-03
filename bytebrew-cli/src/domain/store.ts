@@ -34,7 +34,7 @@ export interface IChunkStore {
   addEmbeddingForKey(key: number, embedding: number[]): void;
   markEmbeddings(keys: number[]): void;
   saveIndex(): void;
-  rebuildIndex(): void;
+  rebuildIndex(): Promise<void>;
 }
 
 /**

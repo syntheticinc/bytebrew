@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
@@ -64,6 +65,9 @@ func (h *FlowHandler) runSingleAgentMode(
 		}
 		defer h.cleanupFlowResources(req.SessionId, activeFlow)
 
+		// Wire message handler so mobile SendCommand can inject messages into this session.
+		h.flowRegistry.SetMessageHandler(req.SessionId, &singleAgentMobileHandler{taskChan: taskChan})
+
 		// Create TurnExecutor via Engine (same path as supervisor mode)
 		turnExecutor := h.turnExecutorFactory.CreateForSession(proxy, req.SessionId, req.ProjectKey, projectRoot, platform)
 
@@ -119,4 +123,22 @@ func (h *FlowHandler) runSingleAgentMode(
 			}
 		}
 	}
+}
+
+// singleAgentMobileHandler routes mobile-injected messages to the task channel.
+type singleAgentMobileHandler struct {
+	taskChan chan<- string
+}
+
+func (m *singleAgentMobileHandler) HandleNewTask(task string) error {
+	select {
+	case m.taskChan <- task:
+		return nil
+	default:
+		return fmt.Errorf("task channel full")
+	}
+}
+
+func (m *singleAgentMobileHandler) HandleAskUserReply(_, _ string) error {
+	return fmt.Errorf("ask_user reply not supported in single-agent mode")
 }

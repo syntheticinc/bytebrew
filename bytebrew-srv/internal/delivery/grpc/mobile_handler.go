@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -12,6 +13,7 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/usecase/list_mobile_sessions"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/usecase/pair_device"
+	pkgerr "github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -333,7 +335,7 @@ func (h *MobileHandler) SendCommand(ctx context.Context, req *pb.SendCommandRequ
 		slog.ErrorContext(ctx, "send command failed", "error", err, "session_id", sessionID)
 		return &pb.SendCommandResponse{
 			Success:      false,
-			ErrorMessage: "command failed",
+			ErrorMessage: safeErrorMessage(err),
 		}, nil
 	}
 
@@ -537,4 +539,15 @@ func mapFlowStatusToSessionState(s domain.FlowStatus) pb.SessionState {
 	default:
 		return pb.SessionState_SESSION_STATE_IDLE
 	}
+}
+
+// safeErrorMessage returns the DomainError.Message for known domain errors
+// (e.g. "session not found", "task is required"), or a generic "command failed"
+// for unexpected errors to avoid leaking internal details to mobile clients.
+func safeErrorMessage(err error) string {
+	var domainErr *pkgerr.DomainError
+	if errors.As(err, &domainErr) {
+		return domainErr.Message
+	}
+	return "command failed"
 }

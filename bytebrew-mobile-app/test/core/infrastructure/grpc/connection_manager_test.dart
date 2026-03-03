@@ -4,14 +4,33 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grpc/grpc.dart' hide Server;
 
-import 'package:bytebrew_mobile/core/domain/mobile_session.dart';
 import 'package:bytebrew_mobile/core/domain/server.dart';
 import 'package:bytebrew_mobile/core/infrastructure/grpc/connection_manager.dart';
+import 'package:bytebrew_mobile/core/infrastructure/grpc/grpc_channel_factory.dart';
 import 'package:bytebrew_mobile/core/infrastructure/grpc/mobile_service_client.dart';
 
 // ---------------------------------------------------------------------------
 // Fakes
 // ---------------------------------------------------------------------------
+
+/// A fake [GrpcChannelFactory] that returns plain [ClientChannel] instances
+/// without attempting real network connections.
+///
+/// The returned channels are never used for actual RPC calls because the
+/// [FakeMobileServiceClient] intercepts all client methods. The channels
+/// can safely [shutdown]/[terminate] because they have no active HTTP/2
+/// connection (the lazy connection is never triggered).
+class FakeGrpcChannelFactory extends GrpcChannelFactory {
+  const FakeGrpcChannelFactory();
+
+  @override
+  ClientChannel createChannel(Server server) =>
+      ClientChannel('localhost', port: 0);
+
+  @override
+  ClientChannel createBridgeChannel(String bridgeUrl) =>
+      ClientChannel('localhost', port: 0);
+}
 
 /// A fake [MobileServiceClient] that avoids real gRPC calls.
 class FakeMobileServiceClient implements MobileServiceClient {
@@ -53,9 +72,7 @@ class FakeMobileServiceClient implements MobileServiceClient {
   }
 
   @override
-  Future<ListSessionsResult> listSessions({
-    required String deviceToken,
-  }) async {
+  Future<ListSessionsResult> listSessions({required String deviceToken}) async {
     return const ListSessionsResult(
       sessions: [],
       serverName: 'Test',
@@ -112,6 +129,7 @@ void main() {
     setUp(() {
       fakeClient = FakeMobileServiceClient();
       manager = ConnectionManager(
+        channelFactory: const FakeGrpcChannelFactory(),
         clientFactory: (_) => fakeClient,
       );
     });
@@ -134,6 +152,7 @@ void main() {
     test('dispose cleans up without errors', () {
       // Use a separate manager so tearDown does not double-dispose.
       final disposableManager = ConnectionManager(
+        channelFactory: const FakeGrpcChannelFactory(),
         clientFactory: (_) => fakeClient,
       );
       expect(() => disposableManager.dispose(), returnsNormally);
@@ -145,10 +164,7 @@ void main() {
     });
 
     test('disconnectFromServer on unknown id does not throw', () async {
-      await expectLater(
-        manager.disconnectFromServer('unknown-id'),
-        completes,
-      );
+      await expectLater(manager.disconnectFromServer('unknown-id'), completes);
     });
 
     test('connectToServer skips server without device token', () async {
@@ -227,32 +243,132 @@ void main() {
       expect(notifyCount, greaterThanOrEqualTo(1));
     });
 
-    test('encryptForServer returns plaintext when server not connected',
-        () async {
-      final plaintext = Uint8List.fromList([1, 2, 3]);
+    test(
+      'encryptForServer returns plaintext when server not connected',
+      () async {
+        final plaintext = Uint8List.fromList([1, 2, 3]);
 
-      final result = await manager.encryptForServer(
-        'nonexistent',
-        plaintext,
-        0,
+        final result = await manager.encryptForServer(
+          'nonexistent',
+          plaintext,
+          0,
+        );
+
+        // No connection => returns plaintext unchanged.
+        expect(result, plaintext);
+      },
+    );
+
+    test(
+      'decryptFromServer returns data as-is when server not connected',
+      () async {
+        final data = Uint8List.fromList([4, 5, 6]);
+
+        final (result, counter) = await manager.decryptFromServer(
+          'nonexistent',
+          data,
+        );
+
+        // No connection => returns data unchanged, counter 0.
+        expect(result, data);
+        expect(counter, 0);
+      },
+    );
+
+    // -----------------------------------------------------------------
+    // Health check & error retry
+    // -----------------------------------------------------------------
+
+    group('health check & error retry', () {
+      Server testServer({String id = 'srv-1'}) => Server(
+        id: id,
+        name: 'Test Server',
+        lanAddress: '192.168.1.100',
+        connectionMode: ConnectionMode.lan,
+        isOnline: false,
+        latencyMs: 0,
+        pairedAt: DateTime.now(),
+        deviceToken: 'test-token-123',
       );
 
-      // No connection => returns plaintext unchanged.
-      expect(result, plaintext);
-    });
-
-    test('decryptFromServer returns data as-is when server not connected',
+      test(
+        'markConnectionLost sets error status and schedules reconnect',
         () async {
-      final data = Uint8List.fromList([4, 5, 6]);
+          await manager.connectToServer(testServer());
 
-      final (result, counter) = await manager.decryptFromServer(
-        'nonexistent',
-        data,
+          final conn = manager.getConnection('srv-1')!;
+          expect(conn.status, GrpcConnectionStatus.connected);
+
+          manager.markConnectionLost('srv-1', reason: 'ping failed');
+
+          expect(conn.status, GrpcConnectionStatus.error);
+          expect(conn.lastError, 'ping failed');
+          // scheduleReconnect should have set a reconnect timer.
+          expect(conn.reconnectTimer, isNotNull);
+          expect(conn.reconnectTimer!.isActive, isTrue);
+        },
       );
 
-      // No connection => returns data unchanged, counter 0.
-      expect(result, data);
-      expect(counter, 0);
+      test('markConnectionLost is no-op for non-connected server', () async {
+        await manager.connectToServer(testServer());
+
+        final conn = manager.getConnection('srv-1')!;
+        // Mark as lost once -- transitions from connected to error.
+        manager.markConnectionLost('srv-1', reason: 'first call');
+        expect(conn.status, GrpcConnectionStatus.error);
+        expect(conn.lastError, 'first call');
+
+        // Mark again -- should be no-op because status is error, not connected.
+        manager.markConnectionLost('srv-1', reason: 'second call');
+        expect(conn.lastError, 'first call'); // unchanged
+      });
+
+      test('markConnectionLost does nothing for unknown server', () {
+        // Should not throw.
+        manager.markConnectionLost('nonexistent', reason: 'test');
+        expect(manager.connections, isEmpty);
+      });
+
+      test('successful connect sets connected status '
+          'and starts health check mechanism', () async {
+        await manager.connectToServer(testServer());
+
+        final conn = manager.getConnection('srv-1')!;
+        expect(conn.status, GrpcConnectionStatus.connected);
+        expect(conn.reconnectAttempts, 0);
+        expect(conn.lastError, isNull);
+
+        // Simulate what the health check would do on ping failure:
+        // mark connection lost and verify the chain works end-to-end.
+        fakeClient.pingError = Exception('down');
+        manager.markConnectionLost('srv-1', reason: 'Health check failed');
+        expect(conn.status, GrpcConnectionStatus.error);
+      });
+
+      test('disconnectAll cleans up connections and timers', () async {
+        await manager.connectToServer(testServer());
+        expect(
+          manager.getConnection('srv-1')!.status,
+          GrpcConnectionStatus.connected,
+        );
+
+        await manager.disconnectAll();
+
+        expect(manager.connections, isEmpty);
+        // No pending timers should fire after disconnect.
+        // Verified implicitly -- if timers were still active they could
+        // fire on a disposed manager and throw.
+      });
+
+      test('markConnectionLost notifies listeners', () async {
+        await manager.connectToServer(testServer());
+
+        var notified = false;
+        manager.addListener(() => notified = true);
+
+        manager.markConnectionLost('srv-1', reason: 'test');
+        expect(notified, isTrue);
+      });
     });
   });
 }

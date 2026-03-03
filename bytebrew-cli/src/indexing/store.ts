@@ -9,12 +9,14 @@ import { IChunkStore, IEmbeddingsClient, ChunkMetadataRow } from '../domain/stor
 import { getLogger } from '../lib/logger.js';
 
 let usearchModule: typeof import('usearch') | null = null;
+let usearchLoadAttempted = false;
 
-function loadUSearch(): typeof import('usearch') | null {
+async function loadUSearch(): Promise<typeof import('usearch') | null> {
   if (usearchModule) return usearchModule;
+  if (usearchLoadAttempted) return null;
+  usearchLoadAttempted = true;
   try {
-    // Dynamic require — fails gracefully if native binary not available
-    usearchModule = require('usearch');
+    usearchModule = await import('usearch');
     return usearchModule;
   } catch {
     return null;
@@ -49,7 +51,8 @@ export class ChunkStore implements IChunkStore {
 
   async ensureCollection(): Promise<void> {
     // Already initialized - skip
-    if (this.db && this.index) {
+    // DB already open (index may or may not be available)
+    if (this.db) {
       return;
     }
 
@@ -149,7 +152,7 @@ export class ChunkStore implements IChunkStore {
     this.nextKey = (maxKey?.max_key || 0) + 1;
 
     // Initialize or load USearch index (native addon — may not be available)
-    const usearch = loadUSearch();
+    const usearch = await loadUSearch();
     if (!usearch) {
       const logger = getLogger();
       logger.warn('USearch native module not available, vector search disabled');
@@ -181,11 +184,7 @@ export class ChunkStore implements IChunkStore {
       const logger = getLogger();
       logger.error('USearch index initialization failed, vector search disabled', { error });
       this.index = null;
-      // Close database on total USearch failure to prevent WAL lock leak
-      if (this.db) {
-        try { this.db.close(); } catch { /* ignore */ }
-        this.db = null;
-      }
+      // DB stays open for metadata-only operations
       return;
     }
 
@@ -210,7 +209,12 @@ export class ChunkStore implements IChunkStore {
     if (chunks.length === 0) return;
 
     await this.ensureCollection();
-    if (!this.index || !this.db) throw new Error('Store not initialized');
+    if (!this.index) {
+      const logger = getLogger();
+      logger.warn('Vector store not available, skipping embedding storage');
+      return;
+    }
+    if (!this.db) throw new Error('Store not initialized');
 
     // Generate embeddings for chunks
     const texts = chunks.map((chunk) => {
@@ -374,7 +378,7 @@ export class ChunkStore implements IChunkStore {
 
   async getByName(name: string): Promise<CodeChunk[]> {
     await this.ensureCollection();
-    if (!this.db) throw new Error('Store not initialized');
+    if (!this.db) return [];
 
     const rows = this.db.prepare('SELECT * FROM chunks WHERE name = ?').all(name) as ChunkRow[];
     return rows.map((row) => this.rowToChunk(row));
@@ -382,7 +386,7 @@ export class ChunkStore implements IChunkStore {
 
   async getByFilePath(filePath: string): Promise<CodeChunk[]> {
     await this.ensureCollection();
-    if (!this.db) throw new Error('Store not initialized');
+    if (!this.db) return [];
 
     const rows = this.db.prepare('SELECT * FROM chunks WHERE file_path = ?').all(filePath) as ChunkRow[];
     return rows.map((row) => this.rowToChunk(row));
@@ -390,7 +394,7 @@ export class ChunkStore implements IChunkStore {
 
   async deleteByFilePath(filePath: string): Promise<void> {
     await this.ensureCollection();
-    if (!this.db) throw new Error('Store not initialized');
+    if (!this.db) return;
 
     // Delete from SQLite only. Do NOT call index.remove() — USearch's native
     // remove() corrupts the index structure, causing segfaults on subsequent
@@ -401,7 +405,15 @@ export class ChunkStore implements IChunkStore {
 
   async getStatus(): Promise<IndexStatus> {
     await this.ensureCollection();
-    if (!this.db) throw new Error('Store not initialized');
+    if (!this.db) {
+      return {
+        totalChunks: 0,
+        filesCount: 0,
+        languages: [],
+        lastUpdated: new Date(),
+        isStale: true,
+      };
+    }
 
     const countResult = this.db.prepare('SELECT COUNT(*) as count FROM chunks').get() as { count: number };
     const languagesResult = this.db.prepare('SELECT DISTINCT language FROM chunks').all() as { language: string }[];
@@ -421,7 +433,7 @@ export class ChunkStore implements IChunkStore {
    */
   async getIndexedFiles(): Promise<Map<string, number | null>> {
     await this.ensureCollection();
-    if (!this.db) throw new Error('Store not initialized');
+    if (!this.db) return new Map();
 
     const rows = this.db.prepare(
       'SELECT DISTINCT file_path, file_mtime FROM chunks'
@@ -481,7 +493,7 @@ export class ChunkStore implements IChunkStore {
 
   async getChunksWithoutEmbeddings(limit: number = 100): Promise<ChunkMetadataRow[]> {
     await this.ensureCollection();
-    if (!this.db) throw new Error('Store not initialized');
+    if (!this.db) return [];
 
     return this.db.prepare(
       'SELECT key, name, signature, content FROM chunks WHERE has_embedding = 0 LIMIT ?'
@@ -499,7 +511,7 @@ export class ChunkStore implements IChunkStore {
   }
 
   markEmbeddings(keys: number[]): void {
-    if (!this.db) throw new Error('Store not initialized');
+    if (!this.db) return;
 
     const stmt = this.db.prepare('UPDATE chunks SET has_embedding = 1 WHERE key = ?');
     const updateMany = this.db.transaction((keysToMark: number[]) => {
@@ -526,7 +538,7 @@ export class ChunkStore implements IChunkStore {
    * has_embedding=0 for all chunks so embeddingSync will re-embed everything.
    * This is the safe way to handle index corruption — never use index.remove().
    */
-  rebuildIndex(): void {
+  async rebuildIndex(): Promise<void> {
     if (!this.db) return;
 
     const logger = getLogger();
@@ -536,7 +548,7 @@ export class ChunkStore implements IChunkStore {
     try { if (fs.existsSync(this.indexPath)) fs.unlinkSync(this.indexPath); } catch { /* ignore */ }
 
     // Create fresh USearch index
-    const usearch = loadUSearch();
+    const usearch = await loadUSearch();
     if (!usearch) {
       logger.warn('USearch native module not available, cannot rebuild index');
       this.index = null;

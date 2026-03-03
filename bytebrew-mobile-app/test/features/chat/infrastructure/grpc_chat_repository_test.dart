@@ -231,6 +231,41 @@ void main() {
         expect(fakeClient.sendNewTaskCalls.first.sessionId, 'session-1');
       });
 
+      test('shows error message when sendNewTask fails', () async {
+        await connectionManager.connectToServer(_testServer());
+        fakeClient.sendNewTaskResult = const grpc.SendCommandResult(
+          success: false,
+          errorMessage: 'Connection lost',
+        );
+
+        final emitted = <List<ChatMessage>>[];
+        repo.watchMessages().listen(emitted.add);
+
+        await repo.sendMessage('session-1', 'Hello');
+
+        final messages = await repo.getMessages('session-1');
+        // Optimistic user message + error system message.
+        expect(messages, hasLength(2));
+        expect(messages[0].type, ChatMessageType.userMessage);
+        expect(messages[1].type, ChatMessageType.systemMessage);
+        expect(messages[1].content, contains('Failed to send'));
+        expect(messages[1].content, contains('Connection lost'));
+      });
+
+      test('shows default error when sendNewTask fails with empty message',
+          () async {
+        await connectionManager.connectToServer(_testServer());
+        fakeClient.sendNewTaskResult = const grpc.SendCommandResult(
+          success: false,
+        );
+
+        await repo.sendMessage('session-1', 'Hello');
+
+        final messages = await repo.getMessages('session-1');
+        expect(messages, hasLength(2));
+        expect(messages[1].content, contains('Server not connected'));
+      });
+
       test('generates unique message IDs for each user message', () async {
         await connectionManager.connectToServer(_testServer());
 
@@ -634,6 +669,40 @@ void main() {
         expect(fakeClient.sendAskUserReplyCalls, hasLength(1));
         expect(fakeClient.sendAskUserReplyCalls.first.question, 'Continue?');
         expect(fakeClient.sendAskUserReplyCalls.first.answer, 'Yes');
+      });
+
+      test('shows error message when sendAskUserReply fails', () async {
+        await connectionManager.connectToServer(_testServer());
+        repo.subscribe();
+
+        fakeClient.sessionStreamController!.add(_event(
+          eventId: 'evt-ask-err',
+          payload: const grpc.AskUserPayload(
+            question: 'Proceed?',
+            options: ['Yes', 'No'],
+            isAnswered: false,
+          ),
+        ));
+        await Future<void>.delayed(Duration.zero);
+
+        final askUserId = (await repo.getMessages('session-1'))
+            .first
+            .askUser!
+            .id;
+
+        fakeClient.sendAskUserReplyResult = const grpc.SendCommandResult(
+          success: false,
+          errorMessage: 'No device token',
+        );
+
+        await repo.answerAskUser('session-1', askUserId, 'Yes');
+
+        final messages = await repo.getMessages('session-1');
+        // Ask-user message (updated) + error system message.
+        expect(messages, hasLength(2));
+        expect(messages[1].type, ChatMessageType.systemMessage);
+        expect(messages[1].content, contains('Failed to send reply'));
+        expect(messages[1].content, contains('No device token'));
       });
     });
 

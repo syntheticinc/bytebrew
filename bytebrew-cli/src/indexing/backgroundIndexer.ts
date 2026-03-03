@@ -90,7 +90,7 @@ export class BackgroundIndexer {
       // structure, causing segfaults. A fresh rebuild avoids this entirely.
       if (filesChanged) {
         diag('start: rebuilding USearch index (files changed)');
-        this.config.store.rebuildIndex();
+        await this.config.store.rebuildIndex();
       }
 
       // Phase 2: embedding sync (only if Ollama available)

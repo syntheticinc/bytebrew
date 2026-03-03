@@ -7,6 +7,7 @@ import (
 
 	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/flow_registry"
 	infragrpc "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/grpc"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/tools"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/orchestrator"
@@ -28,6 +29,7 @@ type ActiveFlowRegistry interface {
 	Get(sessionID string) (*domain.ActiveFlow, bool)
 	IsActive(sessionID string) bool
 	BroadcastEvent(sessionID string, event *domain.AgentEvent) error
+	SetMessageHandler(sessionID string, handler flow_registry.MessageHandler)
 }
 
 // AgentPoolProxy defines interface for updating proxy on agent pool (used by delivery layer)
