@@ -9,14 +9,15 @@ import { IChunkStore, IEmbeddingsClient, ChunkMetadataRow } from '../domain/stor
 import { getLogger } from '../lib/logger.js';
 
 let usearchModule: typeof import('usearch') | null = null;
-let usearchLoadAttempted = false;
 
-async function loadUSearch(): Promise<typeof import('usearch') | null> {
+function loadUSearch(): typeof import('usearch') | null {
   if (usearchModule) return usearchModule;
-  if (usearchLoadAttempted) return null;
-  usearchLoadAttempted = true;
   try {
-    usearchModule = await import('usearch');
+    // Dynamic require — fails gracefully if native binary not available
+    const mod = require('usearch');
+    // Bun may load the module but without native bindings (MetricKind undefined)
+    if (!mod?.MetricKind) return null;
+    usearchModule = mod;
     return usearchModule;
   } catch {
     return null;
@@ -49,10 +50,11 @@ export class ChunkStore implements IChunkStore {
     this.dimension = config.dimension || embeddings.getDimension() || DEFAULT_DIMENSION;
   }
 
+  private _usearchFailed = false;
+
   async ensureCollection(): Promise<void> {
-    // Already initialized - skip
-    // DB already open (index may or may not be available)
-    if (this.db) {
+    // Already initialized — DB open, and either index is ready or USearch already failed
+    if (this.db && (this.index || this._usearchFailed)) {
       return;
     }
 
@@ -152,10 +154,11 @@ export class ChunkStore implements IChunkStore {
     this.nextKey = (maxKey?.max_key || 0) + 1;
 
     // Initialize or load USearch index (native addon — may not be available)
-    const usearch = await loadUSearch();
+    const usearch = loadUSearch();
     if (!usearch) {
       const logger = getLogger();
       logger.warn('USearch native module not available, vector search disabled');
+      this._usearchFailed = true;
       return;
     }
 
@@ -184,7 +187,8 @@ export class ChunkStore implements IChunkStore {
       const logger = getLogger();
       logger.error('USearch index initialization failed, vector search disabled', { error });
       this.index = null;
-      // DB stays open for metadata-only operations
+      this._usearchFailed = true;
+      // DB stays open for metadata-only operations (indexing, search by name/path)
       return;
     }
 
@@ -209,12 +213,7 @@ export class ChunkStore implements IChunkStore {
     if (chunks.length === 0) return;
 
     await this.ensureCollection();
-    if (!this.index) {
-      const logger = getLogger();
-      logger.warn('Vector store not available, skipping embedding storage');
-      return;
-    }
-    if (!this.db) throw new Error('Store not initialized');
+    if (!this.index || !this.db) throw new Error('Store not initialized');
 
     // Generate embeddings for chunks
     const texts = chunks.map((chunk) => {
@@ -378,7 +377,7 @@ export class ChunkStore implements IChunkStore {
 
   async getByName(name: string): Promise<CodeChunk[]> {
     await this.ensureCollection();
-    if (!this.db) return [];
+    if (!this.db) throw new Error('Store not initialized');
 
     const rows = this.db.prepare('SELECT * FROM chunks WHERE name = ?').all(name) as ChunkRow[];
     return rows.map((row) => this.rowToChunk(row));
@@ -386,7 +385,7 @@ export class ChunkStore implements IChunkStore {
 
   async getByFilePath(filePath: string): Promise<CodeChunk[]> {
     await this.ensureCollection();
-    if (!this.db) return [];
+    if (!this.db) throw new Error('Store not initialized');
 
     const rows = this.db.prepare('SELECT * FROM chunks WHERE file_path = ?').all(filePath) as ChunkRow[];
     return rows.map((row) => this.rowToChunk(row));
@@ -394,7 +393,7 @@ export class ChunkStore implements IChunkStore {
 
   async deleteByFilePath(filePath: string): Promise<void> {
     await this.ensureCollection();
-    if (!this.db) return;
+    if (!this.db) throw new Error('Store not initialized');
 
     // Delete from SQLite only. Do NOT call index.remove() — USearch's native
     // remove() corrupts the index structure, causing segfaults on subsequent
@@ -405,15 +404,7 @@ export class ChunkStore implements IChunkStore {
 
   async getStatus(): Promise<IndexStatus> {
     await this.ensureCollection();
-    if (!this.db) {
-      return {
-        totalChunks: 0,
-        filesCount: 0,
-        languages: [],
-        lastUpdated: new Date(),
-        isStale: true,
-      };
-    }
+    if (!this.db) throw new Error('Store not initialized');
 
     const countResult = this.db.prepare('SELECT COUNT(*) as count FROM chunks').get() as { count: number };
     const languagesResult = this.db.prepare('SELECT DISTINCT language FROM chunks').all() as { language: string }[];
@@ -433,7 +424,7 @@ export class ChunkStore implements IChunkStore {
    */
   async getIndexedFiles(): Promise<Map<string, number | null>> {
     await this.ensureCollection();
-    if (!this.db) return new Map();
+    if (!this.db) throw new Error('Store not initialized');
 
     const rows = this.db.prepare(
       'SELECT DISTINCT file_path, file_mtime FROM chunks'
@@ -493,7 +484,7 @@ export class ChunkStore implements IChunkStore {
 
   async getChunksWithoutEmbeddings(limit: number = 100): Promise<ChunkMetadataRow[]> {
     await this.ensureCollection();
-    if (!this.db) return [];
+    if (!this.db) throw new Error('Store not initialized');
 
     return this.db.prepare(
       'SELECT key, name, signature, content FROM chunks WHERE has_embedding = 0 LIMIT ?'
@@ -511,7 +502,7 @@ export class ChunkStore implements IChunkStore {
   }
 
   markEmbeddings(keys: number[]): void {
-    if (!this.db) return;
+    if (!this.db) throw new Error('Store not initialized');
 
     const stmt = this.db.prepare('UPDATE chunks SET has_embedding = 1 WHERE key = ?');
     const updateMany = this.db.transaction((keysToMark: number[]) => {
@@ -533,12 +524,31 @@ export class ChunkStore implements IChunkStore {
   }
 
   /**
+   * Check if the USearch index has too many orphaned vectors and needs compaction.
+   * Returns true when orphans exceed 50% of valid embeddings.
+   */
+  async shouldCompactIndex(): Promise<boolean> {
+    if (!this.db || !this.index) return false;
+
+    const result = this.db.prepare(
+      'SELECT COUNT(*) as count FROM chunks WHERE has_embedding = 1'
+    ).get() as { count: number };
+
+    const validCount = result.count;
+    const indexSize = Number(this.index.size());
+    const orphanCount = indexSize - validCount;
+
+    if (validCount === 0) return false;
+    return orphanCount > validCount * 0.5;
+  }
+
+  /**
    * Rebuild the USearch index from scratch.
    * Deletes the existing index file, creates a fresh empty index, and resets
    * has_embedding=0 for all chunks so embeddingSync will re-embed everything.
    * This is the safe way to handle index corruption — never use index.remove().
    */
-  async rebuildIndex(): Promise<void> {
+  rebuildIndex(): void {
     if (!this.db) return;
 
     const logger = getLogger();
@@ -548,7 +558,7 @@ export class ChunkStore implements IChunkStore {
     try { if (fs.existsSync(this.indexPath)) fs.unlinkSync(this.indexPath); } catch { /* ignore */ }
 
     // Create fresh USearch index
-    const usearch = await loadUSearch();
+    const usearch = loadUSearch();
     if (!usearch) {
       logger.warn('USearch native module not available, cannot rebuild index');
       this.index = null;

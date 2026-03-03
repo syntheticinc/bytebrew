@@ -55,33 +55,75 @@ export class MobileProxyServer {
       this.broadcast(this.serializeEvent(event));
     });
 
-    this.server = Bun.serve<undefined>({
-      port,
-      fetch: (req, server) => {
-        const upgraded = server.upgrade(req);
-        if (upgraded) return undefined;
-        return new Response('WebSocket endpoint', { status: 426 });
+    const wsOptions = {
+      // Disable idle timeout — mobile clients may be idle while CLI
+      // waits for long server responses. Without this, Bun closes the
+      // connection after 120s of inactivity with code 1000.
+      idleTimeout: 0,
+      sendPings: true,
+      open: (ws: ServerWebSocket<unknown>) => this.handleConnect(ws),
+      message: (ws: ServerWebSocket<unknown>, data: string | Buffer) => this.handleMessage(ws, String(data)),
+      close: (ws: ServerWebSocket<unknown>) => {
+        this.clients.delete(ws);
+        console.error(`[MobileProxy] Client disconnected (remaining: ${this.clients.size})`);
       },
-      websocket: {
-        // Disable idle timeout — mobile clients may be idle while CLI
-        // waits for long server responses. Without this, Bun closes the
-        // connection after 120s of inactivity with code 1000.
-        idleTimeout: 0,
-        sendPings: true,
-        open: (ws) => this.handleConnect(ws),
-        message: (ws, data) => this.handleMessage(ws, String(data)),
-        close: (ws) => {
-          this.clients.delete(ws);
-          console.log(`[MobileProxy] Client disconnected (remaining: ${this.clients.size})`);
-        },
-      },
-    });
+    };
+
+    const fetchHandler = (req: Request, server: { upgrade(req: Request): boolean }) => {
+      const upgraded = server.upgrade(req);
+      if (upgraded) return undefined;
+      return new Response('WebSocket endpoint', { status: 426 });
+    };
+
+    try {
+      this.server = Bun.serve<undefined>({
+        port,
+        fetch: fetchHandler,
+        websocket: wsOptions,
+      });
+    } catch (error) {
+      const msg = (error as Error).message || '';
+      const isAddressInUse = msg.includes('EADDRINUSE') || msg.includes('address already in use');
+
+      if (isAddressInUse) {
+        console.error(`[MobileProxy] Port ${port} already in use. Another CLI instance may be running.`);
+        console.error(`[MobileProxy] Tip: kill the old process or use a different --mobile-port.`);
+        console.error(`[MobileProxy] Falling back to random port...`);
+
+        try {
+          this.server = Bun.serve<undefined>({
+            port: 0,
+            fetch: fetchHandler,
+            websocket: wsOptions,
+          });
+        } catch (fallbackError) {
+          console.error(`[MobileProxy] Fallback also failed: ${(fallbackError as Error).message}`);
+          console.error(`[MobileProxy] Mobile proxy disabled for this session.`);
+          this.cleanupSubscription();
+          return;
+        }
+      } else {
+        console.error(`[MobileProxy] Failed to start: ${msg}`);
+        console.error(`[MobileProxy] Mobile proxy disabled for this session.`);
+        this.cleanupSubscription();
+        return;
+      }
+    }
 
     // Start heartbeat to keep mobile connections alive and allow clients
     // to detect stale connections even when no domain events are flowing.
     this.startHeartbeat();
 
-    console.log(`[MobileProxy] Started on port ${this.server.port}`);
+    console.error(`[MobileProxy] Started on port ${this.server.port}`);
+  }
+
+  /** Remove event subscription when start fails. */
+  private cleanupSubscription(): void {
+    if (this.unsubscribe) {
+      this.unsubscribe();
+      this.unsubscribe = null;
+    }
+    this.server = null;
   }
 
   stop(): void {

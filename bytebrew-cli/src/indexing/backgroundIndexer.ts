@@ -85,12 +85,16 @@ export class BackgroundIndexer {
       const filesChanged = await this.metadataSync(report);
       diag(`start: metadataSync done, filesChanged=${filesChanged}`);
 
-      // If files were added/modified/deleted, rebuild USearch index from scratch.
-      // USearch's native index.remove() and add()-after-remove corrupt the index
-      // structure, causing segfaults. A fresh rebuild avoids this entirely.
+      // Auto-compact: rebuild USearch index only when orphaned vectors exceed 50%
+      // of valid embeddings. This avoids re-embedding 15k+ chunks on every file
+      // change while keeping the index from growing unbounded.
+      // Orphans are harmless (keys are monotonic, never reused) but waste memory.
       if (filesChanged) {
-        diag('start: rebuilding USearch index (files changed)');
-        await this.config.store.rebuildIndex();
+        const needsCompact = await this.config.store.shouldCompactIndex();
+        if (needsCompact) {
+          diag('start: compacting USearch index (too many orphans)');
+          this.config.store.rebuildIndex();
+        }
       }
 
       // Phase 2: embedding sync (only if Ollama available)

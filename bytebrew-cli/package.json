@@ -7,6 +7,7 @@
   "bin": {
     "bytebrew": "dist/index.js"
   },
+  "trustedDependencies": ["usearch"],
   "scripts": {
     "dev": "npx tsx src/index.tsx",
     "dev:bun": "bun run src/index.tsx",

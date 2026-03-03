@@ -844,11 +844,26 @@ function runChatApp(config: AppConfig, initialQuestion?: string) {
     writeDiag(`process.on('exit') code=${code}`);
   });
 
+  // Pre-flight check: interactive mode requires a TTY with raw mode support.
+  // Without it, Ink hangs because it can't read stdin. Detect early and fail fast.
+  if (!process.stdin.isTTY) {
+    console.error('Error: Interactive mode requires a terminal with TTY support.');
+    console.error('Your current stdin is not a TTY (e.g., piped input or non-interactive shell).');
+    console.error('');
+    console.error('Solutions:');
+    console.error('  - Run from Windows Terminal, PowerShell, or cmd.exe (not Git Bash/MinTTY)');
+    console.error('  - Use headless mode: bytebrew ask --headless "your question"');
+    process.exit(1);
+  }
+
+
   // Ink 6 options to reduce flickering
   const { waitUntilExit, unmount } = render(<App config={config} initialQuestion={initialQuestion} />, {
     // Only update changed lines instead of redrawing entire output
     incrementalRendering: true,
   });
+
+
 
   let isExiting = false;
 

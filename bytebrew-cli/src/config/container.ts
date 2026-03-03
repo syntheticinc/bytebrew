@@ -125,7 +125,9 @@ export class Container {
    */
   initialize(): void {
     if (this._initialized) return;
+
     this._streamProcessor.initialize();
+
     // Fire-and-forget: pre-spawn LSP servers so they're warm for first write/edit
     void this._diagnosticsService.warmup();
     // Pre-warm metadata index (fire-and-forget) and populate chunk store
@@ -135,6 +137,7 @@ export class Container {
     }).catch((error) => {
       getLogger().error('Store initialization failed', { error: error?.message || error });
     });
+
     // Start mobile proxy if port is configured
     if (this._config.mobileProxyPort) {
       this._mobileProxy = new MobileProxyServer(
