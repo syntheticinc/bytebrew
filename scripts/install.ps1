@@ -1,9 +1,9 @@
 # ByteBrew CLI installer for Windows.
-# Usage: irm https://raw.githubusercontent.com/syntheticinc/bytebrew/main/scripts/install.ps1 | iex
+# Usage: irm https://bytebrew.ai/releases/install.ps1 | iex
 
 $ErrorActionPreference = 'Stop'
 
-$Repo = 'syntheticinc/bytebrew'
+$BaseUrl = 'https://bytebrew.ai/releases'
 $InstallDir = Join-Path $env:USERPROFILE '.bytebrew\bin'
 $BinaryName = 'bytebrew.exe'
 
@@ -20,18 +20,17 @@ switch ($Arch) {
 
 $Platform = "windows_$PlatformArch"
 
-# Get latest version from GitHub API
+# Get latest version
 Write-Host 'Detecting latest version...'
-$Release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest"
-$Version = $Release.tag_name -replace '^v', ''
+$Version = (Invoke-RestMethod -Uri "$BaseUrl/LATEST" -UseBasicParsing).Trim()
 
 if (-not $Version) {
-    Write-Error "Could not detect latest version. Check https://github.com/$Repo/releases"
+    Write-Error "Could not detect latest version. Check $BaseUrl/LATEST"
     exit 1
 }
 
 $Archive = "bytebrew_${Version}_${Platform}.zip"
-$Url = "https://github.com/$Repo/releases/download/v$Version/$Archive"
+$Url = "$BaseUrl/v$Version/$Archive"
 
 Write-Host "Installing ByteBrew CLI v$Version ($Platform)..."
 Write-Host "  From: $Url"

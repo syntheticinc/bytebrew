@@ -3,9 +3,17 @@
 }
 
 bytebrew.ai, www.bytebrew.ai {
-    root * /var/www/bytebrew-cloud-web
-    try_files {path} /index.html
-    file_server
+    handle /releases/* {
+        root * /var/www
+        file_server browse
+    }
+
+    handle {
+        root * /var/www/bytebrew-cloud-web
+        try_files {path} /index.html
+        file_server
+    }
+
     encode gzip
 }
 

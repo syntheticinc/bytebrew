@@ -20,9 +20,6 @@ jobs:
         with:
           go-version: '1.24'
 
-      - name: Install garble
-        run: go install mvdan.cc/garble@latest
-
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -214,3 +211,49 @@ jobs:
           files: artifacts/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare VPS release directory
+        if: ${{ secrets.VPS_HOST != '' }}
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            mkdir -p /var/www/releases/v${{ steps.version.outputs.version }}
+
+      - name: Copy release files to VPS
+        if: ${{ secrets.VPS_HOST != '' }}
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "artifacts/*"
+          target: /var/www/releases/v${{ steps.version.outputs.version }}
+          strip_components: 1
+
+      - name: Copy install scripts to VPS
+        if: ${{ secrets.VPS_HOST != '' }}
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "scripts/install.sh,scripts/install.ps1"
+          target: /var/www/releases
+          strip_components: 1
+
+      - name: Finalize VPS release
+        if: ${{ secrets.VPS_HOST != '' }}
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            echo "${{ steps.version.outputs.version }}" > /var/www/releases/LATEST
+            chmod -R a+r /var/www/releases/v${{ steps.version.outputs.version }}
+            chmod a+r /var/www/releases/LATEST
+            chmod a+rx /var/www/releases/install.sh
+            chmod a+r /var/www/releases/install.ps1

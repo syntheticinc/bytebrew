@@ -98,10 +98,10 @@ export function LandingPage() {
 }
 
 const installCommands = {
-  macOS: 'curl -fsSL https://raw.githubusercontent.com/syntheticinc/bytebrew/main/scripts/install.sh | sh',
-  Linux: 'curl -fsSL https://raw.githubusercontent.com/syntheticinc/bytebrew/main/scripts/install.sh | sh',
+  macOS: 'curl -fsSL https://bytebrew.ai/releases/install.sh | bash',
+  Linux: 'curl -fsSL https://bytebrew.ai/releases/install.sh | bash',
   Windows:
-    'irm https://raw.githubusercontent.com/syntheticinc/bytebrew/main/scripts/install.ps1 | iex',
+    'irm https://bytebrew.ai/releases/install.ps1 | iex',
 } as const;
 
 type Platform = keyof typeof installCommands;

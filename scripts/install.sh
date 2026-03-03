@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # ByteBrew CLI installer for macOS and Linux.
-# Usage: curl -fsSL https://raw.githubusercontent.com/syntheticinc/bytebrew/main/scripts/install.sh | sh
+# Usage: curl -fsSL https://bytebrew.ai/releases/install.sh | sh
 
-REPO="syntheticinc/bytebrew"
+BASE_URL="https://bytebrew.ai/releases"
 INSTALL_DIR="$HOME/.bytebrew/bin"
 BINARY_NAME="bytebrew"
 
@@ -32,21 +32,19 @@ esac
 
 PLATFORM="${PLATFORM_OS}_${PLATFORM_ARCH}"
 
-# Get latest version from GitHub API
+# Get latest version
 echo "Detecting latest version..."
-VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-  | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/')
+VERSION=$(curl -fsSL "${BASE_URL}/LATEST")
 
 if [ -z "$VERSION" ]; then
-  echo "Error: could not detect latest version. Check https://github.com/${REPO}/releases"
+  echo "Error: could not detect latest version. Check ${BASE_URL}/LATEST"
   exit 1
 fi
 
 ARCHIVE="bytebrew_${VERSION}_${PLATFORM}.tar.gz"
-URL="https://github.com/${REPO}/releases/download/v${VERSION}/${ARCHIVE}"
+URL="${BASE_URL}/v${VERSION}/${ARCHIVE}"
 
 echo "Installing ByteBrew CLI v${VERSION} (${PLATFORM})..."
-echo "  From: ${URL}"
 echo ""
 
 # Create install directory
@@ -59,7 +57,7 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 echo "Downloading..."
 if ! curl -fsSL -o "${TMP_DIR}/${ARCHIVE}" "$URL"; then
   echo "Error: download failed. Check that release v${VERSION} exists for ${PLATFORM}."
-  echo "  ${URL}"
+  echo "  URL: $URL"
   exit 1
 fi
 
