@@ -4,11 +4,9 @@ project_name: bytebrew-srv
 before:
   hooks:
     - go mod tidy
-    - go install mvdan.cc/garble@latest
 
 builds:
   - id: bytebrew-srv
-    gobinary: ../scripts/garble-wrapper.sh
     main: ./cmd/server
     binary: bytebrew-srv
     ldflags:
