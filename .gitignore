@@ -93,6 +93,7 @@ test-output
 test-project
 
 *.bun-build
+*.tsbuildinfo
 bytebrew-cloud-web/node_modules
 
 query.txt
