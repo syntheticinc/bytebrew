@@ -20,6 +20,7 @@ eggs/
 lib/
 !bytebrew-cli/src/lib/
 !bytebrew-cloud-web/src/lib/
+!bytebrew-mobile-app/lib/
 lib64/
 parts/
 sdist/
