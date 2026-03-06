@@ -135,23 +135,6 @@ func readMsg(t *testing.T, ctx context.Context, conn *websocket.Conn) *Message {
 	return &msg
 }
 
-func readMsgTimeout(ctx context.Context, conn *websocket.Conn, timeout time.Duration) (*Message, error) {
-	tctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	_, data, err := conn.Read(tctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var msg Message
-	if err := json.Unmarshal(data, &msg); err != nil {
-		return nil, fmt.Errorf("unmarshal: %w", err)
-	}
-
-	return &msg, nil
-}
-
 func TestRegisterAndListOnline(t *testing.T) {
 	r := NewWsRelay("")
 	_, wsURL := setupTestServer(t, r)
@@ -160,7 +143,7 @@ func TestRegisterAndListOnline(t *testing.T) {
 	defer cancel()
 
 	cli := registerCLI(t, ctx, wsURL, "srv-1", "My Server", "")
-	defer cli.Close(websocket.StatusNormalClosure, "")
+	defer func() { _ = cli.Close(websocket.StatusNormalClosure, "") }()
 
 	// Verify server is listed.
 	servers := r.ListOnline()
@@ -184,11 +167,11 @@ func TestBidirectionalRelay(t *testing.T) {
 
 	// Register CLI server.
 	cli := registerCLI(t, ctx, wsURL, "srv-relay", "Relay Server", "")
-	defer cli.Close(websocket.StatusNormalClosure, "")
+	defer func() { _ = cli.Close(websocket.StatusNormalClosure, "") }()
 
 	// Connect mobile.
 	mobile := connectMobile(t, ctx, wsURL, "srv-relay", "mobile-1")
-	defer mobile.Close(websocket.StatusNormalClosure, "")
+	defer func() { _ = mobile.Close(websocket.StatusNormalClosure, "") }()
 
 	// CLI should get device_connected.
 	cliMsg := readMsg(t, ctx, cli)
@@ -243,10 +226,10 @@ func TestServerToMobileRelay(t *testing.T) {
 	defer cancel()
 
 	cli := registerCLI(t, ctx, wsURL, "srv-s2m", "S2M Server", "")
-	defer cli.Close(websocket.StatusNormalClosure, "")
+	defer func() { _ = cli.Close(websocket.StatusNormalClosure, "") }()
 
 	mobile := connectMobile(t, ctx, wsURL, "srv-s2m", "mobile-s2m")
-	defer mobile.Close(websocket.StatusNormalClosure, "")
+	defer func() { _ = mobile.Close(websocket.StatusNormalClosure, "") }()
 
 	// Drain device_connected from CLI.
 	readMsg(t, ctx, cli)
@@ -280,7 +263,7 @@ func TestUnregisteredServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer conn.CloseNow()
+	defer func() { _ = conn.CloseNow() }()
 
 	// Connection should be closed by relay with error.
 	_, _, err = conn.Read(ctx)
@@ -300,7 +283,7 @@ func TestInvalidAuthToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer conn.CloseNow()
+	defer func() { _ = conn.CloseNow() }()
 
 	// Send register with wrong token.
 	writeMsg(t, ctx, conn, &Message{
@@ -330,7 +313,7 @@ func TestValidAuthToken(t *testing.T) {
 	defer cancel()
 
 	cli := registerCLI(t, ctx, wsURL, "srv-auth", "Auth Server", "secret123")
-	defer cli.Close(websocket.StatusNormalClosure, "")
+	defer func() { _ = cli.Close(websocket.StatusNormalClosure, "") }()
 
 	servers := r.ListOnline()
 	if len(servers) != 1 {
@@ -349,7 +332,7 @@ func TestMobileDisconnect_CLIGetsDeviceDisconnected(t *testing.T) {
 	defer cancel()
 
 	cli := registerCLI(t, ctx, wsURL, "srv-disc", "Disconnect Server", "")
-	defer cli.Close(websocket.StatusNormalClosure, "")
+	defer func() { _ = cli.Close(websocket.StatusNormalClosure, "") }()
 
 	mobile := connectMobile(t, ctx, wsURL, "srv-disc", "mobile-disc")
 
@@ -360,7 +343,7 @@ func TestMobileDisconnect_CLIGetsDeviceDisconnected(t *testing.T) {
 	}
 
 	// Close mobile connection.
-	mobile.Close(websocket.StatusNormalClosure, "")
+	_ = mobile.Close(websocket.StatusNormalClosure, "")
 
 	// CLI should receive device_disconnected.
 	cliMsg = readMsg(t, ctx, cli)
@@ -380,10 +363,10 @@ func TestLargePayload(t *testing.T) {
 	defer cancel()
 
 	cli := registerCLI(t, ctx, wsURL, "srv-large", "Large Server", "")
-	defer cli.Close(websocket.StatusNormalClosure, "")
+	defer func() { _ = cli.Close(websocket.StatusNormalClosure, "") }()
 
 	mobile := connectMobile(t, ctx, wsURL, "srv-large", "mobile-large")
-	defer mobile.Close(websocket.StatusNormalClosure, "")
+	defer func() { _ = mobile.Close(websocket.StatusNormalClosure, "") }()
 
 	// Drain device_connected.
 	readMsg(t, ctx, cli)
@@ -420,7 +403,7 @@ func TestMultipleConcurrentMobiles(t *testing.T) {
 	defer cancel()
 
 	cli := registerCLI(t, ctx, wsURL, "srv-multi", "Multi Server", "")
-	defer cli.Close(websocket.StatusNormalClosure, "")
+	defer func() { _ = cli.Close(websocket.StatusNormalClosure, "") }()
 
 	const numDevices = 5
 	mobiles := make([]*websocket.Conn, numDevices)
@@ -428,7 +411,7 @@ func TestMultipleConcurrentMobiles(t *testing.T) {
 	for i := 0; i < numDevices; i++ {
 		deviceID := fmt.Sprintf("mobile-%d", i)
 		mobiles[i] = connectMobile(t, ctx, wsURL, "srv-multi", deviceID)
-		defer mobiles[i].Close(websocket.StatusNormalClosure, "")
+		defer func() { _ = mobiles[i].Close(websocket.StatusNormalClosure, "") }()
 
 		// Drain device_connected from CLI.
 		msg := readMsg(t, ctx, cli)
@@ -480,13 +463,13 @@ func TestServerDisconnect_ClosesDeviceConnections(t *testing.T) {
 	cli := registerCLI(t, ctx, wsURL, "srv-srvdisc", "Srv Disconnect Server", "")
 
 	mobile := connectMobile(t, ctx, wsURL, "srv-srvdisc", "mobile-srvdisc")
-	defer mobile.CloseNow()
+	defer func() { _ = mobile.CloseNow() }()
 
 	// Drain device_connected.
 	readMsg(t, ctx, cli)
 
 	// Close CLI connection.
-	cli.Close(websocket.StatusNormalClosure, "")
+	_ = cli.Close(websocket.StatusNormalClosure, "")
 
 	// Mobile connection should be closed eventually.
 	_, _, err := mobile.Read(ctx)
@@ -517,7 +500,7 @@ func TestServerReRegister_ReplacesOldConnection(t *testing.T) {
 
 	// Register second connection with same server_id.
 	cli2 := registerCLI(t, ctx, wsURL, "srv-rereg", "Server V2", "")
-	defer cli2.Close(websocket.StatusNormalClosure, "")
+	defer func() { _ = cli2.Close(websocket.StatusNormalClosure, "") }()
 
 	// Should still have 1 server.
 	servers := r.ListOnline()
@@ -576,10 +559,10 @@ func TestBase64PayloadRelay(t *testing.T) {
 	defer cancel()
 
 	cli := registerCLI(t, ctx, wsURL, "srv-b64", "B64 Server", "")
-	defer cli.Close(websocket.StatusNormalClosure, "")
+	defer func() { _ = cli.Close(websocket.StatusNormalClosure, "") }()
 
 	mobile := connectMobile(t, ctx, wsURL, "srv-b64", "mobile-b64")
-	defer mobile.Close(websocket.StatusNormalClosure, "")
+	defer func() { _ = mobile.Close(websocket.StatusNormalClosure, "") }()
 
 	// Drain device_connected.
 	readMsg(t, ctx, cli)
@@ -608,7 +591,7 @@ func TestCLISendsToNonexistentDevice(t *testing.T) {
 	defer cancel()
 
 	cli := registerCLI(t, ctx, wsURL, "srv-nodev", "No Device Server", "")
-	defer cli.Close(websocket.StatusNormalClosure, "")
+	defer func() { _ = cli.Close(websocket.StatusNormalClosure, "") }()
 
 	// CLI sends data to a non-existent device — should not crash.
 	writeMsg(t, ctx, cli, &Message{
@@ -619,7 +602,7 @@ func TestCLISendsToNonexistentDevice(t *testing.T) {
 
 	// Verify relay is still working — no panic, no disconnect.
 	mobile := connectMobile(t, ctx, wsURL, "srv-nodev", "real-device")
-	defer mobile.Close(websocket.StatusNormalClosure, "")
+	defer func() { _ = mobile.Close(websocket.StatusNormalClosure, "") }()
 
 	cliMsg := readMsg(t, ctx, cli)
 	if cliMsg.Type != MsgTypeDeviceConnected {
@@ -638,7 +621,7 @@ func TestEmptyServerIDInRegister(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer conn.CloseNow()
+	defer func() { _ = conn.CloseNow() }()
 
 	writeMsg(t, ctx, conn, &Message{
 		Type:       MsgTypeRegister,
@@ -664,7 +647,7 @@ func TestWrongMessageTypeOnRegister(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer conn.CloseNow()
+	defer func() { _ = conn.CloseNow() }()
 
 	writeMsg(t, ctx, conn, &Message{
 		Type:     MsgTypeData,

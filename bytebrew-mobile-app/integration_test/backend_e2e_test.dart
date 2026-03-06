@@ -474,4 +474,171 @@ void main() {
       }
     });
   });
+
+  // -------------------------------------------------------------------------
+  // FE2E-07: Reconnect after disconnect
+  // -------------------------------------------------------------------------
+
+  testWidgets('FE2E-07: Reconnect after disconnect', (tester) async {
+    expect(_isPaired, isTrue, reason: 'FE2E-01 must pass first');
+
+    await tester.runAsync(() async {
+      final server = _buildPairedServer(backend);
+      final manager = WsConnectionManager();
+
+      try {
+        // 1. Connect and verify.
+        await manager.connectToServer(server);
+
+        final connBefore = manager.getConnection(_pairedServerId);
+        expect(
+          connBefore,
+          isNotNull,
+          reason: 'Connection should exist after connectToServer',
+        );
+        expect(
+          connBefore!.status,
+          WsConnectionStatus.connected,
+          reason: 'Connection should be connected',
+        );
+
+        // 2. Disconnect — the manager removes the entry entirely.
+        await manager.disconnectFromServer(_pairedServerId);
+        expect(
+          manager.getConnection(_pairedServerId),
+          isNull,
+          reason: 'Connection should be removed after disconnect',
+        );
+
+        // 3. Reconnect with the same server.
+        await manager.connectToServer(server);
+
+        final connAfter = manager.getConnection(_pairedServerId);
+        expect(
+          connAfter,
+          isNotNull,
+          reason: 'Connection should exist after reconnect',
+        );
+        expect(
+          connAfter!.status,
+          WsConnectionStatus.connected,
+          reason: 'Connection should be connected after reconnect',
+        );
+
+        // 4. Verify the reconnected connection works by sending a ping.
+        final pingResult = await connAfter.client.ping();
+        expect(
+          pingResult.timestamp,
+          isNotNull,
+          reason: 'Ping via reconnected connection should return a timestamp',
+        );
+      } finally {
+        await manager.disconnectAll();
+        manager.dispose();
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // FE2E-08: Multi-message lifecycle
+  // -------------------------------------------------------------------------
+
+  testWidgets('FE2E-08: Multi-message lifecycle', (tester) async {
+    expect(_isPaired, isTrue, reason: 'FE2E-01 must pass first');
+
+    await tester.runAsync(() async {
+      final server = _buildPairedServer(backend);
+      final manager = WsConnectionManager();
+
+      try {
+        await manager.connectToServer(server);
+
+        final conn = manager.getConnection(_pairedServerId);
+        expect(conn, isNotNull, reason: 'Should be connected');
+        expect(conn!.status, WsConnectionStatus.connected);
+
+        // Create the real WsChatRepository.
+        final chatRepo = WsChatRepository(
+          connectionManager: manager,
+          serverId: _pairedServerId,
+          sessionId: backend.sessionId,
+        );
+        chatRepo.subscribe();
+
+        try {
+          // Listen for message snapshots.
+          final messageSnapshots = <List<ChatMessage>>[];
+          final sub = chatRepo.watchMessages().listen(messageSnapshots.add);
+
+          try {
+            final messages = ['first', 'second', 'third'];
+
+            // Send 3 messages in sequence, waiting for each agent reply.
+            for (var i = 0; i < messages.length; i++) {
+              await chatRepo.sendMessage(backend.sessionId, messages[i]);
+
+              final expectedAgentCount = i + 1;
+              await _waitForCondition(
+                () =>
+                    messageSnapshots.isNotEmpty &&
+                    messageSnapshots.last
+                            .where(
+                              (m) => m.type == ChatMessageType.agentMessage,
+                            )
+                            .length >=
+                        expectedAgentCount,
+                timeout: const Duration(seconds: 30),
+              );
+            }
+
+            // Verify the final snapshot contains all user and agent messages.
+            final lastSnapshot = messageSnapshots.last;
+
+            final userMessages = lastSnapshot
+                .where((m) => m.type == ChatMessageType.userMessage)
+                .toList();
+            final agentMessages = lastSnapshot
+                .where((m) => m.type == ChatMessageType.agentMessage)
+                .toList();
+
+            expect(
+              userMessages.length,
+              greaterThanOrEqualTo(3),
+              reason: 'Should have at least 3 user messages',
+            );
+            expect(
+              agentMessages.length,
+              greaterThanOrEqualTo(3),
+              reason: 'Should have at least 3 agent responses',
+            );
+
+            // Verify user messages match the sent texts.
+            for (final text in messages) {
+              expect(
+                userMessages.any((m) => m.content == text),
+                isTrue,
+                reason: 'User message "$text" should be in the message list',
+              );
+            }
+
+            // Verify all agent responses have non-empty content.
+            for (final agentMsg in agentMessages) {
+              expect(
+                agentMsg.content,
+                isNotEmpty,
+                reason: 'Agent response should have content',
+              );
+            }
+          } finally {
+            await sub.cancel();
+          }
+        } finally {
+          chatRepo.dispose();
+        }
+      } finally {
+        await manager.disconnectAll();
+        manager.dispose();
+      }
+    });
+  });
 }

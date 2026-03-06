@@ -18,8 +18,7 @@
     "noEmit": true,
     "types": ["bun-types", "node"],
     "paths": {
-      "@noble/ciphers/chacha": ["./node_modules/@noble/ciphers/chacha.js"],
-      "@noble/ciphers/webcrypto": ["./node_modules/@noble/ciphers/utils.js"]
+      "@noble/ciphers/*": ["./node_modules/@noble/ciphers/*"]
     }
   },
   "include": ["src/**/*"],

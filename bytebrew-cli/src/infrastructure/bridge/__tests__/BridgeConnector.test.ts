@@ -34,7 +34,7 @@ function createMockBridgeServer(): Promise<WsServerHandle> {
           connections.push(ws as unknown as WebSocket);
         },
         message(ws, message) {
-          const msgStr = typeof message === 'string' ? message : new TextDecoder().decode(message as ArrayBuffer);
+          const msgStr = typeof message === 'string' ? message : new TextDecoder().decode(message as unknown as ArrayBuffer);
           lastReceivedMessages.push(msgStr);
 
           const parsed = JSON.parse(msgStr);
@@ -50,7 +50,7 @@ function createMockBridgeServer(): Promise<WsServerHandle> {
     });
 
     resolve({
-      port: server.port,
+      port: server.port!,
       close: () => server.stop(true),
       connections,
       lastReceivedMessages,
