@@ -63,6 +63,7 @@ export interface GenerateTokenResult {
 export interface PairResult {
   deviceId: string;
   deviceToken: string;
+  serverPublicKey: Uint8Array;
 }
 
 // --- Service ---
@@ -169,7 +170,7 @@ export class PairingService {
 
     logger.info('device paired successfully', { deviceId, deviceName });
 
-    return { deviceId, deviceToken };
+    return { deviceId, deviceToken, serverPublicKey: pairingToken.serverPublicKey };
   }
 
   /**

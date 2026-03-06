@@ -1,5 +1,5 @@
 /**
- * WsMobileSimulator — WebSocket client that behaves like a real mobile app.
+ * WsMobileSimulator -- WebSocket client that behaves like a real mobile app.
  *
  * Connects to Bridge /connect?server_id=xxx&device_id=xxx, sends and receives
  * MobileMessage-format JSON through the Bridge relay.
@@ -9,14 +9,13 @@
  *   Bridge -> Simulator: {"type":"data","payload": <MobileMessage | base64>}
  *
  * For pairing flow (no shared secret yet), payload is a plaintext MobileMessage object.
- * After pairing with E2E encryption, payload would be a base64 string.
+ * After pairing with E2E encryption, payload is a base64 string containing encrypted bytes.
  *
- * NOTE: server_public_key is NOT returned in pair_response (current design),
- * so encryption is not established via this flow. The simulator works in
- * plaintext mode.
+ * Encryption: X25519 ECDH key exchange + XChaCha20-Poly1305 (same as CryptoService in CLI).
  */
 
 import { v4 as uuidv4 } from 'uuid';
+import { CryptoService } from '../../src/infrastructure/mobile/CryptoService.js';
 
 // --- Types ---
 
@@ -63,6 +62,12 @@ export class WsMobileSimulator {
   private _deviceId: string;
   private _deviceToken: string | null = null;
 
+  // E2E encryption
+  private crypto = new CryptoService();
+  private myKeyPair: { publicKey: Uint8Array; privateKey: Uint8Array } | null = null;
+  private sharedSecret: Uint8Array | null = null;
+  private encryptCounter = 0;
+
   // Request-response correlation
   private pendingRequests = new Map<string, PendingRequest>();
 
@@ -84,6 +89,10 @@ export class WsMobileSimulator {
 
   get deviceToken(): string | null {
     return this._deviceToken;
+  }
+
+  get isEncrypted(): boolean {
+    return this.sharedSecret !== null;
   }
 
   /**
@@ -123,12 +132,18 @@ export class WsMobileSimulator {
 
   /**
    * Send pair_request and wait for pair_response.
-   * Pairing is always plaintext (no encryption established yet).
+   * Generates X25519 keys and includes device_public_key in request.
+   * If server returns server_public_key, computes sharedSecret for E2E encryption.
+   * Pairing messages themselves are always plaintext.
    */
   async pair(pairingToken: string, deviceName = 'Test Device'): Promise<PairResult> {
+    // Generate X25519 keypair for ECDH key exchange
+    this.myKeyPair = this.crypto.generateKeyPair();
+
     const response = await this.sendRequest('pair_request', {
       token: pairingToken,
       device_name: deviceName,
+      device_public_key: Buffer.from(this.myKeyPair.publicKey).toString('base64'),
     });
 
     // Check for error response
@@ -149,6 +164,16 @@ export class WsMobileSimulator {
     // The server may assign a different device_id
     if (payload.device_id) {
       this._deviceId = payload.device_id as string;
+    }
+
+    // If server returned server_public_key, compute sharedSecret for E2E encryption
+    const serverPublicKeyB64 = payload.server_public_key as string | undefined;
+    if (serverPublicKeyB64) {
+      const serverPublicKey = new Uint8Array(Buffer.from(serverPublicKeyB64, 'base64'));
+      this.sharedSecret = this.crypto.computeSharedSecret(
+        this.myKeyPair.privateKey,
+        serverPublicKey,
+      );
     }
 
     return {
@@ -299,16 +324,35 @@ export class WsMobileSimulator {
   /**
    * Handle incoming bridge-level message.
    *
-   * Bridge wraps all CLI responses in: {"type": "data", "payload": <MobileMessage>}
-   * where payload is a plaintext MobileMessage object (no encryption in current design).
+   * Bridge wraps all CLI responses in: {"type": "data", "payload": ...}
+   * Payload is either:
+   * - A plaintext MobileMessage object (pairing flow, no encryption)
+   * - A base64 string containing encrypted bytes (post-pairing with E2E)
    */
   private handleBridgeMessage(bridgeMsg: BridgeMessage): void {
     if (bridgeMsg.type !== 'data') return;
 
     const payload = bridgeMsg.payload;
-    if (typeof payload !== 'object' || payload === null) return;
+    if (payload === undefined || payload === null) return;
 
-    const innerMessage = payload as MobileMessage;
+    let innerMessage: MobileMessage;
+
+    if (typeof payload === 'string' && this.sharedSecret !== null) {
+      // Encrypted: base64 -> bytes -> decrypt -> JSON.parse
+      const ciphertext = new Uint8Array(Buffer.from(payload, 'base64'));
+      const plaintext = this.crypto.decrypt(ciphertext, this.sharedSecret);
+      const jsonStr = new TextDecoder().decode(plaintext);
+      innerMessage = JSON.parse(jsonStr) as MobileMessage;
+    } else if (typeof payload === 'object') {
+      // Plaintext JSON object (pairing flow or no encryption)
+      innerMessage = payload as MobileMessage;
+    } else if (typeof payload === 'string') {
+      // String but no encryption — try JSON.parse
+      innerMessage = JSON.parse(payload) as MobileMessage;
+    } else {
+      return;
+    }
+
     const requestId = innerMessage.request_id;
     const type = innerMessage.type;
 
@@ -373,8 +417,15 @@ export class WsMobileSimulator {
   /**
    * Send a raw message through the bridge.
    *
-   * Mobile -> Bridge format: {"type": "data", "payload": <MobileMessage>}
-   * The bridge relay forwards the payload to the registered CLI server.
+   * If E2E encryption is established (sharedSecret !== null):
+   *   - Serialize MobileMessage to JSON bytes
+   *   - Encrypt with XChaCha20-Poly1305
+   *   - Base64 encode -> payload is a string
+   *
+   * Otherwise (pairing flow, no encryption):
+   *   - payload is the MobileMessage object directly
+   *
+   * Bridge envelope: {"type": "data", "payload": <string | object>}
    */
   private sendRawMessage(
     type: string,
@@ -388,10 +439,22 @@ export class WsMobileSimulator {
       payload,
     };
 
+    let bridgePayload: unknown;
+
+    if (this.sharedSecret !== null) {
+      // Encrypt: JSON -> bytes -> encrypt -> base64 string
+      const jsonBytes = new TextEncoder().encode(JSON.stringify(innerMessage));
+      const ciphertext = this.crypto.encrypt(jsonBytes, this.sharedSecret, this.encryptCounter++);
+      bridgePayload = Buffer.from(ciphertext).toString('base64');
+    } else {
+      // Plaintext: send message object directly
+      bridgePayload = innerMessage;
+    }
+
     // Wrap in bridge envelope
     const bridgeMessage: BridgeMessage = {
       type: 'data',
-      payload: innerMessage,
+      payload: bridgePayload,
     };
 
     this.ws!.send(JSON.stringify(bridgeMessage));

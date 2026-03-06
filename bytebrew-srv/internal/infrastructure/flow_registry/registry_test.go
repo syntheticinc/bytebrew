@@ -185,45 +185,6 @@ func TestIsActive_False(t *testing.T) {
 	assert.False(t, registry.IsActive("non-existent"))
 }
 
-func TestSubscribe_Success(t *testing.T) {
-	registry := NewInMemoryRegistry()
-
-	flow, err := domain.NewActiveFlow("session-1", "project-1", "user-1", "test task")
-	require.NoError(t, err)
-
-	err = registry.Register(flow.SessionID, flow, nil)
-	require.NoError(t, err)
-
-	subscriber := &mockSubscriber{id: "sub-1"}
-	err = registry.Subscribe(flow.SessionID, subscriber)
-	require.NoError(t, err)
-}
-
-func TestSubscribe_FlowNotFound(t *testing.T) {
-	registry := NewInMemoryRegistry()
-
-	subscriber := &mockSubscriber{id: "sub-1"}
-	err := registry.Subscribe("non-existent", subscriber)
-	assert.Error(t, err)
-}
-
-func TestUnsubscribe_Success(t *testing.T) {
-	registry := NewInMemoryRegistry()
-
-	flow, err := domain.NewActiveFlow("session-1", "project-1", "user-1", "test task")
-	require.NoError(t, err)
-
-	err = registry.Register(flow.SessionID, flow, nil)
-	require.NoError(t, err)
-
-	subscriber := &mockSubscriber{id: "sub-1"}
-	err = registry.Subscribe(flow.SessionID, subscriber)
-	require.NoError(t, err)
-
-	err = registry.Unsubscribe(flow.SessionID, subscriber.ID())
-	require.NoError(t, err)
-}
-
 func TestConcurrentAccess(t *testing.T) {
 	registry := NewInMemoryRegistry()
 
@@ -258,25 +219,3 @@ func TestConcurrentAccess(t *testing.T) {
 		}
 	}
 }
-
-// mockSubscriber implements FlowSubscriber for testing
-type mockSubscriber struct {
-	id string
-}
-
-func (m *mockSubscriber) ID() string {
-	return m.id
-}
-
-func (m *mockSubscriber) OnEvent(event *domain.AgentEvent) error {
-	return nil
-}
-
-func (m *mockSubscriber) OnComplete() error {
-	return nil
-}
-
-func (m *mockSubscriber) OnError(err error) error {
-	return nil
-}
-

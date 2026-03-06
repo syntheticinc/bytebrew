@@ -9,21 +9,6 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
 )
 
-// FlowSubscriber подписчик на события flow
-type FlowSubscriber interface {
-	// ID возвращает уникальный ID подписчика
-	ID() string
-
-	// OnEvent вызывается при получении события
-	OnEvent(event *domain.AgentEvent) error
-
-	// OnComplete вызывается при завершении flow
-	OnComplete() error
-
-	// OnError вызывается при ошибке
-	OnError(err error) error
-}
-
 // flowEntry holds a flow and its associated cancel function.
 // The cancel func is stored here (not in domain) to keep ActiveFlow pure.
 type flowEntry struct {
@@ -35,14 +20,12 @@ type flowEntry struct {
 type InMemoryRegistry struct {
 	mu    sync.RWMutex
 	flows map[string]*flowEntry
-	subs  map[string]map[string]FlowSubscriber // sessionID -> subscriberID -> subscriber
 }
 
 // NewInMemoryRegistry создает новый InMemoryRegistry
 func NewInMemoryRegistry() *InMemoryRegistry {
 	return &InMemoryRegistry{
 		flows: make(map[string]*flowEntry),
-		subs:  make(map[string]map[string]FlowSubscriber),
 	}
 }
 
@@ -61,9 +44,6 @@ func (r *InMemoryRegistry) Register(sessionID string, flow *domain.ActiveFlow, c
 	}
 
 	r.flows[sessionID] = &flowEntry{flow: flow, cancel: cancel}
-	if _, exists := r.subs[sessionID]; !exists {
-		r.subs[sessionID] = make(map[string]FlowSubscriber)
-	}
 
 	return nil
 }
@@ -74,7 +54,6 @@ func (r *InMemoryRegistry) Unregister(sessionID string) error {
 	defer r.mu.Unlock()
 
 	delete(r.flows, sessionID)
-	delete(r.subs, sessionID)
 
 	return nil
 }
@@ -95,7 +74,6 @@ func (r *InMemoryRegistry) UnregisterIfCurrent(sessionID string, expected *domai
 	}
 
 	delete(r.flows, sessionID)
-	delete(r.subs, sessionID)
 	return true
 }
 
@@ -124,32 +102,6 @@ func (r *InMemoryRegistry) IsActive(sessionID string) bool {
 	return entry.flow.IsRunning()
 }
 
-// Subscribe подписывает клиента на события flow
-func (r *InMemoryRegistry) Subscribe(sessionID string, subscriber FlowSubscriber) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if _, exists := r.flows[sessionID]; !exists {
-		return fmt.Errorf("flow not found for session: %s", sessionID)
-	}
-
-	r.subs[sessionID][subscriber.ID()] = subscriber
-	return nil
-}
-
-// Unsubscribe отписывает клиента от событий flow
-func (r *InMemoryRegistry) Unsubscribe(sessionID string, subscriberID string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if _, exists := r.subs[sessionID]; !exists {
-		return fmt.Errorf("subscribers not found for session: %s", sessionID)
-	}
-
-	delete(r.subs[sessionID], subscriberID)
-	return nil
-}
-
 // ListActiveFlows returns all currently registered flows
 func (r *InMemoryRegistry) ListActiveFlows() []*domain.ActiveFlow {
 	r.mu.RLock()
@@ -175,23 +127,5 @@ func (r *InMemoryRegistry) CancelFlow(sessionID string) error {
 	if entry.cancel != nil {
 		entry.cancel()
 	}
-	return nil
-}
-
-// BroadcastEvent отправляет событие всем подписчикам
-func (r *InMemoryRegistry) BroadcastEvent(sessionID string, event *domain.AgentEvent) error {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	if _, exists := r.flows[sessionID]; !exists {
-		return fmt.Errorf("flow not found for session: %s", sessionID)
-	}
-
-	for _, subscriber := range r.subs[sessionID] {
-		if err := subscriber.OnEvent(event); err != nil {
-			return fmt.Errorf("subscriber %s failed to handle event: %w", subscriber.ID(), err)
-		}
-	}
-
 	return nil
 }

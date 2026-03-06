@@ -62,6 +62,7 @@ describe('PairingService', () => {
 
     expect(result.deviceId).toBeTruthy();
     expect(result.deviceToken).toBeTruthy();
+    expect(result.serverPublicKey).toEqual(FAKE_PUBLIC);
 
     // Device saved in store
     const device = deviceStore.getById(result.deviceId);

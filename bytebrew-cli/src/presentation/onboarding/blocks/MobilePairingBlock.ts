@@ -1,15 +1,19 @@
 import { OnboardingBlock, OnboardingCheckResult, OnboardingContext, OnboardingResult } from '../OnboardingBlock.js';
 import { OnboardingStateStore } from '../../../infrastructure/onboarding/OnboardingStateStore.js';
 import { ByteBrewConfig } from '../../../infrastructure/config/ByteBrewConfig.js';
-import { QrPairingCodeGenerator } from '../../../infrastructure/mobile/QrPairingCodeGenerator.js';
 import { prompt } from '../../../infrastructure/auth/prompt.js';
-import type { GeneratePairingTokenResponse } from '../../../infrastructure/mobile/QrPairingCodeGenerator.js';
 
 interface ListDevicesResponse {
   devices: Array<{ deviceId: string; deviceName: string; pairedAt: string; lastSeenAt: string }>;
 }
 
 const DEFAULT_BRIDGE_URL = 'bridge.bytebrew.ai:443';
+
+/** Legacy response shape (block is non-functional, pending rewrite to PairingService). */
+interface GeneratePairingTokenResponse {
+  shortCode: string;
+  token: string;
+}
 
 /** Consumer-side interface for mobile service operations needed by pairing. */
 interface MobilePairingClient {
@@ -130,9 +134,10 @@ export class MobilePairingBlock implements OnboardingBlock {
     const countBefore = devicesBefore.devices.length;
 
     // Step 2: Generate pairing token + show QR
+    // TODO: Rewrite to use PairingService + QrPairingCodeGenerator.displayLocalPairingInfo()
     const result = await client.generatePairingToken();
-    const generator = new QrPairingCodeGenerator();
-    generator.displayPairingInfo({ response: result, bridgeUrl });
+    console.log(`Pairing code: ${result.shortCode}`);
+    console.log('Scan with ByteBrew mobile app.');
 
     // Step 3: Wait for scan
     console.log('');

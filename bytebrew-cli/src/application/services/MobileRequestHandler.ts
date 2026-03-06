@@ -22,6 +22,7 @@ interface PairingHandler {
   pair(token: string, devicePublicKey: Uint8Array, deviceName: string): {
     deviceId: string;
     deviceToken: string;
+    serverPublicKey: Uint8Array;
   };
 }
 
@@ -171,14 +172,21 @@ export class MobileRequestHandler {
       deviceName: device_name,
     });
 
+    // Include server_public_key so mobile can compute sharedSecret for E2E encryption
+    const responsePayload: Record<string, unknown> = {
+      device_id: result.deviceId,
+      device_token: result.deviceToken,
+    };
+
+    if (result.serverPublicKey.length > 0) {
+      responsePayload.server_public_key = Buffer.from(result.serverPublicKey).toString('base64');
+    }
+
     return {
       type: 'pair_response',
       request_id: message.request_id,
       device_id: deviceId,
-      payload: {
-        device_id: result.deviceId,
-        device_token: result.deviceToken,
-      },
+      payload: responsePayload,
     };
   }
 

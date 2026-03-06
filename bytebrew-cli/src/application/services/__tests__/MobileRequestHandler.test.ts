@@ -10,7 +10,11 @@ function mockPairing() {
     handler: {
       pair: (token: string, _pk: Uint8Array, name: string) => {
         paired.push(name);
-        return { deviceId: 'new-dev-id', deviceToken: 'new-dev-token' };
+        return {
+          deviceId: 'new-dev-id',
+          deviceToken: 'new-dev-token',
+          serverPublicKey: new Uint8Array([1, 2, 3]),
+        };
       },
     },
     paired,
