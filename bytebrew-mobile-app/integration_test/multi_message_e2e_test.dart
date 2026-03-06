@@ -38,8 +38,9 @@ void main() {
             overrides: [
               authProvider.overrideWithValue(const AuthState.authenticated()),
               authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
-              sessionsProvider
-                  .overrideWith(() => FakeSessionsNotifier([_testSession])),
+              sessionsProvider.overrideWith(
+                () => FakeSessionsNotifier([_testSession]),
+              ),
               groupedSessionsProvider.overrideWithValue({
                 SessionStatus.active: [_testSession],
               }),
@@ -212,8 +213,9 @@ void main() {
             overrides: [
               authProvider.overrideWithValue(const AuthState.authenticated()),
               authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
-              sessionsProvider
-                  .overrideWith(() => FakeSessionsNotifier([_testSession])),
+              sessionsProvider.overrideWith(
+                () => FakeSessionsNotifier([_testSession]),
+              ),
               groupedSessionsProvider.overrideWithValue({
                 SessionStatus.active: [_testSession],
               }),

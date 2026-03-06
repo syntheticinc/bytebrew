@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { QrPairingCodeGenerator } from '../QrPairingCodeGenerator';
-import type { GeneratePairingTokenResponse } from '../../grpc/mobile_client';
+import type { GeneratePairingTokenResponse } from '../QrPairingCodeGenerator';
 
 class TestableGenerator extends QrPairingCodeGenerator {
   constructor(private fixedLanIp?: string) {

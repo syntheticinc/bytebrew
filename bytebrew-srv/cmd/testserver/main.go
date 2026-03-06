@@ -16,6 +16,7 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/flow_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/llm"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/testutil"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/tools"
 	agentservice "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/agent"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/engine"
@@ -30,15 +31,15 @@ func main() {
 	flag.Parse()
 
 	// 1. Create mock ChatModel
-	chatModel := NewMockChatModel(*scenario)
+	chatModel := llm.NewMockChatModel(*scenario)
 
 	// 2. Create Engine with in-memory repos
-	snapshotRepo := newMockSnapshotRepo()
-	historyRepo := newMockHistoryRepo()
+	snapshotRepo := testutil.NewMockSnapshotRepo()
+	historyRepo := testutil.NewMockHistoryRepo()
 	agentEngine := engine.New(snapshotRepo, historyRepo)
 
 	// 3. Create FlowManager programmatically (no flows.yaml)
-	flowsCfg, promptsCfg := testFlowConfig()
+	flowsCfg, promptsCfg := testutil.TestFlowConfig()
 	flowManager, err := agentservice.NewFlowManager(flowsCfg, promptsCfg)
 	if err != nil {
 		log.Fatalf("Failed to create flow manager: %v", err)
@@ -56,12 +57,12 @@ func main() {
 	}
 
 	// 6. Create mock managers
-	subtaskMgr := newMockSubtaskManager()
-	taskMgr := newMockTaskManager()
+	subtaskMgr := testutil.NewMockSubtaskManager()
+	taskMgr := testutil.NewMockTaskManager()
 
 	// Pre-seed subtask for "multi-agent" scenario
 	if *scenario == "multi-agent" {
-		subtaskMgr.subtasks["test-subtask-1"] = &domain.Subtask{
+		subtaskMgr.Subtasks["test-subtask-1"] = &domain.Subtask{
 			ID:          "test-subtask-1",
 			SessionID:   "",
 			TaskID:      "test-task-1",
@@ -75,7 +76,7 @@ func main() {
 
 	// Pre-seed subtask for "agent-interrupt" scenario
 	if *scenario == "agent-interrupt" {
-		subtaskMgr.subtasks["test-subtask-1"] = &domain.Subtask{
+		subtaskMgr.Subtasks["test-subtask-1"] = &domain.Subtask{
 			ID:          "test-subtask-1",
 			SessionID:   "",
 			TaskID:      "test-task-1",
@@ -89,7 +90,7 @@ func main() {
 
 	// Pre-seed subtask for "agent-failure" scenario
 	if *scenario == "agent-failure" {
-		subtaskMgr.subtasks["test-subtask-1"] = &domain.Subtask{
+		subtaskMgr.Subtasks["test-subtask-1"] = &domain.Subtask{
 			ID:          "test-subtask-1",
 			SessionID:   "",
 			TaskID:      "test-task-1",
@@ -103,7 +104,7 @@ func main() {
 
 	// Pre-seed subtask for "multi-agent-read" scenario
 	if *scenario == "multi-agent-read" {
-		subtaskMgr.subtasks["test-subtask-1"] = &domain.Subtask{
+		subtaskMgr.Subtasks["test-subtask-1"] = &domain.Subtask{
 			ID:          "test-subtask-1",
 			SessionID:   "",
 			TaskID:      "test-task-1",
@@ -117,7 +118,7 @@ func main() {
 
 	// 7. Create ModelSelector and AgentPool for multi-agent support
 	modelSelector := llm.NewModelSelector(chatModel, "mock-model")
-	agentRunStorage := newMockAgentRunStorage()
+	agentRunStorage := testutil.NewMockAgentRunStorage()
 	agentPool := agentservice.NewAgentPool(agentservice.AgentPoolConfig{
 		ModelSelector:   modelSelector,
 		SubtaskManager:  subtaskMgr,
@@ -157,7 +158,7 @@ func main() {
 	// 9. Create FlowHandler (SAME as production!)
 	flowRegistry := flow_registry.NewInMemoryRegistry()
 	flowHandlerCfg := deliverygrpc.FlowHandlerConfig{
-		AgentService:        &noopAgentService{},
+		AgentService:        &testutil.NoopAgentService{},
 		TurnExecutorFactory: factory,
 		PingInterval:        60 * time.Second, // Keep-alive ping every 60s
 		FlowRegistry:        flowRegistry,

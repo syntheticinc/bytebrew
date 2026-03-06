@@ -178,6 +178,11 @@ class _PlanStepTile extends StatelessWidget {
         color: AppColors.shade3,
         size: 24,
       ),
+      PlanStepStatus.failed => const Icon(
+        Icons.cancel,
+        color: AppColors.statusNeedsAttention,
+        size: 24,
+      ),
     };
   }
 
@@ -190,6 +195,10 @@ class _PlanStepTile extends StatelessWidget {
       ),
       PlanStepStatus.inProgress => base?.copyWith(fontWeight: FontWeight.bold),
       PlanStepStatus.pending => base,
+      PlanStepStatus.failed => base?.copyWith(
+        decoration: TextDecoration.lineThrough,
+        color: AppColors.statusNeedsAttention,
+      ),
     };
   }
 

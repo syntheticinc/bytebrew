@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/domain/server.dart';
-import '../../../../core/infrastructure/ws/ws_connection.dart';
+import '../../../../core/infrastructure/ws/ws_connection_manager.dart';
+import '../../../../core/infrastructure/ws/ws_providers.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/status_indicator.dart';
 
 /// A list tile displaying a paired server's name and connection status.
 ///
-/// Reads live connection state from [WsConnection] to show online/offline status.
+/// Reads live connection state from [WsConnectionManager] to show
+/// online/offline status.
 class ServerListTile extends ConsumerWidget {
   const ServerListTile({super.key, required this.server, this.onDismissed});
 
@@ -19,19 +21,17 @@ class ServerListTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Listen to WsConnection for live connection state.
-    final wsStatus = ref.watch(wsConnectionProvider);
-    final isConnected = wsStatus == WsConnectionStatus.connected;
+    final manager = ref.watch(connectionManagerProvider);
+    final connection = manager.getConnection(server.id);
+
+    final isConnected =
+        connection != null && connection.status == WsConnectionStatus.connected;
+
     final statusColor = isConnected ? AppColors.statusActive : AppColors.shade3;
 
-    final statusLabel = switch (wsStatus) {
-      WsConnectionStatus.connected => 'Connected',
-      WsConnectionStatus.connecting => 'Connecting',
-      WsConnectionStatus.error => 'Error',
-      WsConnectionStatus.disconnected => 'Offline',
-    };
+    final routeLabel = _routeLabel(connection);
 
-    final subtitle = '${server.lanAddress}:${server.wsPort}';
+    final subtitle = 'Bridge: ${server.bridgeUrl}';
 
     final tile = ListTile(
       leading: StatusIndicator(color: statusColor),
@@ -39,7 +39,19 @@ class ServerListTile extends ConsumerWidget {
       subtitle: Text(subtitle),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [_StatusChip(label: statusLabel, isConnected: isConnected)],
+        children: [
+          if (server.latencyMs > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Text(
+                '${server.latencyMs}ms',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.shade3),
+              ),
+            ),
+          _StatusChip(label: routeLabel, isConnected: isConnected),
+        ],
       ),
     );
 
@@ -58,6 +70,15 @@ class ServerListTile extends ConsumerWidget {
       onDismissed: (_) => onDismissed?.call(),
       child: tile,
     );
+  }
+
+  String _routeLabel(WsServerConnection? connection) {
+    if (connection == null ||
+        connection.status == WsConnectionStatus.disconnected) {
+      return 'Offline';
+    }
+
+    return 'Bridge';
   }
 
   Future<bool> _confirmDelete(BuildContext context) async {

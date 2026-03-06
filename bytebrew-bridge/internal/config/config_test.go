@@ -72,15 +72,11 @@ func TestValidate_PartialTLS(t *testing.T) {
 }
 
 func TestValidate_DefaultPort(t *testing.T) {
-	// Ensure Load() returns Port=8443 by default (without BRIDGE_PORT env).
-	// We cannot unset env vars reliably in parallel tests, so test the struct directly.
 	cfg := Load()
 	if cfg.Port != 8443 {
-		// BRIDGE_PORT env var may be set in the environment; only check default when unset.
 		t.Logf("port is %d (BRIDGE_PORT env may be set)", cfg.Port)
 	}
 
-	// Validate the default config.
 	if err := cfg.Validate(); err != nil {
 		t.Errorf("default config should be valid, got %v", err)
 	}

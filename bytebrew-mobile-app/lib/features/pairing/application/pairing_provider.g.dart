@@ -8,12 +8,12 @@ part of 'pairing_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Provides the [PairingRepository] implementation backed by LAN WebSocket.
+/// Provides the [PairingRepository] implementation backed by gRPC.
 
 @ProviderFor(pairingRepository)
 final pairingRepositoryProvider = PairingRepositoryProvider._();
 
-/// Provides the [PairingRepository] implementation backed by LAN WebSocket.
+/// Provides the [PairingRepository] implementation backed by gRPC.
 
 final class PairingRepositoryProvider
     extends
@@ -23,7 +23,7 @@ final class PairingRepositoryProvider
           PairingRepository
         >
     with $Provider<PairingRepository> {
-  /// Provides the [PairingRepository] implementation backed by LAN WebSocket.
+  /// Provides the [PairingRepository] implementation backed by gRPC.
   PairingRepositoryProvider._()
     : super(
         from: null,
@@ -58,7 +58,7 @@ final class PairingRepositoryProvider
   }
 }
 
-String _$pairingRepositoryHash() => r'ae9f48907c642362913d2cdb9efcaa7f534d7738';
+String _$pairingRepositoryHash() => r'6b410426ba2c4de379b15728ab6d6e764e034dfe';
 
 /// Manages server pairing state.
 

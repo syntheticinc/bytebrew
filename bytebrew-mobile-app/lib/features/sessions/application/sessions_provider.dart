@@ -1,33 +1,19 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:bytebrew_mobile/core/domain/session.dart';
-import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_providers.dart';
 import 'package:bytebrew_mobile/features/sessions/application/auto_connect_provider.dart';
 import 'package:bytebrew_mobile/features/sessions/domain/session_repository.dart';
-import 'package:bytebrew_mobile/features/sessions/infrastructure/empty_session_repository.dart';
 import 'package:bytebrew_mobile/features/sessions/infrastructure/ws_session_repository.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'sessions_provider.g.dart';
 
-/// Provides the [SessionRepository] backed by the active WS connection.
-///
-/// Returns [WsSessionRepository] when WebSocket is connected,
-/// [EmptySessionRepository] otherwise.
+/// Provides the [SessionRepository] backed by WS via [WsConnectionManager].
 @Riverpod(keepAlive: true)
 SessionRepository sessionRepository(Ref ref) {
-  final status = ref.watch(wsConnectionProvider);
-  if (status == WsConnectionStatus.connected) {
-    final notifier = ref.read(wsConnectionProvider.notifier);
-    debugPrint('[SessionRepo] -> WsSessionRepository');
-    final repo = WsSessionRepository(connection: notifier);
-    ref.onDispose(repo.dispose);
-    return repo;
-  }
-
-  debugPrint('[SessionRepo] -> EmptySessionRepository');
-  return const EmptySessionRepository();
+  final manager = ref.read(connectionManagerProvider);
+  return WsSessionRepository(connectionManager: manager);
 }
 
 /// Manages the list of agent sessions.
@@ -65,6 +51,7 @@ class Sessions extends _$Sessions {
     state = const AsyncLoading();
     try {
       final repo = ref.read(sessionRepositoryProvider);
+      await repo.refresh();
       state = AsyncData(await repo.listSessions());
     } on Exception catch (e, st) {
       state = AsyncError(e, st);

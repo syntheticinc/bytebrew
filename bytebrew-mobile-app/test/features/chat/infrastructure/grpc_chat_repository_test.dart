@@ -9,42 +9,47 @@ import 'package:bytebrew_mobile/core/domain/mobile_session.dart';
 import 'package:bytebrew_mobile/core/domain/plan.dart';
 import 'package:bytebrew_mobile/core/domain/server.dart';
 import 'package:bytebrew_mobile/core/domain/tool_call.dart';
-import 'package:bytebrew_mobile/core/infrastructure/grpc/connection_manager.dart';
-import 'package:bytebrew_mobile/core/infrastructure/grpc/mobile_service_client.dart'
-    as grpc;
-import 'package:bytebrew_mobile/features/chat/infrastructure/grpc_chat_repository.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_bridge_client.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart'
+    hide WsConnectionStatus;
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection_manager.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_types.dart';
+import 'package:bytebrew_mobile/features/chat/infrastructure/ws_chat_repository.dart';
+
+import '../../../helpers/fakes.dart';
 
 // ---------------------------------------------------------------------------
 // Fakes
 // ---------------------------------------------------------------------------
 
-/// Fake [grpc.MobileServiceClient] that records calls and returns
-/// configurable results.
-class FakeMobileServiceClient implements grpc.MobileServiceClient {
-  bool closeCalled = false;
-
+/// Fake [WsBridgeClient] that records calls and returns configurable results.
+class _FakeWsBridgeClient implements WsBridgeClient {
   // --- sendNewTask ---
-  grpc.SendCommandResult sendNewTaskResult =
-      const grpc.SendCommandResult(success: true);
-  final sendNewTaskCalls = <({String deviceToken, String sessionId, String task})>[];
+  SendCommandResult sendNewTaskResult = const SendCommandResult(success: true);
+  final sendNewTaskCalls =
+      <({String deviceToken, String sessionId, String task})>[];
 
   // --- sendAskUserReply ---
-  grpc.SendCommandResult sendAskUserReplyResult =
-      const grpc.SendCommandResult(success: true);
+  SendCommandResult sendAskUserReplyResult = const SendCommandResult(
+    success: true,
+  );
   final sendAskUserReplyCalls =
-      <({String deviceToken, String sessionId, String question, String answer})>[];
+      <
+        ({String deviceToken, String sessionId, String question, String answer})
+      >[];
 
   // --- cancelSession ---
-  grpc.SendCommandResult cancelSessionResult =
-      const grpc.SendCommandResult(success: true);
+  SendCommandResult cancelSessionResult = const SendCommandResult(
+    success: true,
+  );
   final cancelSessionCalls = <({String deviceToken, String sessionId})>[];
 
   // --- subscribeSession ---
-  StreamController<grpc.SessionEvent>? sessionStreamController;
+  StreamController<SessionEvent>? sessionStreamController;
 
   @override
-  Future<grpc.PingResult> ping() async {
-    return grpc.PingResult(
+  Future<PingResult> ping() async {
+    return PingResult(
       timestamp: DateTime.now(),
       serverName: 'Test Server',
       serverId: 'test-server-id',
@@ -52,42 +57,17 @@ class FakeMobileServiceClient implements grpc.MobileServiceClient {
   }
 
   @override
-  Future<void> close() async {
-    closeCalled = true;
-  }
-
-  @override
-  Future<grpc.PairResult> pair({
-    required String token,
-    required String deviceName,
-    Uint8List? mobilePublicKey,
-  }) async {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<grpc.ListSessionsResult> listSessions({
-    required String deviceToken,
-  }) async {
-    return const grpc.ListSessionsResult(
-      sessions: [],
-      serverName: 'Test',
-      serverId: 'test-id',
-    );
-  }
-
-  @override
-  Stream<grpc.SessionEvent> subscribeSession({
+  Stream<SessionEvent> subscribeSession({
     required String deviceToken,
     required String sessionId,
     String? lastEventId,
   }) {
-    sessionStreamController ??= StreamController<grpc.SessionEvent>.broadcast();
+    sessionStreamController ??= StreamController<SessionEvent>.broadcast();
     return sessionStreamController!.stream;
   }
 
   @override
-  Future<grpc.SendCommandResult> sendNewTask({
+  Future<SendCommandResult> sendNewTask({
     required String deviceToken,
     required String sessionId,
     required String task,
@@ -101,7 +81,7 @@ class FakeMobileServiceClient implements grpc.MobileServiceClient {
   }
 
   @override
-  Future<grpc.SendCommandResult> sendAskUserReply({
+  Future<SendCommandResult> sendAskUserReply({
     required String deviceToken,
     required String sessionId,
     required String question,
@@ -117,16 +97,25 @@ class FakeMobileServiceClient implements grpc.MobileServiceClient {
   }
 
   @override
-  Future<grpc.SendCommandResult> cancelSession({
+  Future<SendCommandResult> cancelSession({
     required String deviceToken,
     required String sessionId,
   }) async {
-    cancelSessionCalls.add((
-      deviceToken: deviceToken,
-      sessionId: sessionId,
-    ));
+    cancelSessionCalls.add((deviceToken: deviceToken, sessionId: sessionId));
     return cancelSessionResult;
   }
+
+  @override
+  Future<void> dispose() async {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// Fake WsConnection stub.
+class _FakeWsConnection implements WsConnection {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 /// Creates a test server with a device token.
@@ -138,8 +127,7 @@ Server _testServer({
   return Server(
     id: id,
     name: name,
-    lanAddress: '192.168.1.100',
-    connectionMode: ConnectionMode.lan,
+    bridgeUrl: 'ws://bridge:8080',
     isOnline: true,
     latencyMs: 10,
     pairedAt: DateTime(2026, 1, 1),
@@ -147,16 +135,16 @@ Server _testServer({
   );
 }
 
-/// Helper to create a [grpc.SessionEvent] with a given payload.
-grpc.SessionEvent _event({
+/// Helper to create a [SessionEvent] with a given payload.
+SessionEvent _event({
   String eventId = 'evt-1',
   String sessionId = 'session-1',
-  grpc.SessionEventType type = grpc.SessionEventType.agentMessage,
+  SessionEventType type = SessionEventType.agentMessage,
   String agentId = 'agent-main',
   int step = 0,
-  grpc.SessionEventPayload? payload,
+  SessionEventPayload? payload,
 }) {
-  return grpc.SessionEvent(
+  return SessionEvent(
     eventId: eventId,
     sessionId: sessionId,
     type: type,
@@ -172,28 +160,36 @@ grpc.SessionEvent _event({
 // ---------------------------------------------------------------------------
 
 void main() {
-  group('GrpcChatRepository', () {
-    late ConnectionManager connectionManager;
-    late FakeMobileServiceClient fakeClient;
-    late GrpcChatRepository repo;
+  group('WsChatRepository', () {
+    late FakeConnectionManager connectionManager;
+    late _FakeWsBridgeClient fakeClient;
+    late WsChatRepository repo;
 
     setUp(() {
-      fakeClient = FakeMobileServiceClient();
-      connectionManager = ConnectionManager(
-        clientFactory: (_) => fakeClient,
-      );
-      repo = GrpcChatRepository(
+      fakeClient = _FakeWsBridgeClient();
+      connectionManager = FakeConnectionManager();
+      repo = WsChatRepository(
         connectionManager: connectionManager,
         serverId: 'srv-1',
         sessionId: 'session-1',
       );
     });
 
+    /// Adds a connected server to the fake connection manager.
+    void addConnectedServer({Server? server}) {
+      final s = server ?? _testServer();
+      final conn = WsServerConnection(
+        server: s,
+        connection: _FakeWsConnection(),
+        client: fakeClient,
+      )..status = WsConnectionStatus.connected;
+      connectionManager.addFakeConnection(s.id, conn);
+    }
+
     tearDown(() async {
       repo.dispose();
       await fakeClient.sessionStreamController?.close();
       fakeClient.sessionStreamController = null;
-      await connectionManager.disconnectAll();
     });
 
     group('initial state', () {
@@ -209,31 +205,32 @@ void main() {
     });
 
     group('sendMessage', () {
-      test('adds optimistic user message and delegates to connection manager',
-          () async {
-        // Connect the server so the manager knows about it.
-        await connectionManager.connectToServer(_testServer());
+      test(
+        'adds optimistic user message and delegates to connection manager',
+        () async {
+          addConnectedServer();
 
-        final emittedMessages = <List<ChatMessage>>[];
-        repo.watchMessages().listen(emittedMessages.add);
+          final emittedMessages = <List<ChatMessage>>[];
+          repo.watchMessages().listen(emittedMessages.add);
 
-        await repo.sendMessage('session-1', 'Hello agent');
+          await repo.sendMessage('session-1', 'Hello agent');
 
-        // Optimistic message should be present.
-        final messages = await repo.getMessages('session-1');
-        expect(messages, hasLength(1));
-        expect(messages.first.type, ChatMessageType.userMessage);
-        expect(messages.first.content, 'Hello agent');
+          // Optimistic message should be present.
+          final messages = await repo.getMessages('session-1');
+          expect(messages, hasLength(1));
+          expect(messages.first.type, ChatMessageType.userMessage);
+          expect(messages.first.content, 'Hello agent');
 
-        // ConnectionManager should have received the sendNewTask call.
-        expect(fakeClient.sendNewTaskCalls, hasLength(1));
-        expect(fakeClient.sendNewTaskCalls.first.task, 'Hello agent');
-        expect(fakeClient.sendNewTaskCalls.first.sessionId, 'session-1');
-      });
+          // Client should have received the sendNewTask call.
+          expect(fakeClient.sendNewTaskCalls, hasLength(1));
+          expect(fakeClient.sendNewTaskCalls.first.task, 'Hello agent');
+          expect(fakeClient.sendNewTaskCalls.first.sessionId, 'session-1');
+        },
+      );
 
       test('shows error message when sendNewTask fails', () async {
-        await connectionManager.connectToServer(_testServer());
-        fakeClient.sendNewTaskResult = const grpc.SendCommandResult(
+        addConnectedServer();
+        fakeClient.sendNewTaskResult = const SendCommandResult(
           success: false,
           errorMessage: 'Connection lost',
         );
@@ -252,22 +249,24 @@ void main() {
         expect(messages[1].content, contains('Connection lost'));
       });
 
-      test('shows default error when sendNewTask fails with empty message',
-          () async {
-        await connectionManager.connectToServer(_testServer());
-        fakeClient.sendNewTaskResult = const grpc.SendCommandResult(
-          success: false,
-        );
+      test(
+        'shows default error when sendNewTask fails with empty message',
+        () async {
+          addConnectedServer();
+          fakeClient.sendNewTaskResult = const SendCommandResult(
+            success: false,
+          );
 
-        await repo.sendMessage('session-1', 'Hello');
+          await repo.sendMessage('session-1', 'Hello');
 
-        final messages = await repo.getMessages('session-1');
-        expect(messages, hasLength(2));
-        expect(messages[1].content, contains('Server not connected'));
-      });
+          final messages = await repo.getMessages('session-1');
+          expect(messages, hasLength(2));
+          expect(messages[1].content, contains('Server not connected'));
+        },
+      );
 
       test('generates unique message IDs for each user message', () async {
-        await connectionManager.connectToServer(_testServer());
+        addConnectedServer();
 
         await repo.sendMessage('session-1', 'First');
         // Ensure at least 1 ms elapses so DateTime.now().millisecondsSinceEpoch
@@ -282,9 +281,9 @@ void main() {
     });
 
     group('subscribe and event handling', () {
-      setUp(() async {
-        // Connect the server so subscribeToSession returns a stream.
-        await connectionManager.connectToServer(_testServer());
+      setUp(() {
+        // Add connected server so subscribeToSession returns a stream.
+        addConnectedServer();
       });
 
       test('subscribe sets isSubscribed to true when stream is available', () {
@@ -299,13 +298,15 @@ void main() {
         final emitted = <List<ChatMessage>>[];
         repo.watchMessages().listen(emitted.add);
 
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-agent-1',
-          payload: const grpc.AgentMessagePayload(
-            content: 'Hello from agent',
-            isComplete: true,
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-agent-1',
+            payload: const AgentMessagePayload(
+              content: 'Hello from agent',
+              isComplete: true,
+            ),
           ),
-        ));
+        );
 
         // Give the stream a tick to process.
         await Future<void>.delayed(Duration.zero);
@@ -323,27 +324,31 @@ void main() {
         repo.watchMessages().listen(emitted.add);
 
         // First chunk.
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-chunk-1',
-          agentId: 'agent-1',
-          step: 1,
-          payload: const grpc.AgentMessagePayload(
-            content: 'Hello ',
-            isComplete: false,
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-chunk-1',
+            agentId: 'agent-1',
+            step: 1,
+            payload: const AgentMessagePayload(
+              content: 'Hello ',
+              isComplete: false,
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
         // Second chunk.
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-chunk-2',
-          agentId: 'agent-1',
-          step: 1,
-          payload: const grpc.AgentMessagePayload(
-            content: 'world',
-            isComplete: false,
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-chunk-2',
+            agentId: 'agent-1',
+            step: 1,
+            payload: const AgentMessagePayload(
+              content: 'world',
+              isComplete: false,
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
         // There should be one message with accumulated content.
@@ -358,14 +363,16 @@ void main() {
         final emitted = <List<ChatMessage>>[];
         repo.watchMessages().listen(emitted.add);
 
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-tc-start',
-          payload: const grpc.ToolCallStartPayload(
-            callId: 'call-1',
-            toolName: 'read_file',
-            arguments: {'path': '/src/main.dart'},
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-tc-start',
+            payload: const ToolCallStartPayload(
+              callId: 'call-1',
+              toolName: 'read_file',
+              arguments: {'path': '/src/main.dart'},
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
         final messages = await repo.getMessages('session-1');
@@ -381,26 +388,30 @@ void main() {
         repo.subscribe();
 
         // First start the tool call.
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-tc-start',
-          payload: const grpc.ToolCallStartPayload(
-            callId: 'call-1',
-            toolName: 'read_file',
-            arguments: {'path': '/src/main.dart'},
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-tc-start',
+            payload: const ToolCallStartPayload(
+              callId: 'call-1',
+              toolName: 'read_file',
+              arguments: {'path': '/src/main.dart'},
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
         // Then end it.
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-tc-end',
-          payload: const grpc.ToolCallEndPayload(
-            callId: 'call-1',
-            toolName: 'read_file',
-            resultSummary: '50 lines',
-            hasError: false,
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-tc-end',
+            payload: const ToolCallEndPayload(
+              callId: 'call-1',
+              toolName: 'read_file',
+              resultSummary: '50 lines',
+              hasError: false,
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
         final messages = await repo.getMessages('session-1');
@@ -413,25 +424,29 @@ void main() {
       test('handles ToolCallEndPayload (error)', () async {
         repo.subscribe();
 
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-tc-start',
-          payload: const grpc.ToolCallStartPayload(
-            callId: 'call-2',
-            toolName: 'execute',
-            arguments: {'cmd': 'rm -rf /'},
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-tc-start',
+            payload: const ToolCallStartPayload(
+              callId: 'call-2',
+              toolName: 'execute',
+              arguments: {'cmd': 'rm -rf /'},
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-tc-end',
-          payload: const grpc.ToolCallEndPayload(
-            callId: 'call-2',
-            toolName: 'execute',
-            resultSummary: 'Permission denied',
-            hasError: true,
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-tc-end',
+            payload: const ToolCallEndPayload(
+              callId: 'call-2',
+              toolName: 'execute',
+              resultSummary: 'Permission denied',
+              hasError: true,
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
         final messages = await repo.getMessages('session-1');
@@ -443,26 +458,30 @@ void main() {
         repo.subscribe();
 
         // Incomplete reasoning should be ignored.
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-reason-incomplete',
-          payload: const grpc.ReasoningPayload(
-            content: 'Thinking...',
-            isComplete: false,
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-reason-incomplete',
+            payload: const ReasoningPayload(
+              content: 'Thinking...',
+              isComplete: false,
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
         var messages = await repo.getMessages('session-1');
         expect(messages, isEmpty);
 
         // Complete reasoning should produce a message.
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-reason-complete',
-          payload: const grpc.ReasoningPayload(
-            content: 'I need to analyze the structure',
-            isComplete: true,
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-reason-complete',
+            payload: const ReasoningPayload(
+              content: 'I need to analyze the structure',
+              isComplete: true,
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
         messages = await repo.getMessages('session-1');
@@ -474,14 +493,16 @@ void main() {
       test('handles AskUserPayload', () async {
         repo.subscribe();
 
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-ask-1',
-          payload: const grpc.AskUserPayload(
-            question: 'Which framework?',
-            options: ['React', 'Vue', 'Angular'],
-            isAnswered: false,
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-ask-1',
+            payload: const AskUserPayload(
+              question: 'Which framework?',
+              options: ['React', 'Vue', 'Angular'],
+              isAnswered: false,
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
         final messages = await repo.getMessages('session-1');
@@ -496,14 +517,16 @@ void main() {
       test('ignores already-answered AskUserPayload', () async {
         repo.subscribe();
 
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-ask-answered',
-          payload: const grpc.AskUserPayload(
-            question: 'Already answered',
-            options: [],
-            isAnswered: true,
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-ask-answered',
+            payload: const AskUserPayload(
+              question: 'Already answered',
+              options: [],
+              isAnswered: true,
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
         final messages = await repo.getMessages('session-1');
@@ -513,27 +536,29 @@ void main() {
       test('handles PlanPayload', () async {
         repo.subscribe();
 
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-plan-1',
-          agentId: 'agent-main',
-          payload: grpc.PlanPayload(
-            planName: 'Refactor module',
-            steps: const [
-              grpc.PlanStepPayload(
-                title: 'Analyze code',
-                status: grpc.PlanStepStatus.completed,
-              ),
-              grpc.PlanStepPayload(
-                title: 'Write tests',
-                status: grpc.PlanStepStatus.inProgress,
-              ),
-              grpc.PlanStepPayload(
-                title: 'Refactor',
-                status: grpc.PlanStepStatus.pending,
-              ),
-            ],
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-plan-1',
+            agentId: 'agent-main',
+            payload: const PlanPayload(
+              planName: 'Refactor module',
+              steps: [
+                PlanStepPayload(
+                  title: 'Analyze code',
+                  status: WsPlanStepStatus.completed,
+                ),
+                PlanStepPayload(
+                  title: 'Write tests',
+                  status: WsPlanStepStatus.inProgress,
+                ),
+                PlanStepPayload(
+                  title: 'Refactor',
+                  status: WsPlanStepStatus.pending,
+                ),
+              ],
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
         final messages = await repo.getMessages('session-1');
@@ -543,23 +568,22 @@ void main() {
         expect(messages.first.plan!.goal, 'Refactor module');
         expect(messages.first.plan!.steps, hasLength(3));
         expect(messages.first.plan!.steps[0].status, PlanStepStatus.completed);
-        expect(
-          messages.first.plan!.steps[1].status,
-          PlanStepStatus.inProgress,
-        );
+        expect(messages.first.plan!.steps[1].status, PlanStepStatus.inProgress);
         expect(messages.first.plan!.steps[2].status, PlanStepStatus.pending);
       });
 
       test('handles SessionStatusPayload with custom message', () async {
         repo.subscribe();
 
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-status-1',
-          payload: const grpc.SessionStatusPayload(
-            state: MobileSessionState.completed,
-            message: 'Task finished successfully',
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-status-1',
+            payload: const SessionStatusPayload(
+              state: MobileSessionState.completed,
+              message: 'Task finished successfully',
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
         final messages = await repo.getMessages('session-1');
@@ -568,33 +592,39 @@ void main() {
         expect(messages.first.content, 'Task finished successfully');
       });
 
-      test('handles SessionStatusPayload with empty message (uses default)',
-          () async {
-        repo.subscribe();
+      test(
+        'handles SessionStatusPayload with empty message (uses default)',
+        () async {
+          repo.subscribe();
 
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-status-2',
-          payload: const grpc.SessionStatusPayload(
-            state: MobileSessionState.active,
-            message: '',
-          ),
-        ));
-        await Future<void>.delayed(Duration.zero);
+          fakeClient.sessionStreamController!.add(
+            _event(
+              eventId: 'evt-status-2',
+              payload: const SessionStatusPayload(
+                state: MobileSessionState.active,
+                message: '',
+              ),
+            ),
+          );
+          await Future<void>.delayed(Duration.zero);
 
-        final messages = await repo.getMessages('session-1');
-        expect(messages.first.content, 'Session status: active');
-      });
+          final messages = await repo.getMessages('session-1');
+          expect(messages.first.content, 'Session status: active');
+        },
+      );
 
       test('handles ErrorPayload', () async {
         repo.subscribe();
 
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-error-1',
-          payload: const grpc.ErrorPayload(
-            code: 'RATE_LIMIT',
-            message: 'Too many requests',
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-error-1',
+            payload: const ErrorPayload(
+              code: 'RATE_LIMIT',
+              message: 'Too many requests',
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
         final messages = await repo.getMessages('session-1');
@@ -606,10 +636,9 @@ void main() {
       test('ignores event with null payload', () async {
         repo.subscribe();
 
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-null',
-          payload: null,
-        ));
+        fakeClient.sessionStreamController!.add(
+          _event(eventId: 'evt-null', payload: null),
+        );
         await Future<void>.delayed(Duration.zero);
 
         final messages = await repo.getMessages('session-1');
@@ -619,78 +648,82 @@ void main() {
       test('tracks lastEventId from received events', () async {
         repo.subscribe();
 
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-100',
-          payload: const grpc.AgentMessagePayload(
-            content: 'msg',
-            isComplete: true,
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-100',
+            payload: const AgentMessagePayload(
+              content: 'msg',
+              isComplete: true,
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
-        // After dispose and re-subscribe, the lastEventId should be tracked.
-        // We can test indirectly: the event was processed without errors.
         final messages = await repo.getMessages('session-1');
         expect(messages, hasLength(1));
       });
     });
 
     group('answerAskUser', () {
-      test('updates message status and sends reply via connection manager',
-          () async {
-        await connectionManager.connectToServer(_testServer());
+      test(
+        'updates message status and sends reply via connection manager',
+        () async {
+          addConnectedServer();
 
-        // First inject an ask-user message via event stream.
-        repo.subscribe();
+          // First inject an ask-user message via event stream.
+          repo.subscribe();
 
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-ask-reply',
-          payload: const grpc.AskUserPayload(
-            question: 'Continue?',
-            options: ['Yes', 'No'],
-            isAnswered: false,
-          ),
-        ));
-        await Future<void>.delayed(Duration.zero);
+          fakeClient.sessionStreamController!.add(
+            _event(
+              eventId: 'evt-ask-reply',
+              payload: const AskUserPayload(
+                question: 'Continue?',
+                options: ['Yes', 'No'],
+                isAnswered: false,
+              ),
+            ),
+          );
+          await Future<void>.delayed(Duration.zero);
 
-        final askUserId = (await repo.getMessages('session-1'))
-            .first
-            .askUser!
-            .id;
+          final askUserId = (await repo.getMessages(
+            'session-1',
+          )).first.askUser!.id;
 
-        await repo.answerAskUser('session-1', askUserId, 'Yes');
+          await repo.answerAskUser('session-1', askUserId, 'Yes');
 
-        // Message should be updated optimistically.
-        final messages = await repo.getMessages('session-1');
-        expect(messages.first.askUser!.status, AskUserStatus.answered);
-        expect(messages.first.askUser!.answer, 'Yes');
+          // Message should be updated optimistically.
+          final messages = await repo.getMessages('session-1');
+          expect(messages.first.askUser!.status, AskUserStatus.answered);
+          expect(messages.first.askUser!.answer, 'Yes');
 
-        // gRPC call should have been made.
-        expect(fakeClient.sendAskUserReplyCalls, hasLength(1));
-        expect(fakeClient.sendAskUserReplyCalls.first.question, 'Continue?');
-        expect(fakeClient.sendAskUserReplyCalls.first.answer, 'Yes');
-      });
+          // Client call should have been made.
+          expect(fakeClient.sendAskUserReplyCalls, hasLength(1));
+          expect(fakeClient.sendAskUserReplyCalls.first.question, 'Continue?');
+          expect(fakeClient.sendAskUserReplyCalls.first.answer, 'Yes');
+        },
+      );
 
       test('shows error message when sendAskUserReply fails', () async {
-        await connectionManager.connectToServer(_testServer());
+        addConnectedServer();
         repo.subscribe();
 
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-ask-err',
-          payload: const grpc.AskUserPayload(
-            question: 'Proceed?',
-            options: ['Yes', 'No'],
-            isAnswered: false,
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-ask-err',
+            payload: const AskUserPayload(
+              question: 'Proceed?',
+              options: ['Yes', 'No'],
+              isAnswered: false,
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
-        final askUserId = (await repo.getMessages('session-1'))
-            .first
-            .askUser!
-            .id;
+        final askUserId = (await repo.getMessages(
+          'session-1',
+        )).first.askUser!.id;
 
-        fakeClient.sendAskUserReplyResult = const grpc.SendCommandResult(
+        fakeClient.sendAskUserReplyResult = const SendCommandResult(
           success: false,
           errorMessage: 'No device token',
         );
@@ -708,7 +741,7 @@ void main() {
 
     group('cancel', () {
       test('delegates to connection manager', () async {
-        await connectionManager.connectToServer(_testServer());
+        addConnectedServer();
 
         await repo.cancel('session-1');
 
@@ -719,28 +752,32 @@ void main() {
 
     group('watchMessages', () {
       test('emits message lists on events', () async {
-        await connectionManager.connectToServer(_testServer());
+        addConnectedServer();
         repo.subscribe();
 
         final collected = <List<ChatMessage>>[];
         final sub = repo.watchMessages().listen(collected.add);
 
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-watch-1',
-          payload: const grpc.AgentMessagePayload(
-            content: 'First',
-            isComplete: true,
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-watch-1',
+            payload: const AgentMessagePayload(
+              content: 'First',
+              isComplete: true,
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-watch-2',
-          payload: const grpc.AgentMessagePayload(
-            content: 'Second',
-            isComplete: true,
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-watch-2',
+            payload: const AgentMessagePayload(
+              content: 'Second',
+              isComplete: true,
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
         expect(collected, hasLength(2));
@@ -755,51 +792,53 @@ void main() {
       test('closes stream controllers without error', () {
         // Double dispose should not throw.
         repo.dispose();
-        // After dispose, watchMessages should be a closed stream.
-        // Creating a new repo to verify original was disposed cleanly.
         expect(() => repo.dispose(), returnsNormally);
       });
     });
 
     group('upsert behavior', () {
       test('replaces existing message with same id', () async {
-        await connectionManager.connectToServer(_testServer());
+        addConnectedServer();
         repo.subscribe();
 
         // Plan messages use id 'plan-<agentId>', so sending two plans
         // for the same agent should result in one message.
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-plan-first',
-          agentId: 'agent-1',
-          payload: grpc.PlanPayload(
-            planName: 'Plan v1',
-            steps: const [
-              grpc.PlanStepPayload(
-                title: 'Step 1',
-                status: grpc.PlanStepStatus.pending,
-              ),
-            ],
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-plan-first',
+            agentId: 'agent-1',
+            payload: const PlanPayload(
+              planName: 'Plan v1',
+              steps: [
+                PlanStepPayload(
+                  title: 'Step 1',
+                  status: WsPlanStepStatus.pending,
+                ),
+              ],
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-plan-second',
-          agentId: 'agent-1',
-          payload: grpc.PlanPayload(
-            planName: 'Plan v2',
-            steps: const [
-              grpc.PlanStepPayload(
-                title: 'Step 1',
-                status: grpc.PlanStepStatus.completed,
-              ),
-              grpc.PlanStepPayload(
-                title: 'Step 2',
-                status: grpc.PlanStepStatus.inProgress,
-              ),
-            ],
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-plan-second',
+            agentId: 'agent-1',
+            payload: const PlanPayload(
+              planName: 'Plan v2',
+              steps: [
+                PlanStepPayload(
+                  title: 'Step 1',
+                  status: WsPlanStepStatus.completed,
+                ),
+                PlanStepPayload(
+                  title: 'Step 2',
+                  status: WsPlanStepStatus.inProgress,
+                ),
+              ],
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
         final messages = await repo.getMessages('session-1');
@@ -811,36 +850,33 @@ void main() {
     });
 
     group('plan step status mapping', () {
-      test('maps grpc.PlanStepStatus.failed to PlanStepStatus.completed',
-          () async {
-        await connectionManager.connectToServer(_testServer());
+      test('maps WsPlanStepStatus.failed to PlanStepStatus.failed', () async {
+        addConnectedServer();
         repo.subscribe();
 
-        fakeClient.sessionStreamController!.add(_event(
-          eventId: 'evt-plan-failed-step',
-          agentId: 'agent-1',
-          payload: grpc.PlanPayload(
-            planName: 'Plan with failed step',
-            steps: const [
-              grpc.PlanStepPayload(
-                title: 'Failed step',
-                status: grpc.PlanStepStatus.failed,
-              ),
-              grpc.PlanStepPayload(
-                title: 'Unspecified step',
-                status: grpc.PlanStepStatus.unspecified,
-              ),
-            ],
+        fakeClient.sessionStreamController!.add(
+          _event(
+            eventId: 'evt-plan-failed-step',
+            agentId: 'agent-1',
+            payload: const PlanPayload(
+              planName: 'Plan with failed step',
+              steps: [
+                PlanStepPayload(
+                  title: 'Failed step',
+                  status: WsPlanStepStatus.failed,
+                ),
+                PlanStepPayload(
+                  title: 'Unspecified step',
+                  status: WsPlanStepStatus.unspecified,
+                ),
+              ],
+            ),
           ),
-        ));
+        );
         await Future<void>.delayed(Duration.zero);
 
         final messages = await repo.getMessages('session-1');
-        // Based on _mapPlanStepStatus: failed -> completed, unspecified -> pending
-        expect(
-          messages.first.plan!.steps[0].status,
-          PlanStepStatus.completed,
-        );
+        expect(messages.first.plan!.steps[0].status, PlanStepStatus.failed);
         expect(messages.first.plan!.steps[1].status, PlanStepStatus.pending);
       });
     });

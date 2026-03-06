@@ -108,54 +108,53 @@ void main() {
       },
     );
 
-    testWidgets(
-      'TC-E2E-AUTH-03: Register mode toggle and register flow',
-      (tester) async {
-        await tester.pumpWidget(
-          buildE2EApp(
-            overrides: [
-              authRepositoryProvider.overrideWithValue(
-                FakeAuthRepository(shouldSucceed: true),
-              ),
-              sessionsProvider.overrideWith(() => FakeSessionsNotifier([])),
-              groupedSessionsProvider.overrideWithValue({}),
-              serversProvider.overrideWithValue([]),
-            ],
-          ),
-        );
+    testWidgets('TC-E2E-AUTH-03: Register mode toggle and register flow', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildE2EApp(
+          overrides: [
+            authRepositoryProvider.overrideWithValue(
+              FakeAuthRepository(shouldSucceed: true),
+            ),
+            sessionsProvider.overrideWith(() => FakeSessionsNotifier([])),
+            groupedSessionsProvider.overrideWithValue({}),
+            serversProvider.overrideWithValue([]),
+          ],
+        ),
+      );
 
-        // Wait for splash -> login.
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 1300));
-        await tester.pump(const Duration(milliseconds: 300));
+      // Wait for splash -> login.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1300));
+      await tester.pump(const Duration(milliseconds: 300));
 
-        // Initially in login mode.
-        expect(find.text('Sign In'), findsOneWidget);
+      // Initially in login mode.
+      expect(find.text('Sign In'), findsOneWidget);
 
-        // Switch to register mode.
-        await tester.tap(find.text("Don't have an account? Register"));
-        await tester.pump();
+      // Switch to register mode.
+      await tester.tap(find.text("Don't have an account? Register"));
+      await tester.pump();
 
-        expect(find.text('Create Account'), findsOneWidget);
-        expect(find.text('Sign In'), findsNothing);
+      expect(find.text('Create Account'), findsOneWidget);
+      expect(find.text('Sign In'), findsNothing);
 
-        // Fill in credentials.
-        await tester.enterText(find.byType(TextField).first, 'new@test.com');
-        await tester.enterText(find.byType(TextField).last, 'newpass123');
-        await tester.pump();
+      // Fill in credentials.
+      await tester.enterText(find.byType(TextField).first, 'new@test.com');
+      await tester.enterText(find.byType(TextField).last, 'newpass123');
+      await tester.pump();
 
-        // Tap Create Account.
-        await tester.tap(find.text('Create Account'));
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 100));
+      // Tap Create Account.
+      await tester.tap(find.text('Create Account'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
 
-        // Wait for navigation.
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
+      // Wait for navigation.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-        // Should navigate to sessions on successful register.
-        expect(find.byType(SessionsScreen), findsOneWidget);
-      },
-    );
+      // Should navigate to sessions on successful register.
+      expect(find.byType(SessionsScreen), findsOneWidget);
+    });
   });
 }

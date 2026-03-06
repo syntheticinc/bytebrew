@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bytebrew_mobile/core/domain/session.dart';
+import 'package:bytebrew_mobile/features/sessions/application/auto_connect_provider.dart';
 import 'package:bytebrew_mobile/features/sessions/application/sessions_provider.dart';
 import 'package:bytebrew_mobile/features/sessions/domain/session_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,16 +26,9 @@ class _FakeSessionRepository implements SessionRepository {
   Future<void> refresh() async {
     refreshCount++;
   }
-}
-
-class _FailingSessionRepository implements SessionRepository {
-  @override
-  Future<List<Session>> listSessions() async {
-    throw Exception('Network error');
-  }
 
   @override
-  Future<void> refresh() async {}
+  Stream<List<Session>>? watchSessions() => null;
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +87,7 @@ void main() {
 
       final container = ProviderContainer(
         overrides: [
+          sessionsAutoConnectProvider.overrideWith((ref) async {}),
           sessionRepositoryProvider.overrideWithValue(fakeRepo),
         ],
       );
@@ -109,6 +104,7 @@ void main() {
 
       final container = ProviderContainer(
         overrides: [
+          sessionsAutoConnectProvider.overrideWith((ref) async {}),
           sessionRepositoryProvider.overrideWithValue(fakeRepo),
         ],
       );
@@ -123,6 +119,7 @@ void main() {
 
       final container = ProviderContainer(
         overrides: [
+          sessionsAutoConnectProvider.overrideWith((ref) async {}),
           sessionRepositoryProvider.overrideWithValue(fakeRepo),
         ],
       );
@@ -198,9 +195,7 @@ void main() {
 
       final container = ProviderContainer(
         overrides: [
-          sessionsProvider.overrideWith(
-            () => FakeSessionsNotifier(onlyActive),
-          ),
+          sessionsProvider.overrideWith(() => FakeSessionsNotifier(onlyActive)),
         ],
       );
       addTearDown(container.dispose);

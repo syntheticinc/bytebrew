@@ -62,8 +62,9 @@ interface CommandOptions {
   server?: string;
   project: string;
   debug: boolean;
-  mobilePort?: string;
-  noMobile?: boolean;
+  bridge?: string;
+  noBridge?: boolean;
+  serverId?: string;
 }
 
 /**
@@ -81,20 +82,29 @@ async function connectAndConfigure(
   const orchestrator = new ServerConnectionOrchestrator();
   const connection = await orchestrator.connect(externalAddress || undefined);
 
-  // Mobile proxy is always enabled (default port 8765).
-  // Can be overridden with --mobile-port or disabled with --no-mobile.
-  const DEFAULT_MOBILE_PORT = 8765;
-  let mobileProxyPort: number | undefined;
-  if (options.noMobile) {
-    mobileProxyPort = undefined;
-  } else if (options.mobilePort) {
-    mobileProxyPort = parseInt(options.mobilePort, 10);
-    if (Number.isNaN(mobileProxyPort)) {
-      console.error(`Error: Invalid --mobile-port value: "${options.mobilePort}" (must be a number)`);
-      process.exit(1);
-    }
+  // Bridge configuration: --bridge <address> enables it, --no-bridge disables.
+  // If not specified, read from ~/.bytebrew/config.json (bridge_url).
+  let bridgeAddress: string | undefined;
+  let bridgeEnabled = false;
+
+  if (options.noBridge) {
+    bridgeEnabled = false;
+  } else if (options.bridge) {
+    bridgeAddress = options.bridge;
+    bridgeEnabled = true;
   } else {
-    mobileProxyPort = DEFAULT_MOBILE_PORT;
+    // Try reading from persisted config
+    try {
+      const { ByteBrewConfig } = await import('./infrastructure/config/ByteBrewConfig.js');
+      const bbConfig = new ByteBrewConfig();
+      const savedBridgeUrl = bbConfig.getBridgeUrl();
+      if (savedBridgeUrl) {
+        bridgeAddress = savedBridgeUrl;
+        bridgeEnabled = true;
+      }
+    } catch {
+      // Config not available — bridge stays disabled
+    }
   }
 
   const config = loadAndValidateConfig({
@@ -103,7 +113,9 @@ async function connectAndConfigure(
     projectRoot,
     sessionId,
     debug: options.debug,
-    mobileProxyPort,
+    bridgeAddress,
+    bridgeEnabled,
+    serverId: options.serverId,
   });
 
   return { config, connection };
@@ -168,8 +180,10 @@ program
   .option('-s, --server <address>', 'Server address (connect to external server)')
   .option('-p, --project <key>', 'Project key', 'default')
   .option('-d, --debug', 'Enable debug mode', false)
-  .option('--mobile-port <port>', 'Override mobile proxy port (default: 8765)')
-  .option('--no-mobile', 'Disable mobile proxy')
+
+  .option('--bridge <address>', 'Bridge relay address (enables mobile via bridge)')
+  .option('--no-bridge', 'Disable bridge relay')
+  .option('--server-id <uuid>', 'CLI server ID for bridge registration')
   .action(async (options) => {
     const globalOpts = program.opts();
     initLogger(options.debug);
@@ -234,8 +248,10 @@ program
   .option('-s, --server <address>', 'Server address (connect to external server)')
   .option('-p, --project <key>', 'Project key', 'default')
   .option('-d, --debug', 'Enable debug mode', false)
-  .option('--mobile-port <port>', 'Override mobile proxy port (default: 8765)')
-  .option('--no-mobile', 'Disable mobile proxy')
+
+  .option('--bridge <address>', 'Bridge relay address (enables mobile via bridge)')
+  .option('--no-bridge', 'Disable bridge relay')
+  .option('--server-id <uuid>', 'CLI server ID for bridge registration')
   .option('--headless', 'Run in headless mode (no UI, plain text output)', false)
   .option('-o, --output <file>', 'Write output to file (headless mode only)')
   .option(
@@ -305,8 +321,10 @@ program
   .option('-s, --server <address>', 'Server address (connect to external server)')
   .option('-p, --project <key>', 'Project key', 'default')
   .option('-d, --debug', 'Enable debug mode', false)
-  .option('--mobile-port <port>', 'Override mobile proxy port (default: 8765)')
-  .option('--no-mobile', 'Disable mobile proxy')
+
+  .option('--bridge <address>', 'Bridge relay address (enables mobile via bridge)')
+  .option('--no-bridge', 'Disable bridge relay')
+  .option('--server-id <uuid>', 'CLI server ID for bridge registration')
   .option('-o, --output <file>', 'Write output to file (in addition to console)')
   .action(async (options) => {
     const globalOpts = program.opts();
@@ -631,164 +649,8 @@ program
     }
   });
 
-// Mobile pair command - generate pairing code for mobile app
-program
-  .command('mobile-pair')
-  .description('Generate pairing code for mobile app')
-  .option('-s, --server <address>', 'Server address')
-  .option('-p, --project <key>', 'Project key', 'default')
-  .option('-d, --debug', 'Enable debug mode', false)
-  .option('--mobile-port <port>', 'Override mobile proxy port (default: 8765)')
-  .option('--no-mobile', 'Disable mobile proxy')
-  .option('--lan', 'Use direct LAN connection (no bridge)')
-  .action(async (options) => {
-    const orchestrator = new ServerConnectionOrchestrator();
-    const connection = await orchestrator.connect(options.server || process.env.BYTEBREW_SERVER);
-    const { MobileServiceClient } = await import('./infrastructure/grpc/mobile_client.js');
-    const client = new MobileServiceClient(connection.address);
-
-    let transitionedToChat = false;
-
-    try {
-      const result = await client.generatePairingToken();
-
-      const { ByteBrewConfig } = await import('./infrastructure/config/ByteBrewConfig.js');
-      const { QrPairingCodeGenerator } = await import('./infrastructure/mobile/QrPairingCodeGenerator.js');
-
-      const config = new ByteBrewConfig();
-      const generator = new QrPairingCodeGenerator();
-
-      console.log('\nMobile Pairing');
-      console.log('\u2500'.repeat(40));
-      console.log(`Server: ${result.serverName}`);
-      console.log('');
-
-      let bridgeUrl: string | undefined;
-      if (options.lan) {
-        bridgeUrl = undefined;
-        console.log('Direct LAN mode \u2014 phone must be on same network.');
-        console.log('');
-      } else {
-        bridgeUrl = config.getBridgeUrl();
-        if (!bridgeUrl) {
-          console.log('Note: Bridge not configured. QR will work for LAN only.');
-          console.log('Run onboarding or set bridge_url in ~/.bytebrew/config.json');
-          console.log('');
-        }
-      }
-
-      generator.displayPairingInfo({ response: result, bridgeUrl });
-      console.log('');
-      console.log('Waiting for mobile device to scan... (token expires in 5 minutes)');
-
-      try {
-        const event = await client.waitForPairing(result.token);
-        console.log('');
-        console.log(`\u2713 Device "${event.deviceName}" paired successfully!`);
-        console.log('');
-        console.log('Starting chat session...');
-        console.log('');
-
-        // Close mobile-specific gRPC client before starting chat.
-        client.close();
-
-        // Build full AppConfig and start interactive chat.
-        const globalOpts = program.opts();
-        const projectRoot = path.resolve(globalOpts.directory || process.cwd());
-        const sessionId = resolveSessionId(globalOpts, projectRoot);
-
-        const DEFAULT_MOBILE_PORT = 8765;
-        let mobileProxyPort: number | undefined;
-        if (options.noMobile) {
-          mobileProxyPort = undefined;
-        } else if (options.mobilePort) {
-          mobileProxyPort = parseInt(options.mobilePort, 10);
-        } else {
-          mobileProxyPort = DEFAULT_MOBILE_PORT;
-        }
-
-        const chatConfig = loadAndValidateConfig({
-          serverAddress: connection.address,
-          projectKey: options.project || 'default',
-          projectRoot,
-          sessionId,
-          debug: options.debug || false,
-          mobileProxyPort,
-        });
-
-        transitionedToChat = true;
-        registerExitCleanup(connection);
-        runChatApp(chatConfig);
-        return; // Don't fall through to finally { client.close() }
-      } catch (waitErr) {
-        const msg = (waitErr as Error).message;
-        if (msg.includes('timed out')) {
-          console.log('\nPairing timed out. Run mobile-pair again to generate a new code.');
-        } else {
-          console.log(`\nPairing wait ended: ${msg}`);
-        }
-      }
-    } catch (err) {
-      console.error(`Failed to generate pairing token: ${(err as Error).message}`);
-      process.exit(1);
-    } finally {
-      if (!transitionedToChat) {
-        client.close();
-      }
-    }
-  });
-
-// Mobile devices command - list/revoke paired devices
-program
-  .command('mobile-devices')
-  .description('List paired mobile devices')
-  .option('-s, --server <address>', 'Server address')
-  .option('--revoke <device-id>', 'Revoke a paired device')
-  .action(async (options) => {
-    const orchestrator = new ServerConnectionOrchestrator();
-    const connection = await orchestrator.connect(options.server || process.env.BYTEBREW_SERVER);
-    const { MobileServiceClient } = await import('./infrastructure/grpc/mobile_client.js');
-    const client = new MobileServiceClient(connection.address);
-
-    try {
-      if (options.revoke) {
-        const result = await client.revokeDevice(options.revoke);
-        if (result.success) {
-          console.log(`Device ${options.revoke} revoked.`);
-        } else {
-          console.error('Failed to revoke device.');
-          process.exit(1);
-        }
-        return;
-      }
-
-      const result = await client.listDevices();
-
-      if (result.devices.length === 0) {
-        console.log('No paired devices. Run "bytebrew mobile-pair" to pair a device.');
-        return;
-      }
-
-      console.log('\nPaired Devices');
-      console.log('\u2500'.repeat(60));
-      for (const device of result.devices) {
-        const pairedDate = new Date(Number(device.pairedAt) * 1000).toLocaleString();
-        const lastSeen = new Date(Number(device.lastSeenAt) * 1000).toLocaleString();
-        console.log(`  ${device.deviceName}`);
-        console.log(`    ID:        ${device.deviceId}`);
-        console.log(`    Paired:    ${pairedDate}`);
-        console.log(`    Last seen: ${lastSeen}`);
-        console.log('');
-      }
-
-      console.log('To revoke: bytebrew mobile-devices --revoke <device-id>');
-    } catch (err) {
-      console.error(`Failed: ${(err as Error).message}`);
-      process.exit(1);
-    } finally {
-      client.close();
-    }
-  });
+// TODO: mobile-pair and mobile-devices commands will be re-implemented
+// using local PairingService via Bridge (mobile_client.ts / Server MobileService removed).
 
 function printProgress(progress: IndexProgress): void {
   const { phase, filesScanned, totalFiles, chunksProcessed, totalChunks, error } = progress;

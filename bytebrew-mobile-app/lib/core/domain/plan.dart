@@ -1,5 +1,5 @@
 /// Status of a single plan step.
-enum PlanStepStatus { pending, inProgress, completed }
+enum PlanStepStatus { pending, inProgress, completed, failed }
 
 /// A step within an agent's execution plan.
 class PlanStep {

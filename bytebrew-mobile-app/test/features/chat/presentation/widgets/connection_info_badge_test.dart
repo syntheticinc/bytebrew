@@ -1,15 +1,22 @@
 import 'package:bytebrew_mobile/core/domain/server.dart';
-import 'package:bytebrew_mobile/core/infrastructure/grpc/connection_manager.dart';
-import 'package:bytebrew_mobile/core/infrastructure/grpc/mobile_service_client.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_bridge_client.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart'
+    hide WsConnectionStatus;
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection_manager.dart';
 import 'package:bytebrew_mobile/features/chat/presentation/widgets/connection_info_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // ---------------------------------------------------------------------------
-// Fake MobileServiceClient to satisfy ServerConnection constructor
+// Fake stubs for WsConnection and WsBridgeClient
 // ---------------------------------------------------------------------------
 
-class _FakeMobileServiceClient implements MobileServiceClient {
+class _FakeWsConnection implements WsConnection {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeWsBridgeClient implements WsBridgeClient {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -23,54 +30,33 @@ final _now = DateTime.now();
 final _testServer = Server(
   id: 'srv-1',
   name: 'Test Server',
-  lanAddress: '192.168.1.50',
-  connectionMode: ConnectionMode.lan,
+  bridgeUrl: 'ws://bridge.bytebrew.ai:8080',
   isOnline: true,
   latencyMs: 5,
   pairedAt: _now,
 );
 
-ServerConnection _makeConnection({
-  required GrpcConnectionStatus status,
-  ConnectionRoute route = ConnectionRoute.lan,
-  bool withEncryption = false,
-}) {
-  final connection = ServerConnection(
+WsServerConnection _makeConnection({required WsConnectionStatus status}) {
+  final connection = WsServerConnection(
     server: _testServer,
-    client: _FakeMobileServiceClient(),
-    currentRoute: route,
+    connection: _FakeWsConnection(),
+    client: _FakeWsBridgeClient(),
   );
   connection.status = status;
   return connection;
 }
 
-Widget _buildBadge(ServerConnection connection) {
+Widget _buildBadge(WsServerConnection connection) {
   return MaterialApp(
-    home: Scaffold(
-      body: ConnectionInfoBadge(connection: connection),
-    ),
+    home: Scaffold(body: ConnectionInfoBadge(connection: connection)),
   );
 }
 
 void main() {
-  testWidgets('ConnectionInfoBadge shows "LAN" for LAN route', (tester) async {
-    final connection = _makeConnection(
-      status: GrpcConnectionStatus.connected,
-      route: ConnectionRoute.lan,
-    );
-
-    await tester.pumpWidget(_buildBadge(connection));
-    await tester.pumpAndSettle();
-
-    expect(find.text('LAN'), findsOneWidget);
-  });
-
-  testWidgets('ConnectionInfoBadge shows "Bridge" for bridge route',
-      (tester) async {
-    final connection = _makeConnection(
-      status: GrpcConnectionStatus.connected,
-      route: ConnectionRoute.bridge,
-    );
+  testWidgets('ConnectionInfoBadge shows "Bridge" for connected connection', (
+    tester,
+  ) async {
+    final connection = _makeConnection(status: WsConnectionStatus.connected);
 
     await tester.pumpWidget(_buildBadge(connection));
     await tester.pumpAndSettle();
@@ -78,25 +64,8 @@ void main() {
     expect(find.text('Bridge'), findsOneWidget);
   });
 
-  testWidgets('ConnectionInfoBadge shows LAN icon for LAN route',
-      (tester) async {
-    final connection = _makeConnection(
-      status: GrpcConnectionStatus.connected,
-      route: ConnectionRoute.lan,
-    );
-
-    await tester.pumpWidget(_buildBadge(connection));
-    await tester.pumpAndSettle();
-
-    expect(find.byIcon(Icons.lan_outlined), findsOneWidget);
-  });
-
-  testWidgets('ConnectionInfoBadge shows cloud icon for bridge route',
-      (tester) async {
-    final connection = _makeConnection(
-      status: GrpcConnectionStatus.connected,
-      route: ConnectionRoute.bridge,
-    );
+  testWidgets('ConnectionInfoBadge shows cloud icon', (tester) async {
+    final connection = _makeConnection(status: WsConnectionStatus.connected);
 
     await tester.pumpWidget(_buildBadge(connection));
     await tester.pumpAndSettle();
@@ -104,11 +73,10 @@ void main() {
     expect(find.byIcon(Icons.cloud_outlined), findsOneWidget);
   });
 
-  testWidgets('ConnectionInfoBadge hides lock icon when no encryption',
-      (tester) async {
-    final connection = _makeConnection(
-      status: GrpcConnectionStatus.connected,
-    );
+  testWidgets('ConnectionInfoBadge hides lock icon when no encryption', (
+    tester,
+  ) async {
+    final connection = _makeConnection(status: WsConnectionStatus.connected);
     // No cipher or sharedSecret set -> hasEncryption = false.
 
     await tester.pumpWidget(_buildBadge(connection));
@@ -117,17 +85,18 @@ void main() {
     expect(find.byIcon(Icons.lock), findsNothing);
   });
 
-  testWidgets('ConnectionInfoBadge shows "LAN" for disconnected connection',
-      (tester) async {
-    final connection = _makeConnection(
-      status: GrpcConnectionStatus.disconnected,
-      route: ConnectionRoute.lan,
-    );
+  testWidgets(
+    'ConnectionInfoBadge shows "Bridge" for disconnected connection',
+    (tester) async {
+      final connection = _makeConnection(
+        status: WsConnectionStatus.disconnected,
+      );
 
-    await tester.pumpWidget(_buildBadge(connection));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(_buildBadge(connection));
+      await tester.pumpAndSettle();
 
-    // Route label is still based on currentRoute, even when disconnected.
-    expect(find.text('LAN'), findsOneWidget);
-  });
+      // Badge always shows "Bridge" regardless of status.
+      expect(find.text('Bridge'), findsOneWidget);
+    },
+  );
 }

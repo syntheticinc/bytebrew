@@ -51,8 +51,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(
-            FakeChatRepository(_testMessages),
+          sessionChatRepositoryProvider.overrideWith(
+            (ref, sessionId) => FakeChatRepository(_testMessages),
           ),
           sessionsProvider.overrideWith(
             () => FakeSessionsNotifier([_testSession]),
@@ -75,8 +75,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(
-            FakeChatRepository(_testMessages),
+          sessionChatRepositoryProvider.overrideWith(
+            (ref, sessionId) => FakeChatRepository(_testMessages),
           ),
           sessionsProvider.overrideWith(
             () => FakeSessionsNotifier([_testSession]),
@@ -95,8 +95,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(
-            FakeChatRepository(_testMessages),
+          sessionChatRepositoryProvider.overrideWith(
+            (ref, sessionId) => FakeChatRepository(_testMessages),
           ),
           sessionsProvider.overrideWith(
             () => FakeSessionsNotifier([_testSession]),
@@ -116,8 +116,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(
-            FakeChatRepository(_testMessages),
+          sessionChatRepositoryProvider.overrideWith(
+            (ref, sessionId) => FakeChatRepository(_testMessages),
           ),
           sessionsProvider.overrideWith(
             () => FakeSessionsNotifier([_testSession]),
@@ -137,7 +137,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(FakeChatRepository([])),
+          sessionChatRepositoryProvider.overrideWith(
+            (ref, sessionId) => FakeChatRepository([]),
+          ),
           sessionsProvider.overrideWith(
             () => FakeSessionsNotifier([_testSession]),
           ),

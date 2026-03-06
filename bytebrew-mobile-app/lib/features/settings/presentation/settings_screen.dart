@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/infrastructure/ws/ws_connection.dart';
+import '../../../core/infrastructure/ws/ws_connection_manager.dart';
+import '../../../core/infrastructure/ws/ws_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/status_indicator.dart';
 import '../application/settings_provider.dart';
@@ -18,7 +19,7 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final servers = ref.watch(serversProvider);
-    final wsStatus = ref.watch(wsConnectionProvider);
+    final manager = ref.watch(connectionManagerProvider);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
@@ -49,8 +50,8 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => context.push('/add-server'),
           ),
           const SizedBox(height: 16),
-          const _SectionHeader(label: 'CONNECTION'),
-          _ConnectionCard(theme: theme, isDark: isDark, wsStatus: wsStatus),
+          const _SectionHeader(label: 'BRIDGE'),
+          _ConnectionCard(theme: theme, isDark: isDark, manager: manager),
           const SizedBox(height: 16),
           const _SectionHeader(label: 'NOTIFICATIONS'),
           const NotificationToggles(),
@@ -73,16 +74,13 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   Future<void> _removeServer(WidgetRef ref, String serverId) async {
-    // Disconnect if this is the connected server.
-    final wsNotifier = ref.read(wsConnectionProvider.notifier);
-    wsNotifier.disconnect();
+    final manager = ref.read(connectionManagerProvider);
+    await manager.disconnectFromServer(serverId);
 
-    // Remove from persistent storage.
     final repo =
         ref.read(settingsRepositoryProvider) as LocalSettingsRepository;
     await repo.removeServer(serverId);
 
-    // Invalidate the servers provider so the list rebuilds.
     ref.invalidate(serversProvider);
   }
 }
@@ -111,29 +109,33 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-/// Card showing WebSocket connection status.
+/// Card showing bridge relay connection status.
 class _ConnectionCard extends StatelessWidget {
   const _ConnectionCard({
     required this.theme,
     required this.isDark,
-    required this.wsStatus,
+    required this.manager,
   });
 
   final ThemeData theme;
   final bool isDark;
-  final WsConnectionStatus wsStatus;
+  final WsConnectionManager manager;
 
   @override
   Widget build(BuildContext context) {
-    final isConnected = wsStatus == WsConnectionStatus.connected;
+    final connections = manager.connections;
+    final connectedCount = manager.activeConnections.length;
+    final totalCount = connections.length;
 
-    final statusColor = isConnected ? AppColors.statusActive : AppColors.shade3;
-    final statusText = switch (wsStatus) {
-      WsConnectionStatus.connected => 'Connected',
-      WsConnectionStatus.connecting => 'Connecting...',
-      WsConnectionStatus.error => 'Connection error',
-      WsConnectionStatus.disconnected => 'Not connected',
-    };
+    final hasConnections = totalCount > 0;
+    final allConnected = hasConnections && connectedCount == totalCount;
+
+    final statusColor = allConnected
+        ? AppColors.statusActive
+        : AppColors.shade3;
+    final statusText = !hasConnections
+        ? 'No servers'
+        : '$connectedCount / $totalCount connected';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -149,9 +151,9 @@ class _ConnectionCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.wifi, color: AppColors.shade3),
+                Icon(Icons.cloud, color: AppColors.shade3),
                 const SizedBox(width: 8),
-                Text('WebSocket', style: theme.textTheme.titleSmall),
+                Text('Bridge Relay', style: theme.textTheme.titleSmall),
               ],
             ),
             const SizedBox(height: 4),
@@ -169,7 +171,7 @@ class _ConnectionCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Connects to your CLI via WebSocket on the local network',
+              'Connects to your CLI servers via bridge relay',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: AppColors.shade3,
               ),

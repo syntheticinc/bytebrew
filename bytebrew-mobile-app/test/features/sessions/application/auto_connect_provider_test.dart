@@ -1,15 +1,15 @@
 import 'package:bytebrew_mobile/core/domain/server.dart';
-import 'package:bytebrew_mobile/core/infrastructure/grpc/connection_manager.dart';
-import 'package:bytebrew_mobile/core/infrastructure/grpc/grpc_providers.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection_manager.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_providers.dart';
 import 'package:bytebrew_mobile/features/sessions/application/auto_connect_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // ---------------------------------------------------------------------------
-// Fake ConnectionManager that records calls without real gRPC
+// Fake ConnectionManager that records calls without real WS
 // ---------------------------------------------------------------------------
 
-class _FakeConnectionManager extends ConnectionManager {
+class _FakeConnectionManager extends WsConnectionManager {
   _FakeConnectionManager() : super();
 
   final List<Server> connectedServers = [];
@@ -37,8 +37,7 @@ final _pairedServers = [
   Server(
     id: 'srv-1',
     name: 'MacBook Pro',
-    lanAddress: '192.168.1.50',
-    connectionMode: ConnectionMode.lan,
+    bridgeUrl: 'ws://bridge.bytebrew.ai:8080',
     isOnline: true,
     latencyMs: 5,
     pairedAt: _now.subtract(const Duration(days: 30)),
@@ -47,8 +46,7 @@ final _pairedServers = [
   Server(
     id: 'srv-2',
     name: 'Desktop PC',
-    lanAddress: '192.168.1.100',
-    connectionMode: ConnectionMode.lan,
+    bridgeUrl: 'ws://bridge.bytebrew.ai:8080',
     isOnline: true,
     latencyMs: 10,
     pairedAt: _now.subtract(const Duration(days: 7)),
@@ -65,19 +63,22 @@ void main() {
   // platform channel dependencies in unit tests, we test the ConnectionManager
   // logic directly and verify the provider integration pattern.
   // =========================================================================
-  group('sessionsAutoConnect (ConnectionManager integration)', () {
-    test('ConnectionManager.connectToAll connects provided servers', () async {
-      final manager = _FakeConnectionManager();
+  group('sessionsAutoConnect (WsConnectionManager integration)', () {
+    test(
+      'WsConnectionManager.connectToAll connects provided servers',
+      () async {
+        final manager = _FakeConnectionManager();
 
-      await manager.connectToAll(_pairedServers);
+        await manager.connectToAll(_pairedServers);
 
-      expect(manager.connectToAllCalled, isTrue);
-      expect(manager.connectedServers, hasLength(2));
-      expect(manager.connectedServers.first.id, 'srv-1');
-      expect(manager.connectedServers.last.id, 'srv-2');
-    });
+        expect(manager.connectToAllCalled, isTrue);
+        expect(manager.connectedServers, hasLength(2));
+        expect(manager.connectedServers.first.id, 'srv-1');
+        expect(manager.connectedServers.last.id, 'srv-2');
+      },
+    );
 
-    test('ConnectionManager.connectToAll handles empty list', () async {
+    test('WsConnectionManager.connectToAll handles empty list', () async {
       final manager = _FakeConnectionManager();
 
       await manager.connectToAll([]);
@@ -87,7 +88,7 @@ void main() {
     });
 
     test(
-      'ConnectionManager.connectToAll receives all servers including unpaired',
+      'WsConnectionManager.connectToAll receives all servers including unpaired',
       () async {
         final manager = _FakeConnectionManager();
 
@@ -96,8 +97,7 @@ void main() {
           Server(
             id: 'srv-3',
             name: 'Unpaired',
-            lanAddress: '192.168.1.200',
-            connectionMode: ConnectionMode.lan,
+            bridgeUrl: 'ws://bridge:8080',
             isOnline: false,
             latencyMs: 0,
             pairedAt: _now,
@@ -107,7 +107,7 @@ void main() {
 
         await manager.connectToAll(mixedServers);
 
-        // Our fake accepts all. Real ConnectionManager.connectToAll
+        // Our fake accepts all. Real WsConnectionManager.connectToAll
         // filters by deviceToken internally.
         expect(manager.connectedServers, hasLength(3));
       },
@@ -126,13 +126,11 @@ void main() {
       await container.read(sessionsAutoConnectProvider.future);
     });
 
-    test('ConnectionManager can be injected via provider override', () {
+    test('WsConnectionManager can be injected via provider override', () {
       final manager = _FakeConnectionManager();
 
       final container = ProviderContainer(
-        overrides: [
-          connectionManagerProvider.overrideWith((ref) => manager),
-        ],
+        overrides: [connectionManagerProvider.overrideWithValue(manager)],
       );
       addTearDown(container.dispose);
 

@@ -3,7 +3,11 @@ import { OnboardingStateStore } from '../../../infrastructure/onboarding/Onboard
 import { ByteBrewConfig } from '../../../infrastructure/config/ByteBrewConfig.js';
 import { QrPairingCodeGenerator } from '../../../infrastructure/mobile/QrPairingCodeGenerator.js';
 import { prompt } from '../../../infrastructure/auth/prompt.js';
-import type { GeneratePairingTokenResponse, ListDevicesResponse } from '../../../infrastructure/grpc/mobile_client.js';
+import type { GeneratePairingTokenResponse } from '../../../infrastructure/mobile/QrPairingCodeGenerator.js';
+
+interface ListDevicesResponse {
+  devices: Array<{ deviceId: string; deviceName: string; pairedAt: string; lastSeenAt: string }>;
+}
 
 const DEFAULT_BRIDGE_URL = 'bridge.bytebrew.ai:443';
 
@@ -32,10 +36,9 @@ export class MobilePairingBlock implements OnboardingBlock {
     this.createClient = createClient ?? MobilePairingBlock.defaultClientFactory;
   }
 
-  private static defaultClientFactory(address: string): MobilePairingClient {
-    // Lazy import to avoid loading gRPC at module level
-    const { MobileServiceClient } = require('../../../infrastructure/grpc/mobile_client.js');
-    return new MobileServiceClient(address);
+  private static defaultClientFactory(_address: string): MobilePairingClient {
+    // TODO: Rewrite to use local PairingService via Container (mobile_client.ts removed)
+    throw new Error('MobileServiceClient removed. Use PairingService via Bridge instead.');
   }
 
   check(): OnboardingCheckResult {

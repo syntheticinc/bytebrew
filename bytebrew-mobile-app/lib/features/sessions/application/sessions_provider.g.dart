@@ -8,18 +8,12 @@ part of 'sessions_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Provides the [SessionRepository] backed by the active WS connection.
-///
-/// Returns [WsSessionRepository] when WebSocket is connected,
-/// [EmptySessionRepository] otherwise.
+/// Provides the [SessionRepository] backed by gRPC via [ConnectionManager].
 
 @ProviderFor(sessionRepository)
 final sessionRepositoryProvider = SessionRepositoryProvider._();
 
-/// Provides the [SessionRepository] backed by the active WS connection.
-///
-/// Returns [WsSessionRepository] when WebSocket is connected,
-/// [EmptySessionRepository] otherwise.
+/// Provides the [SessionRepository] backed by gRPC via [ConnectionManager].
 
 final class SessionRepositoryProvider
     extends
@@ -29,10 +23,7 @@ final class SessionRepositoryProvider
           SessionRepository
         >
     with $Provider<SessionRepository> {
-  /// Provides the [SessionRepository] backed by the active WS connection.
-  ///
-  /// Returns [WsSessionRepository] when WebSocket is connected,
-  /// [EmptySessionRepository] otherwise.
+  /// Provides the [SessionRepository] backed by gRPC via [ConnectionManager].
   SessionRepositoryProvider._()
     : super(
         from: null,
@@ -67,7 +58,7 @@ final class SessionRepositoryProvider
   }
 }
 
-String _$sessionRepositoryHash() => r'e83e47bef64313a246fed189d06b34c44870673e';
+String _$sessionRepositoryHash() => r'8fe388777fbbadf90b2b2367dcd56a41b5aca898';
 
 /// Manages the list of agent sessions.
 ///

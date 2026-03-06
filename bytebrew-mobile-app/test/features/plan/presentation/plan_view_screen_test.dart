@@ -9,12 +9,8 @@ void main() {
   testWidgets('PlanViewScreen shows empty state when no plan', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          activePlanProvider('session-1').overrideWithValue(null),
-        ],
-        child: const MaterialApp(
-          home: PlanViewScreen(sessionId: 'session-1'),
-        ),
+        overrides: [activePlanProvider('session-1').overrideWithValue(null)],
+        child: const MaterialApp(home: PlanViewScreen(sessionId: 'session-1')),
       ),
     );
 
@@ -31,12 +27,8 @@ void main() {
   testWidgets('PlanViewScreen shows empty plan icon', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          activePlanProvider('session-1').overrideWithValue(null),
-        ],
-        child: const MaterialApp(
-          home: PlanViewScreen(sessionId: 'session-1'),
-        ),
+        overrides: [activePlanProvider('session-1').overrideWithValue(null)],
+        child: const MaterialApp(home: PlanViewScreen(sessionId: 'session-1')),
       ),
     );
 
@@ -69,12 +61,8 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          activePlanProvider('session-1').overrideWithValue(plan),
-        ],
-        child: const MaterialApp(
-          home: PlanViewScreen(sessionId: 'session-1'),
-        ),
+        overrides: [activePlanProvider('session-1').overrideWithValue(plan)],
+        child: const MaterialApp(home: PlanViewScreen(sessionId: 'session-1')),
       ),
     );
 
@@ -111,12 +99,8 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          activePlanProvider('session-1').overrideWithValue(plan),
-        ],
-        child: const MaterialApp(
-          home: PlanViewScreen(sessionId: 'session-1'),
-        ),
+        overrides: [activePlanProvider('session-1').overrideWithValue(plan)],
+        child: const MaterialApp(home: PlanViewScreen(sessionId: 'session-1')),
       ),
     );
 
@@ -127,8 +111,9 @@ void main() {
     expect(find.text('Step three'), findsOneWidget);
   });
 
-  testWidgets('PlanViewScreen shows check icon for completed steps',
-      (tester) async {
+  testWidgets('PlanViewScreen shows check icon for completed steps', (
+    tester,
+  ) async {
     const plan = PlanData(
       goal: 'Goal',
       steps: [
@@ -142,12 +127,8 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          activePlanProvider('session-1').overrideWithValue(plan),
-        ],
-        child: const MaterialApp(
-          home: PlanViewScreen(sessionId: 'session-1'),
-        ),
+        overrides: [activePlanProvider('session-1').overrideWithValue(plan)],
+        child: const MaterialApp(home: PlanViewScreen(sessionId: 'session-1')),
       ),
     );
 
@@ -156,8 +137,9 @@ void main() {
     expect(find.byIcon(Icons.check_circle), findsOneWidget);
   });
 
-  testWidgets('PlanViewScreen shows progress indicator for in-progress steps',
-      (tester) async {
+  testWidgets('PlanViewScreen shows progress indicator for in-progress steps', (
+    tester,
+  ) async {
     const plan = PlanData(
       goal: 'Goal',
       steps: [
@@ -171,12 +153,8 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          activePlanProvider('session-1').overrideWithValue(plan),
-        ],
-        child: const MaterialApp(
-          home: PlanViewScreen(sessionId: 'session-1'),
-        ),
+        overrides: [activePlanProvider('session-1').overrideWithValue(plan)],
+        child: const MaterialApp(home: PlanViewScreen(sessionId: 'session-1')),
       ),
     );
 
@@ -186,8 +164,9 @@ void main() {
     expect(find.text('In progress...'), findsOneWidget);
   });
 
-  testWidgets('PlanViewScreen shows circle icon for pending steps',
-      (tester) async {
+  testWidgets('PlanViewScreen shows circle icon for pending steps', (
+    tester,
+  ) async {
     const plan = PlanData(
       goal: 'Goal',
       steps: [
@@ -201,12 +180,8 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          activePlanProvider('session-1').overrideWithValue(plan),
-        ],
-        child: const MaterialApp(
-          home: PlanViewScreen(sessionId: 'session-1'),
-        ),
+        overrides: [activePlanProvider('session-1').overrideWithValue(plan)],
+        child: const MaterialApp(home: PlanViewScreen(sessionId: 'session-1')),
       ),
     );
 
@@ -234,12 +209,8 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          activePlanProvider('session-1').overrideWithValue(plan),
-        ],
-        child: const MaterialApp(
-          home: PlanViewScreen(sessionId: 'session-1'),
-        ),
+        overrides: [activePlanProvider('session-1').overrideWithValue(plan)],
+        child: const MaterialApp(home: PlanViewScreen(sessionId: 'session-1')),
       ),
     );
 
@@ -249,8 +220,9 @@ void main() {
     expect(find.text('50% complete  \u00b7  1/2 steps'), findsOneWidget);
   });
 
-  testWidgets('PlanViewScreen with all steps completed shows 100%',
-      (tester) async {
+  testWidgets('PlanViewScreen with all steps completed shows 100%', (
+    tester,
+  ) async {
     const plan = PlanData(
       goal: 'All done',
       steps: [
@@ -269,12 +241,8 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          activePlanProvider('session-1').overrideWithValue(plan),
-        ],
-        child: const MaterialApp(
-          home: PlanViewScreen(sessionId: 'session-1'),
-        ),
+        overrides: [activePlanProvider('session-1').overrideWithValue(plan)],
+        child: const MaterialApp(home: PlanViewScreen(sessionId: 'session-1')),
       ),
     );
 

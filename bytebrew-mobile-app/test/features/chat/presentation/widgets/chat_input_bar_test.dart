@@ -23,9 +23,9 @@ void main() {
     Widget buildWidget({bool enabled = true}) {
       return ProviderScope(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(fakeRepo),
-          sessionChatRepositoryProvider(_sessionId)
-              .overrideWithValue(fakeRepo),
+          sessionChatRepositoryProvider.overrideWith(
+            (ref, sessionId) => fakeRepo,
+          ),
         ],
         child: MaterialApp(
           home: Scaffold(

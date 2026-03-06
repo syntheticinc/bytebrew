@@ -5,13 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('NotificationToggles renders all three toggle titles',
-      (tester) async {
+  testWidgets('NotificationToggles renders all three toggle titles', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(
-          home: Scaffold(body: NotificationToggles()),
-        ),
+        child: MaterialApp(home: Scaffold(body: NotificationToggles())),
       ),
     );
 
@@ -25,9 +24,7 @@ void main() {
   testWidgets('NotificationToggles renders subtitles', (tester) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(
-          home: Scaffold(body: NotificationToggles()),
-        ),
+        child: MaterialApp(home: Scaffold(body: NotificationToggles())),
       ),
     );
 
@@ -41,9 +38,7 @@ void main() {
   testWidgets('All switches are initially on', (tester) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(
-          home: Scaffold(body: NotificationToggles()),
-        ),
+        child: MaterialApp(home: Scaffold(body: NotificationToggles())),
       ),
     );
 
@@ -61,9 +56,7 @@ void main() {
   testWidgets('Tapping Ask User toggle turns it off', (tester) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(
-          home: Scaffold(body: NotificationToggles()),
-        ),
+        child: MaterialApp(home: Scaffold(body: NotificationToggles())),
       ),
     );
 
@@ -74,9 +67,9 @@ void main() {
     await tester.pumpAndSettle();
 
     // Verify the switch changed.
-    final switches = tester.widgetList<SwitchListTile>(
-      find.byType(SwitchListTile),
-    ).toList();
+    final switches = tester
+        .widgetList<SwitchListTile>(find.byType(SwitchListTile))
+        .toList();
 
     // Ask User should be off.
     expect(switches[0].value, isFalse);
@@ -88,9 +81,7 @@ void main() {
   testWidgets('Tapping Task completed toggle turns it off', (tester) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(
-          home: Scaffold(body: NotificationToggles()),
-        ),
+        child: MaterialApp(home: Scaffold(body: NotificationToggles())),
       ),
     );
 
@@ -99,9 +90,9 @@ void main() {
     await tester.tap(find.text('Task completed'));
     await tester.pumpAndSettle();
 
-    final switches = tester.widgetList<SwitchListTile>(
-      find.byType(SwitchListTile),
-    ).toList();
+    final switches = tester
+        .widgetList<SwitchListTile>(find.byType(SwitchListTile))
+        .toList();
 
     expect(switches[0].value, isTrue);
     expect(switches[1].value, isFalse);
@@ -111,9 +102,7 @@ void main() {
   testWidgets('Tapping Errors toggle turns it off', (tester) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(
-          home: Scaffold(body: NotificationToggles()),
-        ),
+        child: MaterialApp(home: Scaffold(body: NotificationToggles())),
       ),
     );
 
@@ -122,9 +111,9 @@ void main() {
     await tester.tap(find.text('Errors'));
     await tester.pumpAndSettle();
 
-    final switches = tester.widgetList<SwitchListTile>(
-      find.byType(SwitchListTile),
-    ).toList();
+    final switches = tester
+        .widgetList<SwitchListTile>(find.byType(SwitchListTile))
+        .toList();
 
     expect(switches[0].value, isTrue);
     expect(switches[1].value, isTrue);
@@ -134,9 +123,7 @@ void main() {
   testWidgets('Double-tapping restores original state', (tester) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(
-          home: Scaffold(body: NotificationToggles()),
-        ),
+        child: MaterialApp(home: Scaffold(body: NotificationToggles())),
       ),
     );
 
@@ -148,15 +135,16 @@ void main() {
     await tester.tap(find.text('Ask User prompts'));
     await tester.pumpAndSettle();
 
-    final switches = tester.widgetList<SwitchListTile>(
-      find.byType(SwitchListTile),
-    ).toList();
+    final switches = tester
+        .widgetList<SwitchListTile>(find.byType(SwitchListTile))
+        .toList();
 
     expect(switches[0].value, isTrue);
   });
 
-  testWidgets('NotificationToggles with overridden initial state',
-      (tester) async {
+  testWidgets('NotificationToggles with overridden initial state', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -168,17 +156,15 @@ void main() {
             ),
           ),
         ],
-        child: const MaterialApp(
-          home: Scaffold(body: NotificationToggles()),
-        ),
+        child: const MaterialApp(home: Scaffold(body: NotificationToggles())),
       ),
     );
 
     await tester.pumpAndSettle();
 
-    final switches = tester.widgetList<SwitchListTile>(
-      find.byType(SwitchListTile),
-    ).toList();
+    final switches = tester
+        .widgetList<SwitchListTile>(find.byType(SwitchListTile))
+        .toList();
 
     expect(switches[0].value, isFalse); // askUser
     expect(switches[1].value, isTrue); // taskCompleted

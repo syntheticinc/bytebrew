@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:bytebrew_mobile/core/domain/server.dart';
 import 'package:bytebrew_mobile/features/pairing/application/pairing_provider.dart';
 import 'package:bytebrew_mobile/features/pairing/domain/pairing_repository.dart';
@@ -12,16 +14,20 @@ class _FakePairingRepository implements PairingRepository {
   _FakePairingRepository({this.shouldSucceed = true});
 
   final bool shouldSucceed;
-  String? lastAddress;
-  String? lastCode;
+  String? lastBridgeUrl;
+  String? lastServerId;
+  String? lastPairingToken;
 
   @override
   Future<Server> pair({
-    required String serverAddress,
-    required String pairingCode,
+    required String bridgeUrl,
+    required String serverId,
+    required String pairingToken,
+    Uint8List? serverPublicKey,
   }) async {
-    lastAddress = serverAddress;
-    lastCode = pairingCode;
+    lastBridgeUrl = bridgeUrl;
+    lastServerId = serverId;
+    lastPairingToken = pairingToken;
 
     if (!shouldSucceed) {
       throw Exception('Pairing failed: invalid code');
@@ -30,8 +36,7 @@ class _FakePairingRepository implements PairingRepository {
     return Server(
       id: 'paired-srv',
       name: 'Paired Server',
-      lanAddress: serverAddress,
-      connectionMode: ConnectionMode.lan,
+      bridgeUrl: bridgeUrl,
       isOnline: true,
       latencyMs: 5,
       pairedAt: DateTime.now(),
@@ -49,9 +54,7 @@ void main() {
       final fakeRepo = _FakePairingRepository();
 
       final container = ProviderContainer(
-        overrides: [
-          pairingRepositoryProvider.overrideWithValue(fakeRepo),
-        ],
+        overrides: [pairingRepositoryProvider.overrideWithValue(fakeRepo)],
       );
       addTearDown(container.dispose);
 
@@ -64,24 +67,26 @@ void main() {
       final fakeRepo = _FakePairingRepository();
 
       final container = ProviderContainer(
-        overrides: [
-          pairingRepositoryProvider.overrideWithValue(fakeRepo),
-        ],
+        overrides: [pairingRepositoryProvider.overrideWithValue(fakeRepo)],
       );
       addTearDown(container.dispose);
 
-      final server = await container.read(pairDeviceProvider.notifier).pair(
-        serverAddress: '192.168.1.10',
-        pairingCode: '123456',
-      );
+      final server = await container
+          .read(pairDeviceProvider.notifier)
+          .pair(
+            bridgeUrl: 'ws://bridge:8080',
+            serverId: 'srv-1',
+            pairingToken: '123456',
+          );
 
       expect(server.name, 'Paired Server');
-      expect(server.lanAddress, '192.168.1.10');
+      expect(server.bridgeUrl, 'ws://bridge:8080');
       expect(server.deviceToken, 'token-123');
 
       // Verify repository received correct args.
-      expect(fakeRepo.lastAddress, '192.168.1.10');
-      expect(fakeRepo.lastCode, '123456');
+      expect(fakeRepo.lastBridgeUrl, 'ws://bridge:8080');
+      expect(fakeRepo.lastServerId, 'srv-1');
+      expect(fakeRepo.lastPairingToken, '123456');
 
       // State should be AsyncData with the server.
       final state = container.read(pairDeviceProvider);
@@ -94,9 +99,7 @@ void main() {
       final states = <AsyncValue<Server?>>[];
 
       final container = ProviderContainer(
-        overrides: [
-          pairingRepositoryProvider.overrideWithValue(fakeRepo),
-        ],
+        overrides: [pairingRepositoryProvider.overrideWithValue(fakeRepo)],
       );
       addTearDown(container.dispose);
 
@@ -105,17 +108,23 @@ void main() {
         states.add(next);
       });
 
-      await container.read(pairDeviceProvider.notifier).pair(
-        serverAddress: '192.168.1.10',
-        pairingCode: '123456',
-      );
+      await container
+          .read(pairDeviceProvider.notifier)
+          .pair(
+            bridgeUrl: 'ws://bridge:8080',
+            serverId: 'srv-1',
+            pairingToken: '123456',
+          );
 
       // Should have gone through: loading -> data(server)
       expect(states.any((s) => s is AsyncLoading<Server?>), isTrue);
       expect(
         states.last,
-        isA<AsyncData<Server?>>()
-            .having((s) => s.value?.id, 'server id', 'paired-srv'),
+        isA<AsyncData<Server?>>().having(
+          (s) => s.value?.id,
+          'server id',
+          'paired-srv',
+        ),
       );
     });
 
@@ -123,17 +132,18 @@ void main() {
       final fakeRepo = _FakePairingRepository(shouldSucceed: false);
 
       final container = ProviderContainer(
-        overrides: [
-          pairingRepositoryProvider.overrideWithValue(fakeRepo),
-        ],
+        overrides: [pairingRepositoryProvider.overrideWithValue(fakeRepo)],
       );
       addTearDown(container.dispose);
 
       try {
-        await container.read(pairDeviceProvider.notifier).pair(
-          serverAddress: '192.168.1.10',
-          pairingCode: '000000',
-        );
+        await container
+            .read(pairDeviceProvider.notifier)
+            .pair(
+              bridgeUrl: 'ws://bridge:8080',
+              serverId: 'srv-1',
+              pairingToken: '000000',
+            );
         fail('Expected an exception');
       } on Exception catch (e) {
         expect(e.toString(), contains('Pairing failed'));

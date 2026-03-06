@@ -8,27 +8,27 @@ part of 'auto_connect_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Automatically connects to the first saved server when first read.
+/// Automatically connects to all saved servers when first read.
 ///
-/// This provider is kept alive so the connection persists for the app's
+/// This provider is kept alive so the connections persist for the app's
 /// lifetime. It should be watched from the sessions screen to trigger
 /// on first navigation.
 
 @ProviderFor(sessionsAutoConnect)
 final sessionsAutoConnectProvider = SessionsAutoConnectProvider._();
 
-/// Automatically connects to the first saved server when first read.
+/// Automatically connects to all saved servers when first read.
 ///
-/// This provider is kept alive so the connection persists for the app's
+/// This provider is kept alive so the connections persist for the app's
 /// lifetime. It should be watched from the sessions screen to trigger
 /// on first navigation.
 
 final class SessionsAutoConnectProvider
     extends $FunctionalProvider<AsyncValue<void>, void, FutureOr<void>>
     with $FutureModifier<void>, $FutureProvider<void> {
-  /// Automatically connects to the first saved server when first read.
+  /// Automatically connects to all saved servers when first read.
   ///
-  /// This provider is kept alive so the connection persists for the app's
+  /// This provider is kept alive so the connections persist for the app's
   /// lifetime. It should be watched from the sessions screen to trigger
   /// on first navigation.
   SessionsAutoConnectProvider._()
@@ -57,4 +57,4 @@ final class SessionsAutoConnectProvider
 }
 
 String _$sessionsAutoConnectHash() =>
-    r'9bfcd48d10b7e958d0f3553dd59b2f904940630e';
+    r'71e16a99305455a4dca1af0d7967bd3ac9799d72';

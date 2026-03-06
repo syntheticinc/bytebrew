@@ -2,22 +2,25 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:grpc/grpc.dart' hide Server;
 
 import 'package:bytebrew_mobile/core/domain/mobile_session.dart';
 import 'package:bytebrew_mobile/core/domain/server.dart';
 import 'package:bytebrew_mobile/core/domain/session.dart';
-import 'package:bytebrew_mobile/core/infrastructure/grpc/connection_manager.dart';
-import 'package:bytebrew_mobile/core/infrastructure/grpc/mobile_service_client.dart';
-import 'package:bytebrew_mobile/features/sessions/infrastructure/grpc_session_repository.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_bridge_client.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart'
+    hide WsConnectionStatus;
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection_manager.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_types.dart';
+import 'package:bytebrew_mobile/features/sessions/infrastructure/ws_session_repository.dart';
+
+import '../../../helpers/fakes.dart';
 
 // ---------------------------------------------------------------------------
 // Fakes
 // ---------------------------------------------------------------------------
 
-/// Fake [MobileServiceClient] that returns a configurable list of sessions.
-class FakeMobileServiceClient implements MobileServiceClient {
-  bool closeCalled = false;
+/// Fake [WsBridgeClient] that returns a configurable list of sessions.
+class _FakeWsBridgeClient implements WsBridgeClient {
   bool listSessionsCalled = false;
 
   /// Sessions to return from [listSessions].
@@ -36,27 +39,9 @@ class FakeMobileServiceClient implements MobileServiceClient {
   }
 
   @override
-  Future<void> close() async {
-    closeCalled = true;
-  }
-
-  @override
-  Future<PairResult> pair({
-    required String token,
-    required String deviceName,
-    Uint8List? mobilePublicKey,
-  }) async {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<ListSessionsResult> listSessions({
-    required String deviceToken,
-  }) async {
+  Future<ListSessionsResult> listSessions({required String deviceToken}) async {
     listSessionsCalled = true;
-    if (listSessionsError != null) {
-      throw listSessionsError!;
-    }
+    if (listSessionsError != null) throw listSessionsError!;
     return ListSessionsResult(
       sessions: sessionsToReturn,
       serverName: 'Test Server',
@@ -65,40 +50,16 @@ class FakeMobileServiceClient implements MobileServiceClient {
   }
 
   @override
-  Stream<SessionEvent> subscribeSession({
-    required String deviceToken,
-    required String sessionId,
-    String? lastEventId,
-  }) {
-    return const Stream.empty();
-  }
+  Future<void> dispose() async {}
 
   @override
-  Future<SendCommandResult> sendNewTask({
-    required String deviceToken,
-    required String sessionId,
-    required String task,
-  }) async {
-    return const SendCommandResult(success: true);
-  }
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
+/// Fake WsConnection stub.
+class _FakeWsConnection implements WsConnection {
   @override
-  Future<SendCommandResult> sendAskUserReply({
-    required String deviceToken,
-    required String sessionId,
-    required String question,
-    required String answer,
-  }) async {
-    return const SendCommandResult(success: true);
-  }
-
-  @override
-  Future<SendCommandResult> cancelSession({
-    required String deviceToken,
-    required String sessionId,
-  }) async {
-    return const SendCommandResult(success: true);
-  }
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 /// Helper to create a [MobileSession] for tests.
@@ -124,7 +85,7 @@ MobileSession _mobileSess({
   );
 }
 
-/// Creates a test server with a device token for use with ConnectionManager.
+/// Creates a test server with a device token.
 Server _testServer({
   String id = 'srv-1',
   String name = 'Dev Workstation',
@@ -133,8 +94,7 @@ Server _testServer({
   return Server(
     id: id,
     name: name,
-    lanAddress: '192.168.1.100',
-    connectionMode: ConnectionMode.lan,
+    bridgeUrl: 'ws://bridge:8080',
     isOnline: true,
     latencyMs: 10,
     pairedAt: DateTime(2026, 1, 1),
@@ -147,22 +107,27 @@ Server _testServer({
 // ---------------------------------------------------------------------------
 
 void main() {
-  group('GrpcSessionRepository', () {
-    late ConnectionManager connectionManager;
-    late FakeMobileServiceClient fakeClient;
-    late GrpcSessionRepository repo;
+  group('WsSessionRepository', () {
+    late FakeConnectionManager connectionManager;
+    late _FakeWsBridgeClient fakeClient;
+    late WsSessionRepository repo;
 
     setUp(() {
-      fakeClient = FakeMobileServiceClient();
-      connectionManager = ConnectionManager(
-        clientFactory: (_) => fakeClient,
-      );
-      repo = GrpcSessionRepository(connectionManager: connectionManager);
+      fakeClient = _FakeWsBridgeClient();
+      connectionManager = FakeConnectionManager();
+      repo = WsSessionRepository(connectionManager: connectionManager);
     });
 
-    tearDown(() async {
-      await connectionManager.disconnectAll();
-    });
+    /// Adds a fake connected server to the connection manager.
+    void _addConnectedServer({Server? server}) {
+      final s = server ?? _testServer();
+      final conn = WsServerConnection(
+        server: s,
+        connection: _FakeWsConnection(),
+        client: fakeClient,
+      )..status = WsConnectionStatus.connected;
+      connectionManager.addFakeConnection(s.id, conn);
+    }
 
     group('listSessions', () {
       test('returns empty list when no servers are connected', () async {
@@ -187,7 +152,7 @@ void main() {
           ),
         ];
 
-        await connectionManager.connectToServer(_testServer());
+        _addConnectedServer();
 
         final sessions = await repo.listSessions();
 
@@ -203,7 +168,7 @@ void main() {
           _mobileSess(sessionId: 'sess-empty-task', currentTask: ''),
         ];
 
-        await connectionManager.connectToServer(_testServer());
+        _addConnectedServer();
 
         final sessions = await repo.listSessions();
 
@@ -218,7 +183,7 @@ void main() {
           ),
         ];
 
-        await connectionManager.connectToServer(_testServer());
+        _addConnectedServer();
 
         final sessions = await repo.listSessions();
 
@@ -230,7 +195,7 @@ void main() {
           _mobileSess(sessionId: 'sess-ask', hasAskUser: true),
         ];
 
-        await connectionManager.connectToServer(_testServer());
+        _addConnectedServer();
 
         final sessions = await repo.listSessions();
 
@@ -239,44 +204,44 @@ void main() {
     });
 
     group('status mapping', () {
-      Future<SessionStatus> _statusFor(MobileSessionState grpcState) async {
+      Future<SessionStatus> statusFor(MobileSessionState state) async {
         fakeClient.sessionsToReturn = [
-          _mobileSess(sessionId: 'sess-status', status: grpcState),
+          _mobileSess(sessionId: 'sess-status', status: state),
         ];
 
-        await connectionManager.connectToServer(_testServer());
+        _addConnectedServer();
 
         final sessions = await repo.listSessions();
         return sessions.first.status;
       }
 
       test('maps active to active', () async {
-        final status = await _statusFor(MobileSessionState.active);
+        final status = await statusFor(MobileSessionState.active);
         expect(status, SessionStatus.active);
       });
 
       test('maps idle to idle', () async {
-        final status = await _statusFor(MobileSessionState.idle);
+        final status = await statusFor(MobileSessionState.idle);
         expect(status, SessionStatus.idle);
       });
 
       test('maps needsAttention to needsAttention', () async {
-        final status = await _statusFor(MobileSessionState.needsAttention);
+        final status = await statusFor(MobileSessionState.needsAttention);
         expect(status, SessionStatus.needsAttention);
       });
 
       test('maps completed to idle', () async {
-        final status = await _statusFor(MobileSessionState.completed);
+        final status = await statusFor(MobileSessionState.completed);
         expect(status, SessionStatus.idle);
       });
 
       test('maps failed to idle', () async {
-        final status = await _statusFor(MobileSessionState.failed);
+        final status = await statusFor(MobileSessionState.failed);
         expect(status, SessionStatus.idle);
       });
 
       test('maps unspecified to idle', () async {
-        final status = await _statusFor(MobileSessionState.unspecified);
+        final status = await statusFor(MobileSessionState.unspecified);
         expect(status, SessionStatus.idle);
       });
     });
@@ -302,7 +267,7 @@ void main() {
           ),
         ];
 
-        await connectionManager.connectToServer(_testServer());
+        _addConnectedServer();
 
         final sessions = await repo.listSessions();
 
@@ -325,7 +290,7 @@ void main() {
           ),
         ];
 
-        await connectionManager.connectToServer(_testServer());
+        _addConnectedServer();
 
         final sessions = await repo.listSessions();
 
@@ -335,20 +300,10 @@ void main() {
     });
 
     group('error handling', () {
-      test('silently skips server that throws GrpcError', () async {
-        fakeClient.listSessionsError = GrpcError.unavailable('down');
-
-        await connectionManager.connectToServer(_testServer());
-
-        final sessions = await repo.listSessions();
-
-        expect(sessions, isEmpty);
-      });
-
-      test('silently skips server that throws generic Exception', () async {
+      test('silently skips server that throws Exception', () async {
         fakeClient.listSessionsError = Exception('network failure');
 
-        await connectionManager.connectToServer(_testServer());
+        _addConnectedServer();
 
         final sessions = await repo.listSessions();
 
@@ -371,7 +326,7 @@ void main() {
           ),
         ];
 
-        await connectionManager.connectToServer(_testServer());
+        _addConnectedServer();
 
         final sessions = await repo.listSessions();
 
@@ -387,7 +342,7 @@ void main() {
           ),
         ];
 
-        await connectionManager.connectToServer(_testServer());
+        _addConnectedServer();
 
         final sessions = await repo.listSessions();
 

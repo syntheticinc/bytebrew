@@ -176,14 +176,6 @@ func (h *FlowHandler) runSupervisorMode(
 	}
 	defer h.cleanupFlowResources(req.SessionId, activeFlow)
 
-	// Wire message handler so mobile SendCommand can inject messages into this session.
-	h.flowRegistry.SetMessageHandler(req.SessionId, &supervisorMobileHandler{
-		sessionID: req.SessionId,
-		router:    h.agentPoolAdapter,
-		eventBus:  eventBus,
-		storage:   h.sessionStorage,
-	})
-
 	// 8. Publish initial user message
 	if req.Task != "" {
 		_ = eventBus.Publish(orchestrator.OrchestratorEvent{
@@ -225,25 +217,6 @@ func (h *FlowHandler) runSupervisorMode(
 
 	slog.InfoContext(ctx, "[Supervisor] session ended", "session_id", req.SessionId)
 	return nil
-}
-
-// supervisorMobileHandler routes mobile-injected messages through the same
-// path as CLI messages (EventBus / AgentPool interrupt).
-type supervisorMobileHandler struct {
-	sessionID string
-	router    MessageRouter
-	eventBus  *orchestrator.SessionEventBus
-	storage   SessionStorage
-}
-
-func (m *supervisorMobileHandler) HandleNewTask(task string) error {
-	routeUserMessage(m.sessionID, task, m.router, m.eventBus)
-	touchSessionActivity(context.Background(), m.storage, m.sessionID)
-	return nil
-}
-
-func (m *supervisorMobileHandler) HandleAskUserReply(_, _ string) error {
-	return fmt.Errorf("ask_user reply from mobile not yet supported in supervisor mode")
 }
 
 // workCheckerAdapter adapts WorkManagerForOrchestrator to orchestrator.ActiveWorkChecker.

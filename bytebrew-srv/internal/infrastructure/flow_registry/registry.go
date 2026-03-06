@@ -24,18 +24,11 @@ type FlowSubscriber interface {
 	OnError(err error) error
 }
 
-// MessageHandler handles injected messages for a flow session
-type MessageHandler interface {
-	HandleNewTask(task string) error
-	HandleAskUserReply(question, answer string) error
-}
-
 // flowEntry holds a flow and its associated cancel function.
 // The cancel func is stored here (not in domain) to keep ActiveFlow pure.
 type flowEntry struct {
-	flow           *domain.ActiveFlow
-	cancel         context.CancelFunc
-	messageHandler MessageHandler // Optional: for mobile command injection
+	flow   *domain.ActiveFlow
+	cancel context.CancelFunc
 }
 
 // InMemoryRegistry in-memory реализация flow registry
@@ -169,16 +162,6 @@ func (r *InMemoryRegistry) ListActiveFlows() []*domain.ActiveFlow {
 	return flows
 }
 
-// SetMessageHandler sets a message handler for a session (called by FlowHandler during flow execution)
-func (r *InMemoryRegistry) SetMessageHandler(sessionID string, handler MessageHandler) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if entry, exists := r.flows[sessionID]; exists {
-		entry.messageHandler = handler
-	}
-}
-
 // CancelFlow cancels the flow for the given session ID
 func (r *InMemoryRegistry) CancelFlow(sessionID string) error {
 	r.mu.RLock()
@@ -193,40 +176,6 @@ func (r *InMemoryRegistry) CancelFlow(sessionID string) error {
 		entry.cancel()
 	}
 	return nil
-}
-
-// InjectMessage injects a new task message into an active session
-func (r *InMemoryRegistry) InjectMessage(sessionID string, task string) error {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	entry, exists := r.flows[sessionID]
-	if !exists {
-		return fmt.Errorf("flow not found for session: %s", sessionID)
-	}
-
-	if entry.messageHandler == nil {
-		return fmt.Errorf("no message handler for session: %s", sessionID)
-	}
-
-	return entry.messageHandler.HandleNewTask(task)
-}
-
-// InjectAskUserReply injects an ask_user reply into an active session
-func (r *InMemoryRegistry) InjectAskUserReply(sessionID string, question, answer string) error {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	entry, exists := r.flows[sessionID]
-	if !exists {
-		return fmt.Errorf("flow not found for session: %s", sessionID)
-	}
-
-	if entry.messageHandler == nil {
-		return fmt.Errorf("no message handler for session: %s", sessionID)
-	}
-
-	return entry.messageHandler.HandleAskUserReply(question, answer)
 }
 
 // BroadcastEvent отправляет событие всем подписчикам

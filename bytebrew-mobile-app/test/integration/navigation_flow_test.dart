@@ -18,8 +18,7 @@ import '../helpers/fakes.dart';
 final _dummyServer = Server(
   id: 'srv-test',
   name: 'Test',
-  lanAddress: '127.0.0.1',
-  connectionMode: ConnectionMode.lan,
+  bridgeUrl: 'ws://bridge:8080',
   isOnline: true,
   latencyMs: 1,
   pairedAt: DateTime(2026),
@@ -40,8 +39,9 @@ Widget _buildNavApp({
       authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
       sessionsProvider.overrideWith(() => FakeSessionsNotifier(sessions ?? [])),
       groupedSessionsProvider.overrideWithValue({}),
-      settingsRepositoryProvider
-          .overrideWithValue(FakeSettingsRepository([_dummyServer])),
+      settingsRepositoryProvider.overrideWithValue(
+        FakeSettingsRepository([_dummyServer]),
+      ),
       serversProvider.overrideWithValue([_dummyServer]),
     ],
     child: const _NavTestApp(),

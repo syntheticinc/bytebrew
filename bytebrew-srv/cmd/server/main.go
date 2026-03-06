@@ -16,22 +16,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/delivery/grpc"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure"
-	bbconfig "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/config"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/flow_registry"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/mobile"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/portfile"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/usecase/list_mobile_sessions"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/usecase/mobile_command"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/usecase/pair_device"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/logger"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
 // Build info is set via ldflags at build time.
@@ -235,91 +226,7 @@ func main() {
 		log.Fatalf("Failed to create flow handler: %v", err)
 	}
 
-	// Create MobileService components
-	serverName := getServerName()
-	serverID := getOrCreateServerID(dataDir)
-
-	tokenStore := mobile.NewInMemoryPairingTokenStore()
-
-	// Persistent device store (SQLite) — survives server restarts
-	mobileDBPath := filepath.Join(dataDir, "mobile.db")
-	mobileDB, err := gormOpen(mobileDBPath)
-	if err != nil {
-		log.Fatalf("Failed to open mobile database: %v", err)
-	}
-	deviceStore, err := mobile.NewSQLiteDeviceStore(mobileDB)
-	if err != nil {
-		log.Fatalf("Failed to create device store: %v", err)
-	}
-
-	eventBuffer := mobile.NewEventBuffer(0) // default 1000 events
-	eventBroadcaster := mobile.NewEventBroadcaster(eventBuffer)
-
-	cryptoService := mobile.NewCryptoService()
-	pairDeviceUC, err := pair_device.New(tokenStore, deviceStore, cryptoService, serverName, serverID)
-	if err != nil {
-		log.Fatalf("Failed to create pair_device usecase: %v", err)
-	}
-
-	listSessionsUC, err := list_mobile_sessions.New(flowRegistry)
-	if err != nil {
-		log.Fatalf("Failed to create list_mobile_sessions usecase: %v", err)
-	}
-
-	mobileCommandUC, err := mobile_command.New(flowRegistry, flowRegistry, flowRegistry)
-	if err != nil {
-		log.Fatalf("Failed to create mobile_command usecase: %v", err)
-	}
-
-	pairLimiter := mobile.NewSlidingWindowRateLimiter(5, time.Minute)
-	tokenLimiter := mobile.NewSlidingWindowRateLimiter(2, 30*time.Second)
-	go pairLimiter.StartCleanup(ctx)
-	go tokenLimiter.StartCleanup(ctx)
-
-	pairingWaiter := mobile.NewPairingWaiter()
-
-	mobileHandler, err := grpc.NewMobileHandler(grpc.MobileHandlerConfig{
-		PairDevice:    pairDeviceUC,
-		ListSessions:  listSessionsUC,
-		MobileCommand: mobileCommandUC,
-		EventSub:      eventBroadcaster,
-		DeviceAuth:    deviceStore,
-		PairLimiter:   pairLimiter,
-		TokenLimiter:  tokenLimiter,
-		PairingWaiter: pairingWaiter,
-		ServerName:    serverName,
-		ServerID:      serverID,
-		ServerPort:    int32(grpcServer.ActualPort()),
-	})
-	if err != nil {
-		log.Fatalf("Failed to create mobile handler: %v", err)
-	}
-
-	grpcServer.RegisterServices(flowHandler, nil, nil, mobileHandler)
-
-	// Bridge connector: outbound connection to bridge relay (optional).
-	// Enabled via BRIDGE_URL environment variable.
-	bridgeURL := os.Getenv("BRIDGE_URL")
-	if bridgeURL == "" {
-		bridgeURL = bbconfig.ReadBridgeURL()
-	}
-	if bridgeURL != "" {
-		connector := grpc.NewBridgeConnector(bridgeURL, serverID, serverName, cfg.Security.BridgeToken)
-		go func() {
-			if err := connector.Connect(ctx); err != nil {
-				slog.Error("bridge connector failed", "error", err)
-			}
-		}()
-		defer func() {
-			if err := connector.Close(); err != nil {
-				slog.Error("bridge connector close error", "error", err)
-			}
-		}()
-		loggerInstance.InfoContext(ctx, "Bridge connector enabled",
-			"bridge_url", bridgeURL,
-			"server_id", serverID,
-		)
-	}
+	grpcServer.RegisterServices(flowHandler, nil, nil)
 
 	// In managed mode, emit READY protocol before starting
 	if *managed {
@@ -490,41 +397,3 @@ llm:
 	return os.WriteFile(path, []byte(content), 0644)
 }
 
-// getServerName returns a human-readable name for this server (hostname).
-func getServerName() string {
-	name, err := os.Hostname()
-	if err != nil {
-		return "ByteBrew Server"
-	}
-	return name
-}
-
-// getOrCreateServerID returns a persistent server ID.
-// If dataDir is set (managed mode), it reads/creates from file.
-// Otherwise generates a new UUID per startup.
-func getOrCreateServerID(dataDir string) string {
-	if dataDir == "" {
-		return uuid.New().String()
-	}
-
-	idFile := filepath.Join(dataDir, "server_id")
-	data, err := os.ReadFile(idFile)
-	if err == nil && len(data) > 0 {
-		return string(data)
-	}
-
-	id := uuid.New().String()
-	_ = os.WriteFile(idFile, []byte(id), 0644)
-	return id
-}
-
-// gormOpen opens a SQLite database with GORM using sensible defaults.
-func gormOpen(dbPath string) (*gorm.DB, error) {
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
-		Logger: gormlogger.Discard,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("open sqlite %s: %w", dbPath, err)
-	}
-	return db, nil
-}

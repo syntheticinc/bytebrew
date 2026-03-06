@@ -118,9 +118,7 @@ void main() {
   group('serversProvider', () {
     test('returns servers from overridden value', () {
       final container = ProviderContainer(
-        overrides: [
-          serversProvider.overrideWithValue([]),
-        ],
+        overrides: [serversProvider.overrideWithValue([])],
       );
       addTearDown(container.dispose);
 

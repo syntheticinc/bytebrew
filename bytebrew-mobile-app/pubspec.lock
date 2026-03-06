@@ -218,7 +218,7 @@ packages:
     source: hosted
     version: "7.0.1"
   fixnum:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: fixnum
       sha256: b6dc7065e46c974bc7c5f143080a6764ec7a4be6da1285ececdc37be96de53be
@@ -362,22 +362,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.3.3"
-  google_identity_services_web:
-    dependency: transitive
-    description:
-      name: google_identity_services_web
-      sha256: "5d187c46dc59e02646e10fe82665fc3884a9b71bc1c90c2b8b749316d33ee454"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.3.3+1"
-  googleapis_auth:
-    dependency: transitive
-    description:
-      name: googleapis_auth
-      sha256: b81fe352cc4a330b3710d2b7ad258d9bcef6f909bb759b306bf42973a7d046db
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.0"
   graphs:
     dependency: transitive
     description:
@@ -386,14 +370,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.3.2"
-  grpc:
-    dependency: "direct main"
-    description:
-      name: grpc
-      sha256: "2dde469ddd8bbd7a33a0765da417abe1ad2142813efce3a86c512041294e2b26"
-      url: "https://pub.dev"
-    source: hosted
-    version: "4.1.0"
   highlight:
     dependency: "direct main"
     description:
@@ -418,14 +394,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.6.0"
-  http2:
-    dependency: transitive
-    description:
-      name: http2
-      sha256: "382d3aefc5bd6dc68c6b892d7664f29b5beb3251611ae946a98d35158a82bbfa"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.3.1"
   http_multi_server:
     dependency: transitive
     description:
@@ -695,14 +663,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.0.5"
-  protobuf:
-    dependency: "direct main"
-    description:
-      name: protobuf
-      sha256: "68645b24e0716782e58948f8467fd42a880f255096a821f9e7d0ec625b00c84d"
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.1.0"
   pub_semver:
     dependency: transitive
     description:

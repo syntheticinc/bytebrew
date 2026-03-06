@@ -9,8 +9,7 @@ final _testServers = [
   Server(
     id: 'srv-1',
     name: 'MacBook Pro',
-    lanAddress: '192.168.1.50',
-    connectionMode: ConnectionMode.lan,
+    bridgeUrl: 'ws://bridge.bytebrew.ai:8080',
     isOnline: true,
     latencyMs: 5,
     pairedAt: DateTime.now().subtract(const Duration(days: 30)),
@@ -18,9 +17,7 @@ final _testServers = [
   Server(
     id: 'srv-2',
     name: 'Desktop PC',
-    lanAddress: '192.168.1.100',
-    bridgeUrl: 'bridge.bytebrew.ai',
-    connectionMode: ConnectionMode.bridge,
+    bridgeUrl: 'ws://bridge.bytebrew.ai:8080',
     isOnline: false,
     latencyMs: 45,
     pairedAt: DateTime.now().subtract(const Duration(days: 7)),

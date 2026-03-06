@@ -109,8 +109,9 @@ void main() {
             () => FakeSessionsNotifier([_testSession]),
           ),
           // Override session-specific chat repository to return our fake.
-          sessionChatRepositoryProvider('session-1')
-              .overrideWithValue(fakeRepo),
+          sessionChatRepositoryProvider(
+            'session-1',
+          ).overrideWithValue(fakeRepo),
         ],
       );
       addTearDown(container.dispose);
@@ -132,14 +133,16 @@ void main() {
           sessionsProvider.overrideWith(
             () => FakeSessionsNotifier([_testSession]),
           ),
-          sessionChatRepositoryProvider('session-1')
-              .overrideWithValue(fakeRepo),
+          sessionChatRepositoryProvider(
+            'session-1',
+          ).overrideWithValue(fakeRepo),
         ],
       );
       addTearDown(container.dispose);
 
-      final messages =
-          await container.read(chatMessagesProvider('session-1').future);
+      final messages = await container.read(
+        chatMessagesProvider('session-1').future,
+      );
       expect(messages, isEmpty);
     });
 
@@ -154,8 +157,9 @@ void main() {
           sessionsProvider.overrideWith(
             () => FakeSessionsNotifier([_testSession]),
           ),
-          sessionChatRepositoryProvider('session-1')
-              .overrideWithValue(fakeRepo),
+          sessionChatRepositoryProvider(
+            'session-1',
+          ).overrideWithValue(fakeRepo),
         ],
       );
       addTearDown(container.dispose);
@@ -182,8 +186,9 @@ void main() {
           sessionsProvider.overrideWith(
             () => FakeSessionsNotifier([_testSession]),
           ),
-          sessionChatRepositoryProvider('session-1')
-              .overrideWithValue(fakeRepo),
+          sessionChatRepositoryProvider(
+            'session-1',
+          ).overrideWithValue(fakeRepo),
         ],
       );
       addTearDown(container.dispose);
@@ -231,8 +236,9 @@ void main() {
           sessionsProvider.overrideWith(
             () => FakeSessionsNotifier([_testSession]),
           ),
-          sessionChatRepositoryProvider('session-1')
-              .overrideWithValue(FakeChatRepository(_testMessages)),
+          sessionChatRepositoryProvider(
+            'session-1',
+          ).overrideWithValue(FakeChatRepository(_testMessages)),
         ],
       );
       addTearDown(container.dispose);
@@ -251,8 +257,9 @@ void main() {
           sessionsProvider.overrideWith(
             () => FakeSessionsNotifier([_testSession]),
           ),
-          sessionChatRepositoryProvider('session-1')
-              .overrideWithValue(FakeChatRepository(messagesWithPlan)),
+          sessionChatRepositoryProvider(
+            'session-1',
+          ).overrideWithValue(FakeChatRepository(messagesWithPlan)),
         ],
       );
       addTearDown(container.dispose);
@@ -276,8 +283,9 @@ void main() {
           sessionsProvider.overrideWith(
             () => FakeSessionsNotifier([_testSession]),
           ),
-          sessionChatRepositoryProvider('session-1')
-              .overrideWithValue(FakeChatRepository(_testMessages)),
+          sessionChatRepositoryProvider(
+            'session-1',
+          ).overrideWithValue(FakeChatRepository(_testMessages)),
         ],
       );
       addTearDown(container.dispose);
@@ -296,8 +304,9 @@ void main() {
           sessionsProvider.overrideWith(
             () => FakeSessionsNotifier([_testSession]),
           ),
-          sessionChatRepositoryProvider('session-1')
-              .overrideWithValue(FakeChatRepository(messagesWithAskUser)),
+          sessionChatRepositoryProvider(
+            'session-1',
+          ).overrideWithValue(FakeChatRepository(messagesWithAskUser)),
         ],
       );
       addTearDown(container.dispose);
@@ -333,8 +342,9 @@ void main() {
           sessionsProvider.overrideWith(
             () => FakeSessionsNotifier([_testSession]),
           ),
-          sessionChatRepositoryProvider('session-1')
-              .overrideWithValue(FakeChatRepository(answeredMessages)),
+          sessionChatRepositoryProvider(
+            'session-1',
+          ).overrideWithValue(FakeChatRepository(answeredMessages)),
         ],
       );
       addTearDown(container.dispose);

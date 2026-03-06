@@ -1,17 +1,15 @@
-import 'package:bytebrew_mobile/app.dart';
 import 'package:bytebrew_mobile/features/settings/presentation/widgets/appearance_section.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('AppearanceSection renders theme label and options',
-      (tester) async {
+  testWidgets('AppearanceSection renders theme label and options', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(
-          home: Scaffold(body: AppearanceSection()),
-        ),
+        child: MaterialApp(home: Scaffold(body: AppearanceSection())),
       ),
     );
 
@@ -26,9 +24,7 @@ void main() {
   testWidgets('AppearanceSection renders font size label', (tester) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(
-          home: Scaffold(body: AppearanceSection()),
-        ),
+        child: MaterialApp(home: Scaffold(body: AppearanceSection())),
       ),
     );
 
@@ -42,9 +38,7 @@ void main() {
     // AppThemeMode defaults to ThemeMode.dark in build().
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(
-          home: Scaffold(body: AppearanceSection()),
-        ),
+        child: MaterialApp(home: Scaffold(body: AppearanceSection())),
       ),
     );
 
@@ -61,9 +55,7 @@ void main() {
   testWidgets('Tapping Light changes theme mode', (tester) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(
-          home: Scaffold(body: AppearanceSection()),
-        ),
+        child: MaterialApp(home: Scaffold(body: AppearanceSection())),
       ),
     );
 
@@ -82,9 +74,7 @@ void main() {
   testWidgets('Tapping System changes theme mode', (tester) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(
-          home: Scaffold(body: AppearanceSection()),
-        ),
+        child: MaterialApp(home: Scaffold(body: AppearanceSection())),
       ),
     );
 
@@ -102,9 +92,7 @@ void main() {
   testWidgets('Theme mode persists across rebuilds', (tester) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(
-          home: Scaffold(body: AppearanceSection()),
-        ),
+        child: MaterialApp(home: Scaffold(body: AppearanceSection())),
       ),
     );
 

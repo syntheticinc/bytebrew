@@ -1,5 +1,10 @@
+import 'package:bytebrew_mobile/core/domain/server.dart';
 import 'package:bytebrew_mobile/core/domain/session.dart';
-import 'package:bytebrew_mobile/features/chat/application/connection_provider.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_bridge_client.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart'
+    hide WsConnectionStatus;
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection_manager.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_providers.dart';
 import 'package:bytebrew_mobile/features/sessions/application/sessions_provider.dart';
 import 'package:bytebrew_mobile/features/sessions/presentation/sessions_screen.dart';
 import 'package:flutter/material.dart';
@@ -45,16 +50,40 @@ final _testGrouped = <SessionStatus, List<Session>>{
   SessionStatus.idle: [_testSessions[2]],
 };
 
+/// Creates a [WsConnectionManager] with or without active connections.
+WsConnectionManager _makeManager({bool hasActiveConnection = false}) {
+  final manager = FakeConnectionManager();
+  if (hasActiveConnection) {
+    final server = Server(
+      id: 'srv-1',
+      name: 'Test',
+      bridgeUrl: 'ws://bridge:8080',
+      isOnline: true,
+      pairedAt: DateTime.now(),
+      deviceToken: 'tok',
+    );
+    final conn = WsServerConnection(
+      server: server,
+      connection: _FakeWsConnection(),
+      client: _FakeWsBridgeClient(),
+    )..status = WsConnectionStatus.connected;
+    manager.addFakeConnection(server.id, conn);
+  }
+  return manager;
+}
+
 Widget _buildSessionsScreen({
   List<Session>? sessions,
   Map<SessionStatus, List<Session>>? grouped,
-  WsConnectionStatus wsStatus = WsConnectionStatus.disconnected,
+  bool hasActiveConnection = false,
 }) {
   return ProviderScope(
     overrides: [
       sessionsProvider.overrideWith(() => FakeSessionsNotifier(sessions ?? [])),
       groupedSessionsProvider.overrideWithValue(grouped ?? {}),
-      wsConnectionProvider.overrideWith(() => FakeWsConnection(wsStatus)),
+      connectionManagerProvider.overrideWithValue(
+        _makeManager(hasActiveConnection: hasActiveConnection),
+      ),
     ],
     child: const MaterialApp(home: SessionsScreen()),
   );
@@ -95,14 +124,14 @@ void main() {
       expect(find.text('Your agent sessions will appear here'), findsOneWidget);
     });
 
-    testWidgets('TC-SESS-03: Live Session card appears when WS is connected', (
+    testWidgets('TC-SESS-03: Live Session card appears when connected', (
       tester,
     ) async {
       await tester.pumpWidget(
         _buildSessionsScreen(
           sessions: _testSessions,
           grouped: _testGrouped,
-          wsStatus: WsConnectionStatus.connected,
+          hasActiveConnection: true,
         ),
       );
 
@@ -150,4 +179,16 @@ void main() {
       expect(find.text('api-gateway'), findsOneWidget);
     });
   });
+}
+
+/// Minimal fake WsConnection that does nothing.
+class _FakeWsConnection implements WsConnection {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// Minimal fake WsBridgeClient that does nothing.
+class _FakeWsBridgeClient implements WsBridgeClient {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

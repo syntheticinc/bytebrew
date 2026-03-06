@@ -20,15 +20,14 @@ ChatMessage _makeLifecycleMessage(String content) {
 
 Widget _buildWidget(ChatMessage message) {
   return MaterialApp(
-    home: Scaffold(
-      body: AgentLifecycleWidget(message: message),
-    ),
+    home: Scaffold(body: AgentLifecycleWidget(message: message)),
   );
 }
 
 void main() {
-  testWidgets('AgentLifecycleWidget shows "Agent started" for spawn events',
-      (tester) async {
+  testWidgets('AgentLifecycleWidget shows "Agent started" for spawn events', (
+    tester,
+  ) async {
     final message = _makeLifecycleMessage('Agent started: CodeReviewer');
 
     await tester.pumpWidget(_buildWidget(message));
@@ -39,19 +38,21 @@ void main() {
   });
 
   testWidgets(
-      'AgentLifecycleWidget shows "Agent completed" for completed events',
-      (tester) async {
-    final message = _makeLifecycleMessage('Agent completed: TestRunner');
+    'AgentLifecycleWidget shows "Agent completed" for completed events',
+    (tester) async {
+      final message = _makeLifecycleMessage('Agent completed: TestRunner');
 
-    await tester.pumpWidget(_buildWidget(message));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(_buildWidget(message));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Agent completed'), findsOneWidget);
-    expect(find.text('TestRunner'), findsOneWidget);
-  });
+      expect(find.text('Agent completed'), findsOneWidget);
+      expect(find.text('TestRunner'), findsOneWidget);
+    },
+  );
 
-  testWidgets('AgentLifecycleWidget shows "Agent failed" for failure events',
-      (tester) async {
+  testWidgets('AgentLifecycleWidget shows "Agent failed" for failure events', (
+    tester,
+  ) async {
     final message = _makeLifecycleMessage('Agent failed: BuildAgent');
 
     await tester.pumpWidget(_buildWidget(message));
@@ -61,8 +62,9 @@ void main() {
     expect(find.text('BuildAgent'), findsOneWidget);
   });
 
-  testWidgets('AgentLifecycleWidget shows play icon for started events',
-      (tester) async {
+  testWidgets('AgentLifecycleWidget shows play icon for started events', (
+    tester,
+  ) async {
     final message = _makeLifecycleMessage('Agent started: Worker');
 
     await tester.pumpWidget(_buildWidget(message));
@@ -71,8 +73,9 @@ void main() {
     expect(find.byIcon(Icons.play_circle_outline), findsOneWidget);
   });
 
-  testWidgets('AgentLifecycleWidget shows check icon for completed events',
-      (tester) async {
+  testWidgets('AgentLifecycleWidget shows check icon for completed events', (
+    tester,
+  ) async {
     final message = _makeLifecycleMessage('Agent completed: Worker');
 
     await tester.pumpWidget(_buildWidget(message));
@@ -81,8 +84,9 @@ void main() {
     expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
   });
 
-  testWidgets('AgentLifecycleWidget shows cancel icon for failed events',
-      (tester) async {
+  testWidgets('AgentLifecycleWidget shows cancel icon for failed events', (
+    tester,
+  ) async {
     final message = _makeLifecycleMessage('Agent failed: Worker');
 
     await tester.pumpWidget(_buildWidget(message));
@@ -92,22 +96,24 @@ void main() {
   });
 
   testWidgets(
-      'AgentLifecycleWidget shows expand icon when description is present',
-      (tester) async {
-    final message = _makeLifecycleMessage(
-      'Agent started: CodeReviewer\nReviewing pull request #42',
-    );
+    'AgentLifecycleWidget shows expand icon when description is present',
+    (tester) async {
+      final message = _makeLifecycleMessage(
+        'Agent started: CodeReviewer\nReviewing pull request #42',
+      );
 
-    await tester.pumpWidget(_buildWidget(message));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(_buildWidget(message));
+      await tester.pumpAndSettle();
 
-    // Expand icon should be visible (initially collapsed).
-    expect(find.byIcon(Icons.expand_more), findsOneWidget);
-    expect(find.byIcon(Icons.expand_less), findsNothing);
-  });
+      // Expand icon should be visible (initially collapsed).
+      expect(find.byIcon(Icons.expand_more), findsOneWidget);
+      expect(find.byIcon(Icons.expand_less), findsNothing);
+    },
+  );
 
-  testWidgets('AgentLifecycleWidget hides expand icon when no description',
-      (tester) async {
+  testWidgets('AgentLifecycleWidget hides expand icon when no description', (
+    tester,
+  ) async {
     final message = _makeLifecycleMessage('Agent started: SimpleAgent');
 
     await tester.pumpWidget(_buildWidget(message));
@@ -127,10 +133,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Description should not be visible initially.
-    expect(
-      find.text('Analyzing code quality and test coverage'),
-      findsNothing,
-    );
+    expect(find.text('Analyzing code quality and test coverage'), findsNothing);
 
     // Tap to expand.
     await tester.tap(find.byType(InkWell));
@@ -163,8 +166,9 @@ void main() {
     expect(find.text('Doing some work'), findsNothing);
   });
 
-  testWidgets('AgentLifecycleWidget handles content without colon',
-      (tester) async {
+  testWidgets('AgentLifecycleWidget handles content without colon', (
+    tester,
+  ) async {
     final message = _makeLifecycleMessage('Agent started');
 
     await tester.pumpWidget(_buildWidget(message));

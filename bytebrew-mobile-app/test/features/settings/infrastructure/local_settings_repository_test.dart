@@ -13,9 +13,9 @@ void main() {
     // Mock FlutterSecureStorage method channel so delete/write/read work in tests.
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
-      (methodCall) async => null,
-    );
+          const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+          (methodCall) async => null,
+        );
 
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
@@ -36,8 +36,7 @@ void main() {
     expect(servers, hasLength(1));
     expect(servers.first.id, 'srv-1');
     expect(servers.first.name, 'Test Server');
-    expect(servers.first.lanAddress, '192.168.1.100');
-    expect(servers.first.connectionMode, ConnectionMode.lan);
+    expect(servers.first.bridgeUrl, 'ws://bridge:8080');
     expect(servers.first.isOnline, true);
   });
 
@@ -92,9 +91,7 @@ void main() {
     final server = Server(
       id: 'srv-bridge',
       name: 'Bridge Server',
-      lanAddress: '10.0.0.1',
-      bridgeUrl: 'https://bridge.bytebrew.ai',
-      connectionMode: ConnectionMode.bridge,
+      bridgeUrl: 'wss://bridge.bytebrew.ai',
       isOnline: false,
       latencyMs: 42,
       pairedAt: DateTime.utc(2026, 1, 15, 10, 30),
@@ -104,32 +101,18 @@ void main() {
 
     final restored = repo.getServers().first;
     expect(restored.id, 'srv-bridge');
-    expect(restored.bridgeUrl, 'https://bridge.bytebrew.ai');
-    expect(restored.connectionMode, ConnectionMode.bridge);
+    expect(restored.bridgeUrl, 'wss://bridge.bytebrew.ai');
     expect(restored.isOnline, false);
     expect(restored.latencyMs, 42);
     expect(restored.pairedAt, DateTime.utc(2026, 1, 15, 10, 30));
   });
-
-  test(
-    'server with null bridgeUrl serializes and deserializes correctly',
-    () async {
-      final server = _makeServer(id: 'srv-no-bridge', name: 'No Bridge');
-
-      await repo.addServer(server);
-
-      final restored = repo.getServers().first;
-      expect(restored.bridgeUrl, isNull);
-    },
-  );
 
   test('pairedAt preserves time precision', () async {
     final pairedAt = DateTime.utc(2026, 2, 28, 14, 30, 45, 123);
     final server = Server(
       id: 'srv-time',
       name: 'Time Test',
-      lanAddress: '192.168.1.1',
-      connectionMode: ConnectionMode.lan,
+      bridgeUrl: 'ws://bridge:8080',
       isOnline: true,
       latencyMs: 10,
       pairedAt: pairedAt,
@@ -145,8 +128,7 @@ void main() {
 Server _makeServer({required String id, required String name}) => Server(
   id: id,
   name: name,
-  lanAddress: '192.168.1.100',
-  connectionMode: ConnectionMode.lan,
+  bridgeUrl: 'ws://bridge:8080',
   isOnline: true,
   latencyMs: 10,
   pairedAt: DateTime.utc(2026, 1, 1),

@@ -53,9 +53,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Find the container with the accent background.
-      final containers = tester.widgetList<Container>(
-        find.byType(Container),
-      );
+      final containers = tester.widgetList<Container>(find.byType(Container));
       final accentContainer = containers.where((c) {
         final decoration = c.decoration;
         if (decoration is BoxDecoration) {
@@ -96,12 +94,11 @@ void main() {
       await tester.pumpWidget(buildWidget(message));
       await tester.pumpAndSettle();
 
-      final containers = tester.widgetList<Container>(
-        find.byType(Container),
-      );
+      final containers = tester.widgetList<Container>(find.byType(Container));
       final bubbleContainer = containers.firstWhere((c) {
         final decoration = c.decoration;
-        if (decoration is BoxDecoration && decoration.color == AppColors.accent) {
+        if (decoration is BoxDecoration &&
+            decoration.color == AppColors.accent) {
           return decoration.borderRadius != null;
         }
         return false;

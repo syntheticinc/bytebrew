@@ -3,26 +3,46 @@ import 'dart:async';
 import 'package:bytebrew_mobile/core/domain/ask_user.dart';
 import 'package:bytebrew_mobile/core/domain/chat_message.dart';
 import 'package:bytebrew_mobile/core/domain/plan.dart';
-import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_providers.dart';
 import 'package:bytebrew_mobile/features/chat/domain/chat_repository.dart';
 import 'package:bytebrew_mobile/features/chat/infrastructure/empty_chat_repository.dart';
+import 'package:bytebrew_mobile/features/chat/infrastructure/ws_chat_repository.dart';
+import 'package:bytebrew_mobile/features/sessions/application/sessions_provider.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'chat_provider.g.dart';
 
+/// Provides a default [ChatRepository].
+///
+/// Returns [EmptyChatRepository] by default. Session-specific repositories
+/// are created via [sessionChatRepositoryProvider].
+@riverpod
+ChatRepository chatRepository(Ref ref) {
+  return const EmptyChatRepository();
+}
+
 /// Resolves the [ChatRepository] for a specific [sessionId].
 ///
-/// Returns the WS-backed repository when connected, [EmptyChatRepository]
-/// otherwise.
+/// Looks up the session to find its serverId, then creates a
+/// [WsChatRepository] connected via [WsConnectionManager].
+/// Falls back to [EmptyChatRepository] if the session is not found.
 @riverpod
 ChatRepository sessionChatRepository(Ref ref, String sessionId) {
-  final status = ref.watch(wsConnectionProvider);
-  if (status != WsConnectionStatus.connected) {
-    return const EmptyChatRepository();
-  }
-  final notifier = ref.read(wsConnectionProvider.notifier);
-  final repo = notifier.repository;
-  return repo ?? const EmptyChatRepository();
+  final sessionsAsync = ref.watch(sessionsProvider);
+  final session = sessionsAsync.whenOrNull(
+    data: (sessions) => sessions.where((s) => s.id == sessionId).firstOrNull,
+  );
+  if (session == null) return const EmptyChatRepository();
+
+  final manager = ref.read(connectionManagerProvider);
+  final repo = WsChatRepository(
+    connectionManager: manager,
+    serverId: session.serverId,
+    sessionId: sessionId,
+  );
+  repo.subscribe();
+  ref.onDispose(repo.dispose);
+  return repo;
 }
 
 /// Manages chat messages for a given session.

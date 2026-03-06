@@ -93,18 +93,11 @@ func (s *Server) RegisterServices(
 	flowHandler FlowServiceHandler,
 	indexingHandler IndexingServiceHandler,
 	clientOpsHandler ClientOperationsServiceHandler,
-	mobileHandler MobileServiceHandler,
 ) {
 	// Register FlowService
 	if flowHandler != nil {
 		pb.RegisterFlowServiceServer(s.grpcServer, flowHandler)
 		s.logger.Info("FlowService registered")
-	}
-
-	// Register MobileService
-	if mobileHandler != nil {
-		pb.RegisterMobileServiceServer(s.grpcServer, mobileHandler)
-		s.logger.Info("MobileService registered")
 	}
 
 	// IndexingService will be implemented as separate gRPC service (see task 003)
@@ -161,8 +154,3 @@ type FlowServiceHandler interface {
 }
 type IndexingServiceHandler interface{}
 type ClientOperationsServiceHandler interface{}
-
-// MobileServiceHandler defines the interface for MobileService gRPC handler
-type MobileServiceHandler interface {
-	pb.MobileServiceServer
-}

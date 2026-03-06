@@ -144,6 +144,11 @@ class PlanWidget extends StatelessWidget {
           shape: BoxShape.circle,
         ),
       ),
+      PlanStepStatus.failed => const Icon(
+        Icons.cancel,
+        size: 16,
+        color: AppColors.statusNeedsAttention,
+      ),
     };
   }
 }

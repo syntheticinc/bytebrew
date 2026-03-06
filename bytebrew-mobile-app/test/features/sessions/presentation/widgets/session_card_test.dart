@@ -116,17 +116,13 @@ void main() {
       expect(find.textContaining('ago'), findsOneWidget);
     });
 
-    testWidgets('needsAttention status has accent left border', (
-      tester,
-    ) async {
+    testWidgets('needsAttention status has accent left border', (tester) async {
       await tester.pumpWidget(buildWidget(needsAttentionSession));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
       // Find the inner container with the left border decoration.
-      final containers = tester.widgetList<Container>(
-        find.byType(Container),
-      );
+      final containers = tester.widgetList<Container>(find.byType(Container));
       final borderedContainer = containers.where((c) {
         final decoration = c.decoration;
         if (decoration is BoxDecoration && decoration.border != null) {
@@ -146,9 +142,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      final containers = tester.widgetList<Container>(
-        find.byType(Container),
-      );
+      final containers = tester.widgetList<Container>(find.byType(Container));
       final borderedContainer = containers.where((c) {
         final decoration = c.decoration;
         if (decoration is BoxDecoration && decoration.border != null) {
@@ -169,9 +163,7 @@ void main() {
 
       // Idle status uses BorderSide.none for the left border.
       // Verify no container has a 2px wide left border.
-      final containers = tester.widgetList<Container>(
-        find.byType(Container),
-      );
+      final containers = tester.widgetList<Container>(find.byType(Container));
       final borderedContainer = containers.where((c) {
         final decoration = c.decoration;
         if (decoration is BoxDecoration && decoration.border != null) {

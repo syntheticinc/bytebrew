@@ -1,11 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/infrastructure/ws/ws_connection.dart';
+import '../../../core/infrastructure/ws/ws_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../sessions/application/sessions_provider.dart';
 import '../../settings/application/settings_provider.dart';
@@ -40,6 +42,12 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> {
 
   /// Full token from QR scan (bypasses 6-digit code fields).
   String? _qrToken;
+
+  /// Server ID from QR scan.
+  String? _qrServerId;
+
+  /// Server public key from QR scan (base64).
+  String? _qrServerPublicKey;
 
   String get _code => _controllers.map((c) => c.text).join();
 
@@ -91,9 +99,11 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> {
     // callbacks from the QR scanner (fires on multiple frames).
     _isLoading = true;
 
-    // QR contains full server address and pairing token -- connect directly.
+    // QR contains bridge URL, server ID and pairing token -- connect directly.
     _qrToken = data.pairingToken;
-    _addressController.text = data.lanAddress;
+    _addressController.text = data.bridgeUrl;
+    _qrServerId = data.serverId;
+    _qrServerPublicKey = data.serverPublicKey;
 
     setState(() {});
     _onConnect();
@@ -114,9 +124,17 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> {
 
     try {
       debugPrint('[AddServer] Starting pair...');
+      final serverPublicKey = _qrServerPublicKey != null
+          ? base64Decode(_qrServerPublicKey!)
+          : null;
       final server = await ref
           .read(pairDeviceProvider.notifier)
-          .pair(serverAddress: address, pairingCode: pairingCode);
+          .pair(
+            bridgeUrl: address,
+            serverId: _qrServerId ?? '',
+            pairingToken: pairingCode,
+            serverPublicKey: serverPublicKey,
+          );
       debugPrint('[AddServer] Pair success: ${server.id}');
       if (!mounted) return;
 
@@ -127,10 +145,10 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> {
       // Navigate immediately.
       context.go('/sessions');
 
-      // Connect via WebSocket in background (fire-and-forget).
+      // Connect via ConnectionManager in background (fire-and-forget).
       debugPrint('[AddServer] Starting background WS connect...');
-      final wsNotifier = ref.read(wsConnectionProvider.notifier);
-      unawaited(wsNotifier.connect(server.wsUrl));
+      final manager = ref.read(connectionManagerProvider);
+      unawaited(manager.connectToServer(server));
     } catch (e, st) {
       debugPrint('[AddServer] ERROR: $e');
       debugPrint('[AddServer] Stack: $st');
@@ -141,6 +159,8 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> {
         setState(() {
           _isLoading = false;
           _qrToken = null;
+          _qrServerId = null;
+          _qrServerPublicKey = null;
         });
       }
     }
@@ -504,10 +524,10 @@ class _SecurityInfo extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.wifi, size: 14, color: AppColors.shade3),
+            Icon(Icons.lock_outline, size: 14, color: AppColors.shade3),
             const SizedBox(width: 4),
             Text(
-              'Local network connection',
+              'Encrypted connection via bridge relay',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: AppColors.shade3,
               ),
@@ -516,7 +536,7 @@ class _SecurityInfo extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Connects to your CLI via WebSocket on the local network',
+          'End-to-end encrypted connection through a secure relay',
           style: theme.textTheme.bodySmall?.copyWith(
             color: AppColors.shade3.withValues(alpha: 0.7),
           ),

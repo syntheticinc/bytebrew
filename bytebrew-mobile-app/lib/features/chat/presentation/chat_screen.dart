@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/domain/chat_message.dart';
 import '../../../core/domain/session.dart';
-import '../../../core/infrastructure/ws/ws_connection.dart';
+import '../../../core/infrastructure/ws/ws_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/status_indicator.dart';
 import '../../sessions/application/sessions_provider.dart';
@@ -110,8 +110,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   /// Builds a connection info badge showing WS connection status.
   Widget? _buildConnectionBadge() {
-    final status = ref.watch(wsConnectionProvider);
-    return ConnectionInfoBadge(status: status);
+    final manager = ref.watch(connectionManagerProvider);
+    final connections = manager.activeConnections;
+    if (connections.isEmpty) return null;
+
+    // Show badge for the first active connection.
+    return ConnectionInfoBadge(connection: connections.first);
   }
 
   Widget _buildMessageList(

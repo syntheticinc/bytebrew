@@ -5,9 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   Widget buildTestWidget() {
-    return const ProviderScope(
-      child: MaterialApp(home: AddServerScreen()),
-    );
+    return const ProviderScope(child: MaterialApp(home: AddServerScreen()));
   }
 
   testWidgets('AddServerScreen renders AppBar with title', (tester) async {
@@ -25,8 +23,9 @@ void main() {
     expect(find.text('bytebrew mobile-pair'), findsOneWidget);
   });
 
-  testWidgets('AddServerScreen renders QR scan mode by default',
-      (tester) async {
+  testWidgets('AddServerScreen renders QR scan mode by default', (
+    tester,
+  ) async {
     await tester.pumpWidget(buildTestWidget());
     await tester.pumpAndSettle();
 
@@ -35,8 +34,9 @@ void main() {
     expect(find.text('Manual Code'), findsOneWidget);
   });
 
-  testWidgets('AddServerScreen shows manual code form after switching mode',
-      (tester) async {
+  testWidgets('AddServerScreen shows manual code form after switching mode', (
+    tester,
+  ) async {
     await tester.pumpWidget(buildTestWidget());
     await tester.pumpAndSettle();
 
@@ -49,8 +49,9 @@ void main() {
     expect(find.text('Connect'), findsOneWidget);
   });
 
-  testWidgets('AddServerScreen shows address hint in manual mode',
-      (tester) async {
+  testWidgets('AddServerScreen shows address hint in manual mode', (
+    tester,
+  ) async {
     await tester.pumpWidget(buildTestWidget());
     await tester.pumpAndSettle();
 
@@ -60,8 +61,9 @@ void main() {
     expect(find.text('e.g. 192.168.1.5'), findsOneWidget);
   });
 
-  testWidgets('Connect button is disabled when form is incomplete',
-      (tester) async {
+  testWidgets('Connect button is disabled when form is incomplete', (
+    tester,
+  ) async {
     await tester.pumpWidget(buildTestWidget());
     await tester.pumpAndSettle();
 
@@ -81,32 +83,33 @@ void main() {
 
     // Scroll to make security info visible if needed.
     await tester.scrollUntilVisible(
-      find.text('End-to-end encrypted'),
+      find.text('Encrypted connection via bridge relay'),
       200,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('End-to-end encrypted'), findsOneWidget);
+    expect(find.text('Encrypted connection via bridge relay'), findsOneWidget);
     expect(
-      find.text('Connection secured with X25519 key exchange'),
+      find.text('End-to-end encrypted connection through a secure relay'),
       findsOneWidget,
     );
   });
 
-  testWidgets('AddServerScreen shows lock icon in security section',
-      (tester) async {
+  testWidgets('AddServerScreen shows lock icon in security section', (
+    tester,
+  ) async {
     await tester.pumpWidget(buildTestWidget());
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.text('End-to-end encrypted'),
+      find.text('Encrypted connection via bridge relay'),
       200,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
 
-    expect(find.byIcon(Icons.lock), findsOneWidget);
+    expect(find.byIcon(Icons.lock_outline), findsOneWidget);
   });
 
   testWidgets('Entering address enables part of the form', (tester) async {

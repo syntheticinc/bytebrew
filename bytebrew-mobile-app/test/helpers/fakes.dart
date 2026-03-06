@@ -6,9 +6,9 @@ import 'package:bytebrew_mobile/core/domain/chat_message.dart';
 import 'package:bytebrew_mobile/core/domain/session.dart';
 import 'package:bytebrew_mobile/features/auth/domain/auth_repository.dart';
 import 'package:bytebrew_mobile/features/auth/infrastructure/token_storage.dart';
-import 'package:bytebrew_mobile/features/chat/application/connection_provider.dart';
 import 'package:bytebrew_mobile/features/chat/domain/chat_repository.dart';
 import 'package:bytebrew_mobile/core/domain/server.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection_manager.dart';
 import 'package:bytebrew_mobile/features/sessions/application/sessions_provider.dart';
 import 'package:bytebrew_mobile/features/settings/domain/settings_repository.dart';
 
@@ -24,6 +24,12 @@ class FakeSettingsRepository implements SettingsRepository {
 
   @override
   List<Server> getServers() => _servers;
+
+  @override
+  Future<List<Server>> getServersWithKeys() async => _servers;
+
+  @override
+  Future<void> addServer(Server server) async {}
 
   @override
   Future<void> removeServer(String id) async {}
@@ -204,29 +210,29 @@ class StreamableFakeAgentChatRepository extends StreamableFakeChatRepository {
   }
 }
 
-/// Fake [WsConnection] notifier that allows setting [WsConnectionStatus]
-/// directly without a real WebSocket.
-class FakeWsConnection extends WsConnection {
-  FakeWsConnection([this._initialStatus = WsConnectionStatus.disconnected]);
+/// Fake [WsConnectionManager] for widget tests.
+///
+/// Returns a fixed set of connections without establishing real WS channels.
+class FakeConnectionManager extends WsConnectionManager {
+  FakeConnectionManager({Map<String, WsServerConnection>? initialConnections})
+    : _fakeConnections = initialConnections ?? {};
 
-  final WsConnectionStatus _initialStatus;
+  final Map<String, WsServerConnection> _fakeConnections;
 
-  @override
-  WsConnectionStatus build() => _initialStatus;
-
-  @override
-  Future<void> connect(String wsUrl) async {
-    state = WsConnectionStatus.connecting;
+  /// Adds a connection for testing.
+  void addFakeConnection(String serverId, WsServerConnection connection) {
+    _fakeConnections[serverId] = connection;
   }
 
   @override
-  void disconnect() {
-    state = WsConnectionStatus.disconnected;
-  }
+  Map<String, WsServerConnection> get connections =>
+      Map.unmodifiable(_fakeConnections);
 
   @override
-  ChatRepository? get repository => null;
+  Iterable<WsServerConnection> get activeConnections => _fakeConnections.values
+      .where((c) => c.status == WsConnectionStatus.connected);
 
   @override
-  String? get lastError => null;
+  WsServerConnection? getConnection(String serverId) =>
+      _fakeConnections[serverId];
 }

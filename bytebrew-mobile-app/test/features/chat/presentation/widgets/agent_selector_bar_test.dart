@@ -24,8 +24,9 @@ final _testAgents = [
 
 void main() {
   group('AgentSelectorBar', () {
-    testWidgets('hidden when no agents (renders SizedBox.shrink)',
-        (tester) async {
+    testWidgets('hidden when no agents (renders SizedBox.shrink)', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -33,9 +34,7 @@ void main() {
             selectedAgentProvider(_sessionId).overrideWithValue(null),
           ],
           child: const MaterialApp(
-            home: Scaffold(
-              body: AgentSelectorBar(sessionId: _sessionId),
-            ),
+            home: Scaffold(body: AgentSelectorBar(sessionId: _sessionId)),
           ),
         ),
       );
@@ -51,8 +50,9 @@ void main() {
       expect(find.byType(FilterChip), findsNothing);
     });
 
-    testWidgets('shows Supervisor chip and agent chips when agents exist',
-        (tester) async {
+    testWidgets('shows Supervisor chip and agent chips when agents exist', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -60,9 +60,7 @@ void main() {
             selectedAgentProvider(_sessionId).overrideWithValue(null),
           ],
           child: const MaterialApp(
-            home: Scaffold(
-              body: AgentSelectorBar(sessionId: _sessionId),
-            ),
+            home: Scaffold(body: AgentSelectorBar(sessionId: _sessionId)),
           ),
         ),
       );
@@ -76,8 +74,9 @@ void main() {
       expect(find.text('Code Reviewer'), findsOneWidget);
     });
 
-    testWidgets('Supervisor chip is selected when selectedAgent is null',
-        (tester) async {
+    testWidgets('Supervisor chip is selected when selectedAgent is null', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -85,9 +84,7 @@ void main() {
             selectedAgentProvider(_sessionId).overrideWithValue(null),
           ],
           child: const MaterialApp(
-            home: Scaffold(
-              body: AgentSelectorBar(sessionId: _sessionId),
-            ),
+            home: Scaffold(body: AgentSelectorBar(sessionId: _sessionId)),
           ),
         ),
       );
@@ -100,8 +97,9 @@ void main() {
       expect(supervisorChip.selected, isTrue);
     });
 
-    testWidgets('agent chip is selected when selectedAgent matches',
-        (tester) async {
+    testWidgets('agent chip is selected when selectedAgent matches', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -109,17 +107,16 @@ void main() {
             selectedAgentProvider(_sessionId).overrideWithValue('agent-coder'),
           ],
           child: const MaterialApp(
-            home: Scaffold(
-              body: AgentSelectorBar(sessionId: _sessionId),
-            ),
+            home: Scaffold(body: AgentSelectorBar(sessionId: _sessionId)),
           ),
         ),
       );
 
       await tester.pumpAndSettle();
 
-      final chips =
-          tester.widgetList<FilterChip>(find.byType(FilterChip)).toList();
+      final chips = tester
+          .widgetList<FilterChip>(find.byType(FilterChip))
+          .toList();
 
       // Supervisor (index 0) should NOT be selected.
       expect(chips[0].selected, isFalse);
@@ -154,9 +151,7 @@ void main() {
             selectedAgentProvider(_sessionId).overrideWithValue(null),
           ],
           child: const MaterialApp(
-            home: Scaffold(
-              body: AgentSelectorBar(sessionId: _sessionId),
-            ),
+            home: Scaffold(body: AgentSelectorBar(sessionId: _sessionId)),
           ),
         ),
       );
@@ -187,9 +182,7 @@ void main() {
             selectedAgentProvider(_sessionId).overrideWithValue(null),
           ],
           child: const MaterialApp(
-            home: Scaffold(
-              body: AgentSelectorBar(sessionId: _sessionId),
-            ),
+            home: Scaffold(body: AgentSelectorBar(sessionId: _sessionId)),
           ),
         ),
       );
@@ -204,7 +197,8 @@ void main() {
         AgentInfo(
           agentId: 'agent-long',
           status: AgentStatus.running,
-          description: 'Very Long Agent Description That Exceeds Twenty Characters',
+          description:
+              'Very Long Agent Description That Exceeds Twenty Characters',
           lastActivityAt: DateTime(2026, 3, 1, 12, 0),
         ),
       ];
@@ -216,9 +210,7 @@ void main() {
             selectedAgentProvider(_sessionId).overrideWithValue(null),
           ],
           child: const MaterialApp(
-            home: Scaffold(
-              body: AgentSelectorBar(sessionId: _sessionId),
-            ),
+            home: Scaffold(body: AgentSelectorBar(sessionId: _sessionId)),
           ),
         ),
       );
@@ -228,8 +220,7 @@ void main() {
       // The label should be truncated: first 17 chars + "..."
       expect(find.text('Very Long Agent D...'), findsOneWidget);
       expect(
-        find.text(
-            'Very Long Agent Description That Exceeds Twenty Characters'),
+        find.text('Very Long Agent Description That Exceeds Twenty Characters'),
         findsNothing,
       );
     });

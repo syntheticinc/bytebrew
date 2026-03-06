@@ -1,66 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:grpc/grpc.dart';
 
 import 'package:bytebrew_mobile/core/domain/mobile_session.dart';
-import 'package:bytebrew_mobile/core/infrastructure/grpc/mobile_service_client.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_types.dart';
 
 void main() {
-  group('MobileServiceClient', () {
-    test('constructor creates client without errors', () {
-      // Create a channel pointing to a dummy address (we will not
-      // actually make any RPC calls).
-      final channel = ClientChannel(
-        'localhost',
-        port: 60401,
-        options: const ChannelOptions(
-          credentials: ChannelCredentials.insecure(),
-        ),
-      );
-
-      final client = MobileServiceClient(channel: channel);
-
-      expect(client, isNotNull);
-
-      // Clean up the channel.
-      channel.shutdown();
-    });
-
-    test('close disposes channel', () async {
-      final channel = ClientChannel(
-        'localhost',
-        port: 60401,
-        options: const ChannelOptions(
-          credentials: ChannelCredentials.insecure(),
-        ),
-      );
-
-      final client = MobileServiceClient(channel: channel);
-
-      // close() should call channel.shutdown() and complete without error.
-      await expectLater(client.close(), completes);
-    });
-
-    test('multiple close calls do not throw', () async {
-      final channel = ClientChannel(
-        'localhost',
-        port: 60401,
-        options: const ChannelOptions(
-          credentials: ChannelCredentials.insecure(),
-        ),
-      );
-
-      final client = MobileServiceClient(channel: channel);
-
-      // First close should work.
-      await expectLater(client.close(), completes);
-
-      // Second close on an already-shutdown channel should also not throw.
-      // (ClientChannel.shutdown is idempotent.)
-      await expectLater(client.close(), completes);
-    });
-  });
-
-  group('DTOs', () {
+  group('WS DTOs', () {
     test('PairResult stores all fields', () {
       final result = PairResult(
         deviceId: 'dev-1',
@@ -115,10 +59,7 @@ void main() {
         timestamp: now,
         agentId: 'agent-1',
         step: 3,
-        payload: const AgentMessagePayload(
-          content: 'Hello',
-          isComplete: true,
-        ),
+        payload: const AgentMessagePayload(content: 'Hello', isComplete: true),
       );
 
       expect(event.eventId, 'evt-1');
@@ -201,19 +142,19 @@ void main() {
           steps: [
             PlanStepPayload(
               title: 'Analyze code',
-              status: PlanStepStatus.completed,
+              status: WsPlanStepStatus.completed,
             ),
             PlanStepPayload(
               title: 'Write tests',
-              status: PlanStepStatus.pending,
+              status: WsPlanStepStatus.pending,
             ),
           ],
         );
 
         expect(payload.planName, 'Refactoring');
         expect(payload.steps, hasLength(2));
-        expect(payload.steps[0].status, PlanStepStatus.completed);
-        expect(payload.steps[1].status, PlanStepStatus.pending);
+        expect(payload.steps[0].status, WsPlanStepStatus.completed);
+        expect(payload.steps[1].status, WsPlanStepStatus.pending);
       });
 
       test('SessionStatusPayload', () {

@@ -63,32 +63,30 @@ void main() {
       );
     }
 
-    testWidgets(
-      'renders "IN PROGRESS" header with count for active status',
-      (tester) async {
-        await tester.pumpWidget(
-          buildWidget(SessionStatus.active, activeSessions),
-        );
-        // Use pump() because AnimatedStatusIndicator animates.
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 100));
+    testWidgets('renders "IN PROGRESS" header with count for active status', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildWidget(SessionStatus.active, activeSessions),
+      );
+      // Use pump() because AnimatedStatusIndicator animates.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
 
-        expect(find.text('IN PROGRESS (2)'), findsOneWidget);
-      },
-    );
+      expect(find.text('IN PROGRESS (2)'), findsOneWidget);
+    });
 
-    testWidgets(
-      'renders "ACTION REQUIRED" header for needsAttention status',
-      (tester) async {
-        await tester.pumpWidget(
-          buildWidget(SessionStatus.needsAttention, attentionSessions),
-        );
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 100));
+    testWidgets('renders "ACTION REQUIRED" header for needsAttention status', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildWidget(SessionStatus.needsAttention, attentionSessions),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
 
-        expect(find.text('ACTION REQUIRED (1)'), findsOneWidget);
-      },
-    );
+      expect(find.text('ACTION REQUIRED (1)'), findsOneWidget);
+    });
 
     testWidgets('renders "RECENT" header for idle status', (tester) async {
       await tester.pumpWidget(buildWidget(SessionStatus.idle, idleSessions));
@@ -117,9 +115,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      final headerText = tester.widget<Text>(
-        find.text('ACTION REQUIRED (1)'),
-      );
+      final headerText = tester.widget<Text>(find.text('ACTION REQUIRED (1)'));
       expect(headerText.style?.color, AppColors.accent);
     });
 

@@ -16,7 +16,9 @@ void main() {
     Widget buildWidget(ChatMessage message) {
       return ProviderScope(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(FakeChatRepository([])),
+          sessionChatRepositoryProvider.overrideWith(
+            (ref, sessionId) => FakeChatRepository([]),
+          ),
         ],
         child: MaterialApp(
           home: Scaffold(
@@ -26,9 +28,7 @@ void main() {
       );
     }
 
-    testWidgets('renders SizedBox.shrink when askUser is null', (
-      tester,
-    ) async {
+    testWidgets('renders SizedBox.shrink when askUser is null', (tester) async {
       final message = ChatMessage(
         id: 'ask-msg-1',
         type: ChatMessageType.askUser,
@@ -156,22 +156,17 @@ void main() {
       await tester.pumpAndSettle();
 
       // The outer container has an accent border.
-      final containers = tester.widgetList<Container>(
-        find.byType(Container),
-      );
-      final outerContainer = containers.firstWhere(
-        (c) {
-          final decoration = c.decoration;
-          if (decoration is BoxDecoration && decoration.border != null) {
-            final border = decoration.border;
-            if (border is Border) {
-              return border.top.color == AppColors.accent;
-            }
+      final containers = tester.widgetList<Container>(find.byType(Container));
+      final outerContainer = containers.firstWhere((c) {
+        final decoration = c.decoration;
+        if (decoration is BoxDecoration && decoration.border != null) {
+          final border = decoration.border;
+          if (border is Border) {
+            return border.top.color == AppColors.accent;
           }
-          return false;
-        },
-        orElse: () => Container(),
-      );
+        }
+        return false;
+      }, orElse: () => Container());
       expect(outerContainer.decoration, isNotNull);
     });
 
@@ -192,9 +187,7 @@ void main() {
       await tester.pumpWidget(buildWidget(message));
       await tester.pumpAndSettle();
 
-      final questionText = tester.widget<Text>(
-        find.text('Important question'),
-      );
+      final questionText = tester.widget<Text>(find.text('Important question'));
       expect(questionText.style?.fontWeight, FontWeight.bold);
     });
 

@@ -1,232 +1,191 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-import 'package:bytebrew_mobile/features/chat/domain/chat_repository.dart';
-import 'package:bytebrew_mobile/features/chat/infrastructure/ws_chat_repository.dart';
-
-part 'ws_connection.g.dart';
-
-/// Connection status for a WebSocket link to the CLI proxy.
-enum WsConnectionStatus { disconnected, connecting, connected, error }
-
-/// WebSocket client that connects to the CLI MobileProxyServer.
+/// Low-level WebSocket connection to the Bridge relay.
 ///
-/// Protocol:
-/// - Incoming: `{"type":"init",...}`, `{"type":"event","event":{...}}`
-/// - Outgoing: `{"type":"user_message",...}`, `{"type":"ask_user_answer",...}`,
-///             `{"type":"cancel"}`
-@Riverpod(keepAlive: true)
-class WsConnection extends _$WsConnection {
-  /// Maximum number of reconnect attempts before giving up.
-  static const maxReconnectAttempts = 5;
+/// Connects to `ws://bridge/connect?server_id=xxx&device_id=yyy` and provides
+/// typed JSON message send/receive. Handles reconnection with exponential
+/// backoff.
+class WsConnection {
+  WsConnection({
+    required this.bridgeUrl,
+    required this.serverId,
+    required this.deviceId,
+  });
+
+  final String bridgeUrl;
+  final String serverId;
+  final String deviceId;
 
   WebSocketChannel? _channel;
-  StreamSubscription<dynamic>? _subscription;
-  StreamSubscription<bool>? _statusSubscription;
+  StreamSubscription<dynamic>? _channelSubscription;
 
-  // Init data received from the CLI.
-  List<Map<String, dynamic>> _initMessages = [];
-  Map<String, dynamic> _meta = {};
+  final _messageController = StreamController<Map<String, dynamic>>.broadcast();
+  final _statusController = StreamController<WsConnectionStatus>.broadcast();
 
-  // Event stream for downstream consumers.
-  final _eventController = StreamController<Map<String, dynamic>>.broadcast();
-
-  /// Stream of parsed event objects from the CLI.
-  Stream<Map<String, dynamic>> get events => _eventController.stream;
-
-  // Session processing status.
-  bool _isProcessing = false;
-  bool _hasAskUser = false;
-
-  // Chat repository created on init.
-  ChatRepository? _repository;
-  WsChatRepository? _wsRepository;
-
-  /// Initial message snapshots received in the `init` payload.
-  List<Map<String, dynamic>> get initMessages => _initMessages;
-
-  /// Metadata from the `init` payload (projectName, sessionId, etc.).
-  Map<String, dynamic> get meta => _meta;
-
-  /// Whether the agent is currently processing a request.
-  bool get isProcessing => _isProcessing;
-
-  /// Whether there is a pending ask-user prompt.
-  bool get hasAskUser => _hasAskUser;
-
-  /// Chat repository backed by this connection, or null if not connected.
-  ChatRepository? get repository => _repository;
-
-  /// Typed WS chat repository, for internal use and tests.
-  @visibleForTesting
-  WsChatRepository? get wsRepository => _wsRepository;
-
-  /// Last error message, if any.
-  String? get lastError => _lastError;
-  String? _lastError;
-
-  // Reconnect state.
+  WsConnectionStatus _status = WsConnectionStatus.disconnected;
   Timer? _reconnectTimer;
-  int _reconnectAttempt = 0;
-  String? _lastWsUrl;
+  int _reconnectAttempts = 0;
+  bool _disposed = false;
+  bool _intentionalClose = false;
 
-  /// The URL last passed to [connect], for reconnection.
-  @visibleForTesting
-  set lastWsUrl(String? value) => _lastWsUrl = value;
+  static const _maxReconnectDelay = 30;
 
-  /// Current reconnect attempt count.
-  @visibleForTesting
-  int get reconnectAttempts => _reconnectAttempt;
+  /// Current connection status.
+  WsConnectionStatus get status => _status;
 
-  @visibleForTesting
-  set reconnectAttempts(int value) => _reconnectAttempt = value;
+  /// Stream of parsed JSON messages from Bridge.
+  Stream<Map<String, dynamic>> get messages => _messageController.stream;
 
-  /// Factory for creating WebSocket channels. Override in tests.
-  @visibleForTesting
-  WebSocketChannel Function(Uri uri)? channelFactory;
+  /// Stream of connection status changes.
+  Stream<WsConnectionStatus> get statusChanges => _statusController.stream;
 
-  @override
-  WsConnectionStatus build() => WsConnectionStatus.disconnected;
+  /// Connects to Bridge.
+  Future<void> connect() async {
+    if (_disposed) return;
+    if (_status == WsConnectionStatus.connected) return;
 
-  /// Connects to the CLI MobileProxyServer at [wsUrl].
-  ///
-  /// [wsUrl] format: `ws://host:port`
-  Future<void> connect(String wsUrl) async {
-    // Clean up previous connection resources.
-    _subscription?.cancel();
-    _statusSubscription?.cancel();
-    _channel?.sink.close();
+    _intentionalClose = false;
+    _setStatus(WsConnectionStatus.connecting);
 
-    _lastWsUrl = wsUrl;
-    _reconnectAttempt = 0;
-    _reconnectTimer?.cancel();
-
-    state = WsConnectionStatus.connecting;
     try {
-      final uri = Uri.parse(wsUrl);
-      _channel = channelFactory != null
-          ? channelFactory!(uri)
-          : WebSocketChannel.connect(uri);
+      final wsUrl = _buildWsUrl();
+      debugPrint('[WsConnection] Connecting to $wsUrl');
+
+      _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
+
+      // Wait for the connection to be established.
       await _channel!.ready;
-      state = WsConnectionStatus.connected;
-      _lastError = null;
-      _subscription = _channel!.stream.listen(
-        _handleMessage,
-        onError: (Object e) {
-          _lastError = e.toString();
-          state = WsConnectionStatus.error;
-        },
-        onDone: () {
-          state = WsConnectionStatus.disconnected;
-          scheduleReconnect();
-        },
+
+      _channelSubscription = _channel!.stream.listen(
+        _onData,
+        onError: _onError,
+        onDone: _onDone,
       );
-    } on SocketException catch (e) {
-      _lastError = 'Network error: ${e.message}';
-      state = WsConnectionStatus.error;
-    } catch (e) {
-      _lastError = e.toString();
-      state = WsConnectionStatus.error;
-      scheduleReconnect();
+
+      _setStatus(WsConnectionStatus.connected);
+      _reconnectAttempts = 0;
+      debugPrint('[WsConnection] Connected to Bridge');
+    } on Exception catch (e) {
+      debugPrint('[WsConnection] Connection failed: $e');
+      _setStatus(WsConnectionStatus.error);
+      _scheduleReconnect();
     }
   }
 
-  /// Disconnects from the CLI and stops reconnection attempts.
-  void disconnect() {
+  /// Sends a JSON message to Bridge.
+  void send(Map<String, dynamic> message) {
+    if (_channel == null || _status != WsConnectionStatus.connected) {
+      debugPrint('[WsConnection] Cannot send: not connected');
+      return;
+    }
+
+    final encoded = jsonEncode(message);
+    _channel!.sink.add(encoded);
+  }
+
+  /// Gracefully disconnects from Bridge.
+  Future<void> disconnect() async {
+    _intentionalClose = true;
     _reconnectTimer?.cancel();
-    _reconnectAttempt = 0;
-    _subscription?.cancel();
-    _statusSubscription?.cancel();
-    _channel?.sink.close();
+    _reconnectTimer = null;
+    await _channelSubscription?.cancel();
+    _channelSubscription = null;
+    await _channel?.sink.close();
     _channel = null;
-    _repository = null;
-    _wsRepository = null;
-    _initMessages = [];
-    _meta = {};
-    _isProcessing = false;
-    _hasAskUser = false;
-    state = WsConnectionStatus.disconnected;
+    _setStatus(WsConnectionStatus.disconnected);
   }
 
-  /// Sends a user message to the CLI.
-  void sendUserMessage(String text) {
-    _channel?.sink.add(jsonEncode({'type': 'user_message', 'text': text}));
+  /// Disposes all resources. After calling this, the connection cannot be
+  /// reused.
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    await disconnect();
+    await _messageController.close();
+    await _statusController.close();
   }
 
-  /// Sends an ask-user answer to the CLI.
-  void sendAskUserAnswer(String question, String answer) {
-    _channel?.sink.add(
-      jsonEncode({
-        'type': 'ask_user_answer',
-        'answers': [
-          {'question': question, 'answer': answer},
-        ],
-      }),
+  // -------------------------------------------------------------------------
+  // Internal
+  // -------------------------------------------------------------------------
+
+  String _buildWsUrl() {
+    // bridgeUrl may be "ws://host:port", "wss://host:port", or "host:port".
+    final base = bridgeUrl.startsWith('ws') ? bridgeUrl : 'ws://$bridgeUrl';
+
+    final uri = Uri.parse(base);
+    return uri
+        .replace(
+          path: '/connect',
+          queryParameters: {'server_id': serverId, 'device_id': deviceId},
+        )
+        .toString();
+  }
+
+  void _onData(dynamic data) {
+    if (data is! String) return;
+
+    try {
+      final json = jsonDecode(data) as Map<String, dynamic>;
+      _messageController.add(json);
+    } on FormatException catch (e) {
+      debugPrint('[WsConnection] Invalid JSON received: $e');
+    }
+  }
+
+  void _onError(Object error) {
+    debugPrint('[WsConnection] Stream error: $error');
+    _setStatus(WsConnectionStatus.error);
+    if (!_intentionalClose) {
+      _scheduleReconnect();
+    }
+  }
+
+  void _onDone() {
+    debugPrint('[WsConnection] Connection closed');
+    if (_intentionalClose || _disposed) {
+      _setStatus(WsConnectionStatus.disconnected);
+      return;
+    }
+
+    _setStatus(WsConnectionStatus.error);
+    _scheduleReconnect();
+  }
+
+  void _scheduleReconnect() {
+    if (_disposed || _intentionalClose) return;
+
+    _reconnectTimer?.cancel();
+    final delay = _reconnectDelay(_reconnectAttempts);
+    debugPrint(
+      '[WsConnection] Reconnecting in ${delay}s '
+      '(attempt ${_reconnectAttempts + 1})',
     );
-  }
 
-  /// Sends a cancel request to the CLI.
-  void sendCancel() {
-    _channel?.sink.add(jsonEncode({'type': 'cancel'}));
-  }
-
-  void _handleMessage(dynamic raw) {
-    final json = jsonDecode(raw as String) as Map<String, dynamic>;
-    final type = json['type'] as String?;
-
-    if (type == 'init') {
-      _initMessages =
-          (json['messages'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ??
-          [];
-      _meta = json['meta'] as Map<String, dynamic>? ?? {};
-
-      // Create the chat repository and load initial messages.
-      final repo = WsChatRepository(connection: this);
-      repo.loadInitMessages();
-      _wsRepository = repo;
-      _repository = repo;
-      return;
-    }
-
-    if (type == 'event') {
-      final event = json['event'] as Map<String, dynamic>?;
-      if (event == null) return;
-      final eventType = event['type'] as String?;
-
-      if (eventType == 'heartbeat') return;
-      if (eventType == 'ProcessingStarted') _isProcessing = true;
-      if (eventType == 'ProcessingStopped') _isProcessing = false;
-      if (eventType == 'AskUserRequested') _hasAskUser = true;
-      if (eventType == 'AskUserResolved') _hasAskUser = false;
-
-      _eventController.add(event);
-    }
-  }
-
-  /// Schedules a reconnect attempt with exponential backoff.
-  @visibleForTesting
-  void scheduleReconnect() {
-    if (_reconnectAttempt >= maxReconnectAttempts) {
-      _lastError = 'Max reconnection attempts ($maxReconnectAttempts) reached';
-      state = WsConnectionStatus.error;
-      return;
-    }
-    final delay = Duration(seconds: 1 << _reconnectAttempt);
-    _reconnectAttempt++;
-    _reconnectTimer = Timer(delay, () {
-      if (_lastWsUrl != null) connect(_lastWsUrl!);
+    _reconnectTimer = Timer(Duration(seconds: delay), () {
+      _reconnectAttempts++;
+      connect();
     });
   }
+
+  int _reconnectDelay(int attempts) {
+    final delay = min(2 << attempts, _maxReconnectDelay);
+    return delay;
+  }
+
+  void _setStatus(WsConnectionStatus newStatus) {
+    if (_status == newStatus) return;
+    _status = newStatus;
+    if (!_statusController.isClosed) {
+      _statusController.add(newStatus);
+    }
+  }
 }
 
-/// Whether there is an active WebSocket connection.
-@Riverpod(keepAlive: true)
-bool hasActiveConnection(Ref ref) {
-  final status = ref.watch(wsConnectionProvider);
-  return status == WsConnectionStatus.connected;
-}
+/// Connection status for a WebSocket connection to Bridge.
+enum WsConnectionStatus { disconnected, connecting, connected, error }

@@ -8,26 +8,84 @@ part of 'chat_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
+/// Provides a default [ChatRepository].
+///
+/// Returns [EmptyChatRepository] by default. Session-specific repositories
+/// are created via [sessionChatRepositoryProvider].
+
+@ProviderFor(chatRepository)
+final chatRepositoryProvider = ChatRepositoryProvider._();
+
+/// Provides a default [ChatRepository].
+///
+/// Returns [EmptyChatRepository] by default. Session-specific repositories
+/// are created via [sessionChatRepositoryProvider].
+
+final class ChatRepositoryProvider
+    extends $FunctionalProvider<ChatRepository, ChatRepository, ChatRepository>
+    with $Provider<ChatRepository> {
+  /// Provides a default [ChatRepository].
+  ///
+  /// Returns [EmptyChatRepository] by default. Session-specific repositories
+  /// are created via [sessionChatRepositoryProvider].
+  ChatRepositoryProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'chatRepositoryProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$chatRepositoryHash();
+
+  @$internal
+  @override
+  $ProviderElement<ChatRepository> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  ChatRepository create(Ref ref) {
+    return chatRepository(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ChatRepository value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ChatRepository>(value),
+    );
+  }
+}
+
+String _$chatRepositoryHash() => r'851ca9b0dbc912a08188ad92905b26920dd6a909';
+
 /// Resolves the [ChatRepository] for a specific [sessionId].
 ///
-/// Returns the WS-backed repository when connected, [EmptyChatRepository]
-/// otherwise.
+/// Looks up the session to find its serverId, then creates a
+/// [GrpcChatRepository] connected via [ConnectionManager].
+/// Falls back to [EmptyChatRepository] if the session is not found.
 
 @ProviderFor(sessionChatRepository)
 final sessionChatRepositoryProvider = SessionChatRepositoryFamily._();
 
 /// Resolves the [ChatRepository] for a specific [sessionId].
 ///
-/// Returns the WS-backed repository when connected, [EmptyChatRepository]
-/// otherwise.
+/// Looks up the session to find its serverId, then creates a
+/// [GrpcChatRepository] connected via [ConnectionManager].
+/// Falls back to [EmptyChatRepository] if the session is not found.
 
 final class SessionChatRepositoryProvider
     extends $FunctionalProvider<ChatRepository, ChatRepository, ChatRepository>
     with $Provider<ChatRepository> {
   /// Resolves the [ChatRepository] for a specific [sessionId].
   ///
-  /// Returns the WS-backed repository when connected, [EmptyChatRepository]
-  /// otherwise.
+  /// Looks up the session to find its serverId, then creates a
+  /// [GrpcChatRepository] connected via [ConnectionManager].
+  /// Falls back to [EmptyChatRepository] if the session is not found.
   SessionChatRepositoryProvider._({
     required SessionChatRepositoryFamily super.from,
     required String super.argument,
@@ -80,12 +138,13 @@ final class SessionChatRepositoryProvider
 }
 
 String _$sessionChatRepositoryHash() =>
-    r'2d51cb57ead11967b5c6446b04badd16c685b2de';
+    r'4d75bb6c32bfb9bad84e6fdfbf6c84f4b76ed84a';
 
 /// Resolves the [ChatRepository] for a specific [sessionId].
 ///
-/// Returns the WS-backed repository when connected, [EmptyChatRepository]
-/// otherwise.
+/// Looks up the session to find its serverId, then creates a
+/// [GrpcChatRepository] connected via [ConnectionManager].
+/// Falls back to [EmptyChatRepository] if the session is not found.
 
 final class SessionChatRepositoryFamily extends $Family
     with $FunctionalFamilyOverride<ChatRepository, String> {
@@ -100,8 +159,9 @@ final class SessionChatRepositoryFamily extends $Family
 
   /// Resolves the [ChatRepository] for a specific [sessionId].
   ///
-  /// Returns the WS-backed repository when connected, [EmptyChatRepository]
-  /// otherwise.
+  /// Looks up the session to find its serverId, then creates a
+  /// [GrpcChatRepository] connected via [ConnectionManager].
+  /// Falls back to [EmptyChatRepository] if the session is not found.
 
   SessionChatRepositoryProvider call(String sessionId) =>
       SessionChatRepositoryProvider._(argument: sessionId, from: this);

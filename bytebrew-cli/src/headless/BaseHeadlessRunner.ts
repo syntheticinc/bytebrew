@@ -50,7 +50,9 @@ export abstract class BaseHeadlessRunner {
       projectKey: this.config.projectKey,
       sessionId: this.config.sessionId,
       headlessMode: true,
-      mobileProxyPort: this.config.mobileProxyPort,
+      bridgeAddress: this.config.bridgeAddress,
+      bridgeEnabled: this.config.bridgeEnabled,
+      serverId: this.config.serverId,
     });
     return this.container;
   }

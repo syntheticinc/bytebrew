@@ -8,28 +8,33 @@ import '../../../../core/theme/app_colors.dart';
 /// Data extracted from a scanned QR code during pairing.
 class QrPairingData {
   const QrPairingData({
-    required this.lanAddress,
-    this.serverId,
+    required this.bridgeUrl,
+    required this.serverId,
     required this.pairingToken,
+    this.serverPublicKey,
   });
 
-  /// Server LAN address (e.g. "192.168.1.100" or "192.168.1.100:8765").
-  final String lanAddress;
+  /// Bridge relay URL (e.g. "ws://bridge.bytebrew.ai:8080").
+  final String bridgeUrl;
 
-  /// Unique server identifier.
-  final String? serverId;
+  /// Unique server identifier for Bridge routing.
+  final String serverId;
 
-  /// Pairing token (full hex token or 6-digit short code).
+  /// Pairing token.
   final String pairingToken;
+
+  /// Server's X25519 public key (base64-encoded in QR, decoded here).
+  final String? serverPublicKey;
 
   /// Parses [QrPairingData] from a JSON string embedded in a QR code.
   ///
   /// Expected JSON format:
   /// ```json
   /// {
-  ///   "lan": "192.168.1.100:8765",
-  ///   "sid": "server-uuid",
-  ///   "token": "pairing-token-or-short-code"
+  ///   "bridge_url": "ws://bridge.bytebrew.ai:8080",
+  ///   "server_id": "server-uuid",
+  ///   "token": "pairing-token",
+  ///   "server_public_key": "base64-encoded-key"
   /// }
   /// ```
   ///
@@ -43,9 +48,16 @@ class QrPairingData {
       throw const FormatException('Invalid QR code: not valid JSON');
     }
 
-    final lan = json['lan'] as String?;
-    if (lan == null || lan.isEmpty) {
-      throw const FormatException('Invalid QR code: missing "lan" field');
+    final bridgeUrl = json['bridge_url'] as String?;
+    if (bridgeUrl == null || bridgeUrl.isEmpty) {
+      throw const FormatException(
+        'Invalid QR code: missing "bridge_url" field',
+      );
+    }
+
+    final serverId = json['server_id'] as String?;
+    if (serverId == null || serverId.isEmpty) {
+      throw const FormatException('Invalid QR code: missing "server_id" field');
     }
 
     final token = json['token'] as String?;
@@ -54,9 +66,10 @@ class QrPairingData {
     }
 
     return QrPairingData(
-      lanAddress: lan,
-      serverId: json['sid'] as String?,
+      bridgeUrl: bridgeUrl,
+      serverId: serverId,
       pairingToken: token,
+      serverPublicKey: json['server_public_key'] as String?,
     );
   }
 }

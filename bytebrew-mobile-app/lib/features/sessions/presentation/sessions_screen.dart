@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/domain/session.dart';
-import '../../../core/infrastructure/ws/ws_connection.dart';
+import '../../../core/infrastructure/ws/ws_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../application/auto_connect_provider.dart';
 import '../application/sessions_provider.dart';
@@ -26,8 +26,8 @@ class SessionsScreen extends ConsumerWidget {
 
     final sessionsAsync = ref.watch(sessionsProvider);
     final grouped = ref.watch(groupedSessionsProvider);
-    final wsStatus = ref.watch(wsConnectionProvider);
-    final showLiveSession = wsStatus == WsConnectionStatus.connected;
+    final manager = ref.watch(connectionManagerProvider);
+    final hasActiveConnection = manager.activeConnections.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Activity')),
@@ -40,12 +40,12 @@ class SessionsScreen extends ConsumerWidget {
             onRetry: () => ref.read(sessionsProvider.notifier).refresh(),
           ),
           data: (_) {
-            if (grouped.isEmpty && !showLiveSession) {
+            if (grouped.isEmpty && !hasActiveConnection) {
               return const _EmptyBody();
             }
             return _SessionsList(
               grouped: grouped,
-              showLiveSession: showLiveSession,
+              showLiveSession: hasActiveConnection,
             );
           },
         ),
@@ -64,8 +64,9 @@ class _SessionsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visibleStatuses =
-        _statusDisplayOrder.where((s) => grouped.containsKey(s)).toList();
+    final visibleStatuses = _statusDisplayOrder
+        .where((s) => grouped.containsKey(s))
+        .toList();
 
     final extraItems = showLiveSession ? 1 : 0;
 
@@ -87,7 +88,7 @@ class _SessionsList extends StatelessWidget {
   }
 }
 
-/// Card shown when there is an active WebSocket connection to a CLI.
+/// Card shown when there is an active connection to a CLI server.
 class _LiveSessionCard extends StatelessWidget {
   const _LiveSessionCard();
 
@@ -99,11 +100,7 @@ class _LiveSessionCard extends StatelessWidget {
       child: Card(
         color: theme.colorScheme.primaryContainer,
         child: ListTile(
-          leading: Icon(
-            Icons.circle,
-            color: AppColors.statusActive,
-            size: 12,
-          ),
+          leading: Icon(Icons.circle, color: AppColors.statusActive, size: 12),
           title: const Text('Live Session'),
           subtitle: const Text('Connected to CLI'),
         ),

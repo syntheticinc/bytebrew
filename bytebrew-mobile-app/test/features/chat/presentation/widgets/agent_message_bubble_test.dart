@@ -76,9 +76,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Find the small accent bar (3px wide, 16px high).
-      final containers = tester.widgetList<Container>(
-        find.byType(Container),
-      );
+      final containers = tester.widgetList<Container>(find.byType(Container));
       final accentBar = containers.where((c) {
         final decoration = c.decoration;
         if (decoration is BoxDecoration && c.constraints != null) {

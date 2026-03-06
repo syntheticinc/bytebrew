@@ -1,80 +1,102 @@
-import 'dart:async';
+import 'package:flutter/foundation.dart';
 
+import 'package:bytebrew_mobile/core/domain/mobile_session.dart';
 import 'package:bytebrew_mobile/core/domain/session.dart';
-import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection_manager.dart';
 import 'package:bytebrew_mobile/features/sessions/domain/session_repository.dart';
 
-/// [SessionRepository] backed by a WebSocket connection to the CLI.
+/// [SessionRepository] implementation backed by WebSocket via
+/// [WsConnectionManager].
 ///
-/// Builds a single [Session] from the WS connection metadata and updates
-/// its status in response to processing/ask-user events.
+/// Gathers sessions from all actively connected servers, maps them to the
+/// domain [Session] model, and sorts them by priority (status) then recency.
 class WsSessionRepository implements SessionRepository {
-  WsSessionRepository({required WsConnection connection})
-    : _connection = connection {
-    _eventSub = _connection.events.listen(_handleEvent);
-    _emitSession();
-  }
+  WsSessionRepository({required WsConnectionManager connectionManager})
+    : _connectionManager = connectionManager;
 
-  final WsConnection _connection;
-  final _controller = StreamController<List<Session>>.broadcast();
-  StreamSubscription<Map<String, dynamic>>? _eventSub;
-
-  SessionStatus _status = SessionStatus.idle;
-  bool _hasAskUser = false;
+  final WsConnectionManager _connectionManager;
 
   @override
-  Future<List<Session>> listSessions() async => [_buildSession()];
+  Future<List<Session>> listSessions() async {
+    final sessions = <Session>[];
 
-  @override
-  Future<void> refresh() async => _emitSession();
+    for (final connection in _connectionManager.activeConnections) {
+      try {
+        final result = await connection.client.listSessions(
+          deviceToken: connection.server.deviceToken!,
+        );
 
-  @override
-  Stream<List<Session>> watchSessions() => _controller.stream;
+        for (final mobileSess in result.sessions) {
+          sessions.add(
+            Session(
+              id: mobileSess.sessionId,
+              serverId: connection.server.id,
+              serverName: result.serverName,
+              projectName: mobileSess.projectName,
+              status: _mapStatus(mobileSess.status),
+              currentTask: mobileSess.currentTask.isEmpty
+                  ? null
+                  : mobileSess.currentTask,
+              hasAskUser: mobileSess.hasAskUser,
+              lastActivityAt: mobileSess.lastActivityAt,
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint(
+          '[Sessions] Failed to list sessions from '
+          '${connection.server.name}: $e',
+        );
+      }
+    }
 
-  /// Releases resources. Call when the repository is no longer needed.
-  void dispose() {
-    _eventSub?.cancel();
-    _controller.close();
+    sessions.sort(_compareSessionPriority);
+    return sessions;
   }
 
-  void _handleEvent(Map<String, dynamic> event) {
-    final type = event['type'] as String?;
-    var changed = false;
-
-    if (type == 'ProcessingStarted') {
-      _status = SessionStatus.active;
-      changed = true;
-    }
-    if (type == 'ProcessingStopped') {
-      _status = SessionStatus.idle;
-      changed = true;
-    }
-    if (type == 'AskUserRequested') {
-      _hasAskUser = true;
-      _status = SessionStatus.needsAttention;
-      changed = true;
-    }
-    if (type == 'AskUserResolved') {
-      _hasAskUser = false;
-      _status = SessionStatus.active;
-      changed = true;
-    }
-
-    if (changed) _emitSession();
+  @override
+  Future<void> refresh() async {
+    // No-op: listSessions always fetches fresh data from servers.
   }
 
-  Session _buildSession() => Session(
-    id: _connection.meta['sessionId'] as String? ?? 'cli-session',
-    serverId: 'cli',
-    serverName: _connection.meta['projectName'] as String? ?? 'CLI',
-    projectName: _connection.meta['projectName'] as String? ?? '',
-    status: _status,
-    hasAskUser: _hasAskUser,
-    lastActivityAt: DateTime.now(),
-  );
+  @override
+  Stream<List<Session>>? watchSessions() => null;
 
-  void _emitSession() {
-    if (_controller.isClosed) return;
-    _controller.add([_buildSession()]);
+  // ---------------------------------------------------------------------------
+  // Mapping
+  // ---------------------------------------------------------------------------
+
+  static SessionStatus _mapStatus(MobileSessionState state) {
+    return switch (state) {
+      MobileSessionState.active => SessionStatus.active,
+      MobileSessionState.idle => SessionStatus.idle,
+      MobileSessionState.needsAttention => SessionStatus.needsAttention,
+      MobileSessionState.completed => SessionStatus.idle,
+      MobileSessionState.failed => SessionStatus.idle,
+      MobileSessionState.unspecified => SessionStatus.idle,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sorting
+  // ---------------------------------------------------------------------------
+
+  /// Priority order: needsAttention (0) > active (1) > idle (2).
+  static int _statusPriority(SessionStatus status) {
+    return switch (status) {
+      SessionStatus.needsAttention => 0,
+      SessionStatus.active => 1,
+      SessionStatus.idle => 2,
+    };
+  }
+
+  /// Sorts sessions by status priority (ascending) then by
+  /// [Session.lastActivityAt] descending (most recent first).
+  static int _compareSessionPriority(Session a, Session b) {
+    final priorityDiff = _statusPriority(a.status) - _statusPriority(b.status);
+    if (priorityDiff != 0) return priorityDiff;
+
+    // Within same status group, most recent first.
+    return b.lastActivityAt.compareTo(a.lastActivityAt);
   }
 }

@@ -4,6 +4,7 @@ import 'package:bytebrew_mobile/core/domain/plan.dart';
 import 'package:bytebrew_mobile/core/domain/session.dart';
 import 'package:bytebrew_mobile/core/domain/tool_call.dart';
 import 'package:bytebrew_mobile/features/chat/application/chat_provider.dart';
+import 'package:bytebrew_mobile/features/chat/domain/chat_repository.dart';
 import 'package:bytebrew_mobile/features/chat/presentation/chat_screen.dart';
 import 'package:bytebrew_mobile/features/sessions/application/sessions_provider.dart';
 import 'package:flutter/material.dart';
@@ -29,7 +30,9 @@ Widget _buildChatScreen({
 }) {
   return ProviderScope(
     overrides: [
-      chatRepositoryProvider.overrideWithValue(chatRepoOverride as dynamic),
+      sessionChatRepositoryProvider.overrideWith(
+        (ref, sessionId) => chatRepoOverride as ChatRepository,
+      ),
       sessionsProvider.overrideWith(
         () => FakeSessionsNotifier(sessions ?? [_testSession]),
       ),

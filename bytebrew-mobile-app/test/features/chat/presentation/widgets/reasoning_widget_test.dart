@@ -53,9 +53,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // The inner Container has a left border.
-      final containers = tester.widgetList<Container>(
-        find.byType(Container),
-      );
+      final containers = tester.widgetList<Container>(find.byType(Container));
       final borderedContainer = containers.where((c) {
         final decoration = c.decoration;
         if (decoration is BoxDecoration && decoration.border != null) {
@@ -129,9 +127,7 @@ void main() {
 
       // The raw reasoning content should NOT be visible in the main widget.
       expect(
-        find.text(
-          'Hidden reasoning content that should only show in sheet',
-        ),
+        find.text('Hidden reasoning content that should only show in sheet'),
         findsNothing,
       );
 

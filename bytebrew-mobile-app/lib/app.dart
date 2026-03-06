@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-import 'core/infrastructure/ws/ws_connection.dart';
+import 'core/infrastructure/ws/ws_providers.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 
@@ -23,7 +23,7 @@ class AppThemeMode extends _$AppThemeMode {
 /// Root application widget.
 ///
 /// Uses [ConsumerStatefulWidget] to listen for app lifecycle changes and
-/// gracefully disconnect/reconnect WebSocket connections on
+/// gracefully disconnect/reconnect WS connections on
 /// background/foreground transitions.
 class ByteBrewApp extends ConsumerStatefulWidget {
   const ByteBrewApp({super.key});
@@ -50,13 +50,13 @@ class _ByteBrewAppState extends ConsumerState<ByteBrewApp> {
   }
 
   void _handleLifecycleChange(AppLifecycleState state) {
-    final wsConnection = ref.read(wsConnectionProvider.notifier);
+    final manager = ref.read(connectionManagerProvider);
     switch (state) {
       case AppLifecycleState.paused:
       case AppLifecycleState.detached:
-        wsConnection.disconnect();
+        manager.disconnectAll();
       case AppLifecycleState.resumed:
-        // Reconnect will happen via auto-connect.
+        // Reconnect will happen via auto-connect provider.
         break;
       case _:
         break;

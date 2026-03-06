@@ -71,8 +71,9 @@ void main() {
     expect(find.text('Full file contents with more detail'), findsOneWidget);
   });
 
-  testWidgets('ToolDetailSheet shows result when fullResult is null',
-      (tester) async {
+  testWidgets('ToolDetailSheet shows result when fullResult is null', (
+    tester,
+  ) async {
     const toolCall = ToolCallData(
       id: 'tc-4',
       toolName: 'list_files',
@@ -88,8 +89,9 @@ void main() {
     expect(find.text('10 files found'), findsOneWidget);
   });
 
-  testWidgets('ToolDetailSheet shows error section when error is present',
-      (tester) async {
+  testWidgets('ToolDetailSheet shows error section when error is present', (
+    tester,
+  ) async {
     const toolCall = ToolCallData(
       id: 'tc-5',
       toolName: 'execute',
@@ -105,8 +107,9 @@ void main() {
     expect(find.text('Process exited with code 1'), findsOneWidget);
   });
 
-  testWidgets('ToolDetailSheet hides result when result is null',
-      (tester) async {
+  testWidgets('ToolDetailSheet hides result when result is null', (
+    tester,
+  ) async {
     const toolCall = ToolCallData(
       id: 'tc-6',
       toolName: 'write_file',
@@ -120,8 +123,7 @@ void main() {
     expect(find.text('RESULT'), findsNothing);
   });
 
-  testWidgets('ToolDetailSheet hides error when error is null',
-      (tester) async {
+  testWidgets('ToolDetailSheet hides error when error is null', (tester) async {
     const toolCall = ToolCallData(
       id: 'tc-7',
       toolName: 'read_file',

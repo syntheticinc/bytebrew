@@ -3,17 +3,20 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:bytebrew_mobile/core/domain/server.dart';
+import 'package:bytebrew_mobile/core/infrastructure/secure_key_storage.dart';
 import 'package:bytebrew_mobile/features/settings/domain/settings_repository.dart';
 
 /// Persistent implementation of [SettingsRepository].
 ///
 /// Stores server data in [SharedPreferences].
 class LocalSettingsRepository implements SettingsRepository {
-  LocalSettingsRepository(this._prefs);
+  LocalSettingsRepository(this._prefs, [SecureKeyStorage? secureKeyStorage])
+    : _secureKeyStorage = secureKeyStorage ?? SecureKeyStorage();
 
   static const _serversKey = 'saved_servers';
 
   final SharedPreferences _prefs;
+  final SecureKeyStorage _secureKeyStorage;
 
   @override
   List<Server> getServers() {
@@ -30,7 +33,31 @@ class LocalSettingsRepository implements SettingsRepository {
     await _saveServers(servers);
   }
 
+  /// Returns servers with their encryption keys merged from secure storage.
+  @override
+  Future<List<Server>> getServersWithKeys() async {
+    final servers = getServers();
+    final result = <Server>[];
+
+    for (final server in servers) {
+      final keys = await _secureKeyStorage.getServerKeys(server.id);
+      final deviceToken = await _secureKeyStorage.getDeviceToken(server.id);
+
+      result.add(
+        server.copyWith(
+          sharedSecret: keys.sharedSecret ?? server.sharedSecret,
+          publicKey: keys.publicKey ?? server.publicKey,
+          serverPublicKey: keys.serverPublicKey ?? server.serverPublicKey,
+          deviceToken: deviceToken ?? server.deviceToken,
+        ),
+      );
+    }
+
+    return result;
+  }
+
   /// Adds or replaces the [server] in local storage.
+  @override
   Future<void> addServer(Server server) async {
     final servers = getServers();
     final index = servers.indexWhere((s) => s.id == server.id);
@@ -47,21 +74,34 @@ class LocalSettingsRepository implements SettingsRepository {
     await _prefs.setString(_serversKey, json);
   }
 
-  static Map<String, dynamic> _serverToJson(Server s) => {
-    'id': s.id,
-    'name': s.name,
-    'lanAddress': s.lanAddress,
-    'wsPort': s.wsPort,
-    'isOnline': s.isOnline,
-    'pairedAt': s.pairedAt.toIso8601String(),
-  };
+  static Map<String, dynamic> _serverToJson(Server s) {
+    final map = <String, dynamic>{
+      'id': s.id,
+      'name': s.name,
+      'bridgeUrl': s.bridgeUrl,
+      'isOnline': s.isOnline,
+      'latencyMs': s.latencyMs,
+      'pairedAt': s.pairedAt.toIso8601String(),
+    };
 
-  static Server _serverFromJson(Map<String, dynamic> json) => Server(
-    id: json['id'] as String,
-    name: json['name'] as String,
-    lanAddress: json['lanAddress'] as String,
-    wsPort: json['wsPort'] as int? ?? 8765,
-    isOnline: json['isOnline'] as bool? ?? false,
-    pairedAt: DateTime.parse(json['pairedAt'] as String),
-  );
+    if (s.deviceToken != null) map['deviceToken'] = s.deviceToken;
+    if (s.deviceId != null) map['deviceId'] = s.deviceId;
+    // Note: sharedSecret, publicKey, serverPublicKey are stored in
+    // SecureKeyStorage, NOT in SharedPreferences.
+
+    return map;
+  }
+
+  static Server _serverFromJson(Map<String, dynamic> json) {
+    return Server(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      bridgeUrl: json['bridgeUrl'] as String? ?? '',
+      isOnline: json['isOnline'] as bool? ?? false,
+      latencyMs: json['latencyMs'] as int? ?? 0,
+      pairedAt: DateTime.parse(json['pairedAt'] as String),
+      deviceToken: json['deviceToken'] as String?,
+      deviceId: json['deviceId'] as String?,
+    );
+  }
 }

@@ -3,99 +3,95 @@ import 'dart:async';
 import 'package:bytebrew_mobile/core/domain/agent_info.dart';
 import 'package:bytebrew_mobile/core/domain/ask_user.dart';
 import 'package:bytebrew_mobile/core/domain/chat_message.dart';
+import 'package:bytebrew_mobile/core/domain/plan.dart';
 import 'package:bytebrew_mobile/core/domain/tool_call.dart';
-import 'package:bytebrew_mobile/core/infrastructure/ws/event_parser.dart';
-import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection_manager.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_types.dart';
 import 'package:bytebrew_mobile/features/chat/domain/chat_repository.dart';
-import 'package:bytebrew_mobile/features/chat/infrastructure/message_mapper.dart';
 
-/// [ChatRepository] backed by a WebSocket connection to the CLI.
+/// [ChatRepository] implementation backed by WebSocket via [WsConnectionManager].
 ///
-/// Receives initial messages from the `init` payload and real-time events
-/// from the CLI event stream.
+/// Manages an internal message list, handles optimistic updates for user
+/// actions, and processes session events from the server subscription.
 class WsChatRepository implements ChatRepository {
-  WsChatRepository({required WsConnection connection})
-    : _connection = connection;
+  WsChatRepository({
+    required WsConnectionManager connectionManager,
+    required String serverId,
+    required String sessionId,
+  }) : _connectionManager = connectionManager,
+       _serverId = serverId,
+       _sessionId = sessionId;
 
-  final WsConnection _connection;
+  final WsConnectionManager _connectionManager;
+  final String _serverId;
+  final String _sessionId;
+
   final List<ChatMessage> _messages = [];
-  final Map<String, AgentInfo> _agents = {};
-  final _messagesController = StreamController<List<ChatMessage>>.broadcast();
-  final _agentsController = StreamController<List<AgentInfo>>.broadcast();
-  StreamSubscription<Map<String, dynamic>>? _eventSub;
+  final StreamController<List<ChatMessage>> _messageController =
+      StreamController<List<ChatMessage>>.broadcast();
 
-  /// Loads initial messages from the connection and subscribes to events.
-  void loadInitMessages() {
-    for (final json in _connection.initMessages) {
-      final msg = MessageMapper.fromSnapshot(json);
-      _upsertMessage(msg);
-    }
-    _emitMessages();
+  StreamSubscription<SessionEvent>? _subscription;
+  String? _lastEventId;
+  bool _disposed = false;
 
-    // Subscribe to real-time events.
-    _eventSub = _connection.events.listen(_handleEvent);
-  }
+  /// Whether this repository is actively subscribed to session events.
+  bool get isSubscribed => _subscription != null;
 
-  void _handleEvent(Map<String, dynamic> event) {
-    final type = event['type'] as String?;
-
-    // Agent lifecycle -> update agents, not messages.
-    final agentInfo = parseAgentLifecycle(event);
-    if (agentInfo != null) {
-      _agents[agentInfo.agentId] = agentInfo;
-      _emitAgents();
-      return;
-    }
-
-    // Tool execution completed -> update existing tool call by callId.
-    if (type == 'ToolExecutionCompleted') {
-      final exec = event['execution'] as Map<String, dynamic>?;
-      if (exec != null) {
-        final callId = exec['callId'] as String? ?? '';
-        final index = _messages.indexWhere((m) => m.id == callId);
-        if (index != -1) {
-          final original = _messages[index];
-          if (original.toolCall != null) {
-            _messages[index] = original.copyWith(
-              type: ChatMessageType.toolResult,
-              toolCall: original.toolCall!.copyWith(
-                status: exec['error'] != null
-                    ? ToolCallStatus.failed
-                    : ToolCallStatus.completed,
-                result: exec['summary'] as String? ?? exec['result'] as String?,
-                error: exec['error'] as String?,
-              ),
-            );
-            _emitMessages();
-            return;
-          }
-        }
-      }
-    }
-
-    final msg = parseEventToChatMessage(event);
-    if (msg != null) {
-      _upsertMessage(msg);
-      _emitMessages();
-    }
-  }
+  // ---------------------------------------------------------------------------
+  // ChatRepository
+  // ---------------------------------------------------------------------------
 
   @override
-  Future<List<ChatMessage>> getMessages(String sessionId) async =>
-      List.unmodifiable(_messages);
+  Future<List<ChatMessage>> getMessages(String sessionId) async {
+    return List.unmodifiable(_messages);
+  }
 
   @override
   Future<void> sendMessage(String sessionId, String text) async {
-    // Optimistic update: add the user message immediately.
-    final msg = ChatMessage(
+    final userMessage = ChatMessage(
       id: 'user-${DateTime.now().millisecondsSinceEpoch}',
       type: ChatMessageType.userMessage,
       content: text,
       timestamp: DateTime.now(),
     );
-    _upsertMessage(msg);
+    _upsertMessage(userMessage);
     _emitMessages();
-    _connection.sendUserMessage(text);
+
+    final connection = _connectionManager.getConnection(_serverId);
+    if (connection == null ||
+        connection.status != WsConnectionStatus.connected) {
+      _upsertMessage(
+        ChatMessage(
+          id: 'error-${DateTime.now().millisecondsSinceEpoch}',
+          type: ChatMessageType.systemMessage,
+          content: 'Failed to send: Server not connected',
+          timestamp: DateTime.now(),
+        ),
+      );
+      _emitMessages();
+      return;
+    }
+
+    final result = await connection.client.sendNewTask(
+      deviceToken: connection.server.deviceToken!,
+      sessionId: _sessionId,
+      task: text,
+    );
+
+    if (!result.success) {
+      final errorText = result.errorMessage.isEmpty
+          ? 'Server not connected'
+          : result.errorMessage;
+      _upsertMessage(
+        ChatMessage(
+          id: 'error-${DateTime.now().millisecondsSinceEpoch}',
+          type: ChatMessageType.systemMessage,
+          content: 'Failed to send: $errorText',
+          timestamp: DateTime.now(),
+        ),
+      );
+      _emitMessages();
+    }
   }
 
   @override
@@ -104,49 +100,12 @@ class WsChatRepository implements ChatRepository {
     String askUserId,
     String answer,
   ) async {
-    final question =
-        _messages
-            .where((m) => m.askUser?.id == askUserId)
-            .firstOrNull
-            ?.askUser
-            ?.question ??
-        '';
-
-    _updateAskUserStatus(askUserId, answer);
-    _emitMessages();
-    _connection.sendAskUserAnswer(question, answer);
-  }
-
-  @override
-  Future<void> cancel(String sessionId) async {
-    _connection.sendCancel();
-  }
-
-  @override
-  Stream<List<ChatMessage>> watchMessages() => _messagesController.stream;
-
-  @override
-  Stream<List<AgentInfo>> watchAgents() => _agentsController.stream;
-
-  /// Releases resources. Call when the repository is no longer needed.
-  void dispose() {
-    _eventSub?.cancel();
-    _messagesController.close();
-    _agentsController.close();
-  }
-
-  void _upsertMessage(ChatMessage msg) {
-    final index = _messages.indexWhere((m) => m.id == msg.id);
-    if (index != -1) {
-      _messages[index] = msg;
-    } else {
-      _messages.add(msg);
-    }
-  }
-
-  void _updateAskUserStatus(String askUserId, String answer) {
-    final index = _messages.indexWhere((m) => m.askUser?.id == askUserId);
+    // Find the ask-user message and update it optimistically.
+    final index = _messages.indexWhere(
+      (m) => m.askUser != null && m.askUser!.id == askUserId,
+    );
     if (index == -1) return;
+
     final original = _messages[index];
     _messages[index] = original.copyWith(
       askUser: original.askUser!.copyWith(
@@ -154,16 +113,324 @@ class WsChatRepository implements ChatRepository {
         answer: answer,
       ),
     );
+    _emitMessages();
+
+    final connection = _connectionManager.getConnection(_serverId);
+    if (connection == null ||
+        connection.status != WsConnectionStatus.connected) {
+      _upsertMessage(
+        ChatMessage(
+          id: 'error-${DateTime.now().millisecondsSinceEpoch}',
+          type: ChatMessageType.systemMessage,
+          content: 'Failed to send reply: Server not connected',
+          timestamp: DateTime.now(),
+        ),
+      );
+      _emitMessages();
+      return;
+    }
+
+    final result = await connection.client.sendAskUserReply(
+      deviceToken: connection.server.deviceToken!,
+      sessionId: _sessionId,
+      question: original.askUser!.question,
+      answer: answer,
+    );
+
+    if (!result.success) {
+      final errorText = result.errorMessage.isEmpty
+          ? 'Server not connected'
+          : result.errorMessage;
+      _upsertMessage(
+        ChatMessage(
+          id: 'error-${DateTime.now().millisecondsSinceEpoch}',
+          type: ChatMessageType.systemMessage,
+          content: 'Failed to send reply: $errorText',
+          timestamp: DateTime.now(),
+        ),
+      );
+      _emitMessages();
+    }
+  }
+
+  @override
+  Future<void> cancel(String sessionId) async {
+    final connection = _connectionManager.getConnection(_serverId);
+    if (connection == null ||
+        connection.status != WsConnectionStatus.connected) {
+      return;
+    }
+
+    await connection.client.cancelSession(
+      deviceToken: connection.server.deviceToken!,
+      sessionId: _sessionId,
+    );
+  }
+
+  @override
+  Stream<List<ChatMessage>> watchMessages() => _messageController.stream;
+
+  @override
+  Stream<List<AgentInfo>>? watchAgents() => null;
+
+  // ---------------------------------------------------------------------------
+  // Subscription
+  // ---------------------------------------------------------------------------
+
+  /// Subscribes to session events from the server.
+  void subscribe() {
+    final connection = _connectionManager.getConnection(_serverId);
+    if (connection == null ||
+        connection.status != WsConnectionStatus.connected) {
+      return;
+    }
+
+    final stream = connection.client.subscribeSession(
+      deviceToken: connection.server.deviceToken!,
+      sessionId: _sessionId,
+      lastEventId: _lastEventId,
+    );
+
+    _subscription = stream.listen(
+      _handleEvent,
+      onError: (error) {
+        _connectionManager.markConnectionLost(_serverId, reason: '$error');
+      },
+      cancelOnError: false,
+    );
+  }
+
+  /// Cleans up stream controllers and subscriptions.
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+
+    _subscription?.cancel();
+    _subscription = null;
+    _messageController.close();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Event handling
+  // ---------------------------------------------------------------------------
+
+  void _handleEvent(SessionEvent event) {
+    _lastEventId = event.eventId;
+
+    final payload = event.payload;
+    if (payload == null) return;
+
+    switch (payload) {
+      case AgentMessagePayload():
+        _handleAgentMessage(event, payload);
+      case ToolCallStartPayload():
+        _handleToolCallStart(event, payload);
+      case ToolCallEndPayload():
+        _handleToolCallEnd(payload);
+      case ReasoningPayload():
+        _handleReasoning(event, payload);
+      case AskUserPayload():
+        _handleAskUser(event, payload);
+      case PlanPayload():
+        _handlePlan(event, payload);
+      case SessionStatusPayload():
+        _handleSessionStatus(event, payload);
+      case ErrorPayload():
+        _handleError(event, payload);
+    }
+  }
+
+  void _handleAgentMessage(SessionEvent event, AgentMessagePayload payload) {
+    if (payload.isComplete) {
+      _upsertMessage(
+        ChatMessage(
+          id: event.eventId,
+          type: ChatMessageType.agentMessage,
+          content: payload.content,
+          timestamp: event.timestamp,
+          agentId: event.agentId,
+        ),
+      );
+      _emitMessages();
+      return;
+    }
+
+    // Streaming: accumulate content using agentId-step as the key.
+    final streamId = '${event.agentId}-${event.step}';
+    final existingIndex = _messages.indexWhere((m) => m.id == streamId);
+
+    if (existingIndex != -1) {
+      final existing = _messages[existingIndex];
+      _messages[existingIndex] = existing.copyWith(
+        content: '${existing.content}${payload.content}',
+      );
+    } else {
+      _messages.add(
+        ChatMessage(
+          id: streamId,
+          type: ChatMessageType.agentMessage,
+          content: payload.content,
+          timestamp: event.timestamp,
+          agentId: event.agentId,
+        ),
+      );
+    }
+
+    _emitMessages();
+  }
+
+  void _handleToolCallStart(SessionEvent event, ToolCallStartPayload payload) {
+    _upsertMessage(
+      ChatMessage(
+        id: payload.callId,
+        type: ChatMessageType.toolCall,
+        content: '',
+        timestamp: event.timestamp,
+        agentId: event.agentId,
+        toolCall: ToolCallData(
+          id: payload.callId,
+          toolName: payload.toolName,
+          arguments: payload.arguments,
+          status: ToolCallStatus.running,
+        ),
+      ),
+    );
+    _emitMessages();
+  }
+
+  void _handleToolCallEnd(ToolCallEndPayload payload) {
+    final index = _messages.indexWhere((m) => m.id == payload.callId);
+    if (index == -1) return;
+
+    final existing = _messages[index];
+    _messages[index] = existing.copyWith(
+      toolCall: existing.toolCall!.copyWith(
+        status: payload.hasError
+            ? ToolCallStatus.failed
+            : ToolCallStatus.completed,
+        result: payload.hasError ? null : payload.resultSummary,
+        error: payload.hasError ? payload.resultSummary : null,
+      ),
+    );
+    _emitMessages();
+  }
+
+  void _handleReasoning(SessionEvent event, ReasoningPayload payload) {
+    if (!payload.isComplete) return;
+
+    _upsertMessage(
+      ChatMessage(
+        id: event.eventId,
+        type: ChatMessageType.reasoning,
+        content: payload.content,
+        timestamp: event.timestamp,
+        agentId: event.agentId,
+      ),
+    );
+    _emitMessages();
+  }
+
+  void _handleAskUser(SessionEvent event, AskUserPayload payload) {
+    if (payload.isAnswered) return;
+
+    final askId = 'ask-${event.eventId}';
+    _upsertMessage(
+      ChatMessage(
+        id: askId,
+        type: ChatMessageType.askUser,
+        content: '',
+        timestamp: event.timestamp,
+        agentId: event.agentId,
+        askUser: AskUserData(
+          id: askId,
+          question: payload.question,
+          options: payload.options,
+          status: AskUserStatus.pending,
+        ),
+      ),
+    );
+    _emitMessages();
+  }
+
+  void _handlePlan(SessionEvent event, PlanPayload payload) {
+    final planId = 'plan-${event.agentId}';
+    _upsertMessage(
+      ChatMessage(
+        id: planId,
+        type: ChatMessageType.planUpdate,
+        content: '',
+        timestamp: event.timestamp,
+        agentId: event.agentId,
+        plan: PlanData(
+          goal: payload.planName,
+          steps: [
+            for (var i = 0; i < payload.steps.length; i++)
+              PlanStep(
+                index: i,
+                description: payload.steps[i].title,
+                status: _mapPlanStepStatus(payload.steps[i].status),
+              ),
+          ],
+        ),
+      ),
+    );
+    _emitMessages();
+  }
+
+  void _handleSessionStatus(SessionEvent event, SessionStatusPayload payload) {
+    final content = payload.message.isNotEmpty
+        ? payload.message
+        : 'Session status: ${payload.state.name}';
+
+    _upsertMessage(
+      ChatMessage(
+        id: event.eventId,
+        type: ChatMessageType.systemMessage,
+        content: content,
+        timestamp: event.timestamp,
+      ),
+    );
+    _emitMessages();
+  }
+
+  void _handleError(SessionEvent event, ErrorPayload payload) {
+    _upsertMessage(
+      ChatMessage(
+        id: event.eventId,
+        type: ChatMessageType.systemMessage,
+        content: 'Error [${payload.code}]: ${payload.message}',
+        timestamp: event.timestamp,
+      ),
+    );
+    _emitMessages();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  /// Inserts or replaces a message with the same [ChatMessage.id].
+  void _upsertMessage(ChatMessage message) {
+    final index = _messages.indexWhere((m) => m.id == message.id);
+    if (index != -1) {
+      _messages[index] = message;
+    } else {
+      _messages.add(message);
+    }
   }
 
   void _emitMessages() {
-    if (_messagesController.isClosed) return;
-    _messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    _messagesController.add(List.unmodifiable(_messages));
+    if (_disposed) return;
+    _messageController.add(List.unmodifiable(_messages));
   }
 
-  void _emitAgents() {
-    if (_agentsController.isClosed) return;
-    _agentsController.add(List.unmodifiable(_agents.values.toList()));
+  static PlanStepStatus _mapPlanStepStatus(WsPlanStepStatus status) {
+    return switch (status) {
+      WsPlanStepStatus.completed => PlanStepStatus.completed,
+      WsPlanStepStatus.inProgress => PlanStepStatus.inProgress,
+      WsPlanStepStatus.pending => PlanStepStatus.pending,
+      WsPlanStepStatus.failed => PlanStepStatus.failed,
+      WsPlanStepStatus.unspecified => PlanStepStatus.pending,
+    };
   }
 }

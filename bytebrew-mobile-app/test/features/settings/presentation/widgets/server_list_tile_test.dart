@@ -1,11 +1,13 @@
 import 'package:bytebrew_mobile/core/domain/server.dart';
-import 'package:bytebrew_mobile/core/infrastructure/grpc/connection_manager.dart';
-import 'package:bytebrew_mobile/core/infrastructure/grpc/grpc_providers.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection_manager.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_providers.dart';
 import 'package:bytebrew_mobile/core/widgets/status_indicator.dart';
 import 'package:bytebrew_mobile/features/settings/presentation/widgets/server_list_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../../../helpers/fakes.dart';
 
 // ---------------------------------------------------------------------------
 // Test data
@@ -16,8 +18,7 @@ final _now = DateTime.now();
 final _onlineServer = Server(
   id: 'srv-1',
   name: 'MacBook Pro',
-  lanAddress: '192.168.1.50',
-  connectionMode: ConnectionMode.lan,
+  bridgeUrl: 'ws://bridge.bytebrew.ai:8080',
   isOnline: true,
   latencyMs: 5,
   pairedAt: _now.subtract(const Duration(days: 30)),
@@ -26,9 +27,7 @@ final _onlineServer = Server(
 final _bridgeServer = Server(
   id: 'srv-2',
   name: 'Desktop PC',
-  lanAddress: '192.168.1.100',
-  bridgeUrl: 'bridge.bytebrew.ai',
-  connectionMode: ConnectionMode.bridge,
+  bridgeUrl: 'ws://bridge.bytebrew.ai:8080',
   isOnline: true,
   latencyMs: 45,
   pairedAt: _now.subtract(const Duration(days: 7)),
@@ -40,17 +39,13 @@ final _bridgeServer = Server(
 
 void main() {
   testWidgets('ServerListTile renders server name', (tester) async {
-    final manager = ConnectionManager();
+    final manager = FakeConnectionManager();
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          connectionManagerProvider.overrideWith((ref) => manager),
-        ],
+        overrides: [connectionManagerProvider.overrideWithValue(manager)],
         child: MaterialApp(
-          home: Scaffold(
-            body: ServerListTile(server: _onlineServer),
-          ),
+          home: Scaffold(body: ServerListTile(server: _onlineServer)),
         ),
       ),
     );
@@ -60,39 +55,31 @@ void main() {
     expect(find.text('MacBook Pro'), findsOneWidget);
   });
 
-  testWidgets('ServerListTile shows LAN address in subtitle', (tester) async {
-    final manager = ConnectionManager();
+  testWidgets('ServerListTile shows bridge URL in subtitle', (tester) async {
+    final manager = FakeConnectionManager();
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          connectionManagerProvider.overrideWith((ref) => manager),
-        ],
+        overrides: [connectionManagerProvider.overrideWithValue(manager)],
         child: MaterialApp(
-          home: Scaffold(
-            body: ServerListTile(server: _onlineServer),
-          ),
+          home: Scaffold(body: ServerListTile(server: _onlineServer)),
         ),
       ),
     );
 
     await tester.pumpAndSettle();
 
-    expect(find.text('LAN: 192.168.1.50'), findsOneWidget);
+    expect(find.text('Bridge: ws://bridge.bytebrew.ai:8080'), findsOneWidget);
   });
 
   testWidgets('ServerListTile shows latency', (tester) async {
-    final manager = ConnectionManager();
+    final manager = FakeConnectionManager();
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          connectionManagerProvider.overrideWith((ref) => manager),
-        ],
+        overrides: [connectionManagerProvider.overrideWithValue(manager)],
         child: MaterialApp(
-          home: Scaffold(
-            body: ServerListTile(server: _onlineServer),
-          ),
+          home: Scaffold(body: ServerListTile(server: _onlineServer)),
         ),
       ),
     );
@@ -102,19 +89,16 @@ void main() {
     expect(find.text('5ms'), findsOneWidget);
   });
 
-  testWidgets('ServerListTile shows "Offline" route when not connected',
-      (tester) async {
-    final manager = ConnectionManager();
+  testWidgets('ServerListTile shows "Offline" route when not connected', (
+    tester,
+  ) async {
+    final manager = FakeConnectionManager();
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          connectionManagerProvider.overrideWith((ref) => manager),
-        ],
+        overrides: [connectionManagerProvider.overrideWithValue(manager)],
         child: MaterialApp(
-          home: Scaffold(
-            body: ServerListTile(server: _onlineServer),
-          ),
+          home: Scaffold(body: ServerListTile(server: _onlineServer)),
         ),
       ),
     );
@@ -125,17 +109,13 @@ void main() {
   });
 
   testWidgets('ServerListTile renders StatusIndicator', (tester) async {
-    final manager = ConnectionManager();
+    final manager = FakeConnectionManager();
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          connectionManagerProvider.overrideWith((ref) => manager),
-        ],
+        overrides: [connectionManagerProvider.overrideWithValue(manager)],
         child: MaterialApp(
-          home: Scaffold(
-            body: ServerListTile(server: _onlineServer),
-          ),
+          home: Scaffold(body: ServerListTile(server: _onlineServer)),
         ),
       ),
     );
@@ -145,19 +125,14 @@ void main() {
     expect(find.byType(StatusIndicator), findsOneWidget);
   });
 
-  testWidgets('ServerListTile shows latency for bridge server',
-      (tester) async {
-    final manager = ConnectionManager();
+  testWidgets('ServerListTile shows latency for bridge server', (tester) async {
+    final manager = FakeConnectionManager();
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          connectionManagerProvider.overrideWith((ref) => manager),
-        ],
+        overrides: [connectionManagerProvider.overrideWithValue(manager)],
         child: MaterialApp(
-          home: Scaffold(
-            body: ServerListTile(server: _bridgeServer),
-          ),
+          home: Scaffold(body: ServerListTile(server: _bridgeServer)),
         ),
       ),
     );
@@ -168,22 +143,16 @@ void main() {
     expect(find.text('45ms'), findsOneWidget);
   });
 
-  testWidgets('ServerListTile is dismissible when onDismissed is set',
-      (tester) async {
-    final manager = ConnectionManager();
-    var dismissed = false;
-
+  testWidgets('ServerListTile is dismissible when onDismissed is set', (
+    tester,
+  ) async {
+    final manager = FakeConnectionManager();
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          connectionManagerProvider.overrideWith((ref) => manager),
-        ],
+        overrides: [connectionManagerProvider.overrideWithValue(manager)],
         child: MaterialApp(
           home: Scaffold(
-            body: ServerListTile(
-              server: _onlineServer,
-              onDismissed: () => dismissed = true,
-            ),
+            body: ServerListTile(server: _onlineServer, onDismissed: () {}),
           ),
         ),
       ),
@@ -195,19 +164,16 @@ void main() {
     expect(find.byType(Dismissible), findsOneWidget);
   });
 
-  testWidgets('ServerListTile is not dismissible when onDismissed is null',
-      (tester) async {
-    final manager = ConnectionManager();
+  testWidgets('ServerListTile is not dismissible when onDismissed is null', (
+    tester,
+  ) async {
+    final manager = FakeConnectionManager();
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          connectionManagerProvider.overrideWith((ref) => manager),
-        ],
+        overrides: [connectionManagerProvider.overrideWithValue(manager)],
         child: MaterialApp(
-          home: Scaffold(
-            body: ServerListTile(server: _onlineServer),
-          ),
+          home: Scaffold(body: ServerListTile(server: _onlineServer)),
         ),
       ),
     );
