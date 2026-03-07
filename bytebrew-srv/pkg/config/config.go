@@ -163,9 +163,8 @@ type MetricsConfig struct {
 
 // SecurityConfig holds security configuration
 type SecurityConfig struct {
-	APIKey      string `mapstructure:"api_key"`
-	EnableAuth  bool   `mapstructure:"enable_auth"`
-	BridgeToken string `mapstructure:"bridge_token"`
+	APIKey     string `mapstructure:"api_key"`
+	EnableAuth bool   `mapstructure:"enable_auth"`
 }
 
 // QAConfig holds QA configuration

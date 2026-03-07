@@ -1,10 +1,10 @@
 import qrcode from 'qrcode-terminal';
 
 interface QrPayload {
-  bridge?: string;
-  sid: string;
-  spk: string;
+  server_id: string;
+  server_public_key?: string;
   token: string;
+  bridge_url: string;
 }
 
 /** Payload for local PairingService (Bridge mode, no gRPC server needed) */
@@ -27,13 +27,14 @@ export class QrPairingCodeGenerator {
     const { info, bridgeUrl } = params;
 
     const payload: QrPayload = {
-      sid: info.serverId,
-      spk: info.serverPublicKey.length > 0
-        ? Buffer.from(info.serverPublicKey).toString('base64')
-        : '',
+      server_id: info.serverId,
       token: info.token,
-      bridge: bridgeUrl,
+      bridge_url: bridgeUrl,
     };
+
+    if (info.serverPublicKey.length > 0) {
+      payload.server_public_key = Buffer.from(info.serverPublicKey).toString('base64');
+    }
 
     return JSON.stringify(payload);
   }

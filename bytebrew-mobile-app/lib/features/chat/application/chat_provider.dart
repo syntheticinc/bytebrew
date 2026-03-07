@@ -23,12 +23,13 @@ ChatRepository chatRepository(Ref ref) {
 
 /// Resolves the [ChatRepository] for a specific [sessionId].
 ///
-/// Looks up the session to find its serverId, then creates a
-/// [WsChatRepository] connected via [WsConnectionManager].
+/// Uses [ref.read] instead of [ref.watch] on [sessionsProvider] to avoid
+/// rebuilding (and dropping messages) when the session list refreshes.
+/// The serverId is captured once at creation time.
 /// Falls back to [EmptyChatRepository] if the session is not found.
 @riverpod
 ChatRepository sessionChatRepository(Ref ref, String sessionId) {
-  final sessionsAsync = ref.watch(sessionsProvider);
+  final sessionsAsync = ref.read(sessionsProvider);
   final session = sessionsAsync.whenOrNull(
     data: (sessions) => sessions.where((s) => s.id == sessionId).firstOrNull,
   );

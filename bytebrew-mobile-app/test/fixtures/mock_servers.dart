@@ -4,8 +4,7 @@ final mockServers = [
   Server(
     id: 'server-1',
     name: 'MacBook Pro',
-    lanAddress: '192.168.1.50',
-    connectionMode: ConnectionMode.lan,
+    bridgeUrl: 'wss://bridge.bytebrew.ai',
     isOnline: true,
     latencyMs: 5,
     pairedAt: DateTime.now().subtract(const Duration(days: 30)),
@@ -13,9 +12,7 @@ final mockServers = [
   Server(
     id: 'server-2',
     name: 'Desktop PC',
-    lanAddress: '192.168.1.100',
-    bridgeUrl: 'bridge.bytebrew.ai',
-    connectionMode: ConnectionMode.bridge,
+    bridgeUrl: 'wss://bridge.bytebrew.ai',
     isOnline: true,
     latencyMs: 45,
     pairedAt: DateTime.now().subtract(const Duration(days: 7)),

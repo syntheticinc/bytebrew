@@ -25,6 +25,7 @@ export const App: React.FC<AppProps> = ({ config, initialQuestion }) => {
       sessionId: config.sessionId,
       bridgeAddress: config.bridgeAddress,
       bridgeEnabled: config.bridgeEnabled,
+      bridgeAuthToken: config.bridgeAuthToken,
       serverId: config.serverId,
       askUserCallback: createInteractiveAskUserCallback(),
     });

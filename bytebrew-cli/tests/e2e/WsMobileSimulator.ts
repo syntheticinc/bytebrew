@@ -61,6 +61,8 @@ export class WsMobileSimulator {
   private ws: WebSocket | null = null;
   private _deviceId: string;
   private _deviceToken: string | null = null;
+  private _bridgeUrl: string = '';
+  private _serverId: string = '';
 
   // E2E encryption
   private crypto = new CryptoService();
@@ -99,7 +101,16 @@ export class WsMobileSimulator {
    * Connect to Bridge /connect endpoint as a mobile device.
    */
   async connect(bridgeUrl: string, serverId: string): Promise<void> {
-    const wsUrl = `${bridgeUrl}/connect?server_id=${serverId}&device_id=${this._deviceId}`;
+    this._bridgeUrl = bridgeUrl;
+    this._serverId = serverId;
+    await this.connectWs();
+  }
+
+  /**
+   * Internal: establish WS connection with current device_id.
+   */
+  private async connectWs(): Promise<void> {
+    const wsUrl = `${this._bridgeUrl}/connect?server_id=${this._serverId}&device_id=${this._deviceId}`;
     this.ws = new WebSocket(wsUrl);
 
     await new Promise<void>((resolve, reject) => {
@@ -162,9 +173,7 @@ export class WsMobileSimulator {
     this._deviceToken = deviceToken;
 
     // The server may assign a different device_id
-    if (payload.device_id) {
-      this._deviceId = payload.device_id as string;
-    }
+    const authenticatedDeviceId = (payload.device_id as string) ?? this._deviceId;
 
     // If server returned server_public_key, compute sharedSecret for E2E encryption
     const serverPublicKeyB64 = payload.server_public_key as string | undefined;
@@ -174,6 +183,15 @@ export class WsMobileSimulator {
         this.myKeyPair.privateKey,
         serverPublicKey,
       );
+    }
+
+    // Reconnect with authenticated device_id (like real mobile app).
+    if (authenticatedDeviceId !== this._deviceId) {
+      this._deviceId = authenticatedDeviceId;
+      this.ws?.close();
+      this.ws = null;
+      await this.connectWs();
+      await new Promise((r) => setTimeout(r, 100));
     }
 
     return {

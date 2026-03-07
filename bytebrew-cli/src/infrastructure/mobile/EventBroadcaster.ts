@@ -129,16 +129,17 @@ export class EventBroadcaster {
 }
 
 /**
- * Converts a DomainEvent into a serializable plain object for mobile clients.
- * Mirrors the mapping from MobileProxyServer.serializeEvent.
+ * Converts a DomainEvent into a flat serializable object for mobile clients.
+ * Uses flat fields (no nested objects) so the Flutter app can read them directly.
  */
 function serializeEvent(event: DomainEvent): SerializedEvent {
   switch (event.type) {
-    case 'MessageCompleted':
-      return {
-        type: event.type,
-        message: event.message.toSnapshot(),
-      };
+    case 'MessageCompleted': {
+      const snap = event.message.toSnapshot();
+      const result: SerializedEvent = { type: event.type, content: snap.content };
+      if (snap.agentId) result.agent_id = snap.agentId;
+      return result;
+    }
 
     case 'MessageStarted':
       return {
@@ -147,18 +148,39 @@ function serializeEvent(event: DomainEvent): SerializedEvent {
         role: event.role,
       };
 
-    case 'ToolExecutionStarted':
-    case 'ToolExecutionCompleted':
-      return {
+    case 'ToolExecutionStarted': {
+      const snap = event.execution.toSnapshot();
+      const result: SerializedEvent = {
         type: event.type,
-        execution: event.execution.toSnapshot(),
+        call_id: snap.callId,
+        tool_name: snap.toolName,
+        arguments: snap.arguments,
       };
+      if (snap.agentId) result.agent_id = snap.agentId;
+      return result;
+    }
 
-    case 'AskUserRequested':
+    case 'ToolExecutionCompleted': {
+      const snap = event.execution.toSnapshot();
+      const result: SerializedEvent = {
+        type: event.type,
+        call_id: snap.callId,
+        tool_name: snap.toolName,
+        result_summary: snap.summary ?? '',
+        has_error: !!snap.error,
+      };
+      if (snap.agentId) result.agent_id = snap.agentId;
+      return result;
+    }
+
+    case 'AskUserRequested': {
+      const firstQ = event.questions?.[0];
       return {
         type: event.type,
-        questions: event.questions,
+        question: firstQ?.text ?? '',
+        options: (firstQ?.options ?? []).map((o: { label: string }) => o.label),
       };
+    }
 
     case 'StreamingProgress':
       return {
@@ -169,14 +191,16 @@ function serializeEvent(event: DomainEvent): SerializedEvent {
       };
 
     case 'ProcessingStarted':
+      return { type: event.type, state: 'processing' };
+
     case 'ProcessingStopped':
-      return { type: event.type };
+      return { type: event.type, state: 'idle' };
 
     case 'ErrorOccurred':
       return {
-        type: event.type,
+        type: 'Error',
         message: event.error.message,
-        context: event.context,
+        code: 'error',
       };
 
     case 'AgentLifecycle':

@@ -88,23 +88,47 @@ class _SessionsList extends StatelessWidget {
   }
 }
 
-/// Card shown when there is an active connection to a CLI server.
+/// Section header + status line shown when there is an active CLI connection.
+///
+/// Uses the same monospace uppercase header style as [SessionGroup] headers
+/// (e.g. "IN PROGRESS", "ACTION REQUIRED") for visual consistency.
 class _LiveSessionCard extends StatelessWidget {
   const _LiveSessionCard();
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Card(
-        color: theme.colorScheme.primaryContainer,
-        child: ListTile(
-          leading: Icon(Icons.circle, color: AppColors.statusActive, size: 12),
-          title: const Text('Live Session'),
-          subtitle: const Text('Connected to CLI'),
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text(
+            'LIVE',
+            style: theme.textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+              letterSpacing: 2,
+              color: AppColors.statusActive,
+            ),
+          ),
         ),
-      ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+          child: Row(
+            children: [
+              Icon(Icons.circle, color: AppColors.statusActive, size: 8),
+              const SizedBox(width: 8),
+              Text(
+                'Connected to CLI',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppColors.shade3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

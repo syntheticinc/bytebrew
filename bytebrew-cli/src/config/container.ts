@@ -31,7 +31,7 @@ import { LspService } from '../infrastructure/lsp/LspService.js';
 import { AgentStateManager } from '../infrastructure/state/AgentStateManager.js';
 import { ShellSessionManager } from '../infrastructure/shell/ShellSessionManager.js';
 import type { AskUserCallback } from '../tools/askUser.js';
-import { resolveAskUser } from '../tools/askUser.js';
+import { resolveAskUser, createInteractiveAskUserCallback, setAskUserEventBus } from '../tools/askUser.js';
 // Bridge + Mobile components
 import { BridgeConnector, type IBridgeConnector } from '../infrastructure/bridge/BridgeConnector.js';
 import { BridgeMessageRouter, type IBridgeMessageRouter } from '../infrastructure/bridge/BridgeMessageRouter.js';
@@ -126,6 +126,12 @@ export class Container {
     this._diagnosticsService = new DiagnosticsService(this._lspManager);
     this._lspService = new LspService(this._lspManager);
     this._shellSessionManager = new ShellSessionManager();
+    // When bridge is enabled (mobile support), automatically use interactive ask_user
+    // callback so AskUserTool blocks and publishes AskUserRequested via EventBus
+    // (mobile devices can then reply). Without this, ask_user auto-answers immediately.
+    const askUserCallback = config.askUserCallback
+      ?? (config.bridgeEnabled ? createInteractiveAskUserCallback() : undefined);
+
     this._toolExecutor = config.overrides?.toolExecutor ?? new ToolExecutorAdapter(
       config.projectRoot,
       ToolManager,
@@ -134,7 +140,7 @@ export class Container {
       this._shellSessionManager,
       {
         headlessMode: config.headlessMode,
-        askUserCallback: config.askUserCallback,
+        askUserCallback,
       },
     );
     this._agentStateManager = new AgentStateManager();
@@ -185,6 +191,9 @@ export class Container {
   private initializeBridge(): void {
     const serverId = this._config.serverId ?? uuidv4();
     const authToken = this._config.bridgeAuthToken ?? '';
+
+    // Wire EventBus for AskUser events so mobile gets AskUserRequested notifications
+    setAskUserEventBus(this._eventBus);
 
     // Infrastructure stores
     this._deviceStore = new InMemoryDeviceStore();
@@ -242,7 +251,15 @@ export class Container {
       void (async () => {
         const response = await this._mobileRequestHandler!.handleMessage(deviceId, message);
         if (response) {
+          // Send BEFORE registering alias — pair_response must be plaintext
+          // because mobile needs server_public_key to compute shared secret.
           this._bridgeMessageRouter!.sendMessage(deviceId, response);
+
+          // After pair_response is sent, register alias so future encrypted
+          // messages from this bridge device_id can find the shared secret.
+          if (response.type === 'pair_response' && response.payload?.device_id) {
+            cryptoAdapter.registerAlias(deviceId, response.payload.device_id as string);
+          }
         }
       })();
     });

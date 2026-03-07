@@ -8,7 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"sync"
-	"time"
 
 	"github.com/coder/websocket"
 )
@@ -30,7 +29,6 @@ const (
 	MsgTypeData               = "data"
 	MsgTypeDeviceConnected    = "device_connected"
 	MsgTypeDeviceDisconnected = "device_disconnected"
-	MsgTypeError              = "error"
 )
 
 // serverConn represents a registered CLI server connection.
@@ -318,9 +316,8 @@ func (r *WsRelay) closeServerDevices(sc *serverConn) {
 
 // OnlineServer contains public info about a registered server.
 type OnlineServer struct {
-	ServerID    string    `json:"server_id"`
-	ServerName  string    `json:"server_name"`
-	ConnectedAt time.Time `json:"connected_at"`
+	ServerID   string `json:"server_id"`
+	ServerName string `json:"server_name"`
 }
 
 // ListOnline returns all currently registered servers.

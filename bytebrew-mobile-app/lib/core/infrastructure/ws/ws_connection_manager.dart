@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
@@ -7,14 +6,6 @@ import 'package:bytebrew_mobile/core/crypto/message_cipher.dart';
 import 'package:bytebrew_mobile/core/domain/server.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_bridge_client.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart';
-import 'package:bytebrew_mobile/core/infrastructure/ws/ws_types.dart';
-
-// ---------------------------------------------------------------------------
-// Enums
-// ---------------------------------------------------------------------------
-
-/// Connection status for a WebSocket connection via Bridge.
-enum WsConnectionStatus { disconnected, connecting, connected, error }
 
 // ---------------------------------------------------------------------------
 // WsServerConnection
@@ -243,32 +234,5 @@ class WsConnectionManager extends ChangeNotifier {
     }
 
     notifyListeners();
-  }
-
-  // -----------------------------------------------------------------------
-  // Encryption helpers
-  // -----------------------------------------------------------------------
-
-  /// Encrypts [data] for the given server.
-  Future<Uint8List> encryptForServer(
-    String serverId,
-    Uint8List data,
-    int counter,
-  ) async {
-    final serverConn = _connections[serverId];
-    if (serverConn?.cipher == null) return data;
-
-    return serverConn!.cipher!.encrypt(data, counter);
-  }
-
-  /// Decrypts [data] from the given server.
-  Future<(Uint8List, int)> decryptFromServer(
-    String serverId,
-    Uint8List data,
-  ) async {
-    final serverConn = _connections[serverId];
-    if (serverConn?.cipher == null) return (data, 0);
-
-    return serverConn!.cipher!.decrypt(data);
   }
 }

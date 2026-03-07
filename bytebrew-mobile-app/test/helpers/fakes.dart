@@ -8,6 +8,7 @@ import 'package:bytebrew_mobile/features/auth/domain/auth_repository.dart';
 import 'package:bytebrew_mobile/features/auth/infrastructure/token_storage.dart';
 import 'package:bytebrew_mobile/features/chat/domain/chat_repository.dart';
 import 'package:bytebrew_mobile/core/domain/server.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection_manager.dart';
 import 'package:bytebrew_mobile/features/sessions/application/sessions_provider.dart';
 import 'package:bytebrew_mobile/features/settings/domain/settings_repository.dart';

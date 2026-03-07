@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/domain/server.dart';
+import '../../../../core/infrastructure/ws/ws_connection.dart';
 import '../../../../core/infrastructure/ws/ws_connection_manager.dart';
 import '../../../../core/infrastructure/ws/ws_providers.dart';
 import '../../../../core/theme/app_colors.dart';

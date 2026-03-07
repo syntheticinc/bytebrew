@@ -4,6 +4,7 @@ import { ByteBrewHome } from './ByteBrewHome.js';
 
 export interface ByteBrewConfigData {
   bridge_url?: string;
+  bridge_auth_token?: string;
 }
 
 export class ByteBrewConfig {
@@ -40,6 +41,17 @@ export class ByteBrewConfig {
   clearBridgeUrl(): void {
     const config = this.load();
     delete config.bridge_url;
+    delete config.bridge_auth_token;
+    this.save(config);
+  }
+
+  getBridgeAuthToken(): string | undefined {
+    return this.load().bridge_auth_token;
+  }
+
+  setBridgeAuthToken(token: string): void {
+    const config = this.load();
+    config.bridge_auth_token = token;
     this.save(config);
   }
 }

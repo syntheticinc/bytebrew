@@ -52,6 +52,7 @@ export abstract class BaseHeadlessRunner {
       headlessMode: true,
       bridgeAddress: this.config.bridgeAddress,
       bridgeEnabled: this.config.bridgeEnabled,
+      bridgeAuthToken: this.config.bridgeAuthToken,
       serverId: this.config.serverId,
     });
     return this.container;

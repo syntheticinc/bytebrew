@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
@@ -35,7 +34,8 @@ class WsBridgeClient {
   final Map<String, StreamController<Map<String, dynamic>>> _eventControllers =
       {};
 
-  int _encryptCounter = 0;
+  int _requestCounter = 0;
+  int _sendCounter = 0;
   bool _disposed = false;
 
   // -------------------------------------------------------------------------
@@ -103,7 +103,7 @@ class WsBridgeClient {
       final s = json as Map<String, dynamic>;
       return MobileSession(
         sessionId: s['session_id'] as String? ?? '',
-        projectKey: s['project_key'] as String? ?? '',
+        projectKey: s['project_name'] as String? ?? s['project_key'] as String? ?? '',
         projectRoot: s['project_root'] as String? ?? '',
         status: _parseSessionState(s['status'] as String?),
         currentTask: s['current_task'] as String? ?? '',
@@ -242,7 +242,12 @@ class WsBridgeClient {
     final completer = Completer<Map<String, dynamic>>();
     _pendingRequests[requestId] = completer;
 
-    final message = _buildMessage(type, requestId, payload, encrypt: encrypt);
+    final message = await _buildMessage(
+      type,
+      requestId,
+      payload,
+      encrypt: encrypt,
+    );
     _connection.send(message);
 
     // Timeout after 30 seconds.
@@ -258,9 +263,12 @@ class WsBridgeClient {
     );
   }
 
-  void _sendRequestFireAndForget(String type, Map<String, dynamic> payload) {
+  Future<void> _sendRequestFireAndForget(
+    String type,
+    Map<String, dynamic> payload,
+  ) async {
     final requestId = _generateRequestId();
-    final message = _buildMessage(type, requestId, payload);
+    final message = await _buildMessage(type, requestId, payload);
     _connection.send(message);
   }
 
@@ -278,29 +286,32 @@ class WsBridgeClient {
     }
   }
 
-  Map<String, dynamic> _buildMessage(
+  Future<Map<String, dynamic>> _buildMessage(
     String type,
     String requestId,
     Map<String, dynamic> payload, {
     bool encrypt = true,
-  }) {
-    final dynamic encodedPayload;
-    if (encrypt && cipher != null) {
-      // Encrypt payload to base64 string.
-      // Note: encryption is async but we need sync here for message building.
-      // We'll handle this by pre-encrypting before send.
-      encodedPayload = payload;
-    } else {
-      encodedPayload = payload;
-    }
-
-    // Wrap in Bridge's "data" envelope.
+  }) async {
+    // Build the inner (CLI-level) message.
     final innerMessage = <String, dynamic>{
       'type': type,
       'request_id': requestId,
       'device_id': deviceId,
-      'payload': encodedPayload,
+      'payload': payload,
     };
+
+    if (encrypt && cipher != null) {
+      // Encrypt the entire inner message to a base64 string.
+      final jsonBytes = utf8.encode(jsonEncode(innerMessage));
+      final encrypted = await cipher!.encrypt(
+        Uint8List.fromList(jsonBytes),
+        _sendCounter++,
+      );
+      return <String, dynamic>{
+        'type': 'data',
+        'payload': base64Encode(encrypted),
+      };
+    }
 
     return <String, dynamic>{'type': 'data', 'payload': innerMessage};
   }
@@ -427,7 +438,7 @@ class WsBridgeClient {
       'ProcessingStarted' ||
       'ProcessingCompleted' ||
       'ProcessingStopped' => SessionEventType.sessionStatus,
-      'Error' => SessionEventType.error,
+      'Error' || 'ErrorOccurred' => SessionEventType.error,
       _ => SessionEventType.unspecified,
     };
   }
@@ -483,7 +494,7 @@ class WsBridgeClient {
 
   String _generateRequestId() {
     final now = DateTime.now().millisecondsSinceEpoch;
-    return 'req-$now-${_encryptCounter++}';
+    return 'req-$now-${_requestCounter++}';
   }
 
   static DateTime _parseDateTime(dynamic value) {
@@ -503,6 +514,7 @@ class WsBridgeClient {
       'needs_attention' => MobileSessionState.needsAttention,
       'completed' => MobileSessionState.completed,
       'failed' => MobileSessionState.failed,
+      'processing' => MobileSessionState.active,
       _ => MobileSessionState.unspecified,
     };
   }

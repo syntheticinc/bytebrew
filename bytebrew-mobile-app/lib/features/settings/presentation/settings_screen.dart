@@ -81,7 +81,9 @@ class SettingsScreen extends ConsumerWidget {
         ref.read(settingsRepositoryProvider) as LocalSettingsRepository;
     await repo.removeServer(serverId);
 
-    ref.invalidate(serversProvider);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.invalidate(serversProvider);
+    });
   }
 }
 

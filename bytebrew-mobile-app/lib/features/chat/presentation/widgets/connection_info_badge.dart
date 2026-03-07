@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/infrastructure/ws/ws_connection.dart';
 import '../../../../core/infrastructure/ws/ws_connection_manager.dart';
 import '../../../../core/theme/app_colors.dart';
 

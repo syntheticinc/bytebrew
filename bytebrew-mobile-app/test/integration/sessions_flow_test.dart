@@ -1,8 +1,7 @@
 import 'package:bytebrew_mobile/core/domain/server.dart';
 import 'package:bytebrew_mobile/core/domain/session.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_bridge_client.dart';
-import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart'
-    hide WsConnectionStatus;
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection_manager.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_providers.dart';
 import 'package:bytebrew_mobile/features/sessions/application/sessions_provider.dart';
@@ -138,8 +137,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Live Session card should be visible.
-      expect(find.text('Live Session'), findsOneWidget);
+      // Live section header and status line should be visible.
+      expect(find.text('LIVE'), findsOneWidget);
       expect(find.text('Connected to CLI'), findsOneWidget);
     });
 

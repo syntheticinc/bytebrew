@@ -21,11 +21,11 @@ describe('QrPairingCodeGenerator', () => {
     });
     const payload = JSON.parse(json);
 
-    expect(payload.sid).toBe('test-server-id');
+    expect(payload.server_id).toBe('test-server-id');
     expect(payload.token).toBe('abc123hex');
-    expect(typeof payload.spk).toBe('string');
-    expect(payload.spk.length).toBeGreaterThan(0);
-    expect(payload.bridge).toBe('wss://bridge.example.com');
+    expect(typeof payload.server_public_key).toBe('string');
+    expect(payload.server_public_key.length).toBeGreaterThan(0);
+    expect(payload.bridge_url).toBe('wss://bridge.example.com');
   });
 
   test('composeLocalPayload() does not include lan field', () => {
@@ -47,7 +47,7 @@ describe('QrPairingCodeGenerator', () => {
       gen.composeLocalPayload({ info, bridgeUrl: 'wss://bridge.example.com' }),
     );
 
-    expect(payload.spk).toBe('');
+    expect(payload.server_public_key).toBeUndefined();
   });
 
   test('composeLocalPayload() encodes serverPublicKey as base64', () => {
@@ -58,10 +58,10 @@ describe('QrPairingCodeGenerator', () => {
       gen.composeLocalPayload({ info, bridgeUrl: 'wss://bridge.example.com' }),
     );
 
-    expect(payload.spk).toBe(Buffer.from(key).toString('base64'));
+    expect(payload.server_public_key).toBe(Buffer.from(key).toString('base64'));
   });
 
-  test('composeLocalPayload() always includes bridge field', () => {
+  test('composeLocalPayload() always includes bridge_url field', () => {
     const gen = new QrPairingCodeGenerator();
     const payload = JSON.parse(
       gen.composeLocalPayload({
@@ -70,6 +70,6 @@ describe('QrPairingCodeGenerator', () => {
       }),
     );
 
-    expect(payload.bridge).toBe('wss://custom-bridge.io');
+    expect(payload.bridge_url).toBe('wss://custom-bridge.io');
   });
 });

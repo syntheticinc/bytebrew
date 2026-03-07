@@ -56,7 +56,7 @@ export class AskUserTool implements Tool {
       const answers = await this.interactiveCallback(questions);
       return {
         result: JSON.stringify(answers),
-        summary: `${answers.length} answers`,
+        summary: summarizeAnswers(answers),
       };
     }
 
@@ -93,9 +93,19 @@ export class AskUserTool implements Tool {
 
     return {
       result: JSON.stringify(answers),
-      summary: `${answers.length} answers`,
+      summary: summarizeAnswers(answers),
     };
   }
+}
+
+/** Summarize answers for tool result summary. Truncates long answers to 25 chars. */
+function summarizeAnswers(answers: QuestionAnswer[]): string {
+  if (answers.length === 1) {
+    const text = answers[0].answer;
+    if (text.length <= 25) return text;
+    return text.slice(0, 24) + '…';
+  }
+  return `${answers.length} answers`;
 }
 
 // --- Event-driven ask_user for interactive mode ---

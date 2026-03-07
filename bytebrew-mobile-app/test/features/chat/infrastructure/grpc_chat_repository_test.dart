@@ -10,8 +10,7 @@ import 'package:bytebrew_mobile/core/domain/plan.dart';
 import 'package:bytebrew_mobile/core/domain/server.dart';
 import 'package:bytebrew_mobile/core/domain/tool_call.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_bridge_client.dart';
-import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart'
-    hide WsConnectionStatus;
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection_manager.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_types.dart';
 import 'package:bytebrew_mobile/features/chat/infrastructure/ws_chat_repository.dart';

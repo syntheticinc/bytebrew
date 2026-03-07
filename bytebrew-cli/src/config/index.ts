@@ -11,6 +11,7 @@ export interface AppConfig {
   debug: boolean;
   bridgeAddress?: string; // Bridge relay address (e.g. "bridge.bytebrew.ai:443")
   bridgeEnabled: boolean; // Enable Mobile via Bridge (default: false)
+  bridgeAuthToken?: string; // Auth token for Bridge registration
   serverId?: string; // UUID of this CLI instance for Bridge registration
 }
 
@@ -95,6 +96,7 @@ export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     debug: overrides.debug ?? process.env.BYTEBREW_DEBUG === 'true',
     bridgeAddress: overrides.bridgeAddress || process.env.BYTEBREW_BRIDGE || undefined,
     bridgeEnabled: overrides.bridgeEnabled ?? false,
+    bridgeAuthToken: overrides.bridgeAuthToken || process.env.BYTEBREW_BRIDGE_AUTH_TOKEN || undefined,
     serverId: overrides.serverId,
   };
 

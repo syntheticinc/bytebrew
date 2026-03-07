@@ -48,7 +48,9 @@ class Sessions extends _$Sessions {
 
   /// Forces a refresh of session data from servers.
   Future<void> refresh() async {
-    state = const AsyncLoading();
+    // Keep current data visible while refreshing (no loading flash).
+    final previous = state.value ?? [];
+    state = AsyncData(previous);
     try {
       final repo = ref.read(sessionRepositoryProvider);
       await repo.refresh();

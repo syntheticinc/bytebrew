@@ -1,12 +1,10 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:bytebrew_mobile/core/domain/server.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_bridge_client.dart';
-import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart'
-    hide WsConnectionStatus;
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection_manager.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_types.dart';
 
@@ -155,38 +153,6 @@ void main() {
       // (disconnectAll may or may not notify when empty, depending on
       // implementation. We just verify no error.)
     });
-
-    test(
-      'encryptForServer returns plaintext when server not connected',
-      () async {
-        final plaintext = Uint8List.fromList([1, 2, 3]);
-
-        final result = await manager.encryptForServer(
-          'nonexistent',
-          plaintext,
-          0,
-        );
-
-        // No connection => returns plaintext unchanged.
-        expect(result, plaintext);
-      },
-    );
-
-    test(
-      'decryptFromServer returns data as-is when server not connected',
-      () async {
-        final data = Uint8List.fromList([4, 5, 6]);
-
-        final (result, counter) = await manager.decryptFromServer(
-          'nonexistent',
-          data,
-        );
-
-        // No connection => returns data unchanged, counter 0.
-        expect(result, data);
-        expect(counter, 0);
-      },
-    );
 
     // -----------------------------------------------------------------
     // Health check & error retry (using FakeConnectionManager)

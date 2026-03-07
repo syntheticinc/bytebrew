@@ -8,12 +8,12 @@ part of 'pairing_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Provides the [PairingRepository] implementation backed by gRPC.
+/// Provides the [PairingRepository] implementation backed by WebSocket.
 
 @ProviderFor(pairingRepository)
 final pairingRepositoryProvider = PairingRepositoryProvider._();
 
-/// Provides the [PairingRepository] implementation backed by gRPC.
+/// Provides the [PairingRepository] implementation backed by WebSocket.
 
 final class PairingRepositoryProvider
     extends
@@ -23,7 +23,7 @@ final class PairingRepositoryProvider
           PairingRepository
         >
     with $Provider<PairingRepository> {
-  /// Provides the [PairingRepository] implementation backed by gRPC.
+  /// Provides the [PairingRepository] implementation backed by WebSocket.
   PairingRepositoryProvider._()
     : super(
         from: null,
@@ -58,7 +58,7 @@ final class PairingRepositoryProvider
   }
 }
 
-String _$pairingRepositoryHash() => r'6b410426ba2c4de379b15728ab6d6e764e034dfe';
+String _$pairingRepositoryHash() => r'9950583c4fe68962a7ef7c73254a7f48e6ffff8d';
 
 /// Manages server pairing state.
 
@@ -88,7 +88,7 @@ final class PairDeviceProvider
   PairDevice create() => PairDevice();
 }
 
-String _$pairDeviceHash() => r'59df83736e45ff9dea3fb19cc1e26b9b2754427b';
+String _$pairDeviceHash() => r'e062ae69037aafc846fb20c816ff4e3c0b9b4242';
 
 /// Manages server pairing state.
 

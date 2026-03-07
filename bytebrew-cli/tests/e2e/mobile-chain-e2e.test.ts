@@ -154,9 +154,9 @@ describe('Mobile Chain E2E', () => {
     );
 
     expect(event.type).toBe('MessageCompleted');
-    // Echo scenario returns "echo: <input>" in the message content
-    const message = event.message as Record<string, unknown> | undefined;
-    expect(message).toBeDefined();
+    // Flat format: content is a top-level field
+    expect(event.content).toBeDefined();
+    expect(typeof event.content).toBe('string');
   }, 30_000);
 
   // --- TC-M-05: Tool call events ---

@@ -65,8 +65,9 @@ String _$chatRepositoryHash() => r'851ca9b0dbc912a08188ad92905b26920dd6a909';
 
 /// Resolves the [ChatRepository] for a specific [sessionId].
 ///
-/// Looks up the session to find its serverId, then creates a
-/// [GrpcChatRepository] connected via [ConnectionManager].
+/// Uses [ref.read] instead of [ref.watch] on [sessionsProvider] to avoid
+/// rebuilding (and dropping messages) when the session list refreshes.
+/// The serverId is captured once at creation time.
 /// Falls back to [EmptyChatRepository] if the session is not found.
 
 @ProviderFor(sessionChatRepository)
@@ -74,8 +75,9 @@ final sessionChatRepositoryProvider = SessionChatRepositoryFamily._();
 
 /// Resolves the [ChatRepository] for a specific [sessionId].
 ///
-/// Looks up the session to find its serverId, then creates a
-/// [GrpcChatRepository] connected via [ConnectionManager].
+/// Uses [ref.read] instead of [ref.watch] on [sessionsProvider] to avoid
+/// rebuilding (and dropping messages) when the session list refreshes.
+/// The serverId is captured once at creation time.
 /// Falls back to [EmptyChatRepository] if the session is not found.
 
 final class SessionChatRepositoryProvider
@@ -83,8 +85,9 @@ final class SessionChatRepositoryProvider
     with $Provider<ChatRepository> {
   /// Resolves the [ChatRepository] for a specific [sessionId].
   ///
-  /// Looks up the session to find its serverId, then creates a
-  /// [GrpcChatRepository] connected via [ConnectionManager].
+  /// Uses [ref.read] instead of [ref.watch] on [sessionsProvider] to avoid
+  /// rebuilding (and dropping messages) when the session list refreshes.
+  /// The serverId is captured once at creation time.
   /// Falls back to [EmptyChatRepository] if the session is not found.
   SessionChatRepositoryProvider._({
     required SessionChatRepositoryFamily super.from,
@@ -138,12 +141,13 @@ final class SessionChatRepositoryProvider
 }
 
 String _$sessionChatRepositoryHash() =>
-    r'4d75bb6c32bfb9bad84e6fdfbf6c84f4b76ed84a';
+    r'd6758bbb7c4cf5b60c5dada5f2c6085652e0e418';
 
 /// Resolves the [ChatRepository] for a specific [sessionId].
 ///
-/// Looks up the session to find its serverId, then creates a
-/// [GrpcChatRepository] connected via [ConnectionManager].
+/// Uses [ref.read] instead of [ref.watch] on [sessionsProvider] to avoid
+/// rebuilding (and dropping messages) when the session list refreshes.
+/// The serverId is captured once at creation time.
 /// Falls back to [EmptyChatRepository] if the session is not found.
 
 final class SessionChatRepositoryFamily extends $Family
@@ -159,8 +163,9 @@ final class SessionChatRepositoryFamily extends $Family
 
   /// Resolves the [ChatRepository] for a specific [sessionId].
   ///
-  /// Looks up the session to find its serverId, then creates a
-  /// [GrpcChatRepository] connected via [ConnectionManager].
+  /// Uses [ref.read] instead of [ref.watch] on [sessionsProvider] to avoid
+  /// rebuilding (and dropping messages) when the session list refreshes.
+  /// The serverId is captured once at creation time.
   /// Falls back to [EmptyChatRepository] if the session is not found.
 
   SessionChatRepositoryProvider call(String sessionId) =>

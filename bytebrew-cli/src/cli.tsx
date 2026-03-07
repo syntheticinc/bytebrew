@@ -86,6 +86,7 @@ async function connectAndConfigure(
   // If not specified, read from ~/.bytebrew/config.json (bridge_url).
   let bridgeAddress: string | undefined;
   let bridgeEnabled = false;
+  let bridgeAuthToken: string | undefined;
 
   if (options.noBridge) {
     bridgeEnabled = false;
@@ -101,6 +102,7 @@ async function connectAndConfigure(
       if (savedBridgeUrl) {
         bridgeAddress = savedBridgeUrl;
         bridgeEnabled = true;
+        bridgeAuthToken = bbConfig.getBridgeAuthToken();
       }
     } catch {
       // Config not available — bridge stays disabled
@@ -115,6 +117,7 @@ async function connectAndConfigure(
     debug: options.debug,
     bridgeAddress,
     bridgeEnabled,
+    bridgeAuthToken,
     serverId: options.serverId,
   });
 

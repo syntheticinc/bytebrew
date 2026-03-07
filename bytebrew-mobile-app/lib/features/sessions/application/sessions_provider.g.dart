@@ -8,12 +8,12 @@ part of 'sessions_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Provides the [SessionRepository] backed by gRPC via [ConnectionManager].
+/// Provides the [SessionRepository] backed by WS via [WsConnectionManager].
 
 @ProviderFor(sessionRepository)
 final sessionRepositoryProvider = SessionRepositoryProvider._();
 
-/// Provides the [SessionRepository] backed by gRPC via [ConnectionManager].
+/// Provides the [SessionRepository] backed by WS via [WsConnectionManager].
 
 final class SessionRepositoryProvider
     extends
@@ -23,7 +23,7 @@ final class SessionRepositoryProvider
           SessionRepository
         >
     with $Provider<SessionRepository> {
-  /// Provides the [SessionRepository] backed by gRPC via [ConnectionManager].
+  /// Provides the [SessionRepository] backed by WS via [WsConnectionManager].
   SessionRepositoryProvider._()
     : super(
         from: null,
@@ -58,7 +58,7 @@ final class SessionRepositoryProvider
   }
 }
 
-String _$sessionRepositoryHash() => r'8fe388777fbbadf90b2b2367dcd56a41b5aca898';
+String _$sessionRepositoryHash() => r'96e0f65d7aad26ca63dda098a49a1e9c1b3e3917';
 
 /// Manages the list of agent sessions.
 ///
@@ -97,7 +97,7 @@ final class SessionsProvider
   Sessions create() => Sessions();
 }
 
-String _$sessionsHash() => r'68eceade26752bd5ffc597610b787402e4599380';
+String _$sessionsHash() => r'c890bf9ca77cf28c04043117627c9a5997c7e11a';
 
 /// Manages the list of agent sessions.
 ///
