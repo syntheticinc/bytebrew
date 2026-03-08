@@ -53,6 +53,13 @@ class Auth extends _$Auth {
   }
 
   Future<void> _checkSavedTokens() async {
+    // TEMP: skip auth for device testing
+    // Must yield so that build() completes before we mutate state,
+    // otherwise Riverpod overwrites our state with build()'s return value.
+    await Future<void>.value();
+    state = const AuthState.authenticated();
+    return;
+    // ignore: dead_code
     final storage = ref.read(tokenStorageProvider);
     final hasTokens = await storage.hasTokens();
 

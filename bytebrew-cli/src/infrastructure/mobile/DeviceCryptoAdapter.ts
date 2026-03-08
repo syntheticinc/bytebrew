@@ -11,7 +11,7 @@
 import type { ICryptoService } from './CryptoService.js';
 import type { IMessageCrypto } from '../bridge/BridgeMessageRouter.js';
 
-/** Consumer-side interface — only needs sharedSecret lookup */
+/** Consumer-side interface — needs sharedSecret lookup by device ID */
 interface DeviceSecretProvider {
   getById(id: string): { sharedSecret: Uint8Array } | undefined;
 }

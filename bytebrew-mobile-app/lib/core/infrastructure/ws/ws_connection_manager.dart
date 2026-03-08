@@ -33,11 +33,8 @@ class WsServerConnection {
   /// The last error message, if any.
   String? lastError;
 
-  /// Timer for scheduled reconnection attempts.
-  Timer? reconnectTimer;
-
-  /// Number of reconnect attempts since last successful connection.
-  int reconnectAttempts = 0;
+  /// Subscription to WsConnection status changes.
+  StreamSubscription<WsConnectionStatus>? statusSubscription;
 }
 
 // ---------------------------------------------------------------------------
@@ -91,10 +88,20 @@ class WsConnectionManager extends ChangeNotifier {
       return;
     }
 
-    // Skip if already connected.
+    // Skip if already connected or actively connecting.
     final existing = _connections[server.id];
-    if (existing != null && existing.status == WsConnectionStatus.connected) {
+    if (existing != null &&
+        (existing.status == WsConnectionStatus.connected ||
+            existing.status == WsConnectionStatus.connecting)) {
       return;
+    }
+
+    // Clean up stale connection before creating a new one.
+    if (existing != null) {
+      await existing.statusSubscription?.cancel();
+      await existing.client.dispose();
+      await existing.connection.dispose();
+      _connections.remove(server.id);
     }
 
     final wsConnection = _connectionFactory != null
@@ -127,17 +134,37 @@ class WsConnectionManager extends ChangeNotifier {
     );
     serverConn.status = WsConnectionStatus.connecting;
     _connections[server.id] = serverConn;
+
+    // Mirror WsConnection status changes 1:1 into serverConn.
+    // WsConnection owns reconnect logic; manager is a thin status mirror.
+    serverConn.statusSubscription = wsConnection.statusChanges.listen((s) {
+      final conn = _connections[server.id];
+      if (conn == null || conn != serverConn) return;
+
+      conn.status = s;
+      if (s == WsConnectionStatus.error) {
+        conn.lastError = 'Connection lost';
+      } else if (s == WsConnectionStatus.connected) {
+        conn.lastError = null;
+      }
+      notifyListeners();
+    });
+
     notifyListeners();
 
     try {
       await wsConnection.connect();
       await client.ping();
       serverConn.status = WsConnectionStatus.connected;
-      serverConn.reconnectAttempts = 0;
       serverConn.lastError = null;
     } on Exception catch (e) {
-      serverConn.status = WsConnectionStatus.error;
       serverConn.lastError = e.toString();
+      // If WS socket opened but CLI unreachable (ping fail) —
+      // disconnect so auto-connect retry via 30s timer.
+      if (wsConnection.status == WsConnectionStatus.connected) {
+        await wsConnection.disconnect();
+      }
+      serverConn.status = WsConnectionStatus.error;
     }
 
     notifyListeners();
@@ -155,7 +182,7 @@ class WsConnectionManager extends ChangeNotifier {
     final serverConn = _connections.remove(serverId);
     if (serverConn == null) return;
 
-    serverConn.reconnectTimer?.cancel();
+    await serverConn.statusSubscription?.cancel();
     await serverConn.client.dispose();
     await serverConn.connection.dispose();
     notifyListeners();
@@ -164,7 +191,7 @@ class WsConnectionManager extends ChangeNotifier {
   /// Disconnects from all servers and clears all connections.
   Future<void> disconnectAll() async {
     for (final serverConn in _connections.values) {
-      serverConn.reconnectTimer?.cancel();
+      await serverConn.statusSubscription?.cancel();
       await serverConn.client.dispose();
       await serverConn.connection.dispose();
     }
@@ -174,65 +201,7 @@ class WsConnectionManager extends ChangeNotifier {
 
   @override
   void dispose() {
-    for (final serverConn in _connections.values) {
-      serverConn.reconnectTimer?.cancel();
-    }
     _connections.clear();
     super.dispose();
-  }
-
-  // -----------------------------------------------------------------------
-  // Health check & reconnect
-  // -----------------------------------------------------------------------
-
-  /// Marks a connection as lost and schedules a reconnection attempt.
-  void markConnectionLost(String serverId, {String? reason}) {
-    final serverConn = _connections[serverId];
-    if (serverConn == null) return;
-
-    if (serverConn.status != WsConnectionStatus.connected) return;
-
-    serverConn.status = WsConnectionStatus.error;
-    serverConn.lastError = reason;
-    _scheduleReconnect(serverConn);
-    notifyListeners();
-  }
-
-  void _scheduleReconnect(WsServerConnection serverConn) {
-    serverConn.reconnectTimer?.cancel();
-
-    final delay = Duration(
-      seconds: _reconnectDelay(serverConn.reconnectAttempts),
-    );
-
-    serverConn.reconnectTimer = Timer(delay, () async {
-      serverConn.reconnectAttempts++;
-      await _attemptReconnect(serverConn);
-    });
-  }
-
-  int _reconnectDelay(int attempts) {
-    // Exponential backoff: 2, 4, 8, 16, 30 (capped at 30 seconds).
-    final delay = 2 << attempts;
-    return delay > 30 ? 30 : delay;
-  }
-
-  Future<void> _attemptReconnect(WsServerConnection serverConn) async {
-    serverConn.status = WsConnectionStatus.connecting;
-    notifyListeners();
-
-    try {
-      await serverConn.connection.connect();
-      await serverConn.client.ping();
-      serverConn.status = WsConnectionStatus.connected;
-      serverConn.reconnectAttempts = 0;
-      serverConn.lastError = null;
-    } on Exception catch (e) {
-      serverConn.status = WsConnectionStatus.error;
-      serverConn.lastError = e.toString();
-      _scheduleReconnect(serverConn);
-    }
-
-    notifyListeners();
   }
 }

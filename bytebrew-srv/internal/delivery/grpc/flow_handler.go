@@ -27,6 +27,10 @@ type ActiveFlowRegistry interface {
 	UnregisterIfCurrent(sessionID string, expected *domain.ActiveFlow) bool
 	Get(sessionID string) (*domain.ActiveFlow, bool)
 	IsActive(sessionID string) bool
+	// SetMessageSink attaches a message sink so reconnecting clients can forward messages.
+	SetMessageSink(sessionID string, sink interface{ PublishUserMessage(string) error })
+	// PublishUserMessage delivers a user message to the active flow's EventBus.
+	PublishUserMessage(sessionID, message string) bool
 }
 
 // AgentPoolProxy defines interface for updating proxy on agent pool (used by delivery layer)
@@ -195,8 +199,8 @@ func (h *FlowHandler) ExecuteFlow(stream pb.FlowService_ExecuteFlowServer) error
 	// Check if there's an active flow for this session
 	if h.flowRegistry.IsActive(req.SessionId) {
 		if req.Task == "" {
-			// Passive observer mode: no new task, subscribe to events
-			slog.InfoContext(ctx, "active flow found, client will receive events via broadcast", "session_id", req.SessionId)
+			// Reconnect mode: subscribe to events and forward incoming messages
+			slog.InfoContext(ctx, "active flow found, reconnecting client to existing flow", "session_id", req.SessionId)
 
 			err = h.pingService.Start(ctx, req.SessionId, func(pong *pb.PongResponse) error {
 				return stream.Send(&pb.FlowResponse{
@@ -210,8 +214,31 @@ func (h *FlowHandler) ExecuteFlow(stream pb.FlowService_ExecuteFlowServer) error
 			}
 			defer h.pingService.Stop(req.SessionId)
 
+			// Read from client stream and forward user messages to the active flow
+			go func() {
+				for {
+					msg, recvErr := stream.Recv()
+					if recvErr != nil {
+						slog.InfoContext(ctx, "reconnected client stream ended", "error", recvErr)
+						cancel()
+						return
+					}
+					if msg == nil {
+						continue
+					}
+					if msg.Task != "" {
+						slog.InfoContext(ctx, "forwarding user message to active flow",
+							"session_id", req.SessionId, "task_len", len(msg.Task))
+						if !h.flowRegistry.PublishUserMessage(req.SessionId, msg.Task) {
+							slog.WarnContext(ctx, "failed to forward message, flow may have ended",
+								"session_id", req.SessionId)
+						}
+					}
+				}
+			}()
+
 			<-ctx.Done()
-			slog.InfoContext(ctx, "client disconnected from active flow")
+			slog.InfoContext(ctx, "reconnected client disconnected from active flow")
 			return nil
 		}
 

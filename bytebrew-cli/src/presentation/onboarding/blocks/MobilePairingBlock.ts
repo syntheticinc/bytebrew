@@ -1,48 +1,44 @@
+/**
+ * MobilePairingBlock — onboarding step for configuring mobile app via Bridge.
+ *
+ * Creates a lightweight, temporary bridge stack for initial pairing:
+ * 1. User chooses bridge endpoint (cloud / self-hosted / skip)
+ * 2. Connects to bridge, generates pairing token, shows QR
+ * 3. Waits for mobile device to complete pairing (up to 5 minutes)
+ * 4. Saves bridge config; Container.initializeBridge() re-creates its own stack later
+ */
+
 import { OnboardingBlock, OnboardingCheckResult, OnboardingContext, OnboardingResult } from '../OnboardingBlock.js';
 import { OnboardingStateStore } from '../../../infrastructure/onboarding/OnboardingStateStore.js';
 import { ByteBrewConfig } from '../../../infrastructure/config/ByteBrewConfig.js';
+import { ByteBrewDatabase } from '../../../infrastructure/persistence/ByteBrewDatabase.js';
+import { CliIdentity } from '../../../infrastructure/config/CliIdentity.js';
+import { CryptoService } from '../../../infrastructure/mobile/CryptoService.js';
+import { SqliteDeviceStore } from '../../../infrastructure/mobile/stores/SqliteDeviceStore.js';
+import { InMemoryPairingTokenStore } from '../../../infrastructure/mobile/stores/InMemoryPairingTokenStore.js';
+import { PairingWaiter } from '../../../infrastructure/mobile/PairingWaiter.js';
+import { DeviceCryptoAdapter } from '../../../infrastructure/mobile/DeviceCryptoAdapter.js';
+import { BridgeConnector } from '../../../infrastructure/bridge/BridgeConnector.js';
+import { BridgeMessageRouter } from '../../../infrastructure/bridge/BridgeMessageRouter.js';
+import { PairingService } from '../../../application/services/PairingService.js';
+import { QrPairingCodeGenerator } from '../../../infrastructure/mobile/QrPairingCodeGenerator.js';
+import { buildPairResponse } from '../../../infrastructure/mobile/pairRequestHandler.js';
 import { prompt } from '../../../infrastructure/auth/prompt.js';
 
-interface ListDevicesResponse {
-  devices: Array<{ deviceId: string; deviceName: string; pairedAt: string; lastSeenAt: string }>;
-}
-
 const DEFAULT_BRIDGE_URL = 'bridge.bytebrew.ai:443';
-
-/** Legacy response shape (block is non-functional, pending rewrite to PairingService). */
-interface GeneratePairingTokenResponse {
-  shortCode: string;
-  token: string;
-}
-
-/** Consumer-side interface for mobile service operations needed by pairing. */
-interface MobilePairingClient {
-  generatePairingToken(): Promise<GeneratePairingTokenResponse>;
-  listDevices(): Promise<ListDevicesResponse>;
-  close(): void;
-}
-
-/** Factory for creating MobilePairingClient instances. */
-type ClientFactory = (address: string) => MobilePairingClient;
+const PAIRING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 export class MobilePairingBlock implements OnboardingBlock {
   readonly id = 'mobile-pairing';
   readonly displayName = 'Mobile App';
-  readonly description = 'Set up ByteBrew mobile app for remote monitoring';
+  readonly description = 'Set up ByteBrew mobile app for remote access';
   readonly priority = 10;
   readonly skippable = true;
 
   private stateStore: OnboardingStateStore;
-  private createClient: ClientFactory;
 
-  constructor(stateStore?: OnboardingStateStore, createClient?: ClientFactory) {
+  constructor(stateStore?: OnboardingStateStore) {
     this.stateStore = stateStore ?? new OnboardingStateStore();
-    this.createClient = createClient ?? MobilePairingBlock.defaultClientFactory;
-  }
-
-  private static defaultClientFactory(_address: string): MobilePairingClient {
-    // TODO: Rewrite to use local PairingService via Container (mobile_client.ts removed)
-    throw new Error('MobileServiceClient removed. Use PairingService via Bridge instead.');
   }
 
   check(): OnboardingCheckResult {
@@ -59,101 +55,174 @@ export class MobilePairingBlock implements OnboardingBlock {
     };
   }
 
-  async run(context: OnboardingContext): Promise<OnboardingResult> {
-    if (!context.serverAddress) {
+  async run(_context: OnboardingContext): Promise<OnboardingResult> {
+    // Step 1: Choose bridge
+    const bridgeChoice = await this.chooseBridge();
+
+    if (!bridgeChoice) {
+      // User chose "Skip"
       return { status: 'skipped' };
     }
 
-    // Step 0: Ask user
-    const choice = await prompt('Connect mobile app for remote monitoring? (y/n/never): ');
-    const answer = choice.trim().toLowerCase();
-
-    if (answer === 'never') {
-      return { status: 'completed' };
-    }
-    if (answer !== 'y' && answer !== 'yes') {
-      return { status: 'skipped' };
-    }
-
-    // Step 1: Bridge endpoint selection
-    const bridgeUrl = await this.selectBridgeEndpoint();
+    // Save bridge config
     const config = new ByteBrewConfig();
-    if (bridgeUrl !== undefined) {
-      config.setBridgeUrl(bridgeUrl);
-    } else {
-      config.clearBridgeUrl();
+    config.setBridgeUrl(bridgeChoice.url);
+    if (bridgeChoice.authToken) {
+      config.setBridgeAuthToken(bridgeChoice.authToken);
     }
 
-    // Steps 2-4: Generate token, show QR, verify
+    // Step 2: Pairing via temporary bridge stack
     try {
-      const client = this.createClient(context.serverAddress);
-      try {
-        return await this.pairDevice(client, bridgeUrl);
-      } finally {
-        client.close();
-      }
+      return await this.runPairing(bridgeChoice.url, bridgeChoice.authToken ?? '');
     } catch (err) {
-      console.log(`Could not connect to mobile service: ${(err as Error).message}`);
-      console.log('You can set up mobile pairing later with "bytebrew mobile-pair".');
-      return { status: 'skipped' };
+      console.log(`\nPairing error: ${(err as Error).message}`);
+      console.log('Bridge is configured. You can pair later with /mobile.');
+      return { status: 'completed' };
     }
   }
 
-  private async selectBridgeEndpoint(): Promise<string | undefined> {
+  // --- Step 1: Choose bridge ---
+
+  private async chooseBridge(): Promise<{ url: string; authToken?: string } | null> {
     console.log('');
-    console.log('Remote access when not on same network:');
-    console.log('  1) ByteBrew Cloud \u2014 bridge.bytebrew.ai (default)');
-    console.log('  2) Self-hosted \u2014 enter your bridge URL');
-    console.log('  3) Direct LAN \u2014 same network, no bridge');
+    console.log('Mobile app for remote access:');
+    console.log('  1) ByteBrew Cloud \u2014 bridge.bytebrew.ai (recommended)');
+    console.log('  2) Self-hosted \u2014 your own bridge in a private network');
+    console.log('  3) Skip \u2014 don\'t use mobile app');
     console.log('');
 
     const choice = (await prompt('Choose (1/2/3): ')).trim();
 
     if (choice === '3') {
-      return undefined;
+      return null;
     }
 
     if (choice === '2') {
-      const url = (await prompt('Bridge URL: ')).trim();
-      if (!url) {
-        console.log('No URL entered, using default cloud bridge.');
-        return DEFAULT_BRIDGE_URL;
-      }
-      return url;
+      return this.promptSelfHostedBridge();
     }
 
-    return DEFAULT_BRIDGE_URL;
+    // Default: cloud bridge (option 1 or any other input)
+    return { url: DEFAULT_BRIDGE_URL };
   }
 
-  private async pairDevice(
-    client: MobilePairingClient,
-    bridgeUrl?: string,
-  ): Promise<OnboardingResult> {
-    // Capture device count before pairing to detect NEW devices
-    const devicesBefore = await client.listDevices();
-    const countBefore = devicesBefore.devices.length;
+  private async promptSelfHostedBridge(): Promise<{ url: string; authToken?: string }> {
+    const url = (await prompt('Bridge URL (e.g. bridge.example.com:8443): ')).trim();
+    if (!url) {
+      console.log('No URL entered, using cloud bridge.');
+      return { url: DEFAULT_BRIDGE_URL };
+    }
 
-    // Step 2: Generate pairing token + show QR
-    // TODO: Rewrite to use PairingService + QrPairingCodeGenerator.displayLocalPairingInfo()
-    const result = await client.generatePairingToken();
-    console.log(`Pairing code: ${result.shortCode}`);
-    console.log('Scan with ByteBrew mobile app.');
+    const authToken = (await prompt('Auth token (leave empty if none): ')).trim();
+    return { url, authToken: authToken || undefined };
+  }
 
-    // Step 3: Wait for scan
+  // --- Step 2: Pairing ---
+
+  private async runPairing(bridgeUrl: string, authToken: string): Promise<OnboardingResult> {
+    // Create lightweight bridge stack
+    const database = new ByteBrewDatabase();
+    const cryptoService = new CryptoService();
+    const cliIdentity = new CliIdentity(database, cryptoService);
+
+    const serverId = cliIdentity.getServerId();
+    const serverKeyPair = cliIdentity.getKeyPair();
+
+    const deviceStore = new SqliteDeviceStore(database);
+    const pairingTokenStore = new InMemoryPairingTokenStore();
+    const pairingWaiter = new PairingWaiter();
+    const cryptoAdapter = new DeviceCryptoAdapter(cryptoService, deviceStore);
+
+    const bridgeConnector = new BridgeConnector();
+    const messageRouter = new BridgeMessageRouter(cryptoAdapter);
+
+    const pairingService = new PairingService(
+      deviceStore,
+      pairingTokenStore,
+      cryptoService,
+      pairingWaiter,
+      serverKeyPair,
+    );
+
+    const qrGenerator = new QrPairingCodeGenerator();
+
+    // Wire pair_request handler (only need pairing for onboarding)
+    messageRouter.onMessage((deviceId, message) => {
+      if (message.type !== 'pair_request') {
+        return;
+      }
+
+      try {
+        const response = buildPairResponse(deviceId, message, pairingService);
+
+        // Send pair_response BEFORE registering alias (plaintext first —
+        // mobile needs server_public_key to compute shared secret)
+        messageRouter.sendMessage(deviceId, response);
+
+        // Register alias so future encrypted messages resolve correctly
+        if (response.type === 'pair_response' && response.payload?.device_id) {
+          cryptoAdapter.registerAlias(deviceId, response.payload.device_id as string);
+        }
+      } catch (err) {
+        messageRouter.sendMessage(deviceId, {
+          type: 'error',
+          request_id: message.request_id,
+          device_id: deviceId,
+          payload: { message: (err as Error).message },
+        });
+      }
+    });
+
+    // Start router and connect to bridge
+    messageRouter.start(bridgeConnector);
+
+    try {
+      console.log('\nConnecting to bridge...');
+      await bridgeConnector.connect(
+        bridgeUrl,
+        serverId,
+        'ByteBrew CLI (onboarding)',
+        authToken,
+      );
+      console.log('Connected.');
+    } catch (err) {
+      // Clean up on connection failure
+      messageRouter.stop();
+      database.close();
+      throw err;
+    }
+
+    // Generate pairing token, register short code on bridge for manual entry
+    const tokenResult = pairingService.generatePairingToken();
+    const serverPublicKeyB64 = Buffer.from(tokenResult.serverPublicKey).toString('base64');
+    bridgeConnector.sendRegisterCode(tokenResult.shortCode, serverPublicKeyB64);
+
     console.log('');
-    const response = await prompt('Press Enter after scanning, or type "skip": ');
-    if (response.trim().toLowerCase() === 'skip') {
-      return { status: 'skipped' };
-    }
+    qrGenerator.displayLocalPairingInfo({
+      info: {
+        serverId,
+        serverPublicKey: tokenResult.serverPublicKey,
+        token: tokenResult.token,
+        shortCode: tokenResult.shortCode,
+      },
+      bridgeUrl,
+    });
 
-    // Step 4: Verify — check for NEW device (not just any device)
-    const devicesAfter = await client.listDevices();
-    if (devicesAfter.devices.length > countBefore) {
-      console.log('Mobile device paired successfully!');
+    console.log('\nWaiting for mobile device to scan (5 minutes)...');
+
+    // Wait for pairing or timeout
+    try {
+      const pairedDevice = await pairingService.waitForPairing(tokenResult.token, PAIRING_TIMEOUT_MS);
+      console.log(`\nDevice "${pairedDevice.deviceName}" paired successfully!`);
       return { status: 'completed' };
+    } catch {
+      // Timeout or error
+      console.log('\nPairing timed out. You can pair later with /mobile.');
+      return { status: 'completed' };
+    } finally {
+      // Cleanup: disconnect temporary bridge stack
+      bridgeConnector.disconnect();
+      messageRouter.stop();
+      database.close();
     }
-
-    console.log('No paired device detected. You can pair later with "bytebrew mobile-pair".');
-    return { status: 'skipped' };
   }
 }

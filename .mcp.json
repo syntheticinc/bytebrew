@@ -10,6 +10,16 @@
       "headers": {
         "X-Goog-Api-Key": "AQ.Ab8RN6LhsI79oF6qjSO0nQcOEMzB--vd_CQSbBEjavFmsqqlRw"
       }
+    },
+    "marionette": {
+      "type": "stdio",
+      "command": "C:/Users/busul/AppData/Local/Pub/Cache/bin/marionette_mcp.bat",
+      "args": []
+    },
+    "tui-test": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["C:/Users/busul/GolandProjects/bytebrew/tools/mcp-tui-test/server.py"]
     }
   }
 }

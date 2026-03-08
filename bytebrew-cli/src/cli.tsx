@@ -93,6 +93,13 @@ async function connectAndConfigure(
   } else if (options.bridge) {
     bridgeAddress = options.bridge;
     bridgeEnabled = true;
+    // Read auth token from persisted config even when --bridge is explicit
+    try {
+      const { ByteBrewConfig } = await import('./infrastructure/config/ByteBrewConfig.js');
+      bridgeAuthToken = new ByteBrewConfig().getBridgeAuthToken();
+    } catch {
+      // Config not available — token stays undefined
+    }
   } else {
     // Try reading from persisted config
     try {
@@ -711,7 +718,7 @@ function runChatApp(config: AppConfig, initialQuestion?: string) {
 
   // Pre-flight check: interactive mode requires a TTY with raw mode support.
   // Without it, Ink hangs because it can't read stdin. Detect early and fail fast.
-  if (!process.stdin.isTTY) {
+  if (!process.stdin.isTTY && !process.env.BYTEBREW_SKIP_TTY_CHECK) {
     console.error('Error: Interactive mode requires a terminal with TTY support.');
     console.error('Your current stdin is not a TTY (e.g., piped input or non-interactive shell).');
     console.error('');

@@ -8,10 +8,13 @@ import '../../../../core/infrastructure/ws/ws_providers.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/status_indicator.dart';
 
+/// Orange color for "connecting" / "reconnecting" state.
+const _statusConnecting = Color(0xFFFFA726);
+
 /// A list tile displaying a paired server's name and connection status.
 ///
 /// Reads live connection state from [WsConnectionManager] to show
-/// online/offline status.
+/// online/offline/connecting status with a colored [StatusIndicator].
 class ServerListTile extends ConsumerWidget {
   const ServerListTile({super.key, required this.server, this.onDismissed});
 
@@ -25,35 +28,15 @@ class ServerListTile extends ConsumerWidget {
     final manager = ref.watch(connectionManagerProvider);
     final connection = manager.getConnection(server.id);
 
-    final isConnected =
-        connection != null && connection.status == WsConnectionStatus.connected;
-
-    final statusColor = isConnected ? AppColors.statusActive : AppColors.shade3;
-
-    final routeLabel = _routeLabel(connection);
-
-    final subtitle = 'Bridge: ${server.bridgeUrl}';
+    final connectionStatus = _resolveStatus(connection);
+    final statusColor = _statusColor(connectionStatus);
+    final subtitleText = _subtitleText(connectionStatus);
 
     final tile = ListTile(
       leading: StatusIndicator(color: statusColor),
       title: Text(server.name),
-      subtitle: Text(subtitle),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (server.latencyMs > 0)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Text(
-                '${server.latencyMs}ms',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppColors.shade3),
-              ),
-            ),
-          _StatusChip(label: routeLabel, isConnected: isConnected),
-        ],
-      ),
+      subtitle: Text(subtitleText),
+      trailing: _trailing(context, connectionStatus),
     );
 
     if (onDismissed == null) return tile;
@@ -73,13 +56,45 @@ class ServerListTile extends ConsumerWidget {
     );
   }
 
-  String _routeLabel(WsServerConnection? connection) {
-    if (connection == null ||
-        connection.status == WsConnectionStatus.disconnected) {
-      return 'Offline';
+  Widget? _trailing(BuildContext context, _ServerConnectionStatus status) {
+    if (status != _ServerConnectionStatus.online || server.latencyMs <= 0) {
+      return null;
     }
 
-    return 'Bridge';
+    return Text(
+      '${server.latencyMs}ms',
+      style: Theme.of(context)
+          .textTheme
+          .bodySmall
+          ?.copyWith(color: AppColors.shade3),
+    );
+  }
+
+  _ServerConnectionStatus _resolveStatus(WsServerConnection? connection) {
+    if (connection == null) return _ServerConnectionStatus.offline;
+
+    return switch (connection.status) {
+      WsConnectionStatus.connected => _ServerConnectionStatus.online,
+      WsConnectionStatus.connecting => _ServerConnectionStatus.connecting,
+      WsConnectionStatus.disconnected => _ServerConnectionStatus.offline,
+      WsConnectionStatus.error => _ServerConnectionStatus.offline,
+    };
+  }
+
+  Color _statusColor(_ServerConnectionStatus status) {
+    return switch (status) {
+      _ServerConnectionStatus.online => AppColors.statusActive,
+      _ServerConnectionStatus.connecting => _statusConnecting,
+      _ServerConnectionStatus.offline => AppColors.shade3,
+    };
+  }
+
+  String _subtitleText(_ServerConnectionStatus status) {
+    return switch (status) {
+      _ServerConnectionStatus.online => 'Online',
+      _ServerConnectionStatus.connecting => 'Connecting...',
+      _ServerConnectionStatus.offline => 'Offline',
+    };
   }
 
   Future<bool> _confirmDelete(BuildContext context) async {
@@ -107,37 +122,5 @@ class ServerListTile extends ConsumerWidget {
   }
 }
 
-/// Small chip showing the current connection status.
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.label, required this.isConnected});
-
-  final String label;
-  final bool isConnected;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    final bgColor = isConnected
-        ? AppColors.statusActive.withValues(alpha: 0.12)
-        : (isDark ? AppColors.shade3.withValues(alpha: 0.2) : AppColors.shade1);
-
-    final fgColor = isConnected ? AppColors.statusActive : AppColors.shade3;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: fgColor,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
+/// Internal status for display purposes.
+enum _ServerConnectionStatus { online, connecting, offline }

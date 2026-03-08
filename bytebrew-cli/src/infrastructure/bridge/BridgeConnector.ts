@@ -59,6 +59,7 @@ export interface IBridgeConnector {
   connect(bridgeUrl: string, serverId: string, serverName: string, authToken: string): Promise<void>;
   disconnect(): void;
   sendData(deviceId: string, payload: unknown): void;
+  sendRegisterCode(code: string, serverPublicKey: string): void;
   onData(handler: DataHandler): void;
   onDeviceConnect(handler: DeviceHandler): void;
   onDeviceDisconnect(handler: DeviceHandler): void;
@@ -123,9 +124,11 @@ export class BridgeConnector implements IBridgeConnector {
 
   sendData(deviceId: string, payload: unknown): void {
     if (!this.connected || !this.ws) {
+      console.log(`[BridgeConnector] sendData DROPPED: not connected to bridge deviceId=${deviceId}`);
       this.logger.warn('Cannot send data: not connected to bridge');
       return;
     }
+    console.log(`[BridgeConnector] sendData deviceId=${deviceId} connected=${this.connected} wsState=${(this.ws as unknown as { readyState?: number })?.readyState}`);
 
     const msg: DataOutMessage = {
       type: 'data',
@@ -133,7 +136,21 @@ export class BridgeConnector implements IBridgeConnector {
       payload,
     };
 
-    this.ws.send(JSON.stringify(msg));
+    try {
+      this.ws.send(JSON.stringify(msg));
+      console.log(`[BridgeConnector] sendData OK deviceId=${deviceId}`);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.log(`[BridgeConnector] sendData THREW deviceId=${deviceId} err=${errMsg} wsState=${(this.ws as unknown as { readyState?: number })?.readyState}`);
+    }
+  }
+
+  sendRegisterCode(code: string, serverPublicKey: string): void {
+    if (!this.connected || !this.ws) {
+      this.logger.warn('Cannot register code: not connected to bridge');
+      return;
+    }
+    this.ws.send(JSON.stringify({ type: 'register_code', code, server_public_key: serverPublicKey }));
   }
 
   onData(handler: DataHandler): void {
@@ -207,14 +224,17 @@ export class BridgeConnector implements IBridgeConnector {
 
       ws.addEventListener('message', (event: MessageEvent) => {
         const data = typeof event.data === 'string' ? event.data : '';
+        console.log(`[BridgeConnector] WS message received len=${data.length} preview=${data.slice(0, 80)}`);
         let parsed: BridgeIncomingMessage;
 
         try {
           parsed = JSON.parse(data) as BridgeIncomingMessage;
         } catch {
+          console.log(`[BridgeConnector] JSON.parse FAILED data=${data.slice(0, 100)}`);
           this.logger.warn('Failed to parse bridge message', { data });
           return;
         }
+        console.log(`[BridgeConnector] parsed type=${parsed.type} device_id=${(parsed as { device_id?: string }).device_id ?? 'n/a'} payload_type=${typeof (parsed as { payload?: unknown }).payload}`);
 
         if (!registered && parsed.type === 'registered') {
           registered = true;

@@ -28,15 +28,13 @@ class QrPairingData {
 
   /// Parses [QrPairingData] from a JSON string embedded in a QR code.
   ///
-  /// Expected JSON format:
+  /// Expected JSON format (compact keys):
   /// ```json
-  /// {
-  ///   "bridge_url": "ws://bridge.bytebrew.ai:8080",
-  ///   "server_id": "server-uuid",
-  ///   "token": "pairing-token",
-  ///   "server_public_key": "base64-encoded-key"
-  /// }
+  /// {"b": "bridge.bytebrew.ai:443", "s": "server-uuid", "t": "token", "k": "base64-key"}
   /// ```
+  ///
+  /// Also accepts legacy long keys (`bridge_url`, `server_id`, `token`,
+  /// `server_public_key`) for backwards compatibility.
   ///
   /// Throws [FormatException] if the JSON is invalid or required fields
   /// are missing.
@@ -48,28 +46,29 @@ class QrPairingData {
       throw const FormatException('Invalid QR code: not valid JSON');
     }
 
-    final bridgeUrl = json['bridge_url'] as String?;
+    final bridgeUrl = (json['b'] ?? json['bridge_url']) as String?;
     if (bridgeUrl == null || bridgeUrl.isEmpty) {
-      throw const FormatException(
-        'Invalid QR code: missing "bridge_url" field',
-      );
+      throw const FormatException('Invalid QR code: missing bridge URL');
     }
 
-    final serverId = json['server_id'] as String?;
+    final serverId = (json['s'] ?? json['server_id']) as String?;
     if (serverId == null || serverId.isEmpty) {
-      throw const FormatException('Invalid QR code: missing "server_id" field');
+      throw const FormatException('Invalid QR code: missing server ID');
     }
 
-    final token = json['token'] as String?;
+    final token = (json['t'] ?? json['token']) as String?;
     if (token == null || token.isEmpty) {
-      throw const FormatException('Invalid QR code: missing "token" field');
+      throw const FormatException('Invalid QR code: missing token');
     }
+
+    final serverPublicKey =
+        (json['k'] ?? json['server_public_key']) as String?;
 
     return QrPairingData(
       bridgeUrl: bridgeUrl,
       serverId: serverId,
       pairingToken: token,
-      serverPublicKey: json['server_public_key'] as String?,
+      serverPublicKey: serverPublicKey,
     );
   }
 }
@@ -111,13 +110,16 @@ class _QrScannerWidgetState extends State<QrScannerWidget> {
     if (barcode?.rawValue == null) return;
 
     final rawValue = barcode!.rawValue!;
+    debugPrint('[QrScanner] Detected barcode: $rawValue');
 
     try {
       final data = QrPairingData.fromJson(rawValue);
+      debugPrint('[QrScanner] Parsed OK: serverId=${data.serverId}');
       _scanned = true;
       _controller.stop();
       widget.onScanned(data);
     } on FormatException catch (e) {
+      debugPrint('[QrScanner] Parse error: ${e.message}');
       setState(() {
         _errorMessage = e.message;
       });

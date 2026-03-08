@@ -154,16 +154,5 @@ void main() {
       // implementation. We just verify no error.)
     });
 
-    // -----------------------------------------------------------------
-    // Health check & error retry (using FakeConnectionManager)
-    // -----------------------------------------------------------------
-
-    group('health check & error retry', () {
-      test('markConnectionLost is no-op for unknown server', () {
-        // Should not throw.
-        manager.markConnectionLost('nonexistent', reason: 'test');
-        expect(manager.connections, isEmpty);
-      });
-    });
   });
 }

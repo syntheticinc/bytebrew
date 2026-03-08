@@ -25,6 +25,7 @@ Delivery → Usecase → Domain ← Infrastructure
 ### SOLID (обязательно)
 - **S** — один struct = одна ответственность. Описание БЕЗ слова "и"
 - **O** — расширение через новый код, не изменение существующего
+- **L** — подстановка подклассов без изменения кода
 - **I** — маленькие интерфейсы, определённые на стороне потребителя
 - **D** — зависимости через интерфейсы
 
@@ -46,6 +47,30 @@ Delivery → Usecase → Domain ← Infrastructure
 - **Спросить пользователя** если не уверен в подходе
 - Лишний или плохой код — удалять/переписывать
 
+## Cloud Infrastructure
+
+- **Cloud server:** `49.12.226.216` — SSH: `root@49.12.226.216`
+- **Bridge:** `bridge.bytebrew.ai` (Caddy TLS → internal port 8443), systemd `bytebrew-bridge.service`
+- **Cloud API:** `api.bytebrew.ai`, systemd `bytebrew-cloud-api.service`
+- **Config:** `/etc/bytebrew/bridge.env`, Caddyfile: `/etc/caddy/Caddyfile`
+- **Deploy bridge:** `scp bin/bytebrew-bridge root@49.12.226.216:/usr/local/bin/ && ssh root@49.12.226.216 systemctl restart bytebrew-bridge`
+
+## Server Port Discovery
+
+Сервер записывает port file при старте. Не хардкодить порт — читать из файла.
+
+| OS | Port file path |
+|----|---------------|
+| Windows | `%APPDATA%/bytebrew/server.port` |
+| macOS | `~/Library/Application Support/bytebrew/server.port` |
+| Linux | `${XDG_DATA_HOME:-~/.local/share}/bytebrew/server.port` |
+
+```json
+{"pid": 131956, "port": 60466, "host": "127.0.0.1", "startedAt": "2026-03-07T15:29:27Z"}
+```
+
+**Проверка:** `cat "$APPDATA/bytebrew/server.port"` (Windows/bash)
+
 ## Commands
 ```bash
 # Server
@@ -62,8 +87,8 @@ cd bytebrew-cli && bun test
 cd bytebrew-cloud-api && go run ./cmd/server
 cd bytebrew-cloud-web && npm run build
 
-# Kill server (Windows)
-netstat -ano | findstr :60401
+# Kill server (read port from port file)
+cat "$APPDATA/bytebrew/server.port"  # get PID
 taskkill /F /PID <pid>
 ```
 
@@ -114,7 +139,7 @@ taskkill /F /PID <pid>
 ## Тестирование
 
 Два уровня = 100% покрытие:
-1. **Интеграционные с рендерингом** — MockChatModel → весь стек → `render(<ChatApp />)` → `lastFrame()`
+1. **Интеграционные с рендерингом** — MockChatModel → весь стек со стороны клиента (мобильное приложение / cli) → `render(<ChatApp />)` → `lastFrame()`
 2. **Prompt Regression** — замороженный контекст → реальная LLM → assertions
 
 **Принцип:** тестируй что ВИДИТ пользователь, не data layer.
@@ -128,6 +153,64 @@ taskkill /F /PID <pid>
 cd bytebrew-cli
 bun dist/index.js -C ../test-project ask --headless "prompt"
 ```
+
+## MCP TUI Testing (mcp-tui-test)
+
+Для ручного и автоматизированного тестирования CLI через MCP.
+
+### Запуск CLI
+```
+# ВАЖНО: bun напрямую не работает — нужен cmd /c wrapper
+# ВАЖНО: используй stream mode (buffer mode не работает на Windows)
+mcp__tui-test__launch_tui(
+  command: 'cmd /c "cd /d C:\\path\\to\\bytebrew-cli && bun dist\\index.js -C ..\\test-project session -s localhost:60466"',
+  session_id: "cli",
+  timeout: 300,
+  mode: "stream"
+)
+```
+
+### Отправка сообщений и проверка
+```
+# Отправить текст + Enter
+mcp__tui-test__send_keys(keys: "hello\n", session_id: "cli")
+
+# Ждать ответ (regex pattern)
+mcp__tui-test__expect_text(pattern: "Hello|hello", session_id: "cli", timeout: 30)
+
+# Захватить экран
+mcp__tui-test__capture_screen(session_id: "cli")
+```
+
+### Ограничения
+- **Ink TUI** (interactive mode) — Ink перерисовывает экран через ANSI escapes, stream mode не обновляется. Используй `session` command (headless multi-turn) вместо `chat`.
+- **Buffer mode** — не работает на Windows (`SpawnPipe.read_nonblocking` error)
+- **Bun без cmd /c** — `cd` не распознаётся, нужен `cmd /c` wrapper
+
+## MCP Marionette (Flutter)
+
+Для тестирования Flutter app на реальном устройстве через Debug VM Service.
+
+### Подключение
+```
+# URI из вывода flutter run: "A Dart VM Service on ... is available at: http://127.0.0.1:PORT/TOKEN=/ws"
+mcp__marionette__connect(uri: "ws://127.0.0.1:PORT/TOKEN=/ws")
+```
+
+### Взаимодействие
+```
+mcp__marionette__take_screenshots()           # Скриншот текущего состояния
+mcp__marionette__get_interactive_elements()    # Список интерактивных элементов
+mcp__marionette__tap(key: "element_key")       # Тап по key
+mcp__marionette__tap(text: "Button Text")      # Тап по тексту
+mcp__marionette__enter_text(key: "input_key", input: "text")  # Ввод текста
+mcp__marionette__hot_reload()                  # Hot reload после изменений кода
+```
+
+### Важно
+- Элементы идентифицируются по `ValueKey<String>` — если key нет, добавь в код
+- `enter_text` НЕ вызывает `onChanged` — используй `controller.addListener` вместо `onChanged`
+- После изменений кода — обязательно `hot_reload`
 
 ## Compact Instructions
 При сжатии контекста ОБЯЗАТЕЛЬНО сохранить:

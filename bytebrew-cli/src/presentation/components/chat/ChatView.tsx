@@ -76,7 +76,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             return (
               <Box key="welcome" flexDirection="column" marginY={1}>
                 <Text color="gray">
-                  Welcome to Vector CLI! Type a message to start chatting.
+                  Welcome to ByteBrew CLI! Type a message to start chatting.
                 </Text>
                 <Text color="gray" dimColor>
                   Press Ctrl+C to exit.

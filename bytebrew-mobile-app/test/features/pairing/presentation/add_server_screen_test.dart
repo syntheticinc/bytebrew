@@ -19,79 +19,44 @@ void main() {
     await tester.pumpWidget(buildTestWidget());
     await tester.pumpAndSettle();
 
-    expect(find.text('Run in your terminal:'), findsOneWidget);
-    expect(find.text('bytebrew mobile-pair'), findsOneWidget);
+    expect(find.text('In ByteBrew CLI, type:'), findsOneWidget);
+    expect(find.text('/mobile'), findsOneWidget);
   });
 
-  testWidgets('AddServerScreen renders QR scan mode by default', (
+  testWidgets('AddServerScreen renders QR scanner by default', (
     tester,
   ) async {
     await tester.pumpWidget(buildTestWidget());
     await tester.pumpAndSettle();
 
-    // QR scan mode is default -- segment button should be present.
-    expect(find.text('QR Scan'), findsOneWidget);
-    expect(find.text('Manual Code'), findsOneWidget);
+    expect(find.text('Point your camera at the QR code shown in CLI after typing /mobile'), findsOneWidget);
   });
 
-  testWidgets('AddServerScreen shows manual code form after switching mode', (
+  testWidgets('AddServerScreen does not show manual code form', (
     tester,
   ) async {
     await tester.pumpWidget(buildTestWidget());
     await tester.pumpAndSettle();
 
-    // Switch to Manual Code mode.
-    await tester.tap(find.text('Manual Code'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Server Address'), findsOneWidget);
-    expect(find.text('Enter the 6-digit pairing code'), findsOneWidget);
-    expect(find.text('Connect'), findsOneWidget);
-  });
-
-  testWidgets('AddServerScreen shows address hint in manual mode', (
-    tester,
-  ) async {
-    await tester.pumpWidget(buildTestWidget());
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Manual Code'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('e.g. 192.168.1.5'), findsOneWidget);
-  });
-
-  testWidgets('Connect button is disabled when form is incomplete', (
-    tester,
-  ) async {
-    await tester.pumpWidget(buildTestWidget());
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Manual Code'));
-    await tester.pumpAndSettle();
-
-    // Find the Connect button -- it should be disabled (onPressed == null).
-    final connectButton = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Connect'),
-    );
-    expect(connectButton.onPressed, isNull);
+    expect(find.text('Manual Code'), findsNothing);
+    expect(find.text('Enter the 6-digit pairing code'), findsNothing);
+    expect(find.text('Connect'), findsNothing);
   });
 
   testWidgets('AddServerScreen renders security info section', (tester) async {
     await tester.pumpWidget(buildTestWidget());
     await tester.pumpAndSettle();
 
-    // Scroll to make security info visible if needed.
     await tester.scrollUntilVisible(
-      find.text('Encrypted connection via bridge relay'),
+      find.text('End-to-end encrypted connection'),
       200,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Encrypted connection via bridge relay'), findsOneWidget);
+    expect(find.text('End-to-end encrypted connection'), findsOneWidget);
     expect(
-      find.text('End-to-end encrypted connection through a secure relay'),
+      find.text('QR code contains a one-time cryptographic token'),
       findsOneWidget,
     );
   });
@@ -103,31 +68,12 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.text('Encrypted connection via bridge relay'),
+      find.text('End-to-end encrypted connection'),
       200,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
 
     expect(find.byIcon(Icons.lock_outline), findsOneWidget);
-  });
-
-  testWidgets('Entering address enables part of the form', (tester) async {
-    await tester.pumpWidget(buildTestWidget());
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Manual Code'));
-    await tester.pumpAndSettle();
-
-    // Enter a server address.
-    final addressField = find.byType(TextField).first;
-    await tester.enterText(addressField, '192.168.1.5');
-    await tester.pumpAndSettle();
-
-    // Connect should still be disabled -- code fields are empty.
-    final connectButton = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Connect'),
-    );
-    expect(connectButton.onPressed, isNull);
   });
 }

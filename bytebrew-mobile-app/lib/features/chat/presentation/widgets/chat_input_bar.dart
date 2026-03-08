@@ -22,10 +22,19 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
   final _controller = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_onTextChanged);
+  }
+
+  @override
   void dispose() {
+    _controller.removeListener(_onTextChanged);
     _controller.dispose();
     super.dispose();
   }
+
+  void _onTextChanged() => setState(() {});
 
   void _send([String? _]) {
     if (!widget.enabled) return;
@@ -54,6 +63,7 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
           children: [
             Expanded(
               child: TextField(
+                key: const ValueKey('chat_input'),
                 controller: _controller,
                 enabled: widget.enabled,
                 decoration: InputDecoration(
@@ -83,7 +93,6 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
                 maxLines: null,
                 textInputAction: TextInputAction.send,
                 onSubmitted: _send,
-                onChanged: (_) => setState(() {}),
               ),
             ),
             const SizedBox(width: 8),
@@ -99,6 +108,7 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
       width: 40,
       height: 40,
       child: IconButton.filled(
+        key: const ValueKey('send_button'),
         onPressed: _canSend ? () => _send() : null,
         icon: const Icon(Icons.arrow_upward, size: 20),
         style: IconButton.styleFrom(

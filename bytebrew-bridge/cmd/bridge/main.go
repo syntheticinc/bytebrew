@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -33,6 +36,7 @@ func run() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /register", handleRegister(wsRelay))
 	mux.HandleFunc("GET /connect", handleConnect(wsRelay))
+	mux.HandleFunc("GET /lookup", handleLookup(wsRelay))
 	mux.HandleFunc("GET /health", handleHealth)
 
 	httpServer := &http.Server{
@@ -134,4 +138,65 @@ func handleConnect(wsRelay *relay.WsRelay) http.HandlerFunc {
 func handleHealth(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
+}
+
+// rateLimitEntry tracks request counts for a single IP.
+type rateLimitEntry struct {
+	count    int
+	windowAt time.Time
+}
+
+// handleLookup handles GET /lookup?code=XXXXXX.
+// Returns {server_id, server_public_key} for the given short code.
+// Rate-limited to 10 requests per IP per minute to prevent brute force.
+func handleLookup(wsRelay *relay.WsRelay) http.HandlerFunc {
+	const maxPerMinute = 10
+
+	var mu sync.Mutex
+	limits := map[string]*rateLimitEntry{}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Rate limit by IP
+		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+		if ip == "" {
+			ip = r.RemoteAddr
+		}
+
+		now := time.Now()
+		mu.Lock()
+		entry, ok := limits[ip]
+		if !ok || now.Sub(entry.windowAt) > time.Minute {
+			limits[ip] = &rateLimitEntry{count: 1, windowAt: now}
+		} else {
+			entry.count++
+		}
+		count := limits[ip].count
+		mu.Unlock()
+
+		if count > maxPerMinute {
+			http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+			return
+		}
+
+		code := r.URL.Query().Get("code")
+		if len(code) != 6 {
+			http.Error(w, "code must be 6 digits", http.StatusBadRequest)
+			return
+		}
+
+		serverID, serverPublicKey, ok := wsRelay.LookupShortCode(code)
+		if !ok {
+			http.Error(w, "code not found or expired", http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"server_id":         serverID,
+			"server_public_key": serverPublicKey,
+		})
+
+		slog.InfoContext(r.Context(), "short code lookup",
+			"code", code, "server_id", serverID, "ip", ip)
+	}
 }

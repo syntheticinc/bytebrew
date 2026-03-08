@@ -73,17 +73,20 @@ export class PairingService {
   private readonly tokenStore: PairingTokenStore;
   private readonly crypto: CryptoService;
   private readonly pairingWaiter: PairingWaiter;
+  private readonly serverKeyPair?: { publicKey: Uint8Array; privateKey: Uint8Array };
 
   constructor(
     deviceStore: DeviceStore,
     tokenStore: PairingTokenStore,
     crypto: CryptoService,
     pairingWaiter: PairingWaiter,
+    serverKeyPair?: { publicKey: Uint8Array; privateKey: Uint8Array },
   ) {
     this.deviceStore = deviceStore;
     this.tokenStore = tokenStore;
     this.crypto = crypto;
     this.pairingWaiter = pairingWaiter;
+    this.serverKeyPair = serverKeyPair;
   }
 
   /**
@@ -104,8 +107,8 @@ export class PairingService {
     // Create domain entity
     const pairingToken = PairingToken.create(token, shortCode);
 
-    // Generate X25519 keypair for ECDH key exchange
-    const keyPair = this.crypto.generateKeyPair();
+    // Use persistent keypair if provided, otherwise generate ephemeral
+    const keyPair = this.serverKeyPair ?? this.crypto.generateKeyPair();
     const tokenWithKeys = pairingToken.withKeys(keyPair.publicKey, keyPair.privateKey);
 
     // Store token for later pair() call

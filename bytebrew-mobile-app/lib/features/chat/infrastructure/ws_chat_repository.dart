@@ -1,11 +1,15 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:bytebrew_mobile/core/domain/agent_info.dart';
 import 'package:bytebrew_mobile/core/domain/ask_user.dart';
 import 'package:bytebrew_mobile/core/domain/chat_message.dart';
+import 'package:bytebrew_mobile/core/domain/mobile_session.dart';
 import 'package:bytebrew_mobile/core/domain/plan.dart';
 import 'package:bytebrew_mobile/core/domain/tool_call.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart';
+import 'package:bytebrew_mobile/core/utils/debug_file_logger.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection_manager.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_types.dart';
 import 'package:bytebrew_mobile/features/chat/domain/chat_repository.dart';
@@ -34,6 +38,11 @@ class WsChatRepository implements ChatRepository {
   StreamSubscription<SessionEvent>? _subscription;
   String? _lastEventId;
   bool _disposed = false;
+  VoidCallback? _connectionListener;
+
+  /// Stable ID for send-timeout errors so they can be removed retroactively
+  /// when session events confirm the task was actually received.
+  static const _sendErrorId = 'send-timeout-error';
 
   /// Whether this repository is actively subscribed to session events.
   bool get isSubscribed => _subscription != null;
@@ -58,7 +67,14 @@ class WsChatRepository implements ChatRepository {
     _upsertMessage(userMessage);
     _emitMessages();
 
-    final connection = _connectionManager.getConnection(_serverId);
+    // If the connection exists but is reconnecting, wait for it.
+    var connection = _connectionManager.getConnection(_serverId);
+    if (connection != null &&
+        connection.status != WsConnectionStatus.connected) {
+      dlog('[WsChatRepository] Connection not ready (${connection.status}), waiting for reconnect...');
+      connection = await _waitForConnection();
+    }
+
     if (connection == null ||
         connection.status != WsConnectionStatus.connected) {
       _upsertMessage(
@@ -73,19 +89,30 @@ class WsChatRepository implements ChatRepository {
       return;
     }
 
+    dlog('[WsChatRepository] sendNewTask: sessionId=$_sessionId text=$text');
     final result = await connection.client.sendNewTask(
       deviceToken: connection.server.deviceToken!,
       sessionId: _sessionId,
       task: text,
     );
+    dlog(
+      '[WsChatRepository] sendNewTask result: success=${result.success} '
+      'error=${result.errorMessage}',
+    );
 
     if (!result.success) {
+      // Timeout errors for new_task are usually harmless: the CLI received
+      // the task but the ack didn't make it back through a dead connection.
+      // Use a stable ID so _handleSessionStatus can remove this error when
+      // ProcessingStarted arrives, confirming the task was received.
+      final isTimeout = result.errorMessage.contains('timed out');
+
       final errorText = result.errorMessage.isEmpty
           ? 'Server not connected'
           : result.errorMessage;
       _upsertMessage(
         ChatMessage(
-          id: 'error-${DateTime.now().millisecondsSinceEpoch}',
+          id: isTimeout ? _sendErrorId : 'error-${DateTime.now().millisecondsSinceEpoch}',
           type: ChatMessageType.systemMessage,
           content: 'Failed to send: $errorText',
           timestamp: DateTime.now(),
@@ -179,12 +206,50 @@ class WsChatRepository implements ChatRepository {
   // ---------------------------------------------------------------------------
 
   /// Subscribes to session events from the server.
+  ///
+  /// Registers a listener on [WsConnectionManager] to automatically
+  /// re-subscribe whenever the connection becomes available again after
+  /// a disconnect or reconnect.
   void subscribe() {
+    _subscribeInternal();
+
+    _connectionListener = _onConnectionChange;
+    _connectionManager.addListener(_connectionListener!);
+  }
+
+  void _onConnectionChange() {
+    if (_disposed) return;
+    final conn = _connectionManager.getConnection(_serverId);
+    // Connection lost — cancel stale subscription so re-subscribe works on reconnect.
+    if (conn == null || conn.status != WsConnectionStatus.connected) {
+      _subscription?.cancel();
+      _subscription = null;
+      return;
+    }
+    // Always re-subscribe on reconnect: the CLI may have a new session after restart.
+    debugPrint('[WsChatRepository] Connection available — re-subscribing');
+    _subscribeInternal();
+  }
+
+  void _subscribeInternal() {
     final connection = _connectionManager.getConnection(_serverId);
     if (connection == null ||
         connection.status != WsConnectionStatus.connected) {
+      debugPrint(
+        '[WsChatRepository] subscribe() SKIPPED: '
+        'connection=${connection?.status} '
+        'serverId=$_serverId',
+      );
       return;
     }
+
+    _subscription?.cancel();
+    _subscription = null;
+
+    debugPrint(
+      '[WsChatRepository] subscribe() sessionId=$_sessionId '
+      'serverId=$_serverId lastEventId=$_lastEventId',
+    );
 
     final stream = connection.client.subscribeSession(
       deviceToken: connection.server.deviceToken!,
@@ -195,7 +260,14 @@ class WsChatRepository implements ChatRepository {
     _subscription = stream.listen(
       _handleEvent,
       onError: (error) {
-        _connectionManager.markConnectionLost(_serverId, reason: '$error');
+        debugPrint('[WsChatRepository] Subscription error: $error');
+        _subscription?.cancel();
+        _subscription = null;
+      },
+      onDone: () {
+        // Stream ended (WsBridgeClient was disposed on reconnect).
+        // Mark as unsubscribed so _onConnectionChange can re-subscribe.
+        _subscription = null;
       },
       cancelOnError: false,
     );
@@ -206,6 +278,10 @@ class WsChatRepository implements ChatRepository {
     if (_disposed) return;
     _disposed = true;
 
+    if (_connectionListener != null) {
+      _connectionManager.removeListener(_connectionListener!);
+      _connectionListener = null;
+    }
     _subscription?.cancel();
     _subscription = null;
     _messageController.close();
@@ -219,7 +295,18 @@ class WsChatRepository implements ChatRepository {
     _lastEventId = event.eventId;
 
     final payload = event.payload;
-    if (payload == null) return;
+    if (payload == null) {
+      dlog(
+        '[WsChatRepository] Event type=${event.type.name} '
+        'has null payload → skipped',
+      );
+      return;
+    }
+
+    dlog(
+      '[WsChatRepository] Handling event: type=${event.type.name} '
+      'payload=${payload.runtimeType}',
+    );
 
     switch (payload) {
       case AgentMessagePayload():
@@ -242,6 +329,10 @@ class WsChatRepository implements ChatRepository {
   }
 
   void _handleAgentMessage(SessionEvent event, AgentMessagePayload payload) {
+    dlog(
+      '[WsChatRepository] AgentMessage: isComplete=${payload.isComplete} '
+      'content="${payload.content.length > 80 ? '${payload.content.substring(0, 80)}...' : payload.content}"',
+    );
     if (payload.isComplete) {
       _upsertMessage(
         ChatMessage(
@@ -379,6 +470,12 @@ class WsChatRepository implements ChatRepository {
   }
 
   void _handleSessionStatus(SessionEvent event, SessionStatusPayload payload) {
+    // ProcessingStarted confirms the CLI received the task — remove any
+    // stale send-timeout error that was shown while the connection was dead.
+    if (payload.state == MobileSessionState.active) {
+      _messages.removeWhere((m) => m.id == _sendErrorId);
+    }
+
     final content = payload.message.isNotEmpty
         ? payload.message
         : 'Session status: ${payload.state.name}';
@@ -407,6 +504,41 @@ class WsChatRepository implements ChatRepository {
   }
 
   // ---------------------------------------------------------------------------
+  // Connection helpers
+  // ---------------------------------------------------------------------------
+
+  /// Waits for the connection to become available (up to 15 seconds).
+  /// Used when a reconnect is in progress at the time the user sends a message.
+  Future<WsServerConnection?> _waitForConnection() async {
+    final completer = Completer<WsServerConnection?>();
+
+    void listener() {
+      final conn = _connectionManager.getConnection(_serverId);
+      if (conn != null && conn.status == WsConnectionStatus.connected) {
+        if (!completer.isCompleted) completer.complete(conn);
+      }
+    }
+
+    _connectionManager.addListener(listener);
+
+    // Check immediately in case it reconnected between our check and adding
+    // the listener (race condition).
+    final conn = _connectionManager.getConnection(_serverId);
+    if (conn != null && conn.status == WsConnectionStatus.connected) {
+      _connectionManager.removeListener(listener);
+      return conn;
+    }
+
+    try {
+      return await completer.future.timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      return null;
+    } finally {
+      _connectionManager.removeListener(listener);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
 
@@ -422,6 +554,9 @@ class WsChatRepository implements ChatRepository {
 
   void _emitMessages() {
     if (_disposed) return;
+    // Sort by timestamp so replayed events (from re-subscribe after reconnect)
+    // appear in correct chronological order.
+    _messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
     _messageController.add(List.unmodifiable(_messages));
   }
 

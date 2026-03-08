@@ -21,11 +21,11 @@ describe('QrPairingCodeGenerator', () => {
     });
     const payload = JSON.parse(json);
 
-    expect(payload.server_id).toBe('test-server-id');
-    expect(payload.token).toBe('abc123hex');
-    expect(typeof payload.server_public_key).toBe('string');
-    expect(payload.server_public_key.length).toBeGreaterThan(0);
-    expect(payload.bridge_url).toBe('wss://bridge.example.com');
+    expect(payload.s).toBe('test-server-id');
+    expect(payload.t).toBe('abc123hex');
+    expect(payload.b).toBe('wss://bridge.example.com');
+    // server_public_key is NOT in QR — exchanged via pair_response
+    expect(payload.k).toBeUndefined();
   });
 
   test('composeLocalPayload() does not include lan field', () => {
@@ -40,28 +40,18 @@ describe('QrPairingCodeGenerator', () => {
     expect(payload.lan).toBeUndefined();
   });
 
-  test('composeLocalPayload() handles empty serverPublicKey', () => {
+  test('composeLocalPayload() does not include server_public_key (exchanged via handshake)', () => {
     const gen = new QrPairingCodeGenerator();
-    const info = mockLocalInfo({ serverPublicKey: new Uint8Array(0) });
+    const info = mockLocalInfo({ serverPublicKey: new Uint8Array([72, 101, 108, 108, 111]) });
     const payload = JSON.parse(
       gen.composeLocalPayload({ info, bridgeUrl: 'wss://bridge.example.com' }),
     );
 
+    expect(payload.k).toBeUndefined();
     expect(payload.server_public_key).toBeUndefined();
   });
 
-  test('composeLocalPayload() encodes serverPublicKey as base64', () => {
-    const gen = new QrPairingCodeGenerator();
-    const key = new Uint8Array([72, 101, 108, 108, 111]); // "Hello"
-    const info = mockLocalInfo({ serverPublicKey: key });
-    const payload = JSON.parse(
-      gen.composeLocalPayload({ info, bridgeUrl: 'wss://bridge.example.com' }),
-    );
-
-    expect(payload.server_public_key).toBe(Buffer.from(key).toString('base64'));
-  });
-
-  test('composeLocalPayload() always includes bridge_url field', () => {
+  test('composeLocalPayload() always includes bridge url field', () => {
     const gen = new QrPairingCodeGenerator();
     const payload = JSON.parse(
       gen.composeLocalPayload({
@@ -70,6 +60,6 @@ describe('QrPairingCodeGenerator', () => {
       }),
     );
 
-    expect(payload.bridge_url).toBe('wss://custom-bridge.io');
+    expect(payload.b).toBe('wss://custom-bridge.io');
   });
 });

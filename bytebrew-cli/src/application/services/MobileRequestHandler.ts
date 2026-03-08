@@ -13,18 +13,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getLogger } from '../../lib/logger.js';
 import type { MobileMessage } from '../../infrastructure/bridge/BridgeMessageRouter.js';
+import { buildPairResponse, type PairService } from '../../infrastructure/mobile/pairRequestHandler.js';
 
 const logger = getLogger();
-
-// --- Consumer-side interfaces ---
-
-interface PairingHandler {
-  pair(token: string, devicePublicKey: Uint8Array, deviceName: string): {
-    deviceId: string;
-    deviceToken: string;
-    serverPublicKey: Uint8Array;
-  };
-}
 
 interface CommandHandler {
   handleNewTask(deviceId: string, message: string): void;
@@ -42,7 +33,7 @@ interface SessionProvider {
 }
 
 interface Broadcaster {
-  subscribe(deviceId: string, sessionId?: string): void;
+  subscribe(deviceId: string, sessionId?: string, lastEventId?: string): void;
   unsubscribe(deviceId: string): void;
 }
 
@@ -57,7 +48,7 @@ interface DeviceLister {
 // --- Service ---
 
 export class MobileRequestHandler {
-  private readonly pairingHandler: PairingHandler;
+  private readonly pairService: PairService;
   private readonly commandHandler: CommandHandler;
   private readonly sessionProvider: SessionProvider;
   private readonly broadcaster: Broadcaster;
@@ -65,14 +56,14 @@ export class MobileRequestHandler {
   private readonly deviceLister: DeviceLister;
 
   constructor(
-    pairingHandler: PairingHandler,
+    pairService: PairService,
     commandHandler: CommandHandler,
     sessionProvider: SessionProvider,
     broadcaster: Broadcaster,
     authenticator: DeviceAuthenticator,
     deviceLister: DeviceLister,
   ) {
-    this.pairingHandler = pairingHandler;
+    this.pairService = pairService;
     this.commandHandler = commandHandler;
     this.sessionProvider = sessionProvider;
     this.broadcaster = broadcaster;
@@ -127,6 +118,7 @@ export class MobileRequestHandler {
       case 'ask_user_reply':
         return this.handleAskUserReply(message);
       case 'cancel':
+      case 'cancel_session':
         return this.handleCancel(message);
       case 'subscribe':
         // Use bridge-level deviceId for subscribe/unsubscribe so that
@@ -148,46 +140,17 @@ export class MobileRequestHandler {
   }
 
   private handlePairRequest(deviceId: string, message: MobileMessage): MobileMessage {
-    const { token, device_public_key, device_name } = message.payload as {
-      token?: string;
-      device_public_key?: string;
-      device_name?: string;
-    };
+    const response = buildPairResponse(deviceId, message, this.pairService);
 
-    if (!token) {
-      return this.errorResponse(deviceId, message.request_id, 'token is required');
-    }
-    if (!device_name) {
-      return this.errorResponse(deviceId, message.request_id, 'device_name is required');
+    if (response.type === 'pair_response') {
+      const deviceName = (message.payload as { device_name?: string }).device_name;
+      logger.info('Device paired via bridge', {
+        deviceId: response.payload.device_id,
+        deviceName,
+      });
     }
 
-    const publicKeyBytes = device_public_key
-      ? Uint8Array.from(Buffer.from(device_public_key, 'base64'))
-      : new Uint8Array(0);
-
-    const result = this.pairingHandler.pair(token, publicKeyBytes, device_name);
-
-    logger.info('Device paired via bridge', {
-      deviceId: result.deviceId,
-      deviceName: device_name,
-    });
-
-    // Include server_public_key so mobile can compute sharedSecret for E2E encryption
-    const responsePayload: Record<string, unknown> = {
-      device_id: result.deviceId,
-      device_token: result.deviceToken,
-    };
-
-    if (result.serverPublicKey.length > 0) {
-      responsePayload.server_public_key = Buffer.from(result.serverPublicKey).toString('base64');
-    }
-
-    return {
-      type: 'pair_response',
-      request_id: message.request_id,
-      device_id: deviceId,
-      payload: responsePayload,
-    };
+    return response;
   }
 
   private handleNewTask(authenticatedDeviceId: string, message: MobileMessage): MobileMessage {
@@ -211,19 +174,23 @@ export class MobileRequestHandler {
   }
 
   private handleAskUserReply(message: MobileMessage): MobileMessage {
-    const { session_id, reply } = message.payload as {
+    const { session_id, reply, answer } = message.payload as {
       session_id?: string;
       reply?: string;
+      answer?: string;
     };
+
+    // Accept both 'reply' (CLI convention) and 'answer' (Flutter convention)
+    const replyText = reply ?? answer;
 
     if (!session_id) {
       return this.errorResponse(message.device_id, message.request_id, 'session_id is required');
     }
-    if (!reply) {
+    if (!replyText) {
       return this.errorResponse(message.device_id, message.request_id, 'reply is required');
     }
 
-    this.commandHandler.handleAskUserReply(session_id, reply);
+    this.commandHandler.handleAskUserReply(session_id, replyText);
 
     return {
       type: 'ask_user_reply_ack',
@@ -251,9 +218,9 @@ export class MobileRequestHandler {
   }
 
   private handleSubscribe(authenticatedDeviceId: string, message: MobileMessage): MobileMessage {
-    const { session_id } = message.payload as { session_id?: string };
+    const { session_id, last_event_id } = message.payload as { session_id?: string; last_event_id?: string };
 
-    this.broadcaster.subscribe(authenticatedDeviceId, session_id);
+    this.broadcaster.subscribe(authenticatedDeviceId, session_id, last_event_id);
 
     return {
       type: 'subscribe_ack',

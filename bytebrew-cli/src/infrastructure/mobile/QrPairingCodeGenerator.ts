@@ -1,10 +1,13 @@
 import qrcode from 'qrcode-terminal';
 
+/**
+ * Compact QR payload — short keys to minimize QR version and fit terminal width.
+ */
 interface QrPayload {
-  server_id: string;
-  server_public_key?: string;
-  token: string;
-  bridge_url: string;
+  s: string;  // server_id
+  t: string;  // token
+  b: string;  // bridge_url
+  k: string;  // server_public_key (base64) — verified by mobile out-of-band
 }
 
 /** Payload for local PairingService (Bridge mode, no gRPC server needed) */
@@ -13,6 +16,20 @@ export interface LocalPairingInfo {
   serverPublicKey: Uint8Array;
   token: string;
   shortCode: string;
+}
+
+/**
+ * Render QR code for terminal using qrcode-terminal with { small: true }.
+ *
+ * IMPORTANT: output must go to stdout directly (process.stdout.write),
+ * NOT through Ink's rendering pipeline which would reflow the text.
+ */
+export function renderQrForTerminal(data: string): string {
+  let result = '';
+  qrcode.generate(data, { small: true }, (qr: string) => {
+    result = qr;
+  });
+  return result;
 }
 
 export class QrPairingCodeGenerator {
@@ -27,14 +44,11 @@ export class QrPairingCodeGenerator {
     const { info, bridgeUrl } = params;
 
     const payload: QrPayload = {
-      server_id: info.serverId,
-      token: info.token,
-      bridge_url: bridgeUrl,
+      s: info.serverId,
+      t: info.token,
+      b: bridgeUrl,
+      k: Buffer.from(info.serverPublicKey).toString('base64'),
     };
-
-    if (info.serverPublicKey.length > 0) {
-      payload.server_public_key = Buffer.from(info.serverPublicKey).toString('base64');
-    }
 
     return JSON.stringify(payload);
   }

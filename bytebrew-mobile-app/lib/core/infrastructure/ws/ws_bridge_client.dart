@@ -7,6 +7,7 @@ import 'package:bytebrew_mobile/core/crypto/message_cipher.dart';
 import 'package:bytebrew_mobile/core/domain/mobile_session.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_types.dart';
+import 'package:bytebrew_mobile/core/utils/debug_file_logger.dart';
 
 /// High-level client for CLI communication via Bridge WebSocket.
 ///
@@ -73,6 +74,14 @@ class WsBridgeClient {
       payload,
       encrypt: false,
     );
+
+    // Check for error response from CLI.
+    if (response['type'] == 'error') {
+      final errPayload = response['payload'] as Map<String, dynamic>? ?? {};
+      final msg = errPayload['message'] as String? ?? 'Pairing failed';
+      throw Exception(msg);
+    }
+
     final respPayload = response['payload'] as Map<String, dynamic>? ?? {};
 
     Uint8List? serverPublicKey;
@@ -150,7 +159,12 @@ class WsBridgeClient {
 
     controller.onCancel = () {
       rawController.close();
-      _eventControllers.remove(eventKey);
+      // Guard against async race: onCancel fires as a microtask, so by the
+      // time it runs, _subscribeInternal may have already registered a NEW
+      // controller for the same key. Only remove if still ours.
+      if (_eventControllers[eventKey] == rawController) {
+        _eventControllers.remove(eventKey);
+      }
     };
 
     // Send the subscribe request (fire and forget).
@@ -238,17 +252,30 @@ class WsBridgeClient {
     Map<String, dynamic> payload, {
     bool encrypt = true,
   }) async {
+    // If the connection is stale (e.g. after Android idle/doze suspended
+    // timers and the TCP connection died silently), wait for reconnect
+    // before sending. The ping timer's stale check or the pong watchdog
+    // will trigger the reconnect.
+    if (_connection.isStale) {
+      dlog('[WsBridgeClient] Connection stale before $type — waiting for reconnect');
+      await _waitForReconnect();
+      dlog('[WsBridgeClient] Reconnect complete — proceeding with $type');
+    }
+
     final requestId = _generateRequestId();
     final completer = Completer<Map<String, dynamic>>();
     _pendingRequests[requestId] = completer;
 
+    dlog('[WsBridgeClient] _sendRequest type=$type requestId=$requestId encrypt=$encrypt');
     final message = await _buildMessage(
       type,
       requestId,
       payload,
       encrypt: encrypt,
     );
+    dlog('[WsBridgeClient] _sendRequest SENDING type=$type requestId=$requestId msgKeys=${message.keys.toList()}');
     _connection.send(message);
+    dlog('[WsBridgeClient] _sendRequest SENT type=$type requestId=$requestId pendingCount=${_pendingRequests.length}');
 
     // Timeout after 30 seconds.
     return completer.future.timeout(
@@ -268,14 +295,32 @@ class WsBridgeClient {
     Map<String, dynamic> payload,
   ) async {
     final requestId = _generateRequestId();
+    dlog('[WsBridgeClient] _sendFireAndForget type=$type requestId=$requestId');
     final message = await _buildMessage(type, requestId, payload);
     _connection.send(message);
+    dlog('[WsBridgeClient] _sendFireAndForget SENT type=$type requestId=$requestId');
   }
 
   Future<SendCommandResult> _sendCommand(
     String type,
     Map<String, dynamic> payload,
   ) async {
+    // Verify connection is alive before sending important commands.
+    // This catches silently-dead TCP connections (common on Android after
+    // idle) before wasting 30s on a timeout.
+    if (!await _connection.ensureAlive()) {
+      dlog('[WsBridgeClient] Connection dead before $type — waiting for reconnect');
+      try {
+        await _waitForReconnect();
+        dlog('[WsBridgeClient] Reconnected — proceeding with $type');
+      } on TimeoutException {
+        return SendCommandResult(
+          success: false,
+          errorMessage: 'Connection lost — please try again',
+        );
+      }
+    }
+
     try {
       final response = await _sendRequest(type, payload);
       final respPayload = response['payload'] as Map<String, dynamic>? ?? {};
@@ -283,6 +328,39 @@ class WsBridgeClient {
       return SendCommandResult(success: error.isEmpty, errorMessage: error);
     } on Exception catch (e) {
       return SendCommandResult(success: false, errorMessage: e.toString());
+    }
+  }
+
+  /// Waits for the underlying [WsConnection] to transition back to
+  /// [WsConnectionStatus.connected] after a stale-connection reconnect.
+  Future<void> _waitForReconnect() async {
+    final completer = Completer<void>();
+
+    late final StreamSubscription<WsConnectionStatus> sub;
+    sub = _connection.statusChanges.listen((status) {
+      if (status == WsConnectionStatus.connected) {
+        sub.cancel();
+        if (!completer.isCompleted) completer.complete();
+      }
+    });
+
+    // If the connection is already reconnected by the time we subscribe
+    // (race condition), complete immediately.
+    if (!_connection.isStale &&
+        _connection.status == WsConnectionStatus.connected) {
+      sub.cancel();
+      if (!completer.isCompleted) completer.complete();
+      return;
+    }
+
+    try {
+      await completer.future.timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      sub.cancel();
+      throw TimeoutException(
+        'Connection reconnect timed out',
+        const Duration(seconds: 15),
+      );
     }
   }
 
@@ -322,16 +400,27 @@ class WsBridgeClient {
 
   void _onMessage(Map<String, dynamic> bridgeMessage) {
     final bridgeType = bridgeMessage['type'] as String?;
-    if (bridgeType != 'data') return;
+    dlog('[WsBridgeClient] _onMessage type=$bridgeType');
+    if (bridgeType != 'data') {
+      debugPrint('[WsBridgeClient] Ignoring bridge message type=$bridgeType');
+      return;
+    }
 
     final rawPayload = bridgeMessage['payload'];
-    if (rawPayload == null) return;
+    if (rawPayload == null) {
+      debugPrint('[WsBridgeClient] Ignoring data message with null payload');
+      return;
+    }
 
     Map<String, dynamic> innerMessage;
 
     if (rawPayload is String) {
       // Encrypted payload (base64) -- decrypt.
       if (cipher != null) {
+        debugPrint(
+          '[WsBridgeClient] Decrypting payload '
+          '(${rawPayload.length} chars)',
+        );
         _decryptAndHandle(rawPayload);
         return;
       }
@@ -345,6 +434,10 @@ class WsBridgeClient {
     } else if (rawPayload is Map<String, dynamic>) {
       innerMessage = rawPayload;
     } else {
+      debugPrint(
+        '[WsBridgeClient] Unexpected payload type: '
+        '${rawPayload.runtimeType}',
+      );
       return;
     }
 
@@ -354,20 +447,27 @@ class WsBridgeClient {
   Future<void> _decryptAndHandle(String base64Payload) async {
     try {
       final encrypted = base64Decode(base64Payload);
-      final (decrypted, _) = await cipher!.decrypt(encrypted);
+      final (decrypted, counter) = await cipher!.decrypt(encrypted);
       final json = jsonDecode(utf8.decode(decrypted)) as Map<String, dynamic>;
+      final type = json['type'] as String? ?? '?';
+      dlog('[WsBridgeClient] Decrypted OK: type=$type counter=$counter');
       _handleInnerMessage(json);
     } on Exception catch (e) {
-      debugPrint('[WsBridgeClient] Decrypt failed: $e');
+      dlog('[WsBridgeClient] Decrypt FAILED: $e');
     }
   }
 
   void _handleInnerMessage(Map<String, dynamic> message) {
     final type = message['type'] as String?;
     final requestId = message['request_id'] as String?;
+    dlog('[WsBridgeClient] _handleInnerMessage type=$type requestId=$requestId');
 
     // Check if this is a response to a pending request.
     if (requestId != null && _pendingRequests.containsKey(requestId)) {
+      debugPrint(
+        '[WsBridgeClient] Resolving pending request: type=$type '
+        'requestId=$requestId',
+      );
       final completer = _pendingRequests.remove(requestId);
       completer?.complete(message);
       return;
@@ -383,20 +483,44 @@ class WsBridgeClient {
     if (type != null && requestId != null) {
       // Try to find a matching pending request.
       final completer = _pendingRequests.remove(requestId);
-      completer?.complete(message);
+      if (completer != null) {
+        debugPrint(
+          '[WsBridgeClient] Resolving pending (fallback): type=$type',
+        );
+        completer.complete(message);
+      } else {
+        debugPrint(
+          '[WsBridgeClient] Unmatched message: type=$type '
+          'requestId=$requestId',
+        );
+      }
     }
   }
 
   void _handleSessionEvent(Map<String, dynamic> message) {
     final payload = message['payload'] as Map<String, dynamic>?;
-    if (payload == null) return;
+    if (payload == null) {
+      debugPrint('[WsBridgeClient] session_event with null payload');
+      return;
+    }
 
     final sessionId = payload['session_id'] as String?;
-    if (sessionId == null) return;
+    if (sessionId == null) {
+      debugPrint('[WsBridgeClient] session_event missing session_id');
+      return;
+    }
+
+    final eventJson = payload['event'] as Map<String, dynamic>?;
+    final eventType = eventJson?['type'] as String? ?? '?';
 
     final eventKey = 'subscribe-$sessionId';
     final controller = _eventControllers[eventKey];
-    controller?.add(message);
+    if (controller != null) {
+      dlog('[WsBridgeClient] session_event type=$eventType session=$sessionId → dispatched');
+      controller.add(message);
+    } else {
+      dlog('[WsBridgeClient] session_event type=$eventType session=$sessionId → NO CONTROLLER keys=${_eventControllers.keys.toList()}');
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -411,8 +535,19 @@ class WsBridgeClient {
     final eventJson = payload['event'] as Map<String, dynamic>?;
     if (eventJson == null) return null;
 
-    final eventType = _parseEventType(eventJson['type'] as String?);
+    final rawType = eventJson['type'] as String?;
+    final eventRole = eventJson['role'] as String?;
+    final eventType = _parseEventType(rawType, role: eventRole);
     final eventPayload = _parseEventPayload(eventType, eventJson);
+
+    // Only log non-progress events to avoid spam.
+    if (eventType != SessionEventType.unspecified) {
+      debugPrint(
+        '[WsBridgeClient] Parsed event: rawType=$rawType '
+        'role=$eventRole → $eventType '
+        'hasPayload=${eventPayload != null}',
+      );
+    }
 
     return SessionEvent(
       eventId:
@@ -427,9 +562,16 @@ class WsBridgeClient {
     );
   }
 
-  SessionEventType _parseEventType(String? type) {
+  SessionEventType _parseEventType(String? type, {String? role}) {
+    // Only show assistant messages from MessageCompleted events.
+    // Skip user (mobile shows optimistically) and tool (handled via
+    // ToolExecutionStarted/Completed events) messages.
+    if (type == 'MessageCompleted' && role != null && role != 'assistant') {
+      return SessionEventType.unspecified;
+    }
     return switch (type) {
-      'MessageChunk' || 'MessageCompleted' => SessionEventType.agentMessage,
+      'MessageChunk' ||
+      'MessageCompleted' => SessionEventType.agentMessage,
       'ToolExecutionStarted' => SessionEventType.toolCallStart,
       'ToolExecutionCompleted' => SessionEventType.toolCallEnd,
       'ReasoningChunk' || 'ReasoningCompleted' => SessionEventType.reasoning,
@@ -438,6 +580,11 @@ class WsBridgeClient {
       'ProcessingStarted' ||
       'ProcessingCompleted' ||
       'ProcessingStopped' => SessionEventType.sessionStatus,
+      // Progress-only events — silently ignored (no chat message).
+      'MessageStarted' ||
+      'StreamingProgress' ||
+      'MessageChunkCompleted' ||
+      'AgentLifecycle' => SessionEventType.unspecified,
       'Error' || 'ErrorOccurred' => SessionEventType.error,
       _ => SessionEventType.unspecified,
     };

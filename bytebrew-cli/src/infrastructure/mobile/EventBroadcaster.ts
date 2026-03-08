@@ -66,10 +66,42 @@ export class EventBroadcaster {
     this.logger.info('EventBroadcaster stopped');
   }
 
-  /** Subscribe a mobile device to receive events */
-  subscribe(deviceId: string, sessionId?: string): void {
+  /** Subscribe a mobile device to receive events, optionally backfilling missed ones */
+  subscribe(deviceId: string, sessionId?: string, lastEventId?: string): void {
     this.subscriptions.set(deviceId, { deviceId, sessionId });
-    this.logger.info('Device subscribed', { deviceId, sessionId });
+    this.logger.info('Device subscribed', { deviceId, sessionId, lastEventId, total: this.subscriptions.size });
+
+    if (lastEventId) {
+      this.backfillEvents(deviceId, lastEventId);
+    }
+  }
+
+  private backfillEvents(deviceId: string, lastEventId: string): void {
+    const { events } = this.eventBuffer.getAfter(this.sessionId, -1);
+    if (events.length === 0) return;
+
+    const lastIdx = events.findIndex((e) => e.event_id === lastEventId);
+    const toSend = lastIdx >= 0 ? events.slice(lastIdx + 1) : [];
+
+    this.logger.debug('Backfilling events', { deviceId, lastEventId, found: lastIdx >= 0, sending: toSend.length });
+    if (toSend.length === 0) return;
+
+    for (const event of toSend) {
+      const message: MobileMessage = {
+        type: 'session_event',
+        request_id: uuidv4(),
+        device_id: deviceId,
+        payload: {
+          session_id: this.sessionId,
+          event,
+        },
+      };
+      try {
+        this.router.sendMessage(deviceId, message);
+      } catch (_) {
+        // Device may not be fully connected yet — skip silently
+      }
+    }
   }
 
   /** Unsubscribe a mobile device */
@@ -91,19 +123,19 @@ export class EventBroadcaster {
 
   private handleDomainEvent(event: DomainEvent): void {
     const serialized = serializeEvent(event);
+    // Stable ID so Flutter can track lastEventId for backfill on reconnect
+    serialized.event_id = uuidv4();
 
     // Buffer the event for potential backfill
     this.eventBuffer.push(this.sessionId, serialized);
 
     // Broadcast to all subscribed devices
+    this.logger.debug('Broadcasting event', { eventType: event.type, subs: this.subscriptions.size, sessionId: this.sessionId });
     if (this.subscriptions.size === 0) return;
 
-    for (const [deviceId, sub] of this.subscriptions) {
-      // If device subscribed to a specific session, filter by it
-      if (sub.sessionId && sub.sessionId !== this.sessionId) {
-        continue;
-      }
-
+    for (const [deviceId] of this.subscriptions) {
+      // EventBroadcaster manages exactly one session per CLI process.
+      // No per-device session filtering — always broadcast to all subscribers.
       const message: MobileMessage = {
         type: 'session_event',
         request_id: uuidv4(),
@@ -136,7 +168,11 @@ function serializeEvent(event: DomainEvent): SerializedEvent {
   switch (event.type) {
     case 'MessageCompleted': {
       const snap = event.message.toSnapshot();
-      const result: SerializedEvent = { type: event.type, content: snap.content };
+      const result: SerializedEvent = {
+        type: event.type,
+        content: snap.content,
+        role: snap.role,
+      };
       if (snap.agentId) result.agent_id = snap.agentId;
       return result;
     }

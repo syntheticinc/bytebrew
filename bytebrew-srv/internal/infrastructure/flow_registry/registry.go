@@ -12,8 +12,9 @@ import (
 // flowEntry holds a flow and its associated cancel function.
 // The cancel func is stored here (not in domain) to keep ActiveFlow pure.
 type flowEntry struct {
-	flow   *domain.ActiveFlow
-	cancel context.CancelFunc
+	flow        *domain.ActiveFlow
+	cancel      context.CancelFunc
+	messageSink interface{ PublishUserMessage(string) error }
 }
 
 // InMemoryRegistry in-memory реализация flow registry
@@ -112,6 +113,34 @@ func (r *InMemoryRegistry) ListActiveFlows() []*domain.ActiveFlow {
 		flows = append(flows, entry.flow)
 	}
 	return flows
+}
+
+// SetMessageSink attaches a message sink to an existing flow entry.
+func (r *InMemoryRegistry) SetMessageSink(sessionID string, sink interface{ PublishUserMessage(string) error }) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if entry, exists := r.flows[sessionID]; exists {
+		entry.messageSink = sink
+	}
+}
+
+// PublishUserMessage delivers a user message to the active flow's EventBus.
+// Returns false if the session is not active or has no message sink.
+func (r *InMemoryRegistry) PublishUserMessage(sessionID, message string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	entry, exists := r.flows[sessionID]
+	if !exists || entry.messageSink == nil {
+		return false
+	}
+
+	if err := entry.messageSink.PublishUserMessage(message); err != nil {
+		slog.Error("failed to publish user message to active flow", "session_id", sessionID, "error", err)
+		return false
+	}
+	return true
 }
 
 // CancelFlow cancels the flow for the given session ID

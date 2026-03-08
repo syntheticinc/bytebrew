@@ -40,6 +40,7 @@ class SessionCard extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(border: Border(left: _leftBorder())),
             child: InkWell(
+              key: ValueKey('session_${session.id}'),
               borderRadius: BorderRadius.circular(8),
               onTap: () => context.push('/chat/${session.id}'),
               child: Padding(

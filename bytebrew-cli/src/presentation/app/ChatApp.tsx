@@ -206,6 +206,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
     onProviderChange: useCallback(() => setProviderVersion(v => v + 1), []),
     onLicenseChange: useCallback(() => setLicenseVersion(v => v + 1), []),
     licenseInfo,
+    container,
   });
 
   // Connect on mount

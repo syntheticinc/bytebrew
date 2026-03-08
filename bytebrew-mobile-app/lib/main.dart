@@ -1,14 +1,21 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:marionette_flutter/marionette_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
 import 'core/providers/shared_preferences_provider.dart';
+import 'core/utils/debug_file_logger.dart';
 import 'features/auth/application/auth_provider.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  if (kDebugMode) {
+    MarionetteBinding.ensureInitialized();
+  } else {
+    WidgetsFlutterBinding.ensureInitialized();
+  }
+  DebugFileLogger.instance.init();
   final prefs = await SharedPreferences.getInstance();
 
   runApp(

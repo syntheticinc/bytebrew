@@ -154,6 +154,7 @@ export class StreamProcessorService {
    * Execute the actual send logic (called when connection is confirmed).
    */
   private executeSend(content: string): void {
+    console.log(`[StreamProcessor] executeSend isProcessing=${this._isProcessing}`);
     // Add user message to repository (immediately visible)
     const userMessage = Message.createUser(content);
     this.messageRepository.save(userMessage);

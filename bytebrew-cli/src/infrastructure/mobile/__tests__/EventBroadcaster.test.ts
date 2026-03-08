@@ -214,12 +214,13 @@ function emitAndCapture(event: DomainEvent): SerializedEvent {
 }
 
 describe('serializeEvent — flat format for mobile', () => {
-  test('MessageCompleted: flat content + agent_id', () => {
+  test('MessageCompleted: flat content + role + agent_id', () => {
     const message = Message.createAssistantWithContent('Hello world', 'agent-1');
     const serialized = emitAndCapture({ type: 'MessageCompleted', message });
 
     expect(serialized.type).toBe('MessageCompleted');
     expect(serialized.content).toBe('Hello world');
+    expect(serialized.role).toBe('assistant');
     expect(serialized.agent_id).toBe('agent-1');
     // Must NOT have nested message object
     expect(serialized).not.toHaveProperty('message');
@@ -230,7 +231,18 @@ describe('serializeEvent — flat format for mobile', () => {
     const serialized = emitAndCapture({ type: 'MessageCompleted', message });
 
     expect(serialized.content).toBe('No agent');
+    expect(serialized.role).toBe('assistant');
     expect(serialized.agent_id).toBeUndefined();
+  });
+
+  test('MessageCompleted: user message has role=user (echo prevention)', () => {
+    const message = Message.createUser('hello from user');
+    const serialized = emitAndCapture({ type: 'MessageCompleted', message });
+
+    expect(serialized.type).toBe('MessageCompleted');
+    expect(serialized.content).toBe('hello from user');
+    expect(serialized.role).toBe('user');
+    // Mobile must filter this out to avoid showing user's text as agent response
   });
 
   test('ToolExecutionStarted: flat call_id, tool_name, arguments, agent_id', () => {

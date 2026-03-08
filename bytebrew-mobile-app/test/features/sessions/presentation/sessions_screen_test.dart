@@ -1,6 +1,9 @@
 import 'package:bytebrew_mobile/core/domain/session.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_providers.dart';
+import 'package:bytebrew_mobile/features/sessions/application/auto_connect_provider.dart';
 import 'package:bytebrew_mobile/features/sessions/application/sessions_provider.dart';
 import 'package:bytebrew_mobile/features/sessions/presentation/sessions_screen.dart';
+import 'package:bytebrew_mobile/features/settings/application/settings_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -55,6 +58,14 @@ void main() {
             () => FakeSessionsNotifier(testSessions),
           ),
           groupedSessionsProvider.overrideWithValue(testGrouped),
+          settingsRepositoryProvider.overrideWithValue(
+            FakeSettingsRepository(),
+          ),
+          sessionsAutoConnectProvider.overrideWith((ref) async {}),
+          connectionManagerProvider.overrideWithValue(
+            FakeConnectionManager(),
+          ),
+          serversProvider.overrideWithValue([]),
         ],
         child: const MaterialApp(home: SessionsScreen()),
       ),
@@ -85,6 +96,14 @@ void main() {
         overrides: [
           sessionsProvider.overrideWith(() => FakeSessionsNotifier([])),
           groupedSessionsProvider.overrideWithValue({}),
+          settingsRepositoryProvider.overrideWithValue(
+            FakeSettingsRepository(),
+          ),
+          sessionsAutoConnectProvider.overrideWith((ref) async {}),
+          connectionManagerProvider.overrideWithValue(
+            FakeConnectionManager(),
+          ),
+          serversProvider.overrideWithValue([]),
         ],
         child: const MaterialApp(home: SessionsScreen()),
       ),
@@ -104,6 +123,14 @@ void main() {
         overrides: [
           sessionsProvider.overrideWith(() => FakeSessionsNotifier([])),
           groupedSessionsProvider.overrideWithValue({}),
+          settingsRepositoryProvider.overrideWithValue(
+            FakeSettingsRepository(),
+          ),
+          sessionsAutoConnectProvider.overrideWith((ref) async {}),
+          connectionManagerProvider.overrideWithValue(
+            FakeConnectionManager(),
+          ),
+          serversProvider.overrideWithValue([]),
         ],
         child: const MaterialApp(home: SessionsScreen()),
       ),

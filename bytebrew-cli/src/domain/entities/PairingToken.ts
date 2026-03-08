@@ -6,7 +6,7 @@
  */
 
 /** Default pairing token expiry: 5 minutes */
-export const PAIRING_TOKEN_EXPIRY_MS = 5 * 60 * 1000;
+export const PAIRING_TOKEN_EXPIRY_MS = 15 * 60 * 1000;
 
 export interface PairingTokenProps {
   readonly token: string;

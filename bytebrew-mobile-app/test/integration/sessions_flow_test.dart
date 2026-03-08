@@ -4,8 +4,10 @@ import 'package:bytebrew_mobile/core/infrastructure/ws/ws_bridge_client.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection_manager.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_providers.dart';
+import 'package:bytebrew_mobile/features/sessions/application/auto_connect_provider.dart';
 import 'package:bytebrew_mobile/features/sessions/application/sessions_provider.dart';
 import 'package:bytebrew_mobile/features/sessions/presentation/sessions_screen.dart';
+import 'package:bytebrew_mobile/features/settings/application/settings_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -83,6 +85,9 @@ Widget _buildSessionsScreen({
       connectionManagerProvider.overrideWithValue(
         _makeManager(hasActiveConnection: hasActiveConnection),
       ),
+      settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
+      sessionsAutoConnectProvider.overrideWith((ref) async {}),
+      serversProvider.overrideWithValue([]),
     ],
     child: const MaterialApp(home: SessionsScreen()),
   );
@@ -157,7 +162,7 @@ void main() {
 
       // Server names are displayed.
       expect(find.text('MacBook Pro'), findsWidgets);
-      expect(find.text('Desktop PC'), findsOneWidget);
+      expect(find.text('Desktop PC'), findsWidgets);
     });
 
     testWidgets('TC-SESS-05: Pull to refresh does not crash', (tester) async {

@@ -37,11 +37,14 @@ import { BridgeConnector, type IBridgeConnector } from '../infrastructure/bridge
 import { BridgeMessageRouter, type IBridgeMessageRouter } from '../infrastructure/bridge/BridgeMessageRouter.js';
 import { CryptoService } from '../infrastructure/mobile/CryptoService.js';
 import { DeviceCryptoAdapter } from '../infrastructure/mobile/DeviceCryptoAdapter.js';
-import { InMemoryDeviceStore } from '../infrastructure/mobile/stores/InMemoryDeviceStore.js';
+import type { IDeviceStore } from '../infrastructure/mobile/stores/InMemoryDeviceStore.js';
 import { InMemoryPairingTokenStore } from '../infrastructure/mobile/stores/InMemoryPairingTokenStore.js';
 import { PairingWaiter } from '../infrastructure/mobile/PairingWaiter.js';
 import { EventBuffer } from '../infrastructure/mobile/EventBuffer.js';
 import { EventBroadcaster, type SerializedEvent } from '../infrastructure/mobile/EventBroadcaster.js';
+import { ByteBrewDatabase } from '../infrastructure/persistence/ByteBrewDatabase.js';
+import { CliIdentity, type ICliIdentity } from '../infrastructure/config/CliIdentity.js';
+import { SqliteDeviceStore } from '../infrastructure/mobile/stores/SqliteDeviceStore.js';
 
 // Tools layer (singleton)
 import { ToolManager } from '../tools/ToolManager.js';
@@ -64,6 +67,8 @@ export interface ContainerConfig {
   bridgeAuthToken?: string;
   /** Disable LSP server spawning (for tests that don't need real LSP servers). */
   disableLspServers?: boolean;
+  /** Custom path for SQLite database file (for testing; defaults to ~/.bytebrew/bytebrew.db). */
+  dbPath?: string;
   overrides?: {
     streamGateway?: IStreamGateway;
     toolExecutor?: IToolExecutor;
@@ -91,10 +96,12 @@ export class Container {
   private _storeFactory: ChunkStoreFactory;
   private _chunkStore: IChunkStore | null = null;
   private _embeddingsClient: IEmbeddingsClient | null = null;
+  private _bytebrewDb: ByteBrewDatabase | null = null;
+  private _cliIdentity: ICliIdentity | null = null;
   // Bridge + Mobile components (lazy, only when bridgeEnabled)
   private _bridgeConnector: IBridgeConnector | null = null;
   private _bridgeMessageRouter: IBridgeMessageRouter | null = null;
-  private _deviceStore: InMemoryDeviceStore | null = null;
+  private _deviceStore: IDeviceStore | null = null;
   private _pairingTokenStore: InMemoryPairingTokenStore | null = null;
   private _cryptoService: CryptoService | null = null;
   private _pairingWaiter: PairingWaiter | null = null;
@@ -189,14 +196,24 @@ export class Container {
    * Called only when bridgeEnabled=true and bridgeAddress is configured.
    */
   private initializeBridge(): void {
-    const serverId = this._config.serverId ?? uuidv4();
     const authToken = this._config.bridgeAuthToken ?? '';
+
+    // Create shared database and identity (lazy)
+    if (!this._bytebrewDb) {
+      this._bytebrewDb = new ByteBrewDatabase(this._config.dbPath);
+    }
+    if (!this._cliIdentity) {
+      this._cliIdentity = new CliIdentity(this._bytebrewDb, new CryptoService());
+    }
+
+    const serverId = this._config.serverId ?? this._cliIdentity.getServerId();
+    const serverKeyPair = this._cliIdentity.getKeyPair();
 
     // Wire EventBus for AskUser events so mobile gets AskUserRequested notifications
     setAskUserEventBus(this._eventBus);
 
     // Infrastructure stores
-    this._deviceStore = new InMemoryDeviceStore();
+    this._deviceStore = new SqliteDeviceStore(this._bytebrewDb);
     this._pairingTokenStore = new InMemoryPairingTokenStore();
     this._cryptoService = new CryptoService();
     this._pairingWaiter = new PairingWaiter();
@@ -215,6 +232,7 @@ export class Container {
       this._pairingTokenStore,
       this._cryptoService,
       this._pairingWaiter,
+      serverKeyPair,
     );
 
     this._mobileCommandHandler = new MobileCommandHandler(
@@ -249,17 +267,23 @@ export class Container {
     // Wire router -> request handler
     this._bridgeMessageRouter.onMessage((deviceId, message) => {
       void (async () => {
-        const response = await this._mobileRequestHandler!.handleMessage(deviceId, message);
-        if (response) {
-          // Send BEFORE registering alias — pair_response must be plaintext
-          // because mobile needs server_public_key to compute shared secret.
-          this._bridgeMessageRouter!.sendMessage(deviceId, response);
+        try {
+          const response = await this._mobileRequestHandler!.handleMessage(deviceId, message);
+          if (response) {
+            getLogger().debug('Sending response to device', { type: response.type, deviceId });
+            // Send BEFORE registering alias — pair_response must be plaintext
+            // because mobile needs server_public_key to compute shared secret.
+            this._bridgeMessageRouter!.sendMessage(deviceId, response);
 
-          // After pair_response is sent, register alias so future encrypted
-          // messages from this bridge device_id can find the shared secret.
-          if (response.type === 'pair_response' && response.payload?.device_id) {
-            cryptoAdapter.registerAlias(deviceId, response.payload.device_id as string);
+            // After pair_response is sent, register alias so future encrypted
+            // messages from this bridge device_id can find the shared secret.
+            if (response.type === 'pair_response' && response.payload?.device_id) {
+              cryptoAdapter.registerAlias(deviceId, response.payload.device_id as string);
+            }
           }
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          console.error(`[container] IIFE error type=${message.type} deviceId=${deviceId}: ${errMsg}`);
         }
       })();
     });
@@ -302,6 +326,15 @@ export class Container {
     }
     this._chunkStore = null;
     this._embeddingsClient = null;
+
+    if (this._bytebrewDb) {
+      try {
+        this._bytebrewDb.close();
+      } catch {
+        // Already closed or failed
+      }
+      this._bytebrewDb = null;
+    }
   }
 
   /**
@@ -323,6 +356,8 @@ export class Container {
     await this._diagnosticsService.dispose();
     await this._shellSessionManager.disposeAll();
     this._eventBus.clear();
+    // ByteBrewDatabase already closed by closeDatabaseSync() above
+    this._cliIdentity = null;
     this._initialized = false;
   }
 
@@ -390,6 +425,10 @@ export class Container {
 
   get bridgeConnector(): IBridgeConnector | null {
     return this._bridgeConnector;
+  }
+
+  get cliIdentity(): ICliIdentity | null {
+    return this._cliIdentity;
   }
 }
 

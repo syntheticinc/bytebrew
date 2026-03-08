@@ -154,28 +154,42 @@ describe('BridgeMessageRouter', () => {
     expect(received).toHaveLength(1); // no new messages
   });
 
-  test('sendMessage with crypto encrypts when shared secret exists', () => {
+  test('sendMessage mirrors device encryption mode (encrypt if device sent encrypted)', () => {
     const crypto: IMessageCrypto = {
       hasSharedSecret: (id) => id === 'dev-paired',
       encrypt: (_id, plain) => new Uint8Array([0xff, ...plain]),
       decrypt: (_id, cipher) => cipher.slice(1),
     };
 
-    const { connector, sentData } = createMockConnector();
+    const { connector, sentData, simulateData } = createMockConnector();
     const router = new BridgeMessageRouter(crypto);
     router.start(connector);
 
-    // Encrypted device: payload should be base64 string
+    // Simulate an incoming encrypted message from dev-paired (activates encryption mode)
+    const msg = sampleMessage();
+    const jsonBytes = new TextEncoder().encode(JSON.stringify(msg));
+    const encrypted = new Uint8Array([0xff, ...jsonBytes]);
+    const b64 = Buffer.from(encrypted).toString('base64');
+    simulateData('dev-paired', b64);
+
+    // Response to a paired device that sent encrypted → should be encrypted
     router.sendMessage('dev-paired', sampleMessage());
     expect(typeof sentData[0].payload).toBe('string');
     // Verify the base64 decodes to 0xff prefix + JSON
     const decoded = Buffer.from(sentData[0].payload as string, 'base64');
     expect(decoded[0]).toBe(0xff);
 
-    // Unpaired device: payload should be a JSON object (plaintext)
-    router.sendMessage('dev-unpaired', sampleMessage());
+    // Device that sent plaintext → plaintext response even if it has shared secret
+    // (simulate plaintext message first)
+    simulateData('dev-paired', sampleMessage()); // object, not string
+    router.sendMessage('dev-paired', sampleMessage());
     const plain = sentData[1].payload as MobileMessage;
     expect(plain.type).toBe('new_task');
+
+    // Unpaired device: always plaintext
+    router.sendMessage('dev-unpaired', sampleMessage());
+    const plain2 = sentData[2].payload as MobileMessage;
+    expect(plain2.type).toBe('new_task');
   });
 
   test('receiving encrypted data (base64 string) is decrypted', () => {

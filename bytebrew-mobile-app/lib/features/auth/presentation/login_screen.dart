@@ -146,6 +146,7 @@ class _EmailField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TextField(
+      key: const ValueKey('email_field'),
       controller: controller,
       enabled: enabled,
       keyboardType: TextInputType.emailAddress,
@@ -174,6 +175,7 @@ class _PasswordField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TextField(
+      key: const ValueKey('password_field'),
       controller: controller,
       enabled: enabled,
       obscureText: true,

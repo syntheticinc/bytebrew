@@ -27,6 +27,8 @@ export interface IMessageCrypto {
   encrypt(deviceId: string, plaintext: Uint8Array): Uint8Array;
   decrypt(deviceId: string, ciphertext: Uint8Array): Uint8Array;
   hasSharedSecret(deviceId: string): boolean;
+  /** Register bridge-level device ID as alias for authenticated device ID. */
+  registerAlias?(bridgeDeviceId: string, authenticatedDeviceId: string): void;
 }
 
 type MessageHandler = (deviceId: string, message: MobileMessage) => void;
@@ -65,6 +67,8 @@ export class BridgeMessageRouter implements IBridgeMessageRouter {
   private deviceConnectHandlers: DeviceEventHandler[] = [];
   private deviceDisconnectHandlers: DeviceEventHandler[] = [];
   private running: boolean = false;
+  /** Tracks which devices are actively using E2E encryption (sent an encrypted message). */
+  private readonly deviceEncryptionActive = new Set<string>();
 
   /**
    * @param crypto Optional crypto service. When null, all messages are sent/received in plaintext.
@@ -97,6 +101,7 @@ export class BridgeMessageRouter implements IBridgeMessageRouter {
 
     connector.onDeviceDisconnect((deviceId) => {
       this.logger.info('Device disconnected', { deviceId });
+      this.deviceEncryptionActive.delete(deviceId);
       for (const handler of this.deviceDisconnectHandlers) {
         handler(deviceId);
       }
@@ -111,6 +116,7 @@ export class BridgeMessageRouter implements IBridgeMessageRouter {
     this.messageHandlers = [];
     this.deviceConnectHandlers = [];
     this.deviceDisconnectHandlers = [];
+    this.deviceEncryptionActive.clear();
     this.logger.info('BridgeMessageRouter stopped');
   }
 
@@ -141,7 +147,11 @@ export class BridgeMessageRouter implements IBridgeMessageRouter {
       return;
     }
 
-    const encrypted = this.shouldEncrypt(deviceId);
+    // Mirror the device's encryption mode: only encrypt if the device's
+    // last incoming message was encrypted. This prevents responding with
+    // an encrypted message to a device that has no cipher (e.g. Flutter
+    // that lost its shared secret from secure storage after an app reinstall).
+    const encrypted = this.deviceEncryptionActive.has(deviceId) && this.shouldEncrypt(deviceId);
 
     if (encrypted) {
       // Encrypt: JSON -> bytes -> encrypt -> base64 string payload
@@ -173,11 +183,31 @@ export class BridgeMessageRouter implements IBridgeMessageRouter {
    */
   private handleData(deviceId: string, payload: unknown): void {
     if (!this.running) return;
+    const hasSecret = this.crypto?.hasSharedSecret(deviceId) ?? false;
+    const isEncryptedPayload = typeof payload === 'string' && hasSecret;
+
+    // Debug: payload looks encrypted (base64 string) but no shared secret for this device.
+    // This typically means the device reconnected with a new bridge device_id, or has stale
+    // credentials (e.g. Flutter SharedPreferences not cleared after reinstall).
+    // Fix: clear app data on the mobile device and re-pair.
+    if (typeof payload === 'string' && !hasSecret && this.crypto) {
+      this.logger.warn('Received string payload but no shared secret for device — possible stale device_id or unpaired device', {
+        deviceId,
+        hint: 'Clear app data on mobile device and re-pair',
+      });
+    }
+
+    // Track whether this device is using E2E encryption so sendMessage can mirror it.
+    if (isEncryptedPayload) {
+      this.deviceEncryptionActive.add(deviceId);
+    } else {
+      this.deviceEncryptionActive.delete(deviceId);
+    }
 
     try {
       let message: MobileMessage;
 
-      if (typeof payload === 'string' && this.shouldEncrypt(deviceId)) {
+      if (isEncryptedPayload) {
         // Encrypted: base64 -> bytes -> decrypt -> JSON.parse
         const ciphertext = base64ToBytes(payload);
         const plaintext = this.crypto!.decrypt(deviceId, ciphertext);

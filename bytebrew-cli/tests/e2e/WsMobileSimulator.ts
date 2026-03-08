@@ -222,6 +222,17 @@ export class WsMobileSimulator {
 
   /**
    * Subscribe to session events.
+   * Matches Flutter WsBridgeClient: fire-and-forget (does NOT await ack).
+   */
+  subscribeFireAndForget(sessionId: string): void {
+    this.sendRawMessage('subscribe', uuidv4(), {
+      device_token: this._deviceToken!,
+      session_id: sessionId,
+    });
+  }
+
+  /**
+   * Subscribe to session events (awaits ack — legacy test helper).
    */
   async subscribe(sessionId: string): Promise<void> {
     await this.sendRequest('subscribe', {
@@ -232,30 +243,35 @@ export class WsMobileSimulator {
 
   /**
    * Send a new task (user message) to the CLI agent.
+   * Matches Flutter WsBridgeClient: includes session_id in payload.
    */
-  async sendNewTask(text: string): Promise<MobileMessage> {
+  async sendNewTask(text: string, sessionId?: string): Promise<MobileMessage> {
     return await this.sendRequest('new_task', {
       device_token: this._deviceToken!,
+      session_id: sessionId ?? '',
       text,
     });
   }
 
   /**
    * Send ask_user reply.
+   * Matches Flutter WsBridgeClient: sends 'question' + 'answer' (not 'reply').
    */
-  async sendAskUserReply(sessionId: string, reply: string): Promise<void> {
+  async sendAskUserReply(sessionId: string, answer: string, question = ''): Promise<void> {
     await this.sendRequest('ask_user_reply', {
       device_token: this._deviceToken!,
       session_id: sessionId,
-      reply,
+      question,
+      answer,
     });
   }
 
   /**
    * Cancel current session task.
+   * Matches Flutter WsBridgeClient: sends type 'cancel_session' (not 'cancel').
    */
   async cancelSession(sessionId: string): Promise<void> {
-    await this.sendRequest('cancel', {
+    await this.sendRequest('cancel_session', {
       device_token: this._deviceToken!,
       session_id: sessionId,
     });

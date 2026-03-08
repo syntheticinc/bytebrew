@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/domain/session.dart';
+import '../../../core/infrastructure/ws/ws_connection.dart';
+import '../../../core/infrastructure/ws/ws_connection_manager.dart';
 import '../../../core/infrastructure/ws/ws_providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/status_indicator.dart';
+import '../../settings/application/settings_provider.dart';
 import '../application/auto_connect_provider.dart';
 import '../application/sessions_provider.dart';
 import 'widgets/session_group.dart';
@@ -27,6 +31,7 @@ class SessionsScreen extends ConsumerWidget {
     final sessionsAsync = ref.watch(sessionsProvider);
     final grouped = ref.watch(groupedSessionsProvider);
     final manager = ref.watch(connectionManagerProvider);
+    final servers = ref.watch(serversProvider);
     final hasActiveConnection = manager.activeConnections.isNotEmpty;
 
     return Scaffold(
@@ -43,6 +48,19 @@ class SessionsScreen extends ConsumerWidget {
             if (grouped.isEmpty && !hasActiveConnection) {
               return const _EmptyBody();
             }
+
+            final allSessions = grouped.values.expand((s) => s).toList();
+            final serverIds = allSessions.map((s) => s.serverId).toSet();
+            final multipleServers = serverIds.length > 1 || servers.length > 1;
+
+            if (multipleServers) {
+              return _ServerGroupedList(
+                grouped: grouped,
+                showLiveSession: hasActiveConnection,
+                manager: manager,
+              );
+            }
+
             return _SessionsList(
               grouped: grouped,
               showLiveSession: hasActiveConnection,
@@ -84,6 +102,105 @@ class _SessionsList extends StatelessWidget {
         final status = visibleStatuses[adjustedIndex];
         return SessionGroup(status: status, sessions: grouped[status]!);
       },
+    );
+  }
+}
+
+/// Sessions list grouped by server name, each with an online/offline badge.
+class _ServerGroupedList extends StatelessWidget {
+  const _ServerGroupedList({
+    required this.grouped,
+    this.showLiveSession = false,
+    required this.manager,
+  });
+
+  final Map<SessionStatus, List<Session>> grouped;
+  final bool showLiveSession;
+  final WsConnectionManager manager;
+
+  @override
+  Widget build(BuildContext context) {
+    // Flatten all sessions then group by serverId.
+    final allSessions = <Session>[];
+    for (final status in _statusDisplayOrder) {
+      final sessions = grouped[status];
+      if (sessions != null) {
+        allSessions.addAll(sessions);
+      }
+    }
+
+    final byServer = <String, List<Session>>{};
+    for (final session in allSessions) {
+      byServer.putIfAbsent(session.serverId, () => []).add(session);
+    }
+
+    final serverIds = byServer.keys.toList();
+
+    // Build a flat list of widgets: summary, (live), then server headers + groups.
+    final widgets = <Widget>[
+      _SummaryHeader(grouped: grouped),
+    ];
+
+    if (showLiveSession) {
+      widgets.add(const _LiveSessionCard());
+    }
+
+    for (final serverId in serverIds) {
+      final sessions = byServer[serverId]!;
+      final serverName = sessions.first.serverName;
+      final connection = manager.getConnection(serverId);
+      final isOnline = connection != null &&
+          connection.status == WsConnectionStatus.connected;
+
+      widgets.add(
+        _ServerHeader(serverName: serverName, isOnline: isOnline),
+      );
+
+      // Group this server's sessions by status.
+      final serverGrouped = <SessionStatus, List<Session>>{};
+      for (final session in sessions) {
+        serverGrouped.putIfAbsent(session.status, () => []).add(session);
+      }
+      for (final status in _statusDisplayOrder) {
+        final statusSessions = serverGrouped[status];
+        if (statusSessions != null) {
+          widgets.add(
+            SessionGroup(status: status, sessions: statusSessions),
+          );
+        }
+      }
+    }
+
+    return ListView(children: widgets);
+  }
+}
+
+/// Server name header with online/offline status badge.
+class _ServerHeader extends StatelessWidget {
+  const _ServerHeader({required this.serverName, required this.isOnline});
+
+  final String serverName;
+  final bool isOnline;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final statusColor = isOnline ? AppColors.statusActive : AppColors.shade3;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Row(
+        children: [
+          StatusIndicator(color: statusColor, size: 8),
+          const SizedBox(width: 8),
+          Text(
+            serverName,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

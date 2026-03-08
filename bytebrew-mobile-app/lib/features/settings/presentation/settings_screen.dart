@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/domain/server.dart';
+import '../../../core/infrastructure/ws/ws_connection.dart';
 import '../../../core/infrastructure/ws/ws_connection_manager.dart';
 import '../../../core/infrastructure/ws/ws_providers.dart';
 import '../../../core/theme/app_colors.dart';
@@ -21,7 +23,6 @@ class SettingsScreen extends ConsumerWidget {
     final servers = ref.watch(serversProvider);
     final manager = ref.watch(connectionManagerProvider);
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -50,8 +51,8 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => context.push('/add-server'),
           ),
           const SizedBox(height: 16),
-          const _SectionHeader(label: 'BRIDGE'),
-          _ConnectionCard(theme: theme, isDark: isDark, manager: manager),
+          const _SectionHeader(label: 'CONNECTION'),
+          _BridgeStatusTile(manager: manager, servers: servers),
           const SizedBox(height: 16),
           const _SectionHeader(label: 'NOTIFICATIONS'),
           const NotificationToggles(),
@@ -111,76 +112,71 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-/// Card showing bridge relay connection status.
-class _ConnectionCard extends StatelessWidget {
-  const _ConnectionCard({
-    required this.theme,
-    required this.isDark,
-    required this.manager,
-  });
+/// Single-line tile showing bridge relay connection status.
+///
+/// Displays "Bridge: host (Connected)" when any server is connected,
+/// or prompts setup when no servers are paired.
+class _BridgeStatusTile extends ConsumerWidget {
+  const _BridgeStatusTile({required this.manager, required this.servers});
 
-  final ThemeData theme;
-  final bool isDark;
   final WsConnectionManager manager;
+  final List<Server> servers;
+
+  Future<void> _onReconnect(WidgetRef ref) async {
+    final repo = ref.read(settingsRepositoryProvider) as LocalSettingsRepository;
+    final serversWithKeys = await repo.getServersWithKeys();
+    for (final server in serversWithKeys) {
+      await manager.disconnectFromServer(server.id);
+      await manager.connectToServer(server);
+    }
+  }
 
   @override
-  Widget build(BuildContext context) {
-    final connections = manager.connections;
-    final connectedCount = manager.activeConnections.length;
-    final totalCount = connections.length;
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (servers.isEmpty) {
+      return const ListTile(
+        leading: Icon(Icons.cloud_off, color: AppColors.shade3),
+        title: Text('Bridge'),
+        subtitle: Text('No servers paired'),
+      );
+    }
 
-    final hasConnections = totalCount > 0;
-    final allConnected = hasConnections && connectedCount == totalCount;
+    final hasConnected = manager.activeConnections.isNotEmpty;
+    final hasConnecting = manager.connections.values
+        .any((c) => c.status == WsConnectionStatus.connecting);
 
-    final statusColor = allConnected
-        ? AppColors.statusActive
-        : AppColors.shade3;
-    final statusText = !hasConnections
-        ? 'No servers'
-        : '$connectedCount / $totalCount connected';
+    final Color statusColor;
+    final String statusLabel;
+    if (hasConnected) {
+      statusColor = AppColors.statusActive;
+      statusLabel = 'Connected';
+    } else if (hasConnecting) {
+      statusColor = AppColors.statusNeedsAttention;
+      statusLabel = 'Connecting...';
+    } else {
+      statusColor = AppColors.shade3;
+      statusLabel = 'Disconnected';
+    }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.darkAlt : AppColors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.shade3.withValues(alpha: 0.15)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.cloud, color: AppColors.shade3),
-                const SizedBox(width: 8),
-                Text('Bridge Relay', style: theme.textTheme.titleSmall),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                StatusIndicator(color: statusColor),
-                const SizedBox(width: 8),
-                Text(
-                  statusText,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: statusColor,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Connects to your CLI servers via bridge relay',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.shade3,
-              ),
-            ),
-          ],
-        ),
-      ),
+    // Extract host from first server's bridge URL.
+    final bridgeHost = _extractHost(servers.first.bridgeUrl);
+
+    return ListTile(
+      leading: StatusIndicator(color: statusColor),
+      title: Text('Bridge: $bridgeHost'),
+      subtitle: Text(statusLabel),
+      onTap: () => _onReconnect(ref),
     );
+  }
+
+  String _extractHost(String url) {
+    final cleaned = url
+        .replaceFirst('wss://', '')
+        .replaceFirst('ws://', '');
+    final slashIndex = cleaned.indexOf('/');
+    if (slashIndex >= 0) {
+      return cleaned.substring(0, slashIndex);
+    }
+    return cleaned;
   }
 }

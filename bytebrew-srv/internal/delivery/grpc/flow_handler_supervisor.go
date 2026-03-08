@@ -36,6 +36,18 @@ func routeUserMessage(sessionID, message string, router MessageRouter, eventBus 
 	return false
 }
 
+// eventBusSink adapts SessionEventBus to flow_registry.UserMessageSink.
+type eventBusSink struct {
+	sessionID string
+	router    MessageRouter
+	eventBus  *orchestrator.SessionEventBus
+}
+
+func (s *eventBusSink) PublishUserMessage(message string) error {
+	routeUserMessage(s.sessionID, message, s.router, s.eventBus)
+	return nil
+}
+
 // touchSessionActivity updates session's last_activity_at timestamp.
 func touchSessionActivity(ctx context.Context, storage SessionStorage, sessionID string) {
 	if storage == nil {
@@ -113,6 +125,13 @@ func (h *FlowHandler) runSupervisorMode(
 	if pool, ok := h.agentPoolProxy.(interface{ SetEventBus(*orchestrator.SessionEventBus) }); ok {
 		pool.SetEventBus(eventBus)
 	}
+
+	// 2b. Wire message sink so reconnecting clients can forward messages to this flow's EventBus
+	h.flowRegistry.SetMessageSink(req.SessionId, &eventBusSink{
+		sessionID: req.SessionId,
+		router:    h.agentPoolAdapter,
+		eventBus:  eventBus,
+	})
 
 	// 3. Background goroutine: receive from client stream
 	go func() {
