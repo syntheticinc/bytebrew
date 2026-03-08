@@ -40,5 +40,17 @@ if (serverMessage) {
 
 ## Тестирование
 - E2E тесты: `bun test src/presentation/app/__tests__/ChatApp.e2e.test.tsx`
-- Build: `bun run build` (в vector-cli-node/)
+- Mobile Chain E2E: `bun test tests/e2e/mobile-chain-e2e.test.ts`
+- Build: `bun run build` (в bytebrew-cli/)
 - Таймаут E2E: 180s (Go server build + тесты)
+
+## Mobile Chain E2E Infrastructure
+- `src/test-utils/TestServerHelper.ts` — Go test server (bytebrew-srv)
+- `src/test-utils/BridgeHelper.ts` — Go bridge relay (bytebrew-bridge)
+- `tests/e2e/WsMobileSimulator.ts` — WS client simulating mobile app
+- Bridge config: env vars `BRIDGE_PORT`, `BRIDGE_AUTH_TOKEN`
+- Bridge validates port >= 1 (no port 0), use findFreePort() + health poll
+- Container needs `streamGateway.connect()` before sendMessage works (normally done by useStreamConnection hook)
+
+## Bridge DeviceId Bug (Fixed 2026-03-06)
+EventBroadcaster.subscribe must use bridge-level deviceId (from URL query param), NOT authenticated deviceId (from PairingService). They are different UUIDs. Without this, bridge drops events because it doesn't find the device. Fix in `MobileRequestHandler.dispatch`: subscribe/unsubscribe use bridge-level `deviceId` parameter.

@@ -9,7 +9,9 @@
       "WebSearch",
       "WebFetch",
       "Bash(*)",
-      "mcp__dart__*"
+      "mcp__dart__*",
+      "mcp__marionette__*",
+      "mcp__tui-test__*"
     ],
     "deny": [
       "Bash(rm -rf /)",
