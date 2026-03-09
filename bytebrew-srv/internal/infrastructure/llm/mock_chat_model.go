@@ -323,6 +323,74 @@ func (m *MockChatModel) Generate(ctx context.Context, input []*schema.Message, o
 		}
 		return msg, nil
 
+	// --- Integration test scenarios (tools execute on real filesystem via LocalClientOperationsProxy) ---
+
+	case "local-read":
+		// Reads test.txt from project root
+		if hasToolResult {
+			return textMessage(fmt.Sprintf("FILE_CONTENT:%s", extractLastToolResult(input))), nil
+		}
+		return toolCallMessage("read_file", `{"file_path":"test.txt"}`), nil
+
+	case "local-write":
+		// Writes output.txt to project root
+		if hasToolResult {
+			return textMessage(fmt.Sprintf("WRITE_DONE:%s", extractLastToolResult(input))), nil
+		}
+		return toolCallMessage("write_file", `{"file_path":"output.txt","content":"hello from agent"}`), nil
+
+	case "local-edit":
+		// Edits app.txt: replaces "old_value" with "new_value"
+		if hasToolResult {
+			return textMessage(fmt.Sprintf("EDIT_DONE:%s", extractLastToolResult(input))), nil
+		}
+		return toolCallMessage("edit_file", `{"file_path":"app.txt","old_string":"old_value","new_string":"new_value"}`), nil
+
+	case "local-exec":
+		// Runs echo command
+		if hasToolResult {
+			return textMessage(fmt.Sprintf("EXEC_RESULT:%s", extractLastToolResult(input))), nil
+		}
+		return toolCallMessage("execute_command", `{"command":"echo hello_from_test"}`), nil
+
+	case "local-multi-tool":
+		// Chain: read a.txt → read b.txt → answer with both contents
+		toolCount := countToolResults(input)
+		switch {
+		case toolCount == 0:
+			return toolCallMessage("read_file", `{"file_path":"a.txt"}`), nil
+		case toolCount == 1:
+			return toolCallMessageWithID("read_file", `{"file_path":"b.txt"}`, "call_mock_2"), nil
+		default:
+			results := collectAllToolResults(input)
+			return textMessage(fmt.Sprintf("MULTI_READ:[%s]", strings.Join(results, "|"))), nil
+		}
+
+	case "local-read-error":
+		// First: try to read nonexistent file; second: recover with answer
+		toolCount := countToolResults(input)
+		if toolCount == 0 {
+			return toolCallMessage("read_file", `{"file_path":"nonexistent.txt"}`), nil
+		}
+		lastResult := extractLastToolResult(input)
+		if strings.Contains(lastResult, "not found") || strings.Contains(lastResult, "no such") || strings.Contains(lastResult, "cannot find") {
+			return textMessage(fmt.Sprintf("RECOVERED:%s", lastResult)), nil
+		}
+		return textMessage(fmt.Sprintf("UNEXPECTED:%s", lastResult)), nil
+
+	case "local-glob-grep":
+		// Step 1: glob for *.txt, Step 2: grep for "hello", Step 3: answer
+		toolCount := countToolResults(input)
+		switch {
+		case toolCount == 0:
+			return toolCallMessage("glob", `{"pattern":"**/*.txt"}`), nil
+		case toolCount == 1:
+			return toolCallMessageWithID("grep_search", `{"pattern":"hello","limit":10}`, "call_mock_2"), nil
+		default:
+			results := collectAllToolResults(input)
+			return textMessage(fmt.Sprintf("SEARCH_DONE:[%s]", strings.Join(results, "|"))), nil
+		}
+
 	default:
 		return textMessage("Unknown scenario"), nil
 	}

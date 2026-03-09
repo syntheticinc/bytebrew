@@ -12,7 +12,7 @@ import os from 'os';
 /**
  * E2E tests with real Go test server (mock LLM).
  *
- * These tests use REAL GrpcStreamGateway + REAL Go server components:
+ * These tests use REAL StreamingGateway + REAL Go server components:
  * - FlowHandler
  * - EngineTurnExecutorFactory
  * - EngineAdapter
@@ -132,7 +132,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
     execSync('git add -A', { cwd: dir, stdio: 'ignore' });
   }
 
-  // Helper: create container with REAL GrpcStreamGateway (no mock!)
+  // Helper: create container with REAL StreamingGateway (no mock!)
   function createTestContainer(port: number, projectRoot?: string): Container {
     const container = new Container({
       projectRoot: projectRoot || '/test',

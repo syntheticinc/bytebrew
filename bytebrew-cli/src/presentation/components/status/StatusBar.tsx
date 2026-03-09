@@ -4,14 +4,12 @@ import { Box, Text } from 'ink';
 import { ConnectionIndicator } from './ConnectionIndicator.js';
 import { CoffeeSpinner } from '../common/CoffeeSpinner.js';
 import { ConnectionStatus } from '../../../domain/connection.js';
-import { IndexingStatus } from '../../../indexing/backgroundIndexer.js';
 
 interface StatusBarProps {
   connectionStatus: ConnectionStatus;
   reconnectAttempts?: number;
   projectKey?: string;
   isProcessing?: boolean;
-  indexingStatus?: IndexingStatus;
   streamingTokens?: { input: number; output: number };
   actionLabel?: string;
   actionColor?: string;
@@ -19,42 +17,11 @@ interface StatusBarProps {
   providerBadge?: { label: string; color: string };
 }
 
-const IndexingIndicator: React.FC<{ status: IndexingStatus }> = ({ status }) => {
-  switch (status.phase) {
-    case 'syncing': {
-      // Don't show "Syncing 0..." — only show count when there's progress
-      if (!status.filesUpdated && !status.filesTotal) {
-        return <Text color="yellow">Syncing...</Text>;
-      }
-      const progress = status.filesTotal
-        ? `${status.filesUpdated}/${status.filesTotal}`
-        : String(status.filesUpdated);
-      return <Text color="yellow">Syncing {progress}...</Text>;
-    }
-    case 'embedding': {
-      const embProgress = status.chunksTotal
-        ? `${status.chunksEmbedded}/${status.chunksTotal}`
-        : '';
-      return <Text color="yellow">Embedding {embProgress}...</Text>;
-    }
-    case 'watching':
-      return status.ollamaAvailable === false
-        ? <Text color="yellow">No embeddings</Text>
-        : <Text color="green">Indexed</Text>;
-    case 'error':
-      return <Text color="red">Index error</Text>;
-    case 'idle':
-    default:
-      return null;
-  }
-};
-
 const StatusBarComponent: React.FC<StatusBarProps> = ({
   connectionStatus,
   reconnectAttempts,
   projectKey,
   isProcessing,
-  indexingStatus,
   streamingTokens,
   actionLabel,
   actionColor,
@@ -86,13 +53,6 @@ const StatusBarComponent: React.FC<StatusBarProps> = ({
         <>
           <Text color="gray"> · </Text>
           <Text color="cyan">{projectKey}</Text>
-        </>
-      )}
-
-      {indexingStatus && indexingStatus.phase !== 'idle' && (
-        <>
-          <Text color="gray"> · </Text>
-          <IndexingIndicator status={indexingStatus} />
         </>
       )}
 

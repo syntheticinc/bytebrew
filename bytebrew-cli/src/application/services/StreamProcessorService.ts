@@ -22,7 +22,7 @@ import { formatLifecycleMessage } from '../../presentation/utils/formatLifecycle
 export interface StreamProcessorOptions {
   streamGateway: IStreamGateway;
   messageRepository: IMessageRepository;
-  toolExecutor: IToolExecutor;
+  toolExecutor?: IToolExecutor | null;
   accumulator: MessageAccumulatorService;
   eventBus: IEventBus;
   agentStateManager?: AgentStateManager;
@@ -38,7 +38,7 @@ export interface StreamProcessorOptions {
 export class StreamProcessorService {
   private readonly streamGateway: IStreamGateway;
   private readonly messageRepository: IMessageRepository;
-  private readonly toolExecutor: IToolExecutor;
+  private readonly toolExecutor: IToolExecutor | null;
   private readonly accumulator: MessageAccumulatorService;
   private readonly eventBus: IEventBus;
   private readonly agentStateManager: AgentStateManager;
@@ -57,7 +57,7 @@ export class StreamProcessorService {
   constructor(options: StreamProcessorOptions) {
     this.streamGateway = options.streamGateway;
     this.messageRepository = options.messageRepository;
-    this.toolExecutor = options.toolExecutor;
+    this.toolExecutor = options.toolExecutor ?? null;
     this.accumulator = options.accumulator;
     this.eventBus = options.eventBus;
     this.agentStateManager = options.agentStateManager || new AgentStateManager();
@@ -154,7 +154,6 @@ export class StreamProcessorService {
    * Execute the actual send logic (called when connection is confirmed).
    */
   private executeSend(content: string): void {
-    console.log(`[StreamProcessor] executeSend isProcessing=${this._isProcessing}`);
     // Add user message to repository (immediately visible)
     const userMessage = Message.createUser(content);
     this.messageRepository.save(userMessage);

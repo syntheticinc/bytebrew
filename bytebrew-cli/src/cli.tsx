@@ -7,11 +7,9 @@ import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { App } from './presentation/app/App.js';
 import { loadConfig, loadAndValidateConfig, AppConfig } from './config/index.js';
-import { Indexer, IndexProgress } from './indexing/indexer.js';
 import { initLogger } from './lib/logger.js';
 import { initOutputWriter, stopOutputWriter } from './lib/outputWriter.js';
 import { runHeadless, runHeadlessInteractive } from './headless/index.js';
-import { getContainer } from './config/container.js';
 import { SessionStore } from './infrastructure/persistence/SessionStore.js';
 import { AuthStorage } from './infrastructure/auth/AuthStorage.js';
 import { LicenseStorage } from './infrastructure/license/LicenseStorage.js';
@@ -22,7 +20,6 @@ import { startBackgroundLicenseRefresh } from './infrastructure/license/backgrou
 import { checkLicenseStatus } from './presentation/onboarding/OnboardingWizard.js';
 import { OnboardingOrchestrator } from './presentation/onboarding/OnboardingOrchestrator.js';
 import { LicenseBlock } from './presentation/onboarding/blocks/LicenseBlock.js';
-import { MobilePairingBlock } from './presentation/onboarding/blocks/MobilePairingBlock.js';
 import { openBrowser } from './infrastructure/shell/openBrowser.js';
 import { ServerConnectionOrchestrator, ServerConnection } from './infrastructure/server/ServerConnectionOrchestrator.js';
 import { UpdateChecker } from './infrastructure/server/UpdateChecker.js';
@@ -62,9 +59,6 @@ interface CommandOptions {
   server?: string;
   project: string;
   debug: boolean;
-  bridge?: string;
-  noBridge?: boolean;
-  serverId?: string;
 }
 
 /**
@@ -82,50 +76,12 @@ async function connectAndConfigure(
   const orchestrator = new ServerConnectionOrchestrator();
   const connection = await orchestrator.connect(externalAddress || undefined);
 
-  // Bridge configuration: --bridge <address> enables it, --no-bridge disables.
-  // If not specified, read from ~/.bytebrew/config.json (bridge_url).
-  let bridgeAddress: string | undefined;
-  let bridgeEnabled = false;
-  let bridgeAuthToken: string | undefined;
-
-  if (options.noBridge) {
-    bridgeEnabled = false;
-  } else if (options.bridge) {
-    bridgeAddress = options.bridge;
-    bridgeEnabled = true;
-    // Read auth token from persisted config even when --bridge is explicit
-    try {
-      const { ByteBrewConfig } = await import('./infrastructure/config/ByteBrewConfig.js');
-      bridgeAuthToken = new ByteBrewConfig().getBridgeAuthToken();
-    } catch {
-      // Config not available — token stays undefined
-    }
-  } else {
-    // Try reading from persisted config
-    try {
-      const { ByteBrewConfig } = await import('./infrastructure/config/ByteBrewConfig.js');
-      const bbConfig = new ByteBrewConfig();
-      const savedBridgeUrl = bbConfig.getBridgeUrl();
-      if (savedBridgeUrl) {
-        bridgeAddress = savedBridgeUrl;
-        bridgeEnabled = true;
-        bridgeAuthToken = bbConfig.getBridgeAuthToken();
-      }
-    } catch {
-      // Config not available — bridge stays disabled
-    }
-  }
-
   const config = loadAndValidateConfig({
     serverAddress: connection.address,
     projectKey: options.project,
     projectRoot,
     sessionId,
     debug: options.debug,
-    bridgeAddress,
-    bridgeEnabled,
-    bridgeAuthToken,
-    serverId: options.serverId,
   });
 
   return { config, connection };
@@ -138,7 +94,6 @@ async function connectAndConfigure(
 async function runOnboarding(connection: ServerConnection, headless: boolean): Promise<void> {
   const orchestrator = new OnboardingOrchestrator();
   orchestrator.register(new LicenseBlock());
-  orchestrator.register(new MobilePairingBlock());
 
   const result = await orchestrator.run({
     serverAddress: connection.address,
@@ -190,10 +145,6 @@ program
   .option('-s, --server <address>', 'Server address (connect to external server)')
   .option('-p, --project <key>', 'Project key', 'default')
   .option('-d, --debug', 'Enable debug mode', false)
-
-  .option('--bridge <address>', 'Bridge relay address (enables mobile via bridge)')
-  .option('--no-bridge', 'Disable bridge relay')
-  .option('--server-id <uuid>', 'CLI server ID for bridge registration')
   .action(async (options) => {
     const globalOpts = program.opts();
     initLogger(options.debug);
@@ -258,10 +209,6 @@ program
   .option('-s, --server <address>', 'Server address (connect to external server)')
   .option('-p, --project <key>', 'Project key', 'default')
   .option('-d, --debug', 'Enable debug mode', false)
-
-  .option('--bridge <address>', 'Bridge relay address (enables mobile via bridge)')
-  .option('--no-bridge', 'Disable bridge relay')
-  .option('--server-id <uuid>', 'CLI server ID for bridge registration')
   .option('--headless', 'Run in headless mode (no UI, plain text output)', false)
   .option('-o, --output <file>', 'Write output to file (headless mode only)')
   .option(
@@ -331,10 +278,6 @@ program
   .option('-s, --server <address>', 'Server address (connect to external server)')
   .option('-p, --project <key>', 'Project key', 'default')
   .option('-d, --debug', 'Enable debug mode', false)
-
-  .option('--bridge <address>', 'Bridge relay address (enables mobile via bridge)')
-  .option('--no-bridge', 'Disable bridge relay')
-  .option('--server-id <uuid>', 'CLI server ID for bridge registration')
   .option('-o, --output <file>', 'Write output to file (in addition to console)')
   .action(async (options) => {
     const globalOpts = program.opts();
@@ -607,98 +550,6 @@ program
     }
   });
 
-// Index command - index codebase for semantic search
-program
-  .command('index [path]')
-  .description('Index codebase for semantic search')
-  .option('-r, --reindex', 'Force full reindex (clear existing index)', false)
-  .option('--status', 'Show index status only', false)
-  .option('-d, --debug', 'Enable debug mode', false)
-  .action(async (targetPath, options) => {
-    initLogger(options.debug);
-
-    const rootPath = path.resolve(targetPath || process.cwd());
-
-    const indexer = new Indexer({
-      rootPath,
-      onProgress: (progress: IndexProgress) => {
-        printProgress(progress);
-      },
-    });
-
-    if (options.status) {
-      // Just show status
-      try {
-        const status = await indexer.getStatus();
-        console.log('\nIndex Status:');
-        console.log(`  Location: ${rootPath}/.bytebrew/`);
-        console.log(`  Total chunks: ${status.totalChunks}`);
-        console.log(`  Files indexed: ${status.filesCount}`);
-        console.log(`  Languages: ${status.languages.join(', ') || 'none'}`);
-        console.log(`  Status: ${status.isStale ? 'Empty/Stale' : 'Ready'}`);
-      } catch (error) {
-        console.error('\nError:', (error as Error).message);
-        process.exit(1);
-      }
-      return;
-    }
-
-    console.log(`\nIndexing: ${rootPath}`);
-    console.log(`Storage: ${rootPath}/.bytebrew/`);
-    console.log(`Mode: ${options.reindex ? 'Full reindex' : 'Index'}\n`);
-
-    try {
-      const status = await indexer.index(options.reindex);
-      console.log('\n\nIndexing complete!');
-      console.log(`  Total chunks: ${status.totalChunks}`);
-      console.log(`  Files indexed: ${status.filesCount}`);
-      console.log(`  Languages: ${status.languages.join(', ') || 'none'}`);
-    } catch (error) {
-      console.error('\n\nIndexing failed:', (error as Error).message);
-      process.exit(1);
-    }
-  });
-
-// TODO: mobile-pair and mobile-devices commands will be re-implemented
-// using local PairingService via Bridge (mobile_client.ts / Server MobileService removed).
-
-function printProgress(progress: IndexProgress): void {
-  const { phase, filesScanned, totalFiles, chunksProcessed, totalChunks, error } = progress;
-
-  if (error) {
-    console.error(`Error: ${error}`);
-    return;
-  }
-
-  switch (phase) {
-    case 'scanning':
-      if (totalFiles) {
-        process.stdout.write(`\rScanning... Found ${totalFiles} files`);
-      } else {
-        process.stdout.write('\rScanning...');
-      }
-      break;
-    case 'parsing':
-      if (filesScanned && totalFiles) {
-        const pct = Math.round((filesScanned / totalFiles) * 100);
-        process.stdout.write(`\rParsing: ${filesScanned}/${totalFiles} files (${pct}%) - ${chunksProcessed || 0} chunks`);
-      }
-      break;
-    case 'embedding':
-      process.stdout.write(`\rGenerating embeddings for ${totalChunks} chunks...`);
-      break;
-    case 'storing':
-      if (chunksProcessed && totalChunks) {
-        const pct = Math.round((chunksProcessed / totalChunks) * 100);
-        process.stdout.write(`\rStoring: ${chunksProcessed}/${totalChunks} chunks (${pct}%)`);
-      }
-      break;
-    case 'complete':
-      // Final message handled in action
-      break;
-  }
-}
-
 function runChatApp(config: AppConfig, initialQuestion?: string) {
   // Crash diagnostics — write exit info to file for post-mortem analysis.
   // This handler fires on ANY exit (process.exit, signal, native crash that triggers cleanup).
@@ -744,15 +595,6 @@ function runChatApp(config: AppConfig, initialQuestion?: string) {
     isExiting = true;
     // Unmount Ink app — triggers React cleanup (useEffect returns)
     unmount();
-    // Close SQLite synchronously BEFORE exit to release WAL file locks.
-    // Container.dispose() is async and may not complete before process.exit(),
-    // so we explicitly close the chunk store here.
-    try {
-      const container = getContainer();
-      container.closeDatabaseSync();
-    } catch {
-      // Container may not exist yet — ignore
-    }
     // Give React cleanup a moment, then force exit
     setTimeout(() => process.exit(code), 300);
   };

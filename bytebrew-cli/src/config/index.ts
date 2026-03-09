@@ -9,10 +9,6 @@ export interface AppConfig {
   projectRoot: string;
   sessionId?: string; // Optional: reuse specific session
   debug: boolean;
-  bridgeAddress?: string; // Bridge relay address (e.g. "bridge.bytebrew.ai:443")
-  bridgeEnabled: boolean; // Enable Mobile via Bridge (default: false)
-  bridgeAuthToken?: string; // Auth token for Bridge registration
-  serverId?: string; // UUID of this CLI instance for Bridge registration
 }
 
 export interface ConfigValidationError {
@@ -94,10 +90,6 @@ export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     projectRoot: overrides.projectRoot || process.cwd(),
     sessionId: overrides.sessionId, // Optional: pass through if provided
     debug: overrides.debug ?? process.env.BYTEBREW_DEBUG === 'true',
-    bridgeAddress: overrides.bridgeAddress || process.env.BYTEBREW_BRIDGE || undefined,
-    bridgeEnabled: overrides.bridgeEnabled ?? false,
-    bridgeAuthToken: overrides.bridgeAuthToken || process.env.BYTEBREW_BRIDGE_AUTH_TOKEN || undefined,
-    serverId: overrides.serverId,
   };
 
   // Normalize project root to absolute path

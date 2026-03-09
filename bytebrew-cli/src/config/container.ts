@@ -1,52 +1,24 @@
 // DI Container - dependency injection setup for the application
-import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { getStoreFactory, ChunkStoreFactory } from '../indexing/storeFactory.js';
 
 // Domain ports
 import { IMessageRepository } from '../domain/ports/IMessageRepository.js';
 import { IStreamGateway } from '../domain/ports/IStreamGateway.js';
-import { IToolExecutor } from '../domain/ports/IToolExecutor.js';
 import { IEventBus } from '../domain/ports/IEventBus.js';
 import { IToolRenderingService } from '../domain/ports/IToolRenderingService.js';
-import { IChunkStore, IEmbeddingsClient } from '../domain/store.js';
 
 // Application services
 import { MessageAccumulatorService } from '../application/services/MessageAccumulatorService.js';
 import { StreamProcessorService } from '../application/services/StreamProcessorService.js';
-import { PairingService } from '../application/services/PairingService.js';
-import { MobileCommandHandler } from '../application/services/MobileCommandHandler.js';
-import { MobileRequestHandler } from '../application/services/MobileRequestHandler.js';
-import { MobileSessionManager } from '../application/services/MobileSessionManager.js';
 
 // Infrastructure implementations
 import { InMemoryMessageRepository } from '../infrastructure/persistence/InMemoryMessageRepository.js';
 import { SimpleEventBus } from '../infrastructure/events/SimpleEventBus.js';
-import { GrpcStreamGateway } from '../infrastructure/grpc/GrpcStreamGateway.js';
-import { getLogger } from '../lib/logger.js';
-import { ToolExecutorAdapter } from '../infrastructure/tools/ToolExecutorAdapter.js';
-import { DiagnosticsService } from '../infrastructure/lsp/DiagnosticsService.js';
-import { LspManager } from '../infrastructure/lsp/LspManager.js';
-import { LspService } from '../infrastructure/lsp/LspService.js';
+import { StreamingGateway } from '../infrastructure/grpc/StreamingGateway.js';
 import { AgentStateManager } from '../infrastructure/state/AgentStateManager.js';
-import { ShellSessionManager } from '../infrastructure/shell/ShellSessionManager.js';
 import type { AskUserCallback } from '../tools/askUser.js';
-import { resolveAskUser, createInteractiveAskUserCallback, setAskUserEventBus } from '../tools/askUser.js';
-// Bridge + Mobile components
-import { BridgeConnector, type IBridgeConnector } from '../infrastructure/bridge/BridgeConnector.js';
-import { BridgeMessageRouter, type IBridgeMessageRouter } from '../infrastructure/bridge/BridgeMessageRouter.js';
-import { CryptoService } from '../infrastructure/mobile/CryptoService.js';
-import { DeviceCryptoAdapter } from '../infrastructure/mobile/DeviceCryptoAdapter.js';
-import type { IDeviceStore } from '../infrastructure/mobile/stores/InMemoryDeviceStore.js';
-import { InMemoryPairingTokenStore } from '../infrastructure/mobile/stores/InMemoryPairingTokenStore.js';
-import { PairingWaiter } from '../infrastructure/mobile/PairingWaiter.js';
-import { EventBuffer } from '../infrastructure/mobile/EventBuffer.js';
-import { EventBroadcaster, type SerializedEvent } from '../infrastructure/mobile/EventBroadcaster.js';
-import { ByteBrewDatabase } from '../infrastructure/persistence/ByteBrewDatabase.js';
-import { CliIdentity, type ICliIdentity } from '../infrastructure/config/CliIdentity.js';
-import { SqliteDeviceStore } from '../infrastructure/mobile/stores/SqliteDeviceStore.js';
 
-// Tools layer (singleton)
+// Tools layer (rendering only — no execution, singleton)
 import { ToolManager } from '../tools/ToolManager.js';
 import { initDebugLog } from '../lib/debugLog.js';
 
@@ -57,21 +29,8 @@ export interface ContainerConfig {
   sessionId?: string; // Optional: reuse specific session, otherwise generate new
   headlessMode?: boolean;
   askUserCallback?: AskUserCallback;
-  /** Bridge relay address (e.g. "bridge.bytebrew.ai:443") */
-  bridgeAddress?: string;
-  /** Enable mobile support via Bridge relay */
-  bridgeEnabled?: boolean;
-  /** UUID of this CLI instance for Bridge registration */
-  serverId?: string;
-  /** Auth token for Bridge registration */
-  bridgeAuthToken?: string;
-  /** Disable LSP server spawning (for tests that don't need real LSP servers). */
-  disableLspServers?: boolean;
-  /** Custom path for SQLite database file (for testing; defaults to ~/.bytebrew/bytebrew.db). */
-  dbPath?: string;
   overrides?: {
     streamGateway?: IStreamGateway;
-    toolExecutor?: IToolExecutor;
   };
 }
 
@@ -87,30 +46,7 @@ export class Container {
   private _eventBus: IEventBus;
   private _messageRepository: IMessageRepository;
   private _streamGateway: IStreamGateway;
-  private _toolExecutor: IToolExecutor;
-  private _lspManager: LspManager;
-  private _diagnosticsService: DiagnosticsService;
-  private _lspService: LspService;
   private _agentStateManager: AgentStateManager;
-  private _shellSessionManager: ShellSessionManager;
-  private _storeFactory: ChunkStoreFactory;
-  private _chunkStore: IChunkStore | null = null;
-  private _embeddingsClient: IEmbeddingsClient | null = null;
-  private _bytebrewDb: ByteBrewDatabase | null = null;
-  private _cliIdentity: ICliIdentity | null = null;
-  // Bridge + Mobile components (lazy, only when bridgeEnabled)
-  private _bridgeConnector: IBridgeConnector | null = null;
-  private _bridgeMessageRouter: IBridgeMessageRouter | null = null;
-  private _deviceStore: IDeviceStore | null = null;
-  private _pairingTokenStore: InMemoryPairingTokenStore | null = null;
-  private _cryptoService: CryptoService | null = null;
-  private _pairingWaiter: PairingWaiter | null = null;
-  private _eventBuffer: EventBuffer<SerializedEvent> | null = null;
-  private _pairingService: PairingService | null = null;
-  private _mobileCommandHandler: MobileCommandHandler | null = null;
-  private _mobileSessionManager: MobileSessionManager | null = null;
-  private _eventBroadcaster: EventBroadcaster | null = null;
-  private _mobileRequestHandler: MobileRequestHandler | null = null;
 
   // Application layer
   private _accumulator: MessageAccumulatorService;
@@ -128,37 +64,15 @@ export class Container {
     // Create infrastructure layer
     this._eventBus = new SimpleEventBus();
     this._messageRepository = new InMemoryMessageRepository();
-    this._streamGateway = config.overrides?.streamGateway ?? new GrpcStreamGateway();
-    this._lspManager = new LspManager(config.projectRoot, config.disableLspServers ? [] : undefined);
-    this._diagnosticsService = new DiagnosticsService(this._lspManager);
-    this._lspService = new LspService(this._lspManager);
-    this._shellSessionManager = new ShellSessionManager();
-    // When bridge is enabled (mobile support), automatically use interactive ask_user
-    // callback so AskUserTool blocks and publishes AskUserRequested via EventBus
-    // (mobile devices can then reply). Without this, ask_user auto-answers immediately.
-    const askUserCallback = config.askUserCallback
-      ?? (config.bridgeEnabled ? createInteractiveAskUserCallback() : undefined);
-
-    this._toolExecutor = config.overrides?.toolExecutor ?? new ToolExecutorAdapter(
-      config.projectRoot,
-      ToolManager,
-      this._diagnosticsService,
-      this._lspService,
-      this._shellSessionManager,
-      {
-        headlessMode: config.headlessMode,
-        askUserCallback,
-      },
-    );
+    this._streamGateway = config.overrides?.streamGateway ?? new StreamingGateway();
     this._agentStateManager = new AgentStateManager();
-    this._storeFactory = getStoreFactory(config.projectRoot);
 
-    // Create application layer
+    // Create application layer (no toolExecutor — server executes tools)
     this._accumulator = new MessageAccumulatorService();
     this._streamProcessor = new StreamProcessorService({
       streamGateway: this._streamGateway,
       messageRepository: this._messageRepository,
-      toolExecutor: this._toolExecutor,
+      toolExecutor: null,
       accumulator: this._accumulator,
       eventBus: this._eventBus,
       agentStateManager: this._agentStateManager,
@@ -173,191 +87,16 @@ export class Container {
 
     this._streamProcessor.initialize();
 
-    // Fire-and-forget: pre-spawn LSP servers so they're warm for first write/edit
-    void this._diagnosticsService.warmup();
-    // Pre-warm metadata index (fire-and-forget) and populate chunk store
-    void this._storeFactory.getStore().then(store => {
-      this._chunkStore = store;
-      this._embeddingsClient = this._storeFactory.getEmbeddings();
-    }).catch((error) => {
-      getLogger().error('Store initialization failed', { error: error?.message || error });
-    });
-
-    // Initialize bridge + mobile services if bridge is enabled
-    if (this._config.bridgeEnabled && this._config.bridgeAddress) {
-      this.initializeBridge();
-    }
-
     this._initialized = true;
-  }
-
-  /**
-   * Initialize Bridge relay and all mobile service components.
-   * Called only when bridgeEnabled=true and bridgeAddress is configured.
-   */
-  private initializeBridge(): void {
-    const authToken = this._config.bridgeAuthToken ?? '';
-
-    // Create shared database and identity (lazy)
-    if (!this._bytebrewDb) {
-      this._bytebrewDb = new ByteBrewDatabase(this._config.dbPath);
-    }
-    if (!this._cliIdentity) {
-      this._cliIdentity = new CliIdentity(this._bytebrewDb, new CryptoService());
-    }
-
-    const serverId = this._config.serverId ?? this._cliIdentity.getServerId();
-    const serverKeyPair = this._cliIdentity.getKeyPair();
-
-    // Wire EventBus for AskUser events so mobile gets AskUserRequested notifications
-    setAskUserEventBus(this._eventBus);
-
-    // Infrastructure stores
-    this._deviceStore = new SqliteDeviceStore(this._bytebrewDb);
-    this._pairingTokenStore = new InMemoryPairingTokenStore();
-    this._cryptoService = new CryptoService();
-    this._pairingWaiter = new PairingWaiter();
-    this._eventBuffer = new EventBuffer<SerializedEvent>();
-
-    // Crypto adapter: bridges CryptoService + DeviceStore into IMessageCrypto
-    const cryptoAdapter = new DeviceCryptoAdapter(this._cryptoService, this._deviceStore);
-
-    // Bridge transport
-    this._bridgeConnector = new BridgeConnector();
-    this._bridgeMessageRouter = new BridgeMessageRouter(cryptoAdapter);
-
-    // Application services
-    this._pairingService = new PairingService(
-      this._deviceStore,
-      this._pairingTokenStore,
-      this._cryptoService,
-      this._pairingWaiter,
-      serverKeyPair,
-    );
-
-    this._mobileCommandHandler = new MobileCommandHandler(
-      this._streamProcessor,
-      { resolve: resolveAskUser },
-    );
-
-    this._mobileSessionManager = new MobileSessionManager();
-    this._mobileSessionManager.setCurrentSession({
-      sessionId: this._sessionId,
-      projectName: path.basename(this._config.projectRoot),
-      status: 'active',
-      startedAt: new Date(),
-    });
-
-    this._eventBroadcaster = new EventBroadcaster(
-      this._eventBus,
-      this._bridgeMessageRouter,
-      this._eventBuffer,
-      this._sessionId,
-    );
-
-    this._mobileRequestHandler = new MobileRequestHandler(
-      this._pairingService,
-      this._mobileCommandHandler,
-      this._mobileSessionManager,
-      this._eventBroadcaster,
-      this._pairingService,
-      this._pairingService,
-    );
-
-    // Wire router -> request handler
-    this._bridgeMessageRouter.onMessage((deviceId, message) => {
-      void (async () => {
-        try {
-          const response = await this._mobileRequestHandler!.handleMessage(deviceId, message);
-          if (response) {
-            getLogger().debug('Sending response to device', { type: response.type, deviceId });
-            // Send BEFORE registering alias — pair_response must be plaintext
-            // because mobile needs server_public_key to compute shared secret.
-            this._bridgeMessageRouter!.sendMessage(deviceId, response);
-
-            // After pair_response is sent, register alias so future encrypted
-            // messages from this bridge device_id can find the shared secret.
-            if (response.type === 'pair_response' && response.payload?.device_id) {
-              cryptoAdapter.registerAlias(deviceId, response.payload.device_id as string);
-            }
-          }
-        } catch (err) {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          console.error(`[container] IIFE error type=${message.type} deviceId=${deviceId}: ${errMsg}`);
-        }
-      })();
-    });
-
-    // Start components
-    this._bridgeMessageRouter.start(this._bridgeConnector);
-    this._eventBroadcaster.start();
-
-    // Connect to bridge (fire-and-forget, reconnects in background)
-    void this._bridgeConnector.connect(
-      this._config.bridgeAddress!,
-      serverId,
-      path.basename(this._config.projectRoot),
-      authToken,
-    ).catch((err) => {
-      getLogger().error('Failed to connect to bridge', {
-        address: this._config.bridgeAddress,
-        error: (err as Error).message,
-      });
-    });
-
-    getLogger().info('Bridge mobile services initialized', {
-      bridgeAddress: this._config.bridgeAddress,
-      serverId,
-    });
-  }
-
-  /**
-   * Synchronously close the SQLite database to release WAL file locks.
-   * Must be called BEFORE process.exit() to prevent stale locks on next launch.
-   * Safe to call multiple times.
-   */
-  closeDatabaseSync(): void {
-    if (this._chunkStore && 'close' in this._chunkStore) {
-      try {
-        (this._chunkStore as { close(): void }).close();
-      } catch {
-        // Already closed or failed — ignore
-      }
-    }
-    this._chunkStore = null;
-    this._embeddingsClient = null;
-
-    if (this._bytebrewDb) {
-      try {
-        this._bytebrewDb.close();
-      } catch {
-        // Already closed or failed
-      }
-      this._bytebrewDb = null;
-    }
   }
 
   /**
    * Dispose of all resources
    */
   async dispose(): Promise<void> {
-    // Dispose bridge components first (they depend on eventBus)
-    this._eventBroadcaster?.stop();
-    this._eventBroadcaster = null;
-    this._bridgeMessageRouter?.stop();
-    this._bridgeMessageRouter = null;
-    this._bridgeConnector?.disconnect();
-    this._bridgeConnector = null;
-
     this._streamProcessor.dispose();
     this._streamGateway.disconnect();
-    // Close SQLite FIRST (synchronous) — before slow async operations
-    this.closeDatabaseSync();
-    await this._diagnosticsService.dispose();
-    await this._shellSessionManager.disposeAll();
     this._eventBus.clear();
-    // ByteBrewDatabase already closed by closeDatabaseSync() above
-    this._cliIdentity = null;
     this._initialized = false;
   }
 
@@ -383,10 +122,6 @@ export class Container {
     return this._streamGateway;
   }
 
-  get toolExecutor(): IToolExecutor {
-    return this._toolExecutor;
-  }
-
   get accumulator(): MessageAccumulatorService {
     return this._accumulator;
   }
@@ -401,34 +136,6 @@ export class Container {
 
   get agentStateManager(): AgentStateManager {
     return this._agentStateManager;
-  }
-
-  get chunkStore(): IChunkStore | null {
-    return this._chunkStore;
-  }
-
-  get embeddingsClient(): IEmbeddingsClient | null {
-    return this._embeddingsClient;
-  }
-
-  get shellSessionManager(): ShellSessionManager {
-    return this._shellSessionManager;
-  }
-
-  get pairingService(): PairingService | null {
-    return this._pairingService;
-  }
-
-  get mobileSessionManager(): MobileSessionManager | null {
-    return this._mobileSessionManager;
-  }
-
-  get bridgeConnector(): IBridgeConnector | null {
-    return this._bridgeConnector;
-  }
-
-  get cliIdentity(): ICliIdentity | null {
-    return this._cliIdentity;
   }
 }
 

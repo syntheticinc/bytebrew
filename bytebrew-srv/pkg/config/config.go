@@ -26,9 +26,17 @@ type Config struct {
 	License       LicenseConfig       `mapstructure:"license"`
 	Provider      ProviderConfig      `mapstructure:"provider"`
 	Relay         RelayConfig         `mapstructure:"relay"`
+	Bridge        BridgeConfig        `mapstructure:"bridge"`
 
 	// ConfigDir is the directory containing config files (set by Load, not from YAML)
 	ConfigDir string `mapstructure:"-"`
+}
+
+// BridgeConfig holds Bridge relay connectivity configuration for mobile devices.
+type BridgeConfig struct {
+	URL       string `mapstructure:"url"`        // WebSocket URL, e.g. "wss://bridge.bytebrew.ai"
+	AuthToken string `mapstructure:"auth_token"` // Bridge authentication token
+	Enabled   bool   `mapstructure:"enabled"`    // Whether bridge connectivity is enabled
 }
 
 // ProviderConfig holds LLM provider routing configuration.

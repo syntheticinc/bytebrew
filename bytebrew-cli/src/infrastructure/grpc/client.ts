@@ -24,6 +24,10 @@ enum Status {
   STATUS_IN_PROGRESS = 2;
   STATUS_FAILED = 3;
   STATUS_CANCELLED = 4;
+}
+message PlanStep {
+  string title = 1;
+  string status = 2;
 }`;
 
 const FLOW_SERVICE_PROTO = `syntax = "proto3";
@@ -31,6 +35,68 @@ package bytebrew.v1;
 import "common.proto";
 service FlowService {
   rpc ExecuteFlow(stream FlowRequest) returns (stream FlowResponse);
+  rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse);
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+  rpc SubscribeSession(SubscribeSessionRequest) returns (stream SessionEvent);
+  rpc CancelSession(CancelSessionRequest) returns (CancelSessionResponse);
+}
+message CreateSessionRequest {
+  string project_key = 1;
+  string user_id = 2;
+  map<string, string> context = 3;
+}
+message CreateSessionResponse {
+  string session_id = 1;
+}
+message SendMessageRequest {
+  string session_id = 1;
+  string content = 2;
+  string reply_to = 3;
+}
+message SendMessageResponse {
+  bool accepted = 1;
+  string error = 2;
+}
+message SubscribeSessionRequest {
+  string session_id = 1;
+  string last_event_id = 2;
+}
+message CancelSessionRequest {
+  string session_id = 1;
+}
+message CancelSessionResponse {
+  bool cancelled = 1;
+}
+message SessionEvent {
+  string event_id = 1;
+  string session_id = 2;
+  SessionEventType type = 3;
+  string content = 4;
+  string agent_id = 5;
+  int32 step = 6;
+  string tool_name = 7;
+  string call_id = 8;
+  map<string, string> tool_arguments = 9;
+  string tool_result_summary = 10;
+  bool tool_has_error = 11;
+  string question = 12;
+  repeated string options = 13;
+  Error error_detail = 14;
+  string plan_name = 15;
+  repeated PlanStep plan_steps = 16;
+}
+enum SessionEventType {
+  SESSION_EVENT_UNSPECIFIED = 0;
+  SESSION_EVENT_PROCESSING_STARTED = 1;
+  SESSION_EVENT_ANSWER_CHUNK = 2;
+  SESSION_EVENT_ANSWER = 3;
+  SESSION_EVENT_TOOL_EXECUTION_START = 4;
+  SESSION_EVENT_TOOL_EXECUTION_END = 5;
+  SESSION_EVENT_REASONING = 6;
+  SESSION_EVENT_PLAN_UPDATE = 7;
+  SESSION_EVENT_ASK_USER = 8;
+  SESSION_EVENT_PROCESSING_STOPPED = 9;
+  SESSION_EVENT_ERROR = 10;
 }
 message FlowRequest {
   string session_id = 1;
@@ -250,10 +316,69 @@ export interface FlowResponse {
 
 export type FlowStream = grpc.ClientDuplexStream<FlowRequest, FlowResponse>;
 
+// SessionEvent types
+export enum SessionEventType {
+  UNSPECIFIED = 0,
+  PROCESSING_STARTED = 1,
+  ANSWER_CHUNK = 2,
+  ANSWER = 3,
+  TOOL_EXECUTION_START = 4,
+  TOOL_EXECUTION_END = 5,
+  REASONING = 6,
+  PLAN_UPDATE = 7,
+  ASK_USER = 8,
+  PROCESSING_STOPPED = 9,
+  ERROR = 10,
+}
+
+export interface PlanStep {
+  title: string;
+  status: string;
+}
+
+export interface SessionEvent {
+  eventId: string;
+  sessionId: string;
+  type: number;
+  content: string;
+  agentId: string;
+  step: number;
+  toolName: string;
+  callId: string;
+  toolArguments: Record<string, string>;
+  toolResultSummary: string;
+  toolHasError: boolean;
+  question: string;
+  options: string[];
+  errorDetail?: {
+    code: string;
+    message: string;
+  };
+  planName: string;
+  planSteps: PlanStep[];
+}
+
+export type SessionEventStream = grpc.ClientReadableStream<SessionEvent>;
+
 // Service client interface - grpc-js generates client methods at runtime
 interface FlowServiceMethods {
   waitForReady(deadline: number, callback: (error?: Error) => void): void;
   executeFlow(metadata?: grpc.Metadata): FlowStream;
+  createSession(
+    request: { projectKey: string; userId: string; context: Record<string, string> },
+    callback: (error: grpc.ServiceError | null, response: { sessionId: string }) => void
+  ): void;
+  sendMessage(
+    request: { sessionId: string; content: string; replyTo?: string },
+    callback: (error: grpc.ServiceError | null, response: { accepted: boolean; error: string }) => void
+  ): void;
+  subscribeSession(
+    request: { sessionId: string; lastEventId?: string }
+  ): SessionEventStream;
+  cancelSession(
+    request: { sessionId: string },
+    callback: (error: grpc.ServiceError | null, response: { cancelled: boolean }) => void
+  ): void;
   getChannel(): grpc.Channel;
   close(): void;
 }
@@ -318,5 +443,79 @@ export class FlowServiceClient {
    */
   getAddress(): string {
     return this.address;
+  }
+
+  // --- New server-streaming API methods ---
+
+  /**
+   * Create a new session (unary call)
+   */
+  async createSession(
+    projectKey: string,
+    userId: string,
+    context: Record<string, string>
+  ): Promise<string> {
+    return new Promise((resolve, reject) => {
+      this.client.createSession(
+        { projectKey, userId, context },
+        (error, response) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(response.sessionId);
+          }
+        }
+      );
+    });
+  }
+
+  /**
+   * Send a user message (unary call)
+   */
+  async sendMessage(
+    sessionId: string,
+    content: string,
+    replyTo?: string
+  ): Promise<{ accepted: boolean; error?: string }> {
+    return new Promise((resolve, reject) => {
+      this.client.sendMessage(
+        { sessionId, content, replyTo },
+        (error, response) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve({
+              accepted: response.accepted,
+              error: response.error || undefined,
+            });
+          }
+        }
+      );
+    });
+  }
+
+  /**
+   * Subscribe to session events (server-streaming)
+   */
+  subscribeSession(sessionId: string, lastEventId?: string): SessionEventStream {
+    return this.client.subscribeSession({ sessionId, lastEventId });
+  }
+
+  /**
+   * Cancel a session (unary call)
+   */
+  async cancelSession(sessionId: string): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      this.client.cancelSession(
+        { sessionId },
+        (error, response) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(response.cancelled);
+          }
+        }
+      );
+    });
   }
 }

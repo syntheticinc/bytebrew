@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/indexing"
 	"github.com/cloudwego/eino/components/tool"
 )
 
@@ -11,12 +12,15 @@ import (
 type ToolDependencies struct {
 	SessionID      string
 	ProjectKey     string
+	ProjectRoot    string
 	Proxy          ClientOperationsProxy
 	TaskManager    TaskManager
 	SubtaskManager SubtaskManager
 	AgentPool      AgentPoolForTool
 	WebSearchTool  tool.InvokableTool // pre-created (depends on API key)
 	WebFetchTool   tool.InvokableTool // pre-created
+	ChunkStore     *indexing.ChunkStore
+	Embedder       *indexing.EmbeddingsClient
 }
 
 // DefaultToolResolver resolves tool names to tool instances
@@ -39,6 +43,7 @@ func (r *DefaultToolResolver) Resolve(ctx context.Context, toolNames []string, d
 		if t != nil { // nil = optional tool not available
 			riskLevel := GetContentRiskLevel(name)
 			t = NewSafeToolWrapper(t, name, riskLevel)
+			t = NewCancellableToolWrapper(t)
 			resolved = append(resolved, t)
 		}
 	}
@@ -122,6 +127,21 @@ func (r *DefaultToolResolver) resolveOne(ctx context.Context, name string, deps 
 			return nil, nil
 		}
 		return NewLspTool(deps.Proxy, deps.SessionID), nil
+	case "get_function":
+		if deps.ChunkStore == nil {
+			return nil, nil
+		}
+		return NewGetFunctionTool(deps.ChunkStore, deps.Embedder), nil
+	case "get_class":
+		if deps.ChunkStore == nil {
+			return nil, nil
+		}
+		return NewGetClassTool(deps.ChunkStore, deps.Embedder), nil
+	case "get_file_structure":
+		if deps.ChunkStore == nil {
+			return nil, nil
+		}
+		return NewGetFileStructureTool(deps.ChunkStore, deps.ProjectRoot), nil
 	default:
 		return nil, fmt.Errorf("unknown tool: %s", name)
 	}

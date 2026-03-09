@@ -83,6 +83,79 @@ func (ResponseType) EnumDescriptor() ([]byte, []int) {
 	return file_flow_service_proto_rawDescGZIP(), []int{0}
 }
 
+type SessionEventType int32
+
+const (
+	SessionEventType_SESSION_EVENT_UNSPECIFIED          SessionEventType = 0
+	SessionEventType_SESSION_EVENT_PROCESSING_STARTED   SessionEventType = 1
+	SessionEventType_SESSION_EVENT_ANSWER_CHUNK         SessionEventType = 2
+	SessionEventType_SESSION_EVENT_ANSWER               SessionEventType = 3
+	SessionEventType_SESSION_EVENT_TOOL_EXECUTION_START SessionEventType = 4
+	SessionEventType_SESSION_EVENT_TOOL_EXECUTION_END   SessionEventType = 5
+	SessionEventType_SESSION_EVENT_REASONING            SessionEventType = 6
+	SessionEventType_SESSION_EVENT_PLAN_UPDATE          SessionEventType = 7
+	SessionEventType_SESSION_EVENT_ASK_USER             SessionEventType = 8
+	SessionEventType_SESSION_EVENT_PROCESSING_STOPPED   SessionEventType = 9
+	SessionEventType_SESSION_EVENT_ERROR                SessionEventType = 10
+)
+
+// Enum value maps for SessionEventType.
+var (
+	SessionEventType_name = map[int32]string{
+		0:  "SESSION_EVENT_UNSPECIFIED",
+		1:  "SESSION_EVENT_PROCESSING_STARTED",
+		2:  "SESSION_EVENT_ANSWER_CHUNK",
+		3:  "SESSION_EVENT_ANSWER",
+		4:  "SESSION_EVENT_TOOL_EXECUTION_START",
+		5:  "SESSION_EVENT_TOOL_EXECUTION_END",
+		6:  "SESSION_EVENT_REASONING",
+		7:  "SESSION_EVENT_PLAN_UPDATE",
+		8:  "SESSION_EVENT_ASK_USER",
+		9:  "SESSION_EVENT_PROCESSING_STOPPED",
+		10: "SESSION_EVENT_ERROR",
+	}
+	SessionEventType_value = map[string]int32{
+		"SESSION_EVENT_UNSPECIFIED":          0,
+		"SESSION_EVENT_PROCESSING_STARTED":   1,
+		"SESSION_EVENT_ANSWER_CHUNK":         2,
+		"SESSION_EVENT_ANSWER":               3,
+		"SESSION_EVENT_TOOL_EXECUTION_START": 4,
+		"SESSION_EVENT_TOOL_EXECUTION_END":   5,
+		"SESSION_EVENT_REASONING":            6,
+		"SESSION_EVENT_PLAN_UPDATE":          7,
+		"SESSION_EVENT_ASK_USER":             8,
+		"SESSION_EVENT_PROCESSING_STOPPED":   9,
+		"SESSION_EVENT_ERROR":                10,
+	}
+)
+
+func (x SessionEventType) Enum() *SessionEventType {
+	p := new(SessionEventType)
+	*p = x
+	return p
+}
+
+func (x SessionEventType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SessionEventType) Descriptor() protoreflect.EnumDescriptor {
+	return file_flow_service_proto_enumTypes[1].Descriptor()
+}
+
+func (SessionEventType) Type() protoreflect.EnumType {
+	return &file_flow_service_proto_enumTypes[1]
+}
+
+func (x SessionEventType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SessionEventType.Descriptor instead.
+func (SessionEventType) EnumDescriptor() ([]byte, []int) {
+	return file_flow_service_proto_rawDescGZIP(), []int{1}
+}
+
 // FlowRequest represents a request to execute a flow
 type FlowRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -805,6 +878,583 @@ func (x *ReasoningContent) GetIsComplete() bool {
 	return false
 }
 
+type CreateSessionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProjectKey    string                 `protobuf:"bytes,1,opt,name=project_key,json=projectKey,proto3" json:"project_key,omitempty"`
+	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Context       map[string]string      `protobuf:"bytes,3,rep,name=context,proto3" json:"context,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // project_root, platform, testing_strategy
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateSessionRequest) Reset() {
+	*x = CreateSessionRequest{}
+	mi := &file_flow_service_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateSessionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateSessionRequest) ProtoMessage() {}
+
+func (x *CreateSessionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_flow_service_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateSessionRequest.ProtoReflect.Descriptor instead.
+func (*CreateSessionRequest) Descriptor() ([]byte, []int) {
+	return file_flow_service_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *CreateSessionRequest) GetProjectKey() string {
+	if x != nil {
+		return x.ProjectKey
+	}
+	return ""
+}
+
+func (x *CreateSessionRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *CreateSessionRequest) GetContext() map[string]string {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
+type CreateSessionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateSessionResponse) Reset() {
+	*x = CreateSessionResponse{}
+	mi := &file_flow_service_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateSessionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateSessionResponse) ProtoMessage() {}
+
+func (x *CreateSessionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_flow_service_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateSessionResponse.ProtoReflect.Descriptor instead.
+func (*CreateSessionResponse) Descriptor() ([]byte, []int) {
+	return file_flow_service_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *CreateSessionResponse) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+type SendMessageRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Content       string                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`                // user message text
+	ReplyTo       string                 `protobuf:"bytes,3,opt,name=reply_to,json=replyTo,proto3" json:"reply_to,omitempty"` // optional: reply to ask_user (call_id)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SendMessageRequest) Reset() {
+	*x = SendMessageRequest{}
+	mi := &file_flow_service_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendMessageRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendMessageRequest) ProtoMessage() {}
+
+func (x *SendMessageRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_flow_service_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendMessageRequest.ProtoReflect.Descriptor instead.
+func (*SendMessageRequest) Descriptor() ([]byte, []int) {
+	return file_flow_service_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *SendMessageRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *SendMessageRequest) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+func (x *SendMessageRequest) GetReplyTo() string {
+	if x != nil {
+		return x.ReplyTo
+	}
+	return ""
+}
+
+type SendMessageResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Accepted      bool                   `protobuf:"varint,1,opt,name=accepted,proto3" json:"accepted,omitempty"`
+	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SendMessageResponse) Reset() {
+	*x = SendMessageResponse{}
+	mi := &file_flow_service_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendMessageResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendMessageResponse) ProtoMessage() {}
+
+func (x *SendMessageResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_flow_service_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendMessageResponse.ProtoReflect.Descriptor instead.
+func (*SendMessageResponse) Descriptor() ([]byte, []int) {
+	return file_flow_service_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *SendMessageResponse) GetAccepted() bool {
+	if x != nil {
+		return x.Accepted
+	}
+	return false
+}
+
+func (x *SendMessageResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type SubscribeSessionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	LastEventId   string                 `protobuf:"bytes,2,opt,name=last_event_id,json=lastEventId,proto3" json:"last_event_id,omitempty"` // for reconnect replay
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubscribeSessionRequest) Reset() {
+	*x = SubscribeSessionRequest{}
+	mi := &file_flow_service_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubscribeSessionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubscribeSessionRequest) ProtoMessage() {}
+
+func (x *SubscribeSessionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_flow_service_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubscribeSessionRequest.ProtoReflect.Descriptor instead.
+func (*SubscribeSessionRequest) Descriptor() ([]byte, []int) {
+	return file_flow_service_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *SubscribeSessionRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *SubscribeSessionRequest) GetLastEventId() string {
+	if x != nil {
+		return x.LastEventId
+	}
+	return ""
+}
+
+type CancelSessionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelSessionRequest) Reset() {
+	*x = CancelSessionRequest{}
+	mi := &file_flow_service_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelSessionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelSessionRequest) ProtoMessage() {}
+
+func (x *CancelSessionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_flow_service_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelSessionRequest.ProtoReflect.Descriptor instead.
+func (*CancelSessionRequest) Descriptor() ([]byte, []int) {
+	return file_flow_service_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *CancelSessionRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+type CancelSessionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Cancelled     bool                   `protobuf:"varint,1,opt,name=cancelled,proto3" json:"cancelled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelSessionResponse) Reset() {
+	*x = CancelSessionResponse{}
+	mi := &file_flow_service_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelSessionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelSessionResponse) ProtoMessage() {}
+
+func (x *CancelSessionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_flow_service_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelSessionResponse.ProtoReflect.Descriptor instead.
+func (*CancelSessionResponse) Descriptor() ([]byte, []int) {
+	return file_flow_service_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *CancelSessionResponse) GetCancelled() bool {
+	if x != nil {
+		return x.Cancelled
+	}
+	return false
+}
+
+// SessionEvent — view-only events streamed to client (no tool round-trips)
+type SessionEvent struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	EventId   string                 `protobuf:"bytes,1,opt,name=event_id,json=eventId,proto3" json:"event_id,omitempty"`
+	SessionId string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Type      SessionEventType       `protobuf:"varint,3,opt,name=type,proto3,enum=bytebrew.v1.SessionEventType" json:"type,omitempty"`
+	Content   string                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`
+	AgentId   string                 `protobuf:"bytes,5,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	Step      int32                  `protobuf:"varint,6,opt,name=step,proto3" json:"step,omitempty"`
+	// Tool execution info
+	ToolName          string            `protobuf:"bytes,7,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	CallId            string            `protobuf:"bytes,8,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"`
+	ToolArguments     map[string]string `protobuf:"bytes,9,rep,name=tool_arguments,json=toolArguments,proto3" json:"tool_arguments,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	ToolResultSummary string            `protobuf:"bytes,10,opt,name=tool_result_summary,json=toolResultSummary,proto3" json:"tool_result_summary,omitempty"`
+	ToolHasError      bool              `protobuf:"varint,11,opt,name=tool_has_error,json=toolHasError,proto3" json:"tool_has_error,omitempty"`
+	// Ask user
+	Question string   `protobuf:"bytes,12,opt,name=question,proto3" json:"question,omitempty"`
+	Options  []string `protobuf:"bytes,13,rep,name=options,proto3" json:"options,omitempty"`
+	// Error
+	ErrorDetail *Error `protobuf:"bytes,14,opt,name=error_detail,json=errorDetail,proto3" json:"error_detail,omitempty"`
+	// Plan update
+	PlanName      string      `protobuf:"bytes,15,opt,name=plan_name,json=planName,proto3" json:"plan_name,omitempty"`
+	PlanSteps     []*PlanStep `protobuf:"bytes,16,rep,name=plan_steps,json=planSteps,proto3" json:"plan_steps,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionEvent) Reset() {
+	*x = SessionEvent{}
+	mi := &file_flow_service_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionEvent) ProtoMessage() {}
+
+func (x *SessionEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_flow_service_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionEvent.ProtoReflect.Descriptor instead.
+func (*SessionEvent) Descriptor() ([]byte, []int) {
+	return file_flow_service_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *SessionEvent) GetEventId() string {
+	if x != nil {
+		return x.EventId
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetType() SessionEventType {
+	if x != nil {
+		return x.Type
+	}
+	return SessionEventType_SESSION_EVENT_UNSPECIFIED
+}
+
+func (x *SessionEvent) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetStep() int32 {
+	if x != nil {
+		return x.Step
+	}
+	return 0
+}
+
+func (x *SessionEvent) GetToolName() string {
+	if x != nil {
+		return x.ToolName
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetCallId() string {
+	if x != nil {
+		return x.CallId
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetToolArguments() map[string]string {
+	if x != nil {
+		return x.ToolArguments
+	}
+	return nil
+}
+
+func (x *SessionEvent) GetToolResultSummary() string {
+	if x != nil {
+		return x.ToolResultSummary
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetToolHasError() bool {
+	if x != nil {
+		return x.ToolHasError
+	}
+	return false
+}
+
+func (x *SessionEvent) GetQuestion() string {
+	if x != nil {
+		return x.Question
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetOptions() []string {
+	if x != nil {
+		return x.Options
+	}
+	return nil
+}
+
+func (x *SessionEvent) GetErrorDetail() *Error {
+	if x != nil {
+		return x.ErrorDetail
+	}
+	return nil
+}
+
+func (x *SessionEvent) GetPlanName() string {
+	if x != nil {
+		return x.PlanName
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetPlanSteps() []*PlanStep {
+	if x != nil {
+		return x.PlanSteps
+	}
+	return nil
+}
+
+type PlanStep struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Title         string                 `protobuf:"bytes,1,opt,name=title,proto3" json:"title,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"` // "pending", "in_progress", "completed"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlanStep) Reset() {
+	*x = PlanStep{}
+	mi := &file_flow_service_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlanStep) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlanStep) ProtoMessage() {}
+
+func (x *PlanStep) ProtoReflect() protoreflect.Message {
+	mi := &file_flow_service_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlanStep.ProtoReflect.Descriptor instead.
+func (*PlanStep) Descriptor() ([]byte, []int) {
+	return file_flow_service_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *PlanStep) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *PlanStep) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
 var File_flow_service_proto protoreflect.FileDescriptor
 
 const file_flow_service_proto_rawDesc = "" +
@@ -879,7 +1529,61 @@ const file_flow_service_proto_rawDesc = "" +
 	"\x10ReasoningContent\x12\x1a\n" +
 	"\bthinking\x18\x01 \x01(\tR\bthinking\x12\x1f\n" +
 	"\vis_complete\x18\x02 \x01(\bR\n" +
-	"isComplete*\xd9\x01\n" +
+	"isComplete\"\xd6\x01\n" +
+	"\x14CreateSessionRequest\x12\x1f\n" +
+	"\vproject_key\x18\x01 \x01(\tR\n" +
+	"projectKey\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12H\n" +
+	"\acontext\x18\x03 \x03(\v2..bytebrew.v1.CreateSessionRequest.ContextEntryR\acontext\x1a:\n" +
+	"\fContextEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"6\n" +
+	"\x15CreateSessionResponse\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\"h\n" +
+	"\x12SendMessageRequest\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x18\n" +
+	"\acontent\x18\x02 \x01(\tR\acontent\x12\x19\n" +
+	"\breply_to\x18\x03 \x01(\tR\areplyTo\"G\n" +
+	"\x13SendMessageResponse\x12\x1a\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\x12\x14\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\"\\\n" +
+	"\x17SubscribeSessionRequest\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\"\n" +
+	"\rlast_event_id\x18\x02 \x01(\tR\vlastEventId\"5\n" +
+	"\x14CancelSessionRequest\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\"5\n" +
+	"\x15CancelSessionResponse\x12\x1c\n" +
+	"\tcancelled\x18\x01 \x01(\bR\tcancelled\"\xa7\x05\n" +
+	"\fSessionEvent\x12\x19\n" +
+	"\bevent_id\x18\x01 \x01(\tR\aeventId\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x121\n" +
+	"\x04type\x18\x03 \x01(\x0e2\x1d.bytebrew.v1.SessionEventTypeR\x04type\x12\x18\n" +
+	"\acontent\x18\x04 \x01(\tR\acontent\x12\x19\n" +
+	"\bagent_id\x18\x05 \x01(\tR\aagentId\x12\x12\n" +
+	"\x04step\x18\x06 \x01(\x05R\x04step\x12\x1b\n" +
+	"\ttool_name\x18\a \x01(\tR\btoolName\x12\x17\n" +
+	"\acall_id\x18\b \x01(\tR\x06callId\x12S\n" +
+	"\x0etool_arguments\x18\t \x03(\v2,.bytebrew.v1.SessionEvent.ToolArgumentsEntryR\rtoolArguments\x12.\n" +
+	"\x13tool_result_summary\x18\n" +
+	" \x01(\tR\x11toolResultSummary\x12$\n" +
+	"\x0etool_has_error\x18\v \x01(\bR\ftoolHasError\x12\x1a\n" +
+	"\bquestion\x18\f \x01(\tR\bquestion\x12\x18\n" +
+	"\aoptions\x18\r \x03(\tR\aoptions\x125\n" +
+	"\ferror_detail\x18\x0e \x01(\v2\x12.bytebrew.v1.ErrorR\verrorDetail\x12\x1b\n" +
+	"\tplan_name\x18\x0f \x01(\tR\bplanName\x124\n" +
+	"\n" +
+	"plan_steps\x18\x10 \x03(\v2\x15.bytebrew.v1.PlanStepR\tplanSteps\x1a@\n" +
+	"\x12ToolArgumentsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"8\n" +
+	"\bPlanStep\x12\x14\n" +
+	"\x05title\x18\x01 \x01(\tR\x05title\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status*\xd9\x01\n" +
 	"\fResponseType\x12\x1d\n" +
 	"\x19RESPONSE_TYPE_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14RESPONSE_TYPE_ANSWER\x10\x01\x12\x1b\n" +
@@ -887,9 +1591,26 @@ const file_flow_service_proto_rawDesc = "" +
 	"\x17RESPONSE_TYPE_TOOL_CALL\x10\x03\x12\x1d\n" +
 	"\x19RESPONSE_TYPE_TOOL_RESULT\x10\x04\x12\x1e\n" +
 	"\x1aRESPONSE_TYPE_ANSWER_CHUNK\x10\x05\x12\x17\n" +
-	"\x13RESPONSE_TYPE_ERROR\x10\x062U\n" +
+	"\x13RESPONSE_TYPE_ERROR\x10\x06*\xf6\x02\n" +
+	"\x10SessionEventType\x12\x1d\n" +
+	"\x19SESSION_EVENT_UNSPECIFIED\x10\x00\x12$\n" +
+	" SESSION_EVENT_PROCESSING_STARTED\x10\x01\x12\x1e\n" +
+	"\x1aSESSION_EVENT_ANSWER_CHUNK\x10\x02\x12\x18\n" +
+	"\x14SESSION_EVENT_ANSWER\x10\x03\x12&\n" +
+	"\"SESSION_EVENT_TOOL_EXECUTION_START\x10\x04\x12$\n" +
+	" SESSION_EVENT_TOOL_EXECUTION_END\x10\x05\x12\x1b\n" +
+	"\x17SESSION_EVENT_REASONING\x10\x06\x12\x1d\n" +
+	"\x19SESSION_EVENT_PLAN_UPDATE\x10\a\x12\x1a\n" +
+	"\x16SESSION_EVENT_ASK_USER\x10\b\x12$\n" +
+	" SESSION_EVENT_PROCESSING_STOPPED\x10\t\x12\x17\n" +
+	"\x13SESSION_EVENT_ERROR\x10\n" +
+	"2\xae\x03\n" +
 	"\vFlowService\x12F\n" +
-	"\vExecuteFlow\x12\x18.bytebrew.v1.FlowRequest\x1a\x19.bytebrew.v1.FlowResponse(\x010\x01BHZFgithub.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen;bytebrewv1b\x06proto3"
+	"\vExecuteFlow\x12\x18.bytebrew.v1.FlowRequest\x1a\x19.bytebrew.v1.FlowResponse(\x010\x01\x12V\n" +
+	"\rCreateSession\x12!.bytebrew.v1.CreateSessionRequest\x1a\".bytebrew.v1.CreateSessionResponse\x12P\n" +
+	"\vSendMessage\x12\x1f.bytebrew.v1.SendMessageRequest\x1a .bytebrew.v1.SendMessageResponse\x12U\n" +
+	"\x10SubscribeSession\x12$.bytebrew.v1.SubscribeSessionRequest\x1a\x19.bytebrew.v1.SessionEvent0\x01\x12V\n" +
+	"\rCancelSession\x12!.bytebrew.v1.CancelSessionRequest\x1a\".bytebrew.v1.CancelSessionResponseBHZFgithub.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen;bytebrewv1b\x06proto3"
 
 var (
 	file_flow_service_proto_rawDescOnce sync.Once
@@ -903,46 +1624,71 @@ func file_flow_service_proto_rawDescGZIP() []byte {
 	return file_flow_service_proto_rawDescData
 }
 
-var file_flow_service_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_flow_service_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_flow_service_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_flow_service_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_flow_service_proto_goTypes = []any{
-	(ResponseType)(0),        // 0: bytebrew.v1.ResponseType
-	(*FlowRequest)(nil),      // 1: bytebrew.v1.FlowRequest
-	(*PingRequest)(nil),      // 2: bytebrew.v1.PingRequest
-	(*ToolResult)(nil),       // 3: bytebrew.v1.ToolResult
-	(*SubQuery)(nil),         // 4: bytebrew.v1.SubQuery
-	(*SubResult)(nil),        // 5: bytebrew.v1.SubResult
-	(*FlowResponse)(nil),     // 6: bytebrew.v1.FlowResponse
-	(*PongResponse)(nil),     // 7: bytebrew.v1.PongResponse
-	(*ToolCall)(nil),         // 8: bytebrew.v1.ToolCall
-	(*ThoughtStep)(nil),      // 9: bytebrew.v1.ThoughtStep
-	(*ReasoningContent)(nil), // 10: bytebrew.v1.ReasoningContent
-	nil,                      // 11: bytebrew.v1.FlowRequest.ContextEntry
-	nil,                      // 12: bytebrew.v1.ToolCall.ArgumentsEntry
-	(*Error)(nil),            // 13: bytebrew.v1.Error
+	(ResponseType)(0),               // 0: bytebrew.v1.ResponseType
+	(SessionEventType)(0),           // 1: bytebrew.v1.SessionEventType
+	(*FlowRequest)(nil),             // 2: bytebrew.v1.FlowRequest
+	(*PingRequest)(nil),             // 3: bytebrew.v1.PingRequest
+	(*ToolResult)(nil),              // 4: bytebrew.v1.ToolResult
+	(*SubQuery)(nil),                // 5: bytebrew.v1.SubQuery
+	(*SubResult)(nil),               // 6: bytebrew.v1.SubResult
+	(*FlowResponse)(nil),            // 7: bytebrew.v1.FlowResponse
+	(*PongResponse)(nil),            // 8: bytebrew.v1.PongResponse
+	(*ToolCall)(nil),                // 9: bytebrew.v1.ToolCall
+	(*ThoughtStep)(nil),             // 10: bytebrew.v1.ThoughtStep
+	(*ReasoningContent)(nil),        // 11: bytebrew.v1.ReasoningContent
+	(*CreateSessionRequest)(nil),    // 12: bytebrew.v1.CreateSessionRequest
+	(*CreateSessionResponse)(nil),   // 13: bytebrew.v1.CreateSessionResponse
+	(*SendMessageRequest)(nil),      // 14: bytebrew.v1.SendMessageRequest
+	(*SendMessageResponse)(nil),     // 15: bytebrew.v1.SendMessageResponse
+	(*SubscribeSessionRequest)(nil), // 16: bytebrew.v1.SubscribeSessionRequest
+	(*CancelSessionRequest)(nil),    // 17: bytebrew.v1.CancelSessionRequest
+	(*CancelSessionResponse)(nil),   // 18: bytebrew.v1.CancelSessionResponse
+	(*SessionEvent)(nil),            // 19: bytebrew.v1.SessionEvent
+	(*PlanStep)(nil),                // 20: bytebrew.v1.PlanStep
+	nil,                             // 21: bytebrew.v1.FlowRequest.ContextEntry
+	nil,                             // 22: bytebrew.v1.ToolCall.ArgumentsEntry
+	nil,                             // 23: bytebrew.v1.CreateSessionRequest.ContextEntry
+	nil,                             // 24: bytebrew.v1.SessionEvent.ToolArgumentsEntry
+	(*Error)(nil),                   // 25: bytebrew.v1.Error
 }
 var file_flow_service_proto_depIdxs = []int32{
-	11, // 0: bytebrew.v1.FlowRequest.context:type_name -> bytebrew.v1.FlowRequest.ContextEntry
-	2,  // 1: bytebrew.v1.FlowRequest.ping:type_name -> bytebrew.v1.PingRequest
-	3,  // 2: bytebrew.v1.FlowRequest.tool_result:type_name -> bytebrew.v1.ToolResult
-	13, // 3: bytebrew.v1.ToolResult.error:type_name -> bytebrew.v1.Error
-	5,  // 4: bytebrew.v1.ToolResult.sub_results:type_name -> bytebrew.v1.SubResult
+	21, // 0: bytebrew.v1.FlowRequest.context:type_name -> bytebrew.v1.FlowRequest.ContextEntry
+	3,  // 1: bytebrew.v1.FlowRequest.ping:type_name -> bytebrew.v1.PingRequest
+	4,  // 2: bytebrew.v1.FlowRequest.tool_result:type_name -> bytebrew.v1.ToolResult
+	25, // 3: bytebrew.v1.ToolResult.error:type_name -> bytebrew.v1.Error
+	6,  // 4: bytebrew.v1.ToolResult.sub_results:type_name -> bytebrew.v1.SubResult
 	0,  // 5: bytebrew.v1.FlowResponse.type:type_name -> bytebrew.v1.ResponseType
-	8,  // 6: bytebrew.v1.FlowResponse.tool_call:type_name -> bytebrew.v1.ToolCall
-	9,  // 7: bytebrew.v1.FlowResponse.thought:type_name -> bytebrew.v1.ThoughtStep
-	10, // 8: bytebrew.v1.FlowResponse.reasoning:type_name -> bytebrew.v1.ReasoningContent
-	13, // 9: bytebrew.v1.FlowResponse.error:type_name -> bytebrew.v1.Error
-	7,  // 10: bytebrew.v1.FlowResponse.pong:type_name -> bytebrew.v1.PongResponse
-	3,  // 11: bytebrew.v1.FlowResponse.tool_result:type_name -> bytebrew.v1.ToolResult
-	12, // 12: bytebrew.v1.ToolCall.arguments:type_name -> bytebrew.v1.ToolCall.ArgumentsEntry
-	4,  // 13: bytebrew.v1.ToolCall.sub_queries:type_name -> bytebrew.v1.SubQuery
-	1,  // 14: bytebrew.v1.FlowService.ExecuteFlow:input_type -> bytebrew.v1.FlowRequest
-	6,  // 15: bytebrew.v1.FlowService.ExecuteFlow:output_type -> bytebrew.v1.FlowResponse
-	15, // [15:16] is the sub-list for method output_type
-	14, // [14:15] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	9,  // 6: bytebrew.v1.FlowResponse.tool_call:type_name -> bytebrew.v1.ToolCall
+	10, // 7: bytebrew.v1.FlowResponse.thought:type_name -> bytebrew.v1.ThoughtStep
+	11, // 8: bytebrew.v1.FlowResponse.reasoning:type_name -> bytebrew.v1.ReasoningContent
+	25, // 9: bytebrew.v1.FlowResponse.error:type_name -> bytebrew.v1.Error
+	8,  // 10: bytebrew.v1.FlowResponse.pong:type_name -> bytebrew.v1.PongResponse
+	4,  // 11: bytebrew.v1.FlowResponse.tool_result:type_name -> bytebrew.v1.ToolResult
+	22, // 12: bytebrew.v1.ToolCall.arguments:type_name -> bytebrew.v1.ToolCall.ArgumentsEntry
+	5,  // 13: bytebrew.v1.ToolCall.sub_queries:type_name -> bytebrew.v1.SubQuery
+	23, // 14: bytebrew.v1.CreateSessionRequest.context:type_name -> bytebrew.v1.CreateSessionRequest.ContextEntry
+	1,  // 15: bytebrew.v1.SessionEvent.type:type_name -> bytebrew.v1.SessionEventType
+	24, // 16: bytebrew.v1.SessionEvent.tool_arguments:type_name -> bytebrew.v1.SessionEvent.ToolArgumentsEntry
+	25, // 17: bytebrew.v1.SessionEvent.error_detail:type_name -> bytebrew.v1.Error
+	20, // 18: bytebrew.v1.SessionEvent.plan_steps:type_name -> bytebrew.v1.PlanStep
+	2,  // 19: bytebrew.v1.FlowService.ExecuteFlow:input_type -> bytebrew.v1.FlowRequest
+	12, // 20: bytebrew.v1.FlowService.CreateSession:input_type -> bytebrew.v1.CreateSessionRequest
+	14, // 21: bytebrew.v1.FlowService.SendMessage:input_type -> bytebrew.v1.SendMessageRequest
+	16, // 22: bytebrew.v1.FlowService.SubscribeSession:input_type -> bytebrew.v1.SubscribeSessionRequest
+	17, // 23: bytebrew.v1.FlowService.CancelSession:input_type -> bytebrew.v1.CancelSessionRequest
+	7,  // 24: bytebrew.v1.FlowService.ExecuteFlow:output_type -> bytebrew.v1.FlowResponse
+	13, // 25: bytebrew.v1.FlowService.CreateSession:output_type -> bytebrew.v1.CreateSessionResponse
+	15, // 26: bytebrew.v1.FlowService.SendMessage:output_type -> bytebrew.v1.SendMessageResponse
+	19, // 27: bytebrew.v1.FlowService.SubscribeSession:output_type -> bytebrew.v1.SessionEvent
+	18, // 28: bytebrew.v1.FlowService.CancelSession:output_type -> bytebrew.v1.CancelSessionResponse
+	24, // [24:29] is the sub-list for method output_type
+	19, // [19:24] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_flow_service_proto_init() }
@@ -956,8 +1702,8 @@ func file_flow_service_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_flow_service_proto_rawDesc), len(file_flow_service_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   12,
+			NumEnums:      2,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

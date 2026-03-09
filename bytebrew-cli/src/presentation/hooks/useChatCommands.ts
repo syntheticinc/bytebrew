@@ -11,8 +11,6 @@ import {
 } from '../../infrastructure/config/ProviderConfig.js';
 import type { LicenseBadgeInfo } from './useLicenseInfo.js';
 import { handleLogoutCommand, handleStatusCommand, handleLoginCommand, handleActivateCommand } from './authCommands.js';
-import { handleMobileCommand } from './mobileCommands.js';
-import type { Container } from '../../config/container.js';
 
 export interface UseChatCommandsOptions {
   isConnected: boolean;
@@ -31,8 +29,6 @@ export interface UseChatCommandsOptions {
   onLicenseChange?: () => void;
   /** License info for /provider status display */
   licenseInfo?: LicenseBadgeInfo | null;
-  /** DI container for commands that need access to services (e.g. /mobile) */
-  container?: Container;
 }
 
 export interface UseChatCommandsResult {
@@ -122,7 +118,6 @@ export function useChatCommands(options: UseChatCommandsOptions): UseChatCommand
     onProviderChange,
     onLicenseChange,
     licenseInfo,
-    container,
   } = options;
 
   const hasSentInitialQuestionRef = useRef(false);
@@ -174,9 +169,6 @@ export function useChatCommands(options: UseChatCommandsOptions): UseChatCommand
           '  /logout             - Logout and clear credentials',
           '  /status             - Show license and account info',
           '  /activate           - Activate or refresh license',
-          '  /mobile             - Pair a mobile device (QR code)',
-          '  /mobile devices     - List paired devices',
-          '  /mobile status      - Bridge connection status',
           '  /clear             - Clear chat history',
           '  /quit, /exit       - Exit application',
         ].join('\n');
@@ -241,20 +233,10 @@ export function useChatCommands(options: UseChatCommandsOptions): UseChatCommand
         return;
       }
 
-      if (value === '/mobile' || value.startsWith('/mobile ')) {
-        const args = value.slice('/mobile'.length).trim();
-        if (!container) {
-          onCommandOutput?.('Mobile not available.');
-          return;
-        }
-        void handleMobileCommand(args, container, (text) => onCommandOutput?.(text));
-        return;
-      }
-
       addToHistory(value);
       sendMessage(value);
     },
-    [addToHistory, sendMessage, disconnect, exit, clearMessages, isExitingRef, onCommandOutput, onProviderChange, onLicenseChange, licenseInfo, container]
+    [addToHistory, sendMessage, disconnect, exit, clearMessages, isExitingRef, onCommandOutput, onProviderChange, onLicenseChange, licenseInfo]
   );
 
   return {

@@ -19,7 +19,9 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/delivery/grpc"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/bridge"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/flow_registry"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/portfile"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/logger"
@@ -38,6 +40,7 @@ func main() {
 	showVersion := flag.Bool("version", false, "Print version and exit")
 	managed := flag.Bool("managed", false, "Run as managed subprocess (random port, READY protocol)")
 	portFlag := flag.Int("port", 0, "Override port (0 = random, only with --managed)")
+	bridgeFlag := flag.String("bridge", "", "Bridge WebSocket URL (e.g., wss://bridge.bytebrew.ai)")
 	flag.Parse()
 
 	// --version: print and exit (no config needed)
@@ -97,6 +100,12 @@ func main() {
 	}
 
 	log.Printf("Config loaded: default_provider=%s, ollama_model=%s", cfg.LLM.DefaultProvider, cfg.LLM.Ollama.Model)
+
+	// Override bridge config from --bridge flag
+	if *bridgeFlag != "" {
+		cfg.Bridge.URL = *bridgeFlag
+		cfg.Bridge.Enabled = true
+	}
 
 	// Check for already running server BEFORE touching log files.
 	// If log file is locked by the running server, logger.New will fail
@@ -185,6 +194,9 @@ func main() {
 	// Create flow registry for managing active flows
 	flowRegistry := flow_registry.NewInMemoryRegistry()
 
+	// Create session registry for server-streaming API and bridge
+	sessionRegistry := flow_registry.NewSessionRegistry()
+
 	// Create FlowHandler with multi-agent support
 	pingInterval := 2 * time.Second
 	flowHandlerCfg := grpc.FlowHandlerConfig{
@@ -192,6 +204,7 @@ func main() {
 		ToolCallHistoryCleaner: components.AgentService.GetToolCallHistoryReminder(),
 		PingInterval:           pingInterval,
 		FlowRegistry:           flowRegistry,
+		SessionRegistry:        sessionRegistry,
 	}
 
 	// Engine components are always available (server fails to start otherwise)
@@ -226,7 +239,7 @@ func main() {
 		log.Fatalf("Failed to create flow handler: %v", err)
 	}
 
-	grpcServer.RegisterServices(flowHandler, nil, nil)
+	grpcServer.RegisterServices(flowHandler)
 
 	// In managed mode, emit READY protocol before starting
 	if *managed {
@@ -265,6 +278,17 @@ func main() {
 		slog.Info("Port file written", "path", portWriter.Path())
 	}
 
+	// Start bridge connectivity if enabled
+	var bridgeCleanup func()
+	if cfg.Bridge.Enabled && cfg.Bridge.URL != "" {
+		cleanup, err := startBridge(ctx, cfg, dataDir, sessionRegistry, loggerInstance)
+		if err != nil {
+			slog.Error("Failed to start bridge connectivity", "error", err)
+		} else {
+			bridgeCleanup = cleanup
+		}
+	}
+
 	// Wait for shutdown signal or server error
 	select {
 	case sig := <-sigChan:
@@ -276,6 +300,11 @@ func main() {
 	}
 
 	loggerInstance.InfoContext(ctx, "Shutting down ByteBrew Server...")
+
+	// Shutdown bridge first (stops accepting new messages)
+	if bridgeCleanup != nil {
+		bridgeCleanup()
+	}
 
 	// Remove port file on shutdown
 	if err := portWriter.Remove(); err != nil {
@@ -364,6 +393,112 @@ func ensureManagedDirs(dataDir string) error {
 		}
 	}
 	return nil
+}
+
+// startBridge initializes and connects the Bridge relay stack for mobile device communication.
+// Returns a cleanup function for graceful shutdown.
+func startBridge(
+	ctx context.Context,
+	cfg *config.Config,
+	dataDir string,
+	sessionRegistry *flow_registry.SessionRegistry,
+	loggerInstance *logger.Logger,
+) (func(), error) {
+	// Open shared SQLite database for device store and server identity
+	dbPath := filepath.Join(dataDir, "data", "bytebrew.db")
+	db, err := persistence.NewWorkDB(dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("open bridge db: %w", err)
+	}
+
+	// Get or create persistent server identity (server_id + X25519 keypair)
+	identityStore, err := persistence.NewServerIdentityStore(db)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create identity store: %w", err)
+	}
+
+	identity, err := identityStore.GetOrCreateIdentity()
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("get server identity: %w", err)
+	}
+
+	// Create device store for paired mobile devices
+	deviceStore, err := persistence.NewSQLiteDeviceStore(db)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create device store: %w", err)
+	}
+
+	// Create crypto adapter and load existing device secrets
+	cryptoAdapter := bridge.NewDeviceCryptoAdapter()
+	devices, err := deviceStore.List(ctx)
+	if err != nil {
+		slog.Warn("Failed to load existing devices for crypto", "error", err)
+	} else {
+		for _, d := range devices {
+			if len(d.SharedSecret) > 0 {
+				cryptoAdapter.AddDevice(d.ID, d.SharedSecret)
+			}
+		}
+		if len(devices) > 0 {
+			slog.Info("Loaded device crypto keys", "count", len(devices))
+		}
+	}
+
+	// Create bridge client
+	bridgeClient := bridge.NewBridgeClient(cfg.Bridge.URL, identity.ID, "ByteBrew Server", cfg.Bridge.AuthToken)
+
+	// Create message router (handles E2E encryption transparently)
+	messageRouter := bridge.NewMessageRouter(bridgeClient, cryptoAdapter)
+
+	// Create event broadcaster (serializes session events for mobile clients)
+	eventBroadcaster := bridge.NewEventBroadcaster(messageRouter)
+
+	// Create pairing token store (in-memory, ephemeral)
+	tokenStore := bridge.NewPairingTokenStore()
+
+	// Create device store adapter (bridges context-less interface with context-aware store)
+	deviceStoreAdapter := bridge.NewDeviceStoreAdapter(deviceStore)
+
+	// Create request handler (routes incoming mobile messages)
+	requestHandler := bridge.NewMobileRequestHandler(
+		messageRouter,
+		deviceStoreAdapter,
+		tokenStore,
+		cryptoAdapter,
+		eventBroadcaster,
+		sessionRegistry,
+		identity,
+	)
+
+	// Connect to bridge relay
+	if err := bridgeClient.Connect(ctx); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("connect to bridge: %w", err)
+	}
+
+	// Start message routing and request handling
+	messageRouter.Start()
+	requestHandler.Start()
+
+	loggerInstance.InfoContext(ctx, "Bridge connectivity enabled",
+		"url", cfg.Bridge.URL,
+		"server_id", identity.ID,
+	)
+
+	// Return cleanup function for graceful shutdown
+	cleanup := func() {
+		slog.Info("Shutting down bridge connectivity")
+		requestHandler.Stop()
+		messageRouter.Stop()
+		bridgeClient.Disconnect()
+		db.Close()
+		slog.Info("Bridge connectivity stopped")
+	}
+
+	return cleanup, nil
 }
 
 // generateDefaultConfig writes a minimal config.yaml suitable for managed mode.

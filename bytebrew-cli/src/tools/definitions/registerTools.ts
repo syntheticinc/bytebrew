@@ -29,8 +29,4 @@ export function registerToolDefinitions(): void {
   ToolManager.register({ name: 'spawn_code_agent', displayName: 'Agent' });
   ToolManager.register({ name: 'wait', displayName: 'Wait' });
   ToolManager.register({ name: 'lsp', displayName: 'LSP' });
-
-  // Client-side tools are registered via ToolExecutor
-  // They use standard rendering by default
-  // To add custom rendering for a client tool, create definition here
 }

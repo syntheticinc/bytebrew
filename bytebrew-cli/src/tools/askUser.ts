@@ -1,7 +1,7 @@
 // AskUser tool - handles ask_user tool calls from the server proxy
 // In headless mode: auto-selects first option or default
 // In interactive mode: publishes event via EventBus and waits for user response
-import { Tool, ToolResult } from './registry.js';
+import { Tool, ToolResult } from './ToolManager.js';
 import type { IEventBus } from '../domain/ports/IEventBus.js';
 
 // --- Questionnaire types ---
@@ -103,7 +103,7 @@ function summarizeAnswers(answers: QuestionAnswer[]): string {
   if (answers.length === 1) {
     const text = answers[0].answer;
     if (text.length <= 25) return text;
-    return text.slice(0, 24) + '…';
+    return text.slice(0, 24) + '\u2026';
   }
   return `${answers.length} answers`;
 }
@@ -151,8 +151,7 @@ export function resolveAskUser(answers: QuestionAnswer[]): void {
   if (pendingResolve) {
     pendingResolve(answers);
     pendingResolve = null;
-    // Notify UI to clear questions immediately (important for mobile-originated answers
-    // where handleComplete() is not called and ProcessingStopped may arrive late)
+    // Notify UI to clear questions immediately
     if (eventBusRef) {
       eventBusRef.publish({ type: 'AskUserResolved' });
     }

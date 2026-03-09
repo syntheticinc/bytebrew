@@ -19,7 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	FlowService_ExecuteFlow_FullMethodName = "/bytebrew.v1.FlowService/ExecuteFlow"
+	FlowService_ExecuteFlow_FullMethodName      = "/bytebrew.v1.FlowService/ExecuteFlow"
+	FlowService_CreateSession_FullMethodName    = "/bytebrew.v1.FlowService/CreateSession"
+	FlowService_SendMessage_FullMethodName      = "/bytebrew.v1.FlowService/SendMessage"
+	FlowService_SubscribeSession_FullMethodName = "/bytebrew.v1.FlowService/SubscribeSession"
+	FlowService_CancelSession_FullMethodName    = "/bytebrew.v1.FlowService/CancelSession"
 )
 
 // FlowServiceClient is the client API for FlowService service.
@@ -28,8 +32,13 @@ const (
 //
 // FlowService handles AI agent flow execution
 type FlowServiceClient interface {
-	// ExecuteFlow executes an AI agent flow with streaming responses
+	// ExecuteFlow executes an AI agent flow with streaming responses (bidirectional, backward compat)
 	ExecuteFlow(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[FlowRequest, FlowResponse], error)
+	// NEW: Server-streaming API (no tool round-trips — server executes tools locally)
+	CreateSession(ctx context.Context, in *CreateSessionRequest, opts ...grpc.CallOption) (*CreateSessionResponse, error)
+	SendMessage(ctx context.Context, in *SendMessageRequest, opts ...grpc.CallOption) (*SendMessageResponse, error)
+	SubscribeSession(ctx context.Context, in *SubscribeSessionRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SessionEvent], error)
+	CancelSession(ctx context.Context, in *CancelSessionRequest, opts ...grpc.CallOption) (*CancelSessionResponse, error)
 }
 
 type flowServiceClient struct {
@@ -53,14 +62,68 @@ func (c *flowServiceClient) ExecuteFlow(ctx context.Context, opts ...grpc.CallOp
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type FlowService_ExecuteFlowClient = grpc.BidiStreamingClient[FlowRequest, FlowResponse]
 
+func (c *flowServiceClient) CreateSession(ctx context.Context, in *CreateSessionRequest, opts ...grpc.CallOption) (*CreateSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateSessionResponse)
+	err := c.cc.Invoke(ctx, FlowService_CreateSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *flowServiceClient) SendMessage(ctx context.Context, in *SendMessageRequest, opts ...grpc.CallOption) (*SendMessageResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SendMessageResponse)
+	err := c.cc.Invoke(ctx, FlowService_SendMessage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *flowServiceClient) SubscribeSession(ctx context.Context, in *SubscribeSessionRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SessionEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &FlowService_ServiceDesc.Streams[1], FlowService_SubscribeSession_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[SubscribeSessionRequest, SessionEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type FlowService_SubscribeSessionClient = grpc.ServerStreamingClient[SessionEvent]
+
+func (c *flowServiceClient) CancelSession(ctx context.Context, in *CancelSessionRequest, opts ...grpc.CallOption) (*CancelSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelSessionResponse)
+	err := c.cc.Invoke(ctx, FlowService_CancelSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FlowServiceServer is the server API for FlowService service.
 // All implementations must embed UnimplementedFlowServiceServer
 // for forward compatibility.
 //
 // FlowService handles AI agent flow execution
 type FlowServiceServer interface {
-	// ExecuteFlow executes an AI agent flow with streaming responses
+	// ExecuteFlow executes an AI agent flow with streaming responses (bidirectional, backward compat)
 	ExecuteFlow(grpc.BidiStreamingServer[FlowRequest, FlowResponse]) error
+	// NEW: Server-streaming API (no tool round-trips — server executes tools locally)
+	CreateSession(context.Context, *CreateSessionRequest) (*CreateSessionResponse, error)
+	SendMessage(context.Context, *SendMessageRequest) (*SendMessageResponse, error)
+	SubscribeSession(*SubscribeSessionRequest, grpc.ServerStreamingServer[SessionEvent]) error
+	CancelSession(context.Context, *CancelSessionRequest) (*CancelSessionResponse, error)
 	mustEmbedUnimplementedFlowServiceServer()
 }
 
@@ -73,6 +136,18 @@ type UnimplementedFlowServiceServer struct{}
 
 func (UnimplementedFlowServiceServer) ExecuteFlow(grpc.BidiStreamingServer[FlowRequest, FlowResponse]) error {
 	return status.Error(codes.Unimplemented, "method ExecuteFlow not implemented")
+}
+func (UnimplementedFlowServiceServer) CreateSession(context.Context, *CreateSessionRequest) (*CreateSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateSession not implemented")
+}
+func (UnimplementedFlowServiceServer) SendMessage(context.Context, *SendMessageRequest) (*SendMessageResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SendMessage not implemented")
+}
+func (UnimplementedFlowServiceServer) SubscribeSession(*SubscribeSessionRequest, grpc.ServerStreamingServer[SessionEvent]) error {
+	return status.Error(codes.Unimplemented, "method SubscribeSession not implemented")
+}
+func (UnimplementedFlowServiceServer) CancelSession(context.Context, *CancelSessionRequest) (*CancelSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelSession not implemented")
 }
 func (UnimplementedFlowServiceServer) mustEmbedUnimplementedFlowServiceServer() {}
 func (UnimplementedFlowServiceServer) testEmbeddedByValue()                     {}
@@ -102,19 +177,102 @@ func _FlowService_ExecuteFlow_Handler(srv interface{}, stream grpc.ServerStream)
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type FlowService_ExecuteFlowServer = grpc.BidiStreamingServer[FlowRequest, FlowResponse]
 
+func _FlowService_CreateSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FlowServiceServer).CreateSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FlowService_CreateSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FlowServiceServer).CreateSession(ctx, req.(*CreateSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FlowService_SendMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendMessageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FlowServiceServer).SendMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FlowService_SendMessage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FlowServiceServer).SendMessage(ctx, req.(*SendMessageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FlowService_SubscribeSession_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscribeSessionRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(FlowServiceServer).SubscribeSession(m, &grpc.GenericServerStream[SubscribeSessionRequest, SessionEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type FlowService_SubscribeSessionServer = grpc.ServerStreamingServer[SessionEvent]
+
+func _FlowService_CancelSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FlowServiceServer).CancelSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FlowService_CancelSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FlowServiceServer).CancelSession(ctx, req.(*CancelSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // FlowService_ServiceDesc is the grpc.ServiceDesc for FlowService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var FlowService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "bytebrew.v1.FlowService",
 	HandlerType: (*FlowServiceServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CreateSession",
+			Handler:    _FlowService_CreateSession_Handler,
+		},
+		{
+			MethodName: "SendMessage",
+			Handler:    _FlowService_SendMessage_Handler,
+		},
+		{
+			MethodName: "CancelSession",
+			Handler:    _FlowService_CancelSession_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "ExecuteFlow",
 			Handler:       _FlowService_ExecuteFlow_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "SubscribeSession",
+			Handler:       _FlowService_SubscribeSession_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "flow_service.proto",

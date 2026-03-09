@@ -39,6 +39,15 @@ export function handleToolCall(ctx: StreamProcessorContext, response: StreamResp
   if (toolCall.toolName === 'ask_user') {
     completeCurrentMessage(ctx);
 
+    // In display-only mode (no toolExecutor), publish AskUser event directly
+    if (!ctx.toolExecutor) {
+      ctx.eventBus.publish({
+        type: 'AskUserRequested',
+        questions: parseAskUserQuestions(toolCall.arguments),
+      });
+      return;
+    }
+
     executeAskUserAsync(ctx, toolCall).catch((err) => {
       ctx.eventBus.publish({
         type: 'ErrorOccurred',
@@ -55,6 +64,27 @@ export function handleToolCall(ctx: StreamProcessorContext, response: StreamResp
     logger.debug('TOOL_CALL duplicate skipped', { callId: toolCall.callId });
     return;
   }
+
+  // Display-only mode (streaming API): no client-side execution, just show the tool call
+  if (!ctx.toolExecutor) {
+    completeCurrentMessage(ctx);
+
+    const toolMessage = Message.createToolCall(toolCall, ctx.agentId);
+    ctx.messageRepository.save(toolMessage);
+
+    const execution = ToolExecution.create(
+      toolCall.callId,
+      toolCall.toolName,
+      toolCall.arguments,
+      toolMessage.id,
+      ctx.agentId,
+    );
+    ctx.eventBus.publish({ type: 'ToolExecutionStarted', execution });
+    // Result will arrive via TOOL_RESULT (handleServerToolResult)
+    return;
+  }
+
+  // --- Legacy bidirectional mode below ---
 
   // For proxy TOOL_CALLs (non-server-), check if the server-side callback already
   // created a message with callId "server-{callId}". If so, reuse that message
@@ -638,6 +668,23 @@ async function trySymbolFallback(
   } catch {
     // Fallback failed silently — keep original empty result
   }
+}
+
+/**
+ * Parse ask_user questions from tool arguments
+ */
+function parseAskUserQuestions(args: Record<string, string>): { text: string; options?: { label: string }[]; default?: string }[] {
+  const questionsStr = args.questions;
+  if (questionsStr) {
+    try {
+      const parsed = JSON.parse(questionsStr);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    } catch { /* fall through */ }
+  }
+  const question = args.question || 'No question provided';
+  return [{ text: question, default: args.default_answer }];
 }
 
 /**

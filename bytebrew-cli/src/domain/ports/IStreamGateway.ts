@@ -78,7 +78,8 @@ export interface IStreamGateway {
   sendMessage(message: string): void;
 
   /**
-   * Send a tool execution result
+   * Send a tool execution result (legacy bidirectional API only).
+   * No-op in server-streaming mode where tools execute server-side.
    */
   sendToolResult(callId: string, result: string, error?: Error, subResults?: SubResult[]): void;
 

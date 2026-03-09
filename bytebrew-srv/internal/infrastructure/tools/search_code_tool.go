@@ -136,6 +136,6 @@ func (t *SearchCodeTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 	// Log search results
 	slog.DebugContext(ctx, "SearchCodeTool: search completed", "query", args.Query, "results_length", len(results))
 
-	// results is already JSON bytes from ClientOperationsAdapter, just convert to string
+	// results is already JSON bytes, just convert to string
 	return string(results), nil
 }

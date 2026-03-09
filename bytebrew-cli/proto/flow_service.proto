@@ -4,10 +4,18 @@ package bytebrew.v1;
 
 import "common.proto";
 
+option go_package = "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen;bytebrewv1";
+
 // FlowService handles AI agent flow execution
 service FlowService {
-  // ExecuteFlow executes an AI agent flow with streaming responses
+  // ExecuteFlow executes an AI agent flow with streaming responses (bidirectional, backward compat)
   rpc ExecuteFlow(stream FlowRequest) returns (stream FlowResponse);
+
+  // NEW: Server-streaming API (no tool round-trips — server executes tools locally)
+  rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse);
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+  rpc SubscribeSession(SubscribeSessionRequest) returns (stream SessionEvent);
+  rpc CancelSession(CancelSessionRequest) returns (CancelSessionResponse);
 }
 
 // FlowRequest represents a request to execute a flow
@@ -34,7 +42,7 @@ message ToolResult {
   string result = 2;
   Error error = 3;
   repeated SubResult sub_results = 4;  // Results from sub-queries (for grouped operations like smart_search)
-  string summary = 5;                  // Server-computed display summary (P0 Tool Contract)
+  string summary = 5;  // Server-computed display summary (e.g. "3 results", "plan updated")
 }
 
 // SubQuery represents a sub-query for grouped tool operations
@@ -58,14 +66,14 @@ message FlowResponse {
   ResponseType type = 2;
   string content = 3;
   ToolCall tool_call = 4;
-  ThoughtStep thought = 5;
-  ReasoningContent reasoning = 6;
+  ThoughtStep thought = 5;         // Standard agent answer (legacy field name)
+  ReasoningContent reasoning = 6;  // Reasoning content from models like GLM 4.7
   Error error = 7;
   bool is_final = 8;
   PongResponse pong = 9;
-  int32 step = 10;
-  ToolResult tool_result = 11;  // Tool execution result for server-side tools
-  string agent_id = 12;         // Agent identifier: "supervisor" or "code-agent-{uuid}"
+  int32 step = 10;                 // Agent step number
+  ToolResult tool_result = 11;     // Tool execution result
+  string agent_id = 12;            // Agent identifier: "supervisor" or "code-agent-{uuid}"
 }
 
 // PongResponse represents a pong message for keep-alive
@@ -77,12 +85,12 @@ message PongResponse {
 // ResponseType indicates the type of response
 enum ResponseType {
   RESPONSE_TYPE_UNSPECIFIED = 0;
-  RESPONSE_TYPE_ANSWER = 1;
-  RESPONSE_TYPE_REASONING = 2;
-  RESPONSE_TYPE_TOOL_CALL = 3;
-  RESPONSE_TYPE_TOOL_RESULT = 4;
-  RESPONSE_TYPE_ANSWER_CHUNK = 5;
-  RESPONSE_TYPE_ERROR = 6;
+  RESPONSE_TYPE_ANSWER = 1;        // Standard agent answer
+  RESPONSE_TYPE_REASONING = 2;     // Reasoning content (GLM 4.7, Claude thinking)
+  RESPONSE_TYPE_TOOL_CALL = 3;     // Tool invocation
+  RESPONSE_TYPE_TOOL_RESULT = 4;   // Tool result
+  RESPONSE_TYPE_ANSWER_CHUNK = 5;  // Streaming answer chunk
+  RESPONSE_TYPE_ERROR = 6;         // Error
 }
 
 // ToolCall represents a tool invocation
@@ -96,11 +104,94 @@ message ToolCall {
 // ThoughtStep represents agent's intermediate thought
 message ThoughtStep {
   string content = 1;
-  string action = 2;
+  string action = 2;  // Planned action (optional)
 }
 
 // ReasoningContent represents reasoning from models like GLM 4.7
 message ReasoningContent {
-  string thinking = 1;
-  bool is_complete = 2;
+  string thinking = 1;    // Raw thinking content
+  bool is_complete = 2;   // true if reasoning is complete
+}
+
+// === Server-Streaming API Messages ===
+
+message CreateSessionRequest {
+  string project_key = 1;
+  string user_id = 2;
+  map<string, string> context = 3; // project_root, platform, testing_strategy
+}
+
+message CreateSessionResponse {
+  string session_id = 1;
+}
+
+message SendMessageRequest {
+  string session_id = 1;
+  string content = 2;         // user message text
+  string reply_to = 3;        // optional: reply to ask_user (call_id)
+}
+
+message SendMessageResponse {
+  bool accepted = 1;
+  string error = 2;
+}
+
+message SubscribeSessionRequest {
+  string session_id = 1;
+  string last_event_id = 2;   // for reconnect replay
+}
+
+message CancelSessionRequest {
+  string session_id = 1;
+}
+
+message CancelSessionResponse {
+  bool cancelled = 1;
+}
+
+// SessionEvent — view-only events streamed to client (no tool round-trips)
+message SessionEvent {
+  string event_id = 1;
+  string session_id = 2;
+  SessionEventType type = 3;
+  string content = 4;
+  string agent_id = 5;
+  int32 step = 6;
+
+  // Tool execution info
+  string tool_name = 7;
+  string call_id = 8;
+  map<string, string> tool_arguments = 9;
+  string tool_result_summary = 10;
+  bool tool_has_error = 11;
+
+  // Ask user
+  string question = 12;
+  repeated string options = 13;
+
+  // Error
+  Error error_detail = 14;
+
+  // Plan update
+  string plan_name = 15;
+  repeated PlanStep plan_steps = 16;
+}
+
+message PlanStep {
+  string title = 1;
+  string status = 2; // "pending", "in_progress", "completed"
+}
+
+enum SessionEventType {
+  SESSION_EVENT_UNSPECIFIED = 0;
+  SESSION_EVENT_PROCESSING_STARTED = 1;
+  SESSION_EVENT_ANSWER_CHUNK = 2;
+  SESSION_EVENT_ANSWER = 3;
+  SESSION_EVENT_TOOL_EXECUTION_START = 4;
+  SESSION_EVENT_TOOL_EXECUTION_END = 5;
+  SESSION_EVENT_REASONING = 6;
+  SESSION_EVENT_PLAN_UPDATE = 7;
+  SESSION_EVENT_ASK_USER = 8;
+  SESSION_EVENT_PROCESSING_STOPPED = 9;
+  SESSION_EVENT_ERROR = 10;
 }

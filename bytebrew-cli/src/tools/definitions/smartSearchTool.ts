@@ -78,8 +78,8 @@ function parseSmartSearchResult(result: string): Citation[] {
 /**
  * Custom renderer for smart_search tool
  * Shows compact citations format:
- * ● SmartSearch("query") → N results
- *   └ src/auth/handler.go:45-78 handleAuth()
+ * SmartSearch("query") -> N results
+ *   src/auth/handler.go:45-78 handleAuth()
  */
 function SmartSearchRenderer(props: ToolRendererProps): React.ReactNode {
   const { arguments: args, result, error, isExecuting } = props;
@@ -90,7 +90,7 @@ function SmartSearchRenderer(props: ToolRendererProps): React.ReactNode {
   const header = React.createElement(
     Box,
     { key: 'header' },
-    React.createElement(Text, { color: isExecuting ? 'gray' : 'green' }, '●'),
+    React.createElement(Text, { color: isExecuting ? 'gray' : 'green' }, '\u25cf'),
     React.createElement(Text, { color: 'white', bold: true }, ' SmartSearch'),
     React.createElement(Text, { color: 'gray' }, `("${displayQuery}")`)
   );
@@ -107,7 +107,7 @@ function SmartSearchRenderer(props: ToolRendererProps): React.ReactNode {
       React.createElement(
         Box,
         { marginLeft: 1, key: 'error' },
-        React.createElement(Text, { color: 'red' }, '└ ', error.slice(0, 50))
+        React.createElement(Text, { color: 'red' }, '\u2514 ', error.slice(0, 50))
       )
     );
   }
@@ -122,7 +122,7 @@ function SmartSearchRenderer(props: ToolRendererProps): React.ReactNode {
       React.createElement(
         Box,
         { marginLeft: 1, key: 'empty' },
-        React.createElement(Text, { color: 'gray' }, '└ no results')
+        React.createElement(Text, { color: 'gray' }, '\u2514 no results')
       )
     );
   }
@@ -135,10 +135,10 @@ function SmartSearchRenderer(props: ToolRendererProps): React.ReactNode {
     React.createElement(
       Box,
       { key: 'header-with-count' },
-      React.createElement(Text, { color: 'green' }, '●'),
+      React.createElement(Text, { color: 'green' }, '\u25cf'),
       React.createElement(Text, { color: 'white', bold: true }, ' SmartSearch'),
       React.createElement(Text, { color: 'gray' }, `("${displayQuery}")`),
-      React.createElement(Text, { color: 'cyan' }, ` → ${citations.length} result${citations.length !== 1 ? 's' : ''}`)
+      React.createElement(Text, { color: 'cyan' }, ` \u2192 ${citations.length} result${citations.length !== 1 ? 's' : ''}`)
     ),
   ];
 
@@ -146,7 +146,7 @@ function SmartSearchRenderer(props: ToolRendererProps): React.ReactNode {
   for (let i = 0; i < displayCitations.length; i++) {
     const c = displayCitations[i];
     const isLast = i === displayCitations.length - 1 && citations.length <= maxDisplay;
-    const prefix = isLast ? '└' : '├';
+    const prefix = isLast ? '\u2514' : '\u251c';
 
     const symbolText = c.symbol ? ` ${c.symbol}()` : '';
     const sourceColor = c.source === 'vector' ? 'blue' : c.source === 'grep' ? 'yellow' : 'magenta';
@@ -169,7 +169,7 @@ function SmartSearchRenderer(props: ToolRendererProps): React.ReactNode {
       React.createElement(
         Box,
         { marginLeft: 1, key: 'more' },
-        React.createElement(Text, { color: 'gray' }, `└ ...and ${citations.length - maxDisplay} more`)
+        React.createElement(Text, { color: 'gray' }, `\u2514 ...and ${citations.length - maxDisplay} more`)
       )
     );
   }

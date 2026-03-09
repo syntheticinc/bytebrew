@@ -66,15 +66,16 @@ type TurnExecutorFactory interface {
 // FlowHandler handles FlowService gRPC requests
 type FlowHandler struct {
 	pb.UnimplementedFlowServiceServer
-	agentService          AgentService
-	agentPoolProxy        AgentPoolProxy              // For setting proxy/callback on agent pool
-	agentPoolAdapter      tools.AgentPoolForTool      // Adapter for spawn_code_agent tool registration
-	workManager           WorkManagerForOrchestrator  // For active work checking in Orchestrator
-	sessionStorage        SessionStorage              // For session persistence (optional)
-	turnExecutorFactory   TurnExecutorFactory         // Engine-based TurnExecutor factory (required)
-	toolCallHistoryCleaner ToolCallHistoryCleaner     // For clearing tool call history on cleanup (optional)
-	pingService           *infragrpc.PingService
-	flowRegistry          ActiveFlowRegistry
+	agentService           AgentService
+	agentPoolProxy         AgentPoolProxy              // For setting proxy/callback on agent pool
+	agentPoolAdapter       tools.AgentPoolForTool      // Adapter for spawn_code_agent tool registration
+	workManager            WorkManagerForOrchestrator  // For active work checking in Orchestrator
+	sessionStorage         SessionStorage              // For session persistence (optional)
+	turnExecutorFactory    TurnExecutorFactory         // Engine-based TurnExecutor factory (required)
+	toolCallHistoryCleaner ToolCallHistoryCleaner      // For clearing tool call history on cleanup (optional)
+	pingService            *infragrpc.PingService
+	flowRegistry           ActiveFlowRegistry
+	sessionRegistry        SessionRegistryForHandler   // For server-streaming API (optional)
 }
 
 // FlowHandlerConfig holds configuration for FlowHandler
@@ -88,6 +89,7 @@ type FlowHandlerConfig struct {
 	ToolCallHistoryCleaner ToolCallHistoryCleaner      // Optional: for clearing tool call history on cleanup
 	PingInterval           time.Duration
 	FlowRegistry           ActiveFlowRegistry
+	SessionRegistry        SessionRegistryForHandler   // Optional: for server-streaming API
 }
 
 // NewFlowHandler creates a new Flow handler
@@ -129,6 +131,7 @@ func NewFlowHandlerWithConfig(cfg FlowHandlerConfig) (*FlowHandler, error) {
 		toolCallHistoryCleaner: cfg.ToolCallHistoryCleaner,
 		pingService:            pingService,
 		flowRegistry:           cfg.FlowRegistry,
+		sessionRegistry:        cfg.SessionRegistry,
 	}, nil
 }
 

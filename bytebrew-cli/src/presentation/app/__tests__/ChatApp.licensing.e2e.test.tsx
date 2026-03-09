@@ -43,7 +43,7 @@ describe('E2E: License enforcement', () => {
     }
   });
 
-  // Helper: create container with REAL GrpcStreamGateway (same as main e2e tests)
+  // Helper: create container with REAL StreamingGateway (same as main e2e tests)
   function createTestContainer(port: number, projectRoot?: string): Container {
     const container = new Container({
       projectRoot: projectRoot || testDir,

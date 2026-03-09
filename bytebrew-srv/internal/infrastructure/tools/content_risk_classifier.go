@@ -17,10 +17,11 @@ func GetContentRiskLevel(toolName string) ContentRiskLevel {
 	case "web_fetch", "execute_command", "web_search":
 		return RiskCritical
 	// High: project content that could contain injections
-	case "read_file", "grep_search", "smart_search", "search_code":
+	case "read_file", "grep_search", "smart_search", "search_code",
+		"get_function", "get_class":
 		return RiskHigh
 	// Low: structural/metadata tools
-	case "glob", "get_project_tree", "lsp":
+	case "glob", "get_project_tree", "lsp", "get_file_structure":
 		return RiskLow
 	// None: internal tools that don't return untrusted content
 	case "manage_plan", "manage_tasks", "manage_subtasks", "spawn_code_agent",

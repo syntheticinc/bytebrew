@@ -7,7 +7,7 @@
   "bin": {
     "bytebrew": "dist/index.js"
   },
-  "trustedDependencies": ["usearch"],
+  "trustedDependencies": [],
   "scripts": {
     "dev": "npx tsx src/index.tsx",
     "dev:bun": "bun run src/index.tsx",
@@ -24,9 +24,7 @@
     "@grpc/grpc-js": "^1.10.0",
     "@grpc/proto-loader": "^0.7.10",
     "@noble/ciphers": "^2.1.1",
-    "@types/chokidar": "^1.7.5",
     "@types/qrcode": "^1.5.6",
-    "chokidar": "^5.0.0",
     "cli-spinners": "^3.4.0",
     "commander": "^14.0.3",
     "diff": "^8.0.3",
@@ -42,13 +40,8 @@
     "qrcode-terminal": "^0.12.0",
     "react": "^19.2.4",
     "react-devtools-core": "^7.0.1",
-    "tree-sitter-wasms": "^0.1.13",
     "tweetnacl": "^1.0.3",
-    "usearch": "^2.15.0",
     "uuid": "^13.0.0",
-    "vscode-jsonrpc": "^8.2.1",
-    "vscode-languageserver-types": "^3.17.5",
-    "web-tree-sitter": "0.25",
     "zustand": "^5.0.10"
   },
   "devDependencies": {

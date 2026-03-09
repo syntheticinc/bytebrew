@@ -5,7 +5,7 @@ import { ChatView } from '../components/chat/ChatView.js';
 import { InputField } from '../components/input/InputField.js';
 import { StatusBar } from '../components/status/StatusBar.js';
 import { AgentMenu } from '../components/agents/AgentMenu.js';
-import { useBackgroundIndexer } from '../hooks/useBackgroundIndexer.js';
+// Background indexer removed — tools execute server-side
 import { usePermissionApproval } from '../hooks/usePermissionApproval.js';
 import { PermissionApprovalPrompt } from '../components/PermissionApprovalPrompt.js';
 import { QuestionnairePrompt } from '../components/QuestionnairePrompt.js';
@@ -136,13 +136,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
     [messages, currentViewAgentId]
   );
 
-  // Background indexer - starts when connected
-  const { status: indexingStatus } = useBackgroundIndexer({
-    projectRoot: container.config.projectRoot,
-    store: container.chunkStore,
-    embeddingsClient: container.embeddingsClient,
-    enabled: isConnected,
-  });
+  // No background indexer — tools execute server-side
 
   // Permission approval for tool operations
   const { pendingPermission, approve, reject } = usePermissionApproval();
@@ -294,7 +288,6 @@ export const ChatApp: React.FC<ChatAppProps> = ({
               reconnectAttempts={reconnectAttempts}
               projectKey={container.config.projectKey}
               isProcessing={isProcessing}
-              indexingStatus={indexingStatus}
               streamingTokens={streamingTokens}
               actionLabel={actionLabel}
               actionColor={actionColor}

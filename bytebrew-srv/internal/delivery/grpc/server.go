@@ -91,17 +91,12 @@ func (s *Server) ActualPort() int {
 // RegisterServices registers all gRPC services
 func (s *Server) RegisterServices(
 	flowHandler FlowServiceHandler,
-	indexingHandler IndexingServiceHandler,
-	clientOpsHandler ClientOperationsServiceHandler,
 ) {
 	// Register FlowService
 	if flowHandler != nil {
 		pb.RegisterFlowServiceServer(s.grpcServer, flowHandler)
 		s.logger.Info("FlowService registered")
 	}
-
-	// IndexingService will be implemented as separate gRPC service (see task 003)
-	// ClientOperationsService is implemented via StreamBasedClientOperationsProxy using FlowService bidirectional stream
 }
 
 // Start starts the gRPC server
@@ -148,9 +143,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 }
 
-// Handler interfaces (to be implemented)
+// FlowServiceHandler is the interface for the flow service handler.
 type FlowServiceHandler interface {
 	pb.FlowServiceServer
 }
-type IndexingServiceHandler interface{}
-type ClientOperationsServiceHandler interface{}

@@ -312,41 +312,6 @@ describe('useChatCommands - /provider and /model', () => {
     });
   });
 
-  describe('/mobile commands', () => {
-    it('TC-MOBILE-CMD-01: /mobile without container shows not available', async () => {
-      instance = render(<TestComponent />);
-      await tick();
-
-      capturedHandleSubmit!('/mobile');
-      await tick();
-
-      expect(lastCommandOutput).toBe('Mobile not available.');
-      expect(lastSendMessage).toBeNull();
-    });
-
-    it('TC-MOBILE-CMD-02: /mobile status without container shows not available', async () => {
-      instance = render(<TestComponent />);
-      await tick();
-
-      capturedHandleSubmit!('/mobile status');
-      await tick();
-
-      expect(lastCommandOutput).toBe('Mobile not available.');
-    });
-
-    it('TC-MOBILE-CMD-03: /help includes /mobile commands', async () => {
-      instance = render(<TestComponent />);
-      await tick();
-
-      capturedHandleSubmit!('/help');
-      await tick();
-
-      expect(lastCommandOutput).toContain('/mobile');
-      expect(lastCommandOutput).toContain('/mobile devices');
-      expect(lastCommandOutput).toContain('/mobile status');
-    });
-  });
-
   describe('/auth commands', () => {
     const originalFetch = globalThis.fetch;
 

@@ -30,7 +30,6 @@ function createTestConfig(): AppConfig {
     projectKey: 'test',
     userId: 'test-user',
     debug: false,
-    bridgeEnabled: false,
   };
 }
 

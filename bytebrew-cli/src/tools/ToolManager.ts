@@ -1,5 +1,5 @@
 // ToolManager - unified tool management (execution + rendering)
-import { Tool, ToolResult } from './registry.js';
+import type { DiffLine } from '../domain/message.js';
 import {
   IToolRenderingService,
   ToolRenderer,
@@ -9,6 +9,19 @@ import { IToolRegistry } from '../domain/ports/IToolRegistry.js';
 
 // Re-export types for convenience
 export type { ToolRendererProps, ToolRenderer };
+
+export interface ToolResult {
+  result: string;
+  error?: Error;
+  summary?: string;
+  diffLines?: DiffLine[];
+}
+
+export interface Tool {
+  name: string;
+  needsContext?: boolean;
+  execute(args: Record<string, string>): Promise<ToolResult>;
+}
 
 /**
  * Unified tool definition combining execution and rendering

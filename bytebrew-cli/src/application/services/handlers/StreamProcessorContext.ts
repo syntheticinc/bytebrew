@@ -17,7 +17,7 @@ export interface StreamProcessorContext {
   // Dependencies
   streamGateway: IStreamGateway;
   messageRepository: IMessageRepository;
-  toolExecutor: IToolExecutor;
+  toolExecutor: IToolExecutor | null;
   accumulator: MessageAccumulatorService;
   eventBus: IEventBus;
 

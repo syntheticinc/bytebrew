@@ -7,7 +7,4 @@ export { SimpleEventBus, getEventBus, resetEventBus } from './events/SimpleEvent
 export { InMemoryMessageRepository, getMessageRepository, resetMessageRepository } from './persistence/InMemoryMessageRepository.js';
 
 // gRPC Gateway
-export { GrpcStreamGateway } from './grpc/GrpcStreamGateway.js';
-
-// Tool Executor Adapter
-export { ToolExecutorAdapter } from './tools/ToolExecutorAdapter.js';
+export { StreamingGateway } from './grpc/StreamingGateway.js';

@@ -9,6 +9,6 @@ export function openBrowser(url: string): void {
       ['xdg-open', [url]];
     spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref();
   } catch {
-    // Silent — fallback URL printed to console by caller
+    // Silent -- fallback URL printed to console by caller
   }
 }
