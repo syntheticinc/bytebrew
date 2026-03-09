@@ -1,14 +1,17 @@
 package bridge
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/flow_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/persistence"
 )
 
@@ -29,6 +32,12 @@ type SessionManager interface {
 	HasSession(sessionID string) bool
 	SendAskUserReply(sessionID, callID, reply string)
 	Cancel(sessionID string) bool
+	ListSessions() []flow_registry.SessionInfo
+}
+
+// MessageProcessor starts background message processing for a session (consumer-side interface).
+type MessageProcessor interface {
+	StartProcessing(ctx context.Context, sessionID string)
 }
 
 // MobileRequestHandler routes incoming MobileMessages from the MessageRouter
@@ -40,6 +49,7 @@ type MobileRequestHandler struct {
 	crypto         *DeviceCryptoAdapter
 	broadcaster    *EventBroadcaster
 	sessions       SessionManager
+	processor      MessageProcessor
 	serverIdentity *persistence.ServerIdentity
 
 	running atomic.Bool
@@ -53,6 +63,7 @@ func NewMobileRequestHandler(
 	crypto *DeviceCryptoAdapter,
 	broadcaster *EventBroadcaster,
 	sessions SessionManager,
+	processor MessageProcessor,
 	serverIdentity *persistence.ServerIdentity,
 ) *MobileRequestHandler {
 	return &MobileRequestHandler{
@@ -62,6 +73,7 @@ func NewMobileRequestHandler(
 		crypto:         crypto,
 		broadcaster:    broadcaster,
 		sessions:       sessions,
+		processor:      processor,
 		serverIdentity: serverIdentity,
 	}
 }
@@ -171,7 +183,7 @@ func (h *MobileRequestHandler) handlePairRequest(msg *MobileMessage) {
 	h.respond(msg, "pair_response", map[string]interface{}{
 		"device_id":         newDevice.ID,
 		"device_token":      newDevice.DeviceToken,
-		"server_public_key": base64.StdEncoding.EncodeToString(h.serverIdentity.PublicKey),
+		"server_public_key": base64.StdEncoding.EncodeToString(token.ServerPublicKey),
 	})
 
 	// Now register alias and add crypto for future encrypted communication.
@@ -201,8 +213,10 @@ func (h *MobileRequestHandler) handleNewTask(msg *MobileMessage) {
 	}
 
 	sessionID, _ := msg.Payload["session_id"].(string)
-	if sessionID == "" || !h.sessions.HasSession(sessionID) {
+	if sessionID == "" {
 		sessionID = uuid.New().String()
+	}
+	if !h.sessions.HasSession(sessionID) {
 		projectRoot, _ := msg.Payload["project_root"].(string)
 		platform, _ := msg.Payload["platform"].(string)
 		h.sessions.CreateSession(sessionID, "", device.ID, projectRoot, platform)
@@ -213,6 +227,9 @@ func (h *MobileRequestHandler) handleNewTask(msg *MobileMessage) {
 		h.respondError(msg, "new_task_ack", "failed to enqueue message")
 		return
 	}
+
+	// Start message processing loop (idempotent — no-op if already running)
+	h.processor.StartProcessing(context.Background(), sessionID)
 
 	h.respond(msg, "new_task_ack", map[string]interface{}{
 		"session_id": sessionID,
@@ -290,9 +307,42 @@ func (h *MobileRequestHandler) handleListSessions(msg *MobileMessage) {
 		return
 	}
 
-	// SessionManager does not expose a list method yet; return empty list.
+	sessions := h.sessions.ListSessions()
+
+	result := make([]map[string]interface{}, 0, len(sessions))
+	for _, s := range sessions {
+		status := "idle"
+		if s.HasAskUser {
+			status = "needs_attention"
+		} else if s.IsCancelled {
+			status = "idle"
+		} else if time.Since(s.LastActivityAt) < 30*time.Second {
+			status = "active"
+		}
+
+		projectName := s.ProjectKey
+		if s.ProjectRoot != "" {
+			projectName = filepath.Base(s.ProjectRoot)
+		}
+
+		result = append(result, map[string]interface{}{
+			"session_id":       s.SessionID,
+			"project_name":     projectName,
+			"project_key":      s.ProjectKey,
+			"project_root":     s.ProjectRoot,
+			"platform":         s.Platform,
+			"status":           status,
+			"current_task":     "",
+			"has_ask_user":     s.HasAskUser,
+			"started_at":       s.CreatedAt.Format(time.RFC3339),
+			"last_activity_at": s.LastActivityAt.Format(time.RFC3339),
+		})
+	}
+
 	h.respond(msg, "sessions_list", map[string]interface{}{
-		"sessions": []interface{}{},
+		"sessions":    result,
+		"server_name": "ByteBrew Server",
+		"server_id":   h.serverIdentity.ID,
 	})
 }
 

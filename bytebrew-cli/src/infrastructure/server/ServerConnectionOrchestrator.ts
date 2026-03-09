@@ -5,6 +5,8 @@ import { PortFileReader, isServerReachable } from './PortFileReader.js';
 export interface ServerConnection {
   /** host:port address to connect gRPC client to */
   address: string;
+  /** host:ws_port address for WebSocket connection (if available) */
+  wsAddress?: string;
   /** Stop the managed server (no-op for external servers) */
   cleanup: () => Promise<void>;
 }
@@ -70,6 +72,7 @@ export class ServerConnectionOrchestrator {
 
     return {
       address: `${host}:${info.port}`,
+      wsAddress: info.ws_port ? `${host}:${info.ws_port}` : undefined,
       cleanup: async () => {},
     };
   }

@@ -47,6 +47,7 @@ export abstract class BaseHeadlessRunner {
     this.container = createContainer({
       projectRoot: this.config.projectRoot,
       serverAddress: this.config.serverAddress,
+      wsAddress: this.config.wsAddress,
       projectKey: this.config.projectKey,
       sessionId: this.config.sessionId,
       headlessMode: true,
@@ -65,7 +66,7 @@ export abstract class BaseHeadlessRunner {
     const testingStrategy = readTestingStrategy(this.config.projectRoot);
 
     await this.container.streamGateway.connect({
-      serverAddress: this.config.serverAddress,
+      serverAddress: this.container.config.serverAddress,
       sessionId: this.container.sessionId,
       userId: this.config.userId,
       projectKey: this.config.projectKey,

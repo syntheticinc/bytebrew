@@ -1,38 +1,39 @@
-package grpc
+package session_processor
 
 import (
 	"encoding/json"
 	"fmt"
 	"strings"
 	"sync/atomic"
+	"unicode/utf8"
 
 	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
 )
 
-// SessionPublisher publishes session events (consumer-side interface).
-type SessionPublisher interface {
+// EventPublisher publishes session events to subscribers (consumer-side interface).
+type EventPublisher interface {
 	PublishEvent(sessionID string, event *pb.SessionEvent)
 }
 
-// SessionEventStream converts domain.AgentEvent to pb.SessionEvent and publishes via SessionPublisher.
+// EventStream converts domain.AgentEvent to pb.SessionEvent and publishes via EventPublisher.
 // Implements domain.AgentEventStream.
-type SessionEventStream struct {
+type EventStream struct {
 	sessionID string
-	publisher SessionPublisher
+	publisher EventPublisher
 	eventSeq  atomic.Int64
 }
 
-// NewSessionEventStream creates a new event stream that publishes to a SessionPublisher.
-func NewSessionEventStream(sessionID string, publisher SessionPublisher) *SessionEventStream {
-	return &SessionEventStream{
+// NewEventStream creates a new event stream that publishes to an EventPublisher.
+func NewEventStream(sessionID string, publisher EventPublisher) *EventStream {
+	return &EventStream{
 		sessionID: sessionID,
 		publisher: publisher,
 	}
 }
 
 // Send converts a domain AgentEvent to a proto SessionEvent and publishes it.
-func (s *SessionEventStream) Send(event *domain.AgentEvent) error {
+func (s *EventStream) Send(event *domain.AgentEvent) error {
 	pbEvent := s.convertEvent(event)
 	if pbEvent == nil {
 		return nil
@@ -46,7 +47,7 @@ func (s *SessionEventStream) Send(event *domain.AgentEvent) error {
 }
 
 // PublishProcessingStarted sends a PROCESSING_STARTED event.
-func (s *SessionEventStream) PublishProcessingStarted() {
+func (s *EventStream) PublishProcessingStarted() {
 	s.publisher.PublishEvent(s.sessionID, &pb.SessionEvent{
 		EventId:   fmt.Sprintf("evt-%d", s.eventSeq.Add(1)),
 		SessionId: s.sessionID,
@@ -55,7 +56,7 @@ func (s *SessionEventStream) PublishProcessingStarted() {
 }
 
 // PublishProcessingStopped sends a PROCESSING_STOPPED event.
-func (s *SessionEventStream) PublishProcessingStopped() {
+func (s *EventStream) PublishProcessingStopped() {
 	s.publisher.PublishEvent(s.sessionID, &pb.SessionEvent{
 		EventId:   fmt.Sprintf("evt-%d", s.eventSeq.Add(1)),
 		SessionId: s.sessionID,
@@ -64,7 +65,7 @@ func (s *SessionEventStream) PublishProcessingStopped() {
 }
 
 // PublishError sends an ERROR event.
-func (s *SessionEventStream) PublishError(err error) {
+func (s *EventStream) PublishError(err error) {
 	s.publisher.PublishEvent(s.sessionID, &pb.SessionEvent{
 		EventId:   fmt.Sprintf("evt-%d", s.eventSeq.Add(1)),
 		SessionId: s.sessionID,
@@ -78,7 +79,7 @@ func (s *SessionEventStream) PublishError(err error) {
 }
 
 // PublishAnswerChunk sends an ANSWER_CHUNK event.
-func (s *SessionEventStream) PublishAnswerChunk(chunk string) {
+func (s *EventStream) PublishAnswerChunk(chunk string) {
 	s.publisher.PublishEvent(s.sessionID, &pb.SessionEvent{
 		EventId:   fmt.Sprintf("evt-%d", s.eventSeq.Add(1)),
 		SessionId: s.sessionID,
@@ -87,7 +88,7 @@ func (s *SessionEventStream) PublishAnswerChunk(chunk string) {
 	})
 }
 
-func (s *SessionEventStream) convertEvent(event *domain.AgentEvent) *pb.SessionEvent {
+func (s *EventStream) convertEvent(event *domain.AgentEvent) *pb.SessionEvent {
 	agentID := event.AgentID
 	if agentID == "" {
 		agentID = "supervisor"
@@ -97,7 +98,7 @@ func (s *SessionEventStream) convertEvent(event *domain.AgentEvent) *pb.SessionE
 	case domain.EventTypeAnswerChunk:
 		return &pb.SessionEvent{
 			Type:    pb.SessionEventType_SESSION_EVENT_ANSWER_CHUNK,
-			Content: sanitizeUTF8(event.Content),
+			Content: SanitizeUTF8(event.Content),
 			AgentId: agentID,
 			Step:    int32(event.Step),
 		}
@@ -105,12 +106,12 @@ func (s *SessionEventStream) convertEvent(event *domain.AgentEvent) *pb.SessionE
 	case domain.EventTypeAnswer:
 		return &pb.SessionEvent{
 			Type:    pb.SessionEventType_SESSION_EVENT_ANSWER,
-			Content: sanitizeUTF8(event.Content),
+			Content: SanitizeUTF8(event.Content),
 			AgentId: agentID,
 		}
 
 	case domain.EventTypeToolCall:
-		args := parseToolArguments(event)
+		args := ParseToolArguments(event)
 		callID := fmt.Sprintf("server-%s-%d", event.Content, event.Step)
 		return &pb.SessionEvent{
 			Type:          pb.SessionEventType_SESSION_EVENT_TOOL_EXECUTION_START,
@@ -128,25 +129,25 @@ func (s *SessionEventStream) convertEvent(event *domain.AgentEvent) *pb.SessionE
 		}
 		callID := fmt.Sprintf("server-%s-%d", toolName, event.Step)
 
-		summary := sanitizeUTF8(event.Content)
+		summary := SanitizeUTF8(event.Content)
 		if s, ok := event.Metadata["summary"].(string); ok {
-			summary = sanitizeUTF8(s)
+			summary = SanitizeUTF8(s)
 		}
 
 		return &pb.SessionEvent{
-			Type:             pb.SessionEventType_SESSION_EVENT_TOOL_EXECUTION_END,
-			ToolName:         toolName,
-			CallId:           callID,
+			Type:              pb.SessionEventType_SESSION_EVENT_TOOL_EXECUTION_END,
+			ToolName:          toolName,
+			CallId:            callID,
 			ToolResultSummary: summary,
-			ToolHasError:     event.Error != nil,
-			AgentId:          agentID,
-			Step:             int32(event.Step),
+			ToolHasError:      event.Error != nil,
+			AgentId:           agentID,
+			Step:              int32(event.Step),
 		}
 
 	case domain.EventTypeReasoning:
 		return &pb.SessionEvent{
 			Type:    pb.SessionEventType_SESSION_EVENT_REASONING,
-			Content: sanitizeUTF8(event.Content),
+			Content: SanitizeUTF8(event.Content),
 			AgentId: agentID,
 			Step:    int32(event.Step),
 		}
@@ -155,7 +156,7 @@ func (s *SessionEventStream) convertEvent(event *domain.AgentEvent) *pb.SessionE
 		return s.convertPlanEvent(event, agentID)
 
 	case domain.EventTypeUserQuestion:
-		question := sanitizeUTF8(event.Content)
+		question := SanitizeUTF8(event.Content)
 		callID := ""
 		if id, ok := event.Metadata["call_id"].(string); ok {
 			callID = id
@@ -169,13 +170,13 @@ func (s *SessionEventStream) convertEvent(event *domain.AgentEvent) *pb.SessionE
 		}
 
 	case domain.EventTypeError:
-		content := sanitizeUTF8(event.Content)
+		content := SanitizeUTF8(event.Content)
 		var errDetail *pb.Error
 		if event.Error != nil {
-			content = sanitizeUTF8(event.Error.Message)
+			content = SanitizeUTF8(event.Error.Message)
 			errDetail = &pb.Error{
 				Code:    event.Error.Code,
-				Message: sanitizeUTF8(event.Error.Message),
+				Message: SanitizeUTF8(event.Error.Message),
 			}
 		}
 		return &pb.SessionEvent{
@@ -185,9 +186,8 @@ func (s *SessionEventStream) convertEvent(event *domain.AgentEvent) *pb.SessionE
 		}
 
 	case domain.EventTypeAgentSpawned, domain.EventTypeAgentCompleted, domain.EventTypeAgentFailed:
-		// Agent lifecycle events sent as answer chunks with descriptive content
 		eventTypeStr := string(event.Type)
-		content := fmt.Sprintf("[%s] %s: %s", eventTypeStr, agentID, sanitizeUTF8(event.Content))
+		content := fmt.Sprintf("[%s] %s: %s", eventTypeStr, agentID, SanitizeUTF8(event.Content))
 		return &pb.SessionEvent{
 			Type:    pb.SessionEventType_SESSION_EVENT_ANSWER_CHUNK,
 			Content: content,
@@ -200,7 +200,7 @@ func (s *SessionEventStream) convertEvent(event *domain.AgentEvent) *pb.SessionE
 }
 
 // convertPlanEvent converts plan-related domain events to SessionEvent.
-func (s *SessionEventStream) convertPlanEvent(event *domain.AgentEvent, agentID string) *pb.SessionEvent {
+func (s *EventStream) convertPlanEvent(event *domain.AgentEvent, agentID string) *pb.SessionEvent {
 	pbEvent := &pb.SessionEvent{
 		Type:    pb.SessionEventType_SESSION_EVENT_PLAN_UPDATE,
 		AgentId: agentID,
@@ -210,17 +210,16 @@ func (s *SessionEventStream) convertPlanEvent(event *domain.AgentEvent, agentID 
 		pbEvent.PlanName = name
 	}
 
-	// Extract plan steps from metadata
 	if stepsRaw, ok := event.Metadata["plan_steps"]; ok {
-		pbEvent.PlanSteps = extractPlanSteps(stepsRaw)
+		pbEvent.PlanSteps = ExtractPlanSteps(stepsRaw)
 	}
 
-	pbEvent.Content = sanitizeUTF8(event.Content)
+	pbEvent.Content = SanitizeUTF8(event.Content)
 	return pbEvent
 }
 
-// parseToolArguments extracts tool arguments from event metadata.
-func parseToolArguments(event *domain.AgentEvent) map[string]string {
+// ParseToolArguments extracts tool arguments from event metadata.
+func ParseToolArguments(event *domain.AgentEvent) map[string]string {
 	args := make(map[string]string)
 	argsJSON, ok := event.Metadata["function_arguments"].(string)
 	if !ok || argsJSON == "" {
@@ -229,14 +228,14 @@ func parseToolArguments(event *domain.AgentEvent) map[string]string {
 
 	var parsedArgs map[string]interface{}
 	if err := json.Unmarshal([]byte(argsJSON), &parsedArgs); err != nil {
-		args["_json"] = sanitizeUTF8(argsJSON)
+		args["_json"] = SanitizeUTF8(argsJSON)
 		return args
 	}
 
 	for k, v := range parsedArgs {
 		switch val := v.(type) {
 		case string:
-			args[k] = sanitizeUTF8(val)
+			args[k] = SanitizeUTF8(val)
 		case float64:
 			args[k] = fmt.Sprintf("%.0f", val)
 		case bool:
@@ -244,21 +243,20 @@ func parseToolArguments(event *domain.AgentEvent) map[string]string {
 		case []interface{}:
 			var parts []string
 			for _, item := range val {
-				parts = append(parts, sanitizeUTF8(fmt.Sprintf("%v", item)))
+				parts = append(parts, SanitizeUTF8(fmt.Sprintf("%v", item)))
 			}
 			args[k] = strings.Join(parts, "\n")
 		default:
 			if jsonVal, err := json.Marshal(val); err == nil {
-				args[k] = sanitizeUTF8(string(jsonVal))
+				args[k] = SanitizeUTF8(string(jsonVal))
 			}
 		}
 	}
 	return args
 }
 
-// extractPlanSteps converts raw metadata into PlanStep proto messages.
-func extractPlanSteps(stepsRaw interface{}) []*pb.PlanStep {
-	// Try as []interface{} (common from JSON)
+// ExtractPlanSteps converts raw metadata into PlanStep proto messages.
+func ExtractPlanSteps(stepsRaw interface{}) []*pb.PlanStep {
 	stepsSlice, ok := stepsRaw.([]interface{})
 	if !ok {
 		return nil
@@ -280,4 +278,12 @@ func extractPlanSteps(stepsRaw interface{}) []*pb.PlanStep {
 		steps = append(steps, step)
 	}
 	return steps
+}
+
+// SanitizeUTF8 removes invalid UTF-8 characters from a string.
+func SanitizeUTF8(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+	return strings.ToValidUTF8(s, "\uFFFD")
 }

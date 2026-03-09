@@ -54,6 +54,8 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> {
       context.go('/sessions');
 
       final manager = ref.read(connectionManagerProvider);
+      // Disconnect old connection first (re-pairing replaces crypto keys).
+      await manager.disconnectFromServer(server.id);
       unawaited(manager.connectToServer(server));
     } catch (e) {
       if (!mounted) return;

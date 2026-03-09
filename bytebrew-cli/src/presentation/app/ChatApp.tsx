@@ -200,7 +200,9 @@ export const ChatApp: React.FC<ChatAppProps> = ({
     onProviderChange: useCallback(() => setProviderVersion(v => v + 1), []),
     onLicenseChange: useCallback(() => setLicenseVersion(v => v + 1), []),
     licenseInfo,
-    container,
+    generatePairing: 'generatePairing' in container.streamGateway
+      ? () => (container.streamGateway as any).generatePairing()
+      : undefined,
   });
 
   // Connect on mount

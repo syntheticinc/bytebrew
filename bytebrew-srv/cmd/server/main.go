@@ -17,12 +17,14 @@ import (
 	"time"
 
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/delivery/grpc"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/delivery/ws"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/bridge"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/flow_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/portfile"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/session_processor"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/logger"
 )
@@ -223,6 +225,11 @@ func main() {
 	)
 	flowHandlerCfg.TurnExecutorFactory = factory
 
+	// Create shared SessionProcessor for server-streaming message processing.
+	// Used by both gRPC SubscribeSession and bridge MobileRequestHandler.
+	sessProcessor := session_processor.New(sessionRegistry, factory)
+	flowHandlerCfg.SessionProcessor = sessProcessor
+
 	// Wire up agent pool if available (multi-agent mode)
 	if components.AgentPool != nil && components.AgentPoolAdapter != nil {
 		flowHandlerCfg.AgentPoolProxy = components.AgentPool
@@ -241,6 +248,22 @@ func main() {
 
 	grpcServer.RegisterServices(flowHandler)
 
+	// Create WS connection handler for local CLI clients
+	wsHandler := ws.NewConnectionHandler(sessionRegistry, sessProcessor, components.AgentService)
+
+	// Create WS server (localhost only, random port)
+	wsServer, err := ws.NewServer(wsHandler)
+	if err != nil {
+		log.Fatalf("Failed to create WS server: %v", err)
+	}
+
+	// Start WS server in goroutine
+	go func() {
+		if err := wsServer.Start(ctx); err != nil {
+			slog.Error("WS server error", "error", err)
+		}
+	}()
+
 	// In managed mode, emit READY protocol before starting
 	if *managed {
 		fmt.Printf("READY:%d\n", grpcServer.ActualPort())
@@ -257,7 +280,8 @@ func main() {
 
 	loggerInstance.InfoContext(ctx, "ByteBrew Server started successfully",
 		"host", cfg.Server.Host,
-		"port", grpcServer.ActualPort(),
+		"grpc_port", grpcServer.ActualPort(),
+		"ws_port", wsServer.Port(),
 	)
 
 	// Write port file for CLI discovery.
@@ -270,6 +294,7 @@ func main() {
 	if err := portWriter.Write(portfile.PortInfo{
 		PID:       os.Getpid(),
 		Port:      grpcServer.ActualPort(),
+		WsPort:    wsServer.Port(),
 		Host:      portFileHost,
 		StartedAt: time.Now().UTC().Format(time.RFC3339),
 	}); err != nil {
@@ -281,7 +306,7 @@ func main() {
 	// Start bridge connectivity if enabled
 	var bridgeCleanup func()
 	if cfg.Bridge.Enabled && cfg.Bridge.URL != "" {
-		cleanup, err := startBridge(ctx, cfg, dataDir, sessionRegistry, loggerInstance)
+		cleanup, err := startBridge(ctx, cfg, dataDir, sessionRegistry, sessProcessor, wsHandler, loggerInstance)
 		if err != nil {
 			slog.Error("Failed to start bridge connectivity", "error", err)
 		} else {
@@ -314,6 +339,10 @@ func main() {
 	// Graceful shutdown
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
+
+	if err := wsServer.Shutdown(shutdownCtx); err != nil {
+		slog.Warn("WS server shutdown error", "error", err)
+	}
 
 	if err := grpcServer.Shutdown(shutdownCtx); err != nil {
 		loggerInstance.ErrorContext(ctx, "Error during shutdown", "error", err)
@@ -402,6 +431,8 @@ func startBridge(
 	cfg *config.Config,
 	dataDir string,
 	sessionRegistry *flow_registry.SessionRegistry,
+	processor *session_processor.Processor,
+	wsHandler *ws.ConnectionHandler,
 	loggerInstance *logger.Logger,
 ) (func(), error) {
 	// Open shared SQLite database for device store and server identity
@@ -456,8 +487,17 @@ func startBridge(
 	// Create event broadcaster (serializes session events for mobile clients)
 	eventBroadcaster := bridge.NewEventBroadcaster(messageRouter)
 
+	// Wire event hook so SessionRegistry broadcasts events to mobile clients
+	sessionRegistry.SetEventHook(eventBroadcaster.BroadcastEvent)
+
 	// Create pairing token store (in-memory, ephemeral)
 	tokenStore := bridge.NewPairingTokenStore()
+
+	// Create pairing data provider and wire it to WS handler for CLI access
+	pairingProvider := bridge.NewPairingProvider(tokenStore, identity, cfg.Bridge.URL)
+	if wsHandler != nil {
+		wsHandler.SetPairingProvider(pairingProvider)
+	}
 
 	// Create device store adapter (bridges context-less interface with context-aware store)
 	deviceStoreAdapter := bridge.NewDeviceStoreAdapter(deviceStore)
@@ -470,6 +510,7 @@ func startBridge(
 		cryptoAdapter,
 		eventBroadcaster,
 		sessionRegistry,
+		processor,
 		identity,
 	)
 

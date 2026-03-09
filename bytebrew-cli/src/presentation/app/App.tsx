@@ -21,6 +21,7 @@ export const App: React.FC<AppProps> = ({ config, initialQuestion }) => {
     return createContainer({
       projectRoot: config.projectRoot,
       serverAddress: config.serverAddress,
+      wsAddress: config.wsAddress,
       projectKey: config.projectKey,
       sessionId: config.sessionId,
       askUserCallback: createInteractiveAskUserCallback(),

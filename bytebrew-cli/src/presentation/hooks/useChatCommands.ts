@@ -1,6 +1,7 @@
 // useChatCommands hook - manages chat input submission and commands
 import { useEffect, useCallback, useRef, type MutableRefObject } from 'react';
 import { useInputHistory } from './useInputHistory.js';
+import qrcodeTerminal from 'qrcode-terminal';
 import {
   readProviderConfig,
   writeProviderConfig,
@@ -29,6 +30,8 @@ export interface UseChatCommandsOptions {
   onLicenseChange?: () => void;
   /** License info for /provider status display */
   licenseInfo?: LicenseBadgeInfo | null;
+  /** Generate pairing data (QR + short code) for mobile device connection */
+  generatePairing?: () => Promise<{ qrData: string; shortCode: string; expiresInSeconds: number }>;
 }
 
 export interface UseChatCommandsResult {
@@ -118,6 +121,7 @@ export function useChatCommands(options: UseChatCommandsOptions): UseChatCommand
     onProviderChange,
     onLicenseChange,
     licenseInfo,
+    generatePairing,
   } = options;
 
   const hasSentInitialQuestionRef = useRef(false);
@@ -165,6 +169,7 @@ export function useChatCommands(options: UseChatCommandsOptions): UseChatCommand
           '  /model             - Show model overrides',
           '  /model <role> <m>  - Set model for role',
           '  /model reset       - Reset model overrides',
+          '  /pair              - Pair mobile device (QR code)',
           '  /login <email> <pw> - Login to your account',
           '  /logout             - Logout and clear credentials',
           '  /status             - Show license and account info',
@@ -222,6 +227,31 @@ export function useChatCommands(options: UseChatCommandsOptions): UseChatCommand
         return;
       }
 
+      if (value === '/pair') {
+        if (!generatePairing) {
+          onCommandOutput?.('Pairing not available (WebSocket connection required)');
+          return;
+        }
+        onCommandOutput?.('Generating pairing data...');
+        void generatePairing().then(({ qrData, shortCode, expiresInSeconds }) => {
+          // Render QR code as Unicode art
+          qrcodeTerminal.generate(qrData, { small: true }, (qrArt: string) => {
+            const lines = [
+              'Scan this QR code with ByteBrew mobile app:',
+              '',
+              qrArt,
+              '',
+              `Short code: ${shortCode}`,
+              `Expires in: ${Math.floor(expiresInSeconds / 60)} minutes`,
+            ];
+            onCommandOutput?.(lines.join('\n'));
+          });
+        }).catch(err => {
+          onCommandOutput?.(`Pairing error: ${(err as Error).message}`);
+        });
+        return;
+      }
+
       if (value === '/activate') {
         onCommandOutput?.('Activating license...');
         void handleActivateCommand().then(result => {
@@ -236,7 +266,7 @@ export function useChatCommands(options: UseChatCommandsOptions): UseChatCommand
       addToHistory(value);
       sendMessage(value);
     },
-    [addToHistory, sendMessage, disconnect, exit, clearMessages, isExitingRef, onCommandOutput, onProviderChange, onLicenseChange, licenseInfo]
+    [addToHistory, sendMessage, disconnect, exit, clearMessages, isExitingRef, onCommandOutput, onProviderChange, onLicenseChange, licenseInfo, generatePairing]
   );
 
   return {

@@ -63,12 +63,14 @@ func (r *MessageRouter) SendMessage(deviceID string, msg *MobileMessage) error {
 }
 
 func (r *MessageRouter) handleData(deviceID string, payload json.RawMessage) {
+	slog.Info("bridge data received", "device_id", deviceID, "payload_len", len(payload))
 	msg, err := r.decodePayload(deviceID, payload)
 	if err != nil {
 		slog.Error("failed to decode bridge payload", "device_id", deviceID, "error", err)
 		return
 	}
 
+	slog.Info("bridge message decoded", "device_id", deviceID, "type", msg.Type)
 	msg.DeviceID = deviceID
 
 	r.mu.RLock()

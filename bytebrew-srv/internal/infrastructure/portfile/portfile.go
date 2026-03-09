@@ -13,6 +13,7 @@ const fileName = "server.port"
 type PortInfo struct {
 	PID       int    `json:"pid"`
 	Port      int    `json:"port"`
+	WsPort    int    `json:"ws_port,omitempty"`
 	Host      string `json:"host"`
 	StartedAt string `json:"startedAt"`
 }

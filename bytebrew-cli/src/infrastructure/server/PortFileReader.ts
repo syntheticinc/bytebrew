@@ -6,6 +6,7 @@ import { ByteBrewHome } from '../config/ByteBrewHome.js';
 export interface PortInfo {
   pid: number;
   port: number;
+  ws_port?: number;
   host: string;
   startedAt: string;
 }

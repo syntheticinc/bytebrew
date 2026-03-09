@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -12,6 +13,7 @@ import (
 
 	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
 	deliverygrpc "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/delivery/grpc"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/delivery/ws"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/flow_registry"
@@ -20,6 +22,7 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/tools"
 	agentservice "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/agent"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/engine"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/session_processor"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
 	"google.golang.org/grpc"
 )
@@ -157,11 +160,16 @@ func main() {
 
 	// 9. Create FlowHandler (SAME as production!)
 	flowRegistry := flow_registry.NewInMemoryRegistry()
+	sessionRegistry := flow_registry.NewSessionRegistry()
+	sessProcessor := session_processor.New(sessionRegistry, factory)
+
 	flowHandlerCfg := deliverygrpc.FlowHandlerConfig{
 		AgentService:        &testutil.NoopAgentService{},
 		TurnExecutorFactory: factory,
 		PingInterval:        60 * time.Second, // Keep-alive ping every 60s
 		FlowRegistry:        flowRegistry,
+		SessionRegistry:     sessionRegistry,
+		SessionProcessor:    sessProcessor,
 		AgentPoolProxy:      agentPool,        // NEW: for proxy/callback management
 		AgentPoolAdapter:    agentPoolAdapter, // NEW: for spawn_code_agent tool
 	}
@@ -192,18 +200,33 @@ func main() {
 	)
 	pb.RegisterFlowServiceServer(grpcServer, flowHandler)
 
+	// 12. Create WS server (SAME as production!)
+	wsHandler := ws.NewConnectionHandler(sessionRegistry, sessProcessor, &testutil.NoopAgentService{})
+	wsServer, err := ws.NewServer(wsHandler)
+	if err != nil {
+		log.Fatalf("Failed to create WS server: %v", err)
+	}
+
+	// Start WS server in goroutine
+	go func() {
+		if err := wsServer.Start(context.Background()); err != nil {
+			log.Printf("WS server error: %v", err)
+		}
+	}()
+
 	// Graceful shutdown on SIGINT/SIGTERM
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		<-sigChan
+		_ = wsServer.Shutdown(context.Background())
 		grpcServer.GracefulStop()
 	}()
 
-	// Print READY:{port} for client to parse
+	// Print READY:{grpc_port}:{ws_port} for client to parse
 	actualPort := listener.Addr().(*net.TCPAddr).Port
-	fmt.Printf("READY:%d\n", actualPort)
+	fmt.Printf("READY:%d:%d\n", actualPort, wsServer.Port())
 	os.Stdout.Sync()
 
 	// Serve (blocks until GracefulStop or error)

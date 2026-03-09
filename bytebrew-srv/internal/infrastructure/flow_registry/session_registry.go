@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
 )
@@ -26,22 +27,38 @@ type sessionContext struct {
 
 // sessionEntry holds all state for a server-streaming session.
 type sessionEntry struct {
-	mu            sync.RWMutex
-	ctx           sessionContext
-	subscribers   map[uint64]chan *pb.SessionEvent
-	nextSubID     uint64
-	eventLog      []*pb.SessionEvent // ring buffer for replay
-	messageCh     chan string        // incoming user messages
-	askReplies    map[string]chan string
-	cancelled     atomic.Bool
-	turnCancelFn  context.CancelFunc // cancels the currently running agent turn
+	mu             sync.RWMutex
+	ctx            sessionContext
+	subscribers    map[uint64]chan *pb.SessionEvent
+	nextSubID      uint64
+	eventLog       []*pb.SessionEvent // ring buffer for replay
+	messageCh      chan string        // incoming user messages
+	askReplies     map[string]chan string
+	cancelled      atomic.Bool
+	turnCancelFn   context.CancelFunc // cancels the currently running agent turn
+	createdAt      time.Time
+	lastActivityAt time.Time
+}
+
+// SessionInfo represents session metadata returned by ListSessions.
+type SessionInfo struct {
+	SessionID      string
+	ProjectKey     string
+	ProjectRoot    string
+	Platform       string
+	UserID         string
+	HasAskUser     bool
+	IsCancelled    bool
+	CreatedAt      time.Time
+	LastActivityAt time.Time
 }
 
 // SessionRegistry manages server-streaming sessions (subscribe/publish pattern).
 // Separate from InMemoryRegistry which manages bidirectional ExecuteFlow sessions.
 type SessionRegistry struct {
-	mu       sync.RWMutex
-	sessions map[string]*sessionEntry
+	mu        sync.RWMutex
+	sessions  map[string]*sessionEntry
+	eventHook func(sessionID string, event *pb.SessionEvent) // optional hook for broadcasting events externally
 }
 
 // NewSessionRegistry creates a new SessionRegistry.
@@ -51,11 +68,18 @@ func NewSessionRegistry() *SessionRegistry {
 	}
 }
 
+// SetEventHook registers a callback invoked after every PublishEvent.
+// Used to wire EventBroadcaster for mobile event delivery.
+func (r *SessionRegistry) SetEventHook(hook func(sessionID string, event *pb.SessionEvent)) {
+	r.eventHook = hook
+}
+
 // CreateSession stores session context for later use.
 func (r *SessionRegistry) CreateSession(sessionID, projectKey, userID, projectRoot, platform string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	now := time.Now()
 	r.sessions[sessionID] = &sessionEntry{
 		ctx: sessionContext{
 			ProjectRoot: projectRoot,
@@ -63,10 +87,12 @@ func (r *SessionRegistry) CreateSession(sessionID, projectKey, userID, projectRo
 			ProjectKey:  projectKey,
 			UserID:      userID,
 		},
-		subscribers: make(map[uint64]chan *pb.SessionEvent),
-		eventLog:    make([]*pb.SessionEvent, 0, 64),
-		messageCh:   make(chan string, 32),
-		askReplies:  make(map[string]chan string),
+		subscribers:    make(map[uint64]chan *pb.SessionEvent),
+		eventLog:       make([]*pb.SessionEvent, 0, 64),
+		messageCh:      make(chan string, 32),
+		askReplies:     make(map[string]chan string),
+		createdAt:      now,
+		lastActivityAt: now,
 	}
 }
 
@@ -125,6 +151,8 @@ func (r *SessionRegistry) PublishEvent(sessionID string, event *pb.SessionEvent)
 	entry.mu.Lock()
 	defer entry.mu.Unlock()
 
+	entry.lastActivityAt = time.Now()
+
 	// Append to event log (capped)
 	if len(entry.eventLog) < maxEventHistory {
 		entry.eventLog = append(entry.eventLog, event)
@@ -137,6 +165,11 @@ func (r *SessionRegistry) PublishEvent(sessionID string, event *pb.SessionEvent)
 		default:
 			// Subscriber too slow — drop event to avoid blocking
 		}
+	}
+
+	// Notify external hook (e.g., EventBroadcaster for mobile clients)
+	if r.eventHook != nil {
+		r.eventHook(sessionID, event)
 	}
 }
 
@@ -384,4 +417,31 @@ func (r *SessionRegistry) HasSession(sessionID string) bool {
 	defer r.mu.RUnlock()
 	_, exists := r.sessions[sessionID]
 	return exists
+}
+
+// ListSessions returns metadata for all active sessions.
+func (r *SessionRegistry) ListSessions() []SessionInfo {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	result := make([]SessionInfo, 0, len(r.sessions))
+	for id, entry := range r.sessions {
+		entry.mu.RLock()
+		hasAskUser := len(entry.askReplies) > 0
+		lastActivity := entry.lastActivityAt
+		entry.mu.RUnlock()
+
+		result = append(result, SessionInfo{
+			SessionID:      id,
+			ProjectKey:     entry.ctx.ProjectKey,
+			ProjectRoot:    entry.ctx.ProjectRoot,
+			Platform:       entry.ctx.Platform,
+			UserID:         entry.ctx.UserID,
+			HasAskUser:     hasAskUser,
+			IsCancelled:    entry.cancelled.Load(),
+			CreatedAt:      entry.createdAt,
+			LastActivityAt: lastActivity,
+		})
+	}
+	return result
 }

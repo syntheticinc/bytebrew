@@ -40,6 +40,9 @@ class WsChatRepository implements ChatRepository {
   bool _disposed = false;
   VoidCallback? _connectionListener;
 
+  /// Tracks the last observed connection status to detect actual transitions.
+  WsConnectionStatus? _lastConnectionStatus;
+
   /// Stable ID for send-timeout errors so they can be removed retroactively
   /// when session events confirm the task was actually received.
   static const _sendErrorId = 'send-timeout-error';
@@ -220,15 +223,24 @@ class WsChatRepository implements ChatRepository {
   void _onConnectionChange() {
     if (_disposed) return;
     final conn = _connectionManager.getConnection(_serverId);
-    // Connection lost — cancel stale subscription so re-subscribe works on reconnect.
-    if (conn == null || conn.status != WsConnectionStatus.connected) {
+    final currentStatus = conn?.status ?? WsConnectionStatus.disconnected;
+
+    // Only act on actual status transitions to avoid duplicate subscribes.
+    if (currentStatus == _lastConnectionStatus) return;
+    final previousStatus = _lastConnectionStatus;
+    _lastConnectionStatus = currentStatus;
+
+    if (currentStatus != WsConnectionStatus.connected) {
       _subscription?.cancel();
       _subscription = null;
       return;
     }
-    // Always re-subscribe on reconnect: the CLI may have a new session after restart.
-    debugPrint('[WsChatRepository] Connection available — re-subscribing');
-    _subscribeInternal();
+
+    // Re-subscribe only on transition TO connected (from non-connected).
+    if (previousStatus != WsConnectionStatus.connected) {
+      debugPrint('[WsChatRepository] Connection restored — re-subscribing');
+      _subscribeInternal();
+    }
   }
 
   void _subscribeInternal() {

@@ -85,19 +85,16 @@ class WsConnectionManager extends ChangeNotifier {
   /// Verifies the connection via ping before marking as connected.
   Future<void> connectToServer(Server server) async {
     if (server.deviceToken == null || server.deviceToken!.isEmpty) {
+      print('[WsConnectionManager] SKIP connectToServer: deviceToken is null/empty for ${server.id} (${server.name})');
       return;
     }
+    print('[WsConnectionManager] connectToServer: ${server.id} (${server.name}) deviceToken=${server.deviceToken!.substring(0, 8)}...');
 
-    // Skip if already connected or actively connecting.
+    // Clean up any existing connection before creating a new one.
+    // Always recreate to pick up fresh crypto keys after re-pairing.
     final existing = _connections[server.id];
-    if (existing != null &&
-        (existing.status == WsConnectionStatus.connected ||
-            existing.status == WsConnectionStatus.connecting)) {
-      return;
-    }
-
-    // Clean up stale connection before creating a new one.
     if (existing != null) {
+      print('[WsConnectionManager] cleaning up existing connection for ${server.id} (status=${existing.status})');
       await existing.statusSubscription?.cancel();
       await existing.client.dispose();
       await existing.connection.dispose();
@@ -153,11 +150,15 @@ class WsConnectionManager extends ChangeNotifier {
     notifyListeners();
 
     try {
+      print('[WsConnectionManager] connecting WS for ${server.id}...');
       await wsConnection.connect();
+      print('[WsConnectionManager] WS connected, sending ping for ${server.id}...');
       await client.ping();
+      print('[WsConnectionManager] ping OK for ${server.id}');
       serverConn.status = WsConnectionStatus.connected;
       serverConn.lastError = null;
     } on Exception catch (e) {
+      print('[WsConnectionManager] connect/ping FAILED for ${server.id}: $e');
       serverConn.lastError = e.toString();
       // If WS socket opened but CLI unreachable (ping fail) —
       // disconnect so auto-connect retry via 30s timer.

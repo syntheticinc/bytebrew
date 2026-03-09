@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_providers.dart';
 import 'package:bytebrew_mobile/features/settings/application/settings_provider.dart';
@@ -23,6 +24,10 @@ Future<void> sessionsAutoConnect(Ref ref) async {
   final manager = ref.read(connectionManagerProvider);
   final repo = ref.read(settingsRepositoryProvider);
   final servers = await repo.getServersWithKeys();
+  print('[AutoConnect] servers=${servers.length}');
+  for (final s in servers) {
+    print('[AutoConnect] server=${s.id} name=${s.name} deviceToken=${s.deviceToken != null ? '${s.deviceToken!.substring(0, 8)}...' : 'NULL'} bridgeUrl=${s.bridgeUrl}');
+  }
   if (servers.isEmpty) return;
 
   // Initial connect — completes the Future so sessionsProvider can proceed.

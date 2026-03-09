@@ -615,6 +615,78 @@ func TestSessionRegistry_StoreTurnCancel_NotFound(t *testing.T) {
 	reg.StoreTurnCancel("nonexistent", func() {})
 }
 
+// TC-EB-01: SetEventHook → PublishEvent → hook called with correct args.
+func TestSessionRegistry_EventHook_Called(t *testing.T) {
+	reg := NewSessionRegistry()
+
+	var hookCalled bool
+	var hookSessionID string
+	var hookEvent *pb.SessionEvent
+
+	reg.SetEventHook(func(sessionID string, event *pb.SessionEvent) {
+		hookCalled = true
+		hookSessionID = sessionID
+		hookEvent = event
+	})
+
+	reg.CreateSession("s1", "key", "user", "/root", "linux")
+
+	event := &pb.SessionEvent{EventId: "e1", Content: "test"}
+	reg.PublishEvent("s1", event)
+
+	assert.True(t, hookCalled)
+	assert.Equal(t, "s1", hookSessionID)
+	assert.Equal(t, "e1", hookEvent.EventId)
+	assert.Equal(t, "test", hookEvent.Content)
+}
+
+// TC-EB-02: No hook → PublishEvent still works (subscribers receive events).
+func TestSessionRegistry_EventHook_NilDoesNotBreak(t *testing.T) {
+	reg := NewSessionRegistry()
+	// No SetEventHook call — hook is nil
+
+	reg.CreateSession("s1", "key", "user", "/root", "linux")
+
+	ch, cleanup := reg.Subscribe("s1")
+	defer cleanup()
+
+	event := &pb.SessionEvent{EventId: "e1", Content: "hello"}
+	reg.PublishEvent("s1", event)
+
+	select {
+	case received := <-ch:
+		assert.Equal(t, "e1", received.EventId)
+		assert.Equal(t, "hello", received.Content)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for event without hook")
+	}
+}
+
+// TC-EB-03: EventHook called for every event (multiple events).
+func TestSessionRegistry_EventHook_MultipleEvents(t *testing.T) {
+	reg := NewSessionRegistry()
+
+	var hookEvents []*pb.SessionEvent
+
+	reg.SetEventHook(func(_ string, event *pb.SessionEvent) {
+		hookEvents = append(hookEvents, event)
+	})
+
+	reg.CreateSession("s1", "key", "user", "/root", "linux")
+
+	for i := 1; i <= 3; i++ {
+		reg.PublishEvent("s1", &pb.SessionEvent{
+			EventId: fmt.Sprintf("evt-%d", i),
+			Content: fmt.Sprintf("msg-%d", i),
+		})
+	}
+
+	require.Len(t, hookEvents, 3)
+	assert.Equal(t, "evt-1", hookEvents[0].EventId)
+	assert.Equal(t, "evt-2", hookEvents[1].EventId)
+	assert.Equal(t, "evt-3", hookEvents[2].EventId)
+}
+
 // TC-G-07 extended: Cancel prevents further processing
 func TestSessionRegistry_Cancel_MultipleCalls(t *testing.T) {
 	reg := NewSessionRegistry()

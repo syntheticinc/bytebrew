@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -139,7 +140,7 @@ func (p *LocalClientOperationsProxy) WriteFile(ctx context.Context, _, filePath,
 	return fmt.Sprintf("File written: %s (%d lines)", relPath, lineCount), nil
 }
 
-// GetProjectTree returns a directory tree listing.
+// GetProjectTree returns a directory tree as JSON (TreeNode structure).
 func (p *LocalClientOperationsProxy) GetProjectTree(ctx context.Context, _, _, path string, maxDepth int) (string, error) {
 	scanRoot := p.projectRoot
 	if path != "" {
@@ -157,17 +158,32 @@ func (p *LocalClientOperationsProxy) GetProjectTree(ctx context.Context, _, _, p
 		return fmt.Sprintf("[ERROR] Path is a file, not a directory: %s", path), nil
 	}
 
-	var lines []string
-	if err := p.walkTree(scanRoot, 0, maxDepth, &lines); err != nil {
+	rootName := filepath.Base(scanRoot)
+	if path != "" {
+		rootName = path
+	}
+
+	root := &TreeNode{
+		Path:        rootName,
+		Name:        rootName,
+		IsDirectory: true,
+	}
+
+	if err := p.walkTree(scanRoot, rootName, 0, maxDepth, root); err != nil {
 		return "", fmt.Errorf("walk tree %s: %w", path, err)
 	}
 
-	slog.InfoContext(ctx, "project tree", "path", path, "items", len(lines))
-	return strings.Join(lines, "\n"), nil
+	data, err := json.Marshal(root)
+	if err != nil {
+		return "", fmt.Errorf("marshal tree: %w", err)
+	}
+
+	slog.InfoContext(ctx, "project tree", "path", path)
+	return string(data), nil
 }
 
-// walkTree recursively builds a directory tree listing.
-func (p *LocalClientOperationsProxy) walkTree(dir string, depth, maxDepth int, lines *[]string) error {
+// walkTree recursively builds a TreeNode tree.
+func (p *LocalClientOperationsProxy) walkTree(dir, relPath string, depth, maxDepth int, parent *TreeNode) error {
 	if depth > maxDepth {
 		return nil
 	}
@@ -203,19 +219,28 @@ func (p *LocalClientOperationsProxy) walkTree(dir string, depth, maxDepth int, l
 		return strings.ToLower(files[i].Name()) < strings.ToLower(files[j].Name())
 	})
 
-	indent := strings.Repeat("  ", depth)
-
 	// Directories first
 	for _, d := range dirs {
-		*lines = append(*lines, indent+d.Name()+"/")
-		if err := p.walkTree(filepath.Join(dir, d.Name()), depth+1, maxDepth, lines); err != nil {
+		childPath := relPath + "/" + d.Name()
+		child := &TreeNode{
+			Path:        childPath,
+			Name:        d.Name(),
+			IsDirectory: true,
+		}
+		if err := p.walkTree(filepath.Join(dir, d.Name()), childPath, depth+1, maxDepth, child); err != nil {
 			return err
 		}
+		parent.Children = append(parent.Children, child)
 	}
 
 	// Then files
 	for _, f := range files {
-		*lines = append(*lines, indent+f.Name())
+		childPath := relPath + "/" + f.Name()
+		parent.Children = append(parent.Children, &TreeNode{
+			Path:        childPath,
+			Name:        f.Name(),
+			IsDirectory: false,
+		})
 	}
 
 	return nil

@@ -78,6 +78,7 @@ async function connectAndConfigure(
 
   const config = loadAndValidateConfig({
     serverAddress: connection.address,
+    wsAddress: connection.wsAddress,
     projectKey: options.project,
     projectRoot,
     sessionId,

@@ -6,14 +6,12 @@ import (
 
 	"github.com/google/uuid"
 	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/tools"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // SessionRegistryForHandler defines the interface for server-streaming session management.
-// Consumer-side: only methods needed by FlowHandler.
+// Consumer-side: only methods needed by FlowHandler (ISP).
 type SessionRegistryForHandler interface {
 	CreateSession(sessionID, projectKey, userID, projectRoot, platform string)
 	GetSessionContext(sessionID string) (projectRoot, platform, projectKey, userID string, ok bool)
@@ -21,12 +19,9 @@ type SessionRegistryForHandler interface {
 	PublishEvent(sessionID string, event *pb.SessionEvent)
 	ReplayEvents(sessionID, lastEventID string) []*pb.SessionEvent
 	EnqueueMessage(sessionID, content string) error
-	MessageChannel(sessionID string) <-chan string
 	DrainMessages(sessionID string)
 	SendAskUserReply(sessionID, callID, reply string)
 	Cancel(sessionID string) bool
-	ResetCancel(sessionID string)
-	StoreTurnCancel(sessionID string, cancel context.CancelFunc)
 	IsCancelled(sessionID string) bool
 	HasSession(sessionID string) bool
 	RemoveSession(sessionID string)
@@ -150,8 +145,8 @@ func (h *FlowHandler) SubscribeSession(req *pb.SubscribeSessionRequest, stream p
 	eventCh, cleanup := h.sessionRegistry.Subscribe(sessionID)
 	defer cleanup()
 
-	// Start message processing loop in background
-	go h.processMessages(ctx, sessionID)
+	// Start message processing loop via shared SessionProcessor
+	h.sessionProcessor.StartProcessing(ctx, sessionID)
 
 	// Main event loop — stream events to client
 	for {
@@ -196,80 +191,3 @@ func (h *FlowHandler) CancelSession(ctx context.Context, req *pb.CancelSessionRe
 	return &pb.CancelSessionResponse{Cancelled: cancelled}, nil
 }
 
-// processMessages is the background loop that dequeues user messages and runs agent turns.
-func (h *FlowHandler) processMessages(ctx context.Context, sessionID string) {
-	msgCh := h.sessionRegistry.MessageChannel(sessionID)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case message, ok := <-msgCh:
-			if !ok {
-				return
-			}
-			h.processMessage(ctx, sessionID, message)
-		}
-	}
-}
-
-// processMessage runs a single agent turn for the given user message.
-func (h *FlowHandler) processMessage(ctx context.Context, sessionID, message string) {
-	projectRoot, platform, projectKey, _, ok := h.sessionRegistry.GetSessionContext(sessionID)
-	if !ok {
-		slog.ErrorContext(ctx, "[Streaming] session context not found", "session_id", sessionID)
-		return
-	}
-
-	// Create event stream that publishes to registry
-	eventStream := NewSessionEventStream(sessionID, h.sessionRegistry)
-
-	// Publish PROCESSING_STARTED
-	eventStream.PublishProcessingStarted()
-
-	// Create LocalClientOperationsProxy (THE SWAP — local execution instead of gRPC proxy)
-	proxy := tools.NewLocalClientOperationsProxy(projectRoot)
-	defer proxy.Dispose()
-
-	// Create TurnExecutor
-	turnExecutor := h.turnExecutorFactory.CreateForSession(proxy, sessionID, projectKey, projectRoot, platform)
-
-	// Create chunk callback that publishes answer chunks
-	chunkCallback := func(chunk string) error {
-		eventStream.PublishAnswerChunk(chunk)
-		return nil
-	}
-
-	// Create event callback
-	eventCallback := func(event *domain.AgentEvent) error {
-		return eventStream.Send(event)
-	}
-
-	// Создать отменяемый контекст для этого turn, чтобы CancelSession мог его прервать
-	turnCtx, turnCancel := context.WithCancel(ctx)
-	defer turnCancel()
-
-	h.sessionRegistry.StoreTurnCancel(sessionID, turnCancel)
-	defer h.sessionRegistry.StoreTurnCancel(sessionID, nil)
-
-	// Execute the turn
-	err := turnExecutor.ExecuteTurn(turnCtx, sessionID, projectKey, message, chunkCallback, eventCallback)
-
-	// Always reset cancel flag after turn completes so session accepts new messages
-	h.sessionRegistry.ResetCancel(sessionID)
-
-	if err != nil {
-		// Don't publish context cancellation as error — it's expected on user cancel
-		if turnCtx.Err() != nil {
-			slog.InfoContext(ctx, "[Streaming] turn cancelled by user",
-				"session_id", sessionID)
-		} else {
-			slog.ErrorContext(ctx, "[Streaming] turn execution failed",
-				"session_id", sessionID, "error", err)
-			eventStream.PublishError(err)
-		}
-	}
-
-	// Publish PROCESSING_STOPPED
-	eventStream.PublishProcessingStopped()
-}

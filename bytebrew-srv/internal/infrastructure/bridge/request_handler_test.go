@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/flow_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/persistence"
 )
 
@@ -105,6 +107,22 @@ func (m *mockSessionManager) Cancel(sessionID string) bool {
 	return m.sessions[sessionID]
 }
 
+func (m *mockSessionManager) ListSessions() []flow_registry.SessionInfo {
+	result := make([]flow_registry.SessionInfo, 0, len(m.sessions))
+	for id := range m.sessions {
+		result = append(result, flow_registry.SessionInfo{
+			SessionID:      id,
+			CreatedAt:      time.Now(),
+			LastActivityAt: time.Now(),
+		})
+	}
+	return result
+}
+
+type mockMessageProcessor struct{}
+
+func (m *mockMessageProcessor) StartProcessing(_ context.Context, _ string) {}
+
 // --- helpers ---
 
 func newTestRequestHandler(t *testing.T) (*MobileRequestHandler, *mockDeviceStore, *mockSessionManager, *DeviceCryptoAdapter) {
@@ -123,7 +141,7 @@ func newTestRequestHandler(t *testing.T) (*MobileRequestHandler, *mockDeviceStor
 		PrivateKey: make([]byte, 32),
 	}
 
-	handler := NewMobileRequestHandler(router, deviceStore, tokenStore, crypto, broadcaster, sessions, identity)
+	handler := NewMobileRequestHandler(router, deviceStore, tokenStore, crypto, broadcaster, sessions, &mockMessageProcessor{}, identity)
 	return handler, deviceStore, sessions, crypto
 }
 

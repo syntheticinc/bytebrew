@@ -4,6 +4,7 @@ import path from 'path';
 
 export interface AppConfig {
   serverAddress: string;
+  wsAddress?: string; // WebSocket address (host:ws_port) for WS transport
   projectKey: string;
   userId: string;
   projectRoot: string;
@@ -85,6 +86,7 @@ export function validateConfig(config: AppConfig): ConfigValidationError[] {
 export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   const config: AppConfig = {
     serverAddress: overrides.serverAddress || process.env.BYTEBREW_SERVER || '',
+    wsAddress: overrides.wsAddress,
     projectKey: overrides.projectKey || process.env.BYTEBREW_PROJECT || 'default',
     userId: overrides.userId || process.env.BYTEBREW_USER || `cli-user-${process.pid}`,
     projectRoot: overrides.projectRoot || process.cwd(),

@@ -190,7 +190,7 @@ class WsBridgeClient {
     return _sendCommand('new_task', {
       'device_token': deviceToken,
       'session_id': sessionId,
-      'text': task,
+      'content': task,
     });
   }
 
@@ -549,10 +549,12 @@ class WsBridgeClient {
       );
     }
 
+    // event_id lives at the payload level, not inside the nested event object.
+    final eventId = payload['event_id'] as String? ??
+        'evt-${DateTime.now().millisecondsSinceEpoch}';
+
     return SessionEvent(
-      eventId:
-          eventJson['event_id'] as String? ??
-          'evt-${DateTime.now().millisecondsSinceEpoch}',
+      eventId: eventId,
       sessionId: sessionId,
       type: eventType,
       timestamp: _parseDateTime(eventJson['timestamp']),

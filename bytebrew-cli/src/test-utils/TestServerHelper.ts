@@ -25,9 +25,15 @@ const BINARY_PATH = path.join(SERVER_DIR, 'bin', BINARY_NAME);
 export class TestServerHelper {
   private process: ChildProcess | null = null;
   private _port: number = 0;
+  private _wsPort: number = 0;
 
   get port(): number {
     return this._port;
+  }
+
+  /** WebSocket port (0 if not available) */
+  get wsPort(): number {
+    return this._wsPort;
   }
 
   /**
@@ -93,10 +99,11 @@ export class TestServerHelper {
       this.process!.stdout!.on('data', (data: Buffer) => {
         stdout += data.toString();
 
-        // Parse READY:{port} from stdout
-        const match = stdout.match(/READY:(\d+)/);
+        // Parse READY:{grpc_port} or READY:{grpc_port}:{ws_port} from stdout
+        const match = stdout.match(/READY:(\d+)(?::(\d+))?/);
         if (match) {
           this._port = parseInt(match[1], 10);
+          this._wsPort = match[2] ? parseInt(match[2], 10) : 0;
           clearTimeout(timeout);
           resolve();
         }
