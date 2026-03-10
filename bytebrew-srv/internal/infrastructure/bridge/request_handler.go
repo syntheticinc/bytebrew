@@ -38,6 +38,7 @@ type SessionManager interface {
 // MessageProcessor starts background message processing for a session (consumer-side interface).
 type MessageProcessor interface {
 	StartProcessing(ctx context.Context, sessionID string)
+	IsTurnActive(sessionID string) bool
 }
 
 // MobileRequestHandler routes incoming MobileMessages from the MessageRouter
@@ -258,6 +259,14 @@ func (h *MobileRequestHandler) handleSubscribe(msg *MobileMessage) {
 
 	lastEventID, _ := msg.Payload["last_event_id"].(string)
 	h.broadcaster.Subscribe(device.ID, sessionID, lastEventID)
+
+	// Send current session status to prevent stuck-spinner after reconnect.
+	// If the session finished processing while the device was disconnected,
+	// the ProcessingStopped event may have been lost to TCP death (CGNAT).
+	// If the session doesn't exist on this server (e.g. server restarted),
+	// it's definitely not processing → send idle status.
+	processing := h.sessions.HasSession(sessionID) && h.processor.IsTurnActive(sessionID)
+	h.broadcaster.SendSessionStatus(device.ID, sessionID, processing)
 
 	h.respond(msg, "subscribe_ack", map[string]interface{}{
 		"session_id": sessionID,

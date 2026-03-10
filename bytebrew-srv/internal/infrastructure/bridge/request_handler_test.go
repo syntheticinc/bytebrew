@@ -119,13 +119,23 @@ func (m *mockSessionManager) ListSessions() []flow_registry.SessionInfo {
 	return result
 }
 
-type mockMessageProcessor struct{}
+type mockMessageProcessor struct {
+	processing map[string]bool
+}
+
+func newMockMessageProcessor() *mockMessageProcessor {
+	return &mockMessageProcessor{processing: make(map[string]bool)}
+}
 
 func (m *mockMessageProcessor) StartProcessing(_ context.Context, _ string) {}
 
+func (m *mockMessageProcessor) IsTurnActive(sessionID string) bool {
+	return m.processing[sessionID]
+}
+
 // --- helpers ---
 
-func newTestRequestHandler(t *testing.T) (*MobileRequestHandler, *mockDeviceStore, *mockSessionManager, *DeviceCryptoAdapter) {
+func newTestRequestHandler(t *testing.T) (*MobileRequestHandler, *mockDeviceStore, *mockSessionManager, *DeviceCryptoAdapter, *mockMessageProcessor) {
 	t.Helper()
 
 	crypto := NewDeviceCryptoAdapter()
@@ -135,14 +145,15 @@ func newTestRequestHandler(t *testing.T) (*MobileRequestHandler, *mockDeviceStor
 	tokenStore := NewPairingTokenStore()
 	broadcaster := NewEventBroadcaster(router)
 	sessions := newMockSessionManager()
+	processor := newMockMessageProcessor()
 	identity := &persistence.ServerIdentity{
 		ID:         "server-1",
 		PublicKey:  make([]byte, 32),
 		PrivateKey: make([]byte, 32),
 	}
 
-	handler := NewMobileRequestHandler(router, deviceStore, tokenStore, crypto, broadcaster, sessions, &mockMessageProcessor{}, identity, "test-server")
-	return handler, deviceStore, sessions, crypto
+	handler := NewMobileRequestHandler(router, deviceStore, tokenStore, crypto, broadcaster, sessions, processor, identity, "test-server")
+	return handler, deviceStore, sessions, crypto, processor
 }
 
 func addAuthenticatedDevice(store *mockDeviceStore, id, token string) *domain.MobileDevice {
@@ -162,7 +173,7 @@ func addAuthenticatedDevice(store *mockDeviceStore, id, token string) *domain.Mo
 
 // TC-B-04: Ping/pong — ping message returns pong response with timestamp.
 func TestRequestHandler_Ping(t *testing.T) {
-	handler, _, _, _ := newTestRequestHandler(t)
+	handler, _, _, _, _ := newTestRequestHandler(t)
 	handler.Start()
 
 	msg := &MobileMessage{
@@ -178,7 +189,7 @@ func TestRequestHandler_Ping(t *testing.T) {
 
 // TC-B-03: Invalid token — pair_request with wrong token returns error response.
 func TestRequestHandler_PairRequest_InvalidToken(t *testing.T) {
-	handler, _, _, _ := newTestRequestHandler(t)
+	handler, _, _, _, _ := newTestRequestHandler(t)
 	handler.Start()
 
 	msg := &MobileMessage{
@@ -196,7 +207,7 @@ func TestRequestHandler_PairRequest_InvalidToken(t *testing.T) {
 }
 
 func TestRequestHandler_PairRequest_MissingToken(t *testing.T) {
-	handler, _, _, _ := newTestRequestHandler(t)
+	handler, _, _, _, _ := newTestRequestHandler(t)
 
 	msg := &MobileMessage{
 		Type:      "pair_request",
@@ -210,7 +221,7 @@ func TestRequestHandler_PairRequest_MissingToken(t *testing.T) {
 
 // TC-B-02: Pairing flow — full pair_request → pair_response (token valid, key exchange, device stored).
 func TestRequestHandler_PairRequest_Success(t *testing.T) {
-	handler, deviceStore, _, crypto := newTestRequestHandler(t)
+	handler, deviceStore, _, crypto, _ := newTestRequestHandler(t)
 
 	// Generate a real keypair for the token
 	kp, err := GenerateKeyPair()
@@ -261,7 +272,7 @@ func TestRequestHandler_PairRequest_Success(t *testing.T) {
 // TC-B-02: Pairing flow — comprehensive: token consumed, shared secret computed,
 // device stored with correct fields, alias registered, crypto active.
 func TestRequestHandler_PairRequest_FullFlow(t *testing.T) {
-	handler, deviceStore, _, crypto := newTestRequestHandler(t)
+	handler, deviceStore, _, crypto, _ := newTestRequestHandler(t)
 
 	serverKP, err := GenerateKeyPair()
 	require.NoError(t, err)
@@ -324,7 +335,7 @@ func TestRequestHandler_PairRequest_FullFlow(t *testing.T) {
 
 // TC-B-03: Invalid token — pair_request with wrong token, no device stored.
 func TestRequestHandler_PairRequest_InvalidToken_NoDeviceStored(t *testing.T) {
-	handler, deviceStore, _, _ := newTestRequestHandler(t)
+	handler, deviceStore, _, _, _ := newTestRequestHandler(t)
 
 	msg := &MobileMessage{
 		Type:      "pair_request",
@@ -344,7 +355,7 @@ func TestRequestHandler_PairRequest_InvalidToken_NoDeviceStored(t *testing.T) {
 
 // TC-B-17: Unauth request — request without device_token is rejected.
 func TestRequestHandler_NewTask_Unauthorized(t *testing.T) {
-	handler, _, _, _ := newTestRequestHandler(t)
+	handler, _, _, _, _ := newTestRequestHandler(t)
 
 	msg := &MobileMessage{
 		Type:      "new_task",
@@ -361,7 +372,7 @@ func TestRequestHandler_NewTask_Unauthorized(t *testing.T) {
 }
 
 func TestRequestHandler_NewTask_CreatesSession(t *testing.T) {
-	handler, deviceStore, sessions, _ := newTestRequestHandler(t)
+	handler, deviceStore, sessions, _, _ := newTestRequestHandler(t)
 	addAuthenticatedDevice(deviceStore, "dev-1", "tok-1")
 
 	msg := &MobileMessage{
@@ -386,7 +397,7 @@ func TestRequestHandler_NewTask_CreatesSession(t *testing.T) {
 }
 
 func TestRequestHandler_NewTask_ReusesExistingSession(t *testing.T) {
-	handler, deviceStore, sessions, _ := newTestRequestHandler(t)
+	handler, deviceStore, sessions, _, _ := newTestRequestHandler(t)
 	addAuthenticatedDevice(deviceStore, "dev-1", "tok-1")
 	sessions.sessions["existing-session"] = true
 
@@ -408,7 +419,7 @@ func TestRequestHandler_NewTask_ReusesExistingSession(t *testing.T) {
 }
 
 func TestRequestHandler_NewTask_MissingContent(t *testing.T) {
-	handler, deviceStore, sessions, _ := newTestRequestHandler(t)
+	handler, deviceStore, sessions, _, _ := newTestRequestHandler(t)
 	addAuthenticatedDevice(deviceStore, "dev-1", "tok-1")
 
 	msg := &MobileMessage{
@@ -426,7 +437,7 @@ func TestRequestHandler_NewTask_MissingContent(t *testing.T) {
 
 // TC-B-09: AskUser mobile — ask_user_reply forwards reply to session manager.
 func TestRequestHandler_AskUserReply(t *testing.T) {
-	handler, deviceStore, sessions, _ := newTestRequestHandler(t)
+	handler, deviceStore, sessions, _, _ := newTestRequestHandler(t)
 	addAuthenticatedDevice(deviceStore, "dev-1", "tok-1")
 
 	msg := &MobileMessage{
@@ -448,7 +459,7 @@ func TestRequestHandler_AskUserReply(t *testing.T) {
 
 // TC-B-09: AskUser mobile — missing session_id or call_id is rejected.
 func TestRequestHandler_AskUserReply_MissingFields(t *testing.T) {
-	handler, deviceStore, sessions, _ := newTestRequestHandler(t)
+	handler, deviceStore, sessions, _, _ := newTestRequestHandler(t)
 	addAuthenticatedDevice(deviceStore, "dev-1", "tok-1")
 
 	msg := &MobileMessage{
@@ -469,7 +480,7 @@ func TestRequestHandler_AskUserReply_MissingFields(t *testing.T) {
 
 // TC-B-09: AskUser mobile — unauthenticated ask_user_reply is rejected.
 func TestRequestHandler_AskUserReply_Unauthorized(t *testing.T) {
-	handler, _, sessions, _ := newTestRequestHandler(t)
+	handler, _, sessions, _, _ := newTestRequestHandler(t)
 
 	msg := &MobileMessage{
 		Type:      "ask_user_reply",
@@ -490,7 +501,7 @@ func TestRequestHandler_AskUserReply_Unauthorized(t *testing.T) {
 
 // TC-B-10: Cancel session — cancel_session cancels session.
 func TestRequestHandler_CancelSession(t *testing.T) {
-	handler, deviceStore, sessions, _ := newTestRequestHandler(t)
+	handler, deviceStore, sessions, _, _ := newTestRequestHandler(t)
 	addAuthenticatedDevice(deviceStore, "dev-1", "tok-1")
 	sessions.sessions["s1"] = true
 
@@ -510,7 +521,7 @@ func TestRequestHandler_CancelSession(t *testing.T) {
 
 // TC-B-10: Cancel session — missing session_id is rejected.
 func TestRequestHandler_CancelSession_MissingSessionID(t *testing.T) {
-	handler, deviceStore, sessions, _ := newTestRequestHandler(t)
+	handler, deviceStore, sessions, _, _ := newTestRequestHandler(t)
 	addAuthenticatedDevice(deviceStore, "dev-1", "tok-1")
 
 	msg := &MobileMessage{
@@ -529,7 +540,7 @@ func TestRequestHandler_CancelSession_MissingSessionID(t *testing.T) {
 
 // TC-B-10: Cancel session — unauthenticated cancel is rejected.
 func TestRequestHandler_CancelSession_Unauthorized(t *testing.T) {
-	handler, _, sessions, _ := newTestRequestHandler(t)
+	handler, _, sessions, _, _ := newTestRequestHandler(t)
 	sessions.sessions["s1"] = true
 
 	msg := &MobileMessage{
@@ -548,7 +559,7 @@ func TestRequestHandler_CancelSession_Unauthorized(t *testing.T) {
 
 // TC-B-11: List sessions — list_sessions returns session list.
 func TestRequestHandler_ListSessions(t *testing.T) {
-	handler, deviceStore, _, _ := newTestRequestHandler(t)
+	handler, deviceStore, _, _, _ := newTestRequestHandler(t)
 	addAuthenticatedDevice(deviceStore, "dev-1", "tok-1")
 
 	msg := &MobileMessage{
@@ -566,7 +577,7 @@ func TestRequestHandler_ListSessions(t *testing.T) {
 
 // TC-B-11: List sessions — unauthenticated list is rejected.
 func TestRequestHandler_ListSessions_Unauthorized(t *testing.T) {
-	handler, _, _, _ := newTestRequestHandler(t)
+	handler, _, _, _, _ := newTestRequestHandler(t)
 
 	msg := &MobileMessage{
 		Type:      "list_sessions",
@@ -583,7 +594,7 @@ func TestRequestHandler_ListSessions_Unauthorized(t *testing.T) {
 
 // TC-B-12: List devices — list_devices returns device list.
 func TestRequestHandler_ListDevices(t *testing.T) {
-	handler, deviceStore, _, _ := newTestRequestHandler(t)
+	handler, deviceStore, _, _, _ := newTestRequestHandler(t)
 	addAuthenticatedDevice(deviceStore, "dev-1", "tok-1")
 	addAuthenticatedDevice(deviceStore, "dev-2", "tok-2")
 
@@ -603,7 +614,7 @@ func TestRequestHandler_ListDevices(t *testing.T) {
 
 // TC-B-12: List devices — unauthenticated list_devices is rejected.
 func TestRequestHandler_ListDevices_Unauthorized(t *testing.T) {
-	handler, _, _, _ := newTestRequestHandler(t)
+	handler, _, _, _, _ := newTestRequestHandler(t)
 
 	msg := &MobileMessage{
 		Type:      "list_devices",
@@ -620,7 +631,7 @@ func TestRequestHandler_ListDevices_Unauthorized(t *testing.T) {
 
 // TC-B-17: Unauth request — missing device_token is rejected.
 func TestRequestHandler_AuthenticateDevice_MissingToken(t *testing.T) {
-	handler, _, _, _ := newTestRequestHandler(t)
+	handler, _, _, _, _ := newTestRequestHandler(t)
 
 	_, err := handler.authenticateDevice(map[string]interface{}{})
 	assert.Error(t, err)
@@ -629,7 +640,7 @@ func TestRequestHandler_AuthenticateDevice_MissingToken(t *testing.T) {
 
 // TC-B-17: Unauth request — invalid device_token is rejected with "unauthorized".
 func TestRequestHandler_AuthenticateDevice_InvalidToken(t *testing.T) {
-	handler, _, _, _ := newTestRequestHandler(t)
+	handler, _, _, _, _ := newTestRequestHandler(t)
 
 	_, err := handler.authenticateDevice(map[string]interface{}{
 		"device_token": "nonexistent",
@@ -639,7 +650,7 @@ func TestRequestHandler_AuthenticateDevice_InvalidToken(t *testing.T) {
 }
 
 func TestRequestHandler_AuthenticateDevice_Valid(t *testing.T) {
-	handler, deviceStore, _, _ := newTestRequestHandler(t)
+	handler, deviceStore, _, _, _ := newTestRequestHandler(t)
 	addAuthenticatedDevice(deviceStore, "dev-1", "tok-1")
 
 	device, err := handler.authenticateDevice(map[string]interface{}{
@@ -650,7 +661,7 @@ func TestRequestHandler_AuthenticateDevice_Valid(t *testing.T) {
 }
 
 func TestRequestHandler_HandleMessage_Routing(t *testing.T) {
-	handler, _, _, _ := newTestRequestHandler(t)
+	handler, _, _, _, _ := newTestRequestHandler(t)
 	handler.Start()
 
 	// Unknown type should not panic
@@ -658,7 +669,7 @@ func TestRequestHandler_HandleMessage_Routing(t *testing.T) {
 }
 
 func TestRequestHandler_StartStop(t *testing.T) {
-	handler, _, _, _ := newTestRequestHandler(t)
+	handler, _, _, _, _ := newTestRequestHandler(t)
 
 	handler.Start()
 	assert.True(t, handler.running.Load())
@@ -672,7 +683,7 @@ func TestRequestHandler_StartStop(t *testing.T) {
 }
 
 func TestRequestHandler_Subscribe(t *testing.T) {
-	handler, deviceStore, _, _ := newTestRequestHandler(t)
+	handler, deviceStore, _, _, _ := newTestRequestHandler(t)
 	addAuthenticatedDevice(deviceStore, "dev-1", "tok-1")
 
 	msg := &MobileMessage{
@@ -699,7 +710,7 @@ func TestRequestHandler_Subscribe(t *testing.T) {
 // TC-B-08: Full chat flow — new_task → session created → subscribe → events broadcast
 // (ProcessingStarted → ToolExecutionStarted → ToolExecutionCompleted → MessageCompleted).
 func TestRequestHandler_FullChatFlow(t *testing.T) {
-	handler, deviceStore, sessions, _ := newTestRequestHandler(t)
+	handler, deviceStore, sessions, _, _ := newTestRequestHandler(t)
 	handler.Start()
 
 	addAuthenticatedDevice(deviceStore, "dev-1", "tok-1")
@@ -803,6 +814,104 @@ func TestRequestHandler_FullChatFlow(t *testing.T) {
 	// Verify final answer content.
 	lastEvt := msgs[3].Payload["event"].(map[string]interface{})
 	assert.Equal(t, "main.go contains the entry point with HTTP server setup.", lastEvt["content"])
+}
+
+// Subscribe sends ProcessingStopped when session is idle (not processing).
+// This prevents stuck-spinner after reconnect when ProcessingStopped was lost to TCP death.
+func TestRequestHandler_Subscribe_SendsIdleStatus(t *testing.T) {
+	handler, deviceStore, sessions, _, processor := newTestRequestHandler(t)
+
+	addAuthenticatedDevice(deviceStore, "dev-1", "tok-1")
+	sessions.sessions["s1"] = true // session exists but not processing
+
+	// Replace sender to capture messages.
+	sender := newMockMessageSender()
+	handler.broadcaster.sender = sender
+
+	msg := &MobileMessage{
+		Type:      "subscribe",
+		RequestID: "req-1",
+		DeviceID:  "dev-1",
+		Payload: map[string]interface{}{
+			"device_token": "tok-1",
+			"session_id":   "s1",
+		},
+	}
+
+	handler.handleSubscribe(msg)
+
+	// Processor reports not processing → device receives ProcessingStopped.
+	assert.False(t, processor.IsTurnActive("s1"))
+
+	msgs := sender.getMessages("dev-1")
+	require.Len(t, msgs, 1, "device should receive synthetic status event")
+
+	assert.Equal(t, "session_event", msgs[0].Type)
+	evt, ok := msgs[0].Payload["event"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "ProcessingStopped", evt["type"])
+	assert.Equal(t, "idle", evt["state"])
+}
+
+// Subscribe sends ProcessingStarted when session is actively processing.
+func TestRequestHandler_Subscribe_SendsProcessingStatus(t *testing.T) {
+	handler, deviceStore, sessions, _, processor := newTestRequestHandler(t)
+
+	addAuthenticatedDevice(deviceStore, "dev-1", "tok-1")
+	sessions.sessions["s1"] = true
+	processor.processing["s1"] = true // session is actively processing
+
+	sender := newMockMessageSender()
+	handler.broadcaster.sender = sender
+
+	msg := &MobileMessage{
+		Type:      "subscribe",
+		RequestID: "req-1",
+		DeviceID:  "dev-1",
+		Payload: map[string]interface{}{
+			"device_token": "tok-1",
+			"session_id":   "s1",
+		},
+	}
+
+	handler.handleSubscribe(msg)
+
+	msgs := sender.getMessages("dev-1")
+	require.Len(t, msgs, 1, "device should receive synthetic status event")
+
+	evt, ok := msgs[0].Payload["event"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "ProcessingStarted", evt["type"])
+	assert.Equal(t, "processing", evt["state"])
+}
+
+// Subscribe does NOT send status for unknown sessions.
+func TestRequestHandler_Subscribe_IdleStatusForUnknownSession(t *testing.T) {
+	handler, deviceStore, _, _, _ := newTestRequestHandler(t)
+
+	addAuthenticatedDevice(deviceStore, "dev-1", "tok-1")
+	// No session created — sessions.HasSession("s1") returns false.
+	// Should still send idle status (server restarted, session gone).
+
+	sender := newMockMessageSender()
+	handler.broadcaster.sender = sender
+
+	msg := &MobileMessage{
+		Type:      "subscribe",
+		RequestID: "req-1",
+		DeviceID:  "dev-1",
+		Payload: map[string]interface{}{
+			"device_token": "tok-1",
+			"session_id":   "s1",
+		},
+	}
+
+	handler.handleSubscribe(msg)
+
+	msgs := sender.getMessages("dev-1")
+	require.Len(t, msgs, 1, "should send idle status for unknown session")
+	event := msgs[0].Payload["event"].(map[string]interface{})
+	assert.Equal(t, "ProcessingStopped", event["type"])
 }
 
 func TestMobileMessage_JSON(t *testing.T) {

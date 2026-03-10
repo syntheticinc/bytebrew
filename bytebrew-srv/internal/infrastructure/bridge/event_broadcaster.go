@@ -100,6 +100,30 @@ func (b *EventBroadcaster) BroadcastEvent(sessionID string, event *pb.SessionEve
 	}
 }
 
+// SendSessionStatus sends a synthetic session status event to a specific device.
+// Used after subscribe to ensure the device knows the current processing state,
+// preventing stuck-spinner when ProcessingStopped was lost during TCP death.
+//
+// NOT buffered: synthetic events are sent without event_id so the mobile client's
+// dedup logic (based on event_id) won't skip them. This avoids collisions when
+// the server restarts and the mevt counter resets (mobile may already have old
+// mevt-1 in its seen set).
+func (b *EventBroadcaster) SendSessionStatus(deviceID, sessionID string, processing bool) {
+	eventType := "ProcessingStopped"
+	state := "idle"
+	if processing {
+		eventType = "ProcessingStarted"
+		state = "processing"
+	}
+
+	statusEvent := map[string]interface{}{
+		"type":  eventType,
+		"state": state,
+	}
+	// Empty event_id → mobile skips dedup check → always processed.
+	b.sendToDevice(deviceID, sessionID, statusEvent, "")
+}
+
 func (b *EventBroadcaster) sendToDevice(deviceID, sessionID string, event map[string]interface{}, eventID string) {
 	msg := &MobileMessage{
 		Type:      "session_event",

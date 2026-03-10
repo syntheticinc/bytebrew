@@ -41,16 +41,18 @@ type Processor struct {
 	factory             TurnExecutorFactory
 	agentPoolRegistrar AgentPoolRegistrar // optional, nil-safe
 
-	mu     sync.Mutex
-	active map[string]context.CancelFunc
+	mu          sync.Mutex
+	active      map[string]context.CancelFunc
+	turnsActive map[string]bool // sessions with an actively executing turn
 }
 
 // New creates a new Processor.
 func New(registry SessionRegistry, factory TurnExecutorFactory) *Processor {
 	return &Processor{
-		registry: registry,
-		factory:  factory,
-		active:   make(map[string]context.CancelFunc),
+		registry:    registry,
+		factory:     factory,
+		active:      make(map[string]context.CancelFunc),
+		turnsActive: make(map[string]bool),
 	}
 }
 
@@ -96,6 +98,15 @@ func (p *Processor) IsProcessing(sessionID string) bool {
 	return exists
 }
 
+// IsTurnActive returns true if a turn (message processing) is currently executing.
+// Unlike IsProcessing which tracks the background loop, this tracks the actual
+// turn execution between ProcessingStarted and ProcessingStopped.
+func (p *Processor) IsTurnActive(sessionID string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.turnsActive[sessionID]
+}
+
 func (p *Processor) processMessages(ctx context.Context, sessionID string) {
 	defer func() {
 		p.mu.Lock()
@@ -124,6 +135,15 @@ func (p *Processor) processMessage(ctx context.Context, sessionID, message strin
 		slog.ErrorContext(ctx, "[SessionProcessor] session context not found", "session_id", sessionID)
 		return
 	}
+
+	p.mu.Lock()
+	p.turnsActive[sessionID] = true
+	p.mu.Unlock()
+	defer func() {
+		p.mu.Lock()
+		delete(p.turnsActive, sessionID)
+		p.mu.Unlock()
+	}()
 
 	eventStream := NewEventStream(sessionID, p.registry)
 

@@ -460,6 +460,41 @@ func TestEventBroadcaster_BackfillFiltersBySession(t *testing.T) {
 	assert.Equal(t, "mevt-3", msgs[0].Payload["event_id"])
 }
 
+// SendSessionStatus sends ProcessingStopped when not processing.
+func TestEventBroadcaster_SendSessionStatus_Idle(t *testing.T) {
+	sender := newMockMessageSender()
+	broadcaster := NewEventBroadcaster(sender)
+
+	broadcaster.SendSessionStatus("dev-1", "sess-1", false)
+
+	msgs := sender.getMessages("dev-1")
+	require.Len(t, msgs, 1)
+
+	assert.Equal(t, "session_event", msgs[0].Type)
+	// Synthetic events have empty event_id to bypass mobile dedup.
+	assert.Empty(t, msgs[0].Payload["event_id"])
+	evt, ok := msgs[0].Payload["event"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "ProcessingStopped", evt["type"])
+	assert.Equal(t, "idle", evt["state"])
+}
+
+// SendSessionStatus sends ProcessingStarted when processing.
+func TestEventBroadcaster_SendSessionStatus_Processing(t *testing.T) {
+	sender := newMockMessageSender()
+	broadcaster := NewEventBroadcaster(sender)
+
+	broadcaster.SendSessionStatus("dev-1", "sess-1", true)
+
+	msgs := sender.getMessages("dev-1")
+	require.Len(t, msgs, 1)
+
+	evt, ok := msgs[0].Payload["event"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "ProcessingStarted", evt["type"])
+	assert.Equal(t, "processing", evt["state"])
+}
+
 // TC-B-14: Multi-device — events only go to devices subscribed to the matching session.
 func TestEventBroadcaster_MultiDevice_SessionIsolation(t *testing.T) {
 	sender := newMockMessageSender()
