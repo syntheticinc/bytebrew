@@ -88,10 +88,17 @@ class WsConnectionManager extends ChangeNotifier {
       return;
     }
 
-    // Clean up any existing connection before creating a new one.
-    // Always recreate to pick up fresh crypto keys after re-pairing.
+    // If the existing WsConnection is actively handling reconnect with
+    // exponential backoff, don't recreate — that would reset the backoff
+    // counter to zero and cause a reconnect storm.
     final existing = _connections[server.id];
     if (existing != null) {
+      final ws = existing.connection;
+      if (ws.hasActiveReconnect ||
+          ws.status == WsConnectionStatus.connecting ||
+          ws.status == WsConnectionStatus.connected) {
+        return;
+      }
       await existing.statusSubscription?.cancel();
       await existing.client.dispose();
       await existing.connection.dispose();

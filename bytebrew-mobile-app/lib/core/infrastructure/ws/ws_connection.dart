@@ -69,6 +69,11 @@ class WsConnection {
   /// Current connection status.
   WsConnectionStatus get status => _status;
 
+  /// Whether a reconnect timer is active (exponential backoff in progress).
+  /// Used by [WsConnectionManager] to avoid resetting backoff by recreating
+  /// the connection.
+  bool get hasActiveReconnect => _reconnectTimer?.isActive ?? false;
+
   /// Whether the connection appears stale (no data for [_staleThresholdSeconds]).
   bool get isStale =>
       _status == WsConnectionStatus.connected &&
