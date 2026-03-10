@@ -80,6 +80,50 @@ func TestEventBuffer_DefaultSize(t *testing.T) {
 	assert.Len(t, buf.events, 1000)
 }
 
+func TestEventBuffer_GetAllForSession_ReturnsAllForSession(t *testing.T) {
+	buf := NewEventBuffer(10)
+	buf.Append("s1", map[string]interface{}{"n": 1})
+	buf.Append("s2", map[string]interface{}{"n": 2})
+	buf.Append("s1", map[string]interface{}{"n": 3})
+	buf.Append("s2", map[string]interface{}{"n": 4})
+	buf.Append("s1", map[string]interface{}{"n": 5})
+
+	result := buf.GetAllForSession("s1")
+	require.Len(t, result, 3)
+	assert.Equal(t, "mevt-1", result[0].EventID)
+	assert.Equal(t, "mevt-3", result[1].EventID)
+	assert.Equal(t, "mevt-5", result[2].EventID)
+}
+
+func TestEventBuffer_GetAllForSession_EmptyBuffer(t *testing.T) {
+	buf := NewEventBuffer(10)
+
+	result := buf.GetAllForSession("s1")
+	assert.Nil(t, result)
+}
+
+func TestEventBuffer_GetAllForSession_NoMatchingSession(t *testing.T) {
+	buf := NewEventBuffer(10)
+	buf.Append("s1", map[string]interface{}{"n": 1})
+
+	result := buf.GetAllForSession("s2")
+	assert.Nil(t, result)
+}
+
+func TestEventBuffer_GetAllForSession_RingBufferOverwrite(t *testing.T) {
+	buf := NewEventBuffer(3)
+	buf.Append("s1", map[string]interface{}{"n": 1}) // mevt-1 (will be overwritten)
+	buf.Append("s1", map[string]interface{}{"n": 2}) // mevt-2
+	buf.Append("s1", map[string]interface{}{"n": 3}) // mevt-3
+	buf.Append("s1", map[string]interface{}{"n": 4}) // mevt-4 overwrites mevt-1
+
+	result := buf.GetAllForSession("s1")
+	require.Len(t, result, 3)
+	assert.Equal(t, "mevt-2", result[0].EventID)
+	assert.Equal(t, "mevt-3", result[1].EventID)
+	assert.Equal(t, "mevt-4", result[2].EventID)
+}
+
 func TestEventBuffer_ConcurrentAccess(t *testing.T) {
 	buf := NewEventBuffer(100)
 	var wg sync.WaitGroup

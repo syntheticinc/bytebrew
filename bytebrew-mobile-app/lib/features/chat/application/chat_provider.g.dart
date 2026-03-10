@@ -8,6 +8,63 @@ part of 'chat_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
+/// Singleton [ChatMessageStore] for persisting chat messages to SQLite.
+///
+/// Kept alive to avoid re-opening the database on every chat screen visit.
+
+@ProviderFor(chatMessageStore)
+final chatMessageStoreProvider = ChatMessageStoreProvider._();
+
+/// Singleton [ChatMessageStore] for persisting chat messages to SQLite.
+///
+/// Kept alive to avoid re-opening the database on every chat screen visit.
+
+final class ChatMessageStoreProvider
+    extends
+        $FunctionalProvider<
+          ChatMessageStore,
+          ChatMessageStore,
+          ChatMessageStore
+        >
+    with $Provider<ChatMessageStore> {
+  /// Singleton [ChatMessageStore] for persisting chat messages to SQLite.
+  ///
+  /// Kept alive to avoid re-opening the database on every chat screen visit.
+  ChatMessageStoreProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'chatMessageStoreProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$chatMessageStoreHash();
+
+  @$internal
+  @override
+  $ProviderElement<ChatMessageStore> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  ChatMessageStore create(Ref ref) {
+    return chatMessageStore(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ChatMessageStore value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ChatMessageStore>(value),
+    );
+  }
+}
+
+String _$chatMessageStoreHash() => r'c938e1af9851407d795b0edbb8e5befeb7f815a8';
+
 /// Provides a default [ChatRepository].
 ///
 /// Returns [EmptyChatRepository] by default. Session-specific repositories
@@ -141,7 +198,7 @@ final class SessionChatRepositoryProvider
 }
 
 String _$sessionChatRepositoryHash() =>
-    r'd6758bbb7c4cf5b60c5dada5f2c6085652e0e418';
+    r'84ad6ec6a7abfa96474ef8c103a32c36272a5dca';
 
 /// Resolves the [ChatRepository] for a specific [sessionId].
 ///
@@ -232,7 +289,7 @@ final class ChatMessagesProvider
   }
 }
 
-String _$chatMessagesHash() => r'b1c3120386006adb92bee93151a958abb8089689';
+String _$chatMessagesHash() => r'88ef88800a5e3262d14946cde8b6c3118d9fa5a4';
 
 /// Manages chat messages for a given session.
 ///

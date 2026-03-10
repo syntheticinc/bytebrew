@@ -121,7 +121,7 @@ void main() {
         serverId: _serverId,
         sessionId: sessionId,
       );
-      repo.subscribe();
+      await repo.subscribe();
       await Future<void>.delayed(const Duration(milliseconds: 500));
 
       _log('Sending message after idle...');
@@ -180,7 +180,7 @@ void main() {
         serverId: _serverId,
         sessionId: sessionId,
       );
-      repo.subscribe();
+      await repo.subscribe();
       await Future<void>.delayed(const Duration(milliseconds: 500));
 
       // Send and wait
@@ -236,7 +236,7 @@ void main() {
         serverId: _serverId,
         sessionId: sessionId,
       );
-      repo.subscribe();
+      await repo.subscribe();
       await Future<void>.delayed(const Duration(milliseconds: 500));
 
       int count = 0;
@@ -264,7 +264,7 @@ void main() {
         serverId: _serverId,
         sessionId: sessionId,
       );
-      repo.subscribe();
+      await repo.subscribe();
       await Future<void>.delayed(const Duration(milliseconds: 500));
 
       count = 0;
@@ -322,7 +322,7 @@ void main() {
               serverId: _serverId,
               sessionId: sessionId,
             );
-            repo.subscribe();
+            await repo.subscribe();
             ref.onDispose(repo.dispose);
             return repo;
           }),
@@ -434,7 +434,7 @@ void main() {
         serverId: _serverId,
         sessionId: sessionId,
       );
-      repo.subscribe();
+      await repo.subscribe();
       await Future<void>.delayed(const Duration(milliseconds: 500));
 
       // Phase 1: verify normal behavior

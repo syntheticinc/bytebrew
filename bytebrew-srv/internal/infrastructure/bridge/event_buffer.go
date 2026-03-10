@@ -104,6 +104,30 @@ func (b *EventBuffer) GetAfter(lastEventID string) []BufferedEvent {
 	return result
 }
 
+// GetAllForSession returns all buffered events for the given session in chronological order.
+// Used for initial subscribe when no lastEventID is provided.
+func (b *EventBuffer) GetAllForSession(sessionID string) []BufferedEvent {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	if b.count == 0 {
+		return nil
+	}
+
+	start := (b.head - b.count + len(b.events)) % len(b.events)
+	var result []BufferedEvent
+
+	for i := 0; i < b.count; i++ {
+		idx := (start + i) % len(b.events)
+		entry := b.events[idx]
+		if entry.SessionID == sessionID {
+			result = append(result, entry)
+		}
+	}
+
+	return result
+}
+
 // parseEventNum extracts the numeric suffix from an event ID like "mevt-42".
 func parseEventNum(eventID string) (int, error) {
 	parts := strings.SplitN(eventID, "-", 2)

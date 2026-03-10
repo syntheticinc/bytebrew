@@ -78,6 +78,16 @@ func (s *EventStream) PublishError(err error) {
 	})
 }
 
+// PublishUserMessage sends a USER_MESSAGE event so user messages appear in backfill history.
+func (s *EventStream) PublishUserMessage(content string) {
+	s.publisher.PublishEvent(s.sessionID, &pb.SessionEvent{
+		EventId:   fmt.Sprintf("evt-%d", s.eventSeq.Add(1)),
+		SessionId: s.sessionID,
+		Type:      pb.SessionEventType_SESSION_EVENT_USER_MESSAGE,
+		Content:   SanitizeUTF8(content),
+	})
+}
+
 // PublishAnswerChunk sends an ANSWER_CHUNK event.
 func (s *EventStream) PublishAnswerChunk(chunk string) {
 	s.publisher.PublishEvent(s.sessionID, &pb.SessionEvent{

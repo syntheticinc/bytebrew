@@ -285,14 +285,14 @@ void main() {
         addConnectedServer();
       });
 
-      test('subscribe sets isSubscribed to true when stream is available', () {
-        repo.subscribe();
+      test('subscribe sets isSubscribed to true when stream is available', () async {
+        await repo.subscribe();
 
         expect(repo.isSubscribed, isTrue);
       });
 
       test('handles AgentMessagePayload (complete)', () async {
-        repo.subscribe();
+        await repo.subscribe();
 
         final emitted = <List<ChatMessage>>[];
         repo.watchMessages().listen(emitted.add);
@@ -317,7 +317,7 @@ void main() {
       });
 
       test('handles streaming AgentMessagePayload chunks', () async {
-        repo.subscribe();
+        await repo.subscribe();
 
         final emitted = <List<ChatMessage>>[];
         repo.watchMessages().listen(emitted.add);
@@ -357,7 +357,7 @@ void main() {
       });
 
       test('handles ToolCallStartPayload', () async {
-        repo.subscribe();
+        await repo.subscribe();
 
         final emitted = <List<ChatMessage>>[];
         repo.watchMessages().listen(emitted.add);
@@ -384,7 +384,7 @@ void main() {
       });
 
       test('handles ToolCallEndPayload (success)', () async {
-        repo.subscribe();
+        await repo.subscribe();
 
         // First start the tool call.
         fakeClient.sessionStreamController!.add(
@@ -421,7 +421,7 @@ void main() {
       });
 
       test('handles ToolCallEndPayload (error)', () async {
-        repo.subscribe();
+        await repo.subscribe();
 
         fakeClient.sessionStreamController!.add(
           _event(
@@ -454,7 +454,7 @@ void main() {
       });
 
       test('handles ReasoningPayload (complete only)', () async {
-        repo.subscribe();
+        await repo.subscribe();
 
         // Incomplete reasoning should be ignored.
         fakeClient.sessionStreamController!.add(
@@ -490,7 +490,7 @@ void main() {
       });
 
       test('handles AskUserPayload', () async {
-        repo.subscribe();
+        await repo.subscribe();
 
         fakeClient.sessionStreamController!.add(
           _event(
@@ -514,7 +514,7 @@ void main() {
       });
 
       test('ignores already-answered AskUserPayload', () async {
-        repo.subscribe();
+        await repo.subscribe();
 
         fakeClient.sessionStreamController!.add(
           _event(
@@ -533,7 +533,7 @@ void main() {
       });
 
       test('handles PlanPayload', () async {
-        repo.subscribe();
+        await repo.subscribe();
 
         fakeClient.sessionStreamController!.add(
           _event(
@@ -572,7 +572,7 @@ void main() {
       });
 
       test('handles SessionStatusPayload with custom message', () async {
-        repo.subscribe();
+        await repo.subscribe();
 
         fakeClient.sessionStreamController!.add(
           _event(
@@ -594,7 +594,7 @@ void main() {
       test(
         'handles SessionStatusPayload with empty message (uses default)',
         () async {
-          repo.subscribe();
+          await repo.subscribe();
 
           fakeClient.sessionStreamController!.add(
             _event(
@@ -613,7 +613,7 @@ void main() {
       );
 
       test('handles ErrorPayload', () async {
-        repo.subscribe();
+        await repo.subscribe();
 
         fakeClient.sessionStreamController!.add(
           _event(
@@ -633,7 +633,7 @@ void main() {
       });
 
       test('ignores event with null payload', () async {
-        repo.subscribe();
+        await repo.subscribe();
 
         fakeClient.sessionStreamController!.add(
           _event(eventId: 'evt-null', payload: null),
@@ -645,7 +645,7 @@ void main() {
       });
 
       test('tracks lastEventId from received events', () async {
-        repo.subscribe();
+        await repo.subscribe();
 
         fakeClient.sessionStreamController!.add(
           _event(
@@ -670,7 +670,7 @@ void main() {
           addConnectedServer();
 
           // First inject an ask-user message via event stream.
-          repo.subscribe();
+          await repo.subscribe();
 
           fakeClient.sessionStreamController!.add(
             _event(
@@ -704,7 +704,7 @@ void main() {
 
       test('shows error message when sendAskUserReply fails', () async {
         addConnectedServer();
-        repo.subscribe();
+        await repo.subscribe();
 
         fakeClient.sessionStreamController!.add(
           _event(
@@ -752,7 +752,7 @@ void main() {
     group('watchMessages', () {
       test('emits message lists on events', () async {
         addConnectedServer();
-        repo.subscribe();
+        await repo.subscribe();
 
         final collected = <List<ChatMessage>>[];
         final sub = repo.watchMessages().listen(collected.add);
@@ -798,7 +798,7 @@ void main() {
     group('upsert behavior', () {
       test('replaces existing message with same id', () async {
         addConnectedServer();
-        repo.subscribe();
+        await repo.subscribe();
 
         // Plan messages use id 'plan-<agentId>', so sending two plans
         // for the same agent should result in one message.
@@ -851,7 +851,7 @@ void main() {
     group('plan step status mapping', () {
       test('maps WsPlanStepStatus.failed to PlanStepStatus.failed', () async {
         addConnectedServer();
-        repo.subscribe();
+        await repo.subscribe();
 
         fakeClient.sessionStreamController!.add(
           _event(

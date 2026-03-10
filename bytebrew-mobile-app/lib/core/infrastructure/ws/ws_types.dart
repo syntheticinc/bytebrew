@@ -64,6 +64,7 @@ class ListSessionsResult {
 /// The type of a session event received from the server.
 enum SessionEventType {
   unspecified,
+  userMessage,
   agentMessage,
   toolCallStart,
   toolCallEnd,
@@ -102,6 +103,13 @@ class SessionEvent {
 /// Base class for session event payloads.
 sealed class SessionEventPayload {
   const SessionEventPayload();
+}
+
+/// Payload for a user message event (from backfill history).
+class UserMessagePayload extends SessionEventPayload {
+  const UserMessagePayload({required this.content});
+
+  final String content;
 }
 
 /// Payload for an agent message event.

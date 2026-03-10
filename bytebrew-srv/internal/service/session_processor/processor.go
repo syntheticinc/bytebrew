@@ -147,6 +147,9 @@ func (p *Processor) processMessage(ctx context.Context, sessionID, message strin
 
 	eventStream := NewEventStream(sessionID, p.registry)
 
+	// Broadcast user message so it appears in backfill history on reconnect.
+	eventStream.PublishUserMessage(message)
+
 	eventStream.PublishProcessingStarted()
 
 	proxy := tools.NewLocalClientOperationsProxy(projectRoot)

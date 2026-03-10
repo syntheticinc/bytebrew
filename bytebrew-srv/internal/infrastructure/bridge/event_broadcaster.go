@@ -53,12 +53,14 @@ func (b *EventBroadcaster) Subscribe(deviceID, sessionID, lastEventID string) {
 
 	slog.Info("device subscribed to session", "device_id", deviceID, "session_id", sessionID)
 
+	// Backfill missed events (full history if no lastEventID, or delta after lastEventID).
+	var missed []BufferedEvent
 	if lastEventID == "" {
-		return
+		missed = b.buffer.GetAllForSession(sessionID)
+	} else {
+		missed = b.buffer.GetAfter(lastEventID)
 	}
 
-	// Backfill missed events.
-	missed := b.buffer.GetAfter(lastEventID)
 	for _, evt := range missed {
 		if evt.SessionID != sessionID {
 			continue
@@ -219,6 +221,13 @@ func serializeEventForMobile(event *pb.SessionEvent) map[string]interface{} {
 			"type":    "Error",
 			"message": msg,
 			"code":    "error",
+		}
+
+	case pb.SessionEventType_SESSION_EVENT_USER_MESSAGE:
+		return map[string]interface{}{
+			"type":    "UserMessage",
+			"content": event.GetContent(),
+			"role":    "user",
 		}
 
 	case pb.SessionEventType_SESSION_EVENT_PLAN_UPDATE:

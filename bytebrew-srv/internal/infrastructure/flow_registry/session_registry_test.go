@@ -127,9 +127,12 @@ func TestSessionRegistry_ReplayEvents(t *testing.T) {
 	replayed = reg.ReplayEvents("s1", "evt-3")
 	assert.Empty(t, replayed)
 
-	// Replay with empty lastEventID should return nothing
+	// Replay with empty lastEventID should return full history
 	replayed = reg.ReplayEvents("s1", "")
-	assert.Empty(t, replayed)
+	require.Len(t, replayed, 3)
+	assert.Equal(t, "evt-1", replayed[0].EventId)
+	assert.Equal(t, "evt-2", replayed[1].EventId)
+	assert.Equal(t, "evt-3", replayed[2].EventId)
 }
 
 func TestSessionRegistry_EnqueueDequeueMessage(t *testing.T) {

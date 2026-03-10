@@ -594,6 +594,7 @@ class WsBridgeClient {
       return SessionEventType.unspecified;
     }
     return switch (type) {
+      'UserMessage' => SessionEventType.userMessage,
       'MessageChunk' ||
       'MessageCompleted' => SessionEventType.agentMessage,
       'ToolExecutionStarted' => SessionEventType.toolCallStart,
@@ -654,6 +655,9 @@ class WsBridgeClient {
       SessionEventType.error => ErrorPayload(
         code: eventJson['code'] as String? ?? '',
         message: eventJson['message'] as String? ?? '',
+      ),
+      SessionEventType.userMessage => UserMessagePayload(
+        content: eventJson['content'] as String? ?? '',
       ),
       SessionEventType.unspecified => null,
     };

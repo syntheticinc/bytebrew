@@ -187,7 +187,10 @@ func (r *SessionRegistry) ReplayEvents(sessionID, lastEventID string) []*pb.Sess
 	defer entry.mu.RUnlock()
 
 	if lastEventID == "" {
-		return nil
+		// Return full history for initial subscribe (no lastEventID = first connection).
+		result := make([]*pb.SessionEvent, len(entry.eventLog))
+		copy(result, entry.eventLog)
+		return result
 	}
 
 	// Find the event after lastEventID

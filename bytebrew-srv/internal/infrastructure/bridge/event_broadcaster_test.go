@@ -386,6 +386,69 @@ func TestEventBroadcaster_SubscribeAndReceiveEvents(t *testing.T) {
 	assert.Equal(t, "Done!", evt3["content"])
 }
 
+// Subscribe with empty lastEventID backfills ALL events from buffer.
+func TestEventBroadcaster_BackfillsAllOnEmptyLastEventID(t *testing.T) {
+	sender := newMockMessageSender()
+	broadcaster := NewEventBroadcaster(sender)
+
+	// Broadcast 3 events before any subscriber.
+	broadcaster.BroadcastEvent("sess-1", &pb.SessionEvent{
+		Type:    pb.SessionEventType_SESSION_EVENT_PROCESSING_STARTED,
+	})
+	broadcaster.BroadcastEvent("sess-1", &pb.SessionEvent{
+		Type:    pb.SessionEventType_SESSION_EVENT_ANSWER,
+		Content: "hello",
+		AgentId: "supervisor",
+	})
+	broadcaster.BroadcastEvent("sess-1", &pb.SessionEvent{
+		Type: pb.SessionEventType_SESSION_EVENT_PROCESSING_STOPPED,
+	})
+
+	// Subscribe with empty lastEventID → should receive ALL 3 events.
+	broadcaster.Subscribe("dev-1", "sess-1", "")
+
+	msgs := sender.getMessages("dev-1")
+	require.Len(t, msgs, 3, "should backfill all 3 events on empty lastEventID")
+
+	evt0 := msgs[0].Payload["event"].(map[string]interface{})
+	assert.Equal(t, "ProcessingStarted", evt0["type"])
+	assert.Equal(t, "mevt-1", msgs[0].Payload["event_id"])
+
+	evt1 := msgs[1].Payload["event"].(map[string]interface{})
+	assert.Equal(t, "MessageCompleted", evt1["type"])
+	assert.Equal(t, "mevt-2", msgs[1].Payload["event_id"])
+
+	evt2 := msgs[2].Payload["event"].(map[string]interface{})
+	assert.Equal(t, "ProcessingStopped", evt2["type"])
+	assert.Equal(t, "mevt-3", msgs[2].Payload["event_id"])
+}
+
+// Subscribe with empty lastEventID only backfills events for the subscribed session.
+func TestEventBroadcaster_BackfillAllFiltersBySession(t *testing.T) {
+	sender := newMockMessageSender()
+	broadcaster := NewEventBroadcaster(sender)
+
+	broadcaster.BroadcastEvent("sess-1", &pb.SessionEvent{
+		Type:    pb.SessionEventType_SESSION_EVENT_ANSWER,
+		Content: "for sess-1",
+		AgentId: "supervisor",
+	})
+	broadcaster.BroadcastEvent("sess-2", &pb.SessionEvent{
+		Type:    pb.SessionEventType_SESSION_EVENT_ANSWER,
+		Content: "for sess-2",
+		AgentId: "supervisor",
+	})
+
+	// Subscribe to sess-1 with empty lastEventID.
+	broadcaster.Subscribe("dev-1", "sess-1", "")
+
+	msgs := sender.getMessages("dev-1")
+	require.Len(t, msgs, 1, "should only backfill sess-1 events")
+
+	evt := msgs[0].Payload["event"].(map[string]interface{})
+	assert.Equal(t, "for sess-1", evt["content"])
+}
+
 // TC-B-13: Backfill reconnect — subscribe with last_event_id → missed events replayed.
 func TestEventBroadcaster_BackfillOnReconnect(t *testing.T) {
 	sender := newMockMessageSender()

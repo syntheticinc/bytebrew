@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'package:bytebrew_mobile/core/domain/agent_info.dart';
+
 import 'package:bytebrew_mobile/core/domain/ask_user.dart';
 import 'package:bytebrew_mobile/core/domain/chat_message.dart';
 import 'package:bytebrew_mobile/core/domain/mobile_session.dart';
 import 'package:bytebrew_mobile/core/domain/plan.dart';
 import 'package:bytebrew_mobile/core/domain/tool_call.dart';
+import 'package:bytebrew_mobile/core/infrastructure/storage/chat_message_store.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection_manager.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_types.dart';
@@ -18,17 +20,24 @@ import 'package:bytebrew_mobile/features/chat/domain/chat_repository.dart';
 /// Manages an internal message list, handles optimistic updates for user
 /// actions, and processes session events from the server subscription.
 class WsChatRepository implements ChatRepository {
+  static const _maxMessages = 100;
   WsChatRepository({
     required WsConnectionManager connectionManager,
     required String serverId,
     required String sessionId,
+    ChatMessageStore? messageStore,
   }) : _connectionManager = connectionManager,
        _serverId = serverId,
-       _sessionId = sessionId;
+       _sessionId = sessionId,
+       _messageStore = messageStore;
 
   final WsConnectionManager _connectionManager;
   final String _serverId;
   final String _sessionId;
+  final ChatMessageStore? _messageStore;
+
+  /// Whether messages have been loaded from the local DB.
+  bool _dbLoaded = false;
 
   final List<ChatMessage> _messages = [];
   final StreamController<List<ChatMessage>> _messageController =
@@ -48,6 +57,15 @@ class WsChatRepository implements ChatRepository {
   StreamSubscription<SessionEvent>? _subscription;
   String? _lastEventId;
   bool _disposed = false;
+
+  /// Whether the first batch of events has been received from subscribe.
+  /// Used by the UI to show a loader instead of empty state while waiting.
+  bool _historyLoaded = false;
+  bool get isHistoryLoaded => _historyLoaded;
+
+  /// Debounce timer for _emitMessages to batch rapid backfill events.
+  Timer? _emitDebounce;
+
   VoidCallback? _connectionListener;
 
   /// Tracks the last observed connection status to detect actual transitions.
@@ -64,8 +82,33 @@ class WsChatRepository implements ChatRepository {
   // ChatRepository
   // ---------------------------------------------------------------------------
 
+  /// Loads messages from the local database if not yet loaded.
+  ///
+  /// Called lazily on first [getMessages] and before [subscribe] so that
+  /// the in-memory list is seeded from persistent storage.
+  Future<void> _loadFromDb() async {
+    if (_dbLoaded || _messageStore == null) return;
+    _dbLoaded = true;
+
+    try {
+      final stored = await _messageStore.getMessages(_sessionId);
+      if (stored.isEmpty) return;
+
+      // Merge stored messages into in-memory list without duplicates.
+      for (final msg in stored) {
+        final idx = _messages.indexWhere((m) => m.id == msg.id);
+        if (idx == -1) {
+          _messages.add(msg);
+        }
+      }
+    } catch (e) {
+      debugPrint('[WsChatRepository] Failed to load from DB: $e');
+    }
+  }
+
   @override
   Future<List<ChatMessage>> getMessages(String sessionId) async {
+    await _loadFromDb();
     return List.unmodifiable(_messages);
   }
 
@@ -226,10 +269,12 @@ class WsChatRepository implements ChatRepository {
 
   /// Subscribes to session events from the server.
   ///
-  /// Registers a listener on [WsConnectionManager] to automatically
+  /// Loads persisted messages from the local database before subscribing,
+  /// then registers a listener on [WsConnectionManager] to automatically
   /// re-subscribe whenever the connection becomes available again after
   /// a disconnect or reconnect.
-  void subscribe() {
+  Future<void> subscribe() async {
+    await _loadFromDb();
     _subscribeInternal();
 
     _connectionListener = _onConnectionChange;
@@ -246,14 +291,14 @@ class WsChatRepository implements ChatRepository {
     final previousStatus = _lastConnectionStatus;
     _lastConnectionStatus = currentStatus;
 
-    if (currentStatus != WsConnectionStatus.connected) {
-      _subscription?.cancel();
-      _subscription = null;
-      return;
-    }
+    if (currentStatus != WsConnectionStatus.connected) return;
 
-    // Re-subscribe only on transition TO connected (from non-connected).
-    if (previousStatus != WsConnectionStatus.connected) {
+    // Only re-subscribe if we don't have an active subscription.
+    // WsBridgeClient handles proactive reconnect internally via
+    // _resubscribeAll() — we must NOT create a new subscribe call here
+    // because that overwrites the correct last_event_id with null.
+    if (_subscription == null &&
+        previousStatus != WsConnectionStatus.connected) {
       debugPrint('[WsChatRepository] Connection restored — re-subscribing');
       _subscribeInternal();
     }
@@ -312,6 +357,8 @@ class WsChatRepository implements ChatRepository {
     }
     _subscription?.cancel();
     _subscription = null;
+    _emitDebounce?.cancel();
+    _emitDebounce = null;
     _seenEventIds.clear();
     _messageController.close();
     _processingController.close();
@@ -339,6 +386,8 @@ class WsChatRepository implements ChatRepository {
     if (payload == null) return;
 
     switch (payload) {
+      case UserMessagePayload():
+        _handleUserMessage(event, payload);
       case AgentMessagePayload():
         _handleAgentMessage(event, payload);
       case ToolCallStartPayload():
@@ -360,6 +409,30 @@ class WsChatRepository implements ChatRepository {
     }
   }
 
+  void _handleUserMessage(SessionEvent event, UserMessagePayload payload) {
+    // Remove the first optimistic user message (id starts with 'user-') that
+    // has the same content. Only remove ONE to handle duplicate content correctly.
+    final idx = _messages.indexWhere(
+      (m) =>
+          m.type == ChatMessageType.userMessage &&
+          m.id.startsWith('user-') &&
+          m.content == payload.content,
+    );
+    if (idx != -1) {
+      _messages.removeAt(idx);
+    }
+
+    _upsertMessage(
+      ChatMessage(
+        id: event.eventId,
+        type: ChatMessageType.userMessage,
+        content: payload.content,
+        timestamp: event.timestamp,
+      ),
+    );
+    _emitMessages();
+  }
+
   void _handleAgentMessage(SessionEvent event, AgentMessagePayload payload) {
     if (payload.isComplete) {
       // Remove streaming accumulator messages for this agent.
@@ -367,8 +440,9 @@ class WsChatRepository implements ChatRepository {
       // so match by agentId prefix pattern instead of exact streamId.
       final agentPrefix = '${event.agentId}-';
       _messages.removeWhere(
-        (m) => m.type == ChatMessageType.agentMessage &&
-               m.id.startsWith(agentPrefix),
+        (m) =>
+            m.type == ChatMessageType.agentMessage &&
+            m.id.startsWith(agentPrefix),
       );
 
       _upsertMessage(
@@ -518,7 +592,9 @@ class WsChatRepository implements ChatRepository {
     final nowProcessing = payload.state == MobileSessionState.active;
     if (nowProcessing != _isProcessing) {
       _isProcessing = nowProcessing;
-      if (!_disposed) {
+      // Don't emit processing state during history backfill to avoid
+      // stop→send button flickering on chat open.
+      if (!_disposed && _historyLoaded) {
         _processingController.add(_isProcessing);
       }
     }
@@ -569,8 +645,9 @@ class WsChatRepository implements ChatRepository {
       lastActivityAt: event.timestamp,
     );
 
-    final existingIndex =
-        _agents.indexWhere((a) => a.agentId == payload.agentId);
+    final existingIndex = _agents.indexWhere(
+      (a) => a.agentId == payload.agentId,
+    );
     if (existingIndex != -1) {
       _agents[existingIndex] = agent;
     } else {
@@ -596,8 +673,9 @@ class WsChatRepository implements ChatRepository {
 
   String _formatLifecycleMessage(AgentLifecyclePayload payload) {
     final shortId = payload.agentId.replaceFirst('code-agent-', '');
-    final label =
-        payload.agentId == 'supervisor' ? 'Supervisor' : 'Code Agent [$shortId]';
+    final label = payload.agentId == 'supervisor'
+        ? 'Supervisor'
+        : 'Code Agent [$shortId]';
     return switch (payload.lifecycleType) {
       'agent_spawned' => '+ $label spawned: "${payload.description}"',
       'agent_completed' => '✓ $label completed',
@@ -655,12 +733,99 @@ class WsChatRepository implements ChatRepository {
     }
   }
 
+  /// Schedules a debounced emission of the current message list.
+  ///
+  /// Backfill events arrive one by one over ~100-300ms. Without debounce,
+  /// each event triggers a UI rebuild showing messages appearing one at a time.
+  /// The debounce collects all events within a short window and emits them
+  /// as a single batch, giving a smooth "history loaded" appearance.
+  ///
+  /// For user-initiated actions (send, cancel) we want immediate feedback,
+  /// but those go through optimistic updates that don't call _emitMessages.
+  /// Emits messages with debounce during backfill, immediately during live.
   void _emitMessages() {
     if (_disposed) return;
+    if (_historyLoaded) {
+      _emitDebounce?.cancel();
+      _flushMessages();
+    } else {
+      _emitDebounce?.cancel();
+      _emitDebounce = Timer(const Duration(milliseconds: 150), _flushMessages);
+    }
+  }
+
+  void _flushMessages() {
+    if (_disposed) return;
+
+    final wasFirstBatch = !_historyLoaded;
+    _historyLoaded = true;
+
+    // Emit the final processing state after backfill completes so the UI
+    // shows the correct button (send vs stop) without intermediate flicker.
+    if (wasFirstBatch && _isProcessing) {
+      _processingController.add(true);
+    }
+
     // Sort by timestamp so replayed events (from re-subscribe after reconnect)
     // appear in correct chronological order.
     _messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+    // Trim oldest messages to keep UI performant.
+    if (_messages.length > _maxMessages) {
+      _messages.removeRange(0, _messages.length - _maxMessages);
+    }
+
     _messageController.add(List.unmodifiable(_messages));
+
+    // Persist to local database (fire-and-forget).
+    _persistMessages();
+  }
+
+  /// Writes the current message list to SQLite.
+  ///
+  /// Runs asynchronously without blocking the UI. Errors are logged but
+  /// do not interrupt the message stream.
+  void _persistMessages() {
+    if (_messageStore == null) return;
+
+    // Filter out transient streaming messages (id pattern: "agentId-step").
+    // Only persist messages with stable IDs.
+    final persistable = _messages.where(_isPersistable).toList();
+    if (persistable.isEmpty) return;
+
+    _messageStore.upsertMessages(_sessionId, persistable).catchError((e) {
+      debugPrint('[WsChatRepository] Failed to persist messages: $e');
+    });
+  }
+
+  /// Returns true if a message should be persisted to the database.
+  ///
+  /// Excludes transient streaming accumulator messages (which have synthetic
+  /// IDs like "agentId-step") and temporary optimistic user messages (which
+  /// have IDs like "user-timestamp"). These are replaced by server-confirmed
+  /// versions with real event IDs.
+  static bool _isPersistable(ChatMessage message) {
+    // Optimistic user messages are replaced by server-confirmed ones.
+    if (message.id.startsWith('user-')) return false;
+    // Send-timeout error is transient.
+    if (message.id == _sendErrorId) return false;
+    // Streaming accumulator messages have synthetic IDs like "agentId-step".
+    // Real event IDs from the server are UUIDs or longer alphanumeric strings.
+    // A simple heuristic: if the ID contains a hyphen and the part after the
+    // last hyphen is a pure number, it's likely a streaming accumulator.
+    final lastHyphen = message.id.lastIndexOf('-');
+    if (lastHyphen != -1) {
+      final suffix = message.id.substring(lastHyphen + 1);
+      if (suffix.isNotEmpty && int.tryParse(suffix) != null) {
+        // But allow IDs like "ask-uuid" and "plan-agentId" and "error-timestamp"
+        // and "lifecycle-uuid". Only skip if prefix looks like an agent ID.
+        final prefix = message.id.substring(0, lastHyphen);
+        if (prefix.startsWith('code-agent') || prefix == 'supervisor') {
+          return false;
+        }
+      }
+    }
+    return true;
   }
 
   static PlanStepStatus _mapPlanStepStatus(WsPlanStepStatus status) {

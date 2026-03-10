@@ -153,12 +153,16 @@ func TestProcessMessage(t *testing.T) {
 	// Wait a moment for events to be published
 	time.Sleep(50 * time.Millisecond)
 
-	// Verify events were published (ProcessingStarted + ProcessingStopped)
+	// Verify events were published (UserMessage + ProcessingStarted + ProcessingStopped)
 	events := registry.getEvents()
-	require.GreaterOrEqual(t, len(events), 2, "should have at least ProcessingStarted + ProcessingStopped events")
+	require.GreaterOrEqual(t, len(events), 3, "should have at least UserMessage + ProcessingStarted + ProcessingStopped events")
 
-	// First event should be ProcessingStarted
-	assert.Equal(t, pb.SessionEventType_SESSION_EVENT_PROCESSING_STARTED, events[0].Type)
+	// First event should be UserMessage (user's message recorded for backfill)
+	assert.Equal(t, pb.SessionEventType_SESSION_EVENT_USER_MESSAGE, events[0].Type)
+	assert.Equal(t, "hello", events[0].Content)
+
+	// Second event should be ProcessingStarted
+	assert.Equal(t, pb.SessionEventType_SESSION_EVENT_PROCESSING_STARTED, events[1].Type)
 
 	// Last event should be ProcessingStopped
 	assert.Equal(t, pb.SessionEventType_SESSION_EVENT_PROCESSING_STOPPED, events[len(events)-1].Type)

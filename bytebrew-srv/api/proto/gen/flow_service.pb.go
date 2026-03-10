@@ -97,6 +97,7 @@ const (
 	SessionEventType_SESSION_EVENT_ASK_USER             SessionEventType = 8
 	SessionEventType_SESSION_EVENT_PROCESSING_STOPPED   SessionEventType = 9
 	SessionEventType_SESSION_EVENT_ERROR                SessionEventType = 10
+	SessionEventType_SESSION_EVENT_USER_MESSAGE         SessionEventType = 11
 )
 
 // Enum value maps for SessionEventType.
@@ -113,6 +114,7 @@ var (
 		8:  "SESSION_EVENT_ASK_USER",
 		9:  "SESSION_EVENT_PROCESSING_STOPPED",
 		10: "SESSION_EVENT_ERROR",
+		11: "SESSION_EVENT_USER_MESSAGE",
 	}
 	SessionEventType_value = map[string]int32{
 		"SESSION_EVENT_UNSPECIFIED":          0,
@@ -126,6 +128,7 @@ var (
 		"SESSION_EVENT_ASK_USER":             8,
 		"SESSION_EVENT_PROCESSING_STOPPED":   9,
 		"SESSION_EVENT_ERROR":                10,
+		"SESSION_EVENT_USER_MESSAGE":         11,
 	}
 )
 
@@ -1591,7 +1594,7 @@ const file_flow_service_proto_rawDesc = "" +
 	"\x17RESPONSE_TYPE_TOOL_CALL\x10\x03\x12\x1d\n" +
 	"\x19RESPONSE_TYPE_TOOL_RESULT\x10\x04\x12\x1e\n" +
 	"\x1aRESPONSE_TYPE_ANSWER_CHUNK\x10\x05\x12\x17\n" +
-	"\x13RESPONSE_TYPE_ERROR\x10\x06*\xf6\x02\n" +
+	"\x13RESPONSE_TYPE_ERROR\x10\x06*\x96\x03\n" +
 	"\x10SessionEventType\x12\x1d\n" +
 	"\x19SESSION_EVENT_UNSPECIFIED\x10\x00\x12$\n" +
 	" SESSION_EVENT_PROCESSING_STARTED\x10\x01\x12\x1e\n" +
@@ -1604,7 +1607,8 @@ const file_flow_service_proto_rawDesc = "" +
 	"\x16SESSION_EVENT_ASK_USER\x10\b\x12$\n" +
 	" SESSION_EVENT_PROCESSING_STOPPED\x10\t\x12\x17\n" +
 	"\x13SESSION_EVENT_ERROR\x10\n" +
-	"2\xae\x03\n" +
+	"\x12\x1e\n" +
+	"\x1aSESSION_EVENT_USER_MESSAGE\x10\v2\xae\x03\n" +
 	"\vFlowService\x12F\n" +
 	"\vExecuteFlow\x12\x18.bytebrew.v1.FlowRequest\x1a\x19.bytebrew.v1.FlowResponse(\x010\x01\x12V\n" +
 	"\rCreateSession\x12!.bytebrew.v1.CreateSessionRequest\x1a\".bytebrew.v1.CreateSessionResponse\x12P\n" +

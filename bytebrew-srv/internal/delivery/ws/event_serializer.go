@@ -88,6 +88,13 @@ func serializeEvent(event *pb.SessionEvent) map[string]interface{} {
 			"code":    "error",
 		}
 
+	case pb.SessionEventType_SESSION_EVENT_USER_MESSAGE:
+		return map[string]interface{}{
+			"type":    "UserMessage",
+			"content": event.GetContent(),
+			"role":    "user",
+		}
+
 	case pb.SessionEventType_SESSION_EVENT_PLAN_UPDATE:
 		steps := make([]map[string]interface{}, 0, len(event.GetPlanSteps()))
 		for _, s := range event.GetPlanSteps() {

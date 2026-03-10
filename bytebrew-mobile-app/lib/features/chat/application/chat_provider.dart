@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:bytebrew_mobile/core/domain/ask_user.dart';
 import 'package:bytebrew_mobile/core/domain/chat_message.dart';
 import 'package:bytebrew_mobile/core/domain/plan.dart';
+import 'package:bytebrew_mobile/core/infrastructure/storage/chat_message_store.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_providers.dart';
 import 'package:bytebrew_mobile/features/chat/domain/chat_repository.dart';
 import 'package:bytebrew_mobile/features/chat/infrastructure/empty_chat_repository.dart';
@@ -11,6 +12,16 @@ import 'package:bytebrew_mobile/features/sessions/application/sessions_provider.
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'chat_provider.g.dart';
+
+/// Singleton [ChatMessageStore] for persisting chat messages to SQLite.
+///
+/// Kept alive to avoid re-opening the database on every chat screen visit.
+@Riverpod(keepAlive: true)
+ChatMessageStore chatMessageStore(Ref ref) {
+  final store = ChatMessageStore();
+  ref.onDispose(store.close);
+  return store;
+}
 
 /// Provides a default [ChatRepository].
 ///
@@ -36,10 +47,12 @@ ChatRepository sessionChatRepository(Ref ref, String sessionId) {
   if (session == null) return const EmptyChatRepository();
 
   final manager = ref.read(connectionManagerProvider);
+  final store = ref.read(chatMessageStoreProvider);
   final repo = WsChatRepository(
     connectionManager: manager,
     serverId: session.serverId,
     sessionId: sessionId,
+    messageStore: store,
   );
   repo.subscribe();
   ref.onDispose(repo.dispose);
@@ -63,14 +76,29 @@ class ChatMessages extends _$ChatMessages {
     _subscription?.cancel();
 
     final messageStream = repo.watchMessages();
-    if (messageStream != null) {
-      _subscription = messageStream.listen((messages) {
-        state = AsyncData(messages);
-      });
-      ref.onDispose(() => _subscription?.cancel());
+    if (messageStream == null) {
+      return repo.getMessages(sessionId);
     }
 
-    return repo.getMessages(sessionId);
+    // Subscribe to live updates — each emission replaces the state.
+    _subscription = messageStream.listen((messages) {
+      state = AsyncData(messages);
+    });
+    ref.onDispose(() => _subscription?.cancel());
+
+    // If messages are already loaded (rebuild after reconnect), return them.
+    final existing = await repo.getMessages(sessionId);
+    if (existing.isNotEmpty) return existing;
+
+    // Otherwise wait for the first stream event (history backfill) so the
+    // provider stays in AsyncLoading until real data arrives, preventing
+    // the empty-state flash. Timeout prevents infinite spinner when the
+    // session genuinely has no history.
+    try {
+      return await messageStream.first.timeout(const Duration(seconds: 3));
+    } on TimeoutException {
+      return const [];
+    }
   }
 
   /// Sends a user [text] message to the current session.
