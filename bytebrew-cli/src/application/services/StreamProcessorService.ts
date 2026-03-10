@@ -16,6 +16,7 @@ import { handleAnswerChunk, handleAnswer } from './handlers/AnswerStreamHandler.
 import { handleReasoning } from './handlers/ReasoningHandler.js';
 import { handleToolCall, handleServerToolResult } from './handlers/ToolExecutionHandler.js';
 import { handleStreamError, handleError } from './handlers/ErrorHandler.js';
+import { handleUserMessage } from './handlers/UserMessageHandler.js';
 import type { AgentLifecycleType } from '../../domain/ports/IEventBus.js';
 import { formatLifecycleMessage } from '../../presentation/utils/formatLifecycleMessage.js';
 
@@ -309,6 +310,10 @@ export class StreamProcessorService {
 
       case 'TOOL_RESULT':
         handleServerToolResult(ctx, response);
+        break;
+
+      case 'USER_MESSAGE':
+        handleUserMessage(ctx, response);
         break;
 
       case 'ERROR':

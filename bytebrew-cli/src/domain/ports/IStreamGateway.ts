@@ -8,6 +8,7 @@ export type StreamResponseType =
   | 'TOOL_CALL'
   | 'TOOL_RESULT'
   | 'ANSWER_CHUNK'
+  | 'USER_MESSAGE'
   | 'ERROR';
 
 // SubResult for grouped tool operations

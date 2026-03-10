@@ -127,6 +127,13 @@ export function convertEventToStreamResponse(event: WsSessionEvent): StreamRespo
         },
       };
 
+    case 'UserMessage':
+      return {
+        type: 'USER_MESSAGE',
+        content: event.content || '',
+        isFinal: true,
+      };
+
     case 'ProcessingStarted':
       return {
         type: 'ANSWER_CHUNK',
