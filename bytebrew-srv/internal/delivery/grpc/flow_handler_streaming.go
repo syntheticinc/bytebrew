@@ -146,7 +146,9 @@ func (h *FlowHandler) SubscribeSession(req *pb.SubscribeSessionRequest, stream p
 	defer cleanup()
 
 	// Start message processing loop via shared SessionProcessor
-	h.sessionProcessor.StartProcessing(ctx, sessionID)
+	if h.sessionProcessor != nil {
+		h.sessionProcessor.StartProcessing(ctx, sessionID)
+	}
 
 	// Main event loop — stream events to client
 	for {

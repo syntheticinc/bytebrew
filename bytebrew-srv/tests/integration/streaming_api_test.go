@@ -19,6 +19,7 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/tools"
 	agentservice "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/agent"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/engine"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/session_processor"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -85,6 +86,7 @@ func NewStreamingHarness(t *testing.T, scenario string) *StreamingHarness {
 
 	flowReg := flow_registry.NewInMemoryRegistry()
 	sessionReg := flow_registry.NewSessionRegistry()
+	sessProcessor := session_processor.New(sessionReg, factory)
 
 	flowHandler, err := deliverygrpc.NewFlowHandlerWithConfig(deliverygrpc.FlowHandlerConfig{
 		AgentService:        &testutil.NoopAgentService{},
@@ -94,6 +96,7 @@ func NewStreamingHarness(t *testing.T, scenario string) *StreamingHarness {
 		AgentPoolProxy:      agentPool,
 		AgentPoolAdapter:    agentPoolAdapter,
 		SessionRegistry:     sessionReg,
+		SessionProcessor:    sessProcessor,
 	})
 	if err != nil {
 		cancel()

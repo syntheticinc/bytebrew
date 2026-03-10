@@ -163,11 +163,10 @@ describe('E2E: ChatApp with WebSocket transport', () => {
 
       // Second message
       container.streamProcessor.sendMessage('What number did I mention?');
-      await waitForProcessingStopped(container);
-
-      const messages = container.messageRepository.findComplete();
-      // Should have at least 4 messages: user1, assistant1, user2, assistant2
-      expect(messages.length).toBeGreaterThanOrEqual(4);
+      // Wait for messages to accumulate (waitForProcessingStopped may return
+      // before processing starts if there's a gap between sendMessage and
+      // the server picking it up).
+      await waitForMessages(container, (msgs) => msgs.length >= 4);
     } finally {
       if (instance) instance.unmount();
       await container.dispose();
