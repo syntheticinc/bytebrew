@@ -135,6 +135,9 @@ class FakeChatRepository implements ChatRepository {
 
   @override
   Stream<List<AgentInfo>>? watchAgents() => null;
+
+  @override
+  Stream<bool>? watchProcessing() => null;
 }
 
 /// Extended fake [ChatRepository] with a [StreamController] for real-time
@@ -185,6 +188,9 @@ class StreamableFakeChatRepository implements ChatRepository {
 
   @override
   Stream<List<AgentInfo>>? watchAgents() => null;
+
+  @override
+  Stream<bool>? watchProcessing() => null;
 }
 
 /// Extended [StreamableFakeChatRepository] with agent stream support.

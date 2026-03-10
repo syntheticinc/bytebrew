@@ -12,25 +12,22 @@ import os from 'os';
 /**
  * E2E tests with real Go test server (mock LLM).
  *
- * These tests use REAL StreamingGateway + REAL Go server components:
- * - FlowHandler
+ * These tests use REAL WsStreamGateway + REAL Go server components:
+ * - WS Server + SessionProcessor
  * - EngineTurnExecutorFactory
  * - EngineAdapter
  * - Engine + REACT agent
- * - GrpcAgentEventStream
- * - gRPC + protobuf serialization
  *
  * Only difference from production: MockChatModel instead of OpenRouter/Ollama.
  *
  * What's tested that integration tests (TC-1—TC-22) DON'T cover:
- * - gRPC protobuf encoding/decoding
- * - GrpcAgentEventStream transformation (domain.AgentEvent → pb.FlowResponse)
- * - FlowHandler flow management, session handling
+ * - WS event serialization/deserialization
+ * - SessionProcessor flow management, session handling
  * - REACT agent loop (tool call → execute → ChatModel again)
  * - Engine execution pipeline
  * - Tool classification and routing
  */
-describe('E2E: ChatApp with real gRPC + Go server', () => {
+describe('E2E: ChatApp with real Go server', () => {
   let server: TestServerHelper;
   let testDir: string;
 
@@ -132,11 +129,13 @@ func AuthMiddleware(next http.Handler) http.Handler {
     execSync('git add -A', { cwd: dir, stdio: 'ignore' });
   }
 
-  // Helper: create container with REAL StreamingGateway (no mock!)
+  // Helper: create container with WsStreamGateway (no mock!)
   function createTestContainer(port: number, projectRoot?: string): Container {
+    const wsPort = server.wsPort;
     const container = new Container({
       projectRoot: projectRoot || '/test',
       serverAddress: `localhost:${port}`,
+      wsAddress: wsPort ? `localhost:${wsPort}` : undefined,
       projectKey: 'e2e-test',
       headlessMode: true,
       askUserCallback: async (question: string) => 'approved',
@@ -202,8 +201,8 @@ func AuthMiddleware(next http.Handler) http.Handler {
     throw new Error('Timeout waiting for processing to stop');
   }
 
-  // E2E-1: Echo (базовый gRPC pipeline)
-  it('receives text answer via real gRPC pipeline', async () => {
+  // E2E-1: Echo (базовый pipeline)
+  it('receives text answer via real server pipeline', async () => {
     await server.start('echo');
     const container = createTestContainer(server.port);
     let instance: ReturnType<typeof render> | null = null;
@@ -277,7 +276,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
   }, 30000);
 
   // E2E-3: Reasoning
-  it('receives reasoning content via real gRPC', async () => {
+  it('receives reasoning content via real server', async () => {
     await server.start('reasoning');
     const container = createTestContainer(server.port);
     let instance: ReturnType<typeof render> | null = null;
@@ -1814,11 +1813,11 @@ func AuthMiddleware(next http.Handler) http.Handler {
 
   // E2E-38: lsp tool pipeline round-trip
   // Tests that lsp tool call flows through the full pipeline:
-  // MockChatModel → REACT agent → gRPC proxy → client lspTool → result back to model
+  // MockChatModel → REACT agent → server proxy → client lspTool → result back to model
   // In test environment, LSP servers may not be running, so the tool may return
   // "No symbols found..." or "Symbol search unavailable..." — this is expected.
   // The test verifies the PIPELINE works, not the LSP quality.
-  it('executes lsp tool through full gRPC proxy pipeline', async () => {
+  it('executes lsp tool through full server pipeline', async () => {
     await server.start('lsp-definition');
     const container = createTestContainer(server.port, testDir);
 
@@ -1860,7 +1859,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
   }, 30000);
 
   // E2E-39: lsp references operation pipeline
-  it('executes lsp references through gRPC proxy pipeline', async () => {
+  it('executes lsp references through server pipeline', async () => {
     await server.start('lsp-references');
     const container = createTestContainer(server.port, testDir);
 
@@ -1894,7 +1893,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
   }, 30000);
 
   // E2E-40: lsp implementation operation pipeline
-  it('executes lsp implementation through gRPC proxy pipeline', async () => {
+  it('executes lsp implementation through server pipeline', async () => {
     await server.start('lsp-implementation');
     const container = createTestContainer(server.port, testDir);
 
@@ -1931,7 +1930,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
   // Server-side lsp_tool.go validates operation BEFORE proxying to client.
   // Invalid operation is caught on the server → error string returned as tool result →
   // MockChatModel gets error and produces final answer. Client never sees the tool call
-  // because the gRPC proxy request is never sent.
+  // because the server proxy request is never sent.
   it('handles lsp invalid operation gracefully', async () => {
     await server.start('lsp-invalid-op');
     const container = createTestContainer(server.port, testDir);
@@ -2066,7 +2065,7 @@ end
 
   // E2E-43: multi-language LSP tool pipeline
   // Tests that 4 sequential LSP calls across different languages flow through the
-  // full gRPC pipeline: MockChatModel → REACT agent → gRPC proxy → client lspTool → result back
+  // full pipeline: MockChatModel → REACT agent → server proxy → client lspTool → result back
   it('executes lsp tool across multiple languages', async () => {
     setupMultiLangFiles(testDir);
     await server.start('lsp-multilang');
@@ -2124,9 +2123,11 @@ end
     await server.start('write-file-go-error');
 
     // Container WITHOUT disableLspServers — real gopls runs for diagnostics
+    const wsPort = server.wsPort;
     const container = new Container({
       projectRoot: testDir,
       serverAddress: `localhost:${server.port}`,
+      wsAddress: wsPort ? `localhost:${wsPort}` : undefined,
       projectKey: 'e2e-diag-test',
       headlessMode: true,
       askUserCallback: async () => 'approved',

@@ -7,7 +7,7 @@ import { IEventBus } from '../../../domain/ports/IEventBus.js';
 import { MessageAccumulatorService } from '../MessageAccumulatorService.js';
 
 // Re-export from shared for backwards compatibility
-export { ResponseTypeMap } from '../../../shared/grpcConstants.js';
+export { ResponseTypeMap } from '../../../shared/responseTypes.js';
 
 /**
  * Shared context for all stream handlers.

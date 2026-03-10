@@ -59,7 +59,7 @@ export type ConnectionStatus =
 
 /**
  * Gateway interface for stream communication with the server.
- * Abstracts the gRPC details from the application layer.
+ * Abstracts transport details from the application layer.
  */
 export interface IStreamGateway {
   /**
@@ -90,7 +90,7 @@ export interface IStreamGateway {
 
   /**
    * Reconnect the stream (e.g. after user cancel).
-   * Creates a new gRPC stream on the existing channel.
+   * Reconnects the underlying transport (e.g. after user cancel).
    */
   reconnectStream(): Promise<void>;
 

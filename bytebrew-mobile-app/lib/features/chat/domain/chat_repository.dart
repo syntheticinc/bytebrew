@@ -22,4 +22,8 @@ abstract class ChatRepository {
   /// Returns a stream of agent info for multi-agent sessions.
   /// Returns null if not supported (e.g. mock/offline mode).
   Stream<List<AgentInfo>>? watchAgents();
+
+  /// Returns a stream indicating whether the session is actively processing.
+  /// Returns null if not supported (e.g. mock/offline mode).
+  Stream<bool>? watchProcessing();
 }

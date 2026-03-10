@@ -299,6 +299,99 @@ abstract class _$ChatMessages extends $AsyncNotifier<List<ChatMessage>> {
   }
 }
 
+/// Whether the session is currently being processed by the server.
+///
+/// Emits `true` when a ProcessingStarted event is received and `false`
+/// when processing stops (idle / completed / failed).
+
+@ProviderFor(isProcessing)
+final isProcessingProvider = IsProcessingFamily._();
+
+/// Whether the session is currently being processed by the server.
+///
+/// Emits `true` when a ProcessingStarted event is received and `false`
+/// when processing stops (idle / completed / failed).
+
+final class IsProcessingProvider
+    extends $FunctionalProvider<AsyncValue<bool>, bool, Stream<bool>>
+    with $FutureModifier<bool>, $StreamProvider<bool> {
+  /// Whether the session is currently being processed by the server.
+  ///
+  /// Emits `true` when a ProcessingStarted event is received and `false`
+  /// when processing stops (idle / completed / failed).
+  IsProcessingProvider._({
+    required IsProcessingFamily super.from,
+    required String super.argument,
+  }) : super(
+         retry: null,
+         name: r'isProcessingProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$isProcessingHash();
+
+  @override
+  String toString() {
+    return r'isProcessingProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $StreamProviderElement<bool> $createElement($ProviderPointer pointer) =>
+      $StreamProviderElement(pointer);
+
+  @override
+  Stream<bool> create(Ref ref) {
+    final argument = this.argument as String;
+    return isProcessing(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is IsProcessingProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$isProcessingHash() => r'a793b009273f9b926b0eee1c938d49aac1e7f0c7';
+
+/// Whether the session is currently being processed by the server.
+///
+/// Emits `true` when a ProcessingStarted event is received and `false`
+/// when processing stops (idle / completed / failed).
+
+final class IsProcessingFamily extends $Family
+    with $FunctionalFamilyOverride<Stream<bool>, String> {
+  IsProcessingFamily._()
+    : super(
+        retry: null,
+        name: r'isProcessingProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// Whether the session is currently being processed by the server.
+  ///
+  /// Emits `true` when a ProcessingStarted event is received and `false`
+  /// when processing stops (idle / completed / failed).
+
+  IsProcessingProvider call(String sessionId) =>
+      IsProcessingProvider._(argument: sessionId, from: this);
+
+  @override
+  String toString() => r'isProcessingProvider';
+}
+
 /// Returns the active plan from the latest planUpdate message, or null.
 
 @ProviderFor(activePlan)

@@ -17,7 +17,7 @@ import os from 'os';
  * - Allow connections with grace period (warning header)
  * - Allow connections with active license (normal operation)
  *
- * Uses the same real gRPC + Go server stack as ChatApp.e2e.test.tsx.
+ * Uses the same real WS + Go server stack as ChatApp.e2e.test.tsx.
  * Only MockChatModel is different from production.
  */
 describe('E2E: License enforcement', () => {
@@ -43,11 +43,13 @@ describe('E2E: License enforcement', () => {
     }
   });
 
-  // Helper: create container with REAL StreamingGateway (same as main e2e tests)
+  // Helper: create container with WsStreamGateway (same as main e2e tests)
   function createTestContainer(port: number, projectRoot?: string): Container {
+    const wsPort = server.wsPort;
     const container = new Container({
       projectRoot: projectRoot || testDir,
       serverAddress: `localhost:${port}`,
+      wsAddress: wsPort ? `localhost:${wsPort}` : undefined,
       projectKey: 'e2e-license-test',
       headlessMode: true,
       askUserCallback: async () => 'approved',
@@ -175,7 +177,7 @@ describe('E2E: License enforcement', () => {
       instance = render(React.createElement(ChatApp, { container }));
 
       // Wait for connection attempt to fail.
-      // The gRPC stream interceptor returns PermissionDenied immediately,
+      // The license interceptor returns PermissionDenied immediately,
       // which causes the stream error handler to fire and status to go to disconnected.
       await new Promise((r) => setTimeout(r, 3000));
 
@@ -185,7 +187,7 @@ describe('E2E: License enforcement', () => {
       // The connection should have failed — status should not be "Connected"
       expect(frame).not.toContain('Connected');
 
-      // Should show disconnected or connecting status (the gRPC error prevents connection)
+      // Should show disconnected or connecting status (the license error prevents connection)
       const hasDisconnected = frame.includes('Disconnected') || frame.includes('Connecting') || frame.includes('Reconnecting');
       expect(hasDisconnected).toBe(true);
 

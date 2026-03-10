@@ -3,7 +3,7 @@ import { ServerProcessManager } from './ServerProcessManager.js';
 import { PortFileReader, isServerReachable } from './PortFileReader.js';
 
 export interface ServerConnection {
-  /** host:port address to connect gRPC client to */
+  /** host:port address for the server */
   address: string;
   /** host:ws_port address for WebSocket connection (if available) */
   wsAddress?: string;

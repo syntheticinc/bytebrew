@@ -1,2 +1,2 @@
 // Shared utilities barrel export
-export * from './grpcConstants.js';
+export * from './responseTypes.js';

@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
 import 'core/providers/shared_preferences_provider.dart';
-import 'core/utils/debug_file_logger.dart';
 import 'features/auth/application/auth_provider.dart';
 
 void main() async {
@@ -15,7 +14,6 @@ void main() async {
   } else {
     WidgetsFlutterBinding.ensureInitialized();
   }
-  DebugFileLogger.instance.init();
   final prefs = await SharedPreferences.getInstance();
 
   runApp(

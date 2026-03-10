@@ -99,7 +99,7 @@ export class TestServerHelper {
       this.process!.stdout!.on('data', (data: Buffer) => {
         stdout += data.toString();
 
-        // Parse READY:{grpc_port} or READY:{grpc_port}:{ws_port} from stdout
+        // Parse READY:{port} or READY:{port}:{ws_port} from stdout
         const match = stdout.match(/READY:(\d+)(?::(\d+))?/);
         if (match) {
           this._port = parseInt(match[1], 10);

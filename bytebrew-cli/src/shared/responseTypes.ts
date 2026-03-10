@@ -1,10 +1,10 @@
-// Shared gRPC constants
+// Response type mapping (numeric enum → string)
 
 import type { StreamResponse } from '../domain/ports/IStreamGateway.js';
 
 /**
- * Response type enum mapping (numeric to string)
- * Maps protocol buffer enum values to string types
+ * Response type enum mapping (numeric to string).
+ * Used as a safety net for numeric type values in stream responses.
  */
 export const ResponseTypeMap: Record<number, StreamResponse['type']> = {
   0: 'UNSPECIFIED',

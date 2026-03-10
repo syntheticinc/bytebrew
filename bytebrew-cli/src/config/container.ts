@@ -14,7 +14,6 @@ import { StreamProcessorService } from '../application/services/StreamProcessorS
 // Infrastructure implementations
 import { InMemoryMessageRepository } from '../infrastructure/persistence/InMemoryMessageRepository.js';
 import { SimpleEventBus } from '../infrastructure/events/SimpleEventBus.js';
-import { StreamingGateway } from '../infrastructure/grpc/StreamingGateway.js';
 import { WsStreamGateway } from '../infrastructure/ws/WsStreamGateway.js';
 import { AgentStateManager } from '../infrastructure/state/AgentStateManager.js';
 import type { AskUserCallback } from '../tools/askUser.js';
@@ -26,7 +25,7 @@ import { initDebugLog } from '../lib/debugLog.js';
 export interface ContainerConfig {
   projectRoot: string;
   serverAddress: string;
-  wsAddress?: string; // WebSocket address — if set, uses WsStreamGateway
+  wsAddress?: string; // WebSocket address (host:port)
   projectKey: string;
   sessionId?: string; // Optional: reuse specific session, otherwise generate new
   headlessMode?: boolean;
@@ -57,7 +56,7 @@ export class Container {
   private _initialized = false;
 
   constructor(config: ContainerConfig) {
-    // When WS transport is selected, gateway connects to wsAddress
+    // Gateway connects to wsAddress if provided, otherwise serverAddress
     if (config.wsAddress && !config.overrides?.streamGateway) {
       config = { ...config, serverAddress: config.wsAddress };
     }
@@ -70,8 +69,7 @@ export class Container {
     // Create infrastructure layer
     this._eventBus = new SimpleEventBus();
     this._messageRepository = new InMemoryMessageRepository();
-    this._streamGateway = config.overrides?.streamGateway
-      ?? (config.wsAddress ? new WsStreamGateway() : new StreamingGateway());
+    this._streamGateway = config.overrides?.streamGateway ?? new WsStreamGateway();
     this._agentStateManager = new AgentStateManager();
 
     // Create application layer (no toolExecutor — server executes tools)

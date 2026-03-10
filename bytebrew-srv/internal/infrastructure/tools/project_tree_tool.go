@@ -132,6 +132,11 @@ func (t *GetProjectTreeTool) InvokableRun(ctx context.Context, argumentsInJSON s
 		return fmt.Sprintf("[ERROR] Failed to get project tree: %v. Please use search_code to explore the codebase instead.", err), nil
 	}
 
+	// Proxy may return error-as-string with nil Go error (e.g. "[ERROR] Path not found").
+	if strings.HasPrefix(treeJSON, "[ERROR]") {
+		return treeJSON, nil
+	}
+
 	// Format the subtree (client already navigated to the path, root IS the target)
 	compactTree, err := formatTreeFromRoot(treeJSON, args.Path, args.MaxDepth)
 	if err != nil {

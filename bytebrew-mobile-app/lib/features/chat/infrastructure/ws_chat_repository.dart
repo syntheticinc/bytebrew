@@ -9,7 +9,6 @@ import 'package:bytebrew_mobile/core/domain/mobile_session.dart';
 import 'package:bytebrew_mobile/core/domain/plan.dart';
 import 'package:bytebrew_mobile/core/domain/tool_call.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart';
-import 'package:bytebrew_mobile/core/utils/debug_file_logger.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection_manager.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_types.dart';
 import 'package:bytebrew_mobile/features/chat/domain/chat_repository.dart';
@@ -34,6 +33,13 @@ class WsChatRepository implements ChatRepository {
   final List<ChatMessage> _messages = [];
   final StreamController<List<ChatMessage>> _messageController =
       StreamController<List<ChatMessage>>.broadcast();
+  final StreamController<bool> _processingController =
+      StreamController<bool>.broadcast();
+  bool _isProcessing = false;
+
+  /// Tracks seen event IDs to deduplicate backfill events after reconnect.
+  final _seenEventIds = <String>{};
+  static const _maxSeenIds = 500;
 
   StreamSubscription<SessionEvent>? _subscription;
   String? _lastEventId;
@@ -74,7 +80,6 @@ class WsChatRepository implements ChatRepository {
     var connection = _connectionManager.getConnection(_serverId);
     if (connection != null &&
         connection.status != WsConnectionStatus.connected) {
-      dlog('[WsChatRepository] Connection not ready (${connection.status}), waiting for reconnect...');
       connection = await _waitForConnection();
     }
 
@@ -92,15 +97,10 @@ class WsChatRepository implements ChatRepository {
       return;
     }
 
-    dlog('[WsChatRepository] sendNewTask: sessionId=$_sessionId text=$text');
     final result = await connection.client.sendNewTask(
       deviceToken: connection.server.deviceToken!,
       sessionId: _sessionId,
       task: text,
-    );
-    dlog(
-      '[WsChatRepository] sendNewTask result: success=${result.success} '
-      'error=${result.errorMessage}',
     );
 
     if (!result.success) {
@@ -115,7 +115,9 @@ class WsChatRepository implements ChatRepository {
           : result.errorMessage;
       _upsertMessage(
         ChatMessage(
-          id: isTimeout ? _sendErrorId : 'error-${DateTime.now().millisecondsSinceEpoch}',
+          id: isTimeout
+              ? _sendErrorId
+              : 'error-${DateTime.now().millisecondsSinceEpoch}',
           type: ChatMessageType.systemMessage,
           content: 'Failed to send: $errorText',
           timestamp: DateTime.now(),
@@ -203,6 +205,9 @@ class WsChatRepository implements ChatRepository {
 
   @override
   Stream<List<AgentInfo>>? watchAgents() => null;
+
+  @override
+  Stream<bool> watchProcessing() => _processingController.stream;
 
   // ---------------------------------------------------------------------------
   // Subscription
@@ -296,7 +301,9 @@ class WsChatRepository implements ChatRepository {
     }
     _subscription?.cancel();
     _subscription = null;
+    _seenEventIds.clear();
     _messageController.close();
+    _processingController.close();
   }
 
   // ---------------------------------------------------------------------------
@@ -304,21 +311,20 @@ class WsChatRepository implements ChatRepository {
   // ---------------------------------------------------------------------------
 
   void _handleEvent(SessionEvent event) {
-    _lastEventId = event.eventId;
-
-    final payload = event.payload;
-    if (payload == null) {
-      dlog(
-        '[WsChatRepository] Event type=${event.type.name} '
-        'has null payload → skipped',
-      );
-      return;
+    // Deduplicate backfill events after proactive reconnect.
+    final eventId = event.eventId;
+    if (eventId.isNotEmpty && _seenEventIds.contains(eventId)) return;
+    if (eventId.isNotEmpty) {
+      _seenEventIds.add(eventId);
+      if (_seenEventIds.length > _maxSeenIds) {
+        _seenEventIds.remove(_seenEventIds.first);
+      }
     }
 
-    dlog(
-      '[WsChatRepository] Handling event: type=${event.type.name} '
-      'payload=${payload.runtimeType}',
-    );
+    _lastEventId = eventId;
+
+    final payload = event.payload;
+    if (payload == null) return;
 
     switch (payload) {
       case AgentMessagePayload():
@@ -341,10 +347,6 @@ class WsChatRepository implements ChatRepository {
   }
 
   void _handleAgentMessage(SessionEvent event, AgentMessagePayload payload) {
-    dlog(
-      '[WsChatRepository] AgentMessage: isComplete=${payload.isComplete} '
-      'content="${payload.content.length > 80 ? '${payload.content.substring(0, 80)}...' : payload.content}"',
-    );
     if (payload.isComplete) {
       _upsertMessage(
         ChatMessage(
@@ -486,6 +488,15 @@ class WsChatRepository implements ChatRepository {
     // stale send-timeout error that was shown while the connection was dead.
     if (payload.state == MobileSessionState.active) {
       _messages.removeWhere((m) => m.id == _sendErrorId);
+    }
+
+    // Track processing state: active = processing, anything else = idle.
+    final nowProcessing = payload.state == MobileSessionState.active;
+    if (nowProcessing != _isProcessing) {
+      _isProcessing = nowProcessing;
+      if (!_disposed) {
+        _processingController.add(_isProcessing);
+      }
     }
 
     final content = payload.message.isNotEmpty

@@ -29,4 +29,7 @@ class EmptyChatRepository implements ChatRepository {
 
   @override
   Stream<List<AgentInfo>>? watchAgents() => null;
+
+  @override
+  Stream<bool>? watchProcessing() => null;
 }

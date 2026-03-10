@@ -100,6 +100,18 @@ class ChatMessages extends _$ChatMessages {
   }
 }
 
+/// Whether the session is currently being processed by the server.
+///
+/// Emits `true` when a ProcessingStarted event is received and `false`
+/// when processing stops (idle / completed / failed).
+@riverpod
+Stream<bool> isProcessing(Ref ref, String sessionId) {
+  final repo = ref.watch(sessionChatRepositoryProvider(sessionId));
+  final stream = repo.watchProcessing();
+  if (stream == null) return const Stream.empty();
+  return stream;
+}
+
 /// Returns the active plan from the latest planUpdate message, or null.
 @riverpod
 PlanData? activePlan(Ref ref, String sessionId) {

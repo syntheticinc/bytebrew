@@ -32,7 +32,7 @@ export interface StreamProcessorOptions {
  * Service that processes stream responses and coordinates between
  * the accumulator, repository, and event bus.
  *
- * Replaces the logic from useGrpcStream with a testable,
+ * Replaces the logic from the old stream hook with a testable,
  * framework-agnostic implementation.
  */
 export class StreamProcessorService {

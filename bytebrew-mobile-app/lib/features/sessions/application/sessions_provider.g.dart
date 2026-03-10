@@ -97,7 +97,7 @@ final class SessionsProvider
   Sessions create() => Sessions();
 }
 
-String _$sessionsHash() => r'c890bf9ca77cf28c04043117627c9a5997c7e11a';
+String _$sessionsHash() => r'a8628782b269338e6307b7074c513a307856ebcc';
 
 /// Manages the list of agent sessions.
 ///

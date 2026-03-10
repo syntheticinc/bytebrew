@@ -13,6 +13,9 @@ part of 'auto_connect_provider.dart';
 /// This provider is kept alive so the connections persist for the app's
 /// lifetime. It should be watched from the sessions screen to trigger
 /// on first navigation.
+///
+/// On first run: calls connectToAll which initiates WS connections.
+/// After that: periodic check every 30s to reconnect any failed servers.
 
 @ProviderFor(sessionsAutoConnect)
 final sessionsAutoConnectProvider = SessionsAutoConnectProvider._();
@@ -22,6 +25,9 @@ final sessionsAutoConnectProvider = SessionsAutoConnectProvider._();
 /// This provider is kept alive so the connections persist for the app's
 /// lifetime. It should be watched from the sessions screen to trigger
 /// on first navigation.
+///
+/// On first run: calls connectToAll which initiates WS connections.
+/// After that: periodic check every 30s to reconnect any failed servers.
 
 final class SessionsAutoConnectProvider
     extends $FunctionalProvider<AsyncValue<void>, void, FutureOr<void>>
@@ -31,6 +37,9 @@ final class SessionsAutoConnectProvider
   /// This provider is kept alive so the connections persist for the app's
   /// lifetime. It should be watched from the sessions screen to trigger
   /// on first navigation.
+  ///
+  /// On first run: calls connectToAll which initiates WS connections.
+  /// After that: periodic check every 30s to reconnect any failed servers.
   SessionsAutoConnectProvider._()
     : super(
         from: null,
@@ -57,4 +66,4 @@ final class SessionsAutoConnectProvider
 }
 
 String _$sessionsAutoConnectHash() =>
-    r'418a948aabd1b1c9d0429d2ca1453b2879cf13b0';
+    r'6fdc388c70f08f6e85627a7331e0781039523974';

@@ -7,7 +7,6 @@ import 'package:bytebrew_mobile/core/crypto/message_cipher.dart';
 import 'package:bytebrew_mobile/core/domain/mobile_session.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_types.dart';
-import 'package:bytebrew_mobile/core/utils/debug_file_logger.dart';
 
 /// High-level client for CLI communication via Bridge WebSocket.
 ///
@@ -257,25 +256,20 @@ class WsBridgeClient {
     // before sending. The ping timer's stale check or the pong watchdog
     // will trigger the reconnect.
     if (_connection.isStale) {
-      dlog('[WsBridgeClient] Connection stale before $type — waiting for reconnect');
       await _waitForReconnect();
-      dlog('[WsBridgeClient] Reconnect complete — proceeding with $type');
     }
 
     final requestId = _generateRequestId();
     final completer = Completer<Map<String, dynamic>>();
     _pendingRequests[requestId] = completer;
 
-    dlog('[WsBridgeClient] _sendRequest type=$type requestId=$requestId encrypt=$encrypt');
     final message = await _buildMessage(
       type,
       requestId,
       payload,
       encrypt: encrypt,
     );
-    dlog('[WsBridgeClient] _sendRequest SENDING type=$type requestId=$requestId msgKeys=${message.keys.toList()}');
     _connection.send(message);
-    dlog('[WsBridgeClient] _sendRequest SENT type=$type requestId=$requestId pendingCount=${_pendingRequests.length}');
 
     // Timeout after 30 seconds.
     return completer.future.timeout(
@@ -295,10 +289,8 @@ class WsBridgeClient {
     Map<String, dynamic> payload,
   ) async {
     final requestId = _generateRequestId();
-    dlog('[WsBridgeClient] _sendFireAndForget type=$type requestId=$requestId');
     final message = await _buildMessage(type, requestId, payload);
     _connection.send(message);
-    dlog('[WsBridgeClient] _sendFireAndForget SENT type=$type requestId=$requestId');
   }
 
   Future<SendCommandResult> _sendCommand(
@@ -309,10 +301,8 @@ class WsBridgeClient {
     // This catches silently-dead TCP connections (common on Android after
     // idle) before wasting 30s on a timeout.
     if (!await _connection.ensureAlive()) {
-      dlog('[WsBridgeClient] Connection dead before $type — waiting for reconnect');
       try {
         await _waitForReconnect();
-        dlog('[WsBridgeClient] Reconnected — proceeding with $type');
       } on TimeoutException {
         return SendCommandResult(
           success: false,
@@ -400,7 +390,6 @@ class WsBridgeClient {
 
   void _onMessage(Map<String, dynamic> bridgeMessage) {
     final bridgeType = bridgeMessage['type'] as String?;
-    dlog('[WsBridgeClient] _onMessage type=$bridgeType');
     if (bridgeType != 'data') {
       debugPrint('[WsBridgeClient] Ignoring bridge message type=$bridgeType');
       return;
@@ -417,10 +406,6 @@ class WsBridgeClient {
     if (rawPayload is String) {
       // Encrypted payload (base64) -- decrypt.
       if (cipher != null) {
-        debugPrint(
-          '[WsBridgeClient] Decrypting payload '
-          '(${rawPayload.length} chars)',
-        );
         _decryptAndHandle(rawPayload);
         return;
       }
@@ -447,27 +432,20 @@ class WsBridgeClient {
   Future<void> _decryptAndHandle(String base64Payload) async {
     try {
       final encrypted = base64Decode(base64Payload);
-      final (decrypted, counter) = await cipher!.decrypt(encrypted);
+      final (decrypted, _) = await cipher!.decrypt(encrypted);
       final json = jsonDecode(utf8.decode(decrypted)) as Map<String, dynamic>;
-      final type = json['type'] as String? ?? '?';
-      dlog('[WsBridgeClient] Decrypted OK: type=$type counter=$counter');
       _handleInnerMessage(json);
     } on Exception catch (e) {
-      dlog('[WsBridgeClient] Decrypt FAILED: $e');
+      debugPrint('[WsBridgeClient] Decrypt failed: $e');
     }
   }
 
   void _handleInnerMessage(Map<String, dynamic> message) {
     final type = message['type'] as String?;
     final requestId = message['request_id'] as String?;
-    dlog('[WsBridgeClient] _handleInnerMessage type=$type requestId=$requestId');
 
     // Check if this is a response to a pending request.
     if (requestId != null && _pendingRequests.containsKey(requestId)) {
-      debugPrint(
-        '[WsBridgeClient] Resolving pending request: type=$type '
-        'requestId=$requestId',
-      );
       final completer = _pendingRequests.remove(requestId);
       completer?.complete(message);
       return;
@@ -484,15 +462,7 @@ class WsBridgeClient {
       // Try to find a matching pending request.
       final completer = _pendingRequests.remove(requestId);
       if (completer != null) {
-        debugPrint(
-          '[WsBridgeClient] Resolving pending (fallback): type=$type',
-        );
         completer.complete(message);
-      } else {
-        debugPrint(
-          '[WsBridgeClient] Unmatched message: type=$type '
-          'requestId=$requestId',
-        );
       }
     }
   }
@@ -510,16 +480,10 @@ class WsBridgeClient {
       return;
     }
 
-    final eventJson = payload['event'] as Map<String, dynamic>?;
-    final eventType = eventJson?['type'] as String? ?? '?';
-
     final eventKey = 'subscribe-$sessionId';
     final controller = _eventControllers[eventKey];
     if (controller != null) {
-      dlog('[WsBridgeClient] session_event type=$eventType session=$sessionId → dispatched');
       controller.add(message);
-    } else {
-      dlog('[WsBridgeClient] session_event type=$eventType session=$sessionId → NO CONTROLLER keys=${_eventControllers.keys.toList()}');
     }
   }
 
@@ -539,15 +503,6 @@ class WsBridgeClient {
     final eventRole = eventJson['role'] as String?;
     final eventType = _parseEventType(rawType, role: eventRole);
     final eventPayload = _parseEventPayload(eventType, eventJson);
-
-    // Only log non-progress events to avoid spam.
-    if (eventType != SessionEventType.unspecified) {
-      debugPrint(
-        '[WsBridgeClient] Parsed event: rawType=$rawType '
-        'role=$eventRole → $eventType '
-        'hasPayload=${eventPayload != null}',
-      );
-    }
 
     // event_id lives at the payload level, not inside the nested event object.
     final eventId = payload['event_id'] as String? ??

@@ -5,7 +5,6 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-import 'package:bytebrew_mobile/core/utils/debug_file_logger.dart';
 
 /// Low-level WebSocket connection to the Bridge relay.
 ///
@@ -50,11 +49,6 @@ class WsConnection {
   /// Timestamp of the last data received from the server.
   /// Used to detect stale connections (Android TCP receive path death).
   DateTime _lastDataAt = DateTime.now();
-
-  /// Diagnostics: count data frames received since last connect.
-  int _dataFrameCount = 0;
-  int _pongCount = 0;
-  DateTime? _connectedAt;
 
   static const _maxReconnectDelay = 30;
 
@@ -111,13 +105,11 @@ class WsConnection {
       );
 
       _setStatus(WsConnectionStatus.connected);
-      _reconnectAttempts = 0;
+      // Don't reset _reconnectAttempts here — reset in _onData() after
+      // receiving actual data. This prevents reconnect storms when the bridge
+      // accepts the WS handshake but immediately closes (e.g. stale server_id).
       _lastDataAt = DateTime.now();
-      _dataFrameCount = 0;
-      _pongCount = 0;
-      _connectedAt = DateTime.now();
       _startPingLoop();
-      dlog('[WsConnection] Connected to Bridge (deviceId=$deviceId)');
     } on Exception catch (e) {
       debugPrint('[WsConnection] Connection failed: $e');
       _setStatus(WsConnectionStatus.error);
@@ -142,7 +134,6 @@ class WsConnection {
     if (DateTime.now().difference(_lastDataAt).inSeconds < 10) return true;
 
     // Send a ping probe and wait for any response.
-    dlog('[WsConnection] ensureAlive: probing (${DateTime.now().difference(_lastDataAt).inSeconds}s since last data)');
     try {
       _channel!.sink.add(jsonEncode({'type': 'ping'}));
     } on Object catch (_) {
@@ -154,13 +145,11 @@ class WsConnection {
     while (DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(const Duration(milliseconds: 100));
       if (_lastDataAt.isAfter(before)) {
-        dlog('[WsConnection] ensureAlive: alive');
         return true;
       }
       if (_status != WsConnectionStatus.connected) return false;
     }
 
-    dlog('[WsConnection] ensureAlive: dead (no data after probe) — forcing reconnect');
     _onPongTimeout();
     return false;
   }
@@ -173,7 +162,6 @@ class WsConnection {
     }
 
     final encoded = jsonEncode(message);
-    dlog('[WsConnection] send len=${encoded.length} status=$_status');
     _channel!.sink.add(encoded);
   }
 
@@ -229,7 +217,9 @@ class WsConnection {
   void _onData(dynamic data) {
     if (data is! String) return;
     _lastDataAt = DateTime.now();
-    _dataFrameCount++;
+
+    // Data received means stable connection — reset backoff.
+    _reconnectAttempts = 0;
 
     // Any data received means the connection is alive — reset the watchdog.
     _resetPongWatchdog();
@@ -239,16 +229,8 @@ class WsConnection {
       final type = json['type'] as String? ?? '?';
 
       // Filter out pong responses from bridge (keep-alive, not business data).
-      if (type == 'pong') {
-        _pongCount++;
-        final uptime = _connectedAt != null
-            ? DateTime.now().difference(_connectedAt!).inSeconds
-            : 0;
-        dlog('[WsConnection] PONG #$_pongCount (uptime=${uptime}s frames=$_dataFrameCount)');
-        return;
-      }
+      if (type == 'pong') return;
 
-      dlog('[WsConnection] _onData type=$type len=${data.length} frames=$_dataFrameCount');
       _messageController.add(json);
     } on FormatException catch (e) {
       debugPrint('[WsConnection] Invalid JSON received: $e');
@@ -281,11 +263,6 @@ class WsConnection {
 
     _reconnectTimer?.cancel();
     final delay = _reconnectDelay(_reconnectAttempts);
-    dlog(
-      '[WsConnection] RECONNECT scheduled in ${delay}s '
-      '(attempt ${_reconnectAttempts + 1})',
-    );
-
     _reconnectTimer = Timer(Duration(seconds: delay), () {
       _reconnectAttempts++;
       connect();
@@ -317,28 +294,17 @@ class WsConnection {
   void _sendPing() {
     if (_channel == null || _status != WsConnectionStatus.connected) return;
 
-    final sinceLastData = DateTime.now().difference(_lastDataAt).inSeconds;
-    final uptime = _connectedAt != null
-        ? DateTime.now().difference(_connectedAt!).inSeconds
-        : 0;
-
     // If no data has been received for too long, the connection is dead.
     // Skip the ping and trigger immediate reconnect.
     if (isStale) {
-      dlog('[WsConnection] STALE! sinceLastData=${sinceLastData}s uptime=${uptime}s '
-          'pongs=$_pongCount frames=$_dataFrameCount — reconnecting');
       _onPongTimeout();
       return;
     }
 
-    dlog('[WsConnection] PING sinceLastData=${sinceLastData}s uptime=${uptime}s '
-        'pongs=$_pongCount frames=$_dataFrameCount');
     try {
       _channel!.sink.add(jsonEncode({'type': 'ping'}));
       _startPongWatchdog();
-    } on Object catch (e) {
-      dlog('[WsConnection] ping FAILED: $e');
-    }
+    } on Object catch (_) {}
   }
 
   /// Starts (or restarts) a watchdog timer. If no data arrives within
@@ -362,12 +328,6 @@ class WsConnection {
 
   /// Called when no data arrives within the pong timeout window.
   void _onPongTimeout() {
-    final sinceLastData = DateTime.now().difference(_lastDataAt).inSeconds;
-    final uptime = _connectedAt != null
-        ? DateTime.now().difference(_connectedAt!).inSeconds
-        : 0;
-    dlog('[WsConnection] PONG TIMEOUT sinceLastData=${sinceLastData}s uptime=${uptime}s '
-        'pongs=$_pongCount frames=$_dataFrameCount — reconnecting');
     _stopPingLoop();
 
     // Close the dead channel.

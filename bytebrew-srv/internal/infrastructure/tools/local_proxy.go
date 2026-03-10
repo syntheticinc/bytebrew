@@ -192,9 +192,13 @@ func (p *LocalClientOperationsProxy) ExecuteCommandFull(ctx context.Context, ses
 
 // AskUserQuestionnaire in headless mode auto-selects the first option for each question.
 func (p *LocalClientOperationsProxy) AskUserQuestionnaire(ctx context.Context, _, questionsJSON string) (string, error) {
+	// question accepts options as json.RawMessage to handle both formats:
+	// - []string (legacy/tests): ["React", "Vue"]
+	// - []QuestionOption (from AskUserTool): [{"label":"React"}, {"label":"Vue"}]
 	type question struct {
-		Text    string   `json:"text"`
-		Options []string `json:"options"`
+		Text    string            `json:"text"`
+		Options json.RawMessage   `json:"options"`
+		Default string            `json:"default,omitempty"`
 	}
 
 	var questions []question
@@ -209,9 +213,9 @@ func (p *LocalClientOperationsProxy) AskUserQuestionnaire(ctx context.Context, _
 
 	answers := make([]answer, 0, len(questions))
 	for _, q := range questions {
-		selected := ""
-		if len(q.Options) > 0 {
-			selected = q.Options[0]
+		selected := q.Default
+		if selected == "" {
+			selected = extractFirstOption(q.Options)
 		}
 		answers = append(answers, answer{
 			Question: q.Text,
@@ -225,6 +229,30 @@ func (p *LocalClientOperationsProxy) AskUserQuestionnaire(ctx context.Context, _
 		return "", fmt.Errorf("marshal answers: %w", err)
 	}
 	return string(result), nil
+}
+
+// extractFirstOption returns the first option label from a JSON options field.
+// Handles both []string (["React"]) and []QuestionOption ([{"label":"React"}]).
+func extractFirstOption(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+
+	// Try []string first
+	var strOptions []string
+	if err := json.Unmarshal(raw, &strOptions); err == nil && len(strOptions) > 0 {
+		return strOptions[0]
+	}
+
+	// Try []QuestionOption (objects with "label")
+	var objOptions []struct {
+		Label string `json:"label"`
+	}
+	if err := json.Unmarshal(raw, &objOptions); err == nil && len(objOptions) > 0 {
+		return objOptions[0].Label
+	}
+
+	return ""
 }
 
 func (p *LocalClientOperationsProxy) LspRequest(ctx context.Context, _, symbolName, operation string) (string, error) {

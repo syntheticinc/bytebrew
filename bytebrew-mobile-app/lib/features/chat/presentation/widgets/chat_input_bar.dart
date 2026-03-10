@@ -5,6 +5,9 @@ import '../../../../core/theme/app_colors.dart';
 import '../../application/chat_provider.dart';
 
 /// Bottom input bar with branded styling.
+///
+/// Shows a Send button by default, or a Stop button when the session
+/// is actively being processed by the server.
 class ChatInputBar extends ConsumerStatefulWidget {
   const ChatInputBar({super.key, required this.sessionId, this.enabled = true});
 
@@ -46,12 +49,18 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
     _controller.clear();
   }
 
+  void _cancel() {
+    ref.read(chatMessagesProvider(widget.sessionId).notifier).cancel();
+  }
+
   bool get _canSend => widget.enabled && _controller.text.trim().isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final processingAsync = ref.watch(isProcessingProvider(widget.sessionId));
+    final processing = processingAsync.whenOrNull(data: (v) => v) ?? false;
 
     return Container(
       constraints: const BoxConstraints(minHeight: 56),
@@ -96,7 +105,7 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
               ),
             ),
             const SizedBox(width: 8),
-            _buildSendButton(),
+            processing ? _buildStopButton() : _buildSendButton(),
           ],
         ),
       ),
@@ -118,6 +127,24 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
           foregroundColor: _canSend
               ? AppColors.light
               : AppColors.shade3.withValues(alpha: 0.38),
+          shape: const CircleBorder(),
+          padding: EdgeInsets.zero,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStopButton() {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: IconButton.filled(
+        key: const ValueKey('stop_button'),
+        onPressed: _cancel,
+        icon: const Icon(Icons.stop_circle, size: 20),
+        style: IconButton.styleFrom(
+          backgroundColor: AppColors.accent,
+          foregroundColor: AppColors.light,
           shape: const CircleBorder(),
           padding: EdgeInsets.zero,
         ),

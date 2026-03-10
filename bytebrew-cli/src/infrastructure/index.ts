@@ -6,5 +6,5 @@ export { SimpleEventBus, getEventBus, resetEventBus } from './events/SimpleEvent
 // Persistence
 export { InMemoryMessageRepository, getMessageRepository, resetMessageRepository } from './persistence/InMemoryMessageRepository.js';
 
-// gRPC Gateway
-export { StreamingGateway } from './grpc/StreamingGateway.js';
+// WebSocket Gateway
+export { WsStreamGateway } from './ws/WsStreamGateway.js';

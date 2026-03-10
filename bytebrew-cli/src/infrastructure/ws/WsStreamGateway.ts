@@ -94,6 +94,8 @@ export class WsStreamGateway implements IStreamGateway {
       const sessionPayload = await this.sendRequest('create_session', {
         project_key: options.projectKey,
         user_id: options.userId,
+        project_root: options.projectRoot,
+        platform: process.platform,
         context,
       });
 
@@ -402,6 +404,8 @@ export class WsStreamGateway implements IStreamGateway {
     const sessionPayload = await this.sendRequest('create_session', {
       project_key: options.projectKey,
       user_id: options.userId,
+      project_root: options.projectRoot,
+      platform: process.platform,
       context,
     });
 
