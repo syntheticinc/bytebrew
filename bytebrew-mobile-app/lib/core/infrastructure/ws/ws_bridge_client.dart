@@ -531,6 +531,11 @@ class WsBridgeClient {
   // Internal: event parsing
   // -------------------------------------------------------------------------
 
+  /// Regex for lifecycle events embedded in StreamingProgress content.
+  static final _lifecycleRegex = RegExp(
+    r'^\[(agent_spawned|agent_completed|agent_failed)\]\s+([^:]+):\s*(.*)$',
+  );
+
   SessionEvent? _parseSessionEvent(Map<String, dynamic> message) {
     final payload = message['payload'] as Map<String, dynamic>?;
     if (payload == null) return null;
@@ -540,13 +545,35 @@ class WsBridgeClient {
     if (eventJson == null) return null;
 
     final rawType = eventJson['type'] as String?;
-    final eventRole = eventJson['role'] as String?;
-    final eventType = _parseEventType(rawType, role: eventRole);
-    final eventPayload = _parseEventPayload(eventType, eventJson);
 
     // event_id lives at the payload level, not inside the nested event object.
     final eventId = payload['event_id'] as String? ??
         'evt-${DateTime.now().millisecondsSinceEpoch}';
+
+    // Detect lifecycle events embedded in StreamingProgress content.
+    if (rawType == 'StreamingProgress') {
+      final content = eventJson['content'] as String? ?? '';
+      final match = _lifecycleRegex.firstMatch(content);
+      if (match != null) {
+        return SessionEvent(
+          eventId: eventId,
+          sessionId: sessionId,
+          type: SessionEventType.unspecified,
+          agentId: eventJson['agent_id'] as String? ?? '',
+          timestamp: _parseDateTime(eventJson['timestamp']),
+          step: eventJson['step'] as int? ?? 0,
+          payload: AgentLifecyclePayload(
+            lifecycleType: match.group(1)!,
+            agentId: match.group(2)!.trim(),
+            description: match.group(3) ?? '',
+          ),
+        );
+      }
+    }
+
+    final eventRole = eventJson['role'] as String?;
+    final eventType = _parseEventType(rawType, role: eventRole);
+    final eventPayload = _parseEventPayload(eventType, eventJson);
 
     return SessionEvent(
       eventId: eventId,

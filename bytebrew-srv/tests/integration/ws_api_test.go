@@ -88,6 +88,7 @@ func NewWsHarness(t *testing.T, scenario string) *WsHarness {
 	sessionReg := flow_registry.NewSessionRegistry()
 
 	sessProcessor := session_processor.New(sessionReg, factory)
+	sessProcessor.SetAgentPoolRegistrar(agentPool)
 
 	wsHandler := ws.NewConnectionHandler(sessionReg, sessProcessor, &testutil.NoopAgentService{})
 

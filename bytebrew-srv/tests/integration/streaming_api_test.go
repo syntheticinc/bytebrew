@@ -87,6 +87,7 @@ func NewStreamingHarness(t *testing.T, scenario string) *StreamingHarness {
 	flowReg := flow_registry.NewInMemoryRegistry()
 	sessionReg := flow_registry.NewSessionRegistry()
 	sessProcessor := session_processor.New(sessionReg, factory)
+	sessProcessor.SetAgentPoolRegistrar(agentPool)
 
 	flowHandler, err := deliverygrpc.NewFlowHandlerWithConfig(deliverygrpc.FlowHandlerConfig{
 		AgentService:        &testutil.NoopAgentService{},

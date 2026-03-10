@@ -26,11 +26,20 @@ type TurnExecutorFactory interface {
 	CreateForSession(proxy tools.ClientOperationsProxy, sessionID, projectKey, projectRoot, platform string) orchestrator.TurnExecutor
 }
 
+// AgentPoolRegistrar registers per-session resources on the AgentPool (consumer-side interface).
+// Used to deliver lifecycle events and provide proxy for code agent tool execution.
+type AgentPoolRegistrar interface {
+	SetEventCallbackForSession(sessionID string, cb func(event *domain.AgentEvent) error)
+	SetProxyForSession(sessionID string, proxy interface{})
+	RemoveSession(sessionID string)
+}
+
 // Processor runs background message-processing loops for server-streaming sessions.
 // It is shared between gRPC SubscribeSession and bridge MobileRequestHandler.
 type Processor struct {
-	registry SessionRegistry
-	factory  TurnExecutorFactory
+	registry            SessionRegistry
+	factory             TurnExecutorFactory
+	agentPoolRegistrar AgentPoolRegistrar // optional, nil-safe
 
 	mu     sync.Mutex
 	active map[string]context.CancelFunc
@@ -43,6 +52,13 @@ func New(registry SessionRegistry, factory TurnExecutorFactory) *Processor {
 		factory:  factory,
 		active:   make(map[string]context.CancelFunc),
 	}
+}
+
+// SetAgentPoolRegistrar sets the registrar for agent pool resources.
+// When set, processMessage will register event callbacks and proxy on the AgentPool
+// so that lifecycle events reach WS/mobile clients and code agents can execute tools.
+func (p *Processor) SetAgentPoolRegistrar(registrar AgentPoolRegistrar) {
+	p.agentPoolRegistrar = registrar
 }
 
 // StartProcessing launches the message processing loop for a session.
@@ -125,6 +141,14 @@ func (p *Processor) processMessage(ctx context.Context, sessionID, message strin
 
 	eventCallback := func(event *domain.AgentEvent) error {
 		return eventStream.Send(event)
+	}
+
+	// Register proxy and lifecycle callback on AgentPool so code agents can
+	// execute tools and lifecycle events reach WS/mobile clients.
+	if p.agentPoolRegistrar != nil {
+		p.agentPoolRegistrar.SetProxyForSession(sessionID, proxy)
+		p.agentPoolRegistrar.SetEventCallbackForSession(sessionID, eventCallback)
+		defer p.agentPoolRegistrar.RemoveSession(sessionID)
 	}
 
 	turnCtx, turnCancel := context.WithCancel(ctx)

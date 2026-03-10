@@ -236,6 +236,9 @@ func main() {
 		flowHandlerCfg.AgentPoolAdapter = components.AgentPoolAdapter
 		flowHandlerCfg.WorkManager = components.WorkManager
 		flowHandlerCfg.SessionStorage = components.SessionStorage
+		// Register AgentPool as lifecycle event registrar for SessionProcessor.
+		// This ensures agent_spawned/agent_completed events reach WS/mobile clients.
+		sessProcessor.SetAgentPoolRegistrar(components.AgentPool)
 		loggerInstance.InfoContext(ctx, "Multi-agent mode enabled (Supervisor + Code Agents)")
 	} else {
 		loggerInstance.InfoContext(ctx, "Single-agent mode (no WorkStorage)")

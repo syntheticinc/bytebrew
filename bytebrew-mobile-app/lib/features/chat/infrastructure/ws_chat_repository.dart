@@ -37,6 +37,10 @@ class WsChatRepository implements ChatRepository {
       StreamController<bool>.broadcast();
   bool _isProcessing = false;
 
+  final List<AgentInfo> _agents = [];
+  final StreamController<List<AgentInfo>> _agentController =
+      StreamController<List<AgentInfo>>.broadcast();
+
   /// Tracks seen event IDs to deduplicate backfill events after reconnect.
   final _seenEventIds = <String>{};
   static const _maxSeenIds = 500;
@@ -211,7 +215,7 @@ class WsChatRepository implements ChatRepository {
   Stream<List<ChatMessage>> watchMessages() => _messageController.stream;
 
   @override
-  Stream<List<AgentInfo>>? watchAgents() => null;
+  Stream<List<AgentInfo>>? watchAgents() => _agentController.stream;
 
   @override
   Stream<bool> watchProcessing() => _processingController.stream;
@@ -311,6 +315,7 @@ class WsChatRepository implements ChatRepository {
     _seenEventIds.clear();
     _messageController.close();
     _processingController.close();
+    _agentController.close();
   }
 
   // ---------------------------------------------------------------------------
@@ -350,6 +355,8 @@ class WsChatRepository implements ChatRepository {
         _handleSessionStatus(event, payload);
       case ErrorPayload():
         _handleError(event, payload);
+      case AgentLifecyclePayload():
+        _handleAgentLifecycle(event, payload);
     }
   }
 
@@ -542,6 +549,61 @@ class WsChatRepository implements ChatRepository {
       ),
     );
     _emitMessages();
+  }
+
+  void _handleAgentLifecycle(
+    SessionEvent event,
+    AgentLifecyclePayload payload,
+  ) {
+    final status = switch (payload.lifecycleType) {
+      'agent_spawned' => AgentStatus.running,
+      'agent_completed' => AgentStatus.completed,
+      'agent_failed' => AgentStatus.failed,
+      _ => AgentStatus.running,
+    };
+
+    final agent = AgentInfo(
+      agentId: payload.agentId,
+      description: payload.description,
+      status: status,
+      lastActivityAt: event.timestamp,
+    );
+
+    final existingIndex =
+        _agents.indexWhere((a) => a.agentId == payload.agentId);
+    if (existingIndex != -1) {
+      _agents[existingIndex] = agent;
+    } else {
+      _agents.add(agent);
+    }
+
+    if (!_disposed) {
+      _agentController.add(List.unmodifiable(_agents));
+    }
+
+    // Add lifecycle message to chat for visibility.
+    _upsertMessage(
+      ChatMessage(
+        id: 'lifecycle-${event.eventId}',
+        type: ChatMessageType.systemMessage,
+        content: _formatLifecycleMessage(payload),
+        timestamp: event.timestamp,
+        agentId: payload.agentId,
+      ),
+    );
+    _emitMessages();
+  }
+
+  String _formatLifecycleMessage(AgentLifecyclePayload payload) {
+    final shortId = payload.agentId.replaceFirst('code-agent-', '');
+    final label =
+        payload.agentId == 'supervisor' ? 'Supervisor' : 'Code Agent [$shortId]';
+    return switch (payload.lifecycleType) {
+      'agent_spawned' => '+ $label spawned: "${payload.description}"',
+      'agent_completed' => '✓ $label completed',
+      'agent_failed' => '✗ $label failed',
+      _ => '[${payload.lifecycleType}] $label',
+    };
   }
 
   // ---------------------------------------------------------------------------

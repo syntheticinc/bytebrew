@@ -439,9 +439,7 @@ describe('E2E: ChatApp with WebSocket transport', () => {
   }, 30000);
 
   // TC-CLI-WS-10: Multi-agent lifecycle events via WS
-  // SKIP: Code agent requires LocalClientOperationsProxy registered for the session,
-  // which the test server does not set up. Agent fails with "no proxy for session".
-  it.skip('spawns code agent and shows lifecycle events via WebSocket', async () => {
+  it('spawns code agent and shows lifecycle events via WebSocket', async () => {
     await server.start('multi-agent');
     if (!server.wsPort) {
       console.log('SKIP: testserver does not expose WS port');

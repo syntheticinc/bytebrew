@@ -162,6 +162,7 @@ func main() {
 	flowRegistry := flow_registry.NewInMemoryRegistry()
 	sessionRegistry := flow_registry.NewSessionRegistry()
 	sessProcessor := session_processor.New(sessionRegistry, factory)
+	sessProcessor.SetAgentPoolRegistrar(agentPool)
 
 	flowHandlerCfg := deliverygrpc.FlowHandlerConfig{
 		AgentService:        &testutil.NoopAgentService{},

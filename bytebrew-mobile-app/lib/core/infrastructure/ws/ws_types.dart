@@ -195,3 +195,17 @@ class ErrorPayload extends SessionEventPayload {
   final String code;
   final String message;
 }
+
+/// Payload for an agent lifecycle event (spawned, completed, failed).
+class AgentLifecyclePayload extends SessionEventPayload {
+  const AgentLifecyclePayload({
+    required this.lifecycleType,
+    required this.agentId,
+    required this.description,
+  });
+
+  /// One of: `agent_spawned`, `agent_completed`, `agent_failed`.
+  final String lifecycleType;
+  final String agentId;
+  final String description;
+}
