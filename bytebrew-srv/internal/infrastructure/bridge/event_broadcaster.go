@@ -51,7 +51,7 @@ func (b *EventBroadcaster) Subscribe(deviceID, sessionID, lastEventID string) {
 	}
 	b.mu.Unlock()
 
-	slog.Info("device subscribed to session", "device_id", deviceID, "session_id", sessionID)
+	slog.Info("device subscribed to session", "device_id", deviceID, "session_id", sessionID, "last_event_id", lastEventID)
 
 	// Backfill missed events (full history if no lastEventID, or delta after lastEventID).
 	var missed []BufferedEvent
