@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection.dart';
+import 'package:bytebrew_mobile/core/infrastructure/ws/ws_connection_manager.dart';
 import 'package:bytebrew_mobile/core/infrastructure/ws/ws_providers.dart';
 import 'package:bytebrew_mobile/features/settings/application/settings_provider.dart';
+import 'package:bytebrew_mobile/features/settings/infrastructure/local_settings_repository.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'auto_connect_provider.g.dart';
@@ -27,6 +29,9 @@ Future<void> sessionsAutoConnect(Ref ref) async {
 
   // Initial connect — completes the Future so sessionsProvider can proceed.
   await manager.connectToAll(servers);
+
+  // Update persisted server names if the server hostname changed since pairing.
+  await _syncServerNames(ref, manager);
 
   // Periodically reconnect in background without blocking the Future.
   // Uses a Completer per sleep so dispose can cancel the pending timer.
@@ -55,4 +60,26 @@ Future<void> sessionsAutoConnect(Ref ref) async {
       await cancellableSleep(const Duration(seconds: 30));
     }
   }();
+}
+
+/// Checks connected servers for hostname changes and updates persistence.
+Future<void> _syncServerNames(Ref ref, WsConnectionManager manager) async {
+  final repo =
+      ref.read(settingsRepositoryProvider) as LocalSettingsRepository;
+  bool anyUpdated = false;
+
+  for (final conn in manager.connections.values) {
+    final newName = conn.resolvedName;
+    if (newName == null || newName.isEmpty) continue;
+    if (newName == conn.server.name) continue;
+
+    // Server hostname changed — update in SharedPreferences.
+    final updated = conn.server.copyWith(name: newName);
+    await repo.addServer(updated);
+    anyUpdated = true;
+  }
+
+  if (anyUpdated) {
+    ref.invalidate(serversProvider);
+  }
 }

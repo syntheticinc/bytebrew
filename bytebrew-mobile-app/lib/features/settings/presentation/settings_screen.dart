@@ -75,15 +75,19 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   Future<void> _removeServer(WidgetRef ref, String serverId) async {
-    final manager = ref.read(connectionManagerProvider);
-    await manager.disconnectFromServer(serverId);
-
+    // Remove from persistence first, then invalidate the server list.
+    // Disconnect AFTER the UI rebuild so the Dismissible animation completes
+    // without a conflicting rebuild from connectionManagerProvider notification.
     final repo =
         ref.read(settingsRepositoryProvider) as LocalSettingsRepository;
     await repo.removeServer(serverId);
+    ref.invalidate(serversProvider);
 
+    // Disconnect in the next frame — after the widget tree has rebuilt
+    // without the removed server.
+    final manager = ref.read(connectionManagerProvider);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.invalidate(serversProvider);
+      manager.disconnectFromServer(serverId);
     });
   }
 }

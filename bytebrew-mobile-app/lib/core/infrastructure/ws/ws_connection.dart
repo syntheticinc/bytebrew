@@ -12,15 +12,18 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 /// typed JSON message send/receive. Handles reconnection with exponential
 /// backoff.
 ///
-/// Detects dead connections via two mechanisms:
-/// 1. Stale check: if no data arrives for [_staleThresholdSeconds], reconnect.
-/// 2. Pong watchdog: if no data arrives within [_pongTimeoutSeconds] after a
+/// Detects dead connections via three mechanisms:
+/// 1. Proactive reconnect: after [_proactiveReconnectSeconds] of uptime,
+///    close and reconnect BEFORE the TCP path dies. On CGNAT/carrier NAT
+///    (e.g. Xiaomi on mobile data), TCP dies at ~25s regardless of keepalive.
+/// 2. Stale check: if no data arrives for [_staleThresholdSeconds], reconnect.
+/// 3. Pong watchdog: if no data arrives within [_pongTimeoutSeconds] after a
 ///    ping is sent, the connection is considered dead.
 ///
-/// On some Android devices (e.g. Xiaomi/MIUI), the TCP receive path stops
-/// working after ~30-40s even with active keepalive traffic. The stale
-/// detection handles this by triggering a reconnect, and the CLI replays
-/// missed events via lastEventId on re-subscribe.
+/// On some Android devices (e.g. Xiaomi/MIUI), CGNAT/carrier NAT kills TCP
+/// connections after ~25s regardless of keepalive traffic. The proactive
+/// reconnect at 20s avoids the dead window entirely. Stale detection and
+/// pong watchdog serve as fallbacks if proactive reconnect is insufficient.
 class WsConnection {
   WsConnection({
     required this.bridgeUrl,
@@ -37,11 +40,13 @@ class WsConnection {
 
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
   final _statusController = StreamController<WsConnectionStatus>.broadcast();
+  final _reconnectController = StreamController<void>.broadcast();
 
   WsConnectionStatus _status = WsConnectionStatus.disconnected;
   Timer? _reconnectTimer;
   Timer? _pingTimer;
   Timer? _pongWatchdog;
+  Timer? _proactiveReconnectTimer;
   int _reconnectAttempts = 0;
   bool _disposed = false;
   bool _intentionalClose = false;
@@ -63,8 +68,15 @@ class WsConnection {
 
   /// A connection is considered stale if no data has been received for longer
   /// than this threshold. With bridge keepalive every 5s, missing 2 consecutive
-  /// pongs (10s) means the connection is dead.
+  /// pongs (10s) means the connection is dead. Acts as a fallback if proactive
+  /// reconnect does not fire in time.
   static const _staleThresholdSeconds = 10;
+
+  /// Close and reconnect after this many seconds of uptime to avoid TCP death
+  /// from CGNAT/carrier NAT. On Xiaomi with mobile data, TCP dies at ~25s.
+  /// Reconnecting at 20s ensures the connection is always refreshed before the
+  /// NAT timeout kills it. Reconnect takes 200-300ms — no visible interruption.
+  static const _proactiveReconnectSeconds = 20;
 
   /// Current connection status.
   WsConnectionStatus get status => _status;
@@ -81,6 +93,10 @@ class WsConnection {
 
   /// Stream of parsed JSON messages from Bridge.
   Stream<Map<String, dynamic>> get messages => _messageController.stream;
+
+  /// Fires after a silent proactive reconnect completes successfully.
+  /// Listeners should re-send any server-side subscriptions (e.g. subscribe).
+  Stream<void> get onReconnect => _reconnectController.stream;
 
   /// Stream of connection status changes.
   Stream<WsConnectionStatus> get statusChanges => _statusController.stream;
@@ -115,6 +131,7 @@ class WsConnection {
       // accepts the WS handshake but immediately closes (e.g. stale server_id).
       _lastDataAt = DateTime.now();
       _startPingLoop();
+      _startProactiveReconnect();
     } on Exception catch (e) {
       debugPrint('[WsConnection] Connection failed: $e');
       _setStatus(WsConnectionStatus.error);
@@ -176,6 +193,7 @@ class WsConnection {
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
     _stopPingLoop();
+    _stopProactiveReconnect();
     await _channelSubscription?.cancel();
     _channelSubscription = null;
     await _channel?.sink.close();
@@ -189,9 +207,11 @@ class WsConnection {
     if (_disposed) return;
     _disposed = true;
     _stopPingLoop();
+    _stopProactiveReconnect();
     await disconnect();
     await _messageController.close();
     await _statusController.close();
+    await _reconnectController.close();
   }
 
   // -------------------------------------------------------------------------
@@ -245,6 +265,7 @@ class WsConnection {
   void _onError(Object error) {
     debugPrint('[WsConnection] Stream error: $error');
     _stopPingLoop();
+    _stopProactiveReconnect();
     _setStatus(WsConnectionStatus.error);
     if (!_intentionalClose) {
       _scheduleReconnect();
@@ -254,6 +275,7 @@ class WsConnection {
   void _onDone() {
     debugPrint('[WsConnection] Connection closed');
     _stopPingLoop();
+    _stopProactiveReconnect();
     if (_intentionalClose || _disposed) {
       _setStatus(WsConnectionStatus.disconnected);
       return;
@@ -278,6 +300,72 @@ class WsConnection {
   int _reconnectDelay(int attempts) {
     if (attempts == 0) return 0;
     return min(2 << (attempts - 1), _maxReconnectDelay);
+  }
+
+  /// Proactive reconnect: close and reconnect before CGNAT kills the TCP path.
+  /// This runs once per connection lifetime — after [_proactiveReconnectSeconds]
+  /// of uptime, the connection is closed and immediately reconnected.
+  void _startProactiveReconnect() {
+    _proactiveReconnectTimer?.cancel();
+    _proactiveReconnectTimer = Timer(
+      const Duration(seconds: _proactiveReconnectSeconds),
+      _onProactiveReconnect,
+    );
+  }
+
+  void _stopProactiveReconnect() {
+    _proactiveReconnectTimer?.cancel();
+    _proactiveReconnectTimer = null;
+  }
+
+  /// Silently replaces the underlying WebSocket without changing the public
+  /// [status]. This is a background maintenance operation — the UI should not
+  /// see any status flicker.
+  Future<void> _onProactiveReconnect() async {
+    if (_disposed || _intentionalClose) return;
+    if (_status != WsConnectionStatus.connected) return;
+
+    debugPrint(
+      '[WsConnection] Proactive reconnect after '
+      '${_proactiveReconnectSeconds}s (CGNAT protection)',
+    );
+
+    // Tear down old channel silently (no status change).
+    _stopPingLoop();
+    _stopProactiveReconnect();
+    _channelSubscription?.cancel();
+    _channelSubscription = null;
+    try {
+      _channel?.sink.close();
+    } on Object catch (_) {}
+    _channel = null;
+
+    // Open a new channel. Keep status as "connected" throughout —
+    // if the reconnect fails, THEN transition to error.
+    try {
+      final wsUrl = _buildWsUrl();
+      _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
+      await _channel!.ready;
+
+      _channelSubscription = _channel!.stream.listen(
+        _onData,
+        onError: _onError,
+        onDone: _onDone,
+      );
+
+      _lastDataAt = DateTime.now();
+      _reconnectAttempts = 0;
+      _startPingLoop();
+      _startProactiveReconnect();
+
+      // Notify listeners that the underlying connection was replaced.
+      // WsBridgeClient uses this to re-send subscribe commands.
+      _reconnectController.add(null);
+    } on Exception catch (e) {
+      debugPrint('[WsConnection] Proactive reconnect failed: $e');
+      _setStatus(WsConnectionStatus.error);
+      _scheduleReconnect();
+    }
   }
 
   /// Sends application-level ping to keep the connection alive through NAT.
@@ -334,6 +422,7 @@ class WsConnection {
   /// Called when no data arrives within the pong timeout window.
   void _onPongTimeout() {
     _stopPingLoop();
+    _stopProactiveReconnect();
 
     // Close the dead channel.
     _channelSubscription?.cancel();

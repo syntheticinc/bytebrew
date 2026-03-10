@@ -478,8 +478,13 @@ func startBridge(
 		}
 	}
 
-	// Create bridge client
-	bridgeClient := bridge.NewBridgeClient(cfg.Bridge.URL, identity.ID, "ByteBrew Server", cfg.Bridge.AuthToken)
+	// Create bridge client — use machine hostname as server name so mobile
+	// users can distinguish between multiple connected machines.
+	hostName, _ := os.Hostname()
+	if hostName == "" {
+		hostName = "ByteBrew Server"
+	}
+	bridgeClient := bridge.NewBridgeClient(cfg.Bridge.URL, identity.ID, hostName, cfg.Bridge.AuthToken)
 
 	// Create message router (handles E2E encryption transparently)
 	messageRouter := bridge.NewMessageRouter(bridgeClient, cryptoAdapter)
@@ -512,6 +517,7 @@ func startBridge(
 		sessionRegistry,
 		processor,
 		identity,
+		hostName,
 	)
 
 	// Connect to bridge relay

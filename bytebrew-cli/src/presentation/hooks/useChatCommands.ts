@@ -239,7 +239,9 @@ export function useChatCommands(options: UseChatCommandsOptions): UseChatCommand
             const lines = [
               'Scan this QR code with ByteBrew mobile app:',
               '',
+              '```',
               qrArt,
+              '```',
               '',
               `Short code: ${shortCode}`,
               `Expires in: ${Math.floor(expiresInSeconds / 60)} minutes`,

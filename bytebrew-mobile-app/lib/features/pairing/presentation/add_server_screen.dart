@@ -187,7 +187,7 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> {
               const SizedBox(height: 16),
               Center(
                 child: Text(
-                  'Point your camera at the QR code shown in CLI after typing /mobile',
+                  'Point your camera at the QR code shown in CLI after typing /pair',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: AppColors.shade3,
                   ),
@@ -237,7 +237,7 @@ class _InstructionSection extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
-            '/mobile',
+            '/pair',
             style: theme.textTheme.bodyLarge?.copyWith(
               fontWeight: FontWeight.w600,
             ),

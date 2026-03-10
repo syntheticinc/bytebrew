@@ -141,7 +141,7 @@ func newTestRequestHandler(t *testing.T) (*MobileRequestHandler, *mockDeviceStor
 		PrivateKey: make([]byte, 32),
 	}
 
-	handler := NewMobileRequestHandler(router, deviceStore, tokenStore, crypto, broadcaster, sessions, &mockMessageProcessor{}, identity)
+	handler := NewMobileRequestHandler(router, deviceStore, tokenStore, crypto, broadcaster, sessions, &mockMessageProcessor{}, identity, "test-server")
 	return handler, deviceStore, sessions, crypto
 }
 

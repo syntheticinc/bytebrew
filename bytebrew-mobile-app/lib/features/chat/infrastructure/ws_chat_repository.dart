@@ -198,6 +198,13 @@ class WsChatRepository implements ChatRepository {
       deviceToken: connection.server.deviceToken!,
       sessionId: _sessionId,
     );
+
+    // Optimistically reset processing state so Stop button disappears
+    // immediately. Server will confirm via SessionStatusPayload later.
+    if (_isProcessing) {
+      _isProcessing = false;
+      _processingController.add(false);
+    }
   }
 
   @override

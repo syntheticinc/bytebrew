@@ -14,7 +14,7 @@ class SessionGroup extends StatelessWidget {
   static String _statusLabel(SessionStatus status) {
     return switch (status) {
       SessionStatus.needsAttention => 'ACTION REQUIRED',
-      SessionStatus.active => 'IN PROGRESS',
+      SessionStatus.active => 'ACTIVE',
       SessionStatus.idle => 'RECENT',
     };
   }

@@ -66,4 +66,4 @@ final class SessionsAutoConnectProvider
 }
 
 String _$sessionsAutoConnectHash() =>
-    r'6fdc388c70f08f6e85627a7331e0781039523974';
+    r'47156a0dbe1a88a47096f4f7f2e572bfd8c42b00';

@@ -49,6 +49,16 @@ class SessionsScreen extends ConsumerWidget {
               return const _EmptyBody();
             }
 
+            // Resolve active server name for the status bar.
+            // Prefer resolvedName (from ping) over persisted server.name.
+            final activeConn = manager.activeConnections.firstOrNull;
+            final activeServerName =
+                activeConn?.resolvedName ?? activeConn?.server.name;
+
+            if (grouped.isEmpty && hasActiveConnection) {
+              return _ConnectedEmptyBody(serverName: activeServerName ?? 'Server');
+            }
+
             final allSessions = grouped.values.expand((s) => s).toList();
             final serverIds = allSessions.map((s) => s.serverId).toSet();
             final multipleServers = serverIds.length > 1 || servers.length > 1;
@@ -56,14 +66,14 @@ class SessionsScreen extends ConsumerWidget {
             if (multipleServers) {
               return _ServerGroupedList(
                 grouped: grouped,
-                showLiveSession: hasActiveConnection,
+                serverName: activeServerName,
                 manager: manager,
               );
             }
 
             return _SessionsList(
               grouped: grouped,
-              showLiveSession: hasActiveConnection,
+              serverName: activeServerName,
             );
           },
         ),
@@ -75,10 +85,13 @@ class SessionsScreen extends ConsumerWidget {
 /// Scrollable list of session groups ordered by [_statusDisplayOrder],
 /// with a compact summary header showing counts per status.
 class _SessionsList extends StatelessWidget {
-  const _SessionsList({required this.grouped, this.showLiveSession = false});
+  const _SessionsList({
+    required this.grouped,
+    this.serverName,
+  });
 
   final Map<SessionStatus, List<Session>> grouped;
-  final bool showLiveSession;
+  final String? serverName;
 
   @override
   Widget build(BuildContext context) {
@@ -86,19 +99,16 @@ class _SessionsList extends StatelessWidget {
         .where((s) => grouped.containsKey(s))
         .toList();
 
-    final extraItems = showLiveSession ? 1 : 0;
+    final hasStatus = serverName != null;
+    final extraItems = hasStatus ? 1 : 0;
 
-    // +1 for summary header, +extraItems for live session card.
     return ListView.builder(
-      itemCount: visibleStatuses.length + 1 + extraItems,
+      itemCount: visibleStatuses.length + extraItems,
       itemBuilder: (context, index) {
-        if (index == 0) {
-          return _SummaryHeader(grouped: grouped);
+        if (hasStatus && index == 0) {
+          return _ConnectionStatusBar(serverName: serverName!);
         }
-        if (showLiveSession && index == 1) {
-          return const _LiveSessionCard();
-        }
-        final adjustedIndex = index - 1 - extraItems;
+        final adjustedIndex = index - extraItems;
         final status = visibleStatuses[adjustedIndex];
         return SessionGroup(status: status, sessions: grouped[status]!);
       },
@@ -110,12 +120,12 @@ class _SessionsList extends StatelessWidget {
 class _ServerGroupedList extends StatelessWidget {
   const _ServerGroupedList({
     required this.grouped,
-    this.showLiveSession = false,
+    this.serverName,
     required this.manager,
   });
 
   final Map<SessionStatus, List<Session>> grouped;
-  final bool showLiveSession;
+  final String? serverName;
   final WsConnectionManager manager;
 
   @override
@@ -136,13 +146,11 @@ class _ServerGroupedList extends StatelessWidget {
 
     final serverIds = byServer.keys.toList();
 
-    // Build a flat list of widgets: summary, (live), then server headers + groups.
-    final widgets = <Widget>[
-      _SummaryHeader(grouped: grouped),
-    ];
+    // Build a flat list of widgets: (live status), then server headers + groups.
+    final widgets = <Widget>[];
 
-    if (showLiveSession) {
-      widgets.add(const _LiveSessionCard());
+    if (serverName != null) {
+      widgets.add(_ConnectionStatusBar(serverName: serverName!));
     }
 
     for (final serverId in serverIds) {
@@ -205,116 +213,34 @@ class _ServerHeader extends StatelessWidget {
   }
 }
 
-/// Section header + status line shown when there is an active CLI connection.
-///
-/// Uses the same monospace uppercase header style as [SessionGroup] headers
-/// (e.g. "IN PROGRESS", "ACTION REQUIRED") for visual consistency.
-class _LiveSessionCard extends StatelessWidget {
-  const _LiveSessionCard();
+/// Compact connection status bar shown at the top of the sessions list
+/// when there is an active server connection.
+class _ConnectionStatusBar extends StatelessWidget {
+  const _ConnectionStatusBar({required this.serverName});
+
+  final String serverName;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Text(
-            'LIVE',
-            style: theme.textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-              letterSpacing: 2,
-              color: AppColors.statusActive,
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-          child: Row(
-            children: [
-              Icon(Icons.circle, color: AppColors.statusActive, size: 8),
-              const SizedBox(width: 8),
-              Text(
-                'Connected to CLI',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.shade3,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Compact summary row: "2 active . 1 needs attention . 3 idle"
-/// with colored counts.
-class _SummaryHeader extends StatelessWidget {
-  const _SummaryHeader({required this.grouped});
-
-  final Map<SessionStatus, List<Session>> grouped;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    final activeCount = grouped[SessionStatus.active]?.length ?? 0;
-    final attentionCount = grouped[SessionStatus.needsAttention]?.length ?? 0;
-    final idleCount = grouped[SessionStatus.idle]?.length ?? 0;
-
-    final spans = <InlineSpan>[];
-
-    void addSpan(int count, String label, Color color) {
-      if (spans.isNotEmpty) {
-        spans.add(
-          TextSpan(
-            text: '  \u00B7  ',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        );
-      }
-      spans.add(
-        TextSpan(
-          text: '$count',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: color,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      );
-      spans.add(
-        TextSpan(
-          text: ' $label',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
-      );
-    }
-
-    if (activeCount > 0) {
-      addSpan(activeCount, 'active', AppColors.statusActive);
-    }
-    if (attentionCount > 0) {
-      addSpan(
-        attentionCount,
-        'needs attention',
-        AppColors.statusNeedsAttention,
-      );
-    }
-    if (idleCount > 0) {
-      addSpan(idleCount, 'idle', AppColors.statusIdle);
-    }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: Text.rich(TextSpan(children: spans)),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Row(
+        children: [
+          const Icon(Icons.circle, color: AppColors.statusActive, size: 8),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              serverName,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppColors.shade3,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -351,6 +277,73 @@ class _EmptyBody extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   'Your agent sessions will appear here',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.7,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Empty state shown when connected to a server but no sessions exist yet.
+class _ConnectedEmptyBody extends StatelessWidget {
+  const _ConnectedEmptyBody({required this.serverName});
+
+  final String serverName;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return CustomScrollView(
+      slivers: [
+        SliverFillRemaining(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.circle,
+                      color: AppColors.statusActive,
+                      size: 8,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      serverName,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppColors.shade3,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Icon(
+                  Icons.chat_bubble_outline,
+                  size: 64,
+                  color: theme.colorScheme.onSurfaceVariant.withValues(
+                    alpha: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No active sessions',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Start a session from CLI or send a message',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant.withValues(
                       alpha: 0.7,

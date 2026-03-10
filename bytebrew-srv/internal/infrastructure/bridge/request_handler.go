@@ -51,6 +51,7 @@ type MobileRequestHandler struct {
 	sessions       SessionManager
 	processor      MessageProcessor
 	serverIdentity *persistence.ServerIdentity
+	serverName     string
 
 	running atomic.Bool
 }
@@ -65,6 +66,7 @@ func NewMobileRequestHandler(
 	sessions SessionManager,
 	processor MessageProcessor,
 	serverIdentity *persistence.ServerIdentity,
+	serverName string,
 ) *MobileRequestHandler {
 	return &MobileRequestHandler{
 		router:         router,
@@ -75,6 +77,7 @@ func NewMobileRequestHandler(
 		sessions:       sessions,
 		processor:      processor,
 		serverIdentity: serverIdentity,
+		serverName:     serverName,
 	}
 }
 
@@ -122,7 +125,9 @@ func (h *MobileRequestHandler) handleMessage(msg *MobileMessage) {
 
 func (h *MobileRequestHandler) handlePing(msg *MobileMessage) {
 	h.respond(msg, "pong", map[string]interface{}{
-		"timestamp": time.Now().UnixMilli(),
+		"timestamp":   time.Now().UnixMilli(),
+		"server_name": h.serverName,
+		"server_id":   h.serverIdentity.ID,
 	})
 }
 
@@ -341,7 +346,7 @@ func (h *MobileRequestHandler) handleListSessions(msg *MobileMessage) {
 
 	h.respond(msg, "sessions_list", map[string]interface{}{
 		"sessions":    result,
-		"server_name": "ByteBrew Server",
+		"server_name": h.serverName,
 		"server_id":   h.serverIdentity.ID,
 	})
 }

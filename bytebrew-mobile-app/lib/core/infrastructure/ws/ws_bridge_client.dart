@@ -19,6 +19,9 @@ class WsBridgeClient {
     this.deviceId = '',
   }) : _connection = connection {
     _messageSubscription = _connection.messages.listen(_onMessage);
+    _reconnectSubscription = _connection.onReconnect.listen((_) {
+      _resubscribeAll();
+    });
   }
 
   final WsConnection _connection;
@@ -26,6 +29,7 @@ class WsBridgeClient {
   final String deviceId;
 
   StreamSubscription<Map<String, dynamic>>? _messageSubscription;
+  StreamSubscription<void>? _reconnectSubscription;
 
   /// Pending request completers, keyed by request_id.
   final Map<String, Completer<Map<String, dynamic>>> _pendingRequests = {};
@@ -33,6 +37,9 @@ class WsBridgeClient {
   /// Controllers for event streams (e.g. session_event subscriptions).
   final Map<String, StreamController<Map<String, dynamic>>> _eventControllers =
       {};
+
+  /// Tracks active subscribe payloads for re-sending after proactive reconnect.
+  final Map<String, Map<String, dynamic>> _activeSubscriptions = {};
 
   int _requestCounter = 0;
   int _sendCounter = 0;
@@ -164,6 +171,7 @@ class WsBridgeClient {
       if (_eventControllers[eventKey] == rawController) {
         _eventControllers.remove(eventKey);
       }
+      _activeSubscriptions.remove(eventKey);
     };
 
     // Send the subscribe request (fire and forget).
@@ -174,6 +182,9 @@ class WsBridgeClient {
     if (lastEventId != null) {
       payload['last_event_id'] = lastEventId;
     }
+
+    // Track for re-subscribe after proactive reconnect.
+    _activeSubscriptions[eventKey] = payload;
 
     _sendRequestFireAndForget('subscribe', payload);
 
@@ -227,6 +238,9 @@ class WsBridgeClient {
     await _messageSubscription?.cancel();
     _messageSubscription = null;
 
+    await _reconnectSubscription?.cancel();
+    _reconnectSubscription = null;
+
     for (final completer in _pendingRequests.values) {
       if (!completer.isCompleted) {
         completer.completeError(
@@ -240,6 +254,25 @@ class WsBridgeClient {
       await controller.close();
     }
     _eventControllers.clear();
+    _activeSubscriptions.clear();
+  }
+
+  /// Re-sends all active subscribe commands after a silent proactive reconnect.
+  /// The server-side subscription is lost when the Bridge connection drops,
+  /// but the local stream chain is intact — we just need to tell the server
+  /// to resume sending events.
+  void _resubscribeAll() {
+    if (_disposed) return;
+    if (_activeSubscriptions.isEmpty) return;
+
+    debugPrint(
+      '[WsBridgeClient] Re-subscribing ${_activeSubscriptions.length} '
+      'session(s) after proactive reconnect',
+    );
+
+    for (final entry in _activeSubscriptions.entries) {
+      _sendRequestFireAndForget('subscribe', Map.of(entry.value));
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -481,6 +514,13 @@ class WsBridgeClient {
     }
 
     final eventKey = 'subscribe-$sessionId';
+
+    // Update last_event_id for accurate backfill on re-subscribe.
+    final eventId = payload['event_id'] as String?;
+    if (eventId != null && _activeSubscriptions.containsKey(eventKey)) {
+      _activeSubscriptions[eventKey]!['last_event_id'] = eventId;
+    }
+
     final controller = _eventControllers[eventKey];
     if (controller != null) {
       controller.add(message);

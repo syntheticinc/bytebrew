@@ -33,6 +33,10 @@ class WsServerConnection {
   /// The last error message, if any.
   String? lastError;
 
+  /// Server name returned by ping (may differ from [server.name] if hostname
+  /// changed since pairing).
+  String? resolvedName;
+
   /// Subscription to WsConnection status changes.
   StreamSubscription<WsConnectionStatus>? statusSubscription;
 }
@@ -155,9 +159,12 @@ class WsConnectionManager extends ChangeNotifier {
 
     try {
       await wsConnection.connect();
-      await client.ping();
+      final pingResult = await client.ping();
       serverConn.status = WsConnectionStatus.connected;
       serverConn.lastError = null;
+      if (pingResult.serverName.isNotEmpty) {
+        serverConn.resolvedName = pingResult.serverName;
+      }
     } on Exception catch (e) {
       serverConn.lastError = e.toString();
       // If WS socket opened but CLI unreachable (ping fail) —
