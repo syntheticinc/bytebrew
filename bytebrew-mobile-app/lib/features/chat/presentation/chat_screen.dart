@@ -238,6 +238,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Widget _buildMessageWidget(ChatMessage message) {
+    // Skip empty agent messages (streaming remnants from backfill).
+    if (message.type == ChatMessageType.agentMessage &&
+        message.content.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return switch (message.type) {
       ChatMessageType.userMessage => UserMessageBubble(message: message),
       ChatMessageType.agentMessage => AgentMessageBubble(message: message),

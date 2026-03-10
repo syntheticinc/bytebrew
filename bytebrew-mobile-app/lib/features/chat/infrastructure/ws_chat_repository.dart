@@ -355,6 +355,15 @@ class WsChatRepository implements ChatRepository {
 
   void _handleAgentMessage(SessionEvent event, AgentMessagePayload payload) {
     if (payload.isComplete) {
+      // Remove streaming accumulator messages for this agent.
+      // Step may differ between streaming (step N) and complete (step N+1),
+      // so match by agentId prefix pattern instead of exact streamId.
+      final agentPrefix = '${event.agentId}-';
+      _messages.removeWhere(
+        (m) => m.type == ChatMessageType.agentMessage &&
+               m.id.startsWith(agentPrefix),
+      );
+
       _upsertMessage(
         ChatMessage(
           id: event.eventId,
@@ -495,6 +504,7 @@ class WsChatRepository implements ChatRepository {
     // stale send-timeout error that was shown while the connection was dead.
     if (payload.state == MobileSessionState.active) {
       _messages.removeWhere((m) => m.id == _sendErrorId);
+      _emitMessages();
     }
 
     // Track processing state: active = processing, anything else = idle.
@@ -506,19 +516,20 @@ class WsChatRepository implements ChatRepository {
       }
     }
 
-    final content = payload.message.isNotEmpty
-        ? payload.message
-        : 'Session status: ${payload.state.name}';
-
-    _upsertMessage(
-      ChatMessage(
-        id: event.eventId,
-        type: ChatMessageType.systemMessage,
-        content: content,
-        timestamp: event.timestamp,
-      ),
-    );
-    _emitMessages();
+    // Status transitions (active/idle) are NOT shown as chat messages —
+    // they only drive the stop/send button toggle via isProcessing.
+    // Only show explicit server messages (e.g. error descriptions).
+    if (payload.message.isNotEmpty) {
+      _upsertMessage(
+        ChatMessage(
+          id: event.eventId,
+          type: ChatMessageType.systemMessage,
+          content: payload.message,
+          timestamp: event.timestamp,
+        ),
+      );
+      _emitMessages();
+    }
   }
 
   void _handleError(SessionEvent event, ErrorPayload payload) {
