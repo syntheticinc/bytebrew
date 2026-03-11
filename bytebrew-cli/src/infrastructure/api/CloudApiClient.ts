@@ -63,7 +63,7 @@ export class CloudApiClient {
     this.baseUrl =
       options?.baseUrl ??
       process.env.BYTEBREW_CLOUD_URL ??
-      'http://localhost:60402';
+      'https://api.bytebrew.ai';
     this.accessToken = options?.accessToken ?? null;
     this.refreshToken = options?.refreshToken ?? null;
     this.email = options?.email ?? '';
