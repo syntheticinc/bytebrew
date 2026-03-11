@@ -52,8 +52,19 @@ export class ServerConnectionOrchestrator {
     this.processManager = new ServerProcessManager();
     const port = await this.processManager.start(binaryPath);
 
+    // Read port file to get ws_port (server writes it shortly after READY)
+    const reader = new PortFileReader();
+    let portInfo = reader.read();
+    if (!portInfo?.ws_port) {
+      // Port file may not be written yet — wait briefly and retry
+      await new Promise(r => setTimeout(r, 500));
+      portInfo = reader.read();
+    }
+    const wsPort = portInfo?.ws_port;
+
     return {
       address: `localhost:${port}`,
+      wsAddress: wsPort ? `localhost:${wsPort}` : undefined,
       cleanup: async () => {
         await this.processManager?.stop();
       },

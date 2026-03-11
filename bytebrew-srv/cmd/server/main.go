@@ -19,6 +19,7 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/delivery/grpc"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/delivery/ws"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/embedded"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/bridge"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/flow_registry"
@@ -82,6 +83,24 @@ func main() {
 				log.Printf("Generated default config at %s", managedConfigPath)
 			}
 			*configPath = managedConfigPath
+		}
+
+		// Generate default prompts.yaml if missing (from embedded)
+		managedPromptsPath := filepath.Join(dataDir, "prompts.yaml")
+		if _, err := os.Stat(managedPromptsPath); os.IsNotExist(err) {
+			if err := os.WriteFile(managedPromptsPath, embedded.DefaultPrompts, 0644); err != nil {
+				log.Fatalf("Failed to write default prompts: %v", err)
+			}
+			log.Printf("Generated default prompts at %s", managedPromptsPath)
+		}
+
+		// Generate default flows.yaml if missing (from embedded)
+		managedFlowsPath := filepath.Join(dataDir, "flows.yaml")
+		if _, err := os.Stat(managedFlowsPath); os.IsNotExist(err) {
+			if err := os.WriteFile(managedFlowsPath, embedded.DefaultFlows, 0644); err != nil {
+				log.Fatalf("Failed to write default flows: %v", err)
+			}
+			log.Printf("Generated default flows at %s", managedFlowsPath)
 		}
 	}
 
@@ -281,12 +300,6 @@ func main() {
 		}
 	}()
 
-	// In managed mode, emit READY protocol before starting
-	if *managed {
-		fmt.Printf("READY:%d\n", grpcServer.ActualPort())
-		os.Stdout.Sync()
-	}
-
 	// Start gRPC server in goroutine
 	serverErrChan := make(chan error, 1)
 	go func() {
@@ -301,8 +314,8 @@ func main() {
 		"ws_port", wsServer.Port(),
 	)
 
-	// Write port file for CLI discovery.
-	// Always write 127.0.0.1 — clients connect via loopback, not 0.0.0.0.
+	// Write port file for CLI discovery BEFORE emitting READY.
+	// CLI reads READY and immediately tries to read the port file for ws_port.
 	portFileHost := cfg.Server.Host
 	if portFileHost == "" || portFileHost == "0.0.0.0" {
 		portFileHost = "127.0.0.1"
@@ -318,6 +331,12 @@ func main() {
 		slog.Warn("Failed to write port file", "error", err)
 	} else {
 		slog.Info("Port file written", "path", portWriter.Path())
+	}
+
+	// In managed mode, emit READY protocol AFTER port file is written.
+	if *managed {
+		fmt.Printf("READY:%d\n", grpcServer.ActualPort())
+		os.Stdout.Sync()
 	}
 
 	// Start bridge connectivity if enabled
@@ -593,6 +612,35 @@ llm:
     model: "qwen2.5-coder:7b"
     base_url: "http://localhost:11434"
     timeout: 300s
+`
+	return os.WriteFile(path, []byte(content), 0644)
+}
+
+// generateDefaultPrompts writes a minimal prompts.yaml suitable for managed mode.
+func generateDefaultPrompts(path string) error {
+	content := `# ByteBrew Prompts (auto-generated for managed mode)
+prompts:
+  system_prompt: |
+    You are a coding assistant that helps users understand and work with code.
+
+    **Language:** Match the user's language. Russian question = Russian answer.
+
+    **BE EFFICIENT — minimize tool calls.**
+    Every tool call takes time. Do NOT read the same file twice. Fewer calls = faster response.
+
+    **ACTION over description.**
+    When the user asks to modify/refactor/fix code — DO IT immediately.
+    Read the file, make the changes, done.
+
+    **Approach:**
+    - Be concise. Reference files and line numbers when relevant.
+    - Answer questions directly — don't just describe what you found.
+    - Use grep_search and glob to explore unfamiliar code.
+
+    **How you work:**
+    - You are an AI coding assistant with access to file system tools.
+    - You can read, write, and search code files.
+    - You can execute shell commands.
 `
 	return os.WriteFile(path, []byte(content), 0644)
 }
