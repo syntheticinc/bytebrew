@@ -3,7 +3,7 @@ server:
 
 cors:
   allowed_origins:
-    - "https://app.bytebrew.ai"
+    - "https://bytebrew.ai"
 
 auth:
   access_token_ttl: 15m
@@ -14,8 +14,8 @@ trial:
   steps_per_hour: 20
 
 stripe:
-  success_url: "https://app.bytebrew.ai/billing/success"
-  cancel_url: "https://app.bytebrew.ai/billing/cancel"
+  success_url: "https://bytebrew.ai/billing/success"
+  cancel_url: "https://bytebrew.ai/billing/cancel"
   trial_days: 14
 
 deepinfra:
@@ -23,7 +23,7 @@ deepinfra:
 
 email:
   from_email: "ByteBrew <noreply@bytebrew.ai>"
-  frontend_url: "https://app.bytebrew.ai"
+  frontend_url: "https://bytebrew.ai"
 
 model_routing:
   default_model: "zai-org/GLM-5"
