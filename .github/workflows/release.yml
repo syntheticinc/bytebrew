@@ -213,7 +213,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare VPS release directory
-        if: ${{ secrets.VPS_HOST != '' }}
+        if: vars.DEPLOY_TO_VPS == 'true'
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -223,7 +223,7 @@ jobs:
             mkdir -p /var/www/releases/v${{ steps.version.outputs.version }}
 
       - name: Copy release files to VPS
-        if: ${{ secrets.VPS_HOST != '' }}
+        if: vars.DEPLOY_TO_VPS == 'true'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -234,7 +234,7 @@ jobs:
           strip_components: 1
 
       - name: Copy install scripts to VPS
-        if: ${{ secrets.VPS_HOST != '' }}
+        if: vars.DEPLOY_TO_VPS == 'true'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -245,7 +245,7 @@ jobs:
           strip_components: 1
 
       - name: Finalize VPS release
-        if: ${{ secrets.VPS_HOST != '' }}
+        if: vars.DEPLOY_TO_VPS == 'true'
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
