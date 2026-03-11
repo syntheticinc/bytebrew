@@ -1,6 +1,6 @@
 {
   "name": "bytebrew-cli",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "ByteBrew CLI - AI-powered terminal client",
   "type": "module",
   "main": "dist/index.js",
