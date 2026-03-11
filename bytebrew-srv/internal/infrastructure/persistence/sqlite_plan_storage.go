@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 const (
@@ -47,7 +46,7 @@ func NewSQLitePlanStorage(dbPath string) (*SQLitePlanStorage, error) {
 	}
 
 	// Open database with WAL mode for better concurrency
-	db, err := sql.Open("sqlite3", dbPath+"?cache=shared&mode=rwc&_journal_mode=WAL")
+	db, err := sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}

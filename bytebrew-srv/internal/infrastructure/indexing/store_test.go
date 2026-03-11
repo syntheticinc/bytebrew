@@ -209,7 +209,7 @@ func TestNewChunkStore_InvalidPath(t *testing.T) {
 	// Ensure directory does not exist
 	dbPath := filepath.Join(t.TempDir(), "nonexistent", "deep", "test.db")
 	_, err := NewChunkStore(dbPath, 4)
-	// go-sqlite3 creates the file, but the directory must exist
+	// modernc/sqlite creates the file, but the directory must exist
 	// On most systems this should fail
 	if err != nil {
 		assert.Error(t, err)

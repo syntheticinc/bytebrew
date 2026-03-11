@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/glebarez/go-sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -18,7 +18,7 @@ import (
 
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite3", ":memory:?cache=shared&_journal_mode=WAL")
+	db, err := sql.Open("sqlite", ":memory:?_pragma=journal_mode(WAL)")
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	return db
@@ -186,7 +186,7 @@ func TestStore_ConcurrentAppend(t *testing.T) {
 	// can lose schema across connections opened by database/sql pool).
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "concurrent.db")
-	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
+	db, err := sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -236,7 +236,7 @@ func TestStore_PersistenceAcrossReopen(t *testing.T) {
 	dbPath := filepath.Join(tmpDir, "test_events.db")
 
 	// Phase 1: Create store, append 3 events, close
-	db1, err := sql.Open("sqlite3", dbPath)
+	db1, err := sql.Open("sqlite", dbPath)
 	require.NoError(t, err)
 
 	store1, err := New(db1)
@@ -255,7 +255,7 @@ func TestStore_PersistenceAcrossReopen(t *testing.T) {
 	require.NoError(t, db1.Close())
 
 	// Phase 2: Reopen and verify
-	db2, err := sql.Open("sqlite3", dbPath)
+	db2, err := sql.Open("sqlite", dbPath)
 	require.NoError(t, err)
 	defer db2.Close()
 

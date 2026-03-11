@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/glebarez/go-sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -92,7 +92,7 @@ func NewWsHarness(t *testing.T, scenario string) *WsHarness {
 	// Create in-memory event store for tests.
 	// MaxOpenConns(1) ensures all operations use the same connection —
 	// without this, database/sql pool creates separate in-memory DBs per connection.
-	eventsDB, err := sql.Open("sqlite3", ":memory:")
+	eventsDB, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		cancel()
 		t.Fatalf("open in-memory events db: %v", err)

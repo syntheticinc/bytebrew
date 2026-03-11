@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/glebarez/go-sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
@@ -89,7 +89,7 @@ func NewStreamingHarness(t *testing.T, scenario string) *StreamingHarness {
 
 	flowReg := flow_registry.NewInMemoryRegistry()
 	// Create in-memory event store for tests
-	eventsDB, err := sql.Open("sqlite3", ":memory:")
+	eventsDB, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		cancel()
 		t.Fatalf("open in-memory events db: %v", err)

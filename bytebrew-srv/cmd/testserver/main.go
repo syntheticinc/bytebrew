@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
 	deliverygrpc "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/delivery/grpc"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/delivery/ws"
@@ -164,7 +163,7 @@ func main() {
 	// 9. Create FlowHandler (SAME as production!)
 	flowRegistry := flow_registry.NewInMemoryRegistry()
 	// Create in-memory event store for tests
-	eventsDB, err := sql.Open("sqlite3", ":memory:")
+	eventsDB, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		log.Fatalf("Failed to open in-memory events db: %v", err)
 	}

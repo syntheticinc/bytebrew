@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-
-	_ "github.com/mattn/go-sqlite3"
 )
 
 // NewWorkDB creates a shared SQLite database for tasks and subtasks.
@@ -20,7 +18,7 @@ func NewWorkDB(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("create directory for work db: %w", err)
 	}
 
-	db, err := sql.Open("sqlite3", dbPath+"?cache=shared&mode=rwc&_journal_mode=WAL&_foreign_keys=on")
+	db, err := sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)")
 	if err != nil {
 		return nil, fmt.Errorf("open work db: %w", err)
 	}

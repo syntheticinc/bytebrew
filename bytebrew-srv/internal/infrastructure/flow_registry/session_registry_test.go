@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/glebarez/go-sqlite"
 	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,7 +18,7 @@ import (
 // newTestEventStore creates an in-memory event store for tests.
 func newTestEventStore(t *testing.T) *eventstore.Store {
 	t.Helper()
-	db, err := sql.Open("sqlite3", ":memory:?cache=shared&_journal_mode=WAL")
+	db, err := sql.Open("sqlite", ":memory:?_pragma=journal_mode(WAL)")
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	store, err := eventstore.New(db)

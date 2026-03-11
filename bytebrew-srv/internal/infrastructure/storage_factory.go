@@ -19,7 +19,7 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/work"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
 	einotool "github.com/cloudwego/eino/components/tool"
-	"gorm.io/driver/sqlite"
+	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 )
