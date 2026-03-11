@@ -14,12 +14,22 @@ export function BillingSuccessPage() {
         <ol className="space-y-3 text-sm text-gray-300">
           <li>
             <span className="font-mono text-white">1.</span>{' '}
-            Open a terminal and run{' '}
-            <code className="rounded bg-gray-800 px-2 py-0.5 text-blue-400">bytebrew login</code>
+            Install ByteBrew:
+            <div className="mt-1.5 space-y-1.5">
+              <div>
+                <span className="text-xs text-gray-500">macOS / Linux:</span>{' '}
+                <code className="rounded bg-gray-800 px-2 py-0.5 text-blue-400 text-xs">curl -fsSL https://bytebrew.ai/releases/install.sh | sh</code>
+              </div>
+              <div>
+                <span className="text-xs text-gray-500">Windows:</span>{' '}
+                <code className="rounded bg-gray-800 px-2 py-0.5 text-blue-400 text-xs">irm https://bytebrew.ai/releases/install.ps1 | iex</code>
+              </div>
+            </div>
           </li>
           <li>
             <span className="font-mono text-white">2.</span>{' '}
-            Enter your email and password
+            Log in:{' '}
+            <code className="rounded bg-gray-800 px-2 py-0.5 text-blue-400">bytebrew login</code>
           </li>
           <li>
             <span className="font-mono text-white">3.</span>{' '}
