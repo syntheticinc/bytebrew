@@ -8,11 +8,12 @@ $InstallDir = Join-Path $env:USERPROFILE '.bytebrew\bin'
 $BinaryName = 'bytebrew.exe'
 
 # Detect architecture
-$Arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+$Arch = $env:PROCESSOR_ARCHITECTURE
 switch ($Arch) {
-    'X64'   { $PlatformArch = 'amd64' }
-    'Arm64' { $PlatformArch = 'arm64' }
-    default {
+    'AMD64'  { $PlatformArch = 'amd64' }
+    'x86'    { $PlatformArch = 'amd64' }  # 32-bit PS on 64-bit Windows
+    'ARM64'  { $PlatformArch = 'arm64' }
+    default  {
         Write-Error "Unsupported architecture: $Arch"
         exit 1
     }
