@@ -27,7 +27,7 @@ export function checkLicenseStatus(): 'valid' | 'expiring_soon' | 'grace' | 'exp
       const daysLeft = Math.ceil((graceUntil - now) / (60 * 60 * 24));
       console.log('');
       console.log(`Warning: Your subscription expired. Grace period ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'}.`);
-      console.log('Renew at https://app.bytebrew.ai or run "bytebrew status" for details.');
+      console.log('Renew at https://bytebrew.ai or run "bytebrew status" for details.');
       console.log('');
       return 'grace';
     }
@@ -48,7 +48,7 @@ export function checkLicenseStatus(): 'valid' | 'expiring_soon' | 'grace' | 'exp
     } else {
       console.log(`Warning: Your ${label} expires in ${daysLeft} days.`);
     }
-    console.log('Renew at https://app.bytebrew.ai or run "bytebrew status" for details.');
+    console.log('Renew at https://bytebrew.ai or run "bytebrew status" for details.');
     console.log('');
     return 'expiring_soon';
   }
@@ -168,7 +168,7 @@ async function activateFlow(client: CloudApiClient): Promise<boolean> {
   } catch (err) {
     if (err instanceof CloudApiError) {
       console.log(`\nNo active subscription found: ${err.message}`);
-      console.log("Subscribe at https://app.bytebrew.ai and run 'bytebrew activate'.");
+      console.log("Subscribe at https://bytebrew.ai and run 'bytebrew activate'.");
     } else {
       console.error(`Activation failed: ${(err as Error).message}`);
     }

@@ -116,7 +116,7 @@ async function enforceExpiredLicense(connection: ServerConnection): Promise<void
   if (status === 'expired') {
     console.log('');
     console.log('Your subscription has expired.');
-    console.log('Renew at https://app.bytebrew.ai or run "bytebrew login".');
+    console.log('Renew at https://bytebrew.ai or run "bytebrew login".');
     console.log('');
     await connection.cleanup();
     process.exit(1);
