@@ -1,11 +1,10 @@
-# ByteBrew CLI installer for Windows.
+# ByteBrew installer for Windows (CLI + Server).
 # Usage: irm https://bytebrew.ai/releases/install.ps1 | iex
 
 $ErrorActionPreference = 'Stop'
 
 $BaseUrl = 'https://bytebrew.ai/releases'
 $InstallDir = Join-Path $env:USERPROFILE '.bytebrew\bin'
-$BinaryName = 'bytebrew.exe'
 
 # Detect architecture
 $Arch = $env:PROCESSOR_ARCHITECTURE
@@ -30,38 +29,46 @@ if (-not $Version) {
     exit 1
 }
 
-$Archive = "bytebrew_${Version}_${Platform}.zip"
-$Url = "$BaseUrl/v$Version/$Archive"
-
-Write-Host "Installing ByteBrew CLI v$Version ($Platform)..."
-Write-Host "  From: $Url"
+Write-Host "Installing ByteBrew v$Version ($Platform)..."
 Write-Host ''
 
 # Create install directory
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
-# Download
+# Download temp directory
 $TmpDir = Join-Path ([System.IO.Path]::GetTempPath()) "bytebrew-install-$(Get-Random)"
 New-Item -ItemType Directory -Force -Path $TmpDir | Out-Null
 
 try {
-    Write-Host 'Downloading...'
-    $ArchivePath = Join-Path $TmpDir $Archive
-    Invoke-WebRequest -Uri $Url -OutFile $ArchivePath -UseBasicParsing
+    # --- CLI ---
+    $CliArchive = "bytebrew_${Version}_${Platform}.zip"
+    $CliUrl = "$BaseUrl/v$Version/$CliArchive"
+    Write-Host "Downloading CLI...  $CliArchive"
+    $CliArchivePath = Join-Path $TmpDir $CliArchive
+    Invoke-WebRequest -Uri $CliUrl -OutFile $CliArchivePath -UseBasicParsing
 
-    Write-Host 'Extracting...'
-    Expand-Archive -Path $ArchivePath -DestinationPath $TmpDir -Force
+    $CliExtractDir = Join-Path $TmpDir 'cli'
+    Expand-Archive -Path $CliArchivePath -DestinationPath $CliExtractDir -Force
+    Copy-Item -Path (Join-Path $CliExtractDir 'bytebrew.exe') -Destination (Join-Path $InstallDir 'bytebrew.exe') -Force
 
-    # Install binary
-    $BinaryPath = Join-Path $TmpDir $BinaryName
-    Copy-Item -Path $BinaryPath -Destination (Join-Path $InstallDir $BinaryName) -Force
+    # --- Server ---
+    $SrvArchive = "bytebrew-srv_${Version}_${Platform}.zip"
+    $SrvUrl = "$BaseUrl/v$Version/$SrvArchive"
+    Write-Host "Downloading Server... $SrvArchive"
+    $SrvArchivePath = Join-Path $TmpDir $SrvArchive
+    Invoke-WebRequest -Uri $SrvUrl -OutFile $SrvArchivePath -UseBasicParsing
+
+    $SrvExtractDir = Join-Path $TmpDir 'srv'
+    Expand-Archive -Path $SrvArchivePath -DestinationPath $SrvExtractDir -Force
+    Copy-Item -Path (Join-Path $SrvExtractDir 'bytebrew-srv.exe') -Destination (Join-Path $InstallDir 'bytebrew-srv.exe') -Force
 
     Write-Host ''
-    Write-Host "Installed: $InstallDir\$BinaryName"
+    Write-Host "Installed to $InstallDir"
+    Write-Host "  bytebrew.exe     (CLI)"
+    Write-Host "  bytebrew-srv.exe (Server)"
 }
 catch {
     Write-Error "Installation failed: $_"
-    Write-Error "Check that release v$Version exists for $Platform at: $Url"
     exit 1
 }
 finally {
@@ -72,7 +79,9 @@ finally {
 $UserPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
 if ($UserPath -split ';' | Where-Object { $_ -eq $InstallDir }) {
     Write-Host ''
-    Write-Host 'Ready! Run: bytebrew ask "hello"'
+    Write-Host 'Ready! Run:'
+    Write-Host '  bytebrew login    # authenticate with your account'
+    Write-Host '  bytebrew          # start coding'
 }
 else {
     # Add to PATH automatically
@@ -82,5 +91,7 @@ else {
 
     Write-Host ''
     Write-Host "Added $InstallDir to PATH."
-    Write-Host 'Restart your terminal, then run: bytebrew ask "hello"'
+    Write-Host 'Restart your terminal, then run:'
+    Write-Host '  bytebrew login    # authenticate with your account'
+    Write-Host '  bytebrew          # start coding'
 }
