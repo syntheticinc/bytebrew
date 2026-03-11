@@ -20,6 +20,11 @@
       "type": "stdio",
       "command": "python",
       "args": ["C:/Users/busul/GolandProjects/bytebrew/tools/mcp-tui-test/server.py"]
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"]
     }
   }
 }
