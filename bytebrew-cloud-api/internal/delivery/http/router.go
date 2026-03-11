@@ -56,6 +56,11 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 		}
 	})
 
+	// Webhook routes (outside /api/v1 — Stripe sends to /webhooks/stripe)
+	if cfg.WebhookHandler != nil {
+		r.Post("/webhooks/stripe", cfg.WebhookHandler.HandleStripe)
+	}
+
 	// API v1
 	r.Route("/api/v1", func(r chi.Router) {
 		// Public routes
@@ -67,11 +72,6 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 		if cfg.AccountHandler != nil {
 			r.Post("/auth/forgot-password", cfg.AccountHandler.ForgotPassword)
 			r.Post("/auth/reset-password", cfg.AccountHandler.ResetPassword)
-		}
-
-		// Webhook routes (no auth — verified via Stripe-Signature header)
-		if cfg.WebhookHandler != nil {
-			r.Post("/webhooks/stripe", cfg.WebhookHandler.HandleStripe)
 		}
 
 		// Protected routes
