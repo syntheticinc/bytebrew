@@ -23,6 +23,7 @@ export interface StreamResponse {
   type: StreamResponseType;
   content: string;
   isFinal: boolean;
+  eventId?: string;
   agentId?: string;
   toolCall?: ToolCallInfo;
   toolResult?: {

@@ -127,7 +127,7 @@ func TestProcessMessage(t *testing.T) {
 	executor := &mockTurnExecutor{executeCalled: make(chan struct{}, 1)}
 	factory := &mockTurnExecutorFactory{executor: executor}
 
-	proc := New(registry, factory)
+	proc := New(registry, factory, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -174,7 +174,7 @@ func TestStartProcessingIdempotent(t *testing.T) {
 	executor := &mockTurnExecutor{executeCalled: make(chan struct{}, 10)}
 	factory := &mockTurnExecutorFactory{executor: executor}
 
-	proc := New(registry, factory)
+	proc := New(registry, factory, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -212,7 +212,7 @@ func TestStopProcessing(t *testing.T) {
 	executor := &mockTurnExecutor{executeCalled: make(chan struct{}, 1)}
 	factory := &mockTurnExecutorFactory{executor: executor}
 
-	proc := New(registry, factory)
+	proc := New(registry, factory, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -242,7 +242,7 @@ func TestStopProcessing_NonExistent(t *testing.T) {
 	registry := newMockRegistry("session-1", t.TempDir(), "linux", "key-1", "user-1")
 	factory := &mockTurnExecutorFactory{}
 
-	proc := New(registry, factory)
+	proc := New(registry, factory, nil)
 
 	// Should not panic
 	proc.StopProcessing("nonexistent")
@@ -255,7 +255,7 @@ func TestProcessMessage_MissingSession(t *testing.T) {
 	executor := &mockTurnExecutor{executeCalled: make(chan struct{}, 1)}
 	factory := &mockTurnExecutorFactory{executor: executor}
 
-	proc := New(registry, factory)
+	proc := New(registry, factory, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

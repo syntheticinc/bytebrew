@@ -3,19 +3,25 @@ package flow_registry
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/eventstore"
 )
 
 const (
-	// maxEventHistory is the maximum number of events kept for replay on reconnect.
-	maxEventHistory = 500
 	// eventChannelBuffer is the buffer size for subscriber event channels.
 	eventChannelBuffer = 128
 )
+
+// EventStoreReader reads persisted events for replay on reconnect (consumer-side interface).
+type EventStoreReader interface {
+	GetAfter(sessionID string, lastEventID int64) ([]eventstore.StoredEvent, error)
+	GetAll(sessionID string) ([]eventstore.StoredEvent, error)
+}
 
 // sessionContext holds metadata for a server-streaming session.
 type sessionContext struct {
@@ -31,8 +37,7 @@ type sessionEntry struct {
 	ctx            sessionContext
 	subscribers    map[uint64]chan *pb.SessionEvent
 	nextSubID      uint64
-	eventLog       []*pb.SessionEvent // ring buffer for replay
-	messageCh      chan string        // incoming user messages
+	messageCh      chan string // incoming user messages
 	askReplies     map[string]chan string
 	cancelled      atomic.Bool
 	turnCancelFn   context.CancelFunc // cancels the currently running agent turn
@@ -59,12 +64,14 @@ type SessionRegistry struct {
 	mu        sync.RWMutex
 	sessions  map[string]*sessionEntry
 	eventHook func(sessionID string, event *pb.SessionEvent) // optional hook for broadcasting events externally
+	store     EventStoreReader                               // optional, nil-safe — for replay from SQLite
 }
 
 // NewSessionRegistry creates a new SessionRegistry.
-func NewSessionRegistry() *SessionRegistry {
+func NewSessionRegistry(store EventStoreReader) *SessionRegistry {
 	return &SessionRegistry{
 		sessions: make(map[string]*sessionEntry),
+		store:    store,
 	}
 }
 
@@ -88,7 +95,6 @@ func (r *SessionRegistry) CreateSession(sessionID, projectKey, userID, projectRo
 			UserID:      userID,
 		},
 		subscribers:    make(map[uint64]chan *pb.SessionEvent),
-		eventLog:       make([]*pb.SessionEvent, 0, 64),
 		messageCh:      make(chan string, 32),
 		askReplies:     make(map[string]chan string),
 		createdAt:      now,
@@ -138,7 +144,7 @@ func (r *SessionRegistry) Subscribe(sessionID string) (<-chan *pb.SessionEvent, 
 	return ch, cleanup
 }
 
-// PublishEvent sends an event to all subscribers and appends it to the event log.
+// PublishEvent sends an event to all subscribers.
 func (r *SessionRegistry) PublishEvent(sessionID string, event *pb.SessionEvent) {
 	r.mu.RLock()
 	entry, exists := r.sessions[sessionID]
@@ -152,11 +158,6 @@ func (r *SessionRegistry) PublishEvent(sessionID string, event *pb.SessionEvent)
 	defer entry.mu.Unlock()
 
 	entry.lastActivityAt = time.Now()
-
-	// Append to event log (capped)
-	if len(entry.eventLog) < maxEventHistory {
-		entry.eventLog = append(entry.eventLog, event)
-	}
 
 	// Fan-out to subscribers (non-blocking)
 	for _, ch := range entry.subscribers {
@@ -174,34 +175,31 @@ func (r *SessionRegistry) PublishEvent(sessionID string, event *pb.SessionEvent)
 }
 
 // ReplayEvents returns events after the given lastEventID for reconnect.
-func (r *SessionRegistry) ReplayEvents(sessionID, lastEventID string) []*pb.SessionEvent {
-	r.mu.RLock()
-	entry, exists := r.sessions[sessionID]
-	r.mu.RUnlock()
-
-	if !exists {
+// Uses SQLite event store when available; returns nil otherwise.
+func (r *SessionRegistry) ReplayEvents(sessionID string, lastEventID int64) []*pb.SessionEvent {
+	if r.store == nil {
 		return nil
 	}
 
-	entry.mu.RLock()
-	defer entry.mu.RUnlock()
+	var events []eventstore.StoredEvent
+	var err error
 
-	if lastEventID == "" {
-		// Return full history for initial subscribe (no lastEventID = first connection).
-		result := make([]*pb.SessionEvent, len(entry.eventLog))
-		copy(result, entry.eventLog)
-		return result
+	if lastEventID == 0 {
+		events, err = r.store.GetAll(sessionID)
+	} else {
+		events, err = r.store.GetAfter(sessionID, lastEventID)
 	}
 
-	// Find the event after lastEventID
-	for i, ev := range entry.eventLog {
-		if ev.EventId == lastEventID && i+1 < len(entry.eventLog) {
-			result := make([]*pb.SessionEvent, len(entry.eventLog)-i-1)
-			copy(result, entry.eventLog[i+1:])
-			return result
-		}
+	if err != nil {
+		slog.Error("replay events failed", "session_id", sessionID, "error", err)
+		return nil
 	}
-	return nil
+
+	protos := make([]*pb.SessionEvent, len(events))
+	for i, e := range events {
+		protos[i] = e.Proto
+	}
+	return protos
 }
 
 // EnqueueMessage puts a user message into the session's message channel.
@@ -448,3 +446,4 @@ func (r *SessionRegistry) ListSessions() []SessionInfo {
 	}
 	return result
 }
+

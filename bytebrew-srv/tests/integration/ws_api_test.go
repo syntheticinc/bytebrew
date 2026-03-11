@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -23,6 +25,7 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/tools"
 	agentservice "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/agent"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/engine"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/eventstore"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/session_processor"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
 )
@@ -35,6 +38,7 @@ type WsHarness struct {
 	sessionRegistry *flow_registry.SessionRegistry
 	cancel          context.CancelFunc
 	ctx             context.Context
+	eventsDB        *sql.DB
 }
 
 // NewWsHarness creates a full in-process WS server for integration tests.
@@ -85,9 +89,26 @@ func NewWsHarness(t *testing.T, scenario string) *WsHarness {
 		taskMgr, subtaskMgr, agentPoolAdapter, nil, nil, nil,
 	)
 
-	sessionReg := flow_registry.NewSessionRegistry()
+	// Create in-memory event store for tests.
+	// MaxOpenConns(1) ensures all operations use the same connection —
+	// without this, database/sql pool creates separate in-memory DBs per connection.
+	eventsDB, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		cancel()
+		t.Fatalf("open in-memory events db: %v", err)
+	}
+	eventsDB.SetMaxOpenConns(1)
 
-	sessProcessor := session_processor.New(sessionReg, factory)
+	evtStore, err := eventstore.New(eventsDB)
+	if err != nil {
+		eventsDB.Close()
+		cancel()
+		t.Fatalf("create event store: %v", err)
+	}
+
+	sessionReg := flow_registry.NewSessionRegistry(evtStore)
+
+	sessProcessor := session_processor.New(sessionReg, factory, evtStore)
 	sessProcessor.SetAgentPoolRegistrar(agentPool)
 
 	wsHandler := ws.NewConnectionHandler(sessionReg, sessProcessor, &testutil.NoopAgentService{})
@@ -113,6 +134,7 @@ func NewWsHarness(t *testing.T, scenario string) *WsHarness {
 		sessionRegistry: sessionReg,
 		cancel:          cancel,
 		ctx:             ctx,
+		eventsDB:        eventsDB,
 	}
 }
 
@@ -136,10 +158,13 @@ func (h *WsHarness) DialWS(t *testing.T) *websocket.Conn {
 
 // Cleanup shuts down the harness.
 func (h *WsHarness) Cleanup() {
+	h.cancel()
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 	_ = h.wsServer.Shutdown(shutdownCtx)
-	h.cancel()
+	if h.eventsDB != nil {
+		h.eventsDB.Close()
+	}
 }
 
 // sendJSON sends a WsMessage as JSON over the WebSocket connection.
@@ -159,6 +184,30 @@ func recvJSON(t *testing.T, conn *websocket.Conn, timeout time.Duration) ws.WsMe
 	var msg ws.WsMessage
 	require.NoError(t, json.Unmarshal(data, &msg))
 	return msg
+}
+
+// recvJSONOfType reads messages until one with the expected type is found,
+// skipping over session_event and backfill_complete messages.
+func recvJSONOfType(t *testing.T, conn *websocket.Conn, expectedType string, timeout time.Duration) ws.WsMessage {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		conn.SetReadDeadline(deadline)
+		_, data, err := conn.ReadMessage()
+		require.NoError(t, err, "ws read should not error while waiting for %s", expectedType)
+		var msg ws.WsMessage
+		require.NoError(t, json.Unmarshal(data, &msg))
+		if msg.Type == expectedType {
+			return msg
+		}
+		// Skip session_event and backfill_complete silently
+		if msg.Type == "session_event" || msg.Type == "backfill_complete" {
+			continue
+		}
+		t.Fatalf("unexpected message type %q while waiting for %q", msg.Type, expectedType)
+	}
+	t.Fatalf("timed out waiting for message type %q", expectedType)
+	return ws.WsMessage{}
 }
 
 // createSessionViaWS sends a create_session message and returns the session ID.
@@ -229,6 +278,10 @@ func TestWsAPI_FullMessageFlow(t *testing.T) {
 	subAck := recvJSON(t, conn, 5*time.Second)
 	require.Equal(t, "subscribe_ack", subAck.Type)
 
+	// Consume backfill_complete marker
+	bfc := recvJSON(t, conn, 5*time.Second)
+	require.Equal(t, "backfill_complete", bfc.Type)
+
 	// Send message
 	sendJSON(t, conn, ws.WsMessage{
 		Type:      "send_message",
@@ -239,8 +292,7 @@ func TestWsAPI_FullMessageFlow(t *testing.T) {
 		},
 	})
 
-	msgAck := recvJSON(t, conn, 5*time.Second)
-	require.Equal(t, "send_message_ack", msgAck.Type)
+	recvJSONOfType(t, conn, "send_message_ack", 5*time.Second)
 
 	// Collect session events until ProcessingStopped or timeout
 	var events []ws.WsMessage
@@ -357,9 +409,46 @@ func TestWsAPI_AskUserReply(t *testing.T) {
 	}
 }
 
-// TC-WS-05: Subscribe with last_event_id (backfill)
+// TC-WS-08: Backfill after disconnect+reconnect — verifies event replay via last_event_id.
 func TestWsAPI_SubscribeWithBackfill(t *testing.T) {
-	t.Skip("requires event store implementation with stable event IDs for reliable backfill testing")
+	harness := NewWsHarness(t, "echo")
+	defer harness.Cleanup()
+
+	projectRoot := t.TempDir()
+
+	// Phase 1: create session, subscribe, send message, collect events.
+	conn1 := harness.DialWS(t)
+	sessionID := createSessionViaWS(t, conn1, projectRoot)
+	subscribeToSession(t, conn1, sessionID)
+	sendMessage(t, conn1, sessionID, "hello", "msg-1")
+
+	events1 := collectSessionEvents(t, conn1, 15*time.Second, func(et string) bool {
+		return et == "ProcessingStopped"
+	})
+	require.NotEmpty(t, events1, "should receive events for first message")
+
+	lastEventID := getLastEventId(events1)
+	require.NotEmpty(t, lastEventID, "last event should have an event_id")
+
+	// Close first connection (simulate disconnect).
+	conn1.Close()
+
+	// Phase 2: new connection, subscribe with last_event_id.
+	conn2 := harness.DialWS(t)
+	backfilledEvents := subscribeWithBackfill(t, conn2, sessionID, lastEventID)
+
+	// There should be NO duplicate events (nothing after lastEventID since no new messages were sent).
+	assert.Empty(t, backfilledEvents, "no new events should be backfilled since no new messages were sent")
+
+	// Verify event_ids are numeric strings.
+	for _, evt := range events1 {
+		eid := getEventId(evt)
+		if eid == "" {
+			continue
+		}
+		_, err := fmt.Sscanf(eid, "%d", new(int))
+		assert.NoError(t, err, "event_id should be numeric: %s", eid)
+	}
 }
 
 // collectSessionEvents reads session_event messages until a predicate returns true or timeout.
@@ -413,6 +502,7 @@ func hasEventType(events []ws.WsMessage, eventType string) bool {
 }
 
 // subscribeToSession sends a subscribe message and asserts the ack.
+// It also consumes the backfill_complete marker that follows every subscribe.
 func subscribeToSession(t *testing.T, conn *websocket.Conn, sessionID string) {
 	t.Helper()
 
@@ -424,6 +514,10 @@ func subscribeToSession(t *testing.T, conn *websocket.Conn, sessionID string) {
 
 	subAck := recvJSON(t, conn, 5*time.Second)
 	require.Equal(t, "subscribe_ack", subAck.Type)
+
+	// Consume backfill_complete marker (always sent after subscribe)
+	bfc := recvJSON(t, conn, 5*time.Second)
+	require.Equal(t, "backfill_complete", bfc.Type)
 }
 
 // sendMessage sends a send_message command and asserts the ack.
@@ -439,8 +533,7 @@ func sendMessage(t *testing.T, conn *websocket.Conn, sessionID, content, request
 		},
 	})
 
-	msgAck := recvJSON(t, conn, 5*time.Second)
-	require.Equal(t, "send_message_ack", msgAck.Type)
+	msgAck := recvJSONOfType(t, conn, "send_message_ack", 5*time.Second)
 	require.Equal(t, requestID, msgAck.RequestID)
 }
 
@@ -527,7 +620,7 @@ func TestWsAPI_AskUserFullRoundTrip(t *testing.T) {
 		},
 	})
 
-	ackResp := recvJSON(t, conn, 5*time.Second)
+	ackResp := recvJSONOfType(t, conn, "ask_user_reply_ack", 5*time.Second)
 	require.Equal(t, "ask_user_reply_ack", ackResp.Type)
 
 	// Verify reply is delivered to the agent side
@@ -620,8 +713,7 @@ func TestWsAPI_CancelDuringStreaming(t *testing.T) {
 		Payload:   map[string]interface{}{"session_id": sessionID},
 	})
 
-	cancelAck := recvJSON(t, conn, 5*time.Second)
-	assert.Equal(t, "cancel_session_ack", cancelAck.Type)
+	cancelAck := recvJSONOfType(t, conn, "cancel_session_ack", 5*time.Second)
 	assert.Equal(t, true, cancelAck.Payload["cancelled"])
 
 	// Should eventually get ProcessingStopped (agent detects cancellation)
@@ -770,4 +862,401 @@ func TestWsAPI_ConcurrentMessageSending(t *testing.T) {
 
 	// All 3 messages should have been fully processed (3 ProcessingStopped events)
 	assert.Equal(t, 3, processingStopped, "all 3 messages should complete processing")
+}
+
+// --- Helper functions for backfill/event ID tests ---
+
+// getEventId extracts event_id from a session_event WsMessage.
+func getEventId(msg ws.WsMessage) string {
+	eventID, _ := msg.Payload["event_id"].(string)
+	return eventID
+}
+
+// getEventType extracts event type from session_event payload.
+func getEventType(msg ws.WsMessage) string {
+	eventPayload, ok := msg.Payload["event"].(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	t, _ := eventPayload["type"].(string)
+	return t
+}
+
+// getLastEventId returns the event_id of the last session event in the slice.
+func getLastEventId(events []ws.WsMessage) string {
+	for i := len(events) - 1; i >= 0; i-- {
+		if id := getEventId(events[i]); id != "" {
+			return id
+		}
+	}
+	return ""
+}
+
+// collectEventIds returns all non-empty event_ids from session events.
+func collectEventIds(events []ws.WsMessage) []string {
+	var ids []string
+	for _, evt := range events {
+		if id := getEventId(evt); id != "" {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// subscribeWithBackfill subscribes with last_event_id and returns replay events
+// (all session_events received before backfill_complete).
+func subscribeWithBackfill(t *testing.T, conn *websocket.Conn, sessionID, lastEventID string) []ws.WsMessage {
+	t.Helper()
+
+	payload := map[string]interface{}{
+		"session_id": sessionID,
+	}
+	if lastEventID != "" {
+		payload["last_event_id"] = lastEventID
+	}
+
+	sendJSON(t, conn, ws.WsMessage{
+		Type:      "subscribe",
+		RequestID: "sub-bf-" + sessionID[:8],
+		Payload:   payload,
+	})
+
+	// Read subscribe_ack
+	ack := recvJSON(t, conn, 5*time.Second)
+	require.Equal(t, "subscribe_ack", ack.Type)
+
+	// Read events until backfill_complete
+	var backfillEvents []ws.WsMessage
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+		_, data, err := conn.ReadMessage()
+		require.NoError(t, err, "should read message before backfill_complete")
+
+		var msg ws.WsMessage
+		require.NoError(t, json.Unmarshal(data, &msg))
+
+		if msg.Type == "backfill_complete" {
+			break
+		}
+		if msg.Type == "session_event" {
+			backfillEvents = append(backfillEvents, msg)
+		}
+	}
+
+	return backfillEvents
+}
+
+// TC-WS-14: Subscribe-first-replay-second — no event loss between turns.
+func TestWsAPI_SubscribeFirstReplaySecond(t *testing.T) {
+	harness := NewWsHarness(t, "echo")
+	defer harness.Cleanup()
+
+	projectRoot := t.TempDir()
+
+	// Phase 1: create session, subscribe, send msg1, collect events.
+	conn1 := harness.DialWS(t)
+	sessionID := createSessionViaWS(t, conn1, projectRoot)
+	subscribeToSession(t, conn1, sessionID)
+	sendMessage(t, conn1, sessionID, "msg1", "msg-1")
+
+	events1 := collectSessionEvents(t, conn1, 15*time.Second, func(et string) bool {
+		return et == "ProcessingStopped"
+	})
+	require.NotEmpty(t, events1)
+
+	lastEventID := getLastEventId(events1)
+	require.NotEmpty(t, lastEventID)
+
+	// Disconnect
+	conn1.Close()
+
+	// Phase 2: new connection, subscribe with last_event_id, then send msg2.
+	conn2 := harness.DialWS(t)
+	backfilledEvents := subscribeWithBackfill(t, conn2, sessionID, lastEventID)
+
+	// No new events should be backfilled (nothing happened while disconnected)
+	assert.Empty(t, backfilledEvents, "should not receive msg1 events again")
+
+	// Send msg2 on the new connection
+	sendMessage(t, conn2, sessionID, "msg2", "msg-2")
+
+	events2 := collectSessionEvents(t, conn2, 15*time.Second, func(et string) bool {
+		return et == "ProcessingStopped"
+	})
+	require.NotEmpty(t, events2, "should receive events for msg2")
+
+	// Verify msg2 events are present
+	assert.True(t, hasEventType(events2, "ProcessingStarted"), "msg2 should have ProcessingStarted")
+	assert.True(t, hasEventType(events2, "ProcessingStopped"), "msg2 should have ProcessingStopped")
+
+	// Verify msg1 events are NOT duplicated in events2
+	msg1IDs := collectEventIds(events1)
+	msg2IDs := collectEventIds(events2)
+	for _, id := range msg2IDs {
+		for _, oldID := range msg1IDs {
+			assert.NotEqual(t, oldID, id, "msg2 event IDs should not duplicate msg1 event IDs")
+		}
+	}
+}
+
+// TC-WS-15: UserMessage event visible in stream.
+func TestWsAPI_UserMessageInStream(t *testing.T) {
+	harness := NewWsHarness(t, "echo")
+	defer harness.Cleanup()
+
+	conn := harness.DialWS(t)
+
+	sessionID := createSessionViaWS(t, conn, t.TempDir())
+	subscribeToSession(t, conn, sessionID)
+
+	sendMessage(t, conn, sessionID, "test input", "msg-1")
+
+	events := collectSessionEvents(t, conn, 15*time.Second, func(et string) bool {
+		return et == "ProcessingStopped"
+	})
+	require.NotEmpty(t, events)
+
+	// Find UserMessage event
+	hasUserMessage := false
+	for _, evt := range events {
+		eventPayload, ok := evt.Payload["event"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		eventType, _ := eventPayload["type"].(string)
+		if eventType == "UserMessage" {
+			hasUserMessage = true
+			content, _ := eventPayload["content"].(string)
+			assert.Contains(t, content, "test input", "UserMessage should contain the user's input")
+		}
+	}
+	assert.True(t, hasUserMessage, "should have a UserMessage event in the stream")
+}
+
+// TC-WS-16: BackfillComplete marker arrives after replay events.
+func TestWsAPI_BackfillCompleteAfterReplay(t *testing.T) {
+	harness := NewWsHarness(t, "echo")
+	defer harness.Cleanup()
+
+	projectRoot := t.TempDir()
+
+	// Phase 1: create session, subscribe, send message to populate event store.
+	conn1 := harness.DialWS(t)
+	sessionID := createSessionViaWS(t, conn1, projectRoot)
+	subscribeToSession(t, conn1, sessionID)
+	sendMessage(t, conn1, sessionID, "hello", "msg-1")
+
+	events1 := collectSessionEvents(t, conn1, 15*time.Second, func(et string) bool {
+		return et == "ProcessingStopped"
+	})
+	require.NotEmpty(t, events1)
+
+	conn1.Close()
+
+	// Phase 2: new connection, subscribe with empty last_event_id (full replay).
+	conn2 := harness.DialWS(t)
+
+	sendJSON(t, conn2, ws.WsMessage{
+		Type:      "subscribe",
+		RequestID: "sub-replay",
+		Payload:   map[string]interface{}{"session_id": sessionID},
+	})
+
+	ack := recvJSON(t, conn2, 5*time.Second)
+	require.Equal(t, "subscribe_ack", ack.Type)
+
+	// Read all messages until backfill_complete, tracking order.
+	var replayEvents []ws.WsMessage
+	backfillCompleteReceived := false
+
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		conn2.SetReadDeadline(time.Now().Add(10 * time.Second))
+		_, data, err := conn2.ReadMessage()
+		require.NoError(t, err)
+
+		var msg ws.WsMessage
+		require.NoError(t, json.Unmarshal(data, &msg))
+
+		if msg.Type == "backfill_complete" {
+			backfillCompleteReceived = true
+			break
+		}
+		if msg.Type == "session_event" {
+			replayEvents = append(replayEvents, msg)
+		}
+	}
+
+	assert.True(t, backfillCompleteReceived, "should receive backfill_complete")
+	assert.NotEmpty(t, replayEvents, "should have replay events BEFORE backfill_complete")
+
+	// Verify replay events include the original events (at least UserMessage + ProcessingStarted)
+	assert.True(t, hasEventType(replayEvents, "UserMessage"), "replay should include UserMessage")
+	assert.True(t, hasEventType(replayEvents, "ProcessingStarted"), "replay should include ProcessingStarted")
+}
+
+// TC-WS-09-ext: Fan-out — verify both clients receive identical event IDs.
+func TestWsAPI_FanOutIdenticalEventIDs(t *testing.T) {
+	harness := NewWsHarness(t, "echo")
+	defer harness.Cleanup()
+
+	connA := harness.DialWS(t)
+	connB := harness.DialWS(t)
+
+	sessionID := createSessionViaWS(t, connA, t.TempDir())
+
+	subscribeToSession(t, connA, sessionID)
+	subscribeToSession(t, connB, sessionID)
+
+	sendMessage(t, connA, sessionID, "Hello fanout IDs", "msg-1")
+
+	eventsA := collectSessionEvents(t, connA, 15*time.Second, func(et string) bool {
+		return et == "ProcessingStopped"
+	})
+	eventsB := collectSessionEvents(t, connB, 15*time.Second, func(et string) bool {
+		return et == "ProcessingStopped"
+	})
+
+	require.NotEmpty(t, eventsA)
+	require.NotEmpty(t, eventsB)
+
+	idsA := collectEventIds(eventsA)
+	idsB := collectEventIds(eventsB)
+
+	require.NotEmpty(t, idsA, "client A should have event IDs")
+	require.NotEmpty(t, idsB, "client B should have event IDs")
+
+	// Build set from A's IDs
+	setA := make(map[string]bool, len(idsA))
+	for _, id := range idsA {
+		setA[id] = true
+	}
+
+	// Check overlap: B's IDs should exist in A's set (same events)
+	overlap := 0
+	for _, id := range idsB {
+		if setA[id] {
+			overlap++
+		}
+	}
+	assert.True(t, overlap > 0, "fan-out clients should share at least some event IDs, got 0 overlap between A=%v and B=%v", idsA, idsB)
+}
+
+// TC-WS-CROSS-01: Two WS clients — one sends, both see events with identical IDs.
+func TestWsAPI_CrossClientBothSeeEvents(t *testing.T) {
+	harness := NewWsHarness(t, "echo")
+	defer harness.Cleanup()
+
+	connA := harness.DialWS(t)
+	connB := harness.DialWS(t)
+
+	sessionID := createSessionViaWS(t, connA, t.TempDir())
+
+	subscribeToSession(t, connA, sessionID)
+	subscribeToSession(t, connB, sessionID)
+
+	// Client A sends message
+	sendMessage(t, connA, sessionID, "cross-client test", "msg-1")
+
+	// Both clients collect events
+	eventsA := collectSessionEvents(t, connA, 15*time.Second, func(et string) bool {
+		return et == "ProcessingStopped"
+	})
+	eventsB := collectSessionEvents(t, connB, 15*time.Second, func(et string) bool {
+		return et == "ProcessingStopped"
+	})
+
+	// Both should have UserMessage
+	assert.True(t, hasEventType(eventsA, "UserMessage"), "client A should see UserMessage")
+	assert.True(t, hasEventType(eventsB, "UserMessage"), "client B should see UserMessage")
+
+	// Both should have MessageCompleted (the "echo" scenario answer)
+	assert.True(t, hasEventType(eventsA, "MessageCompleted"), "client A should see MessageCompleted")
+	assert.True(t, hasEventType(eventsB, "MessageCompleted"), "client B should see MessageCompleted")
+
+	// Event IDs should match
+	idsA := collectEventIds(eventsA)
+	idsB := collectEventIds(eventsB)
+	assert.ElementsMatch(t, idsA, idsB, "both clients should receive the same event IDs")
+}
+
+// TC-WS-CROSS-02: Backfill after one client disconnects — reconnecting client gets missed events.
+func TestWsAPI_CrossClientBackfillAfterDisconnect(t *testing.T) {
+	harness := NewWsHarness(t, "echo")
+	defer harness.Cleanup()
+
+	projectRoot := t.TempDir()
+
+	connA := harness.DialWS(t)
+	connB := harness.DialWS(t)
+
+	sessionID := createSessionViaWS(t, connA, projectRoot)
+
+	subscribeToSession(t, connA, sessionID)
+	subscribeToSession(t, connB, sessionID)
+
+	// Phase 1: A sends msg1, both receive events.
+	sendMessage(t, connA, sessionID, "msg1", "msg-1")
+
+	eventsA1 := collectSessionEvents(t, connA, 15*time.Second, func(et string) bool {
+		return et == "ProcessingStopped"
+	})
+	eventsB1 := collectSessionEvents(t, connB, 15*time.Second, func(et string) bool {
+		return et == "ProcessingStopped"
+	})
+	require.NotEmpty(t, eventsA1)
+	require.NotEmpty(t, eventsB1)
+
+	lastEventIDB := getLastEventId(eventsB1)
+	require.NotEmpty(t, lastEventIDB)
+
+	// Phase 2: B disconnects.
+	connB.Close()
+
+	// Phase 3: A sends msg2.
+	sendMessage(t, connA, sessionID, "msg2", "msg-2")
+
+	eventsA2 := collectSessionEvents(t, connA, 15*time.Second, func(et string) bool {
+		return et == "ProcessingStopped"
+	})
+	require.NotEmpty(t, eventsA2)
+
+	// Phase 4: B reconnects with last_event_id.
+	connB2 := harness.DialWS(t)
+	backfilledB := subscribeWithBackfill(t, connB2, sessionID, lastEventIDB)
+
+	// B should receive msg2 events via backfill.
+	require.NotEmpty(t, backfilledB, "client B should receive missed events via backfill")
+
+	// Verify backfilled events include msg2's events (UserMessage for "msg2" or ProcessingStarted)
+	hasMsg2UserMessage := false
+	for _, evt := range backfilledB {
+		eventPayload, ok := evt.Payload["event"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		eventType, _ := eventPayload["type"].(string)
+		if eventType == "UserMessage" {
+			content, _ := eventPayload["content"].(string)
+			if content == "msg2" {
+				hasMsg2UserMessage = true
+			}
+		}
+	}
+	assert.True(t, hasMsg2UserMessage, "backfill should include UserMessage for msg2")
+
+	// Verify backfilled event IDs match A's live event IDs for msg2.
+	backfillIDs := collectEventIds(backfilledB)
+	liveIDs := collectEventIds(eventsA2)
+	assert.NotEmpty(t, backfillIDs, "backfilled events should have IDs")
+
+	// All backfill IDs should be present in A's live events
+	liveIDSet := make(map[string]bool, len(liveIDs))
+	for _, id := range liveIDs {
+		liveIDSet[id] = true
+	}
+	for _, id := range backfillIDs {
+		assert.True(t, liveIDSet[id], "backfilled event ID %s should match A's live event", id)
+	}
 }

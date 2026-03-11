@@ -404,6 +404,8 @@ class WsChatRepository implements ChatRepository {
         _handleSessionStatus(event, payload);
       case ErrorPayload():
         _handleError(event, payload);
+      case BackfillCompletePayload():
+        _handleBackfillComplete();
       case AgentLifecyclePayload():
         _handleAgentLifecycle(event, payload);
     }
@@ -613,6 +615,19 @@ class WsChatRepository implements ChatRepository {
       );
       _emitMessages();
     }
+  }
+
+  /// Handles the explicit backfill-complete marker from the server.
+  ///
+  /// Flushes any pending debounced messages and switches emission mode
+  /// from debounced (batched) to immediate so that live events appear
+  /// in real-time without delay.
+  void _handleBackfillComplete() {
+    if (_historyLoaded) return;
+
+    _emitDebounce?.cancel();
+    _emitDebounce = null;
+    _flushMessages();
   }
 
   void _handleError(SessionEvent event, ErrorPayload payload) {

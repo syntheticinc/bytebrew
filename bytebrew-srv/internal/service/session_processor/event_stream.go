@@ -3,12 +3,14 @@ package session_processor
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"strconv"
 	"strings"
-	"sync/atomic"
 	"unicode/utf8"
 
 	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/eventformat"
 )
 
 // EventPublisher publishes session events to subscribers (consumer-side interface).
@@ -16,40 +18,44 @@ type EventPublisher interface {
 	PublishEvent(sessionID string, event *pb.SessionEvent)
 }
 
-// EventStream converts domain.AgentEvent to pb.SessionEvent and publishes via EventPublisher.
+// EventStore persists session events for reliable replay (consumer-side interface).
+type EventStore interface {
+	Append(sessionID, eventType string, proto *pb.SessionEvent, jsonData map[string]interface{}) (int64, error)
+}
+
+// EventStream converts domain.AgentEvent to pb.SessionEvent, persists via EventStore,
+// and publishes via EventPublisher.
 // Implements domain.AgentEventStream.
 type EventStream struct {
 	sessionID string
 	publisher EventPublisher
-	eventSeq  atomic.Int64
+	store     EventStore
 }
 
-// NewEventStream creates a new event stream that publishes to an EventPublisher.
-func NewEventStream(sessionID string, publisher EventPublisher) *EventStream {
+// NewEventStream creates a new event stream that persists and publishes events.
+func NewEventStream(sessionID string, publisher EventPublisher, store EventStore) *EventStream {
 	return &EventStream{
 		sessionID: sessionID,
 		publisher: publisher,
+		store:     store,
 	}
 }
 
-// Send converts a domain AgentEvent to a proto SessionEvent and publishes it.
+// Send converts a domain AgentEvent to a proto SessionEvent, persists it, and publishes.
 func (s *EventStream) Send(event *domain.AgentEvent) error {
 	pbEvent := s.convertEvent(event)
 	if pbEvent == nil {
 		return nil
 	}
 
-	pbEvent.EventId = fmt.Sprintf("evt-%d", s.eventSeq.Add(1))
 	pbEvent.SessionId = s.sessionID
-
-	s.publisher.PublishEvent(s.sessionID, pbEvent)
+	s.persistAndPublish(pbEvent)
 	return nil
 }
 
 // PublishProcessingStarted sends a PROCESSING_STARTED event.
 func (s *EventStream) PublishProcessingStarted() {
-	s.publisher.PublishEvent(s.sessionID, &pb.SessionEvent{
-		EventId:   fmt.Sprintf("evt-%d", s.eventSeq.Add(1)),
+	s.persistAndPublish(&pb.SessionEvent{
 		SessionId: s.sessionID,
 		Type:      pb.SessionEventType_SESSION_EVENT_PROCESSING_STARTED,
 	})
@@ -57,8 +63,7 @@ func (s *EventStream) PublishProcessingStarted() {
 
 // PublishProcessingStopped sends a PROCESSING_STOPPED event.
 func (s *EventStream) PublishProcessingStopped() {
-	s.publisher.PublishEvent(s.sessionID, &pb.SessionEvent{
-		EventId:   fmt.Sprintf("evt-%d", s.eventSeq.Add(1)),
+	s.persistAndPublish(&pb.SessionEvent{
 		SessionId: s.sessionID,
 		Type:      pb.SessionEventType_SESSION_EVENT_PROCESSING_STOPPED,
 	})
@@ -66,8 +71,7 @@ func (s *EventStream) PublishProcessingStopped() {
 
 // PublishError sends an ERROR event.
 func (s *EventStream) PublishError(err error) {
-	s.publisher.PublishEvent(s.sessionID, &pb.SessionEvent{
-		EventId:   fmt.Sprintf("evt-%d", s.eventSeq.Add(1)),
+	s.persistAndPublish(&pb.SessionEvent{
 		SessionId: s.sessionID,
 		Type:      pb.SessionEventType_SESSION_EVENT_ERROR,
 		Content:   err.Error(),
@@ -80,8 +84,7 @@ func (s *EventStream) PublishError(err error) {
 
 // PublishUserMessage sends a USER_MESSAGE event so user messages appear in backfill history.
 func (s *EventStream) PublishUserMessage(content string) {
-	s.publisher.PublishEvent(s.sessionID, &pb.SessionEvent{
-		EventId:   fmt.Sprintf("evt-%d", s.eventSeq.Add(1)),
+	s.persistAndPublish(&pb.SessionEvent{
 		SessionId: s.sessionID,
 		Type:      pb.SessionEventType_SESSION_EVENT_USER_MESSAGE,
 		Content:   SanitizeUTF8(content),
@@ -90,12 +93,31 @@ func (s *EventStream) PublishUserMessage(content string) {
 
 // PublishAnswerChunk sends an ANSWER_CHUNK event.
 func (s *EventStream) PublishAnswerChunk(chunk string) {
-	s.publisher.PublishEvent(s.sessionID, &pb.SessionEvent{
-		EventId:   fmt.Sprintf("evt-%d", s.eventSeq.Add(1)),
+	s.persistAndPublish(&pb.SessionEvent{
 		SessionId: s.sessionID,
 		Type:      pb.SessionEventType_SESSION_EVENT_ANSWER_CHUNK,
 		Content:   chunk,
 	})
+}
+
+// persistAndPublish stores the event in the event store and publishes it.
+// The event ID is assigned by the store (auto-increment) and set on the proto
+// before publishing so subscribers see a stable numeric ID.
+func (s *EventStream) persistAndPublish(event *pb.SessionEvent) {
+	if s.store != nil {
+		jsonData := eventformat.SerializeForMobile(event)
+		eventType := eventformat.EventTypeString(event.GetType())
+
+		id, err := s.store.Append(s.sessionID, eventType, event, jsonData)
+		if err != nil {
+			slog.Error("failed to persist event", "session_id", s.sessionID, "event_type", eventType, "error", err)
+		}
+		if id > 0 {
+			event.EventId = strconv.FormatInt(id, 10)
+		}
+	}
+
+	s.publisher.PublishEvent(s.sessionID, event)
 }
 
 func (s *EventStream) convertEvent(event *domain.AgentEvent) *pb.SessionEvent {

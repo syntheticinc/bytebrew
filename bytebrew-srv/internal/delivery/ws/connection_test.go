@@ -53,8 +53,8 @@ func (f *mockTurnExecutorFactory) CreateForSession(_ interface{ Dispose() }, _, 
 func setupTestServer(t *testing.T) (*httptest.Server, *websocket.Conn) {
 	t.Helper()
 
-	registry := flow_registry.NewSessionRegistry()
-	processor := sp.New(registry, nil) // nil factory is OK — we don't send messages in ping/create tests
+	registry := flow_registry.NewSessionRegistry(nil)
+	processor := sp.New(registry, nil, nil) // nil factory/store is OK — we don't send messages in ping/create tests
 	agentSvc := &mockAgentEnvSetter{}
 
 	handler := NewConnectionHandler(registry, processor, agentSvc)
@@ -74,8 +74,8 @@ func setupTestServer(t *testing.T) (*httptest.Server, *websocket.Conn) {
 func setupTestServerWithRegistry(t *testing.T) (*httptest.Server, *websocket.Conn, *flow_registry.SessionRegistry, *ConnectionHandler) {
 	t.Helper()
 
-	registry := flow_registry.NewSessionRegistry()
-	processor := sp.New(registry, nil)
+	registry := flow_registry.NewSessionRegistry(nil)
+	processor := sp.New(registry, nil, nil)
 	agentSvc := &mockAgentEnvSetter{}
 
 	handler := NewConnectionHandler(registry, processor, agentSvc)
@@ -293,13 +293,17 @@ func TestSubscribeAndReceiveEvents(t *testing.T) {
 		AgentId: "supervisor",
 	})
 
-	// Read session_event from WS
+	// Read messages from WS — skip backfill_complete, find session_event
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	_, respData, err := conn.ReadMessage()
-	require.NoError(t, err)
-
 	var eventMsg WsMessage
-	require.NoError(t, json.Unmarshal(respData, &eventMsg))
+	for {
+		_, respData, err := conn.ReadMessage()
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(respData, &eventMsg))
+		if eventMsg.Type != "backfill_complete" {
+			break
+		}
+	}
 
 	assert.Equal(t, "session_event", eventMsg.Type)
 	assert.Equal(t, sessionID, eventMsg.Payload["session_id"])

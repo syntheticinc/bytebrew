@@ -73,6 +73,7 @@ enum SessionEventType {
   plan,
   sessionStatus,
   error,
+  backfillComplete,
 }
 
 /// A single event from a session subscription stream.
@@ -202,6 +203,15 @@ class ErrorPayload extends SessionEventPayload {
 
   final String code;
   final String message;
+}
+
+/// Payload for a backfill-complete marker.
+///
+/// Sent by the server after all backfill events have been delivered following
+/// a reconnect or initial subscribe. The mobile app uses this to switch from
+/// debounced (batched) emission to immediate emission of messages.
+class BackfillCompletePayload extends SessionEventPayload {
+  const BackfillCompletePayload();
 }
 
 /// Payload for an agent lifecycle event (spawned, completed, failed).

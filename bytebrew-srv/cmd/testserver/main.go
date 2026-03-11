@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/mattn/go-sqlite3"
 	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
 	deliverygrpc "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/delivery/grpc"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/delivery/ws"
@@ -22,6 +24,7 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/tools"
 	agentservice "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/agent"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/engine"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/eventstore"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/session_processor"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
 	"google.golang.org/grpc"
@@ -160,8 +163,21 @@ func main() {
 
 	// 9. Create FlowHandler (SAME as production!)
 	flowRegistry := flow_registry.NewInMemoryRegistry()
-	sessionRegistry := flow_registry.NewSessionRegistry()
-	sessProcessor := session_processor.New(sessionRegistry, factory)
+	// Create in-memory event store for tests
+	eventsDB, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		log.Fatalf("Failed to open in-memory events db: %v", err)
+	}
+	eventsDB.SetMaxOpenConns(1)
+	defer eventsDB.Close()
+
+	evtStore, err := eventstore.New(eventsDB)
+	if err != nil {
+		log.Fatalf("Failed to create event store: %v", err)
+	}
+
+	sessionRegistry := flow_registry.NewSessionRegistry(evtStore)
+	sessProcessor := session_processor.New(sessionRegistry, factory, evtStore)
 	sessProcessor.SetAgentPoolRegistrar(agentPool)
 
 	flowHandlerCfg := deliverygrpc.FlowHandlerConfig{

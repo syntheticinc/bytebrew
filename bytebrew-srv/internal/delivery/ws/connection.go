@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -19,7 +20,7 @@ import (
 type SessionRegistry interface {
 	CreateSession(sessionID, projectKey, userID, projectRoot, platform string)
 	Subscribe(sessionID string) (ch <-chan *pb.SessionEvent, cleanup func())
-	ReplayEvents(sessionID, lastEventID string) []*pb.SessionEvent
+	ReplayEvents(sessionID string, lastEventID int64) []*pb.SessionEvent
 	EnqueueMessage(sessionID, content string) error
 	DrainMessages(sessionID string)
 	SendAskUserReply(sessionID, callID, reply string)
@@ -252,11 +253,13 @@ func (h *ConnectionHandler) handleSendMessage(writer *wsWriter, msg *WsMessage, 
 }
 
 // handleSubscribe subscribes to session events in a background goroutine.
-// The read loop continues so the client can send ask_user_reply, cancel_session, etc.
-// while subscribed.
+// Uses subscribe-first-replay-second pattern: the live subscription is
+// established BEFORE replaying missed events from the store. This guarantees
+// no events are lost between replay and live subscription. The client dedup
+// by event ID handles any overlap.
 func (h *ConnectionHandler) handleSubscribe(writer *wsWriter, msg *WsMessage, state *connState) {
 	sessionID, _ := msg.Payload["session_id"].(string)
-	lastEventID, _ := msg.Payload["last_event_id"].(string)
+	lastEventIDStr, _ := msg.Payload["last_event_id"].(string)
 
 	if sessionID == "" {
 		writer.sendError(msg.RequestID, "session_id required")
@@ -278,23 +281,11 @@ func (h *ConnectionHandler) handleSubscribe(writer *wsWriter, msg *WsMessage, st
 		Payload:   map[string]interface{}{"session_id": sessionID},
 	})
 
-	// Replay missed events
-	if lastEventID != "" {
-		missed := h.sessionRegistry.ReplayEvents(sessionID, lastEventID)
-		for _, event := range missed {
-			h.sendSessionEvent(writer, sessionID, event)
-		}
-	}
-
-	// Subscribe to live events
+	// 1. Subscribe FIRST — capture all new events from this point on.
 	eventCh, cleanup := h.sessionRegistry.Subscribe(sessionID)
 	state.addCleanup(cleanup)
 
-	// Start processing (idempotent -- may already be running)
-	h.sessionProcessor.StartProcessing(state.ctx, sessionID)
-
-	// Write events in background goroutine so read loop continues.
-	// Goroutine exits when eventCh is closed (cleanup) or connection context is cancelled.
+	// 2. Start forwarding goroutine (reads from channel, writes to WS).
 	go func() {
 		for {
 			select {
@@ -308,6 +299,24 @@ func (h *ConnectionHandler) handleSubscribe(writer *wsWriter, msg *WsMessage, st
 			}
 		}
 	}()
+
+	// 3. THEN replay from SQLite (client dedup handles overlap with live events).
+	lastEventID, _ := strconv.ParseInt(lastEventIDStr, 10, 64)
+	missed := h.sessionRegistry.ReplayEvents(sessionID, lastEventID)
+	for _, evt := range missed {
+		h.sendSessionEvent(writer, sessionID, evt)
+	}
+
+	// 4. BackfillComplete marker so client knows replay is done.
+	writer.send(&WsMessage{
+		Type: "backfill_complete",
+		Payload: map[string]interface{}{
+			"session_id": sessionID,
+		},
+	})
+
+	// Start processing (idempotent -- may already be running)
+	h.sessionProcessor.StartProcessing(state.ctx, sessionID)
 }
 
 func (h *ConnectionHandler) sendSessionEvent(writer *wsWriter, sessionID string, event *pb.SessionEvent) {

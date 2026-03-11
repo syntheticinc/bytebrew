@@ -611,6 +611,7 @@ class WsBridgeClient {
       'MessageChunkCompleted' ||
       'AgentLifecycle' => SessionEventType.unspecified,
       'Error' || 'ErrorOccurred' => SessionEventType.error,
+      'BackfillComplete' => SessionEventType.backfillComplete,
       _ => SessionEventType.unspecified,
     };
   }
@@ -659,6 +660,7 @@ class WsBridgeClient {
       SessionEventType.userMessage => UserMessagePayload(
         content: eventJson['content'] as String? ?? '',
       ),
+      SessionEventType.backfillComplete => const BackfillCompletePayload(),
       SessionEventType.unspecified => null,
     };
   }

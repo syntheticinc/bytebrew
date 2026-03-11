@@ -37,9 +37,10 @@ type AgentPoolRegistrar interface {
 // Processor runs background message-processing loops for server-streaming sessions.
 // It is shared between gRPC SubscribeSession and bridge MobileRequestHandler.
 type Processor struct {
-	registry            SessionRegistry
-	factory             TurnExecutorFactory
+	registry           SessionRegistry
+	factory            TurnExecutorFactory
 	agentPoolRegistrar AgentPoolRegistrar // optional, nil-safe
+	eventStore         EventStore         // persists events for reliable replay
 
 	mu          sync.Mutex
 	active      map[string]context.CancelFunc
@@ -47,10 +48,11 @@ type Processor struct {
 }
 
 // New creates a new Processor.
-func New(registry SessionRegistry, factory TurnExecutorFactory) *Processor {
+func New(registry SessionRegistry, factory TurnExecutorFactory, eventStore EventStore) *Processor {
 	return &Processor{
 		registry:    registry,
 		factory:     factory,
+		eventStore:  eventStore,
 		active:      make(map[string]context.CancelFunc),
 		turnsActive: make(map[string]bool),
 	}
@@ -145,7 +147,7 @@ func (p *Processor) processMessage(ctx context.Context, sessionID, message strin
 		p.mu.Unlock()
 	}()
 
-	eventStream := NewEventStream(sessionID, p.registry)
+	eventStream := NewEventStream(sessionID, p.registry, p.eventStore)
 
 	// Broadcast user message so it appears in backfill history on reconnect.
 	eventStream.PublishUserMessage(message)

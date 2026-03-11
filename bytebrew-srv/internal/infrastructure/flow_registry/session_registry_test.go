@@ -2,19 +2,33 @@ package flow_registry
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
 
+	_ "github.com/mattn/go-sqlite3"
 	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/eventstore"
 )
+
+// newTestEventStore creates an in-memory event store for tests.
+func newTestEventStore(t *testing.T) *eventstore.Store {
+	t.Helper()
+	db, err := sql.Open("sqlite3", ":memory:?cache=shared&_journal_mode=WAL")
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	store, err := eventstore.New(db)
+	require.NoError(t, err)
+	return store
+}
 
 // TC-G-01: CreateSession — create session, verify session_id returned and context accessible
 func TestSessionRegistry_CreateAndGetContext(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	reg.CreateSession("s1", "proj-1", "user-1", "/root", "linux")
 
 	root, platform, key, user, ok := reg.GetSessionContext("s1")
@@ -26,14 +40,14 @@ func TestSessionRegistry_CreateAndGetContext(t *testing.T) {
 }
 
 func TestSessionRegistry_GetContext_NotFound(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 
 	_, _, _, _, ok := reg.GetSessionContext("nonexistent")
 	assert.False(t, ok)
 }
 
 func TestSessionRegistry_HasSession(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 
 	assert.False(t, reg.HasSession("s1"))
 
@@ -42,7 +56,7 @@ func TestSessionRegistry_HasSession(t *testing.T) {
 }
 
 func TestSessionRegistry_SubscribeAndPublish(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	reg.CreateSession("s1", "proj", "user", "/root", "linux")
 
 	ch, cleanup := reg.Subscribe("s1")
@@ -67,7 +81,7 @@ func TestSessionRegistry_SubscribeAndPublish(t *testing.T) {
 }
 
 func TestSessionRegistry_MultipleSubscribers(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	reg.CreateSession("s1", "proj", "user", "/root", "linux")
 
 	ch1, cleanup1 := reg.Subscribe("s1")
@@ -95,7 +109,7 @@ func TestSessionRegistry_MultipleSubscribers(t *testing.T) {
 }
 
 func TestSessionRegistry_SubscribeNonExistent(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 
 	ch, cleanup := reg.Subscribe("nonexistent")
 	defer cleanup()
@@ -106,37 +120,41 @@ func TestSessionRegistry_SubscribeNonExistent(t *testing.T) {
 }
 
 func TestSessionRegistry_ReplayEvents(t *testing.T) {
-	reg := NewSessionRegistry()
+	store := newTestEventStore(t)
+	reg := NewSessionRegistry(store)
 	reg.CreateSession("s1", "proj", "user", "/root", "linux")
 
-	// Publish 3 events
-	for i := 1; i <= 3; i++ {
-		reg.PublishEvent("s1", &pb.SessionEvent{
-			EventId: fmt.Sprintf("evt-%d", i),
-			Content: fmt.Sprintf("msg-%d", i),
-		})
+	// Append 3 events via store (simulating what EventStream does)
+	var ids [3]int64
+	for i := 0; i < 3; i++ {
+		id, err := store.Append("s1", "answer", &pb.SessionEvent{
+			Content: fmt.Sprintf("msg-%d", i+1),
+			Type:    pb.SessionEventType_SESSION_EVENT_ANSWER,
+		}, map[string]interface{}{"type": "MessageCompleted", "content": fmt.Sprintf("msg-%d", i+1)})
+		require.NoError(t, err)
+		ids[i] = id
 	}
 
-	// Replay after evt-1 should return evt-2, evt-3
-	replayed := reg.ReplayEvents("s1", "evt-1")
+	// Replay after first event should return 2nd and 3rd
+	replayed := reg.ReplayEvents("s1", ids[0])
 	require.Len(t, replayed, 2)
-	assert.Equal(t, "evt-2", replayed[0].EventId)
-	assert.Equal(t, "evt-3", replayed[1].EventId)
+	assert.Equal(t, fmt.Sprintf("msg-%d", 2), replayed[0].Content)
+	assert.Equal(t, fmt.Sprintf("msg-%d", 3), replayed[1].Content)
 
-	// Replay after evt-3 should return nothing
-	replayed = reg.ReplayEvents("s1", "evt-3")
+	// Replay after last event should return nothing
+	replayed = reg.ReplayEvents("s1", ids[2])
 	assert.Empty(t, replayed)
 
-	// Replay with empty lastEventID should return full history
-	replayed = reg.ReplayEvents("s1", "")
+	// Replay with 0 should return full history
+	replayed = reg.ReplayEvents("s1", 0)
 	require.Len(t, replayed, 3)
-	assert.Equal(t, "evt-1", replayed[0].EventId)
-	assert.Equal(t, "evt-2", replayed[1].EventId)
-	assert.Equal(t, "evt-3", replayed[2].EventId)
+	assert.Equal(t, "msg-1", replayed[0].Content)
+	assert.Equal(t, "msg-2", replayed[1].Content)
+	assert.Equal(t, "msg-3", replayed[2].Content)
 }
 
 func TestSessionRegistry_EnqueueDequeueMessage(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	reg.CreateSession("s1", "proj", "user", "/root", "linux")
 
 	err := reg.EnqueueMessage("s1", "hello")
@@ -148,7 +166,7 @@ func TestSessionRegistry_EnqueueDequeueMessage(t *testing.T) {
 }
 
 func TestSessionRegistry_EnqueueMessage_NotFound(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 
 	err := reg.EnqueueMessage("nonexistent", "hello")
 	assert.Error(t, err)
@@ -156,7 +174,7 @@ func TestSessionRegistry_EnqueueMessage_NotFound(t *testing.T) {
 }
 
 func TestSessionRegistry_AskUserReply(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	reg.CreateSession("s1", "proj", "user", "/root", "linux")
 
 	replyCh := reg.RegisterAskUser("s1", "call-1")
@@ -178,7 +196,7 @@ func TestSessionRegistry_AskUserReply(t *testing.T) {
 
 // TC-G-04: Reasoning events — publish reasoning event, verify subscriber receives it
 func TestSessionRegistry_ReasoningEvent(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	reg.CreateSession("s1", "proj", "user", "/root", "linux")
 
 	ch, cleanup := reg.Subscribe("s1")
@@ -205,7 +223,7 @@ func TestSessionRegistry_ReasoningEvent(t *testing.T) {
 
 // TC-G-05: Plan update events — publish plan event, verify subscriber receives it
 func TestSessionRegistry_PlanUpdateEvent(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	reg.CreateSession("s1", "proj", "user", "/root", "linux")
 
 	ch, cleanup := reg.Subscribe("s1")
@@ -233,7 +251,7 @@ func TestSessionRegistry_PlanUpdateEvent(t *testing.T) {
 
 // TC-G-07: CancelTask — create session, cancel, verify cancellation
 func TestSessionRegistry_Cancel(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	reg.CreateSession("s1", "proj", "user", "/root", "linux")
 
 	assert.False(t, reg.IsCancelled("s1"))
@@ -244,14 +262,14 @@ func TestSessionRegistry_Cancel(t *testing.T) {
 }
 
 func TestSessionRegistry_Cancel_NotFound(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 
 	cancelled := reg.Cancel("nonexistent")
 	assert.False(t, cancelled)
 }
 
 func TestSessionRegistry_RemoveSession(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	reg.CreateSession("s1", "proj", "user", "/root", "linux")
 
 	ch, cleanup := reg.Subscribe("s1")
@@ -267,7 +285,7 @@ func TestSessionRegistry_RemoveSession(t *testing.T) {
 }
 
 func TestSessionRegistry_ConcurrentAccess(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	reg.CreateSession("s1", "proj", "user", "/root", "linux")
 
 	var wg sync.WaitGroup
@@ -306,7 +324,7 @@ func TestSessionRegistry_ConcurrentAccess(t *testing.T) {
 }
 
 func TestSessionRegistry_MessageChannel(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	reg.CreateSession("s1", "proj", "user", "/root", "linux")
 
 	ch := reg.MessageChannel("s1")
@@ -325,7 +343,7 @@ func TestSessionRegistry_MessageChannel(t *testing.T) {
 }
 
 func TestSessionRegistry_MessageChannel_NotFound(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 
 	ch := reg.MessageChannel("nonexistent")
 	_, ok := <-ch
@@ -335,7 +353,7 @@ func TestSessionRegistry_MessageChannel_NotFound(t *testing.T) {
 // TC-G-02: SendMessage + Subscribe (pub/sub combined)
 // CreateSession → Subscribe → EnqueueMessage → message arrives via MessageChannel
 func TestSessionRegistry_SendMessageAndSubscribe(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	reg.CreateSession("s1", "proj", "user", "/root", "linux")
 
 	// Subscribe for events
@@ -377,7 +395,7 @@ func TestSessionRegistry_SendMessageAndSubscribe(t *testing.T) {
 
 // TC-G-10: Multiple sessions — events are isolated
 func TestSessionRegistry_MultipleSessions_Isolated(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	reg.CreateSession("session-A", "proj-a", "user-a", "/a", "linux")
 	reg.CreateSession("session-B", "proj-b", "user-b", "/b", "windows")
 
@@ -458,22 +476,26 @@ func TestSessionRegistry_MultipleSessions_Isolated(t *testing.T) {
 // TC-G-08 extended: Reconnect replay with subscriber
 // Publish 3 events → new subscriber with replay from evt-1 → receives events 2,3 + live events
 func TestSessionRegistry_ReconnectReplay_WithSubscriber(t *testing.T) {
-	reg := NewSessionRegistry()
+	store := newTestEventStore(t)
+	reg := NewSessionRegistry(store)
 	reg.CreateSession("s1", "proj", "user", "/root", "linux")
 
-	// Publish 3 events (no subscribers yet)
-	for i := 1; i <= 3; i++ {
-		reg.PublishEvent("s1", &pb.SessionEvent{
-			EventId: fmt.Sprintf("evt-%d", i),
-			Content: fmt.Sprintf("msg-%d", i),
-		})
+	// Append 3 events via store (no subscribers yet)
+	var ids [3]int64
+	for i := 0; i < 3; i++ {
+		id, err := store.Append("s1", "answer", &pb.SessionEvent{
+			Content: fmt.Sprintf("msg-%d", i+1),
+			Type:    pb.SessionEventType_SESSION_EVENT_ANSWER,
+		}, map[string]interface{}{"type": "MessageCompleted", "content": fmt.Sprintf("msg-%d", i+1)})
+		require.NoError(t, err)
+		ids[i] = id
 	}
 
-	// Replay from evt-1 → should get evt-2, evt-3
-	replayed := reg.ReplayEvents("s1", "evt-1")
+	// Replay from first event → should get 2nd and 3rd
+	replayed := reg.ReplayEvents("s1", ids[0])
 	require.Len(t, replayed, 2)
-	assert.Equal(t, "evt-2", replayed[0].EventId)
-	assert.Equal(t, "evt-3", replayed[1].EventId)
+	assert.Equal(t, "msg-2", replayed[0].Content)
+	assert.Equal(t, "msg-3", replayed[1].Content)
 
 	// Now subscribe for live events
 	ch, cleanup := reg.Subscribe("s1")
@@ -497,7 +519,7 @@ func TestSessionRegistry_ReconnectReplay_WithSubscriber(t *testing.T) {
 
 // TC-G-06 extended: AskUser register → reply → unregister lifecycle
 func TestSessionRegistry_AskUser_FullLifecycle(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	reg.CreateSession("s1", "proj", "user", "/root", "linux")
 
 	// Register ask_user call
@@ -526,7 +548,7 @@ func TestSessionRegistry_AskUser_FullLifecycle(t *testing.T) {
 
 // DrainMessages discards all pending messages from the queue
 func TestSessionRegistry_DrainMessages(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	reg.CreateSession("s1", "proj", "user", "/root", "linux")
 
 	// Enqueue several messages
@@ -548,14 +570,14 @@ func TestSessionRegistry_DrainMessages(t *testing.T) {
 }
 
 func TestSessionRegistry_DrainMessages_NotFound(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	// Should not panic on nonexistent session
 	reg.DrainMessages("nonexistent")
 }
 
 // ResetCancel clears the cancelled flag
 func TestSessionRegistry_ResetCancel(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	reg.CreateSession("s1", "proj", "user", "/root", "linux")
 
 	// Cancel then reset
@@ -567,14 +589,14 @@ func TestSessionRegistry_ResetCancel(t *testing.T) {
 }
 
 func TestSessionRegistry_ResetCancel_NotFound(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	// Should not panic
 	reg.ResetCancel("nonexistent")
 }
 
 // StoreTurnCancel stores and invokes turn cancel function
 func TestSessionRegistry_StoreTurnCancel(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	reg.CreateSession("s1", "proj", "user", "/root", "linux")
 
 	cancelled := make(chan struct{})
@@ -598,7 +620,7 @@ func TestSessionRegistry_StoreTurnCancel(t *testing.T) {
 }
 
 func TestSessionRegistry_StoreTurnCancel_ClearNil(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	reg.CreateSession("s1", "proj", "user", "/root", "linux")
 
 	called := false
@@ -613,14 +635,14 @@ func TestSessionRegistry_StoreTurnCancel_ClearNil(t *testing.T) {
 }
 
 func TestSessionRegistry_StoreTurnCancel_NotFound(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	// Should not panic
 	reg.StoreTurnCancel("nonexistent", func() {})
 }
 
 // TC-EB-01: SetEventHook → PublishEvent → hook called with correct args.
 func TestSessionRegistry_EventHook_Called(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 
 	var hookCalled bool
 	var hookSessionID string
@@ -645,7 +667,7 @@ func TestSessionRegistry_EventHook_Called(t *testing.T) {
 
 // TC-EB-02: No hook → PublishEvent still works (subscribers receive events).
 func TestSessionRegistry_EventHook_NilDoesNotBreak(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	// No SetEventHook call — hook is nil
 
 	reg.CreateSession("s1", "key", "user", "/root", "linux")
@@ -667,7 +689,7 @@ func TestSessionRegistry_EventHook_NilDoesNotBreak(t *testing.T) {
 
 // TC-EB-03: EventHook called for every event (multiple events).
 func TestSessionRegistry_EventHook_MultipleEvents(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 
 	var hookEvents []*pb.SessionEvent
 
@@ -692,7 +714,7 @@ func TestSessionRegistry_EventHook_MultipleEvents(t *testing.T) {
 
 // TC-G-07 extended: Cancel prevents further processing
 func TestSessionRegistry_Cancel_MultipleCalls(t *testing.T) {
-	reg := NewSessionRegistry()
+	reg := NewSessionRegistry(nil)
 	reg.CreateSession("s1", "proj", "user", "/root", "linux")
 
 	// Initially not cancelled

@@ -143,7 +143,7 @@ func newTestRequestHandler(t *testing.T) (*MobileRequestHandler, *mockDeviceStor
 	router := NewMessageRouter(client, crypto)
 	deviceStore := newMockDeviceStore()
 	tokenStore := NewPairingTokenStore()
-	broadcaster := NewEventBroadcaster(router)
+	broadcaster := NewEventBroadcaster(router, newMockEventStoreReader())
 	sessions := newMockSessionManager()
 	processor := newMockMessageProcessor()
 	identity := &persistence.ServerIdentity{
@@ -840,14 +840,17 @@ func TestRequestHandler_Subscribe_SendsIdleStatus(t *testing.T) {
 
 	handler.handleSubscribe(msg)
 
-	// Processor reports not processing → device receives ProcessingStopped.
+	// Processor reports not processing → device receives BackfillComplete + ProcessingStopped.
 	assert.False(t, processor.IsTurnActive("s1"))
 
 	msgs := sender.getMessages("dev-1")
-	require.Len(t, msgs, 1, "device should receive synthetic status event")
+	// Subscribe sends BackfillComplete marker, then handleSubscribe sends synthetic status.
+	require.GreaterOrEqual(t, len(msgs), 2, "device should receive backfill_complete + synthetic status event")
 
-	assert.Equal(t, "session_event", msgs[0].Type)
-	evt, ok := msgs[0].Payload["event"].(map[string]interface{})
+	// Last message is the synthetic session status.
+	statusMsg := msgs[len(msgs)-1]
+	assert.Equal(t, "session_event", statusMsg.Type)
+	evt, ok := statusMsg.Payload["event"].(map[string]interface{})
 	require.True(t, ok)
 	assert.Equal(t, "ProcessingStopped", evt["type"])
 	assert.Equal(t, "idle", evt["state"])
@@ -877,9 +880,12 @@ func TestRequestHandler_Subscribe_SendsProcessingStatus(t *testing.T) {
 	handler.handleSubscribe(msg)
 
 	msgs := sender.getMessages("dev-1")
-	require.Len(t, msgs, 1, "device should receive synthetic status event")
+	// Subscribe sends BackfillComplete marker, then handleSubscribe sends synthetic status.
+	require.GreaterOrEqual(t, len(msgs), 2, "device should receive backfill_complete + synthetic status event")
 
-	evt, ok := msgs[0].Payload["event"].(map[string]interface{})
+	// Last message is the synthetic session status.
+	statusMsg := msgs[len(msgs)-1]
+	evt, ok := statusMsg.Payload["event"].(map[string]interface{})
 	require.True(t, ok)
 	assert.Equal(t, "ProcessingStarted", evt["type"])
 	assert.Equal(t, "processing", evt["state"])
@@ -909,8 +915,11 @@ func TestRequestHandler_Subscribe_IdleStatusForUnknownSession(t *testing.T) {
 	handler.handleSubscribe(msg)
 
 	msgs := sender.getMessages("dev-1")
-	require.Len(t, msgs, 1, "should send idle status for unknown session")
-	event := msgs[0].Payload["event"].(map[string]interface{})
+	// Subscribe sends BackfillComplete marker + handleSubscribe sends session status
+	require.GreaterOrEqual(t, len(msgs), 2, "should send backfill_complete + idle status")
+	// Last message before subscribe_ack should be session status
+	statusMsg := msgs[len(msgs)-1]
+	event := statusMsg.Payload["event"].(map[string]interface{})
 	assert.Equal(t, "ProcessingStopped", event["type"])
 }
 

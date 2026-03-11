@@ -4,10 +4,12 @@ package integration
 
 import (
 	"context"
+	"database/sql"
 	"net"
 	"testing"
 	"time"
 
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
@@ -19,6 +21,7 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/tools"
 	agentservice "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/agent"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/engine"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/eventstore"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/session_processor"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
 	"google.golang.org/grpc"
@@ -85,8 +88,23 @@ func NewStreamingHarness(t *testing.T, scenario string) *StreamingHarness {
 	)
 
 	flowReg := flow_registry.NewInMemoryRegistry()
-	sessionReg := flow_registry.NewSessionRegistry()
-	sessProcessor := session_processor.New(sessionReg, factory)
+	// Create in-memory event store for tests
+	eventsDB, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		cancel()
+		t.Fatalf("open in-memory events db: %v", err)
+	}
+	eventsDB.SetMaxOpenConns(1)
+	t.Cleanup(func() { eventsDB.Close() })
+
+	evtStore, err := eventstore.New(eventsDB)
+	if err != nil {
+		cancel()
+		t.Fatalf("create event store: %v", err)
+	}
+
+	sessionReg := flow_registry.NewSessionRegistry(evtStore)
+	sessProcessor := session_processor.New(sessionReg, factory, evtStore)
 	sessProcessor.SetAgentPoolRegistrar(agentPool)
 
 	flowHandler, err := deliverygrpc.NewFlowHandlerWithConfig(deliverygrpc.FlowHandlerConfig{

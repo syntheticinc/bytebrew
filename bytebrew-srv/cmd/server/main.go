@@ -24,6 +24,7 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/flow_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/portfile"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/eventstore"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/session_processor"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/logger"
@@ -196,8 +197,21 @@ func main() {
 	// Create flow registry for managing active flows
 	flowRegistry := flow_registry.NewInMemoryRegistry()
 
+	// Create event store (SQLite) for reliable event replay on reconnect
+	eventsDBPath := filepath.Join(dataDir, "data", "events.db")
+	eventsDB, err := persistence.NewWorkDB(eventsDBPath)
+	if err != nil {
+		log.Fatalf("Failed to create events DB: %v", err)
+	}
+	defer eventsDB.Close()
+
+	eventStore, err := eventstore.New(eventsDB)
+	if err != nil {
+		log.Fatalf("Failed to create event store: %v", err)
+	}
+
 	// Create session registry for server-streaming API and bridge
-	sessionRegistry := flow_registry.NewSessionRegistry()
+	sessionRegistry := flow_registry.NewSessionRegistry(eventStore)
 
 	// Create FlowHandler with multi-agent support
 	pingInterval := 2 * time.Second
@@ -227,7 +241,7 @@ func main() {
 
 	// Create shared SessionProcessor for server-streaming message processing.
 	// Used by both gRPC SubscribeSession and bridge MobileRequestHandler.
-	sessProcessor := session_processor.New(sessionRegistry, factory)
+	sessProcessor := session_processor.New(sessionRegistry, factory, eventStore)
 	flowHandlerCfg.SessionProcessor = sessProcessor
 
 	// Wire up agent pool if available (multi-agent mode)
@@ -309,7 +323,7 @@ func main() {
 	// Start bridge connectivity if enabled
 	var bridgeCleanup func()
 	if cfg.Bridge.Enabled && cfg.Bridge.URL != "" {
-		cleanup, err := startBridge(ctx, cfg, dataDir, sessionRegistry, sessProcessor, wsHandler, loggerInstance)
+		cleanup, err := startBridge(ctx, cfg, dataDir, sessionRegistry, sessProcessor, wsHandler, loggerInstance, eventStore)
 		if err != nil {
 			slog.Error("Failed to start bridge connectivity", "error", err)
 		} else {
@@ -437,6 +451,7 @@ func startBridge(
 	processor *session_processor.Processor,
 	wsHandler *ws.ConnectionHandler,
 	loggerInstance *logger.Logger,
+	eventStore *eventstore.Store,
 ) (func(), error) {
 	// Open shared SQLite database for device store and server identity
 	dbPath := filepath.Join(dataDir, "data", "bytebrew.db")
@@ -493,7 +508,7 @@ func startBridge(
 	messageRouter := bridge.NewMessageRouter(bridgeClient, cryptoAdapter)
 
 	// Create event broadcaster (serializes session events for mobile clients)
-	eventBroadcaster := bridge.NewEventBroadcaster(messageRouter)
+	eventBroadcaster := bridge.NewEventBroadcaster(messageRouter, eventStore)
 
 	// Wire event hook so SessionRegistry broadcasts events to mobile clients
 	sessionRegistry.SetEventHook(eventBroadcaster.BroadcastEvent)

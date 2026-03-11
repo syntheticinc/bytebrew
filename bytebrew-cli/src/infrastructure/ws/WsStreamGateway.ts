@@ -49,6 +49,8 @@ export class WsStreamGateway implements IStreamGateway {
   private sessionId: string | null = null;
   private lastEventId: string | null = null;
   private wsUrl: string = '';
+  private seenEventIds = new Set<string>();
+  private static readonly MAX_SEEN = 1000;
 
   private status: ConnectionStatus = 'disconnected';
   private reconnectAttempts = 0;
@@ -322,8 +324,16 @@ export class WsStreamGateway implements IStreamGateway {
       const eventData = payload.event as WsSessionEvent | undefined;
       const eventId = payload.event_id as string | undefined;
 
+      // ID-based dedup: skip events we've already processed
+      if (eventId && this.seenEventIds.has(eventId)) {
+        return;
+      }
       if (eventId) {
-        this.lastEventId = eventId;
+        this.seenEventIds.add(eventId);
+        if (this.seenEventIds.size > WsStreamGateway.MAX_SEEN) {
+          const first = this.seenEventIds.values().next().value;
+          if (first) this.seenEventIds.delete(first);
+        }
       }
 
       if (eventData) {
@@ -332,9 +342,21 @@ export class WsStreamGateway implements IStreamGateway {
         );
         const response = convertEventToStreamResponse(eventData);
         if (response) {
+          response.eventId = eventId;
           this.emitResponse(response);
         }
       }
+
+      // Update cursor AFTER processing
+      if (eventId) {
+        this.lastEventId = eventId;
+      }
+      return;
+    }
+
+    // Handle backfill_complete
+    if (msg.type === 'backfill_complete') {
+      return;
     }
   }
 

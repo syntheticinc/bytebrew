@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"log/slog"
+	"strconv"
 
 	"github.com/google/uuid"
 	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
@@ -17,7 +18,7 @@ type SessionRegistryForHandler interface {
 	GetSessionContext(sessionID string) (projectRoot, platform, projectKey, userID string, ok bool)
 	Subscribe(sessionID string) (ch <-chan *pb.SessionEvent, cleanup func())
 	PublishEvent(sessionID string, event *pb.SessionEvent)
-	ReplayEvents(sessionID, lastEventID string) []*pb.SessionEvent
+	ReplayEvents(sessionID string, lastEventID int64) []*pb.SessionEvent
 	EnqueueMessage(sessionID, content string) error
 	DrainMessages(sessionID string)
 	SendAskUserReply(sessionID, callID, reply string)
@@ -128,26 +129,27 @@ func (h *FlowHandler) SubscribeSession(req *pb.SubscribeSessionRequest, stream p
 		"session_id", sessionID,
 		"last_event_id", req.LastEventId)
 
-	// Replay missed events on reconnect
-	if req.LastEventId != "" {
-		missed := h.sessionRegistry.ReplayEvents(sessionID, req.LastEventId)
-		for _, ev := range missed {
-			if err := stream.Send(ev); err != nil {
-				return err
-			}
-		}
-		slog.InfoContext(ctx, "[Streaming] replayed events",
-			"session_id", sessionID,
-			"count", len(missed))
-	}
-
-	// Subscribe to live events
+	// Subscribe FIRST, then replay (subscribe-first-replay-second pattern).
 	eventCh, cleanup := h.sessionRegistry.Subscribe(sessionID)
 	defer cleanup()
 
 	// Start message processing loop via shared SessionProcessor
 	if h.sessionProcessor != nil {
 		h.sessionProcessor.StartProcessing(ctx, sessionID)
+	}
+
+	// Replay missed events on reconnect
+	lastEventID, _ := strconv.ParseInt(req.LastEventId, 10, 64)
+	missed := h.sessionRegistry.ReplayEvents(sessionID, lastEventID)
+	for _, ev := range missed {
+		if err := stream.Send(ev); err != nil {
+			return err
+		}
+	}
+	if len(missed) > 0 {
+		slog.InfoContext(ctx, "[Streaming] replayed events",
+			"session_id", sessionID,
+			"count", len(missed))
 	}
 
 	// Main event loop — stream events to client
