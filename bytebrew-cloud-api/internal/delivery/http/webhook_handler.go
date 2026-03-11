@@ -42,7 +42,9 @@ func (h *WebhookHandler) HandleStripe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	event, err := webhook.ConstructEvent(body, r.Header.Get("Stripe-Signature"), h.webhookSecret)
+	event, err := webhook.ConstructEventWithOptions(body, r.Header.Get("Stripe-Signature"), h.webhookSecret, webhook.ConstructEventOptions{
+		IgnoreAPIVersionMismatch: true,
+	})
 	if err != nil {
 		slog.WarnContext(r.Context(), "invalid stripe signature", "error", err)
 		http.Error(w, "invalid signature", http.StatusBadRequest)
