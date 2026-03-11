@@ -41,10 +41,13 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
-ARCHIVE="bytebrew_${VERSION}_${PLATFORM}.tar.gz"
-URL="${BASE_URL}/v${VERSION}/${ARCHIVE}"
+CLI_ARCHIVE="bytebrew_${VERSION}_${PLATFORM}.tar.gz"
+CLI_URL="${BASE_URL}/v${VERSION}/${CLI_ARCHIVE}"
 
-echo "Installing ByteBrew CLI v${VERSION} (${PLATFORM})..."
+SRV_ARCHIVE="bytebrew-srv_${VERSION}_${PLATFORM}.tar.gz"
+SRV_URL="${BASE_URL}/v${VERSION}/${SRV_ARCHIVE}"
+
+echo "Installing ByteBrew v${VERSION} (${PLATFORM})..."
 echo ""
 
 # Create install directory
@@ -54,28 +57,42 @@ mkdir -p "$INSTALL_DIR"
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-echo "Downloading..."
-if ! curl -fsSL -o "${TMP_DIR}/${ARCHIVE}" "$URL"; then
-  echo "Error: download failed. Check that release v${VERSION} exists for ${PLATFORM}."
-  echo "  URL: $URL"
+# --- CLI ---
+echo "Downloading CLI...  ${CLI_ARCHIVE}"
+if ! curl -fsSL -o "${TMP_DIR}/${CLI_ARCHIVE}" "$CLI_URL"; then
+  echo "Error: CLI download failed. Check that release v${VERSION} exists for ${PLATFORM}."
+  echo "  URL: $CLI_URL"
   exit 1
 fi
 
-echo "Extracting..."
-tar -xzf "${TMP_DIR}/${ARCHIVE}" -C "$TMP_DIR"
-
-# Install binary
+tar -xzf "${TMP_DIR}/${CLI_ARCHIVE}" -C "$TMP_DIR"
 mv "${TMP_DIR}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
 chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
 
+# --- Server ---
+echo "Downloading Server... ${SRV_ARCHIVE}"
+if ! curl -fsSL -o "${TMP_DIR}/${SRV_ARCHIVE}" "$SRV_URL"; then
+  echo "Error: Server download failed. Check that release v${VERSION} exists for ${PLATFORM}."
+  echo "  URL: $SRV_URL"
+  exit 1
+fi
+
+tar -xzf "${TMP_DIR}/${SRV_ARCHIVE}" -C "$TMP_DIR"
+mv "${TMP_DIR}/bytebrew-srv" "${INSTALL_DIR}/bytebrew-srv"
+chmod +x "${INSTALL_DIR}/bytebrew-srv"
+
 echo ""
-echo "Installed: ${INSTALL_DIR}/${BINARY_NAME}"
+echo "Installed to ${INSTALL_DIR}"
+echo "  bytebrew     (CLI)"
+echo "  bytebrew-srv (Server)"
 
 # Check PATH
 case ":${PATH}:" in
   *":${INSTALL_DIR}:"*)
     echo ""
-    echo "Ready! Run: bytebrew ask \"hello\""
+    echo "Ready! Run:"
+    echo "  bytebrew login    # authenticate with your account"
+    echo "  bytebrew          # start coding"
     ;;
   *)
     echo ""
@@ -89,6 +106,8 @@ case ":${PATH}:" in
       echo "  source ~/.bashrc"
     fi
     echo ""
-    echo "Then run: bytebrew ask \"hello\""
+    echo "Then run:"
+    echo "  bytebrew login    # authenticate with your account"
+    echo "  bytebrew          # start coding"
     ;;
 esac
