@@ -112,7 +112,7 @@ func NewWsHarness(t *testing.T, scenario string) *WsHarness {
 	sessProcessor := session_processor.New(sessionReg, factory, evtStore)
 	sessProcessor.SetAgentPoolRegistrar(agentPool)
 
-	wsHandler := ws.NewConnectionHandler(sessionReg, sessProcessor, &testutil.NoopAgentService{}, &domain.LicenseInfo{Status: domain.LicenseActive})
+	wsHandler := ws.NewConnectionHandler(sessionReg, sessProcessor, &testutil.NoopAgentService{}, nil, &domain.LicenseInfo{Status: domain.LicenseActive})
 
 	wsServer, err := ws.NewServer(wsHandler)
 	if err != nil {

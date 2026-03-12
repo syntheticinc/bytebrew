@@ -34,6 +34,11 @@ type AgentEnvironmentSetter interface {
 	SetEnvironmentContext(projectRoot, platform string)
 }
 
+// AgentCanceller cancels running agents for a session (consumer-side interface).
+type AgentCanceller interface {
+	CancelRunningAgents(sessionID string)
+}
+
 // PairingDataProvider generates pairing data for mobile device pairing (consumer-side interface).
 type PairingDataProvider interface {
 	GeneratePairingData() (map[string]interface{}, error)
@@ -52,6 +57,7 @@ type ConnectionHandler struct {
 	sessionRegistry  SessionRegistry
 	sessionProcessor *sp.Processor
 	agentService     AgentEnvironmentSetter
+	agentCanceller   AgentCanceller      // optional, cancels running agents on user cancel
 	pairingProvider  PairingDataProvider // optional, nil when bridge not configured
 	licenseInfo      *domain.LicenseInfo
 }
@@ -61,6 +67,7 @@ func NewConnectionHandler(
 	registry SessionRegistry,
 	processor *sp.Processor,
 	agentService AgentEnvironmentSetter,
+	agentCanceller AgentCanceller,
 	licenseInfo *domain.LicenseInfo,
 ) *ConnectionHandler {
 	return &ConnectionHandler{
@@ -73,6 +80,7 @@ func NewConnectionHandler(
 		sessionRegistry:  registry,
 		sessionProcessor: processor,
 		agentService:     agentService,
+		agentCanceller:   agentCanceller,
 		licenseInfo:      licenseInfo,
 	}
 }
@@ -405,6 +413,11 @@ func (h *ConnectionHandler) handleCancelSession(writer *wsWriter, msg *WsMessage
 	cancelled := h.sessionRegistry.Cancel(sessionID)
 	if cancelled {
 		h.sessionRegistry.DrainMessages(sessionID)
+		// Also cancel spawned agents — they run on session context
+		// and won't be stopped by turn cancellation alone.
+		if h.agentCanceller != nil {
+			h.agentCanceller.CancelRunningAgents(sessionID)
+		}
 	}
 
 	writer.send(&WsMessage{

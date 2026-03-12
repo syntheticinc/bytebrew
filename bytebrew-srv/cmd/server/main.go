@@ -285,7 +285,13 @@ func main() {
 	grpcServer.RegisterServices(flowHandler)
 
 	// Create WS connection handler for local CLI clients
-	wsHandler := ws.NewConnectionHandler(sessionRegistry, sessProcessor, components.AgentService, components.LicenseInfo)
+	// AgentCanceller is nil-safe — handleCancelSession checks before calling.
+	// Must cast explicitly to avoid non-nil interface wrapping a nil pointer.
+	var agentCanceller ws.AgentCanceller
+	if components.AgentPool != nil {
+		agentCanceller = components.AgentPool
+	}
+	wsHandler := ws.NewConnectionHandler(sessionRegistry, sessProcessor, components.AgentService, agentCanceller, components.LicenseInfo)
 
 	// Create WS server (localhost only, random port)
 	wsServer, err := ws.NewServer(wsHandler)
@@ -605,6 +611,9 @@ logging:
   format: "text"
   output: "file"
   clear_on_startup: true
+
+license:
+  public_key_hex: "5395bf9bb925ce56d86005104951984709670126f95a635e4e2ccf79ac58e395"
 
 llm:
   default_provider: "ollama"

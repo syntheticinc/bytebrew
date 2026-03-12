@@ -67,7 +67,7 @@ func setupTestServerWithLicense(t *testing.T, license *domain.LicenseInfo) (*htt
 	processor := sp.New(registry, nil, nil) // nil factory/store is OK — we don't send messages in ping/create tests
 	agentSvc := &mockAgentEnvSetter{}
 
-	handler := NewConnectionHandler(registry, processor, agentSvc, license)
+	handler := NewConnectionHandler(registry, processor, agentSvc, nil, license)
 
 	server := httptest.NewServer(http.HandlerFunc(handler.ServeHTTP))
 	t.Cleanup(server.Close)
@@ -93,7 +93,7 @@ func setupTestServerWithRegistryAndLicense(t *testing.T, license *domain.License
 	processor := sp.New(registry, nil, nil)
 	agentSvc := &mockAgentEnvSetter{}
 
-	handler := NewConnectionHandler(registry, processor, agentSvc, license)
+	handler := NewConnectionHandler(registry, processor, agentSvc, nil, license)
 
 	server := httptest.NewServer(http.HandlerFunc(handler.ServeHTTP))
 	t.Cleanup(server.Close)
