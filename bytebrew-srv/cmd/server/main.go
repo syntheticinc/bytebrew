@@ -285,7 +285,7 @@ func main() {
 	grpcServer.RegisterServices(flowHandler)
 
 	// Create WS connection handler for local CLI clients
-	wsHandler := ws.NewConnectionHandler(sessionRegistry, sessProcessor, components.AgentService)
+	wsHandler := ws.NewConnectionHandler(sessionRegistry, sessProcessor, components.AgentService, components.LicenseInfo)
 
 	// Create WS server (localhost only, random port)
 	wsServer, err := ws.NewServer(wsHandler)

@@ -217,7 +217,7 @@ func main() {
 	pb.RegisterFlowServiceServer(grpcServer, flowHandler)
 
 	// 12. Create WS server (SAME as production!)
-	wsHandler := ws.NewConnectionHandler(sessionRegistry, sessProcessor, &testutil.NoopAgentService{})
+	wsHandler := ws.NewConnectionHandler(sessionRegistry, sessProcessor, &testutil.NoopAgentService{}, &domain.LicenseInfo{Status: domain.LicenseActive})
 	wsServer, err := ws.NewServer(wsHandler)
 	if err != nil {
 		log.Fatalf("Failed to create WS server: %v", err)

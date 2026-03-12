@@ -7,6 +7,7 @@ import { BaseHeadlessRunner, HeadlessRunnerOptions } from './BaseHeadlessRunner.
  */
 export class HeadlessInteractiveRunner extends BaseHeadlessRunner {
   private responseResolver: (() => void) | null = null;
+  private isReconnecting = false;
 
   constructor(config: AppConfig, options: HeadlessRunnerOptions = {}) {
     super(config, options);
@@ -17,11 +18,35 @@ export class HeadlessInteractiveRunner extends BaseHeadlessRunner {
     const { streamGateway, streamProcessor, eventBus } = container;
 
     // Subscribe to connection status
+    // rl is initialized later, but captured by closure — safe because
+    // status changes only happen after connect() completes (rl is set by then).
+    let rl: ReturnType<typeof import('readline').createInterface> | null = null;
+
     this.unsubscribers.push(
       streamGateway.onStatusChange((status) => {
         this.logStatus(status);
-        if (status === 'error' || status === 'disconnected') {
-          console.error('[Disconnected]');
+
+        if (status === 'reconnecting') {
+          if (!this.isReconnecting) {
+            this.isReconnecting = true;
+            console.error('[Connection lost, reconnecting...]');
+            // Resolve pending send so readline unblocks
+            if (this.responseResolver) {
+              this.responseResolver();
+              this.responseResolver = null;
+            }
+          }
+        } else if (status === 'connected' && this.isReconnecting) {
+          this.isReconnecting = false;
+          console.log('[Reconnected]');
+          rl?.prompt();
+        } else if (status === 'error' || status === 'disconnected') {
+          if (this.isReconnecting) {
+            console.error('[Server unavailable after reconnection attempts. Exiting.]');
+          } else {
+            console.error('[Disconnected]');
+          }
+          this.cleanup();
           process.exit(1);
         }
       })
@@ -52,7 +77,7 @@ export class HeadlessInteractiveRunner extends BaseHeadlessRunner {
 
     // Read stdin line by line
     const readline = await import('readline');
-    const rl = readline.createInterface({
+    rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
       prompt: '> ',
@@ -63,18 +88,30 @@ export class HeadlessInteractiveRunner extends BaseHeadlessRunner {
     rl.on('line', async (line) => {
       const trimmed = line.trim();
       if (!trimmed) {
-        rl.prompt();
+        rl!.prompt();
+        return;
+      }
+
+      if (this.isReconnecting || !streamGateway.isConnected()) {
+        console.error('[Failed to send: not connected]');
+        rl!.prompt();
         return;
       }
 
       // Send message and wait for response
-      streamProcessor.sendMessage(trimmed);
+      try {
+        streamProcessor.sendMessage(trimmed);
+      } catch {
+        console.error('[Failed to send: not connected]');
+        rl!.prompt();
+        return;
+      }
 
       await new Promise<void>((resolve) => {
         this.responseResolver = resolve;
       });
 
-      rl.prompt();
+      rl!.prompt();
     });
 
     rl.on('close', () => {

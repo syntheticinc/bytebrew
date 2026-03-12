@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
 	sp "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/session_processor"
 )
 
@@ -52,6 +53,7 @@ type ConnectionHandler struct {
 	sessionProcessor *sp.Processor
 	agentService     AgentEnvironmentSetter
 	pairingProvider  PairingDataProvider // optional, nil when bridge not configured
+	licenseInfo      *domain.LicenseInfo
 }
 
 // NewConnectionHandler creates a new WebSocket connection handler.
@@ -59,6 +61,7 @@ func NewConnectionHandler(
 	registry SessionRegistry,
 	processor *sp.Processor,
 	agentService AgentEnvironmentSetter,
+	licenseInfo *domain.LicenseInfo,
 ) *ConnectionHandler {
 	return &ConnectionHandler{
 		upgrader: websocket.Upgrader{
@@ -70,6 +73,7 @@ func NewConnectionHandler(
 		sessionRegistry:  registry,
 		sessionProcessor: processor,
 		agentService:     agentService,
+		licenseInfo:      licenseInfo,
 	}
 }
 
@@ -202,7 +206,30 @@ func (h *ConnectionHandler) handleMessage(writer *wsWriter, msg WsMessage, state
 	}
 }
 
+// checkLicense verifies the license status. Returns true if the request should be blocked.
+func (h *ConnectionHandler) checkLicense(writer *wsWriter, msg *WsMessage) (blocked bool) {
+	if h.licenseInfo == nil {
+		return false
+	}
+
+	if h.licenseInfo.Status == domain.LicenseBlocked {
+		writer.sendError(msg.RequestID, "LICENSE_REQUIRED: valid license needed to use this service")
+		return true
+	}
+
+	return false
+}
+
+// isLicenseGrace returns true if the license is in grace period.
+func (h *ConnectionHandler) isLicenseGrace() bool {
+	return h.licenseInfo != nil && h.licenseInfo.Status == domain.LicenseGrace
+}
+
 func (h *ConnectionHandler) handleCreateSession(writer *wsWriter, msg *WsMessage) {
+	if h.checkLicense(writer, msg) {
+		return
+	}
+
 	projectRoot, _ := msg.Payload["project_root"].(string)
 	platform, _ := msg.Payload["platform"].(string)
 	projectKey, _ := msg.Payload["project_key"].(string)
@@ -216,14 +243,23 @@ func (h *ConnectionHandler) handleCreateSession(writer *wsWriter, msg *WsMessage
 
 	slog.Info("[WS] session created", "session_id", sessionID, "project_root", projectRoot)
 
+	payload := map[string]interface{}{"session_id": sessionID}
+	if h.isLicenseGrace() {
+		payload["warning"] = "license expiring soon"
+	}
+
 	writer.send(&WsMessage{
 		Type:      "create_session_ack",
 		RequestID: msg.RequestID,
-		Payload:   map[string]interface{}{"session_id": sessionID},
+		Payload:   payload,
 	})
 }
 
 func (h *ConnectionHandler) handleSendMessage(writer *wsWriter, msg *WsMessage, state *connState) {
+	if h.checkLicense(writer, msg) {
+		return
+	}
+
 	sessionID, _ := msg.Payload["session_id"].(string)
 	content, _ := msg.Payload["content"].(string)
 
@@ -245,10 +281,15 @@ func (h *ConnectionHandler) handleSendMessage(writer *wsWriter, msg *WsMessage, 
 	// Start processing (idempotent) — uses connection context so goroutine stops on disconnect
 	h.sessionProcessor.StartProcessing(state.ctx, sessionID)
 
+	payload := map[string]interface{}{"session_id": sessionID}
+	if h.isLicenseGrace() {
+		payload["warning"] = "license expiring soon"
+	}
+
 	writer.send(&WsMessage{
 		Type:      "send_message_ack",
 		RequestID: msg.RequestID,
-		Payload:   map[string]interface{}{"session_id": sessionID},
+		Payload:   payload,
 	})
 }
 
