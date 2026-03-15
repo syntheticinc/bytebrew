@@ -18,14 +18,19 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/shell"
 )
 
+// AskUserHandler is a blocking function that sends questions to the client and waits for answers.
+// Used to override auto-answer behavior in interactive (non-headless) mode.
+type AskUserHandler func(ctx context.Context, sessionID, questionsJSON string) (string, error)
+
 // LocalClientOperationsProxy implements ClientOperationsProxy with local filesystem operations.
 // Used when tools execute on the server directly instead of proxying to CLI via gRPC.
 type LocalClientOperationsProxy struct {
-	projectRoot  string
-	shellManager *shell.SessionManager
-	chunkStore   *indexing.ChunkStore
-	embedder     *indexing.EmbeddingsClient
-	lspService   *lsp.Service
+	projectRoot    string
+	shellManager   *shell.SessionManager
+	chunkStore     *indexing.ChunkStore
+	embedder       *indexing.EmbeddingsClient
+	lspService     *lsp.Service
+	askUserHandler AskUserHandler // if set, overrides auto-answer behavior
 }
 
 // LocalProxyOption configures optional dependencies for LocalClientOperationsProxy.
@@ -44,6 +49,12 @@ func WithEmbedder(embedder *indexing.EmbeddingsClient) LocalProxyOption {
 // WithLspService sets the LSP service for code navigation.
 func WithLspService(svc *lsp.Service) LocalProxyOption {
 	return func(p *LocalClientOperationsProxy) { p.lspService = svc }
+}
+
+// WithAskUserHandler overrides auto-answer with a blocking handler
+// that sends questions to the client and waits for responses.
+func WithAskUserHandler(h AskUserHandler) LocalProxyOption {
+	return func(p *LocalClientOperationsProxy) { p.askUserHandler = h }
 }
 
 // NewLocalClientOperationsProxy creates a proxy that operates on the local filesystem.
@@ -190,8 +201,13 @@ func (p *LocalClientOperationsProxy) ExecuteCommandFull(ctx context.Context, ses
 	return p.handleForeground(ctx, sessionID, arguments)
 }
 
-// AskUserQuestionnaire in headless mode auto-selects the first option for each question.
-func (p *LocalClientOperationsProxy) AskUserQuestionnaire(ctx context.Context, _, questionsJSON string) (string, error) {
+// AskUserQuestionnaire sends questions to the user. If an interactive handler is set
+// (via WithAskUserHandler), it blocks until the user responds. Otherwise, auto-selects
+// the first option (headless mode).
+func (p *LocalClientOperationsProxy) AskUserQuestionnaire(ctx context.Context, sessionID, questionsJSON string) (string, error) {
+	if p.askUserHandler != nil {
+		return p.askUserHandler(ctx, sessionID, questionsJSON)
+	}
 	// question accepts options as json.RawMessage to handle both formats:
 	// - []string (legacy/tests): ["React", "Vue"]
 	// - []QuestionOption (from AskUserTool): [{"label":"React"}, {"label":"Vue"}]

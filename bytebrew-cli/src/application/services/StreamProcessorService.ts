@@ -50,10 +50,14 @@ export class StreamProcessorService {
   // Track last agent in stream to insert separators when switching
   private lastAgentIdInStream = 'supervisor';
 
+  // Contents of messages sent by THIS client (for echo dedup)
+  private readonly sentMessageContents = new Set<string>();
+
   // Unsubscribe functions
   private unsubscribeResponse: (() => void) | null = null;
   private unsubscribeError: (() => void) | null = null;
   private unsubscribeStatus: (() => void) | null = null;
+  private unsubscribeAskUserResolved: (() => void) | null = null;
 
   constructor(options: StreamProcessorOptions) {
     this.streamGateway = options.streamGateway;
@@ -91,6 +95,7 @@ export class StreamProcessorService {
       setCurrentMessageId: (id) => { this.agentStateManager.setCurrentMessageId(resolvedAgentId, id); },
       setCurrentReasoningId: (id) => { this.agentStateManager.setCurrentReasoningId(resolvedAgentId, id); },
       setIsProcessing: (value) => { this._isProcessing = value; },
+      consumeSentMessage: (content) => this.sentMessageContents.delete(content),
       agentId: resolvedAgentId,
     };
   }
@@ -108,6 +113,12 @@ export class StreamProcessorService {
     this.unsubscribeStatus = this.streamGateway.onStatusChange(
       this.handleStatusChange.bind(this)
     );
+
+    this.unsubscribeAskUserResolved = this.eventBus.subscribe('AskUserResolved', (event) => {
+      if (event.callId && event.answers && this.streamGateway.sendAskUserReply) {
+        this.streamGateway.sendAskUserReply(event.callId, JSON.stringify(event.answers));
+      }
+    });
   }
 
   /**
@@ -117,6 +128,7 @@ export class StreamProcessorService {
     this.unsubscribeResponse?.();
     this.unsubscribeError?.();
     this.unsubscribeStatus?.();
+    this.unsubscribeAskUserResolved?.();
   }
 
   /**
@@ -155,6 +167,9 @@ export class StreamProcessorService {
    * Execute the actual send logic (called when connection is confirmed).
    */
   private executeSend(content: string): void {
+    // Track sent content so we can ignore the server echo (USER_MESSAGE event)
+    this.sentMessageContents.add(content);
+
     // Add user message to repository (immediately visible)
     const userMessage = Message.createUser(content);
     this.messageRepository.save(userMessage);

@@ -64,6 +64,7 @@ func NewAgent(ctx context.Context, config AgentConfig) (*Agent, error) {
 	if len(config.Tools) > 0 {
 		slog.InfoContext(ctx, "adding tools to ReAct agent", "tools_count", len(config.Tools))
 		agentConfig.ToolsConfig.Tools = config.Tools
+		agentConfig.ToolsConfig.ExecuteSequentially = config.SequentialTools
 		// Collect tool names for error messages
 		for _, t := range config.Tools {
 			info, err := t.Info(ctx)

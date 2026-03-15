@@ -87,23 +87,37 @@ export function convertEventToStreamResponse(event: WsSessionEvent): StreamRespo
         },
       };
 
-    case 'AskUserRequested':
+    case 'AskUserRequested': {
+      let questionsJson: string;
+      const callId = event.call_id || `ask-${Date.now()}`;
+      try {
+        const parsed = JSON.parse(event.question || '');
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].text) {
+          questionsJson = event.question!;
+        } else {
+          questionsJson = JSON.stringify([{
+            text: event.question || 'Please respond',
+            options: (event.options || []).map(o => ({ label: o })),
+          }]);
+        }
+      } catch {
+        questionsJson = JSON.stringify([{
+          text: event.question || 'Please respond',
+          options: (event.options || []).map(o => ({ label: o })),
+        }]);
+      }
       return {
         type: 'TOOL_CALL',
         content: '',
         isFinal: false,
         agentId,
         toolCall: {
-          callId: event.call_id || `ask-${Date.now()}`,
+          callId,
           toolName: 'ask_user',
-          arguments: {
-            questions: JSON.stringify([{
-              text: event.question || 'Please respond',
-              options: (event.options || []).map(o => ({ label: o })),
-            }]),
-          },
+          arguments: { questions: questionsJson },
         },
       };
+    }
 
     case 'PlanUpdated':
       return {

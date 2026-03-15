@@ -39,6 +39,7 @@ describe('ToolExecutionHandler - ask_user tool', () => {
       setCurrentMessageId: (id) => { currentMessageId = id; },
       setCurrentReasoningId: (id) => { currentReasoningId = id; },
       setIsProcessing: (value) => { isProcessing = value; },
+      consumeSentMessage: () => false,
       agentId: 'test-agent',
     };
   });
@@ -48,10 +49,10 @@ describe('ToolExecutionHandler - ask_user tool', () => {
       const askUserToolCall: ToolCallInfo = {
         callId: 'client-ask_user-1',
         toolName: 'ask_user',
-        arguments: { question: 'Do you approve?' },
+        arguments: { questions: JSON.stringify([{ text: 'Do you approve?' }]) },
       };
 
-      executor.executeResult = { result: 'yes' };
+      executor.executeResult = { result: JSON.stringify([{ question: 'Do you approve?', answer: 'yes' }]) };
 
       handleToolCall(context, {
         type: 'TOOL_CALL',
@@ -73,10 +74,10 @@ describe('ToolExecutionHandler - ask_user tool', () => {
       const askUserToolCall: ToolCallInfo = {
         callId: 'client-ask_user-2',
         toolName: 'ask_user',
-        arguments: { question: 'Proceed?' },
+        arguments: { questions: JSON.stringify([{ text: 'Proceed?' }]) },
       };
 
-      executor.executeResult = { result: 'approved' };
+      executor.executeResult = { result: JSON.stringify([{ question: 'Proceed?', answer: 'approved' }]) };
 
       handleToolCall(context, {
         type: 'TOOL_CALL',
@@ -98,10 +99,10 @@ describe('ToolExecutionHandler - ask_user tool', () => {
       const askUserToolCall: ToolCallInfo = {
         callId: 'client-ask_user-3',
         toolName: 'ask_user',
-        arguments: { question: 'Test?' },
+        arguments: { questions: JSON.stringify([{ text: 'Test?' }]) },
       };
 
-      executor.executeResult = { result: 'yes' };
+      executor.executeResult = { result: JSON.stringify([{ question: 'Test?', answer: 'yes' }]) };
 
       handleToolCall(context, {
         type: 'TOOL_CALL',
@@ -125,10 +126,10 @@ describe('ToolExecutionHandler - ask_user tool', () => {
       const askUserToolCall: ToolCallInfo = {
         callId: 'client-ask_user-4',
         toolName: 'ask_user',
-        arguments: { question: 'Approve?' },
+        arguments: { questions: JSON.stringify([{ text: 'Approve?' }]) },
       };
 
-      executor.executeResult = { result: 'yes' };
+      executor.executeResult = { result: JSON.stringify([{ question: 'Approve?', answer: 'yes' }]) };
 
       handleToolCall(context, {
         type: 'TOOL_CALL',
@@ -246,10 +247,10 @@ describe('ToolExecutionHandler - ask_user tool', () => {
       const askUserToolCall: ToolCallInfo = {
         callId: 'client-ask_user-preamble',
         toolName: 'ask_user',
-        arguments: { question: 'Approve?' },
+        arguments: { questions: JSON.stringify([{ text: 'Approve?' }]) },
       };
 
-      executor.executeResult = { result: 'yes' };
+      executor.executeResult = { result: JSON.stringify([{ question: 'Approve?', answer: 'yes' }]) };
 
       handleToolCall(context, {
         type: 'TOOL_CALL',

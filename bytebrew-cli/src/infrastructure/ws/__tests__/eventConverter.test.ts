@@ -89,6 +89,62 @@ describe('convertEventToStreamResponse', () => {
     expect(questions[0].options).toHaveLength(2);
   });
 
+  it('converts AskUserRequested with JSON Question[] in question field', () => {
+    const jsonQuestions = JSON.stringify([
+      {
+        text: 'Approve?',
+        options: [{ label: 'approved' }, { label: 'rejected' }],
+        default: 'approved',
+      },
+    ]);
+    const event: WsSessionEvent = {
+      type: 'AskUserRequested',
+      call_id: 'ask-123',
+      question: jsonQuestions,
+    };
+    const result = convertEventToStreamResponse(event);
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('TOOL_CALL');
+    expect(result!.toolCall?.toolName).toBe('ask_user');
+    expect(result!.toolCall?.callId).toBe('ask-123');
+    const parsed = JSON.parse(result!.toolCall?.arguments?.questions || '[]');
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].text).toBe('Approve?');
+    expect(parsed[0].options).toHaveLength(2);
+    expect(parsed[0].options[0].label).toBe('approved');
+    expect(parsed[0].options[1].label).toBe('rejected');
+  });
+
+  it('converts AskUserRequested with plain text question (legacy)', () => {
+    const event: WsSessionEvent = {
+      type: 'AskUserRequested',
+      call_id: 'ask-legacy',
+      question: 'Do you approve?',
+      options: ['yes', 'no'],
+    };
+    const result = convertEventToStreamResponse(event);
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('TOOL_CALL');
+    expect(result!.toolCall?.toolName).toBe('ask_user');
+    const parsed = JSON.parse(result!.toolCall?.arguments?.questions || '[]');
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].text).toBe('Do you approve?');
+    expect(parsed[0].options).toHaveLength(2);
+    expect(parsed[0].options[0].label).toBe('yes');
+    expect(parsed[0].options[1].label).toBe('no');
+  });
+
+  it('converts AskUserRequested with call_id preserved', () => {
+    const event: WsSessionEvent = {
+      type: 'AskUserRequested',
+      call_id: 'server-call-42',
+      question: 'Proceed?',
+    };
+    const result = convertEventToStreamResponse(event);
+    expect(result).not.toBeNull();
+    expect(result!.toolCall?.callId).toBe('server-call-42');
+  });
+
   it('converts PlanUpdated to TOOL_CALL with manage_plan', () => {
     const event: WsSessionEvent = {
       type: 'PlanUpdated',

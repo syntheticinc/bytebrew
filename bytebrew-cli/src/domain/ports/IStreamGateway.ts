@@ -86,6 +86,12 @@ export interface IStreamGateway {
   sendToolResult(callId: string, result: string, error?: Error, subResults?: SubResult[]): void;
 
   /**
+   * Send an ask_user reply back to the server.
+   * Optional — only implemented by WS gateway.
+   */
+  sendAskUserReply?(callId: string, reply: string): void;
+
+  /**
    * Cancel the current stream
    */
   cancel(): void;

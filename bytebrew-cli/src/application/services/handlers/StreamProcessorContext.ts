@@ -31,6 +31,9 @@ export interface StreamProcessorContext {
   setCurrentReasoningId(id: MessageId | null): void;
   setIsProcessing(value: boolean): void;
 
+  // Check if a user message was sent by THIS client (and consume the marker)
+  consumeSentMessage(content: string): boolean;
+
   // Agent identification (for multi-agent routing)
   agentId?: string;
 }

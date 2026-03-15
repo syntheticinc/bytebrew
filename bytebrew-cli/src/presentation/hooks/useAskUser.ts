@@ -24,20 +24,24 @@ export function useAskUser(options: UseAskUserOptions): UseAskUserResult {
   const { eventBus } = options;
 
   const [questions, setQuestions] = useState<Question[] | null>(null);
+  const [callId, setCallId] = useState<string | null>(null);
 
   useEffect(() => {
     setAskUserEventBus(eventBus);
 
     const unsubAskUser = eventBus.subscribe('AskUserRequested', (event) => {
       setQuestions(event.questions);
+      setCallId(event.callId || null);
     });
 
     const unsubStopped = eventBus.subscribe('ProcessingStopped', () => {
       setQuestions(null);
+      setCallId(null);
     });
 
     const unsubResolved = eventBus.subscribe('AskUserResolved', () => {
       setQuestions(null);
+      setCallId(null);
     });
 
     return () => {
@@ -50,8 +54,16 @@ export function useAskUser(options: UseAskUserOptions): UseAskUserResult {
 
   const handleComplete = useCallback((answers: QuestionAnswer[]) => {
     resolveAskUser(answers);
+
+    eventBus.publish({
+      type: 'AskUserResolved',
+      callId: callId,
+      answers: answers,
+    });
+
     setQuestions(null);
-  }, []);
+    setCallId(null);
+  }, [callId, eventBus]);
 
   return { questions, handleComplete };
 }

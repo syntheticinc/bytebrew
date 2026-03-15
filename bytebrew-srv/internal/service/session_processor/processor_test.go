@@ -82,6 +82,12 @@ func (r *mockSessionRegistry) HasSession(sessionID string) bool {
 	return exists
 }
 
+func (r *mockSessionRegistry) RegisterAskUser(_, _ string) <-chan string {
+	return make(chan string, 1)
+}
+
+func (r *mockSessionRegistry) UnregisterAskUser(_, _ string) {}
+
 func (r *mockSessionRegistry) getEvents() []*pb.SessionEvent {
 	r.mu.Lock()
 	defer r.mu.Unlock()

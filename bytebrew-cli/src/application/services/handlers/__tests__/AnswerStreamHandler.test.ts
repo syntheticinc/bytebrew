@@ -34,6 +34,7 @@ function createTestContext(agentId?: string): StreamProcessorContext & { cleanup
     setCurrentMessageId: (id: MessageId | null) => { currentMessageId = id; },
     setCurrentReasoningId: (id: MessageId | null) => { currentReasoningId = id; },
     setIsProcessing: (v: boolean) => { isProcessing = v; },
+    consumeSentMessage: () => false,
     cleanup: () => {},
   };
 }

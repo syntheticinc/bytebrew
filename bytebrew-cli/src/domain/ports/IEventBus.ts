@@ -1,7 +1,7 @@
 // IEventBus port - interface for event-driven communication
 import { Message } from '../entities/Message.js';
 import { ToolExecution } from '../entities/ToolExecution.js';
-import type { Question } from '../../tools/askUser.js';
+import type { Question, QuestionAnswer } from '../../tools/askUser.js';
 
 // Agent lifecycle event types matching server-side domain.AgentEventType
 export type AgentLifecycleType =
@@ -76,10 +76,13 @@ export interface AgentLifecycleEvent {
 export interface AskUserRequestedEvent {
   type: 'AskUserRequested';
   questions: Question[];
+  callId?: string;
 }
 
 export interface AskUserResolvedEvent {
   type: 'AskUserResolved';
+  callId?: string;
+  answers?: QuestionAnswer[];
 }
 
 export type DomainEvent =

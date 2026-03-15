@@ -9,6 +9,7 @@ import {
 } from '../../domain/ports/IStreamGateway.js';
 import { ReconnectionManager } from '../connection/reconnect.js';
 import { convertEventToStreamResponse, WsSessionEvent } from './eventConverter.js';
+import { PortFileReader } from '../server/PortFileReader.js';
 import { getLogger } from '../../lib/logger.js';
 
 type ResponseHandler = (response: StreamResponse) => void;
@@ -376,12 +377,33 @@ export class WsStreamGateway implements IStreamGateway {
 
   // --- Private: Reconnection ---
 
+  /**
+   * Re-read port file and update wsUrl if server restarted on a different port.
+   */
+  private rediscoverServer(): void {
+    const reader = new PortFileReader();
+    const info = reader.read();
+    if (!info) return;
+
+    const host = (!info.host || info.host === '0.0.0.0') ? '127.0.0.1' : info.host;
+    const port = info.ws_port || info.port;
+    const newUrl = `ws://${host}:${port}/ws`;
+
+    if (newUrl !== this.wsUrl) {
+      getLogger().debug('[WsStreamGW] server port changed, updating URL', { old: this.wsUrl, new: newUrl });
+      this.wsUrl = newUrl;
+    }
+  }
+
   private async resubscribe(): Promise<void> {
     if (!this.connectionOptions) {
       throw new Error('Cannot resubscribe: no connection options');
     }
 
     try {
+      // Re-read port file in case server restarted on a different port
+      this.rediscoverServer();
+
       // Re-open WS connection
       await this.openWebSocket();
 
@@ -410,6 +432,7 @@ export class WsStreamGateway implements IStreamGateway {
   private async fullReconnect(): Promise<void> {
     const options = this.connectionOptions!;
 
+    this.rediscoverServer();
     await this.openWebSocket();
 
     const context: Record<string, string> = {

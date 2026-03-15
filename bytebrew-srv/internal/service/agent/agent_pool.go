@@ -176,6 +176,10 @@ type AgentPool struct {
 	maxConcurrent int
 	// Interrupt mechanism for blocking spawns (delegated to InterruptManager)
 	interrupt *InterruptManager
+	// Session-scoped contexts: spawned agents derive from these (not from supervisor's turn context).
+	// This decouples agent lifecycle from supervisor restarts — agents survive turn cancellation.
+	sessionContexts map[string]context.Context
+	sessionCancels  map[string]context.CancelFunc
 }
 
 // NewAgentPool creates a new AgentPool
@@ -191,7 +195,24 @@ func NewAgentPool(cfg AgentPoolConfig) *AgentPool {
 		sessionDirName:        cfg.SessionDirName,
 		maxConcurrent:         cfg.MaxConcurrent,
 		interrupt:             NewInterruptManager(),
+		sessionContexts:       make(map[string]context.Context),
+		sessionCancels:        make(map[string]context.CancelFunc),
 	}
+}
+
+// getOrCreateSessionCtx returns a session-scoped context for spawning agents.
+// Agents derive from this context instead of the supervisor's tool call context,
+// so they survive supervisor turn cancellation.
+func (p *AgentPool) getOrCreateSessionCtx(sessionID string) context.Context {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if ctx, ok := p.sessionContexts[sessionID]; ok {
+		return ctx
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	p.sessionContexts[sessionID] = ctx
+	p.sessionCancels[sessionID] = cancel
+	return ctx
 }
 
 // SetSessionDirName sets the session directory name (from Supervisor's logger)
@@ -254,8 +275,10 @@ func (p *AgentPool) Spawn(ctx context.Context, sessionID, projectKey, subtaskID 
 		return "", fmt.Errorf("assign subtask: %w", err)
 	}
 
-	// Create agent context (child of stream context)
-	agentCtx, cancel := context.WithCancel(ctx)
+	// Create agent context from session-scoped context (NOT from supervisor's turn context).
+	// This ensures agents survive supervisor turn cancellation.
+	sessionCtx := p.getOrCreateSessionCtx(sessionID)
+	agentCtx, cancel := context.WithCancel(sessionCtx)
 	agentCtx = domain.WithAgentID(agentCtx, agentID)
 
 	running := &RunningAgent{
@@ -481,7 +504,9 @@ func (p *AgentPool) SpawnWithDescription(ctx context.Context, sessionID, project
 	prefix := string(flowType)
 	agentID := prefix + "-" + uuid.New().String()[:8]
 
-	agentCtx, cancel := context.WithCancel(ctx)
+	// Create agent context from session-scoped context (NOT from supervisor's turn context).
+	sessionCtx := p.getOrCreateSessionCtx(sessionID)
+	agentCtx, cancel := context.WithCancel(sessionCtx)
 	agentCtx = domain.WithAgentID(agentCtx, agentID)
 
 	title := firstLine(description, 50)
@@ -582,12 +607,20 @@ func (p *AgentPool) SetEventCallbackForSession(sessionID string, cb func(event *
 	p.sessionEventCallbacks[sessionID] = cb
 }
 
-// RemoveSession removes proxy, event callback, and finished agents for a session (cleanup)
+// RemoveSession removes proxy, event callback, and finished agents for a session (cleanup).
+// Also cancels the session-scoped context, which stops all running agents.
 func (p *AgentPool) RemoveSession(sessionID string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	delete(p.sessionProxies, sessionID)
 	delete(p.sessionEventCallbacks, sessionID)
+
+	// Cancel session-scoped context (stops all running agents)
+	if cancel, ok := p.sessionCancels[sessionID]; ok {
+		cancel()
+		delete(p.sessionContexts, sessionID)
+		delete(p.sessionCancels, sessionID)
+	}
 
 	// Clean up agents belonging to this session
 	for agentID, agent := range p.agents {
@@ -597,6 +630,23 @@ func (p *AgentPool) RemoveSession(sessionID string) {
 				agent.Cancel()
 			}
 			delete(p.agents, agentID)
+		}
+	}
+}
+
+// CancelRunningAgents cancels all running agents for a session (e.g. user pressed Esc).
+// Unlike RemoveSession, this does NOT remove the session context or cleanup maps —
+// the session stays alive for the next user message.
+func (p *AgentPool) CancelRunningAgents(sessionID string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for _, agent := range p.agents {
+		if agent.SessionID == sessionID && agent.Status == "running" {
+			agent.Status = "stopped"
+			agent.signalCompletion()
+			agent.Cancel()
+			slog.Info("[AgentPool] cancelled agent (user cancel)", "agent_id", agent.ID)
 		}
 	}
 }
@@ -616,12 +666,19 @@ func (p *AgentPool) HasBlockingWait(sessionID string) bool {
 // WaitForAllSessionAgents waits for ALL running agents in session to complete.
 // Returns immediately if no running agents.
 // If interrupted by user message, IsInterruptResponder indicates if this call should handle the interrupt.
+//
+// Uses session-scoped context (not the passed ctx) for cancellation detection.
+// This means the wait survives supervisor turn cancellation — it only ends on
+// agent completion, user interrupt, or session removal.
 func (p *AgentPool) WaitForAllSessionAgents(ctx context.Context, sessionID string) (WaitResult, error) {
 	// 1. Get/create interrupt context for session
 	interruptCtx := p.interrupt.GetOrCreateInterruptCtx(sessionID)
 	defer p.cleanupInterruptCtx(sessionID)
 
-	// 2. Collect completionCh for ALL running agents in session
+	// 2. Get session-scoped context (survives turn cancel, dies on RemoveSession)
+	sessionCtx := p.getOrCreateSessionCtx(sessionID)
+
+	// 3. Collect completionCh for ALL running agents in session
 	p.mu.RLock()
 	var channels []<-chan struct{}
 	for _, agent := range p.agents {
@@ -635,7 +692,7 @@ func (p *AgentPool) WaitForAllSessionAgents(ctx context.Context, sessionID strin
 		return WaitResult{AllDone: true, Results: p.buildResults(sessionID)}, nil
 	}
 
-	// 3. Goroutine: wait ALL channels -> close allDone
+	// 4. Goroutine: wait ALL channels -> close allDone
 	allDone := make(chan struct{})
 	go func() {
 		for _, ch := range channels {
@@ -644,7 +701,8 @@ func (p *AgentPool) WaitForAllSessionAgents(ctx context.Context, sessionID strin
 		close(allDone)
 	}()
 
-	// 4. select: allDone | interrupt | context cancel
+	// 5. select: allDone | interrupt | session context cancel
+	// NOTE: we use sessionCtx (not ctx) — this decouples from supervisor's turn context.
 	select {
 	case <-allDone:
 		return WaitResult{
@@ -663,8 +721,8 @@ func (p *AgentPool) WaitForAllSessionAgents(ctx context.Context, sessionID strin
 			Results:              p.buildResults(sessionID), // partial: already completed
 		}, nil
 
-	case <-ctx.Done():
-		return WaitResult{}, ctx.Err()
+	case <-sessionCtx.Done():
+		return WaitResult{}, sessionCtx.Err()
 	}
 }
 

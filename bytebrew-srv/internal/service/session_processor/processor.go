@@ -2,8 +2,10 @@ package session_processor
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
@@ -19,6 +21,8 @@ type SessionRegistry interface {
 	ResetCancel(sessionID string)
 	StoreTurnCancel(sessionID string, cancel context.CancelFunc)
 	HasSession(sessionID string) bool
+	RegisterAskUser(sessionID, callID string) <-chan string
+	UnregisterAskUser(sessionID, callID string)
 }
 
 // TurnExecutorFactory creates a TurnExecutor for a given session (consumer-side interface).
@@ -154,7 +158,30 @@ func (p *Processor) processMessage(ctx context.Context, sessionID, message strin
 
 	eventStream.PublishProcessingStarted()
 
-	proxy := tools.NewLocalClientOperationsProxy(projectRoot)
+	// Create proxy with blocking ask_user handler: publishes event to client,
+	// registers reply channel, and blocks until client sends ask_user_reply.
+	askUserHandler := func(ctx context.Context, sid, questionsJSON string) (string, error) {
+		callID := fmt.Sprintf("ask-%d", time.Now().UnixNano())
+		replyCh := p.registry.RegisterAskUser(sid, callID)
+		defer p.registry.UnregisterAskUser(sid, callID)
+
+		// Publish AskUserRequested event so the client sees the questions
+		eventStream.Send(&domain.AgentEvent{
+			Type:    domain.EventTypeUserQuestion,
+			Content: questionsJSON,
+			Metadata: map[string]interface{}{
+				"call_id": callID,
+			},
+		})
+
+		select {
+		case reply := <-replyCh:
+			return reply, nil
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+	proxy := tools.NewLocalClientOperationsProxy(projectRoot, tools.WithAskUserHandler(askUserHandler))
 	defer proxy.Dispose()
 
 	turnExecutor := p.factory.CreateForSession(proxy, sessionID, projectKey, projectRoot, platform)

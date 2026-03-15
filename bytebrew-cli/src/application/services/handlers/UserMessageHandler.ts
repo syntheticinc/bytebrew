@@ -5,15 +5,20 @@ import { StreamProcessorContext } from './StreamProcessorContext.js';
 
 /**
  * Handle USER_MESSAGE response from server.
- * These are messages sent by the user from another client (e.g. mobile app)
- * or replayed from backfill history.
  *
- * Dedup is handled at the transport layer (WsStreamGateway) via event ID.
+ * The server echoes every user message back as a USER_MESSAGE event
+ * (needed for backfill and multi-client sync). If this CLI already
+ * saved the message locally (via executeSend), consumeSentMessage()
+ * returns true and we skip the echo to avoid duplicates.
  */
 export function handleUserMessage(ctx: StreamProcessorContext, response: StreamResponse): void {
   const content = response.content?.trim();
   if (!content) return;
 
+  // This client sent this message — already saved in executeSend(), skip echo
+  if (ctx.consumeSentMessage(content)) return;
+
+  // Message from another client (mobile) or backfill — save it
   const message = Message.createUser(content);
   ctx.messageRepository.save(message);
   ctx.eventBus.publish({

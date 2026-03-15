@@ -44,6 +44,7 @@ export function handleToolCall(ctx: StreamProcessorContext, response: StreamResp
       ctx.eventBus.publish({
         type: 'AskUserRequested',
         questions: parseAskUserQuestions(toolCall.arguments),
+        callId: toolCall.callId,
       });
       return;
     }

@@ -129,6 +129,10 @@ func (e *Engine) Execute(ctx context.Context, cfg ExecutionConfig) (*ExecutionRe
 	}
 
 	// 2. Build react.AgentConfig
+	// Supervisor executes tools sequentially to prevent ask_user + spawn_agent
+	// from running in parallel. Code agents keep parallel execution for performance.
+	isSupervisor := cfg.AgentID == "" || cfg.AgentID == "supervisor"
+
 	agentConfig := &react.AgentConfig{
 		ChatModel:                cfg.ChatModel,
 		Tools:                    cfg.Tools,
@@ -144,6 +148,7 @@ func (e *Engine) Execute(ctx context.Context, cfg ExecutionConfig) (*ExecutionRe
 		ParentAgentID:            cfg.ParentAgentID,
 		SubtaskID:                cfg.SubtaskID,
 		SessionDirName:           cfg.SessionDirName,
+		SequentialTools:          isSupervisor,
 	}
 
 	// 3. Create message collector (wraps EventCallback for per-step persistence)

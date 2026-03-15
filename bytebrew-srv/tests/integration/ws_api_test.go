@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -1260,4 +1261,100 @@ func TestWsAPI_CrossClientBackfillAfterDisconnect(t *testing.T) {
 	for _, id := range backfillIDs {
 		assert.True(t, liveIDSet[id], "backfilled event ID %s should match A's live event", id)
 	}
+}
+
+// TC-WS-17: AskUser end-to-end round-trip — LLM calls ask_user tool,
+// server publishes AskUserRequested event, client replies, LLM receives
+// the reply and produces a final answer.
+func TestAskUserRoundTrip(t *testing.T) {
+	harness := NewWsHarness(t, "ask-user")
+	defer harness.Cleanup()
+
+	conn := harness.DialWS(t)
+
+	sessionID := createSessionViaWS(t, conn, t.TempDir())
+	subscribeToSession(t, conn, sessionID)
+
+	// Send a message that will trigger the ask_user tool call
+	sendMessage(t, conn, sessionID, "Do something that requires approval", "msg-1")
+
+	// Collect events until we see AskUserRequested
+	var askEvent map[string]interface{}
+	var allEvents []ws.WsMessage
+
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		conn.SetReadDeadline(deadline)
+		_, data, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("read error while waiting for AskUserRequested: %v", err)
+		}
+
+		var msg ws.WsMessage
+		require.NoError(t, json.Unmarshal(data, &msg))
+
+		if msg.Type != "session_event" {
+			continue
+		}
+
+		allEvents = append(allEvents, msg)
+
+		eventPayload, ok := msg.Payload["event"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if eventType, _ := eventPayload["type"].(string); eventType == "AskUserRequested" {
+			askEvent = eventPayload
+			break
+		}
+	}
+
+	require.NotNil(t, askEvent, "should receive AskUserRequested event")
+
+	// Verify AskUserRequested payload
+	question, _ := askEvent["question"].(string)
+	callID, _ := askEvent["call_id"].(string)
+	assert.NotEmpty(t, question, "AskUserRequested should have a question")
+	assert.NotEmpty(t, callID, "AskUserRequested should have a call_id")
+
+	// Client sends reply
+	sendJSON(t, conn, ws.WsMessage{
+		Type:      "ask_user_reply",
+		RequestID: "ask-reply-1",
+		Payload: map[string]interface{}{
+			"session_id": sessionID,
+			"call_id":    callID,
+			"reply":      `[{"question":"Approve?","answer":"approved"}]`,
+		},
+	})
+
+	ackResp := recvJSONOfType(t, conn, "ask_user_reply_ack", 5*time.Second)
+	require.Equal(t, "ask_user_reply_ack", ackResp.Type)
+
+	// Collect remaining events until ProcessingStopped
+	remainingEvents := collectSessionEvents(t, conn, 10*time.Second, func(et string) bool {
+		return et == "ProcessingStopped"
+	})
+
+	require.True(t, hasEventType(remainingEvents, "ProcessingStopped"),
+		"should receive ProcessingStopped after ask_user reply — flow must not hang")
+
+	// Verify the agent's answer contains the user's reply (mock returns "User said: <tool_result>").
+	// The answer may arrive as StreamingProgress chunks or a MessageCompleted event,
+	// so check both event types for the expected content.
+	hasAnswer := false
+	for _, evt := range remainingEvents {
+		eventPayload, ok := evt.Payload["event"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		eventType, _ := eventPayload["type"].(string)
+		if eventType == "StreamingProgress" || eventType == "MessageCompleted" {
+			content, _ := eventPayload["content"].(string)
+			if content != "" && strings.Contains(content, "User said:") {
+				hasAnswer = true
+			}
+		}
+	}
+	assert.True(t, hasAnswer, "agent's answer should contain 'User said:' (via StreamingProgress or MessageCompleted)")
 }

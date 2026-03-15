@@ -40,6 +40,7 @@ type AgentConfig struct {
 	PlanManager              PlanManager       // Plan manager for planning system
 	ContextReminderProviders []ContextReminderProvider // External context reminder providers (e.g., WorkContextReminder)
 	ToolCallRecorder         ToolCallRecorder  // Records tool calls for efficiency reminders
+	SequentialTools          bool   // if true, tool calls execute sequentially (not parallel)
 	AgentID                  string // "supervisor" | "code-agent-xxx" (for log separation)
 	ParentAgentID            string // parent agent ID (for Code Agents → "supervisor")
 	SubtaskID                string // subtask being executed (for Code Agents)
