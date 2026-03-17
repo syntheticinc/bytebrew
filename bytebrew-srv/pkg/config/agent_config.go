@@ -18,7 +18,13 @@ type AgentDefinition struct {
 	ToolExecution    string              `mapstructure:"tool_execution"`
 	MaxSteps         int                 `mapstructure:"max_steps"`
 	MaxContextSize   int                 `mapstructure:"max_context_size"`
+	Flow             *FlowConfig         `mapstructure:"flow"`
 	Triggers         []TriggerDefinition `mapstructure:"triggers"`
+}
+
+// FlowConfig describes optional workflow steps for an agent.
+type FlowConfig struct {
+	Steps []string `mapstructure:"steps"`
 }
 
 // AgentToolsConfig describes which tools an agent has access to.

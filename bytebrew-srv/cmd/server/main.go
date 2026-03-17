@@ -21,14 +21,20 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/embedded"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/agent_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/bridge"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/flow_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/persistence"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/portfile"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/eventstore"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/session_processor"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/logger"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 // Build info is set via ldflags at build time.
@@ -201,11 +207,51 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
+	// NEW (Phase 1): Try loading bootstrap config for PostgreSQL database connection.
+	// If database.url is present, connect to PostgreSQL, run migrations, and load AgentRegistry.
+	// If not present (legacy config), skip — everything works as before.
+	var agentRegistry *agent_registry.AgentRegistry
+	bootstrapCfg, bootstrapErr := config.LoadBootstrap(*configPath)
+	if bootstrapErr != nil {
+		slog.Info("No bootstrap database config, running in legacy mode", "reason", bootstrapErr.Error())
+	} else {
+		pgDB, pgErr := gorm.Open(postgres.Open(bootstrapCfg.Database.URL), &gorm.Config{
+			Logger: gormlogger.Default.LogMode(gormlogger.Silent),
+		})
+		if pgErr != nil {
+			slog.Error("Failed to connect to PostgreSQL", "error", pgErr)
+			os.Exit(1)
+		}
+
+		if migrateErr := models.AutoMigrate(pgDB); migrateErr != nil {
+			slog.Error("Failed to run database migrations", "error", migrateErr)
+			os.Exit(1)
+		}
+
+		agentRepo := config_repo.NewGORMAgentRepository(pgDB)
+		agentRegistry = agent_registry.New(agentRepo)
+		if loadErr := agentRegistry.Load(ctx); loadErr != nil {
+			slog.Error("Failed to load agents from database", "error", loadErr)
+			os.Exit(1)
+		}
+
+		agentCount := agentRegistry.Count()
+		if agentCount > 0 {
+			slog.InfoContext(ctx, "Loaded agents from database", "count", agentCount, "agents", agentRegistry.List())
+		} else {
+			slog.InfoContext(ctx, "No agents configured in database")
+		}
+	}
+
 	// Create infrastructure components (AgentService + WorkManager + AgentPool)
 	components, err := infrastructure.NewInfraComponents(*cfg)
 	if err != nil {
 		log.Fatalf("Failed to create infrastructure components: %v", err)
 	}
+
+	// If AgentRegistry loaded named models, register them in ModelSelector.
+	// This enables per-agent model resolution (agent.Model: "llama-4" → ModelSelector.ResolveByName).
+	_ = agentRegistry // available for Phase 2+ wiring
 
 	// Initialize gRPC server
 	grpcServer, err := initializeGRPCServer(cfg, loggerInstance, components.LicenseInfo, *managed)
