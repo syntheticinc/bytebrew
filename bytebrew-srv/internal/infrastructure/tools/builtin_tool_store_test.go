@@ -1,0 +1,175 @@
+package tools
+
+import (
+	"context"
+	"testing"
+
+	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/schema"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/agent_registry"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/persistence/config_repo"
+)
+
+// stubTool is a minimal tool implementation for testing.
+type stubTool struct {
+	name string
+}
+
+func (t *stubTool) Info(_ context.Context) (*schema.ToolInfo, error) {
+	return &schema.ToolInfo{Name: t.name}, nil
+}
+
+func (t *stubTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (string, error) {
+	return "ok:" + t.name, nil
+}
+
+func TestBuiltinToolStore_RegisterAndGet(t *testing.T) {
+	store := NewBuiltinToolStore()
+
+	factory := func(deps ToolDependencies) tool.InvokableTool {
+		return &stubTool{name: "test_tool"}
+	}
+	store.Register("test_tool", factory)
+
+	got, ok := store.Get("test_tool")
+	require.True(t, ok)
+	require.NotNil(t, got)
+
+	instance := got(ToolDependencies{})
+	result, err := instance.InvokableRun(context.Background(), "")
+	require.NoError(t, err)
+	assert.Equal(t, "ok:test_tool", result)
+}
+
+func TestBuiltinToolStore_GetUnknown(t *testing.T) {
+	store := NewBuiltinToolStore()
+
+	_, ok := store.Get("nonexistent")
+	assert.False(t, ok)
+}
+
+func TestBuiltinToolStore_Names(t *testing.T) {
+	store := NewBuiltinToolStore()
+	noopFactory := func(deps ToolDependencies) tool.InvokableTool { return &stubTool{} }
+
+	store.Register("charlie", noopFactory)
+	store.Register("alpha", noopFactory)
+	store.Register("bravo", noopFactory)
+
+	names := store.Names()
+	assert.Equal(t, []string{"alpha", "bravo", "charlie"}, names)
+}
+
+func TestBuiltinToolStore_NamesEmpty(t *testing.T) {
+	store := NewBuiltinToolStore()
+	names := store.Names()
+	assert.Empty(t, names)
+}
+
+func TestAgentToolResolver_ResolveForAgent_Whitelist(t *testing.T) {
+	store := NewBuiltinToolStore()
+	store.Register("tool_a", func(deps ToolDependencies) tool.InvokableTool {
+		return &stubTool{name: "tool_a"}
+	})
+	store.Register("tool_b", func(deps ToolDependencies) tool.InvokableTool {
+		return &stubTool{name: "tool_b"}
+	})
+	store.Register("tool_c", func(deps ToolDependencies) tool.InvokableTool {
+		return &stubTool{name: "tool_c"}
+	})
+
+	resolver := NewAgentToolResolver(store)
+	agent := &agent_registry.RegisteredAgent{
+		Record: config_repo.AgentRecord{
+			Name:         "test_agent",
+			BuiltinTools: []string{"tool_a", "tool_c"},
+		},
+	}
+
+	tools, err := resolver.ResolveForAgent(context.Background(), ResolveContext{
+		Agent: agent,
+		Deps:  ToolDependencies{},
+	})
+	require.NoError(t, err)
+	require.Len(t, tools, 2)
+
+	// Verify tools are in whitelist order
+	info0, _ := tools[0].Info(context.Background())
+	info1, _ := tools[1].Info(context.Background())
+	assert.Equal(t, "tool_a", info0.Name)
+	assert.Equal(t, "tool_c", info1.Name)
+}
+
+func TestAgentToolResolver_ResolveForAgent_UnknownTool(t *testing.T) {
+	store := NewBuiltinToolStore()
+	store.Register("tool_a", func(deps ToolDependencies) tool.InvokableTool {
+		return &stubTool{name: "tool_a"}
+	})
+
+	resolver := NewAgentToolResolver(store)
+	agent := &agent_registry.RegisteredAgent{
+		Record: config_repo.AgentRecord{
+			Name:         "test_agent",
+			BuiltinTools: []string{"tool_a", "unknown_tool"},
+		},
+	}
+
+	tools, err := resolver.ResolveForAgent(context.Background(), ResolveContext{
+		Agent: agent,
+		Deps:  ToolDependencies{},
+	})
+	require.Error(t, err)
+	assert.Nil(t, tools)
+	assert.Contains(t, err.Error(), "unknown builtin tool")
+	assert.Contains(t, err.Error(), "unknown_tool")
+	assert.Contains(t, err.Error(), "test_agent")
+}
+
+func TestAgentToolResolver_ResolveForAgent_EmptyWhitelist(t *testing.T) {
+	store := NewBuiltinToolStore()
+	store.Register("tool_a", func(deps ToolDependencies) tool.InvokableTool {
+		return &stubTool{name: "tool_a"}
+	})
+
+	resolver := NewAgentToolResolver(store)
+	agent := &agent_registry.RegisteredAgent{
+		Record: config_repo.AgentRecord{
+			Name:         "test_agent",
+			BuiltinTools: nil,
+		},
+	}
+
+	tools, err := resolver.ResolveForAgent(context.Background(), ResolveContext{
+		Agent: agent,
+		Deps:  ToolDependencies{},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, tools)
+}
+
+func TestAgentToolResolver_ResolveForAgent_PassesDeps(t *testing.T) {
+	store := NewBuiltinToolStore()
+
+	var capturedSessionID string
+	store.Register("dep_tool", func(deps ToolDependencies) tool.InvokableTool {
+		capturedSessionID = deps.SessionID
+		return &stubTool{name: "dep_tool"}
+	})
+
+	resolver := NewAgentToolResolver(store)
+	agent := &agent_registry.RegisteredAgent{
+		Record: config_repo.AgentRecord{
+			Name:         "test_agent",
+			BuiltinTools: []string{"dep_tool"},
+		},
+	}
+
+	_, err := resolver.ResolveForAgent(context.Background(), ResolveContext{
+		Agent: agent,
+		Deps:  ToolDependencies{SessionID: "session-42"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "session-42", capturedSessionID)
+}
