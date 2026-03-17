@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

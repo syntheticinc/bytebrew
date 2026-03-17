@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/delivery/http/middleware"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/create_checkout"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/create_portal"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/delivery/http/middleware"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/create_checkout"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/create_portal"
 )
 
 type checkoutUsecase interface {

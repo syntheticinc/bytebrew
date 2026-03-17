@@ -8,8 +8,8 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/persistence"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence"
 	"golang.org/x/crypto/curve25519"
 )
 

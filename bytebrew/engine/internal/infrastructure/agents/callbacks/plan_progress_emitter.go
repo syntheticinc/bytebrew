@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 )
 
 // PlanProvider is a consumer-side interface for plan access.

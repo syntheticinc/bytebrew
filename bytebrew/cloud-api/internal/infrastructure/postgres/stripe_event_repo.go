@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/infrastructure/postgres/sqlcgen"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/infrastructure/postgres/sqlcgen"
 )
 
 // StripeEventRepository handles idempotency for Stripe webhook events.

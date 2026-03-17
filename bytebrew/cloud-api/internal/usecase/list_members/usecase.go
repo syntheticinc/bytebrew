@@ -3,8 +3,8 @@ package list_members
 import (
 	"context"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/pkg/errors"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/pkg/errors"
 )
 
 // MemberLister lists team members with their emails.

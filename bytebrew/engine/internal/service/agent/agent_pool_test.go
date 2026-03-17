@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/orchestrator"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/orchestrator"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/config"
 	"github.com/cloudwego/eino/components/model"
 )
 

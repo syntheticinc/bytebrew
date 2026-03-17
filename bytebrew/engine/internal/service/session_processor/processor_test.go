@@ -8,10 +8,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/tools"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/orchestrator"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/tools"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/orchestrator"
 )
 
 // --- mocks ---

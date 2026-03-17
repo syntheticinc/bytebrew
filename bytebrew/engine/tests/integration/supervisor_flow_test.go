@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/persistence"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/orchestrator"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/work"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/orchestrator"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/work"
 )
 
 // setupWorkManager creates a work.Manager with real SQLite storage for integration tests

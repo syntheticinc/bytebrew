@@ -7,8 +7,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 )
 
 // GrpcAgentEventStream implements AgentEventStream interface for gRPC streaming

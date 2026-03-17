@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 )
 
 // TaskLister retrieves tasks for a given session.

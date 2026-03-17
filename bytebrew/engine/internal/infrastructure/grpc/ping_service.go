@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/errors"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/errors"
 )
 
 // PingService manages keep-alive ping/pong mechanism for streaming connections

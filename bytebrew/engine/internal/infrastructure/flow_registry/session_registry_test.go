@@ -9,10 +9,10 @@ import (
 	"time"
 
 	_ "github.com/glebarez/go-sqlite"
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/eventstore"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/eventstore"
 )
 
 // newTestEventStore creates an in-memory event store for tests.

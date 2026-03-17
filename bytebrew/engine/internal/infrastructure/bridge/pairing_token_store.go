@@ -3,7 +3,7 @@ package bridge
 import (
 	"sync"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 )
 
 // PairingTokenStore holds active pairing tokens in memory.

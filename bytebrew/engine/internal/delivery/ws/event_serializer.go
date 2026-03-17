@@ -3,7 +3,7 @@ package ws
 import (
 	"log/slog"
 
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
 )
 
 // serializeEvent converts a proto SessionEvent to a flat JSON map.

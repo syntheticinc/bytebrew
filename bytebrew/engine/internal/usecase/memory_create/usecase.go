@@ -3,8 +3,8 @@ package memory_create
 import (
 	"context"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/errors"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/errors"
 )
 
 // MemoryRepository defines repository interface for Memory

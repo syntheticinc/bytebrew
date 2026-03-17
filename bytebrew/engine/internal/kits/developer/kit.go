@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/cloudwego/eino/components/tool"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 )
 
 // DeveloperKit provides LSP integration and code indexing for coding agents.

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/pkg/errors"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/pkg/errors"
 )
 
 // SubscriptionReader reads subscription data.

@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/lsp"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/lsp"
 )
 
 func TestResolveSymbolCharacter(t *testing.T) {

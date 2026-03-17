@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 )
 
 // WorkContextReminder provides context reminders about active tasks/subtasks

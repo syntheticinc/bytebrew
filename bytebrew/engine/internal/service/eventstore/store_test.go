@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
 )
 
 func newTestDB(t *testing.T) *sql.DB {

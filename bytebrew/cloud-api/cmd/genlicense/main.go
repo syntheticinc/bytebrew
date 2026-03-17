@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/infrastructure/crypto"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/infrastructure/crypto"
 )
 
 func main() {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 	"github.com/stretchr/testify/assert"

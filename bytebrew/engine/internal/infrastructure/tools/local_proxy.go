@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/indexing"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/lsp"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/shell"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/indexing"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/lsp"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/shell"
 )
 
 // AskUserHandler is a blocking function that sends questions to the client and waits for answers.

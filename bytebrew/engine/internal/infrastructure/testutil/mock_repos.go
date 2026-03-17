@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/config"
 )
 
 // NoopAgentService implements AgentService interface for FlowHandler

@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/shell"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/shell"
 )
 
 // Shell is always bash (even on Windows via Git Bash), so all commands use bash syntax.

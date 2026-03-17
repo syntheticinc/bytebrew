@@ -1,6 +1,6 @@
 package tools
 
-import "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+import "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 
 // DefaultToolClassifier implements domain.ToolClassifier
 // It classifies tools as proxied (client-side) or server-side based on their names

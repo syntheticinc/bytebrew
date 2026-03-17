@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/pkg/errors"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/pkg/errors"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

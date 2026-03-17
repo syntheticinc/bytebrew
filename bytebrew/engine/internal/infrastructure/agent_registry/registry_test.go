@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/config_repo"
 )
 
 type mockAgentReader struct {

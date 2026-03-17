@@ -5,12 +5,12 @@ import (
 	"log/slog"
 	"time"
 
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
-	infragrpc "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/grpc"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/tools"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/orchestrator"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/session_processor"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	infragrpc "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/grpc"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/tools"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/orchestrator"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/session_processor"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

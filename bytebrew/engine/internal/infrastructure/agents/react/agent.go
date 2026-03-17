@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/agents"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/agents/callbacks"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/errors"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/agents"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/agents/callbacks"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/errors"
 	"github.com/cloudwego/eino/flow/agent/react"
 	"github.com/cloudwego/eino/schema"
 )

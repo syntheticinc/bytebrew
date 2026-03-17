@@ -1,14 +1,14 @@
 package infrastructure
 
 import (
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/llm"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/tools"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/engine"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/orchestrator"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/turn_executor"
-	agentservice "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/agent"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/llm"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/tools"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/engine"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/orchestrator"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/turn_executor"
+	agentservice "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/agent"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/config"
 	einotool "github.com/cloudwego/eino/components/tool"
 )
 

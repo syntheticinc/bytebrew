@@ -1,6 +1,6 @@
 package crypto
 
-import "github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/domain"
+import "github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/domain"
 
 // licenseFeaturesClaims is the JWT representation of domain.LicenseFeatures.
 // JSON tags live here (infrastructure), not in the domain layer.

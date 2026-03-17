@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/errors"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/errors"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 )

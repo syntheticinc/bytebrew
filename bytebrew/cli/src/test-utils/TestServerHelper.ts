@@ -2,7 +2,7 @@ import { spawn, ChildProcess, execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 
-const SERVER_DIR = path.resolve(import.meta.dir, '../../../bytebrew-srv');
+const SERVER_DIR = path.resolve(import.meta.dir, '../../../bytebrew/engine');
 const BINARY_NAME = process.platform === 'win32' ? 'testserver.exe' : 'testserver';
 const BINARY_PATH = path.join(SERVER_DIR, 'bin', BINARY_NAME);
 

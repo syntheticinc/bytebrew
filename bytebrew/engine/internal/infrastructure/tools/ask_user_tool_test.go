@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	pkgerrors "github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/errors"
+	pkgerrors "github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/errors"
 )
 
 // simpleUserAsker implements UserAsker for testing

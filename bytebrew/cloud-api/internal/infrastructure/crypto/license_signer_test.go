@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/domain"
 	"github.com/golang-jwt/jwt/v5"
 )
 

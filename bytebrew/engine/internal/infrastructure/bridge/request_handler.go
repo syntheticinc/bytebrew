@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/flow_registry"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/persistence"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/flow_registry"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence"
 )
 
 // DeviceStore provides CRUD operations for paired mobile devices.

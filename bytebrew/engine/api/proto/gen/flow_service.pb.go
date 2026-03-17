@@ -1614,7 +1614,7 @@ const file_flow_service_proto_rawDesc = "" +
 	"\rCreateSession\x12!.bytebrew.v1.CreateSessionRequest\x1a\".bytebrew.v1.CreateSessionResponse\x12P\n" +
 	"\vSendMessage\x12\x1f.bytebrew.v1.SendMessageRequest\x1a .bytebrew.v1.SendMessageResponse\x12U\n" +
 	"\x10SubscribeSession\x12$.bytebrew.v1.SubscribeSessionRequest\x1a\x19.bytebrew.v1.SessionEvent0\x01\x12V\n" +
-	"\rCancelSession\x12!.bytebrew.v1.CancelSessionRequest\x1a\".bytebrew.v1.CancelSessionResponseBHZFgithub.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen;bytebrewv1b\x06proto3"
+	"\rCancelSession\x12!.bytebrew.v1.CancelSessionRequest\x1a\".bytebrew.v1.CancelSessionResponseBHZFgithub.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen;bytebrewv1b\x06proto3"
 
 var (
 	file_flow_service_proto_rawDescOnce sync.Once

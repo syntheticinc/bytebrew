@@ -12,7 +12,7 @@ import (
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/config"
 )
 
 // NewDeclarativeTool creates an HTTP-based tool from YAML configuration.

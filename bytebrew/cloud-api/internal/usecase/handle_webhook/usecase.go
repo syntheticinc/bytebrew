@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/pkg/errors"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/pkg/errors"
 )
 
 // UserIDResolver resolves Stripe Customer ID to internal user ID via stripe_customers table.

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/cloudwego/eino/components/tool"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 )
 
 // Kit is a domain-specific module that provides session-level state,

@@ -5,9 +5,9 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/llm"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/errors"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/llm"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/config"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/errors"
 	"github.com/cloudwego/eino-ext/components/model/ollama"
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"

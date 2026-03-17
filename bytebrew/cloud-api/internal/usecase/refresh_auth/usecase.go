@@ -3,8 +3,8 @@ package refresh_auth
 import (
 	"context"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/pkg/errors"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/pkg/errors"
 )
 
 // Consumer-side interfaces

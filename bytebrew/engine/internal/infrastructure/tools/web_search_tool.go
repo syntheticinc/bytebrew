@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/websearch"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/websearch"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 )

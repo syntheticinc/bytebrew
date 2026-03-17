@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/utils"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/utils"
 )
 
 // PlanStatus represents the lifecycle stage of a plan

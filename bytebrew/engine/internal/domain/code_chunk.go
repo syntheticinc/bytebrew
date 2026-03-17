@@ -3,7 +3,7 @@ package domain
 import (
 	"time"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/errors"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/errors"
 )
 
 // CodeChunk represents a chunk of code with metadata

@@ -1,6 +1,6 @@
 package http
 
-import "github.com/syntheticinc/bytebrew/bytebrew-cloud-api/pkg/errors"
+import "github.com/syntheticinc/bytebrew/bytebrew/cloud-api/pkg/errors"
 
 // Sentinel errors reused across handlers.
 var (

@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/indexing"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/indexing"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 )

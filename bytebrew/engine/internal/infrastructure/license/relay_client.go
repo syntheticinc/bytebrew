@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 )
 
 // RelayClient validates licenses through a ByteBrew Relay service.

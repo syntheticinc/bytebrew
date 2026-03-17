@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
 )
 
 func TestLocalProxy_ExecuteSubQueries_Empty(t *testing.T) {

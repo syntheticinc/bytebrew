@@ -8,12 +8,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/delivery/http/middleware"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/accept_invite"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/create_team"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/invite_member"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/list_members"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/remove_member"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/delivery/http/middleware"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/accept_invite"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/create_team"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/invite_member"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/list_members"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/remove_member"
 )
 
 type createTeamUsecase interface {

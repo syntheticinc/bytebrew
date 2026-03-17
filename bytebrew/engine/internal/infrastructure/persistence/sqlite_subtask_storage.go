@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 )
 
 const createSubtasksTableSQL = `

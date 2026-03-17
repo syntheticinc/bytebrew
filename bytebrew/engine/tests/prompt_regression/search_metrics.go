@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/agents"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/agents"
 )
 
 // SearchMetrics contains metrics about search tool usage in a session

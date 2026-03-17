@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
 	"google.golang.org/protobuf/proto"
 )
 

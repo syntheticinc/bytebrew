@@ -8,9 +8,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/errors"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/logger"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/errors"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/logger"
 )
 
 // LoggingInterceptor logs all gRPC requests and responses

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
 )
 
 const sendTimeout = 10 * time.Second

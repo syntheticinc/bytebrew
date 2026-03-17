@@ -11,7 +11,7 @@ import (
 	"github.com/stripe/stripe-go/v82"
 	"github.com/stripe/stripe-go/v82/webhook"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/handle_webhook"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/handle_webhook"
 )
 
 type webhookUsecase interface {

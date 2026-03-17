@@ -6,9 +6,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/eventformat"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/eventstore"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/eventformat"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/eventstore"
 )
 
 // mockMessageSender captures messages sent to devices. Implements MessageSender.

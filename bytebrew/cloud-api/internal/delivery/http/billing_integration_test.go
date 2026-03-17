@@ -16,12 +16,12 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/domain"
-	pgstore "github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/infrastructure/postgres"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/create_checkout"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/create_portal"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/handle_webhook"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/migrations"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/domain"
+	pgstore "github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/infrastructure/postgres"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/create_checkout"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/create_portal"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/handle_webhook"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/migrations"
 )
 
 // --- billing test environment ---

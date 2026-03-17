@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain/search"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain/search"
 )
 
 func TestMergeResults(t *testing.T) {

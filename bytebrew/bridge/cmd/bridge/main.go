@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/syntheticinc/bytebrew/bytebrew-bridge/internal/config"
-	"github.com/syntheticinc/bytebrew/bytebrew-bridge/internal/relay"
+	"github.com/syntheticinc/bytebrew/bytebrew/bridge/internal/config"
+	"github.com/syntheticinc/bytebrew/bytebrew/bridge/internal/relay"
 )
 
 func main() {

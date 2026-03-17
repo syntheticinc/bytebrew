@@ -11,11 +11,11 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
-	sp "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/session_processor"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	sp "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/session_processor"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/flow_registry"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/flow_registry"
 )
 
 // --- mocks ---

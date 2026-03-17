@@ -3,10 +3,10 @@ package repository
 import (
 	"context"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/persistence/adapters"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/persistence/models"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/errors"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/adapters"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/errors"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )

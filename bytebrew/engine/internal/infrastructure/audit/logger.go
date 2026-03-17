@@ -9,7 +9,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/persistence/models"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
 )
 
 // Logger writes audit log entries to the database.

@@ -4,7 +4,7 @@ package bytebrew.v1;
 
 import "common.proto";
 
-option go_package = "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen;bytebrewv1";
+option go_package = "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen;bytebrewv1";
 
 // FlowService handles AI agent flow execution
 service FlowService {

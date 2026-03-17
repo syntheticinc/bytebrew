@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 )
 
 // EventEmitter sends agent events via callback, automatically setting AgentID.

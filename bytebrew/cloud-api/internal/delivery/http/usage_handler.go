@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/delivery/http/middleware"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/get_usage"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/delivery/http/middleware"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/get_usage"
 )
 
 // usageUseCase defines the interface consumed by UsageHandler.

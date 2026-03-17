@@ -9,9 +9,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/delivery/http/middleware"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/activate"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/refresh_license"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/delivery/http/middleware"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/activate"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/refresh_license"
 )
 
 type activateUsecase interface {

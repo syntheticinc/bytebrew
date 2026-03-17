@@ -9,8 +9,8 @@ import (
 
 	"github.com/ollama/ollama/api"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/errors"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/config"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/errors"
 )
 
 // OllamaClient implements LLM client for Ollama

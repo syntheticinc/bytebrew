@@ -12,15 +12,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/llm"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/testutil"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/tools"
-	agentservice "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/agent"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/engine"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/orchestrator"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/llm"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/testutil"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/tools"
+	agentservice "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/agent"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/engine"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/orchestrator"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/config"
 )
 
 // eventCollector collects AgentEvents emitted during a turn.

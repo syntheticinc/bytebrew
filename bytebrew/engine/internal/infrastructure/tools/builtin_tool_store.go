@@ -6,8 +6,8 @@ import (
 	"sort"
 
 	"github.com/cloudwego/eino/components/tool"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/agent_registry"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/agent_registry"
 )
 
 // BuiltinToolFactory creates a tool instance given dependencies.

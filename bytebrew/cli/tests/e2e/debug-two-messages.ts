@@ -12,7 +12,7 @@ import { WsMobileSimulator } from './WsMobileSimulator.js';
 import { spawn, ChildProcess } from 'child_process';
 import path from 'path';
 
-const SERVER_DIR = path.resolve(import.meta.dir, '../../../bytebrew-srv');
+const SERVER_DIR = path.resolve(import.meta.dir, '../../../bytebrew/engine');
 const SERVER_BIN = path.join(SERVER_DIR, process.platform === 'win32' ? 'server.exe' : 'server');
 
 // --- Container setup (minimal CLI with bridge) ---

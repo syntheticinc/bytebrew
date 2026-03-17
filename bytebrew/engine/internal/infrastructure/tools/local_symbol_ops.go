@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/indexing"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/indexing"
 )
 
 // SymbolSearch finds code symbols by name using the chunk store.

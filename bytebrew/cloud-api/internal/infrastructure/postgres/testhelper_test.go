@@ -13,7 +13,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/migrations"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/migrations"
 )
 
 type testDB struct {

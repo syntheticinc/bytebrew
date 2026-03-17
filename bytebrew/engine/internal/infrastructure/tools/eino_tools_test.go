@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
-	pkgerrors "github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/errors"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
+	pkgerrors "github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/errors"
 )
 
 // mockClientOperationsProxy implements ClientOperationsProxy interface for testing

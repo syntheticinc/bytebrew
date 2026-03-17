@@ -21,16 +21,16 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	httpdelivery "github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/delivery/http"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/infrastructure/crypto"
-	pgstore "github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/infrastructure/postgres"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/activate"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/login"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/refresh_auth"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/refresh_license"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/register"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/migrations"
+	httpdelivery "github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/delivery/http"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/infrastructure/crypto"
+	pgstore "github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/infrastructure/postgres"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/activate"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/login"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/refresh_auth"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/refresh_license"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/register"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/migrations"
 )
 
 // newIntegrationTestEnv creates a full-stack test environment with a real PostgreSQL database.

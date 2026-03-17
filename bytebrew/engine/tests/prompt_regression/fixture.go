@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/agents"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/agents"
 )
 
 // Fixture represents a test fixture wrapping a context snapshot

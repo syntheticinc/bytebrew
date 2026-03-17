@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
 )
 
 // mockFlowStream implements pb.FlowService_ExecuteFlowServer for testing

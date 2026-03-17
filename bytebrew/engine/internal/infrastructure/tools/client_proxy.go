@@ -3,7 +3,7 @@ package tools
 import (
 	"context"
 
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
 )
 
 // ClientOperationsProxy defines interface for gRPC client operations

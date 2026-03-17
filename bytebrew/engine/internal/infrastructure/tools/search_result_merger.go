@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain/search"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain/search"
 )
 
 // mergeResults combines results from all search strategies with diversity.

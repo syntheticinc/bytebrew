@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 )
 
 // testTaskManager implements TaskManager for testing (renamed to avoid conflict)

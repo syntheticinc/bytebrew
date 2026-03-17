@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	"gopkg.in/yaml.v3"
 )
 

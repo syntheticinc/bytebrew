@@ -17,15 +17,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	httpdelivery "github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/delivery/http"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/delivery/http/middleware"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/infrastructure/crypto"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/activate"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/login"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/refresh_auth"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/refresh_license"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/register"
+	httpdelivery "github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/delivery/http"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/delivery/http/middleware"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/infrastructure/crypto"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/activate"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/login"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/refresh_auth"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/refresh_license"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/register"
 )
 
 // --- In-memory repositories ---

@@ -9,9 +9,9 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/kit"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/tools"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/kit"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/tools"
 )
 
 // --- mock kit ---

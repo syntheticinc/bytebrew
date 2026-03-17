@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/delivery/http/middleware"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/change_password"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/delete_account"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/forgot_password"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/reset_password"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/delivery/http/middleware"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/change_password"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/delete_account"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/forgot_password"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/reset_password"
 )
 
 type changePasswordUsecase interface {

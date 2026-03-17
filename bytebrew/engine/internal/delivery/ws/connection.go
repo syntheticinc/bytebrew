@@ -12,9 +12,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
-	sp "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/session_processor"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	sp "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/session_processor"
 )
 
 // SessionRegistry provides session management for WS clients (consumer-side interface).

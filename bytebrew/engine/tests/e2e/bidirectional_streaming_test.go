@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/delivery/grpc"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/flow_registry"
-	grpcInfra "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/grpc"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/grpc"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/flow_registry"
+	grpcInfra "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/grpc"
 	"github.com/stretchr/testify/require"
 )
 

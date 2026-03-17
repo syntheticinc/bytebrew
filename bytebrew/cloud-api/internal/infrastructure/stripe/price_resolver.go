@@ -3,8 +3,8 @@ package stripe
 import (
 	"fmt"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/pkg/config"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/pkg/config"
 )
 
 // PriceResolver maps Stripe Price IDs to domain tiers and vice versa.

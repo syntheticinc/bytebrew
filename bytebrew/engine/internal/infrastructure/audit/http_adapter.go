@@ -3,7 +3,7 @@ package audit
 import (
 	"context"
 
-	deliveryhttp "github.com/syntheticinc/bytebrew/bytebrew-srv/internal/delivery/http"
+	deliveryhttp "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/http"
 )
 
 // HTTPAdapter adapts audit.Logger to the delivery/http.AuditLogger interface.

@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/login"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/refresh_auth"
-	"github.com/syntheticinc/bytebrew/bytebrew-cloud-api/internal/usecase/register"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/login"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/refresh_auth"
+	"github.com/syntheticinc/bytebrew/bytebrew/cloud-api/internal/usecase/register"
 )
 
 type registerUsecase interface {

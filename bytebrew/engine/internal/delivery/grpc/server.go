@@ -6,13 +6,13 @@ import (
 	"net"
 	"time"
 
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/logger"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/config"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/logger"
 )
 
 // Server represents the gRPC server

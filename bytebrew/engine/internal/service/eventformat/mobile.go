@@ -3,7 +3,7 @@ package eventformat
 import (
 	"log/slog"
 
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
 )
 
 // SerializeForMobile converts a proto SessionEvent into the flat JSON format

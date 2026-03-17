@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain/search"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain/search"
 )
 
 // isNoResultsMessage returns true if the result string is a "no results" message

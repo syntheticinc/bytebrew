@@ -1,4 +1,4 @@
-module github.com/syntheticinc/bytebrew/bytebrew-srv
+module github.com/syntheticinc/bytebrew/bytebrew/engine
 
 go 1.24.1
 
@@ -93,4 +93,4 @@ require (
 	modernc.org/sqlite v1.46.1 // indirect
 )
 
-replace github.com/syntheticinc/bytebrew/bytebrew-bridge => ../bytebrew-bridge
+replace github.com/syntheticinc/bytebrew/bytebrew/bridge => ../bridge

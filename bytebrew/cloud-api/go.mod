@@ -1,4 +1,4 @@
-module github.com/syntheticinc/bytebrew/bytebrew-cloud-api
+module github.com/syntheticinc/bytebrew/bytebrew/cloud-api
 
 go 1.24.2
 

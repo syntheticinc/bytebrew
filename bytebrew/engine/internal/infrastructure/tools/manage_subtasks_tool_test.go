@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 )
 
 // mockSubtaskManager implements SubtaskManager for testing

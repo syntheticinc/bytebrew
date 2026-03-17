@@ -4,12 +4,12 @@ import (
 	"context"
 	"log/slog"
 
-	pb "github.com/syntheticinc/bytebrew/bytebrew-srv/api/proto/gen"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/agents/react"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/service/turn_executor"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/config"
-	"github.com/syntheticinc/bytebrew/bytebrew-srv/pkg/errors"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/agents/react"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/turn_executor"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/config"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/errors"
 	"github.com/cloudwego/eino/components/model"
 	einotool "github.com/cloudwego/eino/components/tool"
 )
