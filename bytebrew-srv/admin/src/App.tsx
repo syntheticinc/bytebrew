@@ -1,0 +1,55 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthContext, useAuthProvider } from './hooks/useAuth';
+import Layout from './components/Layout';
+import LoginPage from './pages/LoginPage';
+import HealthPage from './pages/HealthPage';
+import AgentsPage from './pages/AgentsPage';
+import AgentEditPage from './pages/AgentEditPage';
+import MCPPage from './pages/MCPPage';
+import ModelsPage from './pages/ModelsPage';
+import TriggersPage from './pages/TriggersPage';
+import TasksPage from './pages/TasksPage';
+import SettingsPage from './pages/SettingsPage';
+import APIKeysPage from './pages/APIKeysPage';
+import ConfigPage from './pages/ConfigPage';
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const token = localStorage.getItem('jwt');
+  if (!token) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
+export default function App() {
+  const auth = useAuthProvider();
+
+  return (
+    <AuthContext.Provider value={auth}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            element={
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/health" element={<HealthPage />} />
+            <Route path="/agents" element={<AgentsPage />} />
+            <Route path="/agents/:name/edit" element={<AgentEditPage />} />
+            <Route path="/agents/new" element={<AgentEditPage />} />
+            <Route path="/mcp" element={<MCPPage />} />
+            <Route path="/models" element={<ModelsPage />} />
+            <Route path="/triggers" element={<TriggersPage />} />
+            <Route path="/tasks" element={<TasksPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/api-keys" element={<APIKeysPage />} />
+            <Route path="/config" element={<ConfigPage />} />
+            <Route path="/" element={<Navigate to="/health" replace />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/health" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthContext.Provider>
+  );
+}
