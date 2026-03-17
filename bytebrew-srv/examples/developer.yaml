@@ -1,0 +1,118 @@
+# ByteBrew Engine — Developer Pipeline Example
+# Import via: POST /api/v1/config/import (Phase 5)
+# Or use as reference for admin dashboard configuration.
+
+engine:
+  host: "0.0.0.0"
+  port: 8443
+  data_dir: "/var/lib/bytebrew"
+
+database:
+  url: "postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/bytebrew"
+
+security:
+  admin_user: "${BYTEBREW_ADMIN_USER}"
+  admin_password: "${BYTEBREW_ADMIN_PASSWORD}"
+
+logging:
+  level: "info"
+
+# --- Below: runtime config (stored in DB, shown here for import/reference) ---
+
+models:
+  providers:
+    - name: "llama-4"
+      type: "openai-compatible"
+      base_url: "http://gpu:8000/v1"
+      model: "meta-llama/Llama-4-70B"
+      api_key: "${LLM_API_KEY}"
+    - name: "qwen-3"
+      type: "ollama"
+      model: "qwen3-30b-a3b"
+  byok:
+    enabled: false
+
+agents:
+  - name: "supervisor"
+    model: "llama-4"
+    system_prompt: |
+      You are a senior developer and project supervisor.
+      You coordinate work between specialized agents.
+      Analyze tasks, decompose them into subtasks, and delegate to code-agent and reviewer.
+    tools:
+      builtin:
+        - read_file
+        - write_file
+        - edit_file
+        - grep_search
+        - glob
+        - get_project_tree
+        - execute_command
+        - manage_tasks
+        - ask_user
+        - web_search
+        - web_fetch
+    can_spawn: ["code-agent", "reviewer", "researcher"]
+    kit: "developer"
+    max_steps: 50
+    confirm_before:
+      - execute_command
+    flow:
+      steps:
+        - "Analyze the task and understand requirements"
+        - "Decompose into subtasks"
+        - "Delegate to specialized agents"
+        - "Review results and iterate"
+
+  - name: "code-agent"
+    model: "llama-4"
+    system_prompt: |
+      You are an expert coder. You write clean, maintainable code.
+      Follow SOLID principles and project conventions.
+    tools:
+      builtin:
+        - read_file
+        - write_file
+        - edit_file
+        - grep_search
+        - glob
+        - get_project_tree
+        - execute_command
+        - web_search
+        - web_fetch
+    kit: "developer"
+    lifecycle: "spawn"
+    max_steps: 100
+
+  - name: "reviewer"
+    model: "qwen-3"
+    system_prompt: |
+      You are a code reviewer. You check code quality, SOLID principles,
+      security issues, and provide constructive feedback.
+    tools:
+      builtin:
+        - read_file
+        - grep_search
+        - glob
+        - get_project_tree
+        - execute_command
+    kit: "developer"
+    lifecycle: "spawn"
+    max_steps: 80
+
+  - name: "researcher"
+    model: "llama-4"
+    system_prompt: |
+      You are a researcher. You explore codebases, search documentation,
+      and provide context for development decisions.
+    tools:
+      builtin:
+        - read_file
+        - grep_search
+        - glob
+        - get_project_tree
+        - web_search
+        - web_fetch
+    kit: "developer"
+    lifecycle: "spawn"
+    max_steps: 60

@@ -1,0 +1,70 @@
+# ByteBrew Engine — IoT Monitor Example
+# Demonstrates: cron triggers, background tasks, local Ollama model
+
+engine:
+  host: "0.0.0.0"
+  port: 8443
+
+database:
+  url: "postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/bytebrew"
+
+security:
+  admin_user: "${BYTEBREW_ADMIN_USER}"
+  admin_password: "${BYTEBREW_ADMIN_PASSWORD}"
+
+logging:
+  level: "info"
+
+# --- Runtime config (stored in DB) ---
+
+models:
+  providers:
+    - name: "local-llama"
+      type: "ollama"
+      model: "llama3.2"
+  byok:
+    enabled: false
+
+agents:
+  - name: "iot-monitor"
+    model: "local-llama"
+    system_prompt: |
+      You are an IoT monitoring agent. You check sensor data,
+      detect anomalies, and alert operators when thresholds are exceeded.
+
+      Report format:
+      - Sensor name and current value
+      - Whether it's within normal range
+      - Recommended action if anomalous
+    tools:
+      builtin:
+        - web_fetch
+      custom:
+        - name: "get_sensor_data"
+          description: "Fetch current sensor readings"
+          endpoint: "GET http://iot-gateway:8080/api/sensors"
+          method: "GET"
+          auth:
+            type: "bearer"
+            token_env: "IOT_API_KEY"
+        - name: "send_alert"
+          description: "Send alert to operators"
+          endpoint: "POST http://iot-gateway:8080/api/alerts"
+          method: "POST"
+          auth:
+            type: "bearer"
+            token_env: "IOT_API_KEY"
+    confirm_before:
+      - send_alert
+    max_steps: 20
+    triggers:
+      - type: "cron"
+        title: "Hourly sensor check"
+        schedule: "0 * * * *"
+        description: "Check all sensors and report anomalies"
+        agent: "iot-monitor"
+      - type: "webhook"
+        title: "Manual sensor check"
+        path: "sensor-check"
+        description: "Trigger manual sensor check"
+        agent: "iot-monitor"
