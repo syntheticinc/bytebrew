@@ -29,20 +29,21 @@ func newTestEventStore(t *testing.T) *eventstore.Store {
 // TC-G-01: CreateSession — create session, verify session_id returned and context accessible
 func TestSessionRegistry_CreateAndGetContext(t *testing.T) {
 	reg := NewSessionRegistry(nil)
-	reg.CreateSession("s1", "proj-1", "user-1", "/root", "linux")
+	reg.CreateSession("s1", "proj-1", "user-1", "/root", "linux", "")
 
-	root, platform, key, user, ok := reg.GetSessionContext("s1")
+	root, platform, key, user, agentName, ok := reg.GetSessionContext("s1")
 	require.True(t, ok)
 	assert.Equal(t, "/root", root)
 	assert.Equal(t, "linux", platform)
 	assert.Equal(t, "proj-1", key)
 	assert.Equal(t, "user-1", user)
+	assert.Empty(t, agentName)
 }
 
 func TestSessionRegistry_GetContext_NotFound(t *testing.T) {
 	reg := NewSessionRegistry(nil)
 
-	_, _, _, _, ok := reg.GetSessionContext("nonexistent")
+	_, _, _, _, _, ok := reg.GetSessionContext("nonexistent")
 	assert.False(t, ok)
 }
 
@@ -51,13 +52,13 @@ func TestSessionRegistry_HasSession(t *testing.T) {
 
 	assert.False(t, reg.HasSession("s1"))
 
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 	assert.True(t, reg.HasSession("s1"))
 }
 
 func TestSessionRegistry_SubscribeAndPublish(t *testing.T) {
 	reg := NewSessionRegistry(nil)
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	ch, cleanup := reg.Subscribe("s1")
 	defer cleanup()
@@ -82,7 +83,7 @@ func TestSessionRegistry_SubscribeAndPublish(t *testing.T) {
 
 func TestSessionRegistry_MultipleSubscribers(t *testing.T) {
 	reg := NewSessionRegistry(nil)
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	ch1, cleanup1 := reg.Subscribe("s1")
 	defer cleanup1()
@@ -122,7 +123,7 @@ func TestSessionRegistry_SubscribeNonExistent(t *testing.T) {
 func TestSessionRegistry_ReplayEvents(t *testing.T) {
 	store := newTestEventStore(t)
 	reg := NewSessionRegistry(store)
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	// Append 3 events via store (simulating what EventStream does)
 	var ids [3]int64
@@ -155,7 +156,7 @@ func TestSessionRegistry_ReplayEvents(t *testing.T) {
 
 func TestSessionRegistry_EnqueueDequeueMessage(t *testing.T) {
 	reg := NewSessionRegistry(nil)
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	err := reg.EnqueueMessage("s1", "hello")
 	require.NoError(t, err)
@@ -175,7 +176,7 @@ func TestSessionRegistry_EnqueueMessage_NotFound(t *testing.T) {
 
 func TestSessionRegistry_AskUserReply(t *testing.T) {
 	reg := NewSessionRegistry(nil)
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	replyCh := reg.RegisterAskUser("s1", "call-1")
 
@@ -197,7 +198,7 @@ func TestSessionRegistry_AskUserReply(t *testing.T) {
 // TC-G-04: Reasoning events — publish reasoning event, verify subscriber receives it
 func TestSessionRegistry_ReasoningEvent(t *testing.T) {
 	reg := NewSessionRegistry(nil)
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	ch, cleanup := reg.Subscribe("s1")
 	defer cleanup()
@@ -224,7 +225,7 @@ func TestSessionRegistry_ReasoningEvent(t *testing.T) {
 // TC-G-05: Plan update events — publish plan event, verify subscriber receives it
 func TestSessionRegistry_PlanUpdateEvent(t *testing.T) {
 	reg := NewSessionRegistry(nil)
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	ch, cleanup := reg.Subscribe("s1")
 	defer cleanup()
@@ -252,7 +253,7 @@ func TestSessionRegistry_PlanUpdateEvent(t *testing.T) {
 // TC-G-07: CancelTask — create session, cancel, verify cancellation
 func TestSessionRegistry_Cancel(t *testing.T) {
 	reg := NewSessionRegistry(nil)
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	assert.False(t, reg.IsCancelled("s1"))
 
@@ -270,7 +271,7 @@ func TestSessionRegistry_Cancel_NotFound(t *testing.T) {
 
 func TestSessionRegistry_RemoveSession(t *testing.T) {
 	reg := NewSessionRegistry(nil)
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	ch, cleanup := reg.Subscribe("s1")
 	defer cleanup()
@@ -286,7 +287,7 @@ func TestSessionRegistry_RemoveSession(t *testing.T) {
 
 func TestSessionRegistry_ConcurrentAccess(t *testing.T) {
 	reg := NewSessionRegistry(nil)
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	var wg sync.WaitGroup
 
@@ -325,7 +326,7 @@ func TestSessionRegistry_ConcurrentAccess(t *testing.T) {
 
 func TestSessionRegistry_MessageChannel(t *testing.T) {
 	reg := NewSessionRegistry(nil)
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	ch := reg.MessageChannel("s1")
 	require.NotNil(t, ch)
@@ -354,7 +355,7 @@ func TestSessionRegistry_MessageChannel_NotFound(t *testing.T) {
 // CreateSession → Subscribe → EnqueueMessage → message arrives via MessageChannel
 func TestSessionRegistry_SendMessageAndSubscribe(t *testing.T) {
 	reg := NewSessionRegistry(nil)
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	// Subscribe for events
 	eventCh, cleanup := reg.Subscribe("s1")
@@ -396,8 +397,8 @@ func TestSessionRegistry_SendMessageAndSubscribe(t *testing.T) {
 // TC-G-10: Multiple sessions — events are isolated
 func TestSessionRegistry_MultipleSessions_Isolated(t *testing.T) {
 	reg := NewSessionRegistry(nil)
-	reg.CreateSession("session-A", "proj-a", "user-a", "/a", "linux")
-	reg.CreateSession("session-B", "proj-b", "user-b", "/b", "windows")
+	reg.CreateSession("session-A", "proj-a", "user-a", "/a", "linux", "")
+	reg.CreateSession("session-B", "proj-b", "user-b", "/b", "windows", "")
 
 	// Subscribe to both sessions
 	chA, cleanupA := reg.Subscribe("session-A")
@@ -478,7 +479,7 @@ func TestSessionRegistry_MultipleSessions_Isolated(t *testing.T) {
 func TestSessionRegistry_ReconnectReplay_WithSubscriber(t *testing.T) {
 	store := newTestEventStore(t)
 	reg := NewSessionRegistry(store)
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	// Append 3 events via store (no subscribers yet)
 	var ids [3]int64
@@ -520,7 +521,7 @@ func TestSessionRegistry_ReconnectReplay_WithSubscriber(t *testing.T) {
 // TC-G-06 extended: AskUser register → reply → unregister lifecycle
 func TestSessionRegistry_AskUser_FullLifecycle(t *testing.T) {
 	reg := NewSessionRegistry(nil)
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	// Register ask_user call
 	replyCh := reg.RegisterAskUser("s1", "call-42")
@@ -549,7 +550,7 @@ func TestSessionRegistry_AskUser_FullLifecycle(t *testing.T) {
 // DrainMessages discards all pending messages from the queue
 func TestSessionRegistry_DrainMessages(t *testing.T) {
 	reg := NewSessionRegistry(nil)
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	// Enqueue several messages
 	require.NoError(t, reg.EnqueueMessage("s1", "msg-1"))
@@ -578,7 +579,7 @@ func TestSessionRegistry_DrainMessages_NotFound(t *testing.T) {
 // ResetCancel clears the cancelled flag
 func TestSessionRegistry_ResetCancel(t *testing.T) {
 	reg := NewSessionRegistry(nil)
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	// Cancel then reset
 	reg.Cancel("s1")
@@ -597,7 +598,7 @@ func TestSessionRegistry_ResetCancel_NotFound(t *testing.T) {
 // StoreTurnCancel stores and invokes turn cancel function
 func TestSessionRegistry_StoreTurnCancel(t *testing.T) {
 	reg := NewSessionRegistry(nil)
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	cancelled := make(chan struct{})
 	_, cancel := context.WithCancel(context.Background())
@@ -621,7 +622,7 @@ func TestSessionRegistry_StoreTurnCancel(t *testing.T) {
 
 func TestSessionRegistry_StoreTurnCancel_ClearNil(t *testing.T) {
 	reg := NewSessionRegistry(nil)
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	called := false
 	reg.StoreTurnCancel("s1", func() { called = true })
@@ -654,7 +655,7 @@ func TestSessionRegistry_EventHook_Called(t *testing.T) {
 		hookEvent = event
 	})
 
-	reg.CreateSession("s1", "key", "user", "/root", "linux")
+	reg.CreateSession("s1", "key", "user", "/root", "linux", "")
 
 	event := &pb.SessionEvent{EventId: "e1", Content: "test"}
 	reg.PublishEvent("s1", event)
@@ -670,7 +671,7 @@ func TestSessionRegistry_EventHook_NilDoesNotBreak(t *testing.T) {
 	reg := NewSessionRegistry(nil)
 	// No SetEventHook call — hook is nil
 
-	reg.CreateSession("s1", "key", "user", "/root", "linux")
+	reg.CreateSession("s1", "key", "user", "/root", "linux", "")
 
 	ch, cleanup := reg.Subscribe("s1")
 	defer cleanup()
@@ -697,7 +698,7 @@ func TestSessionRegistry_EventHook_MultipleEvents(t *testing.T) {
 		hookEvents = append(hookEvents, event)
 	})
 
-	reg.CreateSession("s1", "key", "user", "/root", "linux")
+	reg.CreateSession("s1", "key", "user", "/root", "linux", "")
 
 	for i := 1; i <= 3; i++ {
 		reg.PublishEvent("s1", &pb.SessionEvent{
@@ -715,7 +716,7 @@ func TestSessionRegistry_EventHook_MultipleEvents(t *testing.T) {
 // TC-G-07 extended: Cancel prevents further processing
 func TestSessionRegistry_Cancel_MultipleCalls(t *testing.T) {
 	reg := NewSessionRegistry(nil)
-	reg.CreateSession("s1", "proj", "user", "/root", "linux")
+	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	// Initially not cancelled
 	assert.False(t, reg.IsCancelled("s1"))

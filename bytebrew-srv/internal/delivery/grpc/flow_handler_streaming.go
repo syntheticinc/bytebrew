@@ -14,8 +14,8 @@ import (
 // SessionRegistryForHandler defines the interface for server-streaming session management.
 // Consumer-side: only methods needed by FlowHandler (ISP).
 type SessionRegistryForHandler interface {
-	CreateSession(sessionID, projectKey, userID, projectRoot, platform string)
-	GetSessionContext(sessionID string) (projectRoot, platform, projectKey, userID string, ok bool)
+	CreateSession(sessionID, projectKey, userID, projectRoot, platform, agentName string)
+	GetSessionContext(sessionID string) (projectRoot, platform, projectKey, userID, agentName string, ok bool)
 	Subscribe(sessionID string) (ch <-chan *pb.SessionEvent, cleanup func())
 	PublishEvent(sessionID string, event *pb.SessionEvent)
 	ReplayEvents(sessionID string, lastEventID int64) []*pb.SessionEvent
@@ -58,7 +58,7 @@ func (h *FlowHandler) CreateSession(ctx context.Context, req *pb.CreateSessionRe
 		h.agentService.SetEnvironmentContext(projectRoot, platform)
 	}
 
-	h.sessionRegistry.CreateSession(sessionID, req.ProjectKey, req.UserId, projectRoot, platform)
+	h.sessionRegistry.CreateSession(sessionID, req.ProjectKey, req.UserId, projectRoot, platform, "")
 
 	slog.InfoContext(ctx, "[Streaming] session created",
 		"session_id", sessionID,

@@ -9,6 +9,7 @@ export interface AppConfig {
   userId: string;
   projectRoot: string;
   sessionId?: string; // Optional: reuse specific session
+  agentName?: string; // Optional: agent name to use for this session
   debug: boolean;
 }
 
@@ -91,6 +92,7 @@ export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     userId: overrides.userId || process.env.BYTEBREW_USER || `cli-user-${process.pid}`,
     projectRoot: overrides.projectRoot || process.cwd(),
     sessionId: overrides.sessionId, // Optional: pass through if provided
+    agentName: overrides.agentName,
     debug: overrides.debug ?? process.env.BYTEBREW_DEBUG === 'true',
   };
 

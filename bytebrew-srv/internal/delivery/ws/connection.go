@@ -19,7 +19,7 @@ import (
 
 // SessionRegistry provides session management for WS clients (consumer-side interface).
 type SessionRegistry interface {
-	CreateSession(sessionID, projectKey, userID, projectRoot, platform string)
+	CreateSession(sessionID, projectKey, userID, projectRoot, platform, agentName string)
 	Subscribe(sessionID string) (ch <-chan *pb.SessionEvent, cleanup func())
 	ReplayEvents(sessionID string, lastEventID int64) []*pb.SessionEvent
 	EnqueueMessage(sessionID, content string) error
@@ -44,6 +44,19 @@ type PairingDataProvider interface {
 	GeneratePairingData() (map[string]interface{}, error)
 }
 
+// AgentInfo holds agent metadata for WS list_agents response.
+type AgentInfo struct {
+	Name         string `json:"name"`
+	Kit          string `json:"kit,omitempty"`
+	ToolsCount   int    `json:"tools_count"`
+	HasKnowledge bool   `json:"has_knowledge"`
+}
+
+// AgentLister provides agent listing for WS clients (consumer-side interface).
+type AgentLister interface {
+	ListAgentInfos() []AgentInfo
+}
+
 // WsMessage is the wire format for client <-> server communication.
 type WsMessage struct {
 	Type      string                 `json:"type"`
@@ -59,6 +72,7 @@ type ConnectionHandler struct {
 	agentService     AgentEnvironmentSetter
 	agentCanceller   AgentCanceller      // optional, cancels running agents on user cancel
 	pairingProvider  PairingDataProvider // optional, nil when bridge not configured
+	agentLister      AgentLister         // optional, nil when agent registry not available
 	licenseInfo      *domain.LicenseInfo
 }
 
@@ -88,6 +102,11 @@ func NewConnectionHandler(
 // SetPairingProvider sets the pairing data provider (called after bridge is initialized).
 func (h *ConnectionHandler) SetPairingProvider(p PairingDataProvider) {
 	h.pairingProvider = p
+}
+
+// SetAgentLister sets the agent lister (called after agent registry is initialized).
+func (h *ConnectionHandler) SetAgentLister(l AgentLister) {
+	h.agentLister = l
 }
 
 // connState tracks per-connection state (active subscriptions, context).
@@ -209,6 +228,9 @@ func (h *ConnectionHandler) handleMessage(writer *wsWriter, msg WsMessage, state
 	case "generate_pairing":
 		h.handleGeneratePairing(writer, &msg)
 
+	case "list_agents":
+		h.handleListAgents(writer, &msg)
+
 	default:
 		writer.sendError(msg.RequestID, "unknown message type: "+msg.Type)
 	}
@@ -241,13 +263,14 @@ func (h *ConnectionHandler) handleCreateSession(writer *wsWriter, msg *WsMessage
 	projectRoot, _ := msg.Payload["project_root"].(string)
 	platform, _ := msg.Payload["platform"].(string)
 	projectKey, _ := msg.Payload["project_key"].(string)
+	agentName, _ := msg.Payload["agent_name"].(string)
 
 	if projectRoot != "" || platform != "" {
 		h.agentService.SetEnvironmentContext(projectRoot, platform)
 	}
 
 	sessionID := uuid.New().String()
-	h.sessionRegistry.CreateSession(sessionID, projectKey, "", projectRoot, platform)
+	h.sessionRegistry.CreateSession(sessionID, projectKey, "", projectRoot, platform, agentName)
 
 	slog.Info("[WS] session created", "session_id", sessionID, "project_root", projectRoot)
 
@@ -443,5 +466,31 @@ func (h *ConnectionHandler) handleGeneratePairing(writer *wsWriter, msg *WsMessa
 		Type:      "pairing_data",
 		RequestID: msg.RequestID,
 		Payload:   data,
+	})
+}
+
+func (h *ConnectionHandler) handleListAgents(writer *wsWriter, msg *WsMessage) {
+	if h.agentLister == nil {
+		writer.sendError(msg.RequestID, "agent registry not available")
+		return
+	}
+
+	agents := h.agentLister.ListAgentInfos()
+
+	// Convert to []interface{} for JSON serialization in map payload.
+	agentList := make([]interface{}, len(agents))
+	for i, a := range agents {
+		agentList[i] = map[string]interface{}{
+			"name":          a.Name,
+			"kit":           a.Kit,
+			"tools_count":   a.ToolsCount,
+			"has_knowledge": a.HasKnowledge,
+		}
+	}
+
+	writer.send(&WsMessage{
+		Type:      "agents_list",
+		RequestID: msg.RequestID,
+		Payload:   map[string]interface{}{"agents": agentList},
 	})
 }

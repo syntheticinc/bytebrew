@@ -24,9 +24,10 @@ export const App: React.FC<AppProps> = ({ config, initialQuestion }) => {
       wsAddress: config.wsAddress,
       projectKey: config.projectKey,
       sessionId: config.sessionId,
+      agentName: config.agentName,
       askUserCallback: createInteractiveAskUserCallback(),
     });
-  }, [config.projectRoot, config.serverAddress, config.projectKey, config.sessionId]);
+  }, [config.projectRoot, config.serverAddress, config.projectKey, config.sessionId, config.agentName]);
 
   // Cleanup container on unmount
   useEffect(() => {

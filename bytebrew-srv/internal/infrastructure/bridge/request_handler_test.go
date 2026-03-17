@@ -84,7 +84,7 @@ func newMockSessionManager() *mockSessionManager {
 	}
 }
 
-func (m *mockSessionManager) CreateSession(sessionID, projectKey, userID, projectRoot, platform string) {
+func (m *mockSessionManager) CreateSession(sessionID, projectKey, userID, projectRoot, platform, agentName string) {
 	m.sessions[sessionID] = true
 	m.createCalled++
 }

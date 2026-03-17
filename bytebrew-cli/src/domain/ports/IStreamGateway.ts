@@ -50,6 +50,7 @@ export interface StreamConnectionOptions {
   projectRoot: string;
   clientVersion?: string;
   testingStrategy?: string;
+  agentName?: string;
 }
 
 export type ConnectionStatus =

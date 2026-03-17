@@ -39,14 +39,14 @@ func newMockRegistry(sessionID, projectRoot, platform, projectKey, userID string
 	return r
 }
 
-func (r *mockSessionRegistry) GetSessionContext(sessionID string) (projectRoot, platform, projectKey, userID string, ok bool) {
+func (r *mockSessionRegistry) GetSessionContext(sessionID string) (projectRoot, platform, projectKey, userID, agentName string, ok bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	s, exists := r.sessions[sessionID]
 	if !exists {
-		return "", "", "", "", false
+		return "", "", "", "", "", false
 	}
-	return s.projectRoot, s.platform, s.projectKey, s.userID, true
+	return s.projectRoot, s.platform, s.projectKey, s.userID, "", true
 }
 
 func (r *mockSessionRegistry) MessageChannel(sessionID string) <-chan string {

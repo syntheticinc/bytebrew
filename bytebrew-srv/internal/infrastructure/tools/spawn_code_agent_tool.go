@@ -38,6 +38,7 @@ type WaitResult struct {
 	UserMessage          string                         // user message that caused interrupt
 	StillRunning         []string                       // agent IDs still running
 	Results              map[string]AgentCompletionInfo // completed agents
+	Summaries            []AgentSummary                 // agent summaries (used by generic SpawnTool)
 }
 
 // AgentCompletionInfo holds completion info for an agent

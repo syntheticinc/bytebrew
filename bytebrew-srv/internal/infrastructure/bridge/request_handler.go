@@ -27,7 +27,7 @@ type DeviceStore interface {
 
 // SessionManager manages server-streaming sessions.
 type SessionManager interface {
-	CreateSession(sessionID, projectKey, userID, projectRoot, platform string)
+	CreateSession(sessionID, projectKey, userID, projectRoot, platform, agentName string)
 	EnqueueMessage(sessionID, content string) error
 	HasSession(sessionID string) bool
 	SendAskUserReply(sessionID, callID, reply string)
@@ -225,7 +225,7 @@ func (h *MobileRequestHandler) handleNewTask(msg *MobileMessage) {
 	if !h.sessions.HasSession(sessionID) {
 		projectRoot, _ := msg.Payload["project_root"].(string)
 		platform, _ := msg.Payload["platform"].(string)
-		h.sessions.CreateSession(sessionID, "", device.ID, projectRoot, platform)
+		h.sessions.CreateSession(sessionID, "", device.ID, projectRoot, platform, "")
 	}
 
 	if err := h.sessions.EnqueueMessage(sessionID, content); err != nil {

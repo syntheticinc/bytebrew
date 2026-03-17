@@ -94,13 +94,18 @@ export class WsStreamGateway implements IStreamGateway {
         context.client_version = options.clientVersion;
       }
 
-      const sessionPayload = await this.sendRequest('create_session', {
+      const createSessionPayload: Record<string, unknown> = {
         project_key: options.projectKey,
         user_id: options.userId,
         project_root: options.projectRoot,
         platform: process.platform,
         context,
-      });
+      };
+      if (options.agentName) {
+        createSessionPayload.agent_name = options.agentName;
+      }
+
+      const sessionPayload = await this.sendRequest('create_session', createSessionPayload);
 
       this.sessionId = sessionPayload.session_id as string;
       if (!this.sessionId) {
@@ -446,13 +451,18 @@ export class WsStreamGateway implements IStreamGateway {
       context.client_version = options.clientVersion;
     }
 
-    const sessionPayload = await this.sendRequest('create_session', {
+    const reconnectPayload: Record<string, unknown> = {
       project_key: options.projectKey,
       user_id: options.userId,
       project_root: options.projectRoot,
       platform: process.platform,
       context,
-    });
+    };
+    if (options.agentName) {
+      reconnectPayload.agent_name = options.agentName;
+    }
+
+    const sessionPayload = await this.sendRequest('create_session', reconnectPayload);
 
     this.sessionId = sessionPayload.session_id as string;
     this.lastEventId = null;

@@ -29,6 +29,7 @@ type sessionContext struct {
 	Platform    string
 	ProjectKey  string
 	UserID      string
+	AgentName   string
 }
 
 // sessionEntry holds all state for a server-streaming session.
@@ -52,6 +53,7 @@ type SessionInfo struct {
 	ProjectRoot    string
 	Platform       string
 	UserID         string
+	AgentName      string
 	HasAskUser     bool
 	IsCancelled    bool
 	CreatedAt      time.Time
@@ -82,7 +84,7 @@ func (r *SessionRegistry) SetEventHook(hook func(sessionID string, event *pb.Ses
 }
 
 // CreateSession stores session context for later use.
-func (r *SessionRegistry) CreateSession(sessionID, projectKey, userID, projectRoot, platform string) {
+func (r *SessionRegistry) CreateSession(sessionID, projectKey, userID, projectRoot, platform, agentName string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -93,6 +95,7 @@ func (r *SessionRegistry) CreateSession(sessionID, projectKey, userID, projectRo
 			Platform:    platform,
 			ProjectKey:  projectKey,
 			UserID:      userID,
+			AgentName:   agentName,
 		},
 		subscribers:    make(map[uint64]chan *pb.SessionEvent),
 		messageCh:      make(chan string, 32),
@@ -103,15 +106,15 @@ func (r *SessionRegistry) CreateSession(sessionID, projectKey, userID, projectRo
 }
 
 // GetSessionContext returns session metadata.
-func (r *SessionRegistry) GetSessionContext(sessionID string) (projectRoot, platform, projectKey, userID string, ok bool) {
+func (r *SessionRegistry) GetSessionContext(sessionID string) (projectRoot, platform, projectKey, userID, agentName string, ok bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	entry, exists := r.sessions[sessionID]
 	if !exists {
-		return "", "", "", "", false
+		return "", "", "", "", "", false
 	}
-	return entry.ctx.ProjectRoot, entry.ctx.Platform, entry.ctx.ProjectKey, entry.ctx.UserID, true
+	return entry.ctx.ProjectRoot, entry.ctx.Platform, entry.ctx.ProjectKey, entry.ctx.UserID, entry.ctx.AgentName, true
 }
 
 // Subscribe returns an event channel and a cleanup function.
@@ -438,6 +441,7 @@ func (r *SessionRegistry) ListSessions() []SessionInfo {
 			ProjectRoot:    entry.ctx.ProjectRoot,
 			Platform:       entry.ctx.Platform,
 			UserID:         entry.ctx.UserID,
+			AgentName:      entry.ctx.AgentName,
 			HasAskUser:     hasAskUser,
 			IsCancelled:    entry.cancelled.Load(),
 			CreatedAt:      entry.createdAt,

@@ -28,6 +28,7 @@ export interface ContainerConfig {
   wsAddress?: string; // WebSocket address (host:port)
   projectKey: string;
   sessionId?: string; // Optional: reuse specific session, otherwise generate new
+  agentName?: string; // Optional: agent name to use for this session
   headlessMode?: boolean;
   askUserCallback?: AskUserCallback;
   overrides?: {

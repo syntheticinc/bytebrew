@@ -11,6 +11,7 @@ export interface UseStreamConnectionOptions {
   projectKey: string;
   projectRoot: string;
   testingStrategy?: string;
+  agentName?: string;
 }
 
 export interface UseStreamConnectionResult {
@@ -26,7 +27,7 @@ export interface UseStreamConnectionResult {
  * Subscribes to gateway status changes and updates the view store.
  */
 export function useStreamConnection(options: UseStreamConnectionOptions): UseStreamConnectionResult {
-  const { streamGateway, serverAddress, sessionId, projectKey, projectRoot, testingStrategy } = options;
+  const { streamGateway, serverAddress, sessionId, projectKey, projectRoot, testingStrategy, agentName } = options;
 
   const hasConnectedRef = useRef(false);
 
@@ -65,13 +66,14 @@ export function useStreamConnection(options: UseStreamConnectionOptions): UseStr
         projectRoot,
         clientVersion: VERSION,
         testingStrategy,
+        agentName,
       });
     } catch (error) {
       // Log error but don't throw - just stay disconnected
       // The status will already be set to 'disconnected' by the gateway
       hasConnectedRef.current = false; // Allow retry
     }
-  }, [streamGateway, serverAddress, sessionId, projectKey, projectRoot, testingStrategy]);
+  }, [streamGateway, serverAddress, sessionId, projectKey, projectRoot, testingStrategy, agentName]);
 
   // Disconnect function
   const disconnect = useCallback(() => {

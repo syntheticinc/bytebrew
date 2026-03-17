@@ -167,7 +167,7 @@ func TestCreateSession(t *testing.T) {
 	// Verify session exists in registry
 	assert.True(t, registry.HasSession(sessionID))
 
-	root, platform, _, _, ctxOk := registry.GetSessionContext(sessionID)
+	root, platform, _, _, _, ctxOk := registry.GetSessionContext(sessionID)
 	require.True(t, ctxOk)
 	assert.Equal(t, "/my/project", root)
 	assert.Equal(t, "linux", platform)
@@ -391,7 +391,7 @@ func TestAskUserReply(t *testing.T) {
 	_, conn, registry, _ := setupTestServerWithRegistry(t)
 
 	// Create session and register ask_user
-	registry.CreateSession("s1", "proj", "user", "/root", "linux")
+	registry.CreateSession("s1", "proj", "user", "/root", "linux", "")
 	replyCh := registry.RegisterAskUser("s1", "call-42")
 
 	resp := sendAndReceive(t, conn, WsMessage{

@@ -58,6 +58,7 @@ function resolveSessionId(opts: { new?: boolean; resume?: string }, projectRoot:
 interface CommandOptions {
   server?: string;
   project: string;
+  agent?: string;
   debug: boolean;
 }
 
@@ -82,6 +83,7 @@ async function connectAndConfigure(
     projectKey: options.project,
     projectRoot,
     sessionId,
+    agentName: options.agent,
     debug: options.debug,
   });
 
@@ -145,6 +147,7 @@ program
   .description('Start interactive chat session')
   .option('-s, --server <address>', 'Server address (connect to external server)')
   .option('-p, --project <key>', 'Project key', 'default')
+  .option('-a, --agent <name>', 'Agent name to use (default: server default)')
   .option('-d, --debug', 'Enable debug mode', false)
   .action(async (options) => {
     const globalOpts = program.opts();
@@ -209,6 +212,7 @@ program
   .description('Start chat with an initial question')
   .option('-s, --server <address>', 'Server address (connect to external server)')
   .option('-p, --project <key>', 'Project key', 'default')
+  .option('-a, --agent <name>', 'Agent name to use (default: server default)')
   .option('-d, --debug', 'Enable debug mode', false)
   .option('--headless', 'Run in headless mode (no UI, plain text output)', false)
   .option('-o, --output <file>', 'Write output to file (headless mode only)')
@@ -278,6 +282,7 @@ program
   .description('Start interactive headless session (plain text, multi-message)')
   .option('-s, --server <address>', 'Server address (connect to external server)')
   .option('-p, --project <key>', 'Project key', 'default')
+  .option('-a, --agent <name>', 'Agent name to use (default: server default)')
   .option('-d, --debug', 'Enable debug mode', false)
   .option('-o, --output <file>', 'Write output to file (in addition to console)')
   .action(async (options) => {
@@ -304,6 +309,148 @@ program
       console.error((error as Error).message);
       if (connection) await connection.cleanup();
       await stopOutputWriter();
+      process.exit(1);
+    }
+  });
+
+// Agents command — list available agents
+program
+  .command('agents')
+  .description('List available agents')
+  .option('-s, --server <address>', 'Server address (connect to external server)')
+  .action(async (options) => {
+    let ws: WebSocket | null = null;
+    try {
+      const externalAddress = options.server || process.env.BYTEBREW_SERVER;
+      const orchestrator = new ServerConnectionOrchestrator();
+      const connection = await orchestrator.connect(externalAddress || undefined);
+
+      const wsUrl = `ws://${connection.wsAddress || connection.address}/ws`;
+      ws = new WebSocket(wsUrl);
+
+      await new Promise<void>((resolve, reject) => {
+        const onOpen = () => { ws!.removeEventListener('open', onOpen); ws!.removeEventListener('error', onErr); resolve(); };
+        const onErr = () => { ws!.removeEventListener('open', onOpen); ws!.removeEventListener('error', onErr); reject(new Error('Connection failed')); };
+        ws!.addEventListener('open', onOpen);
+        ws!.addEventListener('error', onErr);
+        setTimeout(() => reject(new Error('Connection timeout')), 10000);
+      });
+
+      const requestId = `req-${Date.now()}`;
+      const responsePromise = new Promise<Record<string, unknown>>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Request timed out')), 15000);
+        ws!.addEventListener('message', (event) => {
+          try {
+            const msg = JSON.parse(typeof event.data === 'string' ? event.data : '');
+            if (msg.request_id === requestId) {
+              clearTimeout(timer);
+              if (msg.type === 'error') {
+                reject(new Error((msg.payload?.error as string) || 'Server error'));
+              } else {
+                resolve(msg.payload || {});
+              }
+            }
+          } catch { /* ignore parse errors */ }
+        });
+      });
+
+      ws.send(JSON.stringify({ type: 'list_agents', request_id: requestId, payload: {} }));
+      const payload = await responsePromise;
+      const agents = (payload.agents as Array<Record<string, unknown>>) || [];
+
+      if (agents.length === 0) {
+        console.log('No agents configured.');
+      } else {
+        console.log('');
+        console.log('Available agents:');
+        console.log('');
+        const nameWidth = Math.max(10, ...agents.map(a => String(a.name || '').length));
+        console.log(`  ${'NAME'.padEnd(nameWidth)}  DESCRIPTION`);
+        console.log(`  ${'─'.repeat(nameWidth)}  ${'─'.repeat(40)}`);
+        for (const agent of agents) {
+          const name = String(agent.name || '');
+          const desc = String(agent.description || '');
+          const isDefault = agent.is_default ? ' (default)' : '';
+          console.log(`  ${name.padEnd(nameWidth)}  ${desc}${isDefault}`);
+        }
+        console.log('');
+      }
+
+      ws.close();
+      await connection.cleanup();
+    } catch (error) {
+      if (ws) try { ws.close(); } catch { /* ignore */ }
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+// Task command — create a background task
+program
+  .command('task <description>')
+  .description('Create a background task')
+  .option('-s, --server <address>', 'Server address (connect to external server)')
+  .option('-a, --agent <name>', 'Agent to execute the task')
+  .action(async (description, options) => {
+    if (!description || !description.trim()) {
+      console.error('Error: Task description cannot be empty');
+      process.exit(1);
+    }
+
+    let ws: WebSocket | null = null;
+    try {
+      const externalAddress = options.server || process.env.BYTEBREW_SERVER;
+      const orchestrator = new ServerConnectionOrchestrator();
+      const connection = await orchestrator.connect(externalAddress || undefined);
+
+      const wsUrl = `ws://${connection.wsAddress || connection.address}/ws`;
+      ws = new WebSocket(wsUrl);
+
+      await new Promise<void>((resolve, reject) => {
+        const onOpen = () => { ws!.removeEventListener('open', onOpen); ws!.removeEventListener('error', onErr); resolve(); };
+        const onErr = () => { ws!.removeEventListener('open', onOpen); ws!.removeEventListener('error', onErr); reject(new Error('Connection failed')); };
+        ws!.addEventListener('open', onOpen);
+        ws!.addEventListener('error', onErr);
+        setTimeout(() => reject(new Error('Connection timeout')), 10000);
+      });
+
+      const requestId = `req-${Date.now()}`;
+      const taskPayload: Record<string, unknown> = { description: description.trim() };
+      if (options.agent) {
+        taskPayload.agent_name = options.agent;
+      }
+
+      const responsePromise = new Promise<Record<string, unknown>>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Request timed out')), 15000);
+        ws!.addEventListener('message', (event) => {
+          try {
+            const msg = JSON.parse(typeof event.data === 'string' ? event.data : '');
+            if (msg.request_id === requestId) {
+              clearTimeout(timer);
+              if (msg.type === 'error') {
+                reject(new Error((msg.payload?.error as string) || 'Server error'));
+              } else {
+                resolve(msg.payload || {});
+              }
+            }
+          } catch { /* ignore parse errors */ }
+        });
+      });
+
+      ws.send(JSON.stringify({ type: 'create_task', request_id: requestId, payload: taskPayload }));
+      const payload = await responsePromise;
+
+      const taskId = payload.task_id || payload.id || 'unknown';
+      console.log(`Task created: ${taskId}`);
+      if (payload.status) {
+        console.log(`Status: ${payload.status}`);
+      }
+
+      ws.close();
+      await connection.cleanup();
+    } catch (error) {
+      if (ws) try { ws.close(); } catch { /* ignore */ }
+      console.error(`Error: ${(error as Error).message}`);
       process.exit(1);
     }
   });

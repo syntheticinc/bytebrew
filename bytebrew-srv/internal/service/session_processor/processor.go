@@ -15,7 +15,7 @@ import (
 
 // SessionRegistry provides session context and message channel (consumer-side interface).
 type SessionRegistry interface {
-	GetSessionContext(sessionID string) (projectRoot, platform, projectKey, userID string, ok bool)
+	GetSessionContext(sessionID string) (projectRoot, platform, projectKey, userID, agentName string, ok bool)
 	MessageChannel(sessionID string) <-chan string
 	PublishEvent(sessionID string, event *pb.SessionEvent)
 	ResetCancel(sessionID string)
@@ -136,7 +136,7 @@ func (p *Processor) processMessages(ctx context.Context, sessionID string) {
 }
 
 func (p *Processor) processMessage(ctx context.Context, sessionID, message string) {
-	projectRoot, platform, projectKey, _, ok := p.registry.GetSessionContext(sessionID)
+	projectRoot, platform, projectKey, _, _, ok := p.registry.GetSessionContext(sessionID)
 	if !ok {
 		slog.ErrorContext(ctx, "[SessionProcessor] session context not found", "session_id", sessionID)
 		return

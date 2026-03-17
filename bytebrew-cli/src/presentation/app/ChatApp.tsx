@@ -99,6 +99,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
     projectKey: container.config.projectKey,
     projectRoot: container.config.projectRoot,
     testingStrategy,
+    agentName: container.config.agentName,
   });
 
   // Conversation management

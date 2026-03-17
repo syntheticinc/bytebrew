@@ -50,6 +50,7 @@ export abstract class BaseHeadlessRunner {
       wsAddress: this.config.wsAddress,
       projectKey: this.config.projectKey,
       sessionId: this.config.sessionId,
+      agentName: this.config.agentName,
       headlessMode: true,
     });
     return this.container;
@@ -73,6 +74,7 @@ export abstract class BaseHeadlessRunner {
       projectRoot: this.config.projectRoot,
       clientVersion: VERSION,
       testingStrategy,
+      agentName: this.config.agentName,
     });
   }
 
