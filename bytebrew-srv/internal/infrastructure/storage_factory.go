@@ -216,7 +216,7 @@ func wireEngineToPool(
 
 	// Set MaxConcurrent from supervisor flow
 	ctx := context.Background()
-	supervisorFlow, err := ec.FlowManager.GetFlow(ctx, domain.FlowTypeSupervisor)
+	supervisorFlow, err := ec.FlowManager.GetFlow(ctx, domain.FlowType("supervisor"))
 	if err != nil {
 		slog.Warn("failed to get supervisor flow for MaxConcurrent config", "error", err)
 		return

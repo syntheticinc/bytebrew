@@ -4,7 +4,7 @@ import "testing"
 
 func TestFlow_Validate(t *testing.T) {
 	flow := &Flow{
-		Type:           FlowTypeSupervisor,
+		Type:           FlowType("supervisor"),
 		Name:           "main-supervisor",
 		SystemPrompt:   "You are a supervisor agent",
 		ToolNames:      []string{"manage_stories", "spawn_code_agent"},
@@ -15,7 +15,7 @@ func TestFlow_Validate(t *testing.T) {
 			ReportTo:  "user",
 		},
 		Spawn: SpawnPolicy{
-			AllowedFlows: []FlowType{FlowTypeCoder},
+			AllowedFlows: []FlowType{FlowType("coder")},
 		},
 	}
 
@@ -43,7 +43,7 @@ func TestFlow_Validate_MissingType(t *testing.T) {
 
 func TestFlow_Validate_MissingName(t *testing.T) {
 	flow := &Flow{
-		Type:           FlowTypeCoder,
+		Type:           FlowType("coder"),
 		SystemPrompt:   "test",
 		MaxSteps:       10,
 		MaxContextSize: 1000,
@@ -60,7 +60,7 @@ func TestFlow_Validate_MissingName(t *testing.T) {
 
 func TestFlow_Validate_MissingPrompt(t *testing.T) {
 	flow := &Flow{
-		Type:           FlowTypeCoder,
+		Type:           FlowType("coder"),
 		Name:           "test",
 		MaxSteps:       10,
 		MaxContextSize: 1000,
@@ -77,7 +77,7 @@ func TestFlow_Validate_MissingPrompt(t *testing.T) {
 
 func TestFlow_Validate_ZeroMaxSteps_IsValid(t *testing.T) {
 	flow := &Flow{
-		Type:           FlowTypeCoder,
+		Type:           FlowType("coder"),
 		Name:           "test",
 		SystemPrompt:   "test",
 		MaxSteps:       0, // 0 = unlimited, should be valid
@@ -92,7 +92,7 @@ func TestFlow_Validate_ZeroMaxSteps_IsValid(t *testing.T) {
 
 func TestFlow_Validate_NegativeMaxSteps(t *testing.T) {
 	flow := &Flow{
-		Type:           FlowTypeCoder,
+		Type:           FlowType("coder"),
 		Name:           "test",
 		SystemPrompt:   "test",
 		MaxSteps:       -1,
@@ -107,7 +107,7 @@ func TestFlow_Validate_NegativeMaxSteps(t *testing.T) {
 
 func TestFlow_Validate_ZeroMaxContextSize(t *testing.T) {
 	flow := &Flow{
-		Type:           FlowTypeCoder,
+		Type:           FlowType("coder"),
 		Name:           "test",
 		SystemPrompt:   "test",
 		MaxSteps:       10,
@@ -125,28 +125,28 @@ func TestFlow_Validate_ZeroMaxContextSize(t *testing.T) {
 
 func TestFlow_CanSpawn(t *testing.T) {
 	flow := &Flow{
-		Type:           FlowTypeSupervisor,
+		Type:           FlowType("supervisor"),
 		Name:           "supervisor",
 		SystemPrompt:   "test",
 		MaxSteps:       10,
 		MaxContextSize: 1000,
 		Spawn: SpawnPolicy{
-			AllowedFlows: []FlowType{FlowTypeCoder, FlowTypeReviewer},
+			AllowedFlows: []FlowType{FlowType("coder"), FlowType("reviewer")},
 		},
 	}
 
-	if !flow.CanSpawn(FlowTypeCoder) {
+	if !flow.CanSpawn(FlowType("coder")) {
 		t.Error("expected supervisor to be able to spawn coder")
 	}
 
-	if !flow.CanSpawn(FlowTypeReviewer) {
+	if !flow.CanSpawn(FlowType("reviewer")) {
 		t.Error("expected supervisor to be able to spawn reviewer")
 	}
 }
 
 func TestFlow_CanSpawn_NotAllowed(t *testing.T) {
 	flow := &Flow{
-		Type:           FlowTypeCoder,
+		Type:           FlowType("coder"),
 		Name:           "coder",
 		SystemPrompt:   "test",
 		MaxSteps:       10,
@@ -156,18 +156,18 @@ func TestFlow_CanSpawn_NotAllowed(t *testing.T) {
 		},
 	}
 
-	if flow.CanSpawn(FlowTypeSupervisor) {
+	if flow.CanSpawn(FlowType("supervisor")) {
 		t.Error("expected coder not to be able to spawn supervisor")
 	}
 
-	if flow.CanSpawn(FlowTypeCoder) {
+	if flow.CanSpawn(FlowType("coder")) {
 		t.Error("expected coder not to be able to spawn coder")
 	}
 }
 
 func TestFlow_ShouldSuspendOn(t *testing.T) {
 	flow := &Flow{
-		Type:           FlowTypeSupervisor,
+		Type:           FlowType("supervisor"),
 		Name:           "supervisor",
 		SystemPrompt:   "test",
 		MaxSteps:       10,
@@ -189,7 +189,7 @@ func TestFlow_ShouldSuspendOn(t *testing.T) {
 
 func TestFlow_ShouldSuspendOn_Unknown(t *testing.T) {
 	flow := &Flow{
-		Type:           FlowTypeSupervisor,
+		Type:           FlowType("supervisor"),
 		Name:           "supervisor",
 		SystemPrompt:   "test",
 		MaxSteps:       10,

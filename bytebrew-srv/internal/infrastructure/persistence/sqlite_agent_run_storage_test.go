@@ -29,7 +29,7 @@ func TestAgentRunStorage_SaveAndGetByID(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create agent run
-	run, err := domain.NewAgentRun("agent-1", "subtask-1", "session-1", domain.FlowTypeCoder)
+	run, err := domain.NewAgentRun("agent-1", "subtask-1", "session-1", domain.FlowType("coder"))
 	require.NoError(t, err)
 
 	// Save
@@ -64,7 +64,7 @@ func TestAgentRunStorage_Update(t *testing.T) {
 	storage, err := NewSQLiteAgentRunStorage(db)
 	require.NoError(t, err)
 
-	run, err := domain.NewAgentRun("agent-1", "subtask-1", "session-1", domain.FlowTypeCoder)
+	run, err := domain.NewAgentRun("agent-1", "subtask-1", "session-1", domain.FlowType("coder"))
 	require.NoError(t, err)
 
 	err = storage.Save(ctx, run)
@@ -103,9 +103,9 @@ func TestAgentRunStorage_GetRunningBySession(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create 3 runs: 2 running, 1 completed
-	run1, _ := domain.NewAgentRun("agent-1", "subtask-1", "session-1", domain.FlowTypeCoder)
-	run2, _ := domain.NewAgentRun("agent-2", "subtask-2", "session-1", domain.FlowTypeCoder)
-	run3, _ := domain.NewAgentRun("agent-3", "subtask-3", "session-1", domain.FlowTypeCoder)
+	run1, _ := domain.NewAgentRun("agent-1", "subtask-1", "session-1", domain.FlowType("coder"))
+	run2, _ := domain.NewAgentRun("agent-2", "subtask-2", "session-1", domain.FlowType("coder"))
+	run3, _ := domain.NewAgentRun("agent-3", "subtask-3", "session-1", domain.FlowType("coder"))
 
 	run3.Complete("done")
 
@@ -137,8 +137,8 @@ func TestAgentRunStorage_CountRunningBySession(t *testing.T) {
 	storage, err := NewSQLiteAgentRunStorage(db)
 	require.NoError(t, err)
 
-	run1, _ := domain.NewAgentRun("agent-1", "subtask-1", "session-1", domain.FlowTypeCoder)
-	run2, _ := domain.NewAgentRun("agent-2", "subtask-2", "session-1", domain.FlowTypeCoder)
+	run1, _ := domain.NewAgentRun("agent-1", "subtask-1", "session-1", domain.FlowType("coder"))
+	run2, _ := domain.NewAgentRun("agent-2", "subtask-2", "session-1", domain.FlowType("coder"))
 
 	storage.Save(ctx, run1)
 	storage.Save(ctx, run2)
@@ -172,9 +172,9 @@ func TestAgentRunStorage_CleanupOrphanedRuns(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create 3 running agents
-	run1, _ := domain.NewAgentRun("agent-1", "subtask-1", "session-1", domain.FlowTypeCoder)
-	run2, _ := domain.NewAgentRun("agent-2", "subtask-2", "session-1", domain.FlowTypeCoder)
-	run3, _ := domain.NewAgentRun("agent-3", "subtask-3", "session-2", domain.FlowTypeCoder)
+	run1, _ := domain.NewAgentRun("agent-1", "subtask-1", "session-1", domain.FlowType("coder"))
+	run2, _ := domain.NewAgentRun("agent-2", "subtask-2", "session-1", domain.FlowType("coder"))
+	run3, _ := domain.NewAgentRun("agent-3", "subtask-3", "session-2", domain.FlowType("coder"))
 
 	storage.Save(ctx, run1)
 	storage.Save(ctx, run2)
@@ -230,7 +230,7 @@ func TestAgentRunStorage_FailedRun(t *testing.T) {
 	storage, err := NewSQLiteAgentRunStorage(db)
 	require.NoError(t, err)
 
-	run, err := domain.NewAgentRun("agent-1", "subtask-1", "session-1", domain.FlowTypeCoder)
+	run, err := domain.NewAgentRun("agent-1", "subtask-1", "session-1", domain.FlowType("coder"))
 	require.NoError(t, err)
 
 	storage.Save(ctx, run)
@@ -264,16 +264,16 @@ func TestAgentRunStorage_GetBySessionID(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create runs in different sessions with distinct timestamps
-	run1, _ := domain.NewAgentRun("agent-1", "subtask-1", "session-1", domain.FlowTypeCoder)
+	run1, _ := domain.NewAgentRun("agent-1", "subtask-1", "session-1", domain.FlowType("coder"))
 	storage.Save(ctx, run1)
 
 	// Wait for different second (SQLite timestamp resolution)
 	time.Sleep(1100 * time.Millisecond)
 
-	run2, _ := domain.NewAgentRun("agent-2", "subtask-2", "session-1", domain.FlowTypeCoder)
+	run2, _ := domain.NewAgentRun("agent-2", "subtask-2", "session-1", domain.FlowType("coder"))
 	storage.Save(ctx, run2)
 
-	run3, _ := domain.NewAgentRun("agent-3", "subtask-3", "session-2", domain.FlowTypeCoder)
+	run3, _ := domain.NewAgentRun("agent-3", "subtask-3", "session-2", domain.FlowType("coder"))
 	storage.Save(ctx, run3)
 
 	// Get by session

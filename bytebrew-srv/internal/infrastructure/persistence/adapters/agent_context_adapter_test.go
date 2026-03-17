@@ -170,7 +170,7 @@ func TestAgentContextSnapshotToModel_Roundtrip(t *testing.T) {
 		ID:            uuid.New().String(),
 		SessionID:     uuid.New().String(),
 		AgentID:       "supervisor",
-		FlowType:      domain.FlowTypeSupervisor,
+		FlowType:      "supervisor",
 		SchemaVersion: domain.CurrentSchemaVersion,
 		ContextData:   []byte(`[{"role":"user","content":"test"}]`),
 		StepNumber:    5,
@@ -214,10 +214,10 @@ func TestAgentContextSnapshotToModel_Nil(t *testing.T) {
 
 func TestAgentContextSnapshotToModel_AllFlowTypes(t *testing.T) {
 	flowTypes := []domain.FlowType{
-		domain.FlowTypeSupervisor,
-		domain.FlowTypeCoder,
-		domain.FlowTypeReviewer,
-		domain.FlowTypeResearcher,
+		"supervisor",
+		"coder",
+		"reviewer",
+		"researcher",
 	}
 
 	for _, flowType := range flowTypes {
@@ -260,7 +260,7 @@ func TestAgentContextSnapshotToModel_AllStatuses(t *testing.T) {
 				ID:            uuid.New().String(),
 				SessionID:     uuid.New().String(),
 				AgentID:       "test-agent",
-				FlowType:      domain.FlowTypeSupervisor,
+				FlowType:      "supervisor",
 				SchemaVersion: 1,
 				ContextData:   []byte(`[]`),
 				StepNumber:    0,

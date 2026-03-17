@@ -7,10 +7,10 @@ import (
 
 // flowTypeRoles maps each FlowType to the "role" string sent to the proxy.
 var flowTypeRoles = map[domain.FlowType]string{
-	domain.FlowTypeSupervisor: "supervisor",
-	domain.FlowTypeCoder:      "coder",
-	domain.FlowTypeReviewer:   "reviewer",
-	domain.FlowTypeResearcher: "researcher",
+	"supervisor": "supervisor",
+	"coder":      "coder",
+	"reviewer":   "reviewer",
+	"researcher": "researcher",
 }
 
 // ProviderResolverConfig holds the inputs for creating a ModelSelector.

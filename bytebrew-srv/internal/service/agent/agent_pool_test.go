@@ -1312,7 +1312,7 @@ func TestAgentPool_SpawnWithDescription(t *testing.T) {
 	ctx := context.Background()
 	pool, _ := createTestAgentPool(t)
 
-	agentID, err := pool.SpawnWithDescription(ctx, "session-1", "project-1", domain.FlowTypeResearcher, "Research codebase structure", false)
+	agentID, err := pool.SpawnWithDescription(ctx, "session-1", "project-1", domain.FlowType("researcher"), "Research codebase structure", false)
 	if err != nil {
 		t.Fatalf("SpawnWithDescription() error = %v", err)
 	}
@@ -1347,7 +1347,7 @@ func TestAgentPool_SpawnWithDescription_Reviewer(t *testing.T) {
 	ctx := context.Background()
 	pool, _ := createTestAgentPool(t)
 
-	agentID, err := pool.SpawnWithDescription(ctx, "session-1", "project-1", domain.FlowTypeReviewer, "Review code quality", false)
+	agentID, err := pool.SpawnWithDescription(ctx, "session-1", "project-1", domain.FlowType("reviewer"), "Review code quality", false)
 	if err != nil {
 		t.Fatalf("SpawnWithDescription() error = %v", err)
 	}
@@ -1369,7 +1369,7 @@ func TestAgentPool_MarkCompleted_EmptySubtaskID(t *testing.T) {
 		Status:    "running",
 		StartedAt: time.Now(),
 		Cancel:    func() {},
-		flowType:  domain.FlowTypeResearcher,
+		flowType:  domain.FlowType("researcher"),
 	}
 
 	pool.mu.Lock()
@@ -1412,7 +1412,7 @@ func TestAgentPool_MarkFailed_EmptySubtaskID(t *testing.T) {
 		Status:    "running",
 		StartedAt: time.Now(),
 		Cancel:    func() {},
-		flowType:  domain.FlowTypeReviewer,
+		flowType:  domain.FlowType("reviewer"),
 	}
 
 	pool.mu.Lock()
@@ -1458,7 +1458,7 @@ func TestAgentPool_RestartAgent_Researcher(t *testing.T) {
 		Error:       "Previous failure",
 		StartedAt:   time.Now().Add(-5 * time.Minute),
 		Cancel:      func() {},
-		flowType:    domain.FlowTypeResearcher,
+		flowType:    domain.FlowType("researcher"),
 		description: "Research codebase architecture",
 	}
 	pool.mu.Unlock()

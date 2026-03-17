@@ -145,7 +145,7 @@ func (m *mockChatModelAdapter) WithTools(tools []*schema.ToolInfo) (model.ToolCa
 
 func testFlowForAdapter() *domain.Flow {
 	return &domain.Flow{
-		Type:           domain.FlowTypeSupervisor,
+		Type:           domain.FlowType("supervisor"),
 		Name:           "test-flow",
 		SystemPrompt:   "You are a test agent",
 		ToolNames:      []string{},
@@ -319,7 +319,7 @@ func TestEngineAdapter_ExecuteTurn(t *testing.T) {
 	assert.True(t, capturedCfg.Streaming)
 	assert.NotNil(t, capturedCfg.ChatModel)
 	assert.NotNil(t, capturedCfg.Flow)
-	assert.Equal(t, domain.FlowTypeSupervisor, capturedCfg.Flow.Type)
+	assert.Equal(t, domain.FlowType("supervisor"), capturedCfg.Flow.Type)
 	assert.NotNil(t, capturedCfg.ChunkCallback)
 	assert.NotNil(t, capturedCfg.EventCallback)
 	assert.Equal(t, "test-model", capturedCfg.ModelName)

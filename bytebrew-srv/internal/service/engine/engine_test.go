@@ -117,7 +117,7 @@ func (m *mockChatModel) WithTools(tools []*schema.ToolInfo) (model.ToolCallingCh
 // Helper to create test flow
 func testFlow() *domain.Flow {
 	return &domain.Flow{
-		Type:           domain.FlowTypeSupervisor,
+		Type:           domain.FlowType("supervisor"),
 		Name:           "test-flow",
 		SystemPrompt:   "You are a test agent",
 		ToolNames:      []string{},
@@ -156,7 +156,7 @@ func TestEngine_FreshStart(t *testing.T) {
 	snapshot := snapshotRepo.snapshots["supervisor"]
 	require.NotNil(t, snapshot)
 	assert.Equal(t, "session-1", snapshot.SessionID)
-	assert.Equal(t, domain.FlowTypeSupervisor, snapshot.FlowType)
+	assert.Equal(t, domain.FlowType("supervisor"), snapshot.FlowType)
 	assert.Equal(t, domain.CurrentSchemaVersion, snapshot.SchemaVersion)
 	assert.Equal(t, domain.AgentContextStatusCompleted, snapshot.Status)
 
@@ -184,7 +184,7 @@ func TestEngine_ResumeFromSnapshot(t *testing.T) {
 	snapshotRepo.snapshots["supervisor"] = &domain.AgentContextSnapshot{
 		SessionID:     "session-1",
 		AgentID:       "supervisor",
-		FlowType:      domain.FlowTypeSupervisor,
+		FlowType:      domain.FlowType("supervisor"),
 		SchemaVersion: domain.CurrentSchemaVersion,
 		ContextData:   contextData,
 		StepNumber:    1,
@@ -367,7 +367,7 @@ func TestEngine_LosslessRoundTrip(t *testing.T) {
 	snapshotRepo.snapshots["supervisor"] = &domain.AgentContextSnapshot{
 		SessionID:     "session-1",
 		AgentID:       "supervisor",
-		FlowType:      domain.FlowTypeSupervisor,
+		FlowType:      domain.FlowType("supervisor"),
 		SchemaVersion: domain.CurrentSchemaVersion,
 		ContextData:   contextData,
 		StepNumber:    2,
@@ -425,7 +425,7 @@ func TestEngine_RecoverInterrupted(t *testing.T) {
 	snapshotRepo.snapshots["agent-1"] = &domain.AgentContextSnapshot{
 		SessionID:     "session-1",
 		AgentID:       "agent-1",
-		FlowType:      domain.FlowTypeSupervisor,
+		FlowType:      domain.FlowType("supervisor"),
 		SchemaVersion: domain.CurrentSchemaVersion,
 		ContextData:   []byte("{}"),
 		Status:        domain.AgentContextStatusActive,
@@ -436,7 +436,7 @@ func TestEngine_RecoverInterrupted(t *testing.T) {
 	snapshotRepo.snapshots["agent-2"] = &domain.AgentContextSnapshot{
 		SessionID:     "session-2",
 		AgentID:       "agent-2",
-		FlowType:      domain.FlowTypeCoder,
+		FlowType:      domain.FlowType("coder"),
 		SchemaVersion: domain.CurrentSchemaVersion,
 		ContextData:   []byte("{}"),
 		Status:        domain.AgentContextStatusActive,
@@ -555,7 +555,7 @@ func TestEngine_SnapshotCompression(t *testing.T) {
 	snapshotRepo.snapshots["supervisor"] = &domain.AgentContextSnapshot{
 		SessionID:     "session-1",
 		AgentID:       "supervisor",
-		FlowType:      domain.FlowTypeSupervisor,
+		FlowType:      domain.FlowType("supervisor"),
 		SchemaVersion: domain.CurrentSchemaVersion,
 		ContextData:   contextData,
 		StepNumber:    100,

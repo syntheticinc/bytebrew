@@ -292,7 +292,7 @@ func (p *AgentPool) Spawn(ctx context.Context, sessionID, projectKey, subtaskID 
 		Cancel:        cancel,
 		completionCh:  make(chan struct{}),
 		blockingSpawn: blocking,
-		flowType:      domain.FlowTypeCoder,
+		flowType:      domain.FlowType("coder"),
 	}
 
 	// Register agent under lock (isolated critical section with defer)
@@ -378,7 +378,7 @@ func (p *AgentPool) registerAgent(ctx context.Context, sessionID, agentID string
 	if p.agentRunStorage != nil {
 		flowType := running.flowType
 		if flowType == "" {
-			flowType = domain.FlowTypeCoder
+			flowType = domain.FlowType("coder")
 		}
 		agentRun, err := domain.NewAgentRun(agentID, running.SubtaskID, sessionID, flowType)
 		if err != nil {

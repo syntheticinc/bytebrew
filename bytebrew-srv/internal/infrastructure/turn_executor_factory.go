@@ -99,9 +99,9 @@ func (f *EngineTurnExecutorFactory) CreateForSession(
 		FlowProvider:     f.flowManager,
 		ToolResolver:     f.toolResolver,
 		ToolDeps:         toolDeps,
-		ChatModel:        f.modelSelector.Select(domain.FlowTypeSupervisor),
+		ChatModel:        f.modelSelector.Select(domain.FlowType("supervisor")),
 		AgentConfig:      f.agentConfig,
-		ModelName:        f.modelSelector.ModelName(domain.FlowTypeSupervisor),
+		ModelName:        f.modelSelector.ModelName(domain.FlowType("supervisor")),
 		ContextReminders: contextReminders,
 	})
 

@@ -46,33 +46,33 @@ func TestModelSelector_Select(t *testing.T) {
 	}{
 		{
 			name:     "default returned when no override",
-			flowType: domain.FlowTypeSupervisor,
+			flowType: domain.FlowType("supervisor"),
 			setup:    func(s *ModelSelector) {},
 			wantID:   "default",
 		},
 		{
 			name:     "default returned for unregistered flow type",
-			flowType: domain.FlowTypeReviewer,
+			flowType: domain.FlowType("reviewer"),
 			setup: func(s *ModelSelector) {
-				s.SetModel(domain.FlowTypeCoder, coderModel, "coder-model")
+				s.SetModel(domain.FlowType("coder"), coderModel, "coder-model")
 			},
 			wantID: "default",
 		},
 		{
 			name:     "override returned when set",
-			flowType: domain.FlowTypeCoder,
+			flowType: domain.FlowType("coder"),
 			setup: func(s *ModelSelector) {
-				s.SetModel(domain.FlowTypeCoder, coderModel, "coder-model")
+				s.SetModel(domain.FlowType("coder"), coderModel, "coder-model")
 			},
 			wantID: "coder",
 		},
 		{
 			name:     "each flow type gets its own model",
-			flowType: domain.FlowTypeSupervisor,
+			flowType: domain.FlowType("supervisor"),
 			setup: func(s *ModelSelector) {
 				supervisorModel := &mockChatModel{id: "supervisor"}
-				s.SetModel(domain.FlowTypeSupervisor, supervisorModel, "supervisor-model")
-				s.SetModel(domain.FlowTypeCoder, coderModel, "coder-model")
+				s.SetModel(domain.FlowType("supervisor"), supervisorModel, "supervisor-model")
+				s.SetModel(domain.FlowType("coder"), coderModel, "coder-model")
 			},
 			wantID: "supervisor",
 		},
@@ -106,23 +106,23 @@ func TestModelSelector_ModelName(t *testing.T) {
 	}{
 		{
 			name:     "default name returned when no override",
-			flowType: domain.FlowTypeSupervisor,
+			flowType: domain.FlowType("supervisor"),
 			setup:    func(s *ModelSelector) {},
 			want:     "default-model",
 		},
 		{
 			name:     "default name returned for unregistered flow type",
-			flowType: domain.FlowTypeReviewer,
+			flowType: domain.FlowType("reviewer"),
 			setup: func(s *ModelSelector) {
-				s.SetModel(domain.FlowTypeCoder, coderModel, "coder-model")
+				s.SetModel(domain.FlowType("coder"), coderModel, "coder-model")
 			},
 			want: "default-model",
 		},
 		{
 			name:     "override name returned when set",
-			flowType: domain.FlowTypeCoder,
+			flowType: domain.FlowType("coder"),
 			setup: func(s *ModelSelector) {
-				s.SetModel(domain.FlowTypeCoder, coderModel, "coder-model")
+				s.SetModel(domain.FlowType("coder"), coderModel, "coder-model")
 			},
 			want: "coder-model",
 		},

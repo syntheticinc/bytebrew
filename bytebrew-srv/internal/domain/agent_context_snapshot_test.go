@@ -10,7 +10,7 @@ func TestAgentContextSnapshot_Validate(t *testing.T) {
 		ID:            "snap-1",
 		SessionID:     "session-1",
 		AgentID:       "supervisor",
-		FlowType:      FlowTypeSupervisor,
+		FlowType:      FlowType("supervisor"),
 		SchemaVersion: CurrentSchemaVersion,
 		ContextData:   []byte(`[{"role":"user","content":"test"}]`),
 		StepNumber:    5,
@@ -28,7 +28,7 @@ func TestAgentContextSnapshot_Validate(t *testing.T) {
 func TestAgentContextSnapshot_Validate_MissingSessionID(t *testing.T) {
 	snapshot := &AgentContextSnapshot{
 		AgentID:       "supervisor",
-		FlowType:      FlowTypeSupervisor,
+		FlowType:      FlowType("supervisor"),
 		SchemaVersion: 1,
 		Status:        AgentContextStatusActive,
 	}
@@ -45,7 +45,7 @@ func TestAgentContextSnapshot_Validate_MissingSessionID(t *testing.T) {
 func TestAgentContextSnapshot_Validate_MissingAgentID(t *testing.T) {
 	snapshot := &AgentContextSnapshot{
 		SessionID:     "session-1",
-		FlowType:      FlowTypeSupervisor,
+		FlowType:      FlowType("supervisor"),
 		SchemaVersion: 1,
 		Status:        AgentContextStatusActive,
 	}
@@ -80,7 +80,7 @@ func TestAgentContextSnapshot_Validate_ZeroSchemaVersion(t *testing.T) {
 	snapshot := &AgentContextSnapshot{
 		SessionID:     "session-1",
 		AgentID:       "supervisor",
-		FlowType:      FlowTypeSupervisor,
+		FlowType:      FlowType("supervisor"),
 		SchemaVersion: 0,
 		Status:        AgentContextStatusActive,
 	}
@@ -98,7 +98,7 @@ func TestAgentContextSnapshot_Validate_InvalidStatus(t *testing.T) {
 	snapshot := &AgentContextSnapshot{
 		SessionID:     "session-1",
 		AgentID:       "supervisor",
-		FlowType:      FlowTypeSupervisor,
+		FlowType:      FlowType("supervisor"),
 		SchemaVersion: 1,
 		Status:        AgentContextStatus("invalid"),
 	}

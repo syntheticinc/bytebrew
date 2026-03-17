@@ -106,7 +106,7 @@ func (p *AgentPool) runCodeAgentWithEngine(
 	subtask *domain.Subtask,
 ) (string, error) {
 	input := buildCodeAgentInput(subtask)
-	return p.runAgentWithEngine(ctx, sessionID, projectKey, agentID, domain.FlowTypeCoder, subtask.ID, input)
+	return p.runAgentWithEngine(ctx, sessionID, projectKey, agentID, domain.FlowType("coder"), subtask.ID, input)
 }
 
 func buildCodeAgentInput(subtask *domain.Subtask) string {

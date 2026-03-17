@@ -130,7 +130,7 @@ func (e *EngineAdapter) ExecuteTurn(
 	eventCallback func(event *domain.AgentEvent) error,
 ) error {
 	// 1. Get flow config for supervisor
-	flow, err := e.flowProvider.GetFlow(ctx, domain.FlowTypeSupervisor)
+	flow, err := e.flowProvider.GetFlow(ctx, domain.FlowType("supervisor"))
 	if err != nil {
 		return fmt.Errorf("get supervisor flow: %w", err)
 	}

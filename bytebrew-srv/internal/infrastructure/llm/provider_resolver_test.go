@@ -20,10 +20,10 @@ func TestResolveModelSelector_Byok(t *testing.T) {
 
 	// All flow types should return the BYOK model.
 	for _, ft := range []domain.FlowType{
-		domain.FlowTypeSupervisor,
-		domain.FlowTypeCoder,
-		domain.FlowTypeReviewer,
-		domain.FlowTypeResearcher,
+		domain.FlowType("supervisor"),
+		domain.FlowType("coder"),
+		domain.FlowType("reviewer"),
+		domain.FlowType("researcher"),
 	} {
 		m := selector.Select(ft)
 		resp, err := m.Generate(context.Background(), nil)
@@ -40,11 +40,11 @@ func TestResolveModelSelector_EmptyMode_DefaultsByok(t *testing.T) {
 		BYOKModelName: "gpt-4",
 	})
 
-	m := selector.Select(domain.FlowTypeSupervisor)
+	m := selector.Select(domain.FlowType("supervisor"))
 	resp, err := m.Generate(context.Background(), nil)
 	require.NoError(t, err)
 	assert.Equal(t, "byok", resp.Content, "empty mode should default to byok")
-	assert.Equal(t, "gpt-4", selector.ModelName(domain.FlowTypeSupervisor))
+	assert.Equal(t, "gpt-4", selector.ModelName(domain.FlowType("supervisor")))
 }
 
 func TestResolveModelSelector_Proxy(t *testing.T) {
@@ -59,10 +59,10 @@ func TestResolveModelSelector_Proxy(t *testing.T) {
 
 	// Each flow type should get a ProxyChatModel.
 	for _, ft := range []domain.FlowType{
-		domain.FlowTypeSupervisor,
-		domain.FlowTypeCoder,
-		domain.FlowTypeReviewer,
-		domain.FlowTypeResearcher,
+		domain.FlowType("supervisor"),
+		domain.FlowType("coder"),
+		domain.FlowType("reviewer"),
+		domain.FlowType("researcher"),
 	} {
 		m := selector.Select(ft)
 		proxy, ok := m.(*ProxyChatModel)
@@ -73,7 +73,7 @@ func TestResolveModelSelector_Proxy(t *testing.T) {
 	}
 
 	// Model name should be "proxy-llm".
-	assert.Equal(t, "proxy-llm", selector.ModelName(domain.FlowTypeSupervisor))
+	assert.Equal(t, "proxy-llm", selector.ModelName(domain.FlowType("supervisor")))
 }
 
 func TestResolveModelSelector_Auto(t *testing.T) {
@@ -88,10 +88,10 @@ func TestResolveModelSelector_Auto(t *testing.T) {
 
 	// Each flow type should get an AutoChatModel.
 	for _, ft := range []domain.FlowType{
-		domain.FlowTypeSupervisor,
-		domain.FlowTypeCoder,
-		domain.FlowTypeReviewer,
-		domain.FlowTypeResearcher,
+		domain.FlowType("supervisor"),
+		domain.FlowType("coder"),
+		domain.FlowType("reviewer"),
+		domain.FlowType("researcher"),
 	} {
 		m := selector.Select(ft)
 		auto, ok := m.(*AutoChatModel)
@@ -110,7 +110,7 @@ func TestResolveModelSelector_Auto(t *testing.T) {
 	}
 
 	// Model name should be "auto-llm".
-	assert.Equal(t, "auto-llm", selector.ModelName(domain.FlowTypeSupervisor))
+	assert.Equal(t, "auto-llm", selector.ModelName(domain.FlowType("supervisor")))
 }
 
 func TestResolveModelSelector_Proxy_DefaultModel(t *testing.T) {
@@ -158,7 +158,7 @@ func TestResolveModelSelector_UnknownMode_DefaultsByok(t *testing.T) {
 		BYOKModelName: "gpt-4",
 	})
 
-	m := selector.Select(domain.FlowTypeSupervisor)
+	m := selector.Select(domain.FlowType("supervisor"))
 	resp, err := m.Generate(context.Background(), nil)
 	require.NoError(t, err)
 	assert.Equal(t, "byok", resp.Content, "unknown mode should fall back to byok")
@@ -167,10 +167,10 @@ func TestResolveModelSelector_UnknownMode_DefaultsByok(t *testing.T) {
 // Verify that flowTypeRoles covers all defined FlowTypes.
 func TestFlowTypeRoles_Coverage(t *testing.T) {
 	expectedFlows := []domain.FlowType{
-		domain.FlowTypeSupervisor,
-		domain.FlowTypeCoder,
-		domain.FlowTypeReviewer,
-		domain.FlowTypeResearcher,
+		domain.FlowType("supervisor"),
+		domain.FlowType("coder"),
+		domain.FlowType("reviewer"),
+		domain.FlowType("researcher"),
 	}
 
 	for _, ft := range expectedFlows {

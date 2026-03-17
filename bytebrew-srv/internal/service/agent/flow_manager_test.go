@@ -90,10 +90,10 @@ func TestFlowManager_GetFlow_AllTypes(t *testing.T) {
 		flowType domain.FlowType
 		wantName string
 	}{
-		{domain.FlowTypeSupervisor, "Supervisor Agent"},
-		{domain.FlowTypeCoder, "Code Agent"},
-		{domain.FlowTypeReviewer, "Code Reviewer"},
-		{domain.FlowTypeResearcher, "Researcher"},
+		{domain.FlowType("supervisor"), "Supervisor Agent"},
+		{domain.FlowType("coder"), "Code Agent"},
+		{domain.FlowType("reviewer"), "Code Reviewer"},
+		{domain.FlowType("researcher"), "Researcher"},
 	}
 
 	for _, tt := range tests {
@@ -182,14 +182,14 @@ func TestFlowManager_SupervisorCanSpawn(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	supervisorFlow, err := manager.GetFlow(ctx, domain.FlowTypeSupervisor)
+	supervisorFlow, err := manager.GetFlow(ctx, domain.FlowType("supervisor"))
 	require.NoError(t, err)
 
 	// Supervisor should be able to spawn coder, reviewer, researcher
-	assert.True(t, supervisorFlow.CanSpawn(domain.FlowTypeCoder))
-	assert.True(t, supervisorFlow.CanSpawn(domain.FlowTypeReviewer))
-	assert.True(t, supervisorFlow.CanSpawn(domain.FlowTypeResearcher))
+	assert.True(t, supervisorFlow.CanSpawn(domain.FlowType("coder")))
+	assert.True(t, supervisorFlow.CanSpawn(domain.FlowType("reviewer")))
+	assert.True(t, supervisorFlow.CanSpawn(domain.FlowType("researcher")))
 
 	// Supervisor cannot spawn another supervisor
-	assert.False(t, supervisorFlow.CanSpawn(domain.FlowTypeSupervisor))
+	assert.False(t, supervisorFlow.CanSpawn(domain.FlowType("supervisor")))
 }

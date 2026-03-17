@@ -137,16 +137,16 @@ Example: {"action": "spawn", "subtask_id": "abc123"}`, nil
 
 	switch args.Action {
 	case "spawn":
-		flowType := domain.FlowTypeCoder
+		flowType := domain.FlowType("coder")
 		if args.FlowType != "" {
 			flowType = domain.FlowType(args.FlowType)
 		}
 
 		// Validate flow_type
 		validFlows := map[domain.FlowType]bool{
-			domain.FlowTypeCoder:      true,
-			domain.FlowTypeResearcher: true,
-			domain.FlowTypeReviewer:   true,
+			domain.FlowType("coder"):      true,
+			domain.FlowType("researcher"): true,
+			domain.FlowType("reviewer"):   true,
 		}
 		if !validFlows[flowType] {
 			return fmt.Sprintf("[ERROR] invalid flow_type: %s. Must be: coder, researcher, reviewer", args.FlowType), nil
@@ -155,7 +155,7 @@ Example: {"action": "spawn", "subtask_id": "abc123"}`, nil
 		var agentID string
 		var err error
 
-		if flowType == domain.FlowTypeCoder {
+		if flowType == domain.FlowType("coder") {
 			if args.SubtaskID == "" {
 				return "[ERROR] subtask_id is required for coder agent", nil
 			}
@@ -171,7 +171,7 @@ Example: {"action": "spawn", "subtask_id": "abc123"}`, nil
 			if strings.Contains(err.Error(), "max concurrent agents reached") {
 				return fmt.Sprintf("Cannot spawn new agent: %s. Use spawn_code_agent(action=list) to check running agents, or spawn_code_agent(action=stop, agent_id=...) to stop one.", err.Error()), nil
 			}
-			if flowType == domain.FlowTypeCoder {
+			if flowType == domain.FlowType("coder") {
 				return fmt.Sprintf("[ERROR] %v. "+
 					"subtask_id MUST be the exact ID returned by manage_subtasks(action=create), e.g. \"a1b2c3d4\". "+
 					"Do NOT invent IDs. Use manage_subtasks(action=get_ready, task_id=...) to list available subtask IDs.", err), nil

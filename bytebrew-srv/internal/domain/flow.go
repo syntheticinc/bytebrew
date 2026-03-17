@@ -2,15 +2,9 @@ package domain
 
 import "fmt"
 
-// FlowType represents the type of flow (agent role)
+// FlowType represents the type of flow (agent name from DB).
+// No hardcoded constants — values come from agent definitions.
 type FlowType string
-
-const (
-	FlowTypeSupervisor FlowType = "supervisor"
-	FlowTypeCoder      FlowType = "coder"
-	FlowTypeReviewer   FlowType = "reviewer"
-	FlowTypeResearcher FlowType = "researcher"
-)
 
 // LifecyclePolicy defines when a flow should suspend and where to report
 type LifecyclePolicy struct {
@@ -32,6 +26,7 @@ type Flow struct {
 	ToolNames      []string
 	MaxSteps       int
 	MaxContextSize int
+	ToolExecution  string // "sequential" or "parallel"
 	Lifecycle      LifecyclePolicy
 	Spawn          SpawnPolicy
 }
