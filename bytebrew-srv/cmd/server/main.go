@@ -22,6 +22,8 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/embedded"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/agent_registry"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/kit"
+	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/kits/developer"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/bridge"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/flow_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew-srv/internal/infrastructure/persistence"
@@ -249,9 +251,15 @@ func main() {
 		log.Fatalf("Failed to create infrastructure components: %v", err)
 	}
 
+	// Create KitRegistry and register known kits.
+	kitRegistry := kit.NewRegistry()
+	kitRegistry.Register(developer.New())
+	slog.InfoContext(ctx, "Kit registry initialized", "kits", kitRegistry.List())
+
 	// If AgentRegistry loaded named models, register them in ModelSelector.
 	// This enables per-agent model resolution (agent.Model: "llama-4" → ModelSelector.ResolveByName).
 	_ = agentRegistry // available for Phase 2+ wiring
+	_ = kitRegistry   // available for Phase 3+ wiring (AgentToolResolver.SetKitProvider)
 
 	// Initialize gRPC server
 	grpcServer, err := initializeGRPCServer(cfg, loggerInstance, components.LicenseInfo, *managed)
