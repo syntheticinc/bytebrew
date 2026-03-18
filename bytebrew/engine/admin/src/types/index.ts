@@ -231,4 +231,6 @@ export interface ToolMetadata {
   description: string;
   security_zone: SecurityZone;
   risk_warning?: string;
+  hint?: string;
+  companion?: string;
 }

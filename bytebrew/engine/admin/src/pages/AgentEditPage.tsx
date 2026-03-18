@@ -193,7 +193,14 @@ export default function AgentEditPage() {
             {tool.risk_warning && (
               <p className="text-xs text-brand-accent bg-red-50/80 p-2 rounded leading-relaxed">{tool.risk_warning}</p>
             )}
+            {tool.hint && (
+              <p className="text-xs text-amber-700 bg-amber-50/80 p-2 rounded leading-relaxed mt-1">💡 {tool.hint}</p>
+            )}
           </div>
+        )}
+        {/* Show hint inline when tool is checked and companion is not */}
+        {isSelected && tool.hint && tool.companion && !(form.tools ?? []).includes(tool.companion) && (
+          <div className="text-xs text-amber-700 mt-1 ml-6">💡 {tool.hint}</div>
         )}
       </div>
     );

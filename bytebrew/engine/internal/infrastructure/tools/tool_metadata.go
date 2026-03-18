@@ -15,6 +15,8 @@ type ToolMetadata struct {
 	Description  string       `json:"description"`
 	SecurityZone SecurityZone `json:"security_zone"`
 	RiskWarning  string       `json:"risk_warning,omitempty"`
+	Hint         string       `json:"hint,omitempty"`         // contextual hint shown when tool is selected
+	Companion    string       `json:"companion,omitempty"`    // suggested companion tool name
 }
 
 // toolMetadataRegistry holds metadata for all known built-in tools.
@@ -27,8 +29,10 @@ var toolMetadataRegistry = map[string]ToolMetadata{
 	},
 	"web_search": {
 		Name:         "web_search",
-		Description:  "Performs web search using Tavily API and returns relevant results. Useful for finding documentation, solutions, and current information.",
+		Description:  "Performs web search using Tavily API and returns relevant results with snippets. Useful for finding documentation, solutions, and current information.",
 		SecurityZone: ZoneSafe,
+		Hint:         "Returns search snippets only. Consider enabling web_fetch (Caution zone) to allow the agent to read full page content from search results.",
+		Companion:    "web_fetch",
 	},
 	"manage_tasks": {
 		Name:         "manage_tasks",
