@@ -21,6 +21,13 @@ import (
 	"gorm.io/gorm"
 )
 
+// dbPingerAdapter bridges *sql.DB to the http.DBPinger interface.
+type dbPingerAdapter struct {
+	db interface{ Ping() error }
+}
+
+func (a *dbPingerAdapter) Ping() error { return a.db.Ping() }
+
 // agentCounterAdapter bridges AgentRegistry to the http.AgentCounter interface.
 type agentCounterAdapter struct {
 	registry *agent_registry.AgentRegistry

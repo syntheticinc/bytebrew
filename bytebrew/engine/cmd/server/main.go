@@ -297,10 +297,18 @@ func main() {
 
 		// Public endpoints
 		healthHandler := deliveryhttp.NewHealthHandler(version, &agentCounterAdapter{registry: agentRegistry})
+		if pgDB != nil {
+			sqlDB, _ := pgDB.DB()
+			if sqlDB != nil {
+				healthHandler.SetDBPinger(&dbPingerAdapter{db: sqlDB})
+			}
+		}
 		r.Get("/api/v1/health", healthHandler.ServeHTTP)
 
 		authHandler := deliveryhttp.NewAuthHandler(bootstrapCfg.Security.AdminUser, bootstrapCfg.Security.AdminPassword, jwtSecret)
-		r.Post("/api/v1/auth/login", authHandler.Login)
+		// Rate limit auth endpoints: 10 requests per minute per IP
+		authRateLimiter := deliveryhttp.NewRateLimiter(10, time.Minute)
+		r.With(authRateLimiter.Middleware).Post("/api/v1/auth/login", authHandler.Login)
 
 		// Protected endpoints
 		// Chat endpoint (SSE streaming — requires auth)
