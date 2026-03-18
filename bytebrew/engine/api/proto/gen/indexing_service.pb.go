@@ -213,7 +213,7 @@ const file_indexing_service_proto_rawDesc = "" +
 	"\x05error\x18\x05 \x01(\v2\x12.bytebrew.v1.ErrorR\x05error\x12\x18\n" +
 	"\amessage\x18\x06 \x01(\tR\amessage2m\n" +
 	"\x0fIndexingService\x12Z\n" +
-	"\rIndexCodebase\x12!.bytebrew.v1.IndexCodebaseRequest\x1a\".bytebrew.v1.IndexCodebaseResponse(\x010\x01BHZFgithub.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen;bytebrewv1b\x06proto3"
+	"\rIndexCodebase\x12!.bytebrew.v1.IndexCodebaseRequest\x1a\".bytebrew.v1.IndexCodebaseResponse(\x010\x01BKZIgithub.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen;bytebrewv1b\x06proto3"
 
 var (
 	file_indexing_service_proto_rawDescOnce sync.Once

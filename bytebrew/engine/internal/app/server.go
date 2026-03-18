@@ -1,8 +1,8 @@
-package main
+// Package app provides common server setup shared between CE and server (legacy) entry points.
+package app
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log"
 	"log/slog"
@@ -22,14 +22,14 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/embedded"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/agent_registry"
-	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/kit"
-	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/kits/developer"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/bridge"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/flow_registry"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/kit"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/config_repo"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/portfile"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/kits/developer"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/eventstore"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/session_processor"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/config"
@@ -39,65 +39,66 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
-// Build info is set via ldflags at build time.
-var (
-	version = "dev"
-	commit  = "unknown"
-	date    = "unknown"
-)
+// ServerConfig holds parameters for Run that differ between CE and server (legacy).
+type ServerConfig struct {
+	// ConfigPath is the path to the config file (resolved by the caller).
+	ConfigPath string
 
-func main() {
-	// Parse command line flags
-	configPath := flag.String("config", "config.yaml", "Path to config file")
-	showVersion := flag.Bool("version", false, "Print version and exit")
-	managed := flag.Bool("managed", false, "Run as managed subprocess (random port, READY protocol)")
-	portFlag := flag.Int("port", 0, "Override port (0 = random, only with --managed)")
-	bridgeFlag := flag.String("bridge", "", "Bridge WebSocket URL (e.g., wss://bridge.bytebrew.ai)")
-	flag.Parse()
+	// ConfigExplicit is true when --config was explicitly provided on the command line.
+	ConfigExplicit bool
 
-	// --version: print and exit (no config needed)
-	if *showVersion {
-		fmt.Printf("bytebrew-srv %s (commit: %s, built: %s)\n", version, commit, date)
-		os.Exit(0)
-	}
+	// Port overrides the config port (0 = use config or random).
+	Port int
 
-	// Determine if --config was explicitly provided
-	configExplicit := false
-	flag.Visit(func(f *flag.Flag) {
-		if f.Name == "config" {
-			configExplicit = true
-		}
-	})
+	// Managed enables managed subprocess mode (random port, READY protocol).
+	Managed bool
 
+	// BridgeURL overrides the bridge WebSocket URL from config.
+	BridgeURL string
+
+	// LicenseInfo is the validated license. nil = CE mode (no restrictions).
+	LicenseInfo *domain.LicenseInfo
+
+	// Version, Commit, Date are build-time metadata.
+	Version string
+	Commit  string
+	Date    string
+}
+
+// Run starts the ByteBrew server with the given configuration.
+// This is the common entry point shared by CE and server (legacy) binaries.
+func Run(sc ServerConfig) error {
 	// Always resolve data dir (needed for port file discovery)
-	dataDir := userDataDir()
+	dataDir := UserDataDir()
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		log.Fatalf("Failed to create data directory: %v", err)
+		return fmt.Errorf("create data directory: %w", err)
 	}
+
+	configPath := sc.ConfigPath
 
 	// In managed mode, create additional subdirs and override paths
-	if *managed {
+	if sc.Managed {
 		if err := ensureManagedDirs(dataDir); err != nil {
-			log.Fatalf("Failed to create managed directories: %v", err)
+			return fmt.Errorf("create managed directories: %w", err)
 		}
 
 		// If --config was not explicitly provided, use config from data dir
-		if !configExplicit {
+		if !sc.ConfigExplicit {
 			managedConfigPath := filepath.Join(dataDir, "config.yaml")
 			if _, err := os.Stat(managedConfigPath); os.IsNotExist(err) {
-				if err := generateDefaultConfig(managedConfigPath); err != nil {
-					log.Fatalf("Failed to generate default config: %v", err)
+				if err := generateDefaultConfig(managedConfigPath, sc.LicenseInfo != nil); err != nil {
+					return fmt.Errorf("generate default config: %w", err)
 				}
 				log.Printf("Generated default config at %s", managedConfigPath)
 			}
-			*configPath = managedConfigPath
+			configPath = managedConfigPath
 		}
 
 		// Generate default prompts.yaml if missing (from embedded)
 		managedPromptsPath := filepath.Join(dataDir, "prompts.yaml")
 		if _, err := os.Stat(managedPromptsPath); os.IsNotExist(err) {
 			if err := os.WriteFile(managedPromptsPath, embedded.DefaultPrompts, 0644); err != nil {
-				log.Fatalf("Failed to write default prompts: %v", err)
+				return fmt.Errorf("write default prompts: %w", err)
 			}
 			log.Printf("Generated default prompts at %s", managedPromptsPath)
 		}
@@ -106,7 +107,7 @@ func main() {
 		managedFlowsPath := filepath.Join(dataDir, "flows.yaml")
 		if _, err := os.Stat(managedFlowsPath); os.IsNotExist(err) {
 			if err := os.WriteFile(managedFlowsPath, embedded.DefaultFlows, 0644); err != nil {
-				log.Fatalf("Failed to write default flows: %v", err)
+				return fmt.Errorf("write default flows: %w", err)
 			}
 			log.Printf("Generated default flows at %s", managedFlowsPath)
 		}
@@ -115,36 +116,34 @@ func main() {
 	// Get working directory for config path resolution
 	wd, err := os.Getwd()
 	if err != nil {
-		log.Fatalf("Failed to get working directory: %v", err)
+		return fmt.Errorf("get working directory: %w", err)
 	}
 
 	// Resolve config path relative to working directory
-	if !filepath.IsAbs(*configPath) {
-		*configPath = filepath.Join(wd, *configPath)
+	if !filepath.IsAbs(configPath) {
+		configPath = filepath.Join(wd, configPath)
 	}
 
 	// Load configuration
-	cfg, err := config.Load(*configPath)
+	cfg, err := config.Load(configPath)
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		return fmt.Errorf("load config: %w", err)
 	}
 
 	log.Printf("Config loaded: default_provider=%s, ollama_model=%s", cfg.LLM.DefaultProvider, cfg.LLM.Ollama.Model)
 
-	// Override bridge config from --bridge flag
-	if *bridgeFlag != "" {
-		cfg.Bridge.URL = *bridgeFlag
+	// Override bridge config from flag
+	if sc.BridgeURL != "" {
+		cfg.Bridge.URL = sc.BridgeURL
 		cfg.Bridge.Enabled = true
 	}
 
 	// Check for already running server BEFORE touching log files.
-	// If log file is locked by the running server, logger.New will fail
-	// with an unhelpful error. Give the user a clear message instead.
 	portReader := portfile.NewReader(dataDir)
 	existingInfo, _ := portReader.Read()
 	if existingInfo != nil {
 		if portfile.IsProcessAlive(existingInfo.PID) {
-			log.Fatalf("Server already running (PID %d, port %d). Kill it first or use a different config.",
+			return fmt.Errorf("server already running (PID %d, port %d). Kill it first or use a different config",
 				existingInfo.PID, existingInfo.Port)
 		}
 		// Stale port file from a crashed/killed server — clean up.
@@ -157,16 +156,16 @@ func main() {
 	}
 
 	// Apply managed mode overrides
-	if *managed {
+	if sc.Managed {
 		cfg.Logging.FilePath = filepath.Join(dataDir, "logs", "server.log")
-		cfg.Server.Port = *portFlag
+		cfg.Server.Port = sc.Port
 	}
 
 	// Clear old logs if configured
 	if cfg.Logging.ClearOnStartup {
 		logsDir := filepath.Dir(cfg.Logging.FilePath)
 		if logsDir == "" || logsDir == "." {
-			logsDir = "logs" // default logs directory
+			logsDir = "logs"
 		}
 		removedCount, err := logger.ClearLogsDir(logsDir)
 		if err != nil {
@@ -179,13 +178,12 @@ func main() {
 	// Initialize logger
 	loggerInstance, err := logger.New(cfg.Logging)
 	if err != nil {
-		log.Fatalf("Failed to initialize logger: %v", err)
+		return fmt.Errorf("initialize logger: %w", err)
 	}
 
-	// Set default slog logger to use our configured logger
 	slog.SetDefault(loggerInstance.Logger)
 
-	// Start pprof HTTP server for diagnostics (heap, goroutines, CPU profiling)
+	// Start pprof HTTP server for diagnostics
 	go func() {
 		pprofAddr := "localhost:6060"
 		slog.Info("pprof server started", "addr", pprofAddr)
@@ -196,10 +194,10 @@ func main() {
 
 	ctx := context.Background()
 	loggerInstance.InfoContext(ctx, "Starting ByteBrew Server",
-		"version", version,
-		"commit", commit,
-		"built", date,
-		"config", *configPath,
+		"version", sc.Version,
+		"commit", sc.Commit,
+		"built", sc.Date,
+		"config", configPath,
 	)
 
 	// Setup graceful shutdown
@@ -209,35 +207,27 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	// NEW (Phase 1): Try loading bootstrap config for PostgreSQL database connection.
-	// If database.url is present, connect to PostgreSQL, run migrations, and load AgentRegistry.
-	// If not present (legacy config), skip — everything works as before.
+	// Try loading bootstrap config for PostgreSQL database connection.
 	var agentRegistry *agent_registry.AgentRegistry
-	var pgDB *gorm.DB
-	var bootstrapCfg *config.BootstrapConfig
-	bootstrapCfg, bootstrapErr := config.LoadBootstrap(*configPath)
+	bootstrapCfg, bootstrapErr := config.LoadBootstrap(configPath)
 	if bootstrapErr != nil {
 		slog.Info("No bootstrap database config, running in legacy mode", "reason", bootstrapErr.Error())
 	} else {
-		var pgErr error
-		pgDB, pgErr = gorm.Open(postgres.Open(bootstrapCfg.Database.URL), &gorm.Config{
+		pgDB, pgErr := gorm.Open(postgres.Open(bootstrapCfg.Database.URL), &gorm.Config{
 			Logger: gormlogger.Default.LogMode(gormlogger.Silent),
 		})
 		if pgErr != nil {
-			slog.Error("Failed to connect to PostgreSQL", "error", pgErr)
-			os.Exit(1)
+			return fmt.Errorf("connect to PostgreSQL: %w", pgErr)
 		}
 
 		if migrateErr := models.AutoMigrate(pgDB); migrateErr != nil {
-			slog.Error("Failed to run database migrations", "error", migrateErr)
-			os.Exit(1)
+			return fmt.Errorf("run database migrations: %w", migrateErr)
 		}
 
 		agentRepo := config_repo.NewGORMAgentRepository(pgDB)
 		agentRegistry = agent_registry.New(agentRepo)
 		if loadErr := agentRegistry.Load(ctx); loadErr != nil {
-			slog.Error("Failed to load agents from database", "error", loadErr)
-			os.Exit(1)
+			return fmt.Errorf("load agents from database: %w", loadErr)
 		}
 
 		agentCount := agentRegistry.Count()
@@ -248,21 +238,13 @@ func main() {
 		}
 	}
 
-	// Validate license (server/legacy mode always validates)
-	licenseInfo := infrastructure.ValidateLicense(cfg.License)
-	slog.Info("license status",
-		"tier", licenseInfo.Tier,
-		"status", licenseInfo.Status,
-		"expires", licenseInfo.ExpiresAt,
-	)
-
 	// Create infrastructure components (AgentService + WorkManager + AgentPool)
 	components, err := infrastructure.NewInfraComponents(infrastructure.InfraComponentsConfig{
 		Config:      *cfg,
-		LicenseInfo: licenseInfo,
+		LicenseInfo: sc.LicenseInfo,
 	})
 	if err != nil {
-		log.Fatalf("Failed to create infrastructure components: %v", err)
+		return fmt.Errorf("create infrastructure components: %w", err)
 	}
 
 	// Create KitRegistry and register known kits.
@@ -270,15 +252,16 @@ func main() {
 	kitRegistry.Register(developer.New())
 	slog.InfoContext(ctx, "Kit registry initialized", "kits", kitRegistry.List())
 
-	// If AgentRegistry loaded named models, register them in ModelSelector.
-	// This enables per-agent model resolution (agent.Model: "llama-4" → ModelSelector.ResolveByName).
-	_ = agentRegistry // available for Phase 2+ wiring
-	_ = kitRegistry   // available for Phase 3+ wiring (AgentToolResolver.SetKitProvider)
+	// HTTP REST API server (Phase 5) — starts only when bootstrap config is available.
+	if agentRegistry != nil && bootstrapCfg != nil {
+		slog.InfoContext(ctx, "Starting HTTP REST API server", "port", bootstrapCfg.Engine.Port)
+	}
+	_ = kitRegistry // available for Kit resolution in AgentToolResolver
 
 	// Initialize gRPC server
-	grpcServer, err := initializeGRPCServer(cfg, loggerInstance, components.LicenseInfo, *managed)
+	grpcServer, err := initializeGRPCServer(cfg, loggerInstance, sc.LicenseInfo, sc.Managed)
 	if err != nil {
-		log.Fatalf("Failed to initialize gRPC server: %v", err)
+		return fmt.Errorf("initialize gRPC server: %w", err)
 	}
 
 	// Create flow registry for managing active flows
@@ -288,13 +271,13 @@ func main() {
 	eventsDBPath := filepath.Join(dataDir, "data", "events.db")
 	eventsDB, err := persistence.NewWorkDB(eventsDBPath)
 	if err != nil {
-		log.Fatalf("Failed to create events DB: %v", err)
+		return fmt.Errorf("create events DB: %w", err)
 	}
 	defer eventsDB.Close()
 
 	eventStore, err := eventstore.New(eventsDB)
 	if err != nil {
-		log.Fatalf("Failed to create event store: %v", err)
+		return fmt.Errorf("create event store: %w", err)
 	}
 
 	// Create session registry for server-streaming API and bridge
@@ -310,24 +293,23 @@ func main() {
 		SessionRegistry:        sessionRegistry,
 	}
 
-	// Engine components are always available (server fails to start otherwise)
+	// Engine components are always available
 	factory := infrastructure.NewEngineTurnExecutorFactory(
 		components.Engine,
 		components.FlowManager,
 		components.ToolResolver,
 		components.ModelSelector,
 		components.AgentConfig,
-		components.WorkManager,     // taskManager (может быть nil)
-		components.WorkManager,     // subtaskManager (может быть nil)
-		components.AgentPoolAdapter, // agentPool (может быть nil)
+		components.WorkManager,
+		components.WorkManager,
+		components.AgentPoolAdapter,
 		components.WebSearchTool,
 		components.WebFetchTool,
 		components.AgentService.GetContextReminders,
 	)
 	flowHandlerCfg.TurnExecutorFactory = factory
 
-	// Create shared SessionProcessor for server-streaming message processing.
-	// Used by both gRPC SubscribeSession and bridge MobileRequestHandler.
+	// Create shared SessionProcessor
 	sessProcessor := session_processor.New(sessionRegistry, factory, eventStore)
 	flowHandlerCfg.SessionProcessor = sessProcessor
 
@@ -337,8 +319,6 @@ func main() {
 		flowHandlerCfg.AgentPoolAdapter = components.AgentPoolAdapter
 		flowHandlerCfg.WorkManager = components.WorkManager
 		flowHandlerCfg.SessionStorage = components.SessionStorage
-		// Register AgentPool as lifecycle event registrar for SessionProcessor.
-		// This ensures agent_spawned/agent_completed events reach WS/mobile clients.
 		sessProcessor.SetAgentPoolRegistrar(components.AgentPool)
 		loggerInstance.InfoContext(ctx, "Multi-agent mode enabled (Supervisor + Code Agents)")
 	} else {
@@ -347,24 +327,22 @@ func main() {
 
 	flowHandler, err := grpc.NewFlowHandlerWithConfig(flowHandlerCfg)
 	if err != nil {
-		log.Fatalf("Failed to create flow handler: %v", err)
+		return fmt.Errorf("create flow handler: %w", err)
 	}
 
 	grpcServer.RegisterServices(flowHandler)
 
 	// Create WS connection handler for local CLI clients
-	// AgentCanceller is nil-safe — handleCancelSession checks before calling.
-	// Must cast explicitly to avoid non-nil interface wrapping a nil pointer.
 	var agentCanceller ws.AgentCanceller
 	if components.AgentPool != nil {
 		agentCanceller = components.AgentPool
 	}
-	wsHandler := ws.NewConnectionHandler(sessionRegistry, sessProcessor, components.AgentService, agentCanceller, components.LicenseInfo)
+	wsHandler := ws.NewConnectionHandler(sessionRegistry, sessProcessor, components.AgentService, agentCanceller, sc.LicenseInfo)
 
 	// Create WS server (localhost only, random port)
 	wsServer, err := ws.NewServer(wsHandler)
 	if err != nil {
-		log.Fatalf("Failed to create WS server: %v", err)
+		return fmt.Errorf("create WS server: %w", err)
 	}
 
 	// Start WS server in goroutine
@@ -389,7 +367,6 @@ func main() {
 	)
 
 	// Write port file for CLI discovery BEFORE emitting READY.
-	// CLI reads READY and immediately tries to read the port file for ws_port.
 	portFileHost := cfg.Server.Host
 	if portFileHost == "" || portFileHost == "0.0.0.0" {
 		portFileHost = "127.0.0.1"
@@ -408,7 +385,7 @@ func main() {
 	}
 
 	// In managed mode, emit READY protocol AFTER port file is written.
-	if *managed {
+	if sc.Managed {
 		fmt.Printf("READY:%d\n", grpcServer.ActualPort())
 		os.Stdout.Sync()
 	}
@@ -459,11 +436,11 @@ func main() {
 	}
 
 	loggerInstance.InfoContext(ctx, "ByteBrew Server stopped")
+	return nil
 }
 
 // initializeGRPCServer creates the gRPC server, choosing between config-based
 // listener and OS-assigned port based on managed mode.
-// If the configured port is busy, falls back to a random OS-assigned port.
 func initializeGRPCServer(cfg *config.Config, log *logger.Logger, licenseInfo *domain.LicenseInfo, managed bool) (*grpc.Server, error) {
 	if managed && cfg.Server.Port == 0 {
 		listener, err := net.Listen("tcp4", "127.0.0.1:0")
@@ -475,7 +452,6 @@ func initializeGRPCServer(cfg *config.Config, log *logger.Logger, licenseInfo *d
 
 	server, err := grpc.NewServer(cfg.Server, log, licenseInfo)
 	if err != nil {
-		// Port busy — fallback to random port (use tcp4 to avoid IPv6 issues with gRPC clients)
 		slog.Warn("Configured port busy, using random port",
 			"port", cfg.Server.Port, "error", err)
 		host := cfg.Server.Host
@@ -491,8 +467,8 @@ func initializeGRPCServer(cfg *config.Config, log *logger.Logger, licenseInfo *d
 	return server, nil
 }
 
-// userDataDir returns the platform-specific user data directory for ByteBrew.
-func userDataDir() string {
+// UserDataDir returns the platform-specific user data directory for ByteBrew.
+func UserDataDir() string {
 	switch runtime.GOOS {
 	case "windows":
 		appData := os.Getenv("APPDATA")
@@ -506,8 +482,7 @@ func userDataDir() string {
 			log.Fatalf("failed to get user home directory: %v", err)
 		}
 		return filepath.Join(home, "Library", "Application Support", "bytebrew")
-	default: // linux and others
-		// Respect XDG_DATA_HOME if set
+	default:
 		xdgData := os.Getenv("XDG_DATA_HOME")
 		if xdgData != "" {
 			return filepath.Join(xdgData, "bytebrew")
@@ -534,133 +509,9 @@ func ensureManagedDirs(dataDir string) error {
 	return nil
 }
 
-// startBridge initializes and connects the Bridge relay stack for mobile device communication.
-// Returns a cleanup function for graceful shutdown.
-func startBridge(
-	ctx context.Context,
-	cfg *config.Config,
-	dataDir string,
-	sessionRegistry *flow_registry.SessionRegistry,
-	processor *session_processor.Processor,
-	wsHandler *ws.ConnectionHandler,
-	loggerInstance *logger.Logger,
-	eventStore *eventstore.Store,
-) (func(), error) {
-	// Open shared SQLite database for device store and server identity
-	dbPath := filepath.Join(dataDir, "data", "bytebrew.db")
-	db, err := persistence.NewWorkDB(dbPath)
-	if err != nil {
-		return nil, fmt.Errorf("open bridge db: %w", err)
-	}
-
-	// Get or create persistent server identity (server_id + X25519 keypair)
-	identityStore, err := persistence.NewServerIdentityStore(db)
-	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("create identity store: %w", err)
-	}
-
-	identity, err := identityStore.GetOrCreateIdentity()
-	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("get server identity: %w", err)
-	}
-
-	// Create device store for paired mobile devices
-	deviceStore, err := persistence.NewSQLiteDeviceStore(db)
-	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("create device store: %w", err)
-	}
-
-	// Create crypto adapter and load existing device secrets
-	cryptoAdapter := bridge.NewDeviceCryptoAdapter()
-	devices, err := deviceStore.List(ctx)
-	if err != nil {
-		slog.Warn("Failed to load existing devices for crypto", "error", err)
-	} else {
-		for _, d := range devices {
-			if len(d.SharedSecret) > 0 {
-				cryptoAdapter.AddDevice(d.ID, d.SharedSecret)
-			}
-		}
-		if len(devices) > 0 {
-			slog.Info("Loaded device crypto keys", "count", len(devices))
-		}
-	}
-
-	// Create bridge client — use machine hostname as server name so mobile
-	// users can distinguish between multiple connected machines.
-	hostName, _ := os.Hostname()
-	if hostName == "" {
-		hostName = "ByteBrew Server"
-	}
-	bridgeClient := bridge.NewBridgeClient(cfg.Bridge.URL, identity.ID, hostName, cfg.Bridge.AuthToken)
-
-	// Create message router (handles E2E encryption transparently)
-	messageRouter := bridge.NewMessageRouter(bridgeClient, cryptoAdapter)
-
-	// Create event broadcaster (serializes session events for mobile clients)
-	eventBroadcaster := bridge.NewEventBroadcaster(messageRouter, eventStore)
-
-	// Wire event hook so SessionRegistry broadcasts events to mobile clients
-	sessionRegistry.SetEventHook(eventBroadcaster.BroadcastEvent)
-
-	// Create pairing token store (in-memory, ephemeral)
-	tokenStore := bridge.NewPairingTokenStore()
-
-	// Create pairing data provider and wire it to WS handler for CLI access
-	pairingProvider := bridge.NewPairingProvider(tokenStore, identity, cfg.Bridge.URL)
-	if wsHandler != nil {
-		wsHandler.SetPairingProvider(pairingProvider)
-	}
-
-	// Create device store adapter (bridges context-less interface with context-aware store)
-	deviceStoreAdapter := bridge.NewDeviceStoreAdapter(deviceStore)
-
-	// Create request handler (routes incoming mobile messages)
-	requestHandler := bridge.NewMobileRequestHandler(
-		messageRouter,
-		deviceStoreAdapter,
-		tokenStore,
-		cryptoAdapter,
-		eventBroadcaster,
-		sessionRegistry,
-		processor,
-		identity,
-		hostName,
-	)
-
-	// Connect to bridge relay
-	if err := bridgeClient.Connect(ctx); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("connect to bridge: %w", err)
-	}
-
-	// Start message routing and request handling
-	messageRouter.Start()
-	requestHandler.Start()
-
-	loggerInstance.InfoContext(ctx, "Bridge connectivity enabled",
-		"url", cfg.Bridge.URL,
-		"server_id", identity.ID,
-	)
-
-	// Return cleanup function for graceful shutdown
-	cleanup := func() {
-		slog.Info("Shutting down bridge connectivity")
-		requestHandler.Stop()
-		messageRouter.Stop()
-		bridgeClient.Disconnect()
-		db.Close()
-		slog.Info("Bridge connectivity stopped")
-	}
-
-	return cleanup, nil
-}
-
 // generateDefaultConfig writes a minimal config.yaml suitable for managed mode.
-func generateDefaultConfig(path string) error {
+// If includeLicense is true, adds the default license public key section.
+func generateDefaultConfig(path string, includeLicense bool) error {
 	content := `# ByteBrew Server Config (auto-generated for managed mode)
 server:
   host: "127.0.0.1"
@@ -680,9 +531,6 @@ logging:
   output: "file"
   clear_on_startup: true
 
-license:
-  public_key_hex: "5395bf9bb925ce56d86005104951984709670126f95a635e4e2ccf79ac58e395"
-
 llm:
   default_provider: "ollama"
   ollama:
@@ -690,35 +538,115 @@ llm:
     base_url: "http://localhost:11434"
     timeout: 300s
 `
-	return os.WriteFile(path, []byte(content), 0644)
-}
-
-// generateDefaultPrompts writes a minimal prompts.yaml suitable for managed mode.
-func generateDefaultPrompts(path string) error {
-	content := `# ByteBrew Prompts (auto-generated for managed mode)
-prompts:
-  system_prompt: |
-    You are a coding assistant that helps users understand and work with code.
-
-    **Language:** Match the user's language. Russian question = Russian answer.
-
-    **BE EFFICIENT — minimize tool calls.**
-    Every tool call takes time. Do NOT read the same file twice. Fewer calls = faster response.
-
-    **ACTION over description.**
-    When the user asks to modify/refactor/fix code — DO IT immediately.
-    Read the file, make the changes, done.
-
-    **Approach:**
-    - Be concise. Reference files and line numbers when relevant.
-    - Answer questions directly — don't just describe what you found.
-    - Use grep_search and glob to explore unfamiliar code.
-
-    **How you work:**
-    - You are an AI coding assistant with access to file system tools.
-    - You can read, write, and search code files.
-    - You can execute shell commands.
+	if includeLicense {
+		content += `
+license:
+  public_key_hex: "5395bf9bb925ce56d86005104951984709670126f95a635e4e2ccf79ac58e395"
 `
+	}
 	return os.WriteFile(path, []byte(content), 0644)
 }
 
+// startBridge initializes and connects the Bridge relay stack for mobile device communication.
+func startBridge(
+	ctx context.Context,
+	cfg *config.Config,
+	dataDir string,
+	sessionRegistry *flow_registry.SessionRegistry,
+	processor *session_processor.Processor,
+	wsHandler *ws.ConnectionHandler,
+	loggerInstance *logger.Logger,
+	eventStore *eventstore.Store,
+) (func(), error) {
+	dbPath := filepath.Join(dataDir, "data", "bytebrew.db")
+	db, err := persistence.NewWorkDB(dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("open bridge db: %w", err)
+	}
+
+	identityStore, err := persistence.NewServerIdentityStore(db)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create identity store: %w", err)
+	}
+
+	identity, err := identityStore.GetOrCreateIdentity()
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("get server identity: %w", err)
+	}
+
+	deviceStore, err := persistence.NewSQLiteDeviceStore(db)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create device store: %w", err)
+	}
+
+	cryptoAdapter := bridge.NewDeviceCryptoAdapter()
+	devices, err := deviceStore.List(ctx)
+	if err != nil {
+		slog.Warn("Failed to load existing devices for crypto", "error", err)
+	} else {
+		for _, d := range devices {
+			if len(d.SharedSecret) > 0 {
+				cryptoAdapter.AddDevice(d.ID, d.SharedSecret)
+			}
+		}
+		if len(devices) > 0 {
+			slog.Info("Loaded device crypto keys", "count", len(devices))
+		}
+	}
+
+	hostName, _ := os.Hostname()
+	if hostName == "" {
+		hostName = "ByteBrew Server"
+	}
+	bridgeClient := bridge.NewBridgeClient(cfg.Bridge.URL, identity.ID, hostName, cfg.Bridge.AuthToken)
+
+	messageRouter := bridge.NewMessageRouter(bridgeClient, cryptoAdapter)
+	eventBroadcaster := bridge.NewEventBroadcaster(messageRouter, eventStore)
+	sessionRegistry.SetEventHook(eventBroadcaster.BroadcastEvent)
+
+	tokenStore := bridge.NewPairingTokenStore()
+	pairingProvider := bridge.NewPairingProvider(tokenStore, identity, cfg.Bridge.URL)
+	if wsHandler != nil {
+		wsHandler.SetPairingProvider(pairingProvider)
+	}
+
+	deviceStoreAdapter := bridge.NewDeviceStoreAdapter(deviceStore)
+	requestHandler := bridge.NewMobileRequestHandler(
+		messageRouter,
+		deviceStoreAdapter,
+		tokenStore,
+		cryptoAdapter,
+		eventBroadcaster,
+		sessionRegistry,
+		processor,
+		identity,
+		hostName,
+	)
+
+	if err := bridgeClient.Connect(ctx); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("connect to bridge: %w", err)
+	}
+
+	messageRouter.Start()
+	requestHandler.Start()
+
+	loggerInstance.InfoContext(ctx, "Bridge connectivity enabled",
+		"url", cfg.Bridge.URL,
+		"server_id", identity.ID,
+	)
+
+	cleanup := func() {
+		slog.Info("Shutting down bridge connectivity")
+		requestHandler.Stop()
+		messageRouter.Stop()
+		bridgeClient.Disconnect()
+		db.Close()
+		slog.Info("Bridge connectivity stopped")
+	}
+
+	return cleanup, nil
+}

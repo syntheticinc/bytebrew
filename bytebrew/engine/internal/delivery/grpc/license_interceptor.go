@@ -13,6 +13,7 @@ import (
 )
 
 // LicenseUnaryInterceptor returns a gRPC unary interceptor that checks license status.
+// nil licenseInfo (CE mode) -> allow all requests.
 // Blocked -> reject with PermissionDenied (LICENSE_REQUIRED).
 // Grace -> add warning header, allow.
 // Active -> allow.
@@ -23,6 +24,10 @@ func LicenseUnaryInterceptor(licenseInfo *domain.LicenseInfo) grpc.UnaryServerIn
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (interface{}, error) {
+		if licenseInfo == nil {
+			return handler(ctx, req)
+		}
+
 		if licenseInfo.Status == domain.LicenseBlocked {
 			return nil, status.Error(codes.PermissionDenied, "LICENSE_REQUIRED: valid license needed to use this service")
 		}
@@ -38,6 +43,7 @@ func LicenseUnaryInterceptor(licenseInfo *domain.LicenseInfo) grpc.UnaryServerIn
 }
 
 // LicenseStreamInterceptor returns a gRPC stream interceptor that checks license status.
+// nil licenseInfo (CE mode) -> allow all requests.
 // Blocked -> reject with PermissionDenied (LICENSE_REQUIRED).
 // Grace -> add warning header, allow.
 // Active -> allow.
@@ -48,6 +54,10 @@ func LicenseStreamInterceptor(licenseInfo *domain.LicenseInfo) grpc.StreamServer
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
 	) error {
+		if licenseInfo == nil {
+			return handler(srv, ss)
+		}
+
 		if licenseInfo.Status == domain.LicenseBlocked {
 			return status.Error(codes.PermissionDenied, "LICENSE_REQUIRED: valid license needed to use this service")
 		}

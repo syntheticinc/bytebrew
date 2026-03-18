@@ -43,17 +43,32 @@ type InfraComponents struct {
 	LicenseInfo      *domain.LicenseInfo
 }
 
-// NewAgentService creates a new AgentService with Eino Agent
+// NewAgentService creates a new AgentService with Eino Agent.
+// License is always validated from config (legacy behavior).
 func NewAgentService(cfg config.Config) (*agentservice.Service, error) {
-	components, err := NewInfraComponents(cfg)
+	licenseInfo := ValidateLicense(cfg.License)
+	components, err := NewInfraComponents(InfraComponentsConfig{
+		Config:      cfg,
+		LicenseInfo: licenseInfo,
+	})
 	if err != nil {
 		return nil, err
 	}
 	return components.AgentService, nil
 }
 
-// NewInfraComponents creates all infrastructure components including WorkManager and AgentPool
-func NewInfraComponents(cfg config.Config) (*InfraComponents, error) {
+// InfraComponentsConfig holds optional parameters for NewInfraComponents.
+// LicenseInfo is nil in CE mode (no restrictions).
+type InfraComponentsConfig struct {
+	Config      config.Config
+	LicenseInfo *domain.LicenseInfo // nil = CE mode (all features enabled)
+}
+
+// NewInfraComponents creates all infrastructure components including WorkManager and AgentPool.
+// License is passed via InfraComponentsConfig; nil means CE mode (no license checks).
+func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
+	cfg := icc.Config
+
 	// 1. Create LLM model
 	chatModel, err := createChatModel(cfg)
 	if err != nil {
@@ -82,13 +97,17 @@ func NewInfraComponents(cfg config.Config) (*InfraComponents, error) {
 		slog.Info("agent pool initialized")
 	}
 
-	// 4. License validation
-	licenseInfo := validateLicense(cfg.License)
-	slog.Info("license status",
-		"tier", licenseInfo.Tier,
-		"status", licenseInfo.Status,
-		"expires", licenseInfo.ExpiresAt,
-	)
+	// 4. License info (passed from caller; nil = CE mode)
+	licenseInfo := icc.LicenseInfo
+	if licenseInfo != nil {
+		slog.Info("license status",
+			"tier", licenseInfo.Tier,
+			"status", licenseInfo.Status,
+			"expires", licenseInfo.ExpiresAt,
+		)
+	} else {
+		slog.Info("running in CE mode (no license)")
+	}
 
 	// 5. Fill empty AgentConfig fields with defaults
 	agentConfig := applyAgentConfigDefaults(&cfg.Agent)
@@ -192,8 +211,9 @@ func createWebTools(cfg config.Config) (einotool.InvokableTool, einotool.Invokab
 	return webSearchTool, webFetchTool
 }
 
-// validateLicense validates the license from config. Always returns a LicenseInfo (fallback to Blocked).
-func validateLicense(cfg config.LicenseConfig) *domain.LicenseInfo {
+// ValidateLicense validates the license from config. Always returns a LicenseInfo (fallback to Blocked).
+// Called from cmd/server (legacy). CE binary skips this entirely.
+func ValidateLicense(cfg config.LicenseConfig) *domain.LicenseInfo {
 	if cfg.PublicKeyHex == "" {
 		return domain.BlockedLicense()
 	}
