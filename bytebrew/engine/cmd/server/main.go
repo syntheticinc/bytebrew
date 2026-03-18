@@ -312,9 +312,12 @@ func main() {
 			r.Use(authMW.Authenticate)
 			r.Use(deliveryhttp.AuditMiddleware(&auditLoggerAdapter{logger: auditLogger}))
 
-			agentHandler := deliveryhttp.NewAgentHandler(&agentListerAdapter{registry: agentRegistry})
-			r.Get("/api/v1/agents", agentHandler.List)
-			r.Get("/api/v1/agents/{name}", agentHandler.Get)
+			agentHandler := deliveryhttp.NewAgentHandlerWithManager(&agentManagerAdapter{
+				agentListerAdapter: agentListerAdapter{registry: agentRegistry},
+				repo:               agentRepo,
+				registry:           agentRegistry,
+			})
+			r.Mount("/api/v1/agents", agentHandler.Routes())
 
 			taskHandler := deliveryhttp.NewTaskHandler(&taskServiceAdapter{repo: taskRepo})
 			r.Post("/api/v1/tasks", taskHandler.Create)
@@ -332,18 +335,26 @@ func main() {
 			r.Post("/api/v1/auth/tokens", tokenHandler.CreateToken)
 			r.Get("/api/v1/auth/tokens", tokenHandler.ListTokens)
 
-			// Settings, Models, MCP Servers (stub endpoints for admin dashboard)
-			r.Get("/api/v1/settings", stubJSONHandler(`{"byok_enabled":false,"byok_allowed_providers":[]}`))
-			r.Put("/api/v1/settings", stubJSONHandler(`{"ok":true}`))
-			r.Get("/api/v1/models", stubJSONHandler(`[]`))
-			r.Post("/api/v1/models", stubJSONHandler(`{"id":1}`))
-			r.Delete("/api/v1/models/{id}", stubJSONHandler(`{"ok":true}`))
-			r.Get("/api/v1/mcp-servers", stubJSONHandler(`[]`))
-			r.Post("/api/v1/mcp-servers", stubJSONHandler(`{"id":1}`))
-			r.Delete("/api/v1/mcp-servers/{id}", stubJSONHandler(`{"ok":true}`))
-			r.Get("/api/v1/triggers", stubJSONHandler(`[]`))
-			r.Post("/api/v1/triggers", stubJSONHandler(`{"id":1}`))
-			r.Delete("/api/v1/triggers/{id}", stubJSONHandler(`{"ok":true}`))
+			// Models (LLM Providers)
+			llmProviderRepo := config_repo.NewGORMLLMProviderRepository(pgDB)
+			modelHandler := deliveryhttp.NewModelHandler(&modelServiceAdapter{repo: llmProviderRepo})
+			r.Mount("/api/v1/models", modelHandler.Routes())
+
+			// MCP Servers
+			mcpServerRepo := config_repo.NewGORMMCPServerRepository(pgDB)
+			mcpHandler := deliveryhttp.NewMCPHandler(&mcpServiceAdapter{repo: mcpServerRepo})
+			r.Mount("/api/v1/mcp-servers", mcpHandler.Routes())
+
+			// Triggers
+			triggerRepo := config_repo.NewGORMTriggerRepository(pgDB)
+			triggerHandler := deliveryhttp.NewTriggerHandler(&triggerServiceAdapter{repo: triggerRepo})
+			r.Mount("/api/v1/triggers", triggerHandler.Routes())
+
+			// Settings
+			settingRepo := config_repo.NewGORMSettingRepository(pgDB)
+			settingHandler := deliveryhttp.NewSettingHandler(&settingServiceAdapter{repo: settingRepo})
+			r.Mount("/api/v1/settings", settingHandler.Routes())
+
 			r.Delete("/api/v1/auth/tokens/{id}", tokenHandler.DeleteToken)
 		})
 

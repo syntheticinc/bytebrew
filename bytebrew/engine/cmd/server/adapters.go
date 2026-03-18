@@ -2,18 +2,20 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/ws"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
-	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/task"
-	"gorm.io/gorm"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/agent_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/audit"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/task"
+	"gorm.io/gorm"
 )
 
 // agentCounterAdapter bridges AgentRegistry to the http.AgentCounter interface.
@@ -99,8 +101,15 @@ func (a *agentListerAdapter) GetAgent(_ context.Context, name string) (*delivery
 			Kit:          agent.Record.Kit,
 			HasKnowledge: agent.Record.KnowledgePath != "",
 		},
-		Tools:    tools,
-		CanSpawn: agent.Record.CanSpawn,
+		SystemPrompt:   agent.Record.SystemPrompt,
+		Tools:          tools,
+		CanSpawn:       agent.Record.CanSpawn,
+		Lifecycle:      agent.Record.Lifecycle,
+		ToolExecution:  agent.Record.ToolExecution,
+		MaxSteps:       agent.Record.MaxSteps,
+		MaxContextSize: agent.Record.MaxContextSize,
+		ConfirmBefore:  agent.Record.ConfirmBefore,
+		MCPServers:     agent.Record.MCPServers,
 	}, nil
 }
 
@@ -139,11 +148,327 @@ func (a *tokenRepoAdapter) VerifyToken(ctx context.Context, tokenHash string) (s
 	return a.repo.VerifyToken(ctx, tokenHash)
 }
 
+// agentManagerAdapter bridges AgentRepository + AgentRegistry to the http.AgentManager interface.
+type agentManagerAdapter struct {
+	agentListerAdapter
+	repo     *config_repo.GORMAgentRepository
+	registry *agent_registry.AgentRegistry
+}
+
+func (a *agentManagerAdapter) CreateAgent(ctx context.Context, req deliveryhttp.CreateAgentRequest) (*deliveryhttp.AgentDetail, error) {
+	rec := agentRequestToRecord(req)
+	if err := a.repo.Create(ctx, &rec); err != nil {
+		return nil, fmt.Errorf("create agent: %w", err)
+	}
+	if err := a.registry.Reload(ctx); err != nil {
+		return nil, fmt.Errorf("reload registry: %w", err)
+	}
+	return a.GetAgent(ctx, req.Name)
+}
+
+func (a *agentManagerAdapter) UpdateAgent(ctx context.Context, name string, req deliveryhttp.CreateAgentRequest) (*deliveryhttp.AgentDetail, error) {
+	rec := agentRequestToRecord(req)
+	if err := a.repo.Update(ctx, name, &rec); err != nil {
+		return nil, fmt.Errorf("update agent: %w", err)
+	}
+	if err := a.registry.Reload(ctx); err != nil {
+		return nil, fmt.Errorf("reload registry: %w", err)
+	}
+	returnName := name
+	if req.Name != "" {
+		returnName = req.Name
+	}
+	return a.GetAgent(ctx, returnName)
+}
+
+func (a *agentManagerAdapter) DeleteAgent(ctx context.Context, name string) error {
+	if err := a.repo.Delete(ctx, name); err != nil {
+		return fmt.Errorf("delete agent: %w", err)
+	}
+	if err := a.registry.Reload(ctx); err != nil {
+		return fmt.Errorf("reload registry: %w", err)
+	}
+	return nil
+}
+
+func agentRequestToRecord(req deliveryhttp.CreateAgentRequest) config_repo.AgentRecord {
+	rec := config_repo.AgentRecord{
+		Name:           req.Name,
+		SystemPrompt:   req.SystemPrompt,
+		Kit:            req.Kit,
+		Lifecycle:      req.Lifecycle,
+		ToolExecution:  req.ToolExecution,
+		MaxSteps:       req.MaxSteps,
+		MaxContextSize: req.MaxContextSize,
+		ConfirmBefore:  req.ConfirmBefore,
+		BuiltinTools:   req.Tools,
+		CanSpawn:       req.CanSpawn,
+		MCPServers:     req.MCPServers,
+	}
+	if req.Escalation != nil {
+		rec.Escalation = &config_repo.EscalationRecord{
+			Action:     req.Escalation.Action,
+			WebhookURL: req.Escalation.WebhookURL,
+			Triggers:   req.Escalation.Triggers,
+		}
+	}
+	return rec
+}
+
+// modelServiceAdapter bridges GORMLLMProviderRepository to the http.ModelService interface.
+type modelServiceAdapter struct {
+	repo *config_repo.GORMLLMProviderRepository
+}
+
+func (a *modelServiceAdapter) ListModels(ctx context.Context) ([]deliveryhttp.ModelResponse, error) {
+	providers, err := a.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]deliveryhttp.ModelResponse, 0, len(providers))
+	for _, p := range providers {
+		result = append(result, deliveryhttp.ModelResponse{
+			ID:        p.ID,
+			Name:      p.Name,
+			Type:      p.Type,
+			BaseURL:   p.BaseURL,
+			ModelName: p.ModelName,
+			HasAPIKey: p.APIKeyEncrypted != "",
+			CreatedAt: p.CreatedAt.Format(time.RFC3339),
+		})
+	}
+	return result, nil
+}
+
+func (a *modelServiceAdapter) CreateModel(ctx context.Context, req deliveryhttp.CreateModelRequest) (*deliveryhttp.ModelResponse, error) {
+	model := &models.LLMProviderModel{
+		Name:            req.Name,
+		Type:            req.Type,
+		BaseURL:         req.BaseURL,
+		ModelName:       req.ModelName,
+		APIKeyEncrypted: req.APIKey, // TODO: encrypt API key
+	}
+	if err := a.repo.Create(ctx, model); err != nil {
+		return nil, err
+	}
+	return &deliveryhttp.ModelResponse{
+		ID:        model.ID,
+		Name:      model.Name,
+		Type:      model.Type,
+		BaseURL:   model.BaseURL,
+		ModelName: model.ModelName,
+		HasAPIKey: model.APIKeyEncrypted != "",
+		CreatedAt: model.CreatedAt.Format(time.RFC3339),
+	}, nil
+}
+
+func (a *modelServiceAdapter) DeleteModel(ctx context.Context, name string) error {
+	// Find by name first, then delete by ID
+	providers, err := a.repo.List(ctx)
+	if err != nil {
+		return err
+	}
+	for _, p := range providers {
+		if p.Name == name {
+			return a.repo.Delete(ctx, p.ID)
+		}
+	}
+	return fmt.Errorf("model not found: %s", name)
+}
+
+// mcpServiceAdapter bridges GORMMCPServerRepository to the http.MCPService interface.
+type mcpServiceAdapter struct {
+	repo *config_repo.GORMMCPServerRepository
+}
+
+func (a *mcpServiceAdapter) ListMCPServers(ctx context.Context) ([]deliveryhttp.MCPServerResponse, error) {
+	servers, err := a.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]deliveryhttp.MCPServerResponse, 0, len(servers))
+	for _, s := range servers {
+		resp := deliveryhttp.MCPServerResponse{
+			ID:          s.ID,
+			Name:        s.Name,
+			Type:        s.Type,
+			Command:     s.Command,
+			URL:         s.URL,
+			IsWellKnown: s.IsWellKnown,
+			Agents:      []string{}, // TODO: load agent associations
+		}
+		if s.Args != "" {
+			_ = json.Unmarshal([]byte(s.Args), &resp.Args)
+		}
+		if s.EnvVars != "" {
+			_ = json.Unmarshal([]byte(s.EnvVars), &resp.EnvVars)
+		}
+		if s.Runtime != nil {
+			resp.Status = &deliveryhttp.MCPStatusInfo{
+				Status:        s.Runtime.Status,
+				StatusMessage: s.Runtime.StatusMessage,
+				ToolsCount:    s.Runtime.ToolsCount,
+			}
+			if s.Runtime.ConnectedAt != nil {
+				resp.Status.ConnectedAt = s.Runtime.ConnectedAt.Format(time.RFC3339)
+			}
+		}
+		result = append(result, resp)
+	}
+	return result, nil
+}
+
+func (a *mcpServiceAdapter) CreateMCPServer(ctx context.Context, req deliveryhttp.CreateMCPServerRequest) (*deliveryhttp.MCPServerResponse, error) {
+	model := &models.MCPServerModel{
+		Name:    req.Name,
+		Type:    req.Type,
+		Command: req.Command,
+		URL:     req.URL,
+	}
+	if len(req.Args) > 0 {
+		data, _ := json.Marshal(req.Args)
+		model.Args = string(data)
+	}
+	if len(req.EnvVars) > 0 {
+		data, _ := json.Marshal(req.EnvVars)
+		model.EnvVars = string(data)
+	}
+	if err := a.repo.Create(ctx, model); err != nil {
+		return nil, err
+	}
+	resp := &deliveryhttp.MCPServerResponse{
+		ID:          model.ID,
+		Name:        model.Name,
+		Type:        model.Type,
+		Command:     model.Command,
+		URL:         model.URL,
+		IsWellKnown: model.IsWellKnown,
+		Args:        req.Args,
+		EnvVars:     req.EnvVars,
+		Agents:      []string{},
+	}
+	return resp, nil
+}
+
+func (a *mcpServiceAdapter) DeleteMCPServer(ctx context.Context, name string) error {
+	servers, err := a.repo.List(ctx)
+	if err != nil {
+		return err
+	}
+	for _, s := range servers {
+		if s.Name == name {
+			return a.repo.Delete(ctx, s.ID)
+		}
+	}
+	return fmt.Errorf("mcp server not found: %s", name)
+}
+
+// triggerServiceAdapter bridges GORMTriggerRepository to the http.TriggerService interface.
+type triggerServiceAdapter struct {
+	repo *config_repo.GORMTriggerRepository
+}
+
+func (a *triggerServiceAdapter) ListTriggers(ctx context.Context) ([]deliveryhttp.TriggerResponse, error) {
+	triggers, err := a.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]deliveryhttp.TriggerResponse, 0, len(triggers))
+	for _, t := range triggers {
+		resp := deliveryhttp.TriggerResponse{
+			ID:          t.ID,
+			Type:        t.Type,
+			Title:       t.Title,
+			AgentID:     t.AgentID,
+			AgentName:   t.Agent.Name,
+			Schedule:    t.Schedule,
+			WebhookPath: t.WebhookPath,
+			Description: t.Description,
+			Enabled:     t.Enabled,
+			CreatedAt:   t.CreatedAt.Format(time.RFC3339),
+		}
+		if t.LastFiredAt != nil {
+			resp.LastFiredAt = t.LastFiredAt.Format(time.RFC3339)
+		}
+		result = append(result, resp)
+	}
+	return result, nil
+}
+
+func (a *triggerServiceAdapter) CreateTrigger(ctx context.Context, req deliveryhttp.CreateTriggerRequest) (*deliveryhttp.TriggerResponse, error) {
+	model := &models.TriggerModel{
+		Type:        req.Type,
+		Title:       req.Title,
+		AgentID:     req.AgentID,
+		Schedule:    req.Schedule,
+		WebhookPath: req.WebhookPath,
+		Description: req.Description,
+		Enabled:     true,
+	}
+	if req.Enabled != nil {
+		model.Enabled = *req.Enabled
+	}
+	if err := a.repo.Create(ctx, model); err != nil {
+		return nil, err
+	}
+	return &deliveryhttp.TriggerResponse{
+		ID:          model.ID,
+		Type:        model.Type,
+		Title:       model.Title,
+		AgentID:     model.AgentID,
+		Schedule:    model.Schedule,
+		WebhookPath: model.WebhookPath,
+		Description: model.Description,
+		Enabled:     model.Enabled,
+		CreatedAt:   model.CreatedAt.Format(time.RFC3339),
+	}, nil
+}
+
+func (a *triggerServiceAdapter) DeleteTrigger(ctx context.Context, id uint) error {
+	return a.repo.Delete(ctx, id)
+}
+
+// settingServiceAdapter bridges GORMSettingRepository to the http.SettingService interface.
+type settingServiceAdapter struct {
+	repo *config_repo.GORMSettingRepository
+}
+
+func (a *settingServiceAdapter) ListSettings(ctx context.Context) ([]deliveryhttp.SettingResponse, error) {
+	settings, err := a.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]deliveryhttp.SettingResponse, 0, len(settings))
+	for _, s := range settings {
+		result = append(result, deliveryhttp.SettingResponse{
+			Key:       s.Key,
+			Value:     s.Value,
+			UpdatedAt: s.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+	return result, nil
+}
+
+func (a *settingServiceAdapter) UpdateSetting(ctx context.Context, key, value string) (*deliveryhttp.SettingResponse, error) {
+	if err := a.repo.Set(ctx, key, value); err != nil {
+		return nil, err
+	}
+	setting, err := a.repo.Get(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	return &deliveryhttp.SettingResponse{
+		Key:       setting.Key,
+		Value:     setting.Value,
+		UpdatedAt: setting.UpdatedAt.Format(time.RFC3339),
+	}, nil
+}
+
 // stubJSONHandler returns a handler that writes a static JSON response.
-func stubJSONHandler(json string) http.HandlerFunc {
+func stubJSONHandler(jsonStr string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(json))
+		w.Write([]byte(jsonStr))
 	}
 }
 
