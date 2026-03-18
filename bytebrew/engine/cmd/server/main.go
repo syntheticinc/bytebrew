@@ -300,6 +300,13 @@ func main() {
 		r.Post("/api/v1/auth/login", authHandler.Login)
 
 		// Protected endpoints
+		// Chat endpoint (SSE streaming — requires auth)
+		chatHandler := deliveryhttp.NewChatHandler(&chatServiceAdapter{})
+		r.Group(func(r chi.Router) {
+			r.Use(authMW.Authenticate)
+			r.Post("/api/v1/agents/{name}/chat", chatHandler.Chat)
+		})
+
 		r.Group(func(r chi.Router) {
 			r.Use(authMW.Authenticate)
 			r.Use(deliveryhttp.AuditMiddleware(&auditLoggerAdapter{logger: auditLogger}))

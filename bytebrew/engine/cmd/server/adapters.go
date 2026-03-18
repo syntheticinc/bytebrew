@@ -114,6 +114,21 @@ func (a *tokenRepoAdapter) VerifyToken(ctx context.Context, tokenHash string) (s
 	return a.repo.VerifyToken(ctx, tokenHash)
 }
 
+// chatServiceAdapter bridges agent execution to the http.ChatService interface.
+type chatServiceAdapter struct{}
+
+func (a *chatServiceAdapter) Chat(agentName, message, userID, sessionID string) (<-chan deliveryhttp.SSEEvent, error) {
+	ch := make(chan deliveryhttp.SSEEvent, 10)
+	go func() {
+		defer close(ch)
+		// Skeleton: send thinking + message events
+		ch <- deliveryhttp.SSEEvent{Type: "thinking", Data: `{"content":"Processing..."}`}
+		ch <- deliveryhttp.SSEEvent{Type: "message", Data: `{"content":"Chat via REST API is a skeleton. Use WS CLI for full agent interaction."}`}
+		ch <- deliveryhttp.SSEEvent{Type: "done", Data: `{"status":"completed"}`}
+	}()
+	return ch, nil
+}
+
 // configReloaderAdapter bridges AgentRegistry to the http.ConfigReloader interface.
 type configReloaderAdapter struct {
 	registry *agent_registry.AgentRegistry
