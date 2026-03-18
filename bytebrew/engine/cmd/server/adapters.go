@@ -552,6 +552,36 @@ func convertEventToSSE(evt interface{}) *deliveryhttp.SSEEvent {
 	}
 }
 
+// mcpServerRow holds an MCP server config loaded from DB.
+type mcpServerRow struct {
+	Name    string
+	Type    string
+	Command string
+	Args    string
+	URL     string
+}
+
+func loadMCPServersFromDB(db *gorm.DB) ([]mcpServerRow, error) {
+	if db == nil {
+		return nil, nil
+	}
+	var rows []models.MCPServerModel
+	if err := db.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	servers := make([]mcpServerRow, 0, len(rows))
+	for _, r := range rows {
+		servers = append(servers, mcpServerRow{
+			Name:    r.Name,
+			Type:    r.Type,
+			Command: r.Command,
+			Args:    r.Args,
+			URL:     r.URL,
+		})
+	}
+	return servers, nil
+}
+
 // triggerRow holds a trigger record loaded from DB.
 type triggerRow struct {
 	ID          uint

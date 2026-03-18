@@ -16,11 +16,13 @@ import (
 	"syscall"
 	"time"
 
+	"encoding/json"
 	"github.com/go-chi/chi/v5"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/grpc"
 	deliveryhttp "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/ws"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/audit"
+	mcpinfra "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/mcp"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/task"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/embedded"
@@ -407,6 +409,44 @@ func main() {
 		slog.InfoContext(ctx, "Cron scheduler started", "triggers", len(triggers))
 	}
 
+	// MCP Client: connect to configured MCP servers
+	var mcpClients []*mcpinfra.Client
+	if pgDB != nil {
+		mcpServers, mcpErr := loadMCPServersFromDB(pgDB)
+		if mcpErr != nil {
+			slog.Warn("Failed to load MCP servers from DB", "error", mcpErr)
+		} else {
+			for _, srv := range mcpServers {
+				var transport mcpinfra.Transport
+				switch srv.Type {
+				case "stdio":
+					var args []string
+					if srv.Args != "" {
+						_ = json.Unmarshal([]byte(srv.Args), &args)
+					}
+					transport = mcpinfra.NewStdioTransport(srv.Command, args, nil)
+				case "http", "sse":
+					transport = mcpinfra.NewHTTPTransport(srv.URL)
+				default:
+					slog.Warn("Unknown MCP server type", "name", srv.Name, "type", srv.Type)
+					continue
+				}
+				client := mcpinfra.NewClient(srv.Name, transport)
+				connectCtx, connectCancel := context.WithTimeout(ctx, 10*time.Second)
+				if err := client.Connect(connectCtx); err != nil {
+					slog.Warn("MCP server unavailable, skipping", "name", srv.Name, "error", err)
+					connectCancel()
+					continue
+				}
+				connectCancel()
+				tools := client.ListTools()
+				slog.InfoContext(ctx, "MCP server connected", "name", srv.Name, "tools", len(tools))
+				mcpClients = append(mcpClients, client)
+			}
+		}
+	}
+	_ = mcpClients // available for tool resolution
+
 	// Initialize gRPC server
 	grpcServer, err := initializeGRPCServer(cfg, loggerInstance, components.LicenseInfo, *managed)
 	if err != nil {
@@ -577,6 +617,14 @@ func main() {
 	if cronScheduler != nil {
 		cronScheduler.Stop()
 		slog.Info("Cron scheduler stopped")
+	}
+
+	// Close MCP clients
+	for _, client := range mcpClients {
+		client.Close()
+	}
+	if len(mcpClients) > 0 {
+		slog.Info("MCP clients closed", "count", len(mcpClients))
 	}
 
 	// Shutdown bridge first (stops accepting new messages)
