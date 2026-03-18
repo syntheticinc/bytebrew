@@ -151,7 +151,7 @@ func (r *GORMAgentRepository) Update(ctx context.Context, name string, record *A
 		if err := r.deleteEscalation(tx, existing.ID); err != nil {
 			return fmt.Errorf("delete old escalation: %w", err)
 		}
-		if err := tx.Exec("DELETE FROM agent_mcp_servers WHERE agent_model_id = ?", existing.ID).Error; err != nil {
+		if err := tx.Exec("DELETE FROM agent_mcp_servers WHERE agent_id = ?", existing.ID).Error; err != nil {
 			return fmt.Errorf("delete old mcp associations: %w", err)
 		}
 
@@ -224,7 +224,7 @@ func (r *GORMAgentRepository) Delete(ctx context.Context, name string) error {
 		if err := r.deleteEscalation(tx, agent.ID); err != nil {
 			return fmt.Errorf("delete escalation: %w", err)
 		}
-		if err := tx.Exec("DELETE FROM agent_mcp_servers WHERE agent_model_id = ?", agent.ID).Error; err != nil {
+		if err := tx.Exec("DELETE FROM agent_mcp_servers WHERE agent_id = ?", agent.ID).Error; err != nil {
 			return fmt.Errorf("delete mcp associations: %w", err)
 		}
 		if err := tx.Delete(&agent).Error; err != nil {
@@ -423,7 +423,7 @@ func (r *GORMAgentRepository) createMCPAssociationsWithTx(tx *gorm.DB, agentID u
 
 	for _, s := range servers {
 		if err := tx.Exec(
-			"INSERT INTO agent_mcp_servers (agent_model_id, mcp_server_model_id) VALUES (?, ?)",
+			"INSERT INTO agent_mcp_servers (agent_id, mcp_server_id) VALUES (?, ?)",
 			agentID, s.ID,
 		).Error; err != nil {
 			return fmt.Errorf("link mcp server %q: %w", s.Name, err)
