@@ -283,6 +283,7 @@ func main() {
 	slog.InfoContext(ctx, "Kit registry initialized", "kits", kitRegistry.List())
 
 	// HTTP REST API server — starts when bootstrap config is available (PostgreSQL connected).
+	var chatAdapter *chatServiceAdapter
 	if agentRegistry != nil && bootstrapCfg != nil {
 		httpPort := bootstrapCfg.Engine.Port
 		if httpPort == 0 {
@@ -313,7 +314,9 @@ func main() {
 
 		// Protected endpoints
 		// Chat endpoint (SSE streaming — requires auth)
-		chatHandler := deliveryhttp.NewChatHandler(&chatServiceAdapter{})
+		// ChatService adapter gets sessionRegistry/sessProcessor wired later (after they're created)
+		chatAdapter := &chatServiceAdapter{}
+		chatHandler := deliveryhttp.NewChatHandler(chatAdapter)
 		r.Group(func(r chi.Router) {
 			r.Use(authMW.Authenticate)
 			r.Post("/api/v1/agents/{name}/chat", chatHandler.Chat)
@@ -520,6 +523,13 @@ func main() {
 	// Used by both gRPC SubscribeSession and bridge MobileRequestHandler.
 	sessProcessor := session_processor.New(sessionRegistry, factory, eventStore)
 	flowHandlerCfg.SessionProcessor = sessProcessor
+
+	// Wire ChatService adapter to real session processor (for REST API SSE chat)
+	if chatAdapter != nil {
+		chatAdapter.sessionRegistry = sessionRegistry
+		chatAdapter.sessProcessor = sessProcessor
+		slog.Info("ChatService REST wired to SessionProcessor")
+	}
 
 	// Wire up agent pool if available (multi-agent mode)
 	if components.AgentPool != nil && components.AgentPoolAdapter != nil {

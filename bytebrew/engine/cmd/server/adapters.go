@@ -13,8 +13,11 @@ import (
 	deliveryhttp "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/ws"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/agent_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/audit"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/flow_registry"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/session_processor"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/config_repo"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/task"
@@ -485,55 +488,42 @@ func stubJSONHandler(jsonStr string) http.HandlerFunc {
 // chatServiceAdapter bridges agent execution to the http.ChatService interface.
 // Uses SessionRegistry + SessionProcessor for real agent execution.
 type chatServiceAdapter struct {
-	sessionRegistry sessionRegistryForChat
-	sessProcessor   sessionProcessorForChat
-}
-
-// sessionRegistryForChat is the consumer-side interface for chat.
-type sessionRegistryForChat interface {
-	CreateSession(sessionID, projectKey, userID, projectRoot, platform, agentName string)
-	Subscribe(sessionID string) (<-chan interface{}, func())
-	SendMessage(sessionID, message string)
-}
-
-// sessionProcessorForChat processes a message through the agent pipeline.
-type sessionProcessorForChat interface {
-	ProcessMessage(sessionID, message string) error
+	sessionRegistry *flow_registry.SessionRegistry
+	sessProcessor   *session_processor.Processor
 }
 
 func (a *chatServiceAdapter) Chat(agentName, message, userID, sessionID string) (<-chan deliveryhttp.SSEEvent, error) {
 	ch := make(chan deliveryhttp.SSEEvent, 10)
 
 	if a.sessionRegistry == nil || a.sessProcessor == nil {
-		// Fallback to skeleton if not wired
 		go func() {
 			defer close(ch)
 			ch <- deliveryhttp.SSEEvent{Type: "thinking", Data: `{"content":"Processing..."}`}
-			ch <- deliveryhttp.SSEEvent{Type: "message", Data: `{"content":"Chat REST API: SessionProcessor not wired. Use CLI for full interaction."}`}
+			ch <- deliveryhttp.SSEEvent{Type: "message", Data: `{"content":"Chat REST API: SessionProcessor not wired. Use CLI."}`}
 			ch <- deliveryhttp.SSEEvent{Type: "done", Data: `{"status":"completed"}`}
 		}()
 		return ch, nil
 	}
 
-	// Create ephemeral session for REST chat
 	if sessionID == "" {
 		sessionID = fmt.Sprintf("rest-%d", time.Now().UnixNano())
 	}
 	a.sessionRegistry.CreateSession(sessionID, "", userID, "", "", agentName)
 
-	// Subscribe to events
+	// Subscribe to SSE events from session
 	eventCh, cleanup := a.sessionRegistry.Subscribe(sessionID)
 
 	go func() {
 		defer close(ch)
 		defer cleanup()
 
-		// Send message to agent
-		a.sessionRegistry.SendMessage(sessionID, message)
+		// Start processing loop for this session, then enqueue message
+		a.sessProcessor.StartProcessing(context.Background(), sessionID)
+		a.sessionRegistry.EnqueueMessage(sessionID, message)
 
-		// Stream events
+		// Stream events until done
 		for evt := range eventCh {
-			sseEvt := convertEventToSSE(evt)
+			sseEvt := convertSessionEventToSSE(evt)
 			if sseEvt != nil {
 				ch <- *sseEvt
 				if sseEvt.Type == "done" {
@@ -546,16 +536,25 @@ func (a *chatServiceAdapter) Chat(agentName, message, userID, sessionID string) 
 	return ch, nil
 }
 
-// convertEventToSSE converts a session event to an SSE event.
-func convertEventToSSE(evt interface{}) *deliveryhttp.SSEEvent {
-	// The event type depends on the SessionRegistry implementation.
-	// For now, return a generic message event.
+// convertSessionEventToSSE converts a gRPC SessionEvent to an SSE event.
+func convertSessionEventToSSE(evt *pb.SessionEvent) *deliveryhttp.SSEEvent {
 	if evt == nil {
 		return nil
 	}
-	return &deliveryhttp.SSEEvent{
-		Type: "message",
-		Data: fmt.Sprintf(`{"content":"%v"}`, evt),
+
+	switch evt.Type {
+	case pb.SessionEventType_SESSION_EVENT_REASONING:
+		return &deliveryhttp.SSEEvent{Type: "thinking", Data: fmt.Sprintf(`{"content":%q}`, evt.Content)}
+	case pb.SessionEventType_SESSION_EVENT_ANSWER, pb.SessionEventType_SESSION_EVENT_ANSWER_CHUNK:
+		return &deliveryhttp.SSEEvent{Type: "message", Data: fmt.Sprintf(`{"content":%q}`, evt.Content)}
+	case pb.SessionEventType_SESSION_EVENT_TOOL_EXECUTION_START:
+		return &deliveryhttp.SSEEvent{Type: "tool_call", Data: fmt.Sprintf(`{"tool":%q,"content":%q}`, evt.ToolName, evt.Content)}
+	case pb.SessionEventType_SESSION_EVENT_TOOL_EXECUTION_END:
+		return &deliveryhttp.SSEEvent{Type: "tool_result", Data: fmt.Sprintf(`{"tool":%q,"content":%q}`, evt.ToolName, evt.Content)}
+	case pb.SessionEventType_SESSION_EVENT_PROCESSING_STOPPED:
+		return &deliveryhttp.SSEEvent{Type: "done", Data: `{"status":"completed"}`}
+	default:
+		return nil
 	}
 }
 
