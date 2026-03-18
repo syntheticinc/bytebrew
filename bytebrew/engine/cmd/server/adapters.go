@@ -517,9 +517,13 @@ func (a *chatServiceAdapter) Chat(agentName, message, userID, sessionID string) 
 		defer close(ch)
 		defer cleanup()
 
-		// Start processing loop for this session, then enqueue message
+		// Start processing loop, wait for goroutine to be ready, then enqueue
 		a.sessProcessor.StartProcessing(context.Background(), sessionID)
-		a.sessionRegistry.EnqueueMessage(sessionID, message)
+		time.Sleep(50 * time.Millisecond) // let processor goroutine start
+		if err := a.sessionRegistry.EnqueueMessage(sessionID, message); err != nil {
+			ch <- deliveryhttp.SSEEvent{Type: "error", Data: fmt.Sprintf(`{"message":%q}`, err.Error())}
+			return
+		}
 
 		// Stream events until done (with timeout)
 		timeout := time.After(2 * time.Minute)
