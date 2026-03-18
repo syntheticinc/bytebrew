@@ -93,7 +93,11 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 		if !ok {
 			return nil, fmt.Errorf("unknown builtin tool %q for agent %q", name, rc.Agent.Record.Name)
 		}
-		tools = append(tools, factory(rc.Deps))
+		t := factory(rc.Deps)
+		if t == nil {
+			continue // tool disabled (e.g. ask_user in background mode)
+		}
+		tools = append(tools, t)
 	}
 
 	// Phase 2.3: Generate spawn_{name} tools from can_spawn

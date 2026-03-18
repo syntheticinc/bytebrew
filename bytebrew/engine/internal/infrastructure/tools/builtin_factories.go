@@ -47,8 +47,11 @@ func RegisterAllBuiltins(store *BuiltinToolStore) {
 		return NewManageSubtasksTool(deps.SubtaskManager, deps.SessionID)
 	})
 
-	// User interaction
+	// User interaction — disabled in background mode (cron/webhook tasks have no user)
 	store.Register("ask_user", func(deps ToolDependencies) tool.InvokableTool {
+		if deps.BackgroundMode {
+			return nil // tool not available in background mode
+		}
 		return NewAskUserTool(deps.Proxy, deps.SessionID)
 	})
 

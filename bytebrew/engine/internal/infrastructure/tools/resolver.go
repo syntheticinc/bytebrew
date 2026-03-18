@@ -13,6 +13,7 @@ type ToolDependencies struct {
 	SessionID          string
 	ProjectKey         string
 	ProjectRoot        string
+	BackgroundMode     bool               // true for cron/webhook/API tasks (no user interaction)
 	Proxy              ClientOperationsProxy
 	TaskManager        TaskManager
 	SubtaskManager     SubtaskManager
