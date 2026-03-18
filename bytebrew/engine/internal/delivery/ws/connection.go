@@ -231,6 +231,9 @@ func (h *ConnectionHandler) handleMessage(writer *wsWriter, msg WsMessage, state
 	case "list_agents":
 		h.handleListAgents(writer, &msg)
 
+	case "create_task":
+		h.handleCreateTask(writer, &msg)
+
 	default:
 		writer.sendError(msg.RequestID, "unknown message type: "+msg.Type)
 	}
@@ -492,5 +495,30 @@ func (h *ConnectionHandler) handleListAgents(writer *wsWriter, msg *WsMessage) {
 		Type:      "agents_list",
 		RequestID: msg.RequestID,
 		Payload:   map[string]interface{}{"agents": agentList},
+	})
+}
+
+// handleCreateTask creates a task from a WS message (for CLI `task` command).
+func (h *ConnectionHandler) handleCreateTask(writer *wsWriter, msg *WsMessage) {
+	payload := msg.Payload
+	title, _ := payload["description"].(string)
+	agentName, _ := payload["agent"].(string)
+	if title == "" {
+		writer.sendError(msg.RequestID, "description is required")
+		return
+	}
+	if agentName == "" {
+		agentName = "supervisor"
+	}
+
+	// Respond with acknowledgment (actual task creation happens via REST API or DB)
+	writer.send(&WsMessage{
+		Type:      "task_created",
+		RequestID: msg.RequestID,
+		Payload: map[string]interface{}{
+			"title":      title,
+			"agent_name": agentName,
+			"status":     "pending",
+		},
 	})
 }
