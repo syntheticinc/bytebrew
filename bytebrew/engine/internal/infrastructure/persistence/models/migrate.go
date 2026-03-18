@@ -25,7 +25,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&APITokenModel{},
 		&AuditLogModel{},
 
-		// Agent runtime tables (7)
+		// Agent runtime tables (9)
 		&RuntimeSessionModel{},
 		&RuntimeTaskModel{},
 		&RuntimeSubtaskModel{},
@@ -33,5 +33,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&RuntimeDeviceModel{},
 		&RuntimeConfigKV{},
 		&RuntimeSessionEventModel{},
+		&RuntimeMessageModel{},
+		&RuntimeAgentContextModel{},
 	)
 }

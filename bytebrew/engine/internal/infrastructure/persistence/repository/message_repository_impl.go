@@ -7,7 +7,6 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/adapters"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/errors"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -34,17 +33,10 @@ func (r *MessageRepositoryImpl) Create(ctx context.Context, message *domain.Mess
 }
 
 // GetBySessionID retrieves messages by session ID
-// CRITICAL: Uses adapters.MessageFromModel to properly deserialize ToolCalls and Metadata
 func (r *MessageRepositoryImpl) GetBySessionID(ctx context.Context, sessionID string, limit, offset int) ([]*domain.Message, error) {
-	sessID, err := uuid.Parse(sessionID)
-	if err != nil {
-		return nil, errors.Wrap(err, errors.CodeInvalidInput, "invalid session ID")
-	}
-
 	// Load most recent messages first (DESC), then reverse to chronological order.
-	// This ensures we always get the LAST N messages, not the first N.
-	var messageModels []models.Message
-	query := r.db.WithContext(ctx).Where("session_id = ?", sessID).Order("created_at DESC")
+	var messageModels []models.RuntimeMessageModel
+	query := r.db.WithContext(ctx).Where("session_id = ?", sessionID).Order("created_at DESC")
 
 	if limit > 0 {
 		query = query.Limit(limit)
@@ -74,14 +66,9 @@ func (r *MessageRepositoryImpl) GetBySessionID(ctx context.Context, sessionID st
 
 // GetBySessionAndAgent retrieves messages by session ID and agent ID
 func (r *MessageRepositoryImpl) GetBySessionAndAgent(ctx context.Context, sessionID, agentID string, limit, offset int) ([]*domain.Message, error) {
-	sessID, err := uuid.Parse(sessionID)
-	if err != nil {
-		return nil, errors.Wrap(err, errors.CodeInvalidInput, "invalid session ID")
-	}
-
 	// Load most recent messages first (DESC), then reverse to chronological order
-	var messageModels []models.Message
-	query := r.db.WithContext(ctx).Where("session_id = ? AND agent_id = ?", sessID, agentID).Order("created_at DESC")
+	var messageModels []models.RuntimeMessageModel
+	query := r.db.WithContext(ctx).Where("session_id = ? AND agent_id = ?", sessionID, agentID).Order("created_at DESC")
 
 	if limit > 0 {
 		query = query.Limit(limit)

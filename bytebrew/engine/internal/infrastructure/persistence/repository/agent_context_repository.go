@@ -4,11 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/adapters"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/errors"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -26,8 +26,8 @@ func NewAgentContextRepository(db *gorm.DB) *AgentContextRepository {
 // Save performs upsert by agent_id (one snapshot per agent per session)
 func (r *AgentContextRepository) Save(ctx context.Context, snapshot *domain.AgentContextSnapshot) error {
 	model := adapters.AgentContextSnapshotToModel(snapshot)
-	if model.ID == uuid.Nil {
-		model.ID = uuid.New()
+	if model.ID == "" {
+		model.ID = uuid.New().String()
 	}
 	model.UpdatedAt = time.Now()
 
@@ -42,19 +42,14 @@ func (r *AgentContextRepository) Save(ctx context.Context, snapshot *domain.Agen
 		return errors.Wrap(result.Error, errors.CodeInternal, "save agent context snapshot")
 	}
 
-	snapshot.ID = model.ID.String()
+	snapshot.ID = model.ID
 	return nil
 }
 
 // Load loads snapshot by session+agent ID
 func (r *AgentContextRepository) Load(ctx context.Context, sessionID, agentID string) (*domain.AgentContextSnapshot, error) {
-	sessID, err := uuid.Parse(sessionID)
-	if err != nil {
-		return nil, errors.Wrap(err, errors.CodeInvalidInput, "invalid session ID")
-	}
-
-	var model models.AgentContextSnapshot
-	result := r.db.WithContext(ctx).Where("session_id = ? AND agent_id = ?", sessID, agentID).First(&model)
+	var model models.RuntimeAgentContextModel
+	result := r.db.WithContext(ctx).Where("session_id = ? AND agent_id = ?", sessionID, agentID).First(&model)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
 			return nil, nil // Not found = fresh start
@@ -67,12 +62,7 @@ func (r *AgentContextRepository) Load(ctx context.Context, sessionID, agentID st
 
 // Delete removes snapshot by session+agent ID
 func (r *AgentContextRepository) Delete(ctx context.Context, sessionID, agentID string) error {
-	sessID, err := uuid.Parse(sessionID)
-	if err != nil {
-		return errors.Wrap(err, errors.CodeInvalidInput, "invalid session ID")
-	}
-
-	result := r.db.WithContext(ctx).Where("session_id = ? AND agent_id = ?", sessID, agentID).Delete(&models.AgentContextSnapshot{})
+	result := r.db.WithContext(ctx).Where("session_id = ? AND agent_id = ?", sessionID, agentID).Delete(&models.RuntimeAgentContextModel{})
 	if result.Error != nil {
 		return errors.Wrap(result.Error, errors.CodeInternal, "delete agent context snapshot")
 	}
@@ -81,7 +71,7 @@ func (r *AgentContextRepository) Delete(ctx context.Context, sessionID, agentID 
 
 // FindActive returns all snapshots with status "active"
 func (r *AgentContextRepository) FindActive(ctx context.Context) ([]*domain.AgentContextSnapshot, error) {
-	var dbModels []models.AgentContextSnapshot
+	var dbModels []models.RuntimeAgentContextModel
 	result := r.db.WithContext(ctx).Where("status = ?", string(domain.AgentContextStatusActive)).Find(&dbModels)
 	if result.Error != nil {
 		return nil, errors.Wrap(result.Error, errors.CodeInternal, "find active snapshots")

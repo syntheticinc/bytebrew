@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/cloudwego/eino/schema"
 	"github.com/google/uuid"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
 )
 
 // SerializeSchemaMessages serializes []*schema.Message to JSON bytes
@@ -34,18 +34,20 @@ func DeserializeSchemaMessages(data []byte) ([]*schema.Message, error) {
 	return messages, nil
 }
 
-// AgentContextSnapshotToModel converts domain snapshot to DB model
-func AgentContextSnapshotToModel(snapshot *domain.AgentContextSnapshot) *models.AgentContextSnapshot {
+// AgentContextSnapshotToModel converts domain snapshot to RuntimeAgentContextModel
+func AgentContextSnapshotToModel(snapshot *domain.AgentContextSnapshot) *models.RuntimeAgentContextModel {
 	if snapshot == nil {
 		return nil
 	}
 
-	id, _ := uuid.Parse(snapshot.ID)
-	sessionID, _ := uuid.Parse(snapshot.SessionID)
+	id := snapshot.ID
+	if id == "" {
+		id = uuid.New().String()
+	}
 
-	return &models.AgentContextSnapshot{
+	return &models.RuntimeAgentContextModel{
 		ID:            id,
-		SessionID:     sessionID,
+		SessionID:     snapshot.SessionID,
 		AgentID:       snapshot.AgentID,
 		FlowType:      string(snapshot.FlowType),
 		SchemaVersion: snapshot.SchemaVersion,
@@ -58,15 +60,15 @@ func AgentContextSnapshotToModel(snapshot *domain.AgentContextSnapshot) *models.
 	}
 }
 
-// AgentContextSnapshotFromModel converts DB model to domain snapshot
-func AgentContextSnapshotFromModel(model *models.AgentContextSnapshot) *domain.AgentContextSnapshot {
+// AgentContextSnapshotFromModel converts RuntimeAgentContextModel to domain snapshot
+func AgentContextSnapshotFromModel(model *models.RuntimeAgentContextModel) *domain.AgentContextSnapshot {
 	if model == nil {
 		return nil
 	}
 
 	return &domain.AgentContextSnapshot{
-		ID:            model.ID.String(),
-		SessionID:     model.SessionID.String(),
+		ID:            model.ID,
+		SessionID:     model.SessionID,
 		AgentID:       model.AgentID,
 		FlowType:      domain.FlowType(model.FlowType),
 		SchemaVersion: model.SchemaVersion,

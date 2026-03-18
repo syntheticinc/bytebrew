@@ -2,25 +2,22 @@ package infrastructure
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"path/filepath"
 
+	einotool "github.com/cloudwego/eino/components/tool"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/repository"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/tools"
-	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	agentservice "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/agent"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/engine"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/turn_executor"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/work"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/config"
-	einotool "github.com/cloudwego/eino/components/tool"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
-	"github.com/glebarez/sqlite"
-	"fmt"
-	"os"
-	"path/filepath"
 )
 
 // storageComponents holds all storage-related components created during initialization.
@@ -87,35 +84,24 @@ type engineComponents struct {
 }
 
 // createEngine creates Engine, FlowManager, ToolResolver and ToolDepsProvider.
+// Uses the shared PostgreSQL database for message and context snapshot storage.
 func createEngine(
 	cfg config.Config,
+	db *gorm.DB,
 	workManager *work.Manager,
 	agentPoolAdapter *agentservice.AgentPoolAdapter,
 	webSearchTool, webFetchTool einotool.InvokableTool,
 ) (*engineComponents, error) {
-	// 1. Create engine DB (snapshot + message storage) — still SQLite for now
-	engineDBPath := "./data/engine.db"
-	if err := os.MkdirAll(filepath.Dir(engineDBPath), 0755); err != nil {
-		return nil, fmt.Errorf("create engine data directory: %w", err)
+	if db == nil {
+		return nil, fmt.Errorf("database connection required for engine")
 	}
 
-	gormDB, err := gorm.Open(sqlite.Open(engineDBPath), &gorm.Config{
-		Logger: gormlogger.Default.LogMode(gormlogger.Silent),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("open engine DB: %w", err)
-	}
-
-	if err := createEngineTables(gormDB); err != nil {
-		return nil, fmt.Errorf("migrate engine DB: %w", err)
-	}
-
-	snapshotRepo := repository.NewAgentContextRepository(gormDB)
-	messageRepo := repository.NewMessageRepositoryImpl(gormDB)
+	snapshotRepo := repository.NewAgentContextRepository(db)
+	messageRepo := repository.NewMessageRepositoryImpl(db)
 	agentEngine := engine.New(snapshotRepo, messageRepo)
-	slog.Info("engine initialized", "db_path", engineDBPath)
+	slog.Info("engine initialized (PostgreSQL)")
 
-	// 2. Load flows.yaml
+	// Load flows.yaml
 	flowsPath := filepath.Join(cfg.ConfigDir, "flows.yaml")
 	flowsCfg, err := config.LoadFlowsConfig(flowsPath)
 	if err != nil {
@@ -128,7 +114,7 @@ func createEngine(
 	}
 	slog.Info("flow manager initialized", "flows_path", flowsPath)
 
-	// 3. Create ToolDepsProvider
+	// Create ToolDepsProvider
 	toolDepsProvider := tools.NewDefaultToolDepsProvider(
 		nil, // proxy -- set dynamically per-session
 		workManager,
@@ -138,7 +124,7 @@ func createEngine(
 		webFetchTool,
 	)
 
-	// 4. Create AgentToolResolver (Phase 2+: factory-based tool resolution)
+	// Create AgentToolResolver (factory-based tool resolution)
 	builtinStore := tools.NewBuiltinToolStore()
 	tools.RegisterAllBuiltins(builtinStore)
 
@@ -183,51 +169,6 @@ func wireEngineToPool(
 		agentPool.SetMaxConcurrent(supervisorFlow.Spawn.MaxConcurrent)
 		slog.Info("max concurrent agents configured", "limit", supervisorFlow.Spawn.MaxConcurrent)
 	}
-}
-
-// createEngineTables creates SQLite-compatible tables for Engine storage.
-// We use raw SQL instead of GORM AutoMigrate because the shared models.Message
-// has PostgreSQL-specific defaults (gen_random_uuid) and foreign key relationships
-// that are incompatible with SQLite.
-func createEngineTables(db *gorm.DB) error {
-	if err := db.Exec(`CREATE TABLE IF NOT EXISTS agent_context_snapshot (
-		id TEXT PRIMARY KEY,
-		session_id TEXT NOT NULL,
-		agent_id TEXT NOT NULL,
-		flow_type TEXT NOT NULL,
-		schema_version INTEGER NOT NULL DEFAULT 1,
-		context_data BLOB NOT NULL,
-		step_number INTEGER NOT NULL DEFAULT 0,
-		token_count INTEGER NOT NULL DEFAULT 0,
-		status TEXT NOT NULL DEFAULT 'active',
-		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-	)`).Error; err != nil {
-		return fmt.Errorf("create agent_context_snapshot table: %w", err)
-	}
-
-	db.Exec(`CREATE INDEX IF NOT EXISTS idx_snap_session_agent ON agent_context_snapshot(session_id, agent_id)`)
-	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_snap_agent_unique ON agent_context_snapshot(agent_id)`)
-
-	if err := db.Exec(`CREATE TABLE IF NOT EXISTS message (
-		id TEXT PRIMARY KEY,
-		session_id TEXT NOT NULL,
-		message_type TEXT NOT NULL,
-		sender TEXT,
-		agent_id TEXT,
-		content TEXT NOT NULL,
-		metadata TEXT,
-		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-	)`).Error; err != nil {
-		return fmt.Errorf("create message table: %w", err)
-	}
-
-	db.Exec(`CREATE INDEX IF NOT EXISTS idx_msg_session ON message(session_id)`)
-	db.Exec(`CREATE INDEX IF NOT EXISTS idx_msg_session_agent ON message(session_id, agent_id)`)
-	db.Exec(`CREATE INDEX IF NOT EXISTS idx_session_created ON message(created_at)`)
-
-	return nil
 }
 
 // NewRuntimeDB is a convenience function that returns the existing pgDB reference.

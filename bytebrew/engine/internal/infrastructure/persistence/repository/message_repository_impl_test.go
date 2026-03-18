@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,21 +21,8 @@ func setupMessageTestDB(t *testing.T) *gorm.DB {
 	})
 	require.NoError(t, err, "failed to open in-memory SQLite")
 
-	// Create table manually for SQLite compatibility
-	err = db.Exec(`
-		CREATE TABLE message (
-			id TEXT PRIMARY KEY,
-			session_id TEXT NOT NULL,
-			message_type TEXT NOT NULL,
-			sender TEXT,
-			agent_id TEXT,
-			content TEXT NOT NULL,
-			metadata TEXT,
-			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)
-	`).Error
-	require.NoError(t, err, "failed to create table")
+	err = db.AutoMigrate(&models.RuntimeMessageModel{})
+	require.NoError(t, err, "failed to migrate")
 
 	return db
 }

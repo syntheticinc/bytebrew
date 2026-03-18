@@ -1,48 +1,100 @@
 package adapters
 
 import (
+	"encoding/json"
+
+	"github.com/google/uuid"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
-	"github.com/google/uuid"
 )
 
-// SubtaskToTaskModel converts domain Subtask to persistence Task model
-func SubtaskToTaskModel(subtask *domain.Subtask) *models.Task {
+// SubtaskToRuntimeModel converts domain Subtask to RuntimeSubtaskModel
+func SubtaskToRuntimeModel(subtask *domain.Subtask) *models.RuntimeSubtaskModel {
 	if subtask == nil {
 		return nil
 	}
 
-	id, _ := uuid.Parse(subtask.ID)
-	sessionID, _ := uuid.Parse(subtask.SessionID)
+	id := subtask.ID
+	if id == "" {
+		id = uuid.New().String()
+	}
 
-	return &models.Task{
-		ID:          id,
-		Code:        subtask.ID, // Using ID as code for now
-		Title:       subtask.Description,
-		Description: subtask.Description,
-		TaskType:    "question",
-		SessionID:   sessionID,
-		Status:      string(subtask.Status),
-		CreatedAt:   subtask.CreatedAt,
-		UpdatedAt:   subtask.UpdatedAt,
+	blockedBy := ""
+	if len(subtask.BlockedBy) > 0 {
+		data, _ := json.Marshal(subtask.BlockedBy)
+		blockedBy = string(data)
+	}
+
+	filesInvolved := ""
+	if len(subtask.FilesInvolved) > 0 {
+		data, _ := json.Marshal(subtask.FilesInvolved)
+		filesInvolved = string(data)
+	}
+
+	ctx := ""
+	if len(subtask.Context) > 0 {
+		data, _ := json.Marshal(subtask.Context)
+		ctx = string(data)
+	}
+
+	return &models.RuntimeSubtaskModel{
+		ID:              id,
+		SessionID:       subtask.SessionID,
+		TaskID:          subtask.TaskID,
+		Title:           subtask.Title,
+		Description:     subtask.Description,
+		Status:          string(subtask.Status),
+		AssignedAgentID: subtask.AssignedAgentID,
+		BlockedBy:       blockedBy,
+		FilesInvolved:   filesInvolved,
+		Result:          subtask.Result,
+		Context:         ctx,
+		CreatedAt:       subtask.CreatedAt,
+		UpdatedAt:       subtask.UpdatedAt,
+		CompletedAt:     subtask.CompletedAt,
 	}
 }
 
-// TaskModelToSubtask converts persistence Task model to domain Subtask
-func TaskModelToSubtask(model *models.Task) (*domain.Subtask, error) {
+// RuntimeModelToSubtask converts RuntimeSubtaskModel to domain Subtask
+func RuntimeModelToSubtask(model *models.RuntimeSubtaskModel) (*domain.Subtask, error) {
 	if model == nil {
 		return nil, nil
 	}
 
 	subtask := &domain.Subtask{
-		ID:          model.ID.String(),
-		SessionID:   model.SessionID.String(),
-		Description: model.Title,
-		Status:      domain.SubtaskStatus(model.Status),
-		Result:      "", // Not stored in model
-		CreatedAt:   model.CreatedAt,
-		UpdatedAt:   model.UpdatedAt,
+		ID:              model.ID,
+		SessionID:       model.SessionID,
+		TaskID:          model.TaskID,
+		Title:           model.Title,
+		Description:     model.Description,
+		Status:          domain.SubtaskStatus(model.Status),
+		AssignedAgentID: model.AssignedAgentID,
+		Result:          model.Result,
+		CreatedAt:       model.CreatedAt,
+		UpdatedAt:       model.UpdatedAt,
+		CompletedAt:     model.CompletedAt,
+	}
+
+	if model.BlockedBy != "" {
+		_ = json.Unmarshal([]byte(model.BlockedBy), &subtask.BlockedBy)
+	}
+	if model.FilesInvolved != "" {
+		_ = json.Unmarshal([]byte(model.FilesInvolved), &subtask.FilesInvolved)
+	}
+	if model.Context != "" {
+		_ = json.Unmarshal([]byte(model.Context), &subtask.Context)
 	}
 
 	return subtask, nil
+}
+
+// SubtaskToTaskModel is a legacy alias — use SubtaskToRuntimeModel instead.
+// Kept temporarily for backward compatibility during migration.
+func SubtaskToTaskModel(subtask *domain.Subtask) *models.RuntimeSubtaskModel {
+	return SubtaskToRuntimeModel(subtask)
+}
+
+// TaskModelToSubtask is a legacy alias — use RuntimeModelToSubtask instead.
+func TaskModelToSubtask(model *models.RuntimeSubtaskModel) (*domain.Subtask, error) {
+	return RuntimeModelToSubtask(model)
 }

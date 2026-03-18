@@ -2,26 +2,25 @@ package flow_registry
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
 
-	_ "github.com/glebarez/go-sqlite"
+	"github.com/glebarez/sqlite"
 	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/eventstore"
+	"gorm.io/gorm"
 )
 
 // newTestEventStore creates an in-memory event store for tests.
 func newTestEventStore(t *testing.T) *eventstore.Store {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:?_pragma=journal_mode(WAL)")
+	gormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-	store, err := eventstore.New(db)
+	store, err := eventstore.New(gormDB)
 	require.NoError(t, err)
 	return store
 }

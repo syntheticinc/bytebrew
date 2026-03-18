@@ -489,14 +489,12 @@ func main() {
 	}
 
 	// Engine components are always available (server fails to start otherwise)
-	// Use AgentRegistry as FlowProvider if available (DB agents), fallback to legacy FlowManager
-	flowProvider := turn_executor.FlowProvider(components.FlowManager)
-	if agentRegistry != nil && agentRegistry.Count() > 0 {
-		flowProvider = agentRegistry
-		slog.InfoContext(ctx, "Using AgentRegistry as FlowProvider", "agents", agentRegistry.Count())
-	} else {
-		slog.InfoContext(ctx, "Using legacy FlowManager as FlowProvider")
+	// AgentRegistry is the FlowProvider (DB agents). PostgreSQL required.
+	if agentRegistry == nil {
+		log.Fatalf("AgentRegistry is nil — PostgreSQL database required. Set database.url in config.")
 	}
+	flowProvider := turn_executor.FlowProvider(agentRegistry)
+	slog.InfoContext(ctx, "Using AgentRegistry as FlowProvider", "agents", agentRegistry.Count())
 
 	factory := infrastructure.NewEngineTurnExecutorFactory(
 		components.Engine,

@@ -118,7 +118,7 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 	webSearchTool, webFetchTool := createWebTools(cfg)
 
 	// 7. Create Engine and wire to AgentPool
-	ec, err := createEngine(cfg, storageCmp.WorkManager, agentPoolAdapter, webSearchTool, webFetchTool)
+	ec, err := createEngine(cfg, icc.DB, storageCmp.WorkManager, agentPoolAdapter, webSearchTool, webFetchTool)
 	if err != nil {
 		return nil, errors.Wrap(err, errors.CodeInternal, "failed to initialize engine")
 	}

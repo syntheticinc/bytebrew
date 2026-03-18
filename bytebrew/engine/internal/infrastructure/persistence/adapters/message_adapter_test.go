@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
-	"github.com/google/uuid"
 )
 
 func TestMessageToModel_Basic(t *testing.T) {
@@ -79,14 +79,8 @@ func TestMessageToModel_WithMetadata(t *testing.T) {
 		t.Fatal("MessageToModel() returned nil")
 	}
 
-	if len(model.Metadata) == 0 {
+	if model.Metadata == "" {
 		t.Error("MessageToModel() Metadata should not be empty")
-	}
-
-	// Verify metadata is serialized (contains expected keys)
-	metaStr := string(model.Metadata)
-	if metaStr == "" || metaStr == "null" {
-		t.Error("MessageToModel() Metadata was not serialized")
 	}
 }
 
@@ -124,21 +118,14 @@ func TestMessageToModel_WithToolCalls(t *testing.T) {
 		t.Fatal("MessageToModel() returned nil")
 	}
 
-	if len(model.Metadata) == 0 {
+	if model.Metadata == "" {
 		t.Error("MessageToModel() Metadata should contain serialized tool_calls")
 	}
 
-	// Verify tool_calls are in metadata
-	metaStr := string(model.Metadata)
-	if metaStr == "" {
-		t.Error("MessageToModel() Metadata should not be empty")
-	}
-
-	// Check that tool call info is present
-	if !containsString(metaStr, "call-1") {
+	if !containsString(model.Metadata, "call-1") {
 		t.Error("MessageToModel() Metadata should contain tool call ID 'call-1'")
 	}
-	if !containsString(metaStr, "search_code") {
+	if !containsString(model.Metadata, "search_code") {
 		t.Error("MessageToModel() Metadata should contain tool name 'search_code'")
 	}
 }
@@ -169,19 +156,17 @@ func TestMessageToModel_ToolMessage(t *testing.T) {
 		t.Errorf("MessageToModel() MessageType = %v, want tool", model.MessageType)
 	}
 
-	// Verify tool_call_id is in metadata
-	metaStr := string(model.Metadata)
-	if !containsString(metaStr, "call-1") {
+	if !containsString(model.Metadata, "call-1") {
 		t.Error("MessageToModel() Metadata should contain tool_call_id 'call-1'")
 	}
 }
 
 func TestMessageFromModel_Basic(t *testing.T) {
-	modelID := uuid.New()
-	sessionID := uuid.New()
+	modelID := uuid.New().String()
+	sessionID := uuid.New().String()
 	createdAt := time.Now()
 
-	model := &models.Message{
+	model := &models.RuntimeMessageModel{
 		ID:          modelID,
 		SessionID:   sessionID,
 		MessageType: "user",
@@ -200,8 +185,8 @@ func TestMessageFromModel_Basic(t *testing.T) {
 		t.Fatal("MessageFromModel() returned nil message")
 	}
 
-	if msg.ID != modelID.String() {
-		t.Errorf("MessageFromModel() ID = %v, want %v", msg.ID, modelID.String())
+	if msg.ID != modelID {
+		t.Errorf("MessageFromModel() ID = %v, want %v", msg.ID, modelID)
 	}
 
 	if msg.Type != domain.MessageTypeUser {
@@ -224,13 +209,13 @@ func TestMessageFromModel_Nil(t *testing.T) {
 }
 
 func TestMessageFromModel_WithMetadata(t *testing.T) {
-	model := &models.Message{
-		ID:          uuid.New(),
-		SessionID:   uuid.New(),
+	model := &models.RuntimeMessageModel{
+		ID:          uuid.New().String(),
+		SessionID:   uuid.New().String(),
 		MessageType: "user",
 		Sender:      "user",
 		Content:     "Test",
-		Metadata:    []byte(`{"user_metadata":{"source":"web","language":"en"}}`),
+		Metadata:    `{"user_metadata":{"source":"web","language":"en"}}`,
 		CreatedAt:   time.Now(),
 	}
 
@@ -258,13 +243,13 @@ func TestMessageFromModel_WithMetadata(t *testing.T) {
 }
 
 func TestMessageFromModel_WithToolCalls(t *testing.T) {
-	model := &models.Message{
-		ID:          uuid.New(),
-		SessionID:   uuid.New(),
+	model := &models.RuntimeMessageModel{
+		ID:          uuid.New().String(),
+		SessionID:   uuid.New().String(),
 		MessageType: "agent",
 		Sender:      "assistant",
 		Content:     "Let me search",
-		Metadata:    []byte(`{"tool_calls":[{"id":"call-1","name":"search_code","arguments":{"query":"test"}},{"id":"call-2","name":"read_file","arguments":{"path":"/test.go"}}]}`),
+		Metadata:    `{"tool_calls":[{"id":"call-1","name":"search_code","arguments":{"query":"test"}},{"id":"call-2","name":"read_file","arguments":{"path":"/test.go"}}]}`,
 		CreatedAt:   time.Now(),
 	}
 
@@ -296,13 +281,13 @@ func TestMessageFromModel_WithToolCalls(t *testing.T) {
 }
 
 func TestMessageFromModel_ToolMessage(t *testing.T) {
-	model := &models.Message{
-		ID:          uuid.New(),
-		SessionID:   uuid.New(),
+	model := &models.RuntimeMessageModel{
+		ID:          uuid.New().String(),
+		SessionID:   uuid.New().String(),
 		MessageType: "tool",
 		Sender:      "search_code",
 		Content:     "Found 5 results",
-		Metadata:    []byte(`{"tool_call_id":"call-1","tool_name":"search_code"}`),
+		Metadata:    `{"tool_call_id":"call-1","tool_name":"search_code"}`,
 		CreatedAt:   time.Now(),
 	}
 
@@ -330,7 +315,6 @@ func TestMessageFromModel_ToolMessage(t *testing.T) {
 }
 
 func TestMessageAdapter_RoundTrip(t *testing.T) {
-	// Test user message round trip
 	t.Run("user message", func(t *testing.T) {
 		original := &domain.Message{
 			ID:        uuid.New().String(),
@@ -349,7 +333,6 @@ func TestMessageAdapter_RoundTrip(t *testing.T) {
 			t.Fatalf("MessageToModel() error = %v", err)
 		}
 		restored, err := MessageFromModel(model)
-
 		if err != nil {
 			t.Errorf("Round trip error: %v", err)
 		}
@@ -357,7 +340,6 @@ func TestMessageAdapter_RoundTrip(t *testing.T) {
 		assertMessagesEqual(t, original, restored)
 	})
 
-	// Test assistant message with tool calls round trip
 	t.Run("assistant with tool calls", func(t *testing.T) {
 		original := &domain.Message{
 			ID:        uuid.New().String(),
@@ -381,7 +363,6 @@ func TestMessageAdapter_RoundTrip(t *testing.T) {
 			t.Fatalf("MessageToModel() error = %v", err)
 		}
 		restored, err := MessageFromModel(model)
-
 		if err != nil {
 			t.Errorf("Round trip error: %v", err)
 		}
@@ -397,7 +378,6 @@ func TestMessageAdapter_RoundTrip(t *testing.T) {
 		}
 	})
 
-	// Test tool result message round trip
 	t.Run("tool result", func(t *testing.T) {
 		original := &domain.Message{
 			ID:         uuid.New().String(),
@@ -416,7 +396,6 @@ func TestMessageAdapter_RoundTrip(t *testing.T) {
 			t.Fatalf("MessageToModel() error = %v", err)
 		}
 		restored, err := MessageFromModel(model)
-
 		if err != nil {
 			t.Errorf("Round trip error: %v", err)
 		}
@@ -434,19 +413,18 @@ func TestMessageAdapter_RoundTrip(t *testing.T) {
 }
 
 func TestMessageFromModel_InvalidMetadata(t *testing.T) {
-	model := &models.Message{
-		ID:          uuid.New(),
-		SessionID:   uuid.New(),
+	model := &models.RuntimeMessageModel{
+		ID:          uuid.New().String(),
+		SessionID:   uuid.New().String(),
 		MessageType: "user",
 		Sender:      "user",
 		Content:     "Test",
-		Metadata:    []byte(`{invalid json`),
+		Metadata:    `{invalid json`,
 		CreatedAt:   time.Now(),
 	}
 
 	msg, err := MessageFromModel(model)
 
-	// Should not fail, just ignore invalid metadata
 	if err != nil {
 		t.Errorf("MessageFromModel() should not fail on invalid metadata: %v", err)
 	}
@@ -455,7 +433,6 @@ func TestMessageFromModel_InvalidMetadata(t *testing.T) {
 		t.Fatal("MessageFromModel() returned nil")
 	}
 
-	// Metadata should be initialized but empty (or default)
 	if msg.Metadata == nil {
 		t.Error("MessageFromModel() Metadata should be initialized")
 	}
@@ -464,10 +441,6 @@ func TestMessageFromModel_InvalidMetadata(t *testing.T) {
 // Helper functions
 
 func containsString(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || containsSubstring(s, substr)))
-}
-
-func containsSubstring(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {
 			return true

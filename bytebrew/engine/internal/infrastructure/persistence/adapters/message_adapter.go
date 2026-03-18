@@ -2,41 +2,30 @@ package adapters
 
 import (
 	"encoding/json"
-	"fmt"
 	"log/slog"
 
+	"github.com/google/uuid"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
-	"github.com/google/uuid"
 )
 
 // messageMetadata represents the full metadata stored in the database
 type messageMetadata struct {
-	UserMetadata map[string]string      `json:"user_metadata,omitempty"`
-	ToolCalls    []domain.ToolCallInfo  `json:"tool_calls,omitempty"`
-	ToolCallID   string                 `json:"tool_call_id,omitempty"`
-	ToolName     string                 `json:"tool_name,omitempty"`
+	UserMetadata map[string]string     `json:"user_metadata,omitempty"`
+	ToolCalls    []domain.ToolCallInfo `json:"tool_calls,omitempty"`
+	ToolCallID   string                `json:"tool_call_id,omitempty"`
+	ToolName     string                `json:"tool_name,omitempty"`
 }
 
-// MessageToModel converts domain Message to persistence model
-func MessageToModel(message *domain.Message) (*models.Message, error) {
+// MessageToModel converts domain Message to RuntimeMessageModel
+func MessageToModel(message *domain.Message) (*models.RuntimeMessageModel, error) {
 	if message == nil {
 		return nil, nil
 	}
 
-	var id uuid.UUID
-	if message.ID == "" {
-		id = uuid.New()
-	} else {
-		var err error
-		id, err = uuid.Parse(message.ID)
-		if err != nil {
-			return nil, fmt.Errorf("parse message ID %q: %w", message.ID, err)
-		}
-	}
-	sessionID, err := uuid.Parse(message.SessionID)
-	if err != nil {
-		return nil, fmt.Errorf("parse session ID %q: %w", message.SessionID, err)
+	id := message.ID
+	if id == "" {
+		id = uuid.New().String()
 	}
 
 	// Serialize metadata including ToolCalls
@@ -53,60 +42,47 @@ func MessageToModel(message *domain.Message) (*models.Message, error) {
 		metadataJSON = []byte("{}")
 	}
 
-	model := &models.Message{
+	return &models.RuntimeMessageModel{
 		ID:          id,
-		SessionID:   sessionID,
+		SessionID:   message.SessionID,
 		MessageType: string(message.Type),
 		Sender:      message.Sender,
+		AgentID:     message.AgentID,
 		Content:     message.Content,
-		Metadata:    metadataJSON,
+		Metadata:    string(metadataJSON),
 		CreatedAt:   message.CreatedAt,
 		UpdatedAt:   message.CreatedAt,
-	}
-
-	// Set AgentID if present (nullable field for backward compatibility)
-	if message.AgentID != "" {
-		agentID := message.AgentID
-		model.AgentID = &agentID
-	}
-
-	return model, nil
+	}, nil
 }
 
-// MessageFromModel converts persistence model to domain Message
-func MessageFromModel(model *models.Message) (*domain.Message, error) {
+// MessageFromModel converts RuntimeMessageModel to domain Message
+func MessageFromModel(model *models.RuntimeMessageModel) (*domain.Message, error) {
 	if model == nil {
 		return nil, nil
 	}
 
 	message := &domain.Message{
-		ID:        model.ID.String(),
-		SessionID: model.SessionID.String(),
+		ID:        model.ID,
+		SessionID: model.SessionID,
 		Type:      domain.MessageType(model.MessageType),
 		Sender:    model.Sender,
+		AgentID:   model.AgentID,
 		Content:   model.Content,
 		Metadata:  make(map[string]string),
 		CreatedAt: model.CreatedAt,
 	}
 
 	// Deserialize metadata if present
-	if len(model.Metadata) > 0 {
+	if model.Metadata != "" {
 		var meta messageMetadata
-		if err := json.Unmarshal(model.Metadata, &meta); err == nil {
-			// Restore user metadata
+		if err := json.Unmarshal([]byte(model.Metadata), &meta); err == nil {
 			if meta.UserMetadata != nil {
 				message.Metadata = meta.UserMetadata
 			}
-			// Restore tool-related fields
 			message.ToolCalls = meta.ToolCalls
 			message.ToolCallID = meta.ToolCallID
 			message.ToolName = meta.ToolName
 		}
-	}
-
-	// Restore AgentID if present
-	if model.AgentID != nil {
-		message.AgentID = *model.AgentID
 	}
 
 	return message, nil
