@@ -29,11 +29,12 @@ export default function SettingsPage() {
       }
     } else if (typeof settings === 'object') {
       // Handle flat object response from stub API
-      if (settings.byok_enabled !== undefined) map['byok.enabled'] = String(settings.byok_enabled);
-      if (Array.isArray(settings.byok_allowed_providers)) {
-        map['byok.allow_openai'] = settings.byok_allowed_providers.includes('openai') ? 'true' : 'false';
-        map['byok.allow_anthropic'] = settings.byok_allowed_providers.includes('anthropic') ? 'true' : 'false';
-        map['byok.allow_ollama'] = settings.byok_allowed_providers.includes('ollama') ? 'true' : 'false';
+      const obj = settings as Record<string, unknown>;
+      if (obj.byok_enabled !== undefined) map['byok.enabled'] = String(obj.byok_enabled);
+      if (Array.isArray(obj.byok_allowed_providers)) {
+        map['byok.allow_openai'] = (obj.byok_allowed_providers as string[]).includes('openai') ? 'true' : 'false';
+        map['byok.allow_anthropic'] = (obj.byok_allowed_providers as string[]).includes('anthropic') ? 'true' : 'false';
+        map['byok.allow_ollama'] = (obj.byok_allowed_providers as string[]).includes('ollama') ? 'true' : 'false';
       }
     }
     setLocalSettings(map);

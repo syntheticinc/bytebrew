@@ -167,7 +167,8 @@ class APIClient {
 
   // ---- Settings ----
   listSettings() {
-    return this.request<Setting[]>('GET', '/settings');
+    // API may return Setting[] or flat object depending on backend implementation
+    return this.request<Setting[] | Record<string, unknown>>('GET', '/settings');
   }
   updateSetting(key: string, value: string) {
     return this.request<Setting>('PUT', `/settings/${encodeURIComponent(key)}`, { value });
