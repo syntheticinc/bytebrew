@@ -61,7 +61,6 @@ func (r *GORMAgentRepository) List(ctx context.Context) ([]AgentRecord, error) {
 		Preload("SpawnTargets.TargetAgent").
 		Preload("Escalation").
 		Preload("Escalation.Triggers").
-		Preload("MCPServers").
 		Preload("Model").
 		Find(&agents).Error
 	if err != nil {
@@ -88,7 +87,6 @@ func (r *GORMAgentRepository) GetByName(ctx context.Context, name string) (*Agen
 		Preload("SpawnTargets.TargetAgent").
 		Preload("Escalation").
 		Preload("Escalation.Triggers").
-		Preload("MCPServers").
 		Preload("Model").
 		Where("name = ?", name).
 		First(&agent).Error
@@ -279,10 +277,7 @@ func toAgentRecord(a models.AgentModel) (AgentRecord, error) {
 		rec.CanSpawn = append(rec.CanSpawn, st.TargetAgent.Name)
 	}
 
-	// MCP servers: extract names
-	for _, m := range a.MCPServers {
-		rec.MCPServers = append(rec.MCPServers, m.Name)
-	}
+	// MCP servers: skip loading (loaded separately if needed)
 
 	// Escalation
 	if a.Escalation != nil {

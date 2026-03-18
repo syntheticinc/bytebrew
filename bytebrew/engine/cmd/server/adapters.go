@@ -5,6 +5,7 @@ import (
 	"time"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/http"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/ws"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/agent_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/audit"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/config_repo"
@@ -17,6 +18,25 @@ type agentCounterAdapter struct {
 
 func (a *agentCounterAdapter) Count() int {
 	return a.registry.Count()
+}
+
+// wsAgentListerAdapter bridges AgentRegistry to the ws.AgentLister interface.
+type wsAgentListerAdapter struct {
+	registry *agent_registry.AgentRegistry
+}
+
+func (a *wsAgentListerAdapter) ListAgentInfos() []ws.AgentInfo {
+	agents := a.registry.GetAll()
+	result := make([]ws.AgentInfo, 0, len(agents))
+	for _, agent := range agents {
+		result = append(result, ws.AgentInfo{
+			Name:         agent.Record.Name,
+			ToolsCount:   len(agent.Record.BuiltinTools) + len(agent.Record.CustomTools),
+			Kit:          agent.Record.Kit,
+			HasKnowledge: agent.Record.KnowledgePath != "",
+		})
+	}
+	return result
 }
 
 // auditLoggerAdapter bridges audit.Logger to the http.AuditLogger interface.

@@ -23,7 +23,7 @@ type AgentModel struct {
 	Tools        []AgentToolModel     `gorm:"foreignKey:AgentID"`
 	SpawnTargets []AgentSpawnTarget   `gorm:"foreignKey:AgentID"`
 	Escalation   *AgentEscalation     `gorm:"foreignKey:AgentID"`
-	MCPServers   []MCPServerModel     `gorm:"many2many:agent_mcp_servers"`
+	// MCPServers loaded manually via separate query (GORM many2many infers wrong column names from AgentModel → agent_model_id)
 }
 
 func (AgentModel) TableName() string { return "agents" }

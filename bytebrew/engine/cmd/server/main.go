@@ -428,6 +428,11 @@ func main() {
 	}
 	wsHandler := ws.NewConnectionHandler(sessionRegistry, sessProcessor, components.AgentService, agentCanceller, components.LicenseInfo)
 
+	// Wire agent lister for WS list_agents command
+	if agentRegistry != nil {
+		wsHandler.SetAgentLister(&wsAgentListerAdapter{registry: agentRegistry})
+	}
+
 	// Create WS server (localhost only, random port)
 	wsServer, err := ws.NewServer(wsHandler)
 	if err != nil {
