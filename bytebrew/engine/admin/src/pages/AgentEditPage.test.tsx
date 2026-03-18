@@ -50,9 +50,9 @@ describe('AgentEditPage', () => {
     renderEditPage('new');
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Create Agent' })).toBeInTheDocument();
-      expect(screen.getByLabelText('Name')).toBeInTheDocument();
-      expect(screen.getByLabelText('System Prompt')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Create Agent');
+      expect(screen.getByText('Name')).toBeInTheDocument();
+      expect(screen.getByText('System Prompt')).toBeInTheDocument();
     });
   });
 

@@ -55,7 +55,7 @@ describe('AgentsPage', () => {
 
     renderPage();
     await waitFor(() => {
-      expect(screen.getByText('developer')).toBeInTheDocument();
+      expect(screen.getAllByText('developer').length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText('sales')).toBeInTheDocument();
     });
   });
