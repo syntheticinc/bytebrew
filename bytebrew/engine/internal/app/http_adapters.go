@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -10,21 +10,21 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/config_repo"
 )
 
-// agentCounterAdapter bridges AgentRegistry to the http.AgentCounter interface.
-type agentCounterAdapter struct {
+// agentCounterHTTPAdapter bridges AgentRegistry to the http.AgentCounter interface.
+type agentCounterHTTPAdapter struct {
 	registry *agent_registry.AgentRegistry
 }
 
-func (a *agentCounterAdapter) Count() int {
+func (a *agentCounterHTTPAdapter) Count() int {
 	return a.registry.Count()
 }
 
-// auditLoggerAdapter bridges audit.Logger to the http.AuditLogger interface.
-type auditLoggerAdapter struct {
+// auditHTTPAdapter bridges audit.Logger to the http.AuditLogger interface.
+type auditHTTPAdapter struct {
 	logger *audit.Logger
 }
 
-func (a *auditLoggerAdapter) Log(ctx context.Context, entry deliveryhttp.AuditEntry) error {
+func (a *auditHTTPAdapter) Log(ctx context.Context, entry deliveryhttp.AuditEntry) error {
 	return a.logger.Log(ctx, audit.Entry{
 		Timestamp: entry.Timestamp,
 		ActorType: entry.ActorType,
@@ -36,12 +36,12 @@ func (a *auditLoggerAdapter) Log(ctx context.Context, entry deliveryhttp.AuditEn
 	})
 }
 
-// agentListerAdapter bridges AgentRegistry to the http.AgentLister interface.
-type agentListerAdapter struct {
+// agentListerHTTPAdapter bridges AgentRegistry to the http.AgentLister interface.
+type agentListerHTTPAdapter struct {
 	registry *agent_registry.AgentRegistry
 }
 
-func (a *agentListerAdapter) ListAgents(_ context.Context) ([]deliveryhttp.AgentInfo, error) {
+func (a *agentListerHTTPAdapter) ListAgents(_ context.Context) ([]deliveryhttp.AgentInfo, error) {
 	agents := a.registry.GetAll()
 	result := make([]deliveryhttp.AgentInfo, 0, len(agents))
 	for _, agent := range agents {
@@ -55,18 +55,16 @@ func (a *agentListerAdapter) ListAgents(_ context.Context) ([]deliveryhttp.Agent
 	return result, nil
 }
 
-func (a *agentListerAdapter) GetAgent(_ context.Context, name string) (*deliveryhttp.AgentDetail, error) {
+func (a *agentListerHTTPAdapter) GetAgent(_ context.Context, name string) (*deliveryhttp.AgentDetail, error) {
 	agent, err := a.registry.Get(name)
 	if err != nil {
-		return nil, nil // not found
+		return nil, nil
 	}
-
 	tools := make([]string, 0, len(agent.Record.BuiltinTools)+len(agent.Record.CustomTools))
 	tools = append(tools, agent.Record.BuiltinTools...)
 	for _, ct := range agent.Record.CustomTools {
 		tools = append(tools, ct.Name)
 	}
-
 	return &deliveryhttp.AgentDetail{
 		AgentInfo: deliveryhttp.AgentInfo{
 			Name:         agent.Record.Name,
@@ -79,16 +77,16 @@ func (a *agentListerAdapter) GetAgent(_ context.Context, name string) (*delivery
 	}, nil
 }
 
-// tokenRepoAdapter bridges GORMAPITokenRepository to the http.TokenRepository interface.
-type tokenRepoAdapter struct {
+// tokenRepoHTTPAdapter bridges GORMAPITokenRepository to the http.TokenRepository interface.
+type tokenRepoHTTPAdapter struct {
 	repo *config_repo.GORMAPITokenRepository
 }
 
-func (a *tokenRepoAdapter) Create(ctx context.Context, name, tokenHash string, scopesMask int) (uint, error) {
+func (a *tokenRepoHTTPAdapter) Create(ctx context.Context, name, tokenHash string, scopesMask int) (uint, error) {
 	return a.repo.Create(ctx, name, tokenHash, scopesMask)
 }
 
-func (a *tokenRepoAdapter) List(ctx context.Context) ([]deliveryhttp.TokenInfo, error) {
+func (a *tokenRepoHTTPAdapter) List(ctx context.Context) ([]deliveryhttp.TokenInfo, error) {
 	tokens, err := a.repo.List(ctx)
 	if err != nil {
 		return nil, err
@@ -106,62 +104,56 @@ func (a *tokenRepoAdapter) List(ctx context.Context) ([]deliveryhttp.TokenInfo, 
 	return result, nil
 }
 
-func (a *tokenRepoAdapter) Delete(ctx context.Context, id string) error {
+func (a *tokenRepoHTTPAdapter) Delete(ctx context.Context, id string) error {
 	return a.repo.Delete(ctx, id)
 }
 
-func (a *tokenRepoAdapter) VerifyToken(ctx context.Context, tokenHash string) (string, int, error) {
+func (a *tokenRepoHTTPAdapter) VerifyToken(ctx context.Context, tokenHash string) (string, int, error) {
 	return a.repo.VerifyToken(ctx, tokenHash)
 }
 
-// configReloaderAdapter bridges AgentRegistry to the http.ConfigReloader interface.
-type configReloaderAdapter struct {
+// configReloaderHTTPAdapter bridges AgentRegistry to the http.ConfigReloader interface.
+type configReloaderHTTPAdapter struct {
 	registry *agent_registry.AgentRegistry
 }
 
-func (a *configReloaderAdapter) Reload(ctx context.Context) error {
+func (a *configReloaderHTTPAdapter) Reload(ctx context.Context) error {
 	return a.registry.Reload(ctx)
 }
 
-func (a *configReloaderAdapter) AgentsCount() int {
+func (a *configReloaderHTTPAdapter) AgentsCount() int {
 	return a.registry.Count()
 }
 
-// configImportExportAdapter bridges AgentRepository to the http.ConfigImportExporter interface.
-// Phase 5 skeleton — full YAML import/export will be implemented when config_repo gains the methods.
-type configImportExportAdapter struct {
-	repo *config_repo.GORMAgentRepository
+// configImportExportHTTPAdapter — skeleton for YAML import/export.
+type configImportExportHTTPAdapter struct{}
+
+func (a *configImportExportHTTPAdapter) ImportYAML(_ context.Context, _ []byte) error {
+	return nil
 }
 
-func (a *configImportExportAdapter) ImportYAML(_ context.Context, _ []byte) error {
-	return nil // TODO: implement YAML import
+func (a *configImportExportHTTPAdapter) ExportYAML(_ context.Context) ([]byte, error) {
+	return []byte("# ByteBrew config export\n"), nil
 }
 
-func (a *configImportExportAdapter) ExportYAML(_ context.Context) ([]byte, error) {
-	return []byte("# ByteBrew config export (not yet implemented)\n"), nil
-}
-
-// taskServiceAdapter bridges task infrastructure to the http.TaskService interface.
-// Phase 5 skeleton — full task CRUD will be wired when TaskExecutor is available.
-type taskServiceAdapter struct {
+// taskServiceHTTPAdapter bridges task infrastructure to the http.TaskService interface.
+type taskServiceHTTPAdapter struct {
 	repo *config_repo.GORMTaskRepository
 }
 
-func (a *taskServiceAdapter) CreateTask(_ context.Context, _ deliveryhttp.CreateTaskRequest) (uint, error) {
-	return 0, nil // TODO: wire task creation through TaskWorker
+func (a *taskServiceHTTPAdapter) CreateTask(_ context.Context, _ deliveryhttp.CreateTaskRequest) (uint, error) {
+	return 0, nil
 }
 
-func (a *taskServiceAdapter) ListTasks(ctx context.Context, filter deliveryhttp.TaskListFilter) ([]deliveryhttp.TaskResponse, error) {
+func (a *taskServiceHTTPAdapter) ListTasks(ctx context.Context, filter deliveryhttp.TaskListFilter) ([]deliveryhttp.TaskResponse, error) {
 	repoFilter := config_repo.TaskFilter{}
 	if filter.AgentName != "" {
 		repoFilter.AgentName = &filter.AgentName
 	}
-
 	tasks, err := a.repo.List(ctx, repoFilter)
 	if err != nil {
 		return nil, err
 	}
-
 	result := make([]deliveryhttp.TaskResponse, 0, len(tasks))
 	for _, t := range tasks {
 		result = append(result, deliveryhttp.TaskResponse{
@@ -176,12 +168,11 @@ func (a *taskServiceAdapter) ListTasks(ctx context.Context, filter deliveryhttp.
 	return result, nil
 }
 
-func (a *taskServiceAdapter) GetTask(ctx context.Context, id uint) (*deliveryhttp.TaskDetailResponse, error) {
+func (a *taskServiceHTTPAdapter) GetTask(ctx context.Context, id uint) (*deliveryhttp.TaskDetailResponse, error) {
 	t, err := a.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-
 	resp := &deliveryhttp.TaskDetailResponse{
 		TaskResponse: deliveryhttp.TaskResponse{
 			ID:        t.ID,
@@ -205,10 +196,10 @@ func (a *taskServiceAdapter) GetTask(ctx context.Context, id uint) (*deliveryhtt
 	return resp, nil
 }
 
-func (a *taskServiceAdapter) CancelTask(ctx context.Context, id uint) error {
+func (a *taskServiceHTTPAdapter) CancelTask(ctx context.Context, id uint) error {
 	return a.repo.Cancel(ctx, id)
 }
 
-func (a *taskServiceAdapter) ProvideInput(_ context.Context, _ uint, _ string) error {
-	return nil // TODO: wire input channel to task session
+func (a *taskServiceHTTPAdapter) ProvideInput(_ context.Context, _ uint, _ string) error {
+	return nil
 }

@@ -16,8 +16,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/grpc"
+	deliveryhttp "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/ws"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/audit"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/embedded"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure"
@@ -214,6 +217,9 @@ func main() {
 	// If not present (legacy config), skip — everything works as before.
 	var agentRegistry *agent_registry.AgentRegistry
 	var pgDB *gorm.DB
+	var agentRepo *config_repo.GORMAgentRepository
+	var taskRepo *config_repo.GORMTaskRepository
+	var apiTokenRepo *config_repo.GORMAPITokenRepository
 	var bootstrapCfg *config.BootstrapConfig
 	bootstrapCfg, bootstrapErr := config.LoadBootstrap(*configPath)
 	if bootstrapErr != nil {
@@ -233,7 +239,9 @@ func main() {
 			os.Exit(1)
 		}
 
-		agentRepo := config_repo.NewGORMAgentRepository(pgDB)
+		agentRepo = config_repo.NewGORMAgentRepository(pgDB)
+		taskRepo = config_repo.NewGORMTaskRepository(pgDB)
+		apiTokenRepo = config_repo.NewGORMAPITokenRepository(pgDB)
 		agentRegistry = agent_registry.New(agentRepo)
 		if loadErr := agentRegistry.Load(ctx); loadErr != nil {
 			slog.Error("Failed to load agents from database", "error", loadErr)
@@ -270,10 +278,62 @@ func main() {
 	kitRegistry.Register(developer.New())
 	slog.InfoContext(ctx, "Kit registry initialized", "kits", kitRegistry.List())
 
-	// If AgentRegistry loaded named models, register them in ModelSelector.
-	// This enables per-agent model resolution (agent.Model: "llama-4" → ModelSelector.ResolveByName).
-	_ = agentRegistry // available for Phase 2+ wiring
-	_ = kitRegistry   // available for Phase 3+ wiring (AgentToolResolver.SetKitProvider)
+	// HTTP REST API server — starts when bootstrap config is available (PostgreSQL connected).
+	if agentRegistry != nil && bootstrapCfg != nil {
+		httpPort := bootstrapCfg.Engine.Port
+		if httpPort == 0 {
+			httpPort = 8443
+		}
+		httpSrv := deliveryhttp.NewServer(httpPort)
+		r := httpSrv.Router()
+
+		jwtSecret := bootstrapCfg.Security.AdminPassword
+		authMW := deliveryhttp.NewAuthMiddleware(jwtSecret, &tokenRepoAdapter{repo: apiTokenRepo})
+
+		auditLogger := audit.NewLogger(pgDB)
+
+		// Public endpoints
+		healthHandler := deliveryhttp.NewHealthHandler(version, &agentCounterAdapter{registry: agentRegistry})
+		r.Get("/api/v1/health", healthHandler.ServeHTTP)
+
+		authHandler := deliveryhttp.NewAuthHandler(bootstrapCfg.Security.AdminUser, bootstrapCfg.Security.AdminPassword, jwtSecret)
+		r.Post("/api/v1/auth/login", authHandler.Login)
+
+		// Protected endpoints
+		r.Group(func(r chi.Router) {
+			r.Use(authMW.Authenticate)
+			r.Use(deliveryhttp.AuditMiddleware(&auditLoggerAdapter{logger: auditLogger}))
+
+			agentHandler := deliveryhttp.NewAgentHandler(&agentListerAdapter{registry: agentRegistry})
+			r.Get("/api/v1/agents", agentHandler.List)
+			r.Get("/api/v1/agents/{name}", agentHandler.Get)
+
+			taskHandler := deliveryhttp.NewTaskHandler(&taskServiceAdapter{repo: taskRepo})
+			r.Post("/api/v1/tasks", taskHandler.Create)
+			r.Get("/api/v1/tasks", taskHandler.List)
+			r.Get("/api/v1/tasks/{id}", taskHandler.Get)
+			r.Delete("/api/v1/tasks/{id}", taskHandler.Cancel)
+			r.Post("/api/v1/tasks/{id}/input", taskHandler.ProvideInput)
+
+			configHandler := deliveryhttp.NewConfigHandler(&configReloaderAdapter{registry: agentRegistry}, &configImportExportAdapter{repo: agentRepo})
+			r.Post("/api/v1/config/reload", configHandler.Reload)
+			r.Post("/api/v1/config/import", configHandler.Import)
+			r.Get("/api/v1/config/export", configHandler.Export)
+
+			tokenHandler := deliveryhttp.NewTokenHandler(&tokenRepoAdapter{repo: apiTokenRepo})
+			r.Post("/api/v1/auth/tokens", tokenHandler.CreateToken)
+			r.Get("/api/v1/auth/tokens", tokenHandler.ListTokens)
+			r.Delete("/api/v1/auth/tokens/{id}", tokenHandler.DeleteToken)
+		})
+
+		go func() {
+			if err := httpSrv.Start(); err != nil && err != http.ErrServerClosed {
+				slog.Error("HTTP server error", "error", err)
+			}
+		}()
+		slog.InfoContext(ctx, "HTTP REST API server started", "port", httpPort)
+	}
+	_ = kitRegistry // available for Kit resolution in AgentToolResolver
 
 	// Initialize gRPC server
 	grpcServer, err := initializeGRPCServer(cfg, loggerInstance, components.LicenseInfo, *managed)

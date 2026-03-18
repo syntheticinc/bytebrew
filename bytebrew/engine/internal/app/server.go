@@ -16,8 +16,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/grpc"
+	deliveryhttp "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/ws"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/audit"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/embedded"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure"
@@ -209,11 +212,15 @@ func Run(sc ServerConfig) error {
 
 	// Try loading bootstrap config for PostgreSQL database connection.
 	var agentRegistry *agent_registry.AgentRegistry
+	var pgDB *gorm.DB
+	var taskRepo *config_repo.GORMTaskRepository
+	var apiTokenRepo *config_repo.GORMAPITokenRepository
 	bootstrapCfg, bootstrapErr := config.LoadBootstrap(configPath)
 	if bootstrapErr != nil {
 		slog.Info("No bootstrap database config, running in legacy mode", "reason", bootstrapErr.Error())
 	} else {
-		pgDB, pgErr := gorm.Open(postgres.Open(bootstrapCfg.Database.URL), &gorm.Config{
+		var pgErr error
+		pgDB, pgErr = gorm.Open(postgres.Open(bootstrapCfg.Database.URL), &gorm.Config{
 			Logger: gormlogger.Default.LogMode(gormlogger.Silent),
 		})
 		if pgErr != nil {
@@ -225,6 +232,8 @@ func Run(sc ServerConfig) error {
 		}
 
 		agentRepo := config_repo.NewGORMAgentRepository(pgDB)
+		taskRepo = config_repo.NewGORMTaskRepository(pgDB)
+		apiTokenRepo = config_repo.NewGORMAPITokenRepository(pgDB)
 		agentRegistry = agent_registry.New(agentRepo)
 		if loadErr := agentRegistry.Load(ctx); loadErr != nil {
 			return fmt.Errorf("load agents from database: %w", loadErr)
@@ -253,8 +262,74 @@ func Run(sc ServerConfig) error {
 	slog.InfoContext(ctx, "Kit registry initialized", "kits", kitRegistry.List())
 
 	// HTTP REST API server (Phase 5) — starts only when bootstrap config is available.
+	var httpServer *deliveryhttp.Server
 	if agentRegistry != nil && bootstrapCfg != nil {
-		slog.InfoContext(ctx, "Starting HTTP REST API server", "port", bootstrapCfg.Engine.Port)
+		httpPort := bootstrapCfg.Engine.Port
+		if httpPort == 0 {
+			httpPort = 8443
+		}
+		httpServer = deliveryhttp.NewServer(httpPort)
+		r := httpServer.Router()
+
+		// Auth
+		jwtSecret := bootstrapCfg.Security.AdminPassword
+		authMW := deliveryhttp.NewAuthMiddleware(jwtSecret, &tokenRepoHTTPAdapter{repo: apiTokenRepo})
+
+		// Audit logger
+		auditLogger := audit.NewLogger(pgDB)
+
+		// Health (public)
+		healthHandler := deliveryhttp.NewHealthHandler(sc.Version, &agentCounterHTTPAdapter{registry: agentRegistry})
+		r.Get("/api/v1/health", healthHandler.ServeHTTP)
+
+		// Auth login (public)
+		authHandler := deliveryhttp.NewAuthHandler(
+			bootstrapCfg.Security.AdminUser,
+			bootstrapCfg.Security.AdminPassword,
+			jwtSecret,
+		)
+		r.Post("/api/v1/auth/login", authHandler.Login)
+
+		// Protected routes
+		r.Group(func(r chi.Router) {
+			r.Use(authMW.Authenticate)
+			r.Use(deliveryhttp.AuditMiddleware(&auditHTTPAdapter{logger: auditLogger}))
+
+			// Agents
+			agentHandler := deliveryhttp.NewAgentHandler(&agentListerHTTPAdapter{registry: agentRegistry})
+			r.Get("/api/v1/agents", agentHandler.List)
+			r.Get("/api/v1/agents/{name}", agentHandler.Get)
+
+			// Tasks
+			taskHandler := deliveryhttp.NewTaskHandler(&taskServiceHTTPAdapter{repo: taskRepo})
+			r.Post("/api/v1/tasks", taskHandler.Create)
+			r.Get("/api/v1/tasks", taskHandler.List)
+			r.Get("/api/v1/tasks/{id}", taskHandler.Get)
+			r.Delete("/api/v1/tasks/{id}", taskHandler.Cancel)
+			r.Post("/api/v1/tasks/{id}/input", taskHandler.ProvideInput)
+
+			// Config
+			configHandler := deliveryhttp.NewConfigHandler(
+				&configReloaderHTTPAdapter{registry: agentRegistry},
+				&configImportExportHTTPAdapter{},
+			)
+			r.Post("/api/v1/config/reload", configHandler.Reload)
+			r.Post("/api/v1/config/import", configHandler.Import)
+			r.Get("/api/v1/config/export", configHandler.Export)
+
+			// API Tokens
+			tokenHandler := deliveryhttp.NewTokenHandler(&tokenRepoHTTPAdapter{repo: apiTokenRepo})
+			r.Post("/api/v1/auth/tokens", tokenHandler.CreateToken)
+			r.Get("/api/v1/auth/tokens", tokenHandler.ListTokens)
+			r.Delete("/api/v1/auth/tokens/{id}", tokenHandler.DeleteToken)
+		})
+
+		go func() {
+			if err := httpServer.Start(); err != nil && err != http.ErrServerClosed {
+				slog.Error("HTTP server error", "error", err)
+			}
+		}()
+		slog.InfoContext(ctx, "HTTP REST API server started", "port", httpPort)
 	}
 	_ = kitRegistry // available for Kit resolution in AgentToolResolver
 

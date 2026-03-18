@@ -1,0 +1,57 @@
+# Test config: legacy fields + new bootstrap fields (PostgreSQL)
+
+server:
+  host: "0.0.0.0"
+  port: 60466
+
+# Database — legacy fields + new url for PostgreSQL config storage
+database:
+  host: localhost
+  port: 5499
+  user: postgres
+  password: postgres
+  database: bytebrew
+  ssl_mode: disable
+  url: "postgresql://bytebrew:bytebrew@localhost:5436/bytebrew_test"
+
+# NEW: Bootstrap engine settings
+engine:
+  host: "0.0.0.0"
+  port: 9443
+
+# NEW: Security for admin dashboard
+security:
+  admin_user: "admin"
+  admin_password: "testpass123"
+
+logging:
+  level: info
+  format: text
+  output: file
+  file_path: logs/bytebrew-srv.log
+  clear_on_startup: true
+
+llm:
+  default_provider: openrouter
+  streaming: false
+  ollama:
+    base_url: http://localhost:11434
+    model: qwen3-coder:30b
+    timeout: 300s
+    thinking: false
+  openrouter:
+    api_key: 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
+    base_url: https://openrouter.ai/api/v1
+    model: qwen/qwen3-coder-next
+    timeout: 120s
+
+agent:
+  max_steps: 50
+  max_context_size: 48000
+
+websearch:
+  provider: "tavily"
+  api_key: "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"
+
+license:
+  public_key_hex: "5395bf9bb925ce56d86005104951984709670126f95a635e4e2ccf79ac58e395"
