@@ -9,7 +9,7 @@ type SSEEvent struct {
 // domainToSSE maps domain event type strings to SSE event type strings.
 var domainToSSE = map[string]string{
 	"MessageStarted":        "thinking",
-	"StreamingProgress":     "message",
+	"StreamingProgress":     "message_delta",
 	"MessageCompleted":      "message",
 	"ToolExecutionStarted":  "tool_call",
 	"ToolExecutionCompleted": "tool_result",

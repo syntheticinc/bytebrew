@@ -1,9 +1,0 @@
-{
-  "name": "bytebrew-test-client",
-  "private": true,
-  "scripts": {
-    "chat": "bun run src/chat.ts",
-    "health": "bun run src/health.ts"
-  },
-  "dependencies": {}
-}

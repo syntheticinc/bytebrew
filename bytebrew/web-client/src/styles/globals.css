@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-brand-dark font-mono text-brand-light antialiased;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #87867F #1F1F1F;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #1F1F1F;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #87867F;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #CBC9BC;
+  }
+}
+
+@layer components {
+  .chat-input {
+    @apply w-full resize-none rounded-btn border border-brand-shade3/30 bg-brand-dark-alt px-4 py-3
+           text-brand-light placeholder-brand-shade3 outline-none transition-colors
+           focus:border-brand-accent;
+    field-sizing: content;
+    min-height: 48px;
+    max-height: 200px;
+  }
+}

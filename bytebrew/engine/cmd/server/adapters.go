@@ -725,8 +725,10 @@ func convertSessionEventToSSE(evt *pb.SessionEvent) *deliveryhttp.SSEEvent {
 	switch evt.Type {
 	case pb.SessionEventType_SESSION_EVENT_REASONING:
 		return &deliveryhttp.SSEEvent{Type: "thinking", Data: fmt.Sprintf(`{"content":%q}`, evt.Content)}
-	case pb.SessionEventType_SESSION_EVENT_ANSWER, pb.SessionEventType_SESSION_EVENT_ANSWER_CHUNK:
+	case pb.SessionEventType_SESSION_EVENT_ANSWER:
 		return &deliveryhttp.SSEEvent{Type: "message", Data: fmt.Sprintf(`{"content":%q}`, evt.Content)}
+	case pb.SessionEventType_SESSION_EVENT_ANSWER_CHUNK:
+		return &deliveryhttp.SSEEvent{Type: "message_delta", Data: fmt.Sprintf(`{"content":%q}`, evt.Content)}
 	case pb.SessionEventType_SESSION_EVENT_TOOL_EXECUTION_START:
 		return &deliveryhttp.SSEEvent{Type: "tool_call", Data: fmt.Sprintf(`{"tool":%q,"content":%q}`, evt.ToolName, evt.Content)}
 	case pb.SessionEventType_SESSION_EVENT_TOOL_EXECUTION_END:
