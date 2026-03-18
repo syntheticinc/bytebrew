@@ -167,8 +167,8 @@ func cancelRecursive(tx *gorm.DB, id uint) error {
 		return fmt.Errorf("transition task %d to cancelled: %w", id, err)
 	}
 
-	updated := toTaskModel(task)
-	if err := tx.Save(&updated).Error; err != nil {
+	if err := tx.Exec("UPDATE tasks SET status = $1, completed_at = NOW() WHERE id = $2",
+		string(domain.EngineTaskStatusCancelled), id).Error; err != nil {
 		return fmt.Errorf("save cancelled task %d: %w", id, err)
 	}
 
@@ -220,7 +220,7 @@ func toTaskModel(t *domain.EngineTask) models.TaskModel {
 		Source:       string(t.Source),
 		SourceID:     t.SourceID,
 		UserID:       t.UserID,
-		SessionID:    t.SessionID,
+		SessionID:    strPtr(t.SessionID),
 		ParentTaskID: t.ParentTaskID,
 		Depth:        t.Depth,
 		Status:       string(t.Status),
@@ -233,6 +233,20 @@ func toTaskModel(t *domain.EngineTask) models.TaskModel {
 	}
 }
 
+func strPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func derefStr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
 // toEngineTask maps a GORM TaskModel to a domain EngineTask.
 func toEngineTask(m *models.TaskModel) *domain.EngineTask {
 	return &domain.EngineTask{
@@ -243,7 +257,7 @@ func toEngineTask(m *models.TaskModel) *domain.EngineTask {
 		Source:       domain.TaskSource(m.Source),
 		SourceID:     m.SourceID,
 		UserID:       m.UserID,
-		SessionID:    m.SessionID,
+		SessionID:    derefStr(m.SessionID),
 		ParentTaskID: m.ParentTaskID,
 		Depth:        m.Depth,
 		Status:       domain.EngineTaskStatus(m.Status),

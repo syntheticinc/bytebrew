@@ -11,7 +11,7 @@ type TaskModel struct {
 	Source       string     `gorm:"type:varchar(20);not null;index"`
 	SourceID     string     `gorm:"type:varchar(255);index:idx_source_composite"`
 	UserID       string     `gorm:"type:varchar(255);index"`
-	SessionID    string     `gorm:"type:varchar(36);index"`
+	SessionID    *string    `gorm:"type:varchar(36);index"`
 	ParentTaskID *uint      `gorm:"index"`
 	Depth        int        `gorm:"not null;default:0"`
 	Status       string     `gorm:"type:varchar(20);not null;default:pending;index"`
