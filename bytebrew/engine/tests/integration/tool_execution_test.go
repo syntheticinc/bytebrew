@@ -129,7 +129,9 @@ func createTurnExecutor(t *testing.T, scenario, projectRoot string) *turnExecuto
 	flowManager, err := agentservice.NewFlowManager(flowsCfg, promptsCfg)
 	require.NoError(t, err, "create flow manager")
 
-	toolResolver := tools.NewDefaultToolResolver()
+	builtinStore := tools.NewBuiltinToolStore()
+	tools.RegisterAllBuiltins(builtinStore)
+	toolResolver := tools.NewAgentToolResolver(builtinStore)
 	agentConfig := &config.AgentConfig{
 		MaxContextSize:     4000,
 		MaxSteps:           10,

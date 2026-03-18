@@ -17,7 +17,7 @@ import (
 type EngineTurnExecutorFactory struct {
 	engine        *engine.Engine
 	flowManager   *agentservice.FlowManager
-	toolResolver  *tools.DefaultToolResolver
+	toolResolver  *tools.AgentToolResolver
 	modelSelector *llm.ModelSelector
 	agentConfig   *config.AgentConfig
 	// Raw deps for creating per-session ToolDepsProvider
@@ -34,7 +34,7 @@ type EngineTurnExecutorFactory struct {
 func NewEngineTurnExecutorFactory(
 	engine *engine.Engine,
 	flowManager *agentservice.FlowManager,
-	toolResolver *tools.DefaultToolResolver,
+	toolResolver *tools.AgentToolResolver,
 	modelSelector *llm.ModelSelector,
 	agentConfig *config.AgentConfig,
 	taskManager tools.TaskManager,

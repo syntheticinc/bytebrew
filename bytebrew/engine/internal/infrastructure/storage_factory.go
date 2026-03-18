@@ -135,10 +135,11 @@ func initWorkComponents(workDB *sql.DB, modelSelector agentservice.AgentModelSel
 
 // engineComponents holds Engine and its associated dependencies.
 type engineComponents struct {
-	Engine           *engine.Engine
-	FlowManager      *agentservice.FlowManager
-	ToolResolver     *tools.DefaultToolResolver
-	ToolDepsProvider *tools.DefaultToolDepsProvider
+	Engine            *engine.Engine
+	FlowManager       *agentservice.FlowManager
+	ToolResolver      *tools.DefaultToolResolver
+	AgentToolResolver *tools.AgentToolResolver
+	ToolDepsProvider  *tools.DefaultToolDepsProvider
 }
 
 // createEngine creates Engine, FlowManager, ToolResolver and ToolDepsProvider.
@@ -194,11 +195,26 @@ func createEngine(
 		webFetchTool,
 	)
 
+	// 4. Create AgentToolResolver (Phase 2+: factory-based tool resolution)
+	builtinStore := tools.NewBuiltinToolStore()
+	tools.RegisterAllBuiltins(builtinStore)
+
+	// Register spawn_code_agent separately (requires AgentPool, wired later via wireEngineToPool)
+	if agentPoolAdapter != nil {
+		builtinStore.Register("spawn_code_agent", func(deps tools.ToolDependencies) einotool.InvokableTool {
+			return tools.NewSpawnCodeAgentTool(deps.AgentPool, deps.SessionID, deps.ProjectKey)
+		})
+	}
+
+	agentToolResolver := tools.NewAgentToolResolver(builtinStore)
+	slog.Info("agent tool resolver initialized", "builtin_tools", len(builtinStore.Names()))
+
 	return &engineComponents{
-		Engine:           agentEngine,
-		FlowManager:      flowManager,
-		ToolResolver:     toolResolver,
-		ToolDepsProvider: toolDepsProvider,
+		Engine:            agentEngine,
+		FlowManager:       flowManager,
+		ToolResolver:      toolResolver,
+		AgentToolResolver: agentToolResolver,
+		ToolDepsProvider:  toolDepsProvider,
 	}, nil
 }
 
@@ -211,7 +227,7 @@ func wireEngineToPool(
 		return
 	}
 
-	agentPool.SetEngine(ec.Engine, ec.FlowManager, ec.ToolResolver, ec.ToolDepsProvider)
+	agentPool.SetEngine(ec.Engine, ec.FlowManager, ec.AgentToolResolver, ec.ToolDepsProvider)
 	slog.Info("engine wired to agent pool")
 
 	// Set MaxConcurrent from supervisor flow

@@ -61,7 +61,9 @@ func NewWsHarness(t *testing.T, scenario string) *WsHarness {
 		t.Fatalf("create flow manager: %v", err)
 	}
 
-	toolResolver := tools.NewDefaultToolResolver()
+	builtinStore := tools.NewBuiltinToolStore()
+	tools.RegisterAllBuiltins(builtinStore)
+	toolResolver := tools.NewAgentToolResolver(builtinStore)
 	agentConfig := &config.AgentConfig{
 		MaxContextSize:     4000,
 		MaxSteps:           10,

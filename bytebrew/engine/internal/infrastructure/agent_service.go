@@ -31,10 +31,11 @@ type InfraComponents struct {
 	ChatModel        model.ToolCallingChatModel // kept for backward compatibility
 	ModelSelector    *llm.ModelSelector
 	// Engine components
-	Engine           *engine.Engine
-	FlowManager      *agentservice.FlowManager
-	ToolResolver     *tools.DefaultToolResolver
-	ToolDepsProvider *tools.DefaultToolDepsProvider
+	Engine            *engine.Engine
+	FlowManager       *agentservice.FlowManager
+	ToolResolver      *tools.DefaultToolResolver
+	AgentToolResolver *tools.AgentToolResolver
+	ToolDepsProvider  *tools.DefaultToolDepsProvider
 	// Additional dependencies for TurnExecutorFactory
 	ModelName        string
 	WebSearchTool    einotool.InvokableTool
@@ -162,10 +163,11 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 		SessionStorage:   storageCmp.SessionStorage,
 		ChatModel:        chatModel,
 		ModelSelector:    modelSelector,
-		Engine:           ec.Engine,
-		FlowManager:      ec.FlowManager,
-		ToolResolver:     ec.ToolResolver,
-		ToolDepsProvider: ec.ToolDepsProvider,
+		Engine:            ec.Engine,
+		FlowManager:       ec.FlowManager,
+		ToolResolver:      ec.ToolResolver,
+		AgentToolResolver: ec.AgentToolResolver,
+		ToolDepsProvider:  ec.ToolDepsProvider,
 		ModelName:        modelName,
 		WebSearchTool:    webSearchTool,
 		WebFetchTool:     webFetchTool,

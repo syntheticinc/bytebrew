@@ -50,8 +50,10 @@ func main() {
 		log.Fatalf("Failed to create flow manager: %v", err)
 	}
 
-	// 4. Create ToolResolver
-	toolResolver := tools.NewDefaultToolResolver()
+	// 4. Create ToolResolver (AgentToolResolver with BuiltinToolStore)
+	builtinStore := tools.NewBuiltinToolStore()
+	tools.RegisterAllBuiltins(builtinStore)
+	toolResolver := tools.NewAgentToolResolver(builtinStore)
 
 	// 5. Create AgentConfig
 	agentConfig := &config.AgentConfig{

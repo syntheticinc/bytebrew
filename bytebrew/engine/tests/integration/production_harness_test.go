@@ -57,7 +57,9 @@ func NewProductionHarness(t *testing.T, scenario string) *ProductionHarness {
 	}
 
 	// 3. Tool resolver + Agent config
-	toolResolver := tools.NewDefaultToolResolver()
+	builtinStore := tools.NewBuiltinToolStore()
+	tools.RegisterAllBuiltins(builtinStore)
+	toolResolver := tools.NewAgentToolResolver(builtinStore)
 	agentConfig := &config.AgentConfig{
 		MaxContextSize:     4000,
 		MaxSteps:           10,

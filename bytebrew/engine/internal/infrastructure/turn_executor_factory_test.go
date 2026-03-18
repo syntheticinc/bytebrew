@@ -182,7 +182,9 @@ func TestEngineTurnExecutorFactory_CreateForSession(t *testing.T) {
 	flowManager, err := agentservice.NewFlowManager(flowsCfg, promptsCfg)
 	require.NoError(t, err)
 
-	toolResolver := tools.NewDefaultToolResolver()
+	builtinStore := tools.NewBuiltinToolStore()
+	tools.RegisterAllBuiltins(builtinStore)
+	toolResolver := tools.NewAgentToolResolver(builtinStore)
 	chatModel := &mockChatModelFactory{}
 	agentConfig := &config.AgentConfig{
 		MaxContextSize: 4000,
@@ -221,7 +223,9 @@ func TestEngineTurnExecutorFactory_CreateForSession_WithProxy(t *testing.T) {
 	flowManager, err := agentservice.NewFlowManager(flowsCfg, promptsCfg)
 	require.NoError(t, err)
 
-	toolResolver := tools.NewDefaultToolResolver()
+	builtinStore := tools.NewBuiltinToolStore()
+	tools.RegisterAllBuiltins(builtinStore)
+	toolResolver := tools.NewAgentToolResolver(builtinStore)
 	chatModel := &mockChatModelFactory{}
 	agentConfig := &config.AgentConfig{
 		MaxContextSize: 4000,
@@ -275,7 +279,9 @@ func TestEngineTurnExecutorFactory_CreateForSession_NilProxy(t *testing.T) {
 	flowManager, err := agentservice.NewFlowManager(flowsCfg, promptsCfg)
 	require.NoError(t, err)
 
-	toolResolver := tools.NewDefaultToolResolver()
+	builtinStore := tools.NewBuiltinToolStore()
+	tools.RegisterAllBuiltins(builtinStore)
+	toolResolver := tools.NewAgentToolResolver(builtinStore)
 	chatModel := &mockChatModelFactory{}
 	agentConfig := &config.AgentConfig{
 		MaxContextSize: 4000,
@@ -312,7 +318,9 @@ func TestEngineTurnExecutorFactory_CreateForSession_WithWebTools(t *testing.T) {
 	flowManager, err := agentservice.NewFlowManager(flowsCfg, promptsCfg)
 	require.NoError(t, err)
 
-	toolResolver := tools.NewDefaultToolResolver()
+	builtinStore := tools.NewBuiltinToolStore()
+	tools.RegisterAllBuiltins(builtinStore)
+	toolResolver := tools.NewAgentToolResolver(builtinStore)
 	chatModel := &mockChatModelFactory{}
 	agentConfig := &config.AgentConfig{
 		MaxContextSize: 4000,
@@ -380,7 +388,9 @@ func TestEngineTurnExecutorFactory_CreateForSession_WithContextReminders(t *test
 	flowManager, err := agentservice.NewFlowManager(flowsCfg, promptsCfg)
 	require.NoError(t, err)
 
-	toolResolver := tools.NewDefaultToolResolver()
+	builtinStore := tools.NewBuiltinToolStore()
+	tools.RegisterAllBuiltins(builtinStore)
+	toolResolver := tools.NewAgentToolResolver(builtinStore)
 	chatModel := &mockChatModelFactory{}
 	agentConfig := &config.AgentConfig{
 		MaxContextSize: 4000,
@@ -432,7 +442,9 @@ func TestEngineTurnExecutorFactory_CreateForSession_NilContextRemindersGetter(t 
 	flowManager, err := agentservice.NewFlowManager(flowsCfg, promptsCfg)
 	require.NoError(t, err)
 
-	toolResolver := tools.NewDefaultToolResolver()
+	builtinStore := tools.NewBuiltinToolStore()
+	tools.RegisterAllBuiltins(builtinStore)
+	toolResolver := tools.NewAgentToolResolver(builtinStore)
 	chatModel := &mockChatModelFactory{}
 	agentConfig := &config.AgentConfig{
 		MaxContextSize: 4000,

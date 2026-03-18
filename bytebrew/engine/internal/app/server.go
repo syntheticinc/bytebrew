@@ -372,7 +372,7 @@ func Run(sc ServerConfig) error {
 	factory := infrastructure.NewEngineTurnExecutorFactory(
 		components.Engine,
 		components.FlowManager,
-		components.ToolResolver,
+		components.AgentToolResolver,
 		components.ModelSelector,
 		components.AgentConfig,
 		components.WorkManager,
