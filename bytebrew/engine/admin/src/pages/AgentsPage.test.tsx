@@ -13,6 +13,7 @@ vi.mock('react-router-dom', async () => {
 vi.mock('../api/client', () => ({
   api: {
     listAgents: vi.fn(),
+    getAgent: vi.fn(),
     deleteAgent: vi.fn(),
   },
 }));
@@ -65,10 +66,11 @@ describe('AgentsPage', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('Create Agent')).toBeInTheDocument();
+      expect(screen.getAllByText('Create Agent').length).toBeGreaterThanOrEqual(1);
     });
 
-    fireEvent.click(screen.getByText('Create Agent'));
+    const buttons = screen.getAllByText('Create Agent');
+    fireEvent.click(buttons[0]!);
     expect(mockNavigate).toHaveBeenCalledWith('/agents/new');
   });
 

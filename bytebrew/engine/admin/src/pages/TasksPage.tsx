@@ -3,7 +3,7 @@ import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
 import DataTable from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
-import Modal from '../components/Modal';
+import DetailPanel, { DetailRow, DetailSection } from '../components/DetailPanel';
 import type { TaskResponse, TaskDetailResponse } from '../types';
 
 const STATUS_OPTIONS = ['', 'pending', 'in_progress', 'completed', 'failed', 'cancelled', 'needs_input', 'escalated'];
@@ -48,7 +48,7 @@ export default function TasksPage() {
   }
 
   const columns = [
-    { key: 'id', header: 'ID' },
+    { key: 'id', header: 'ID', className: 'w-16' },
     { key: 'title', header: 'Title' },
     { key: 'agent_name', header: 'Agent' },
     {
@@ -74,13 +74,15 @@ export default function TasksPage() {
     },
   ];
 
+  const canCancel = selectedTask && ['pending', 'in_progress', 'needs_input'].includes(selectedTask.status);
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-brand-dark">Tasks</h1>
         <button
           onClick={refetch}
-          className="px-4 py-2 text-sm text-brand-dark border border-brand-shade2 rounded-btn hover:bg-brand-light"
+          className="px-4 py-2 text-sm text-brand-dark border border-brand-shade2 rounded-btn hover:bg-brand-light transition-colors"
         >
           Refresh
         </button>
@@ -131,21 +133,23 @@ export default function TasksPage() {
             data={tasks ?? []}
             keyField="id"
             onRowClick={handleRowClick}
+            activeKey={selectedTask?.id}
             emptyMessage="No tasks found."
+            emptyIcon="&#x1F4CB;"
           />
         </div>
       )}
 
-      {/* Task detail modal */}
-      <Modal
+      {/* Detail Panel */}
+      <DetailPanel
         open={selectedTask !== null}
         onClose={() => setSelectedTask(null)}
         title={selectedTask ? `Task #${selectedTask.id}: ${selectedTask.title}` : 'Task Detail'}
-        footer={
-          selectedTask && ['pending', 'in_progress', 'needs_input'].includes(selectedTask.status) ? (
+        actions={
+          canCancel ? (
             <button
-              onClick={() => handleCancel(selectedTask.id)}
-              className="px-4 py-2 text-sm text-white bg-red-600 rounded-btn hover:bg-red-700"
+              onClick={() => handleCancel(selectedTask!.id)}
+              className="px-4 py-2 text-sm text-white bg-red-600 rounded-btn hover:bg-red-700 transition-colors font-medium"
             >
               Cancel Task
             </button>
@@ -153,56 +157,52 @@ export default function TasksPage() {
         }
       >
         {loadingDetail ? (
-          <div className="text-brand-shade3">Loading...</div>
+          <div className="text-brand-shade3 text-sm">Loading...</div>
         ) : selectedTask ? (
-          <div className="space-y-3 text-sm">
-            <div className="flex justify-between">
-              <span className="text-brand-shade3">Status</span>
-              <StatusBadge status={selectedTask.status} />
-            </div>
-            <div className="flex justify-between">
-              <span className="text-brand-shade3">Agent</span>
-              <span className="text-brand-dark">{selectedTask.agent_name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-brand-shade3">Source</span>
-              <span className="text-brand-dark">{selectedTask.source}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-brand-shade3">Mode</span>
-              <span className="text-brand-dark">{selectedTask.mode}</span>
-            </div>
+          <>
+            <DetailSection title="Overview">
+              <DetailRow label="Status"><StatusBadge status={selectedTask.status} /></DetailRow>
+              <DetailRow label="Agent">{selectedTask.agent_name}</DetailRow>
+              <DetailRow label="Source">
+                <span className="text-xs bg-brand-light px-2 py-0.5 rounded">{selectedTask.source}</span>
+              </DetailRow>
+              <DetailRow label="Mode">{selectedTask.mode}</DetailRow>
+            </DetailSection>
+
             {selectedTask.description && (
-              <div>
-                <span className="text-brand-shade3">Description</span>
-                <p className="mt-1 text-brand-dark">{selectedTask.description}</p>
-              </div>
+              <DetailSection title="Description">
+                <p className="text-sm text-brand-dark">{selectedTask.description}</p>
+              </DetailSection>
             )}
+
             {selectedTask.result && (
-              <div>
-                <span className="text-brand-shade3">Result</span>
-                <pre className="mt-1 p-2 bg-brand-light rounded-btn text-xs whitespace-pre-wrap">
+              <DetailSection title="Result">
+                <pre className="p-3 bg-brand-light rounded-btn text-xs whitespace-pre-wrap max-h-48 overflow-y-auto border border-brand-shade1/50">
                   {selectedTask.result}
                 </pre>
-              </div>
+              </DetailSection>
             )}
+
             {selectedTask.error && (
-              <div>
-                <span className="text-brand-shade3">Error</span>
-                <pre className="mt-1 p-2 bg-red-50 rounded-btn text-xs text-red-700 whitespace-pre-wrap">
+              <DetailSection title="Error">
+                <pre className="p-3 bg-red-50 rounded-btn text-xs text-red-700 whitespace-pre-wrap max-h-48 overflow-y-auto border border-red-200">
                   {selectedTask.error}
                 </pre>
-              </div>
+              </DetailSection>
             )}
-            <div className="flex justify-between text-xs text-brand-shade3">
-              <span>Created: {new Date(selectedTask.created_at).toLocaleString()}</span>
-              {selectedTask.completed_at && (
-                <span>Completed: {new Date(selectedTask.completed_at).toLocaleString()}</span>
+
+            <DetailSection title="Timestamps">
+              <DetailRow label="Created">{new Date(selectedTask.created_at).toLocaleString()}</DetailRow>
+              {selectedTask.started_at && (
+                <DetailRow label="Started">{new Date(selectedTask.started_at).toLocaleString()}</DetailRow>
               )}
-            </div>
-          </div>
+              {selectedTask.completed_at && (
+                <DetailRow label="Completed">{new Date(selectedTask.completed_at).toLocaleString()}</DetailRow>
+              )}
+            </DetailSection>
+          </>
         ) : null}
-      </Modal>
+      </DetailPanel>
     </div>
   );
 }

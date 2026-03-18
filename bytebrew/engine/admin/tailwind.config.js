@@ -27,6 +27,20 @@ export default {
         card: '12px',
         btn: '10px',
       },
+      keyframes: {
+        'slide-in-right': {
+          from: { transform: 'translateX(100%)' },
+          to: { transform: 'translateX(0)' },
+        },
+        'modal-in': {
+          from: { opacity: '0', transform: 'scale(0.95)' },
+          to: { opacity: '1', transform: 'scale(1)' },
+        },
+      },
+      animation: {
+        'slide-in-right': 'slide-in-right 0.2s ease-out',
+        'modal-in': 'modal-in 0.15s ease-out',
+      },
     },
   },
   plugins: [],

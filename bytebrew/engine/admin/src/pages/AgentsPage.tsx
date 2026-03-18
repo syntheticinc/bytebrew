@@ -4,14 +4,30 @@ import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
 import DataTable from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
-import Modal from '../components/Modal';
-import type { AgentInfo } from '../types';
+import DetailPanel, { DetailRow, DetailSection } from '../components/DetailPanel';
+import ConfirmDialog from '../components/ConfirmDialog';
+import type { AgentInfo, AgentDetail } from '../types';
 
 export default function AgentsPage() {
   const { data: agents, loading, error, refetch } = useApi(() => api.listAgents());
   const navigate = useNavigate();
+
+  const [selected, setSelected] = useState<AgentDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  async function handleRowClick(row: AgentInfo) {
+    setLoadingDetail(true);
+    try {
+      const detail = await api.getAgent(row.name);
+      setSelected(detail);
+    } catch {
+      // visible in console
+    } finally {
+      setLoadingDetail(false);
+    }
+  }
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -19,9 +35,10 @@ export default function AgentsPage() {
     try {
       await api.deleteAgent(deleteTarget);
       setDeleteTarget(null);
+      setSelected(null);
       refetch();
     } catch {
-      // error is visible in console
+      // visible in console
     } finally {
       setDeleting(false);
     }
@@ -38,40 +55,19 @@ export default function AgentsPage() {
             {row.kit}
           </span>
         ) : (
-          <span className="text-brand-shade3">-</span>
+          <span className="text-brand-shade3">--</span>
         ),
     },
     { key: 'tools_count', header: 'Tools' },
     {
       key: 'has_knowledge',
       header: 'Knowledge',
-      render: (row: AgentInfo) => (row.has_knowledge ? <StatusBadge status="active" /> : <span className="text-brand-shade3">-</span>),
-    },
-    {
-      key: 'actions',
-      header: '',
-      render: (row: AgentInfo) => (
-        <div className="flex gap-2">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/agents/${row.name}/edit`);
-            }}
-            className="text-brand-accent hover:text-brand-accent-hover text-sm"
-          >
-            Edit
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setDeleteTarget(row.name);
-            }}
-            className="text-red-600 hover:text-red-800 text-sm"
-          >
-            Delete
-          </button>
-        </div>
-      ),
+      render: (row: AgentInfo) =>
+        row.has_knowledge ? (
+          <StatusBadge status="active" />
+        ) : (
+          <span className="text-brand-shade3">--</span>
+        ),
     },
   ];
 
@@ -95,38 +91,137 @@ export default function AgentsPage() {
           columns={columns}
           data={agents ?? []}
           keyField="name"
-          onRowClick={(row) => navigate(`/agents/${row.name}/edit`)}
-          emptyMessage="No agents configured. Create your first agent."
+          onRowClick={handleRowClick}
+          activeKey={selected?.name}
+          emptyMessage="No agents configured"
+          emptyIcon="&#x1F916;"
+          emptyAction={{ label: 'Create Agent', onClick: () => navigate('/agents/new') }}
         />
       </div>
 
-      <Modal
-        open={deleteTarget !== null}
-        onClose={() => setDeleteTarget(null)}
-        title="Delete Agent"
-        footer={
-          <>
-            <button
-              onClick={() => setDeleteTarget(null)}
-              className="px-4 py-2 text-sm text-brand-dark border border-brand-shade2 rounded-btn hover:bg-brand-light"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleDelete}
-              disabled={deleting}
-              className="px-4 py-2 text-sm text-white bg-red-600 rounded-btn hover:bg-red-700 disabled:opacity-50"
-            >
-              {deleting ? 'Deleting...' : 'Delete'}
-            </button>
-          </>
+      {/* Detail Panel */}
+      <DetailPanel
+        open={selected !== null}
+        onClose={() => setSelected(null)}
+        title={selected?.name ?? ''}
+        actions={
+          selected ? (
+            <>
+              <button
+                onClick={() => navigate(`/agents/${selected.name}/edit`)}
+                className="flex-1 px-4 py-2 bg-brand-accent text-brand-light rounded-btn text-sm font-medium hover:bg-brand-accent-hover transition-colors"
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => setDeleteTarget(selected.name)}
+                className="px-4 py-2 text-red-600 border border-red-200 rounded-btn text-sm font-medium hover:bg-red-50 transition-colors"
+              >
+                Delete
+              </button>
+            </>
+          ) : undefined
         }
       >
-        <p className="text-sm text-brand-shade3">
-          Are you sure you want to delete agent <strong className="text-brand-dark">{deleteTarget}</strong>? This action cannot
-          be undone.
-        </p>
-      </Modal>
+        {loadingDetail ? (
+          <div className="text-brand-shade3 text-sm">Loading...</div>
+        ) : selected ? (
+          <>
+            <DetailSection title="General">
+              <DetailRow label="Lifecycle">
+                <StatusBadge status={selected.lifecycle === 'persistent' ? 'active' : 'idle'} className="text-xs" />
+                <span className="ml-2 text-xs">{selected.lifecycle}</span>
+              </DetailRow>
+              {selected.kit && <DetailRow label="Kit">{selected.kit}</DetailRow>}
+              <DetailRow label="Tool Execution">{selected.tool_execution}</DetailRow>
+              <DetailRow label="Max Steps">{selected.max_steps}</DetailRow>
+              <DetailRow label="Max Context">{selected.max_context_size.toLocaleString()}</DetailRow>
+            </DetailSection>
+
+            <DetailSection title="System Prompt">
+              <pre className="p-3 bg-brand-light rounded-btn text-xs whitespace-pre-wrap max-h-48 overflow-y-auto border border-brand-shade1/50">
+                {selected.system_prompt}
+              </pre>
+            </DetailSection>
+
+            {selected.tools.length > 0 && (
+              <DetailSection title="Tools">
+                <div className="flex flex-wrap gap-1.5">
+                  {selected.tools.map((t) => (
+                    <span key={t} className="px-2 py-0.5 bg-brand-light border border-brand-shade1 rounded text-xs text-brand-dark">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </DetailSection>
+            )}
+
+            {selected.mcp_servers.length > 0 && (
+              <DetailSection title="MCP Servers">
+                <div className="flex flex-wrap gap-1.5">
+                  {selected.mcp_servers.map((s) => (
+                    <span key={s} className="px-2 py-0.5 bg-purple-50 border border-purple-200 rounded text-xs text-purple-700">
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              </DetailSection>
+            )}
+
+            {selected.can_spawn.length > 0 && (
+              <DetailSection title="Can Spawn">
+                <div className="flex flex-wrap gap-1.5">
+                  {selected.can_spawn.map((a) => (
+                    <span key={a} className="px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                      {a}
+                    </span>
+                  ))}
+                </div>
+              </DetailSection>
+            )}
+
+            {selected.confirm_before.length > 0 && (
+              <DetailSection title="Confirm Before">
+                <div className="flex flex-wrap gap-1.5">
+                  {selected.confirm_before.map((t) => (
+                    <span key={t} className="px-2 py-0.5 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </DetailSection>
+            )}
+
+            {selected.escalation && (
+              <DetailSection title="Escalation">
+                <DetailRow label="Action">{selected.escalation.action}</DetailRow>
+                {selected.escalation.webhook_url && (
+                  <DetailRow label="Webhook">{selected.escalation.webhook_url}</DetailRow>
+                )}
+                {selected.escalation.triggers.length > 0 && (
+                  <DetailRow label="Triggers">{selected.escalation.triggers.join(', ')}</DetailRow>
+                )}
+              </DetailSection>
+            )}
+          </>
+        ) : null}
+      </DetailPanel>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Delete Agent"
+        message={
+          <>
+            Are you sure you want to delete agent <strong className="text-brand-dark">{deleteTarget}</strong>?
+            This action cannot be undone.
+          </>
+        }
+        confirmLabel="Delete"
+        loading={deleting}
+        variant="danger"
+      />
     </div>
   );
 }

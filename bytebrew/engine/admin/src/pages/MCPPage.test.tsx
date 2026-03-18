@@ -9,6 +9,7 @@ vi.mock('../api/client', () => ({
     listMCPServers: vi.fn(),
     getWellKnownMCP: vi.fn(),
     createMCPServer: vi.fn(),
+    updateMCPServer: vi.fn(),
     deleteMCPServer: vi.fn(),
   },
 }));
@@ -57,7 +58,7 @@ describe('MCPPage', () => {
     await waitFor(() => {
       expect(screen.getByText('playwright')).toBeInTheDocument();
       expect(screen.getByText('connected')).toBeInTheDocument();
-      expect(screen.getByText('12 tools')).toBeInTheDocument();
+      expect(screen.getByText('12')).toBeInTheDocument();
     });
   });
 
@@ -68,9 +69,7 @@ describe('MCPPage', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(
-        screen.getByText('No MCP servers configured. Add one from the catalog or create a custom server.'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('No MCP servers configured')).toBeInTheDocument();
     });
   });
 });
