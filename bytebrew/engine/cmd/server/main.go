@@ -21,6 +21,7 @@ import (
 	deliveryhttp "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/ws"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/audit"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/task"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/embedded"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure"
@@ -376,6 +377,25 @@ func main() {
 	}
 	_ = kitRegistry // available for Kit resolution in AgentToolResolver
 
+	// CronScheduler: load triggers from DB and start
+	var cronScheduler *task.CronScheduler
+	if taskRepo != nil {
+		cronScheduler = task.NewCronScheduler(&cronTaskCreatorAdapter{repo: taskRepo})
+		// Load triggers from DB
+		triggers, trigErr := loadTriggersFromDB(pgDB)
+		if trigErr == nil {
+			for _, t := range triggers {
+				if t.Type == "cron" && t.Schedule != "" {
+					if err := cronScheduler.AddTrigger(t.Schedule, t.Title, t.Description, t.AgentName, fmt.Sprintf("trigger-%d", t.ID)); err != nil {
+						slog.Warn("Failed to add cron trigger", "id", t.ID, "error", err)
+					}
+				}
+			}
+		}
+		cronScheduler.Start()
+		slog.InfoContext(ctx, "Cron scheduler started", "triggers", len(triggers))
+	}
+
 	// Initialize gRPC server
 	grpcServer, err := initializeGRPCServer(cfg, loggerInstance, components.LicenseInfo, *managed)
 	if err != nil {
@@ -541,6 +561,12 @@ func main() {
 	}
 
 	loggerInstance.InfoContext(ctx, "Shutting down ByteBrew Server...")
+
+	// Stop cron scheduler
+	if cronScheduler != nil {
+		cronScheduler.Stop()
+		slog.Info("Cron scheduler stopped")
+	}
 
 	// Shutdown bridge first (stops accepting new messages)
 	if bridgeCleanup != nil {

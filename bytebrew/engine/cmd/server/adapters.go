@@ -8,6 +8,9 @@ import (
 	deliveryhttp "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/ws"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/task"
+	"gorm.io/gorm"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/agent_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/audit"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/config_repo"
@@ -157,6 +160,60 @@ func (a *chatServiceAdapter) Chat(agentName, message, userID, sessionID string) 
 		ch <- deliveryhttp.SSEEvent{Type: "done", Data: `{"status":"completed"}`}
 	}()
 	return ch, nil
+}
+
+// triggerRow holds a trigger record loaded from DB.
+type triggerRow struct {
+	ID          uint
+	Type        string
+	Schedule    string
+	Title       string
+	Description string
+	AgentName   string
+}
+
+// loadTriggersFromDB loads trigger definitions from PostgreSQL.
+func loadTriggersFromDB(db *gorm.DB) ([]triggerRow, error) {
+	if db == nil {
+		return nil, nil
+	}
+	var rows []models.TriggerModel
+	if err := db.Preload("Agent").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	triggers := make([]triggerRow, 0, len(rows))
+	for _, r := range rows {
+		triggers = append(triggers, triggerRow{
+			ID:          r.ID,
+			Type:        r.Type,
+			Schedule:    r.Schedule,
+			Title:       r.Title,
+			Description: r.Description,
+			AgentName:   r.Agent.Name,
+		})
+	}
+	return triggers, nil
+}
+
+// cronTaskCreatorAdapter bridges GORMTaskRepository to task.TaskCreator for CronScheduler.
+type cronTaskCreatorAdapter struct {
+	repo *config_repo.GORMTaskRepository
+}
+
+func (a *cronTaskCreatorAdapter) CreateFromTrigger(ctx context.Context, params task.TriggerTaskParams) (uint, error) {
+	t := &domain.EngineTask{
+		Title:       params.Title,
+		Description: params.Description,
+		AgentName:   params.AgentName,
+		Source:      domain.TaskSource(params.Source),
+		SourceID:    params.SourceID,
+		Status:      domain.EngineTaskStatusPending,
+		Mode:        domain.TaskModeBackground,
+	}
+	if err := a.repo.Create(ctx, t); err != nil {
+		return 0, err
+	}
+	return t.ID, nil
 }
 
 // configReloaderAdapter bridges AgentRegistry to the http.ConfigReloader interface.
