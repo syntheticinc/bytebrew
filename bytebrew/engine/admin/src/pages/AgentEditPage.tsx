@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type FormEvent } from 'react';
+import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
@@ -6,27 +6,45 @@ import type { CreateAgentRequest, Model, MCPServer, AgentInfo, ToolMetadata, Sec
 
 const ZONE_ORDER: SecurityZone[] = ['safe', 'caution', 'dangerous'];
 
-const ZONE_CONFIG: Record<SecurityZone, { label: string; borderClass: string; bgClass: string; activeClass: string; icon: string }> = {
+const ZONE_CONFIG: Record<SecurityZone, {
+  label: string;
+  subtitle: string;
+  borderClass: string;
+  bgClass: string;
+  activeClass: string;
+  labelClass: string;
+  zoneBorderClass: string;
+  zoneBgClass: string;
+}> = {
   safe: {
     label: 'Safe',
-    borderClass: 'border-green-300',
-    bgClass: 'bg-green-50',
-    activeClass: 'border-green-500 bg-green-100 text-green-800',
-    icon: '',
+    subtitle: 'No security risk',
+    borderClass: 'border-brand-shade2',
+    bgClass: 'bg-brand-light',
+    activeClass: 'border-brand-shade2 bg-brand-light text-brand-dark',
+    labelClass: 'text-brand-shade3',
+    zoneBorderClass: 'border-brand-shade2',
+    zoneBgClass: '',
   },
   caution: {
     label: 'Caution',
-    borderClass: 'border-yellow-300',
-    bgClass: 'bg-yellow-50',
-    activeClass: 'border-yellow-500 bg-yellow-100 text-yellow-800',
-    icon: '',
+    subtitle: 'Read-only access, external content',
+    borderClass: 'border-amber-600/30',
+    bgClass: 'bg-amber-50/50',
+    activeClass: 'border-amber-600 bg-amber-50 text-amber-900',
+    labelClass: 'text-amber-700',
+    zoneBorderClass: 'border-amber-600/30',
+    zoneBgClass: '',
   },
   dangerous: {
     label: 'Dangerous Tools — Filesystem & Command Access',
-    borderClass: 'border-red-300',
-    bgClass: 'bg-red-50',
-    activeClass: 'border-red-500 bg-red-100 text-red-800',
-    icon: '',
+    subtitle: '',
+    borderClass: 'border-brand-accent/50',
+    bgClass: 'bg-red-50/50',
+    activeClass: 'border-brand-accent bg-red-50 text-brand-accent',
+    labelClass: 'text-brand-accent',
+    zoneBorderClass: 'border-brand-accent/50',
+    zoneBgClass: '',
   },
 };
 
@@ -138,25 +156,46 @@ export default function AgentEditPage() {
 
   const otherAgents = (allAgents ?? []).filter((a) => a.name !== form.name);
 
-  function renderToolChip(tool: ToolMetadata, zone: SecurityZone) {
+  function ToolChip({ tool, zone }: { tool: ToolMetadata; zone: SecurityZone }) {
+    const [showPopover, setShowPopover] = useState(false);
+    const timeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
     const isSelected = form.tools?.includes(tool.name) ?? false;
     const cfg = ZONE_CONFIG[zone];
+
+    function handleMouseEnter() {
+      timeoutRef.current = setTimeout(() => setShowPopover(true), 300);
+    }
+    function handleMouseLeave() {
+      if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
+      setShowPopover(false);
+    }
+
     return (
-      <label
-        key={tool.name}
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn border text-sm cursor-pointer transition-colors ${
-          isSelected ? cfg.activeClass : `${cfg.borderClass} bg-white text-brand-shade3 hover:${cfg.bgClass}`
-        }`}
-        title={tool.risk_warning ?? tool.description}
-      >
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={() => updateField('tools', toggleInArray(form.tools ?? [], tool.name))}
-          className="sr-only"
-        />
-        {tool.name}
-      </label>
+      <div className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+        <label
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn border text-sm cursor-pointer transition-colors ${
+            isSelected ? cfg.activeClass : `${cfg.borderClass} bg-white text-brand-shade3 hover:${cfg.bgClass}`
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => updateField('tools', toggleInArray(form.tools ?? [], tool.name))}
+            className="sr-only"
+          />
+          {tool.name}
+        </label>
+
+        {showPopover && (
+          <div className="absolute z-50 w-80 p-3 bg-white rounded-card border border-brand-shade1 shadow-lg left-0 top-full mt-1">
+            <div className="font-semibold text-brand-dark text-sm mb-1">{tool.name}</div>
+            <p className="text-xs text-brand-shade3 leading-relaxed mb-1">{tool.description}</p>
+            {tool.risk_warning && (
+              <p className="text-xs text-brand-accent bg-red-50/80 p-2 rounded leading-relaxed">{tool.risk_warning}</p>
+            )}
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -294,54 +333,60 @@ export default function AgentEditPage() {
             <div className="space-y-4">
               {/* Safe Zone */}
               {toolsByZone.safe.length > 0 && (
-                <div className="border border-green-200 rounded-card p-3">
-                  <p className="text-xs font-semibold text-green-700 mb-2">Safe — No security risk</p>
+                <div className={`border ${ZONE_CONFIG.safe.zoneBorderClass} rounded-card p-3`}>
+                  <p className={`text-xs font-semibold ${ZONE_CONFIG.safe.labelClass} mb-2`}>Safe — No security risk</p>
                   <div className="flex flex-wrap gap-2">
-                    {toolsByZone.safe.map((tool) => renderToolChip(tool, 'safe'))}
+                    {toolsByZone.safe.map((tool) => (
+                      <ToolChip key={tool.name} tool={tool} zone="safe" />
+                    ))}
                   </div>
                 </div>
               )}
 
               {/* Caution Zone */}
               {toolsByZone.caution.length > 0 && (
-                <div className="border border-yellow-200 rounded-card p-3">
-                  <p className="text-xs font-semibold text-yellow-700 mb-2">Caution — Read-only access, external content</p>
+                <div className={`border ${ZONE_CONFIG.caution.zoneBorderClass} rounded-card p-3`}>
+                  <p className={`text-xs font-semibold ${ZONE_CONFIG.caution.labelClass} mb-2`}>Caution — Read-only access, external content</p>
                   <div className="flex flex-wrap gap-2">
-                    {toolsByZone.caution.map((tool) => renderToolChip(tool, 'caution'))}
+                    {toolsByZone.caution.map((tool) => (
+                      <ToolChip key={tool.name} tool={tool} zone="caution" />
+                    ))}
                   </div>
                 </div>
               )}
 
               {/* Dangerous Zone — collapsed by default */}
-              <div className="border-2 border-red-300 rounded-card overflow-hidden">
+              <div className={`border-2 ${ZONE_CONFIG.dangerous.zoneBorderClass} rounded-card overflow-hidden`}>
                 <button
                   type="button"
                   onClick={() => setDangerousExpanded(!dangerousExpanded)}
-                  className="w-full flex items-center justify-between px-3 py-2 bg-red-50 text-red-800 text-sm font-semibold hover:bg-red-100 transition-colors"
+                  className="w-full flex items-center justify-between px-3 py-2 bg-red-50/50 text-brand-accent text-sm font-semibold hover:bg-red-50 transition-colors"
                 >
                   <span>Dangerous Tools — Filesystem & Command Access</span>
-                  <span className="text-red-500">{dangerousExpanded ? '▲' : '▼'}</span>
+                  <span className="text-brand-accent/60">{dangerousExpanded ? '▲' : '▼'}</span>
                 </button>
 
                 {dangerousExpanded && (
                   <div className="p-3 space-y-3">
-                    <p className="text-xs text-red-700 leading-relaxed">
-                      These tools grant the agent direct access to the server filesystem and shell.
-                      Enable only for trusted coding agents running in isolated environments.
-                    </p>
+                    <div className="p-3 bg-red-50/60 border border-brand-accent/20 rounded-btn">
+                      <p className="text-xs text-brand-dark leading-relaxed">
+                        <span className="font-semibold text-brand-accent">Warning:</span>{' '}
+                        These tools give the agent direct access to the server filesystem and shell.
+                        Only enable for fully trusted agents in isolated environments.
+                        Misuse can lead to data loss, credential exposure, or system compromise.
+                      </p>
+                    </div>
 
                     <div className="flex flex-wrap gap-2">
                       {toolsByZone.dangerous.map((tool) => (
-                        <div key={tool.name} className="flex flex-col">
-                          {renderToolChip(tool, 'dangerous')}
-                        </div>
+                        <ToolChip key={tool.name} tool={tool} zone="dangerous" />
                       ))}
                     </div>
 
                     {/* execute_command extra warning */}
                     {(form.tools ?? []).includes('execute_command') && (
-                      <div className="mt-2 p-3 bg-red-100 border border-red-400 rounded-btn text-xs text-red-900 leading-relaxed">
-                        <strong>CRITICAL WARNING:</strong> execute_command allows the agent to run ARBITRARY shell commands
+                      <div className="mt-2 p-3 bg-red-50 border border-brand-accent/40 rounded-btn text-xs text-brand-dark leading-relaxed">
+                        <strong className="text-brand-accent">CRITICAL:</strong> execute_command allows the agent to run ARBITRARY shell commands
                         with the server process permissions. This includes installing software, modifying system files,
                         accessing the network, and deleting data. Never enable for user-facing agents.
                       </div>
