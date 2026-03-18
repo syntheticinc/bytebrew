@@ -26,7 +26,6 @@ func NewToolClassifier() *DefaultToolClassifier {
 			"lsp":              true, // Uses proxy → client LSP servers
 		},
 		serverSideTools: map[string]bool{
-			"manage_plan":      true,
 			"web_search":       true,
 			"web_fetch":        true,
 			"manage_tasks":     true,

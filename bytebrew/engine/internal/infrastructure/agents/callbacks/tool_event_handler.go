@@ -162,11 +162,6 @@ func (h *ToolEventHandler) OnToolEnd(ctx context.Context, info *callbacks.RunInf
 		h.recorder.RecordToolResult(h.sessionID, info.Name, output.Response)
 	}
 
-	// If manage_plan was called, emit plan progress
-	if info.Name == "manage_plan" {
-		h.planEmitter.EmitPlanProgress(ctx)
-	}
-
 	// Increment step after tool execution completes
 	// This ensures onToolStart and onToolEnd use the same step number for callId
 	h.counter.IncrementStep()

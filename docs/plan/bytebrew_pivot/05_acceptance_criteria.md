@@ -242,12 +242,9 @@
 
 ## Phase 5: Job System
 
-### AC-5.1: Chat message → Job
+### ~~AC-5.1: Chat message → Job~~ — УДАЛЁН
 
-1. CLI: отправить сообщение через WS
-2. Проверить: Job создан в БД со status "running"
-3. Проверить: agent обработал
-4. Проверить: Job status → "completed"
+> Chat message != Task (см. master.md AD-5). Агент сам создаёт Tasks через `manage_tasks` tool по результатам интервью с пользователем. Автоматическое создание Task из каждого chat message — неверная архитектура.
 
 ### AC-5.2: Cron trigger → Job
 
@@ -265,12 +262,13 @@
 3. Проверить: Job создан
 4. Проверить: agent обработал с description из webhook body
 
-### AC-5.4: Background job + ask_user → needs_input
+### AC-5.4: Background task → ask_user недоступен
 
-1. Cron trigger создаёт job (background mode)
-2. Agent вызывает ask_user (нужен ввод)
-3. Проверить: Job status → "needs_input"
-4. Проверить: notification отправлено (mobile push / webhook callback)
+1. Cron/webhook создаёт task (background mode)
+2. Agent пытается вызвать ask_user
+3. Проверить: tool возвращает ошибку "ask_user not available in background mode"
+4. Проверить: agent обрабатывает ошибку и продолжает без input
+5. Если agent не может продолжить → task status = "failed" с причиной
 
 ### AC-5.5: Job cancel
 

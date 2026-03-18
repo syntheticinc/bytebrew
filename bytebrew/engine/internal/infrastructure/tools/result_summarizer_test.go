@@ -8,42 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSummarizeToolResult_ManagePlan(t *testing.T) {
-	tests := []struct {
-		name     string
-		result   string
-		expected string
-	}{
-		{
-			name:     "plan created",
-			result:   "Plan created successfully\nStep 1: Do something\nStep 2: Do another thing",
-			expected: "plan created",
-		},
-		{
-			name:     "plan updated",
-			result:   "Plan updated with new steps\nStep 1: Modified task",
-			expected: "plan updated",
-		},
-		{
-			name:     "plan with step completed",
-			result:   "Step 1 marked as completed",
-			expected: "plan updated",
-		},
-		{
-			name:     "empty result",
-			result:   "",
-			expected: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := SummarizeToolResult("manage_plan", tt.result)
-			assert.Equal(t, tt.expected, got)
-		})
-	}
-}
-
 func TestSummarizeToolResult_SmartSearch(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -269,7 +233,7 @@ func TestSummarizeToolResult_UnknownTool(t *testing.T) {
 }
 
 func TestSummarizeToolResult_EmptyResult(t *testing.T) {
-	got := SummarizeToolResult("manage_plan", "")
+	got := SummarizeToolResult("web_search", "")
 	assert.Equal(t, "", got, "Empty result should return empty summary")
 }
 

@@ -137,7 +137,6 @@ func initWorkComponents(workDB *sql.DB, modelSelector agentservice.AgentModelSel
 type engineComponents struct {
 	Engine            *engine.Engine
 	FlowManager       *agentservice.FlowManager
-	ToolResolver      *tools.DefaultToolResolver
 	AgentToolResolver *tools.AgentToolResolver
 	ToolDepsProvider  *tools.DefaultToolDepsProvider
 }
@@ -184,8 +183,7 @@ func createEngine(
 	}
 	slog.Info("flow manager initialized", "flows_path", flowsPath)
 
-	// 3. Create ToolResolver and ToolDepsProvider
-	toolResolver := tools.NewDefaultToolResolver()
+	// 3. Create ToolDepsProvider
 	toolDepsProvider := tools.NewDefaultToolDepsProvider(
 		nil, // proxy -- set dynamically per-session
 		workManager,
@@ -212,7 +210,6 @@ func createEngine(
 	return &engineComponents{
 		Engine:            agentEngine,
 		FlowManager:       flowManager,
-		ToolResolver:      toolResolver,
 		AgentToolResolver: agentToolResolver,
 		ToolDepsProvider:  toolDepsProvider,
 	}, nil

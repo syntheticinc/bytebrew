@@ -33,7 +33,6 @@ type InfraComponents struct {
 	// Engine components
 	Engine            *engine.Engine
 	FlowManager       *agentservice.FlowManager
-	ToolResolver      *tools.DefaultToolResolver
 	AgentToolResolver *tools.AgentToolResolver
 	ToolDepsProvider  *tools.DefaultToolDepsProvider
 	// Additional dependencies for TurnExecutorFactory
@@ -165,7 +164,6 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 		ModelSelector:    modelSelector,
 		Engine:            ec.Engine,
 		FlowManager:       ec.FlowManager,
-		ToolResolver:      ec.ToolResolver,
 		AgentToolResolver: ec.AgentToolResolver,
 		ToolDepsProvider:  ec.ToolDepsProvider,
 		ModelName:        modelName,

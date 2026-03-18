@@ -19,8 +19,6 @@ func SummarizeToolResult(toolName, result string) string {
 	}
 
 	switch toolName {
-	case "manage_plan":
-		return summarizeManagePlan(result)
 	case "smart_search":
 		return summarizeSmartSearch(result)
 	case "web_search":
@@ -38,17 +36,6 @@ func SummarizeToolResult(toolName, result string) string {
 	default:
 		return ""
 	}
-}
-
-// summarizeManagePlan парсит первую строку результата manage_plan
-func summarizeManagePlan(result string) string {
-	fl := firstLine(result)
-	lower := strings.ToLower(fl)
-
-	if strings.Contains(lower, "created") {
-		return "plan created"
-	}
-	return "plan updated"
 }
 
 // summarizeSmartSearch парсит формат "Found N results:\n\n1. path:line [source] ..."
