@@ -473,18 +473,80 @@ func stubJSONHandler(jsonStr string) http.HandlerFunc {
 }
 
 // chatServiceAdapter bridges agent execution to the http.ChatService interface.
-type chatServiceAdapter struct{}
+// Uses SessionRegistry + SessionProcessor for real agent execution.
+type chatServiceAdapter struct {
+	sessionRegistry sessionRegistryForChat
+	sessProcessor   sessionProcessorForChat
+}
+
+// sessionRegistryForChat is the consumer-side interface for chat.
+type sessionRegistryForChat interface {
+	CreateSession(sessionID, projectKey, userID, projectRoot, platform, agentName string)
+	Subscribe(sessionID string) (<-chan interface{}, func())
+	SendMessage(sessionID, message string)
+}
+
+// sessionProcessorForChat processes a message through the agent pipeline.
+type sessionProcessorForChat interface {
+	ProcessMessage(sessionID, message string) error
+}
 
 func (a *chatServiceAdapter) Chat(agentName, message, userID, sessionID string) (<-chan deliveryhttp.SSEEvent, error) {
 	ch := make(chan deliveryhttp.SSEEvent, 10)
+
+	if a.sessionRegistry == nil || a.sessProcessor == nil {
+		// Fallback to skeleton if not wired
+		go func() {
+			defer close(ch)
+			ch <- deliveryhttp.SSEEvent{Type: "thinking", Data: `{"content":"Processing..."}`}
+			ch <- deliveryhttp.SSEEvent{Type: "message", Data: `{"content":"Chat REST API: SessionProcessor not wired. Use CLI for full interaction."}`}
+			ch <- deliveryhttp.SSEEvent{Type: "done", Data: `{"status":"completed"}`}
+		}()
+		return ch, nil
+	}
+
+	// Create ephemeral session for REST chat
+	if sessionID == "" {
+		sessionID = fmt.Sprintf("rest-%d", time.Now().UnixNano())
+	}
+	a.sessionRegistry.CreateSession(sessionID, "", userID, "", "", agentName)
+
+	// Subscribe to events
+	eventCh, cleanup := a.sessionRegistry.Subscribe(sessionID)
+
 	go func() {
 		defer close(ch)
-		// Skeleton: send thinking + message events
-		ch <- deliveryhttp.SSEEvent{Type: "thinking", Data: `{"content":"Processing..."}`}
-		ch <- deliveryhttp.SSEEvent{Type: "message", Data: `{"content":"Chat via REST API is a skeleton. Use WS CLI for full agent interaction."}`}
-		ch <- deliveryhttp.SSEEvent{Type: "done", Data: `{"status":"completed"}`}
+		defer cleanup()
+
+		// Send message to agent
+		a.sessionRegistry.SendMessage(sessionID, message)
+
+		// Stream events
+		for evt := range eventCh {
+			sseEvt := convertEventToSSE(evt)
+			if sseEvt != nil {
+				ch <- *sseEvt
+				if sseEvt.Type == "done" {
+					return
+				}
+			}
+		}
 	}()
+
 	return ch, nil
+}
+
+// convertEventToSSE converts a session event to an SSE event.
+func convertEventToSSE(evt interface{}) *deliveryhttp.SSEEvent {
+	// The event type depends on the SessionRegistry implementation.
+	// For now, return a generic message event.
+	if evt == nil {
+		return nil
+	}
+	return &deliveryhttp.SSEEvent{
+		Type: "message",
+		Data: fmt.Sprintf(`{"content":"%v"}`, evt),
+	}
 }
 
 // triggerRow holds a trigger record loaded from DB.
