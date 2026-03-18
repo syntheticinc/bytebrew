@@ -10,17 +10,18 @@ import (
 
 // ToolDependencies holds all dependencies needed by tools
 type ToolDependencies struct {
-	SessionID      string
-	ProjectKey     string
-	ProjectRoot    string
-	Proxy          ClientOperationsProxy
-	TaskManager    TaskManager
-	SubtaskManager SubtaskManager
-	AgentPool      AgentPoolForTool
-	WebSearchTool  tool.InvokableTool // pre-created (depends on API key)
-	WebFetchTool   tool.InvokableTool // pre-created
-	ChunkStore     *indexing.ChunkStore
-	Embedder       *indexing.EmbeddingsClient
+	SessionID          string
+	ProjectKey         string
+	ProjectRoot        string
+	Proxy              ClientOperationsProxy
+	TaskManager        TaskManager
+	SubtaskManager     SubtaskManager
+	AgentPool          AgentPoolForTool
+	EngineTaskManager  EngineTaskManager  // Phase 4: engine task CRUD
+	WebSearchTool      tool.InvokableTool // pre-created (depends on API key)
+	WebFetchTool       tool.InvokableTool // pre-created
+	ChunkStore         *indexing.ChunkStore
+	Embedder           *indexing.EmbeddingsClient
 }
 
 // DefaultToolResolver resolves tool names to tool instances

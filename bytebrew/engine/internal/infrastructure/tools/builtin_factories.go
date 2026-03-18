@@ -68,6 +68,14 @@ func RegisterAllBuiltins(store *BuiltinToolStore) {
 		return NewGetFileStructureTool(deps.ChunkStore, deps.ProjectRoot)
 	})
 
+	// Engine task management (Phase 4: replaces old manage_tasks for DB-backed tasks)
+	store.Register("engine_manage_tasks", func(deps ToolDependencies) tool.InvokableTool {
+		if deps.EngineTaskManager == nil {
+			return nil // not available without PostgreSQL
+		}
+		return NewEngineManageTasksTool(deps.EngineTaskManager, deps.SessionID)
+	})
+
 	// Web tools (pre-created instances passed via deps)
 	store.Register("web_search", func(deps ToolDependencies) tool.InvokableTool {
 		return deps.WebSearchTool
