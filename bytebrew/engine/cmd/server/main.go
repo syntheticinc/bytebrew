@@ -371,6 +371,10 @@ func main() {
 			r.Mount("/api/v1/settings", settingHandler.Routes())
 
 			r.Delete("/api/v1/auth/tokens/{id}", tokenHandler.DeleteToken)
+
+			// Tool metadata (security zones for admin UI)
+			toolMetaHandler := deliveryhttp.NewToolMetadataHandler(&toolMetadataAdapter{})
+			r.Get("/api/v1/tools/metadata", toolMetaHandler.List)
 		})
 
 		// Webhook route (public, no auth — triggered by external services)

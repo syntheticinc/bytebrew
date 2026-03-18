@@ -12,6 +12,7 @@ vi.mock('../api/client', () => ({
     listModels: vi.fn(),
     listMCPServers: vi.fn(),
     listAgents: vi.fn(),
+    listToolMetadata: vi.fn(),
   },
 }));
 
@@ -44,6 +45,10 @@ describe('AgentEditPage', () => {
     mockApi.listModels.mockResolvedValue([]);
     mockApi.listMCPServers.mockResolvedValue([]);
     mockApi.listAgents.mockResolvedValue([]);
+    mockApi.listToolMetadata.mockResolvedValue([
+      { name: 'ask_user', description: 'Ask user', security_zone: 'safe' },
+      { name: 'read_file', description: 'Read file', security_zone: 'dangerous', risk_warning: 'Filesystem access' },
+    ]);
   });
 
   it('renders create form for new agent', async () => {

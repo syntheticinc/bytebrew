@@ -15,6 +15,7 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/agent_registry"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/tools"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/audit"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/flow_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/session_processor"
@@ -992,4 +993,21 @@ func (a *taskServiceAdapter) CancelTask(ctx context.Context, id uint) error {
 
 func (a *taskServiceAdapter) ProvideInput(_ context.Context, _ uint, _ string) error {
 	return nil // TODO: wire input channel to task session
+}
+
+// toolMetadataAdapter bridges tools.GetAllToolMetadata to the http.ToolMetadataProvider interface.
+type toolMetadataAdapter struct{}
+
+func (a *toolMetadataAdapter) GetAllToolMetadata() []deliveryhttp.ToolMetadataResponse {
+	all := tools.GetAllToolMetadata()
+	result := make([]deliveryhttp.ToolMetadataResponse, len(all))
+	for i, m := range all {
+		result[i] = deliveryhttp.ToolMetadataResponse{
+			Name:         m.Name,
+			Description:  m.Description,
+			SecurityZone: string(m.SecurityZone),
+			RiskWarning:  m.RiskWarning,
+		}
+	}
+	return result
 }

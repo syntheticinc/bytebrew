@@ -219,3 +219,16 @@ export interface LoginResponse {
   token: string;
   expires_at: string;
 }
+
+// ============================================================================
+// Tool metadata types
+// ============================================================================
+
+export type SecurityZone = 'safe' | 'caution' | 'dangerous';
+
+export interface ToolMetadata {
+  name: string;
+  description: string;
+  security_zone: SecurityZone;
+  risk_warning?: string;
+}

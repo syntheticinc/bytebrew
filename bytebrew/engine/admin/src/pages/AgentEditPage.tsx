@@ -1,18 +1,34 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
-import type { CreateAgentRequest, Model, MCPServer, AgentInfo } from '../types';
+import type { CreateAgentRequest, Model, MCPServer, AgentInfo, ToolMetadata, SecurityZone } from '../types';
 
-const BUILTIN_TOOLS = [
-  'read_file',
-  'write_file',
-  'execute_command',
-  'list_directory',
-  'search_files',
-  'web_search',
-  'http_request',
-];
+const ZONE_ORDER: SecurityZone[] = ['safe', 'caution', 'dangerous'];
+
+const ZONE_CONFIG: Record<SecurityZone, { label: string; borderClass: string; bgClass: string; activeClass: string; icon: string }> = {
+  safe: {
+    label: 'Safe',
+    borderClass: 'border-green-300',
+    bgClass: 'bg-green-50',
+    activeClass: 'border-green-500 bg-green-100 text-green-800',
+    icon: '',
+  },
+  caution: {
+    label: 'Caution',
+    borderClass: 'border-yellow-300',
+    bgClass: 'bg-yellow-50',
+    activeClass: 'border-yellow-500 bg-yellow-100 text-yellow-800',
+    icon: '',
+  },
+  dangerous: {
+    label: 'Dangerous Tools — Filesystem & Command Access',
+    borderClass: 'border-red-300',
+    bgClass: 'bg-red-50',
+    activeClass: 'border-red-500 bg-red-100 text-red-800',
+    icon: '',
+  },
+};
 
 export default function AgentEditPage() {
   const { name } = useParams<{ name: string }>();
@@ -35,10 +51,31 @@ export default function AgentEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [confirmInput, setConfirmInput] = useState('');
+  const [dangerousExpanded, setDangerousExpanded] = useState(false);
 
   const { data: models } = useApi<Model[]>(() => api.listModels());
   const { data: mcpServers } = useApi<MCPServer[]>(() => api.listMCPServers());
   const { data: allAgents } = useApi<AgentInfo[]>(() => api.listAgents());
+  const { data: toolMetadata } = useApi<ToolMetadata[]>(() => api.listToolMetadata());
+
+  // Group tools by security zone
+  const toolsByZone = useMemo(() => {
+    const grouped: Record<SecurityZone, ToolMetadata[]> = { safe: [], caution: [], dangerous: [] };
+    if (!toolMetadata) return grouped;
+    for (const tool of toolMetadata) {
+      const zone = tool.security_zone ?? 'caution';
+      if (grouped[zone]) {
+        grouped[zone].push(tool);
+      } else {
+        grouped.caution.push(tool);
+      }
+    }
+    // Sort alphabetically within each zone
+    for (const zone of ZONE_ORDER) {
+      grouped[zone].sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return grouped;
+  }, [toolMetadata]);
 
   useEffect(() => {
     if (isNew) return;
@@ -57,8 +94,13 @@ export default function AgentEditPage() {
         mcp_servers: agent.mcp_servers,
         confirm_before: agent.confirm_before,
       });
+      // Expand dangerous section if agent already has dangerous tools
+      const dangerousNames = new Set(toolsByZone.dangerous.map((t) => t.name));
+      if (agent.tools?.some((t) => dangerousNames.has(t))) {
+        setDangerousExpanded(true);
+      }
     }).catch((err: Error) => setError(err.message));
-  }, [name, isNew]);
+  }, [name, isNew, toolsByZone]);
 
   function updateField<K extends keyof CreateAgentRequest>(key: K, value: CreateAgentRequest[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -95,6 +137,28 @@ export default function AgentEditPage() {
   }
 
   const otherAgents = (allAgents ?? []).filter((a) => a.name !== form.name);
+
+  function renderToolChip(tool: ToolMetadata, zone: SecurityZone) {
+    const isSelected = form.tools?.includes(tool.name) ?? false;
+    const cfg = ZONE_CONFIG[zone];
+    return (
+      <label
+        key={tool.name}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn border text-sm cursor-pointer transition-colors ${
+          isSelected ? cfg.activeClass : `${cfg.borderClass} bg-white text-brand-shade3 hover:${cfg.bgClass}`
+        }`}
+        title={tool.risk_warning ?? tool.description}
+      >
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => updateField('tools', toggleInArray(form.tools ?? [], tool.name))}
+          className="sr-only"
+        />
+        {tool.name}
+      </label>
+    );
+  }
 
   return (
     <div className="max-w-3xl">
@@ -220,29 +284,73 @@ export default function AgentEditPage() {
           </div>
         </div>
 
-        {/* Builtin Tools */}
+        {/* Builtin Tools — grouped by security zone */}
         <div>
-          <label className="block text-sm font-medium text-brand-dark mb-2">Builtin Tools</label>
-          <div className="flex flex-wrap gap-2">
-            {BUILTIN_TOOLS.map((tool) => (
-              <label
-                key={tool}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn border text-sm cursor-pointer transition-colors ${
-                  form.tools?.includes(tool)
-                    ? 'border-brand-accent bg-brand-accent/10 text-brand-accent'
-                    : 'border-brand-shade1 bg-white text-brand-shade3 hover:border-brand-shade2'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={form.tools?.includes(tool) ?? false}
-                  onChange={() => updateField('tools', toggleInArray(form.tools ?? [], tool))}
-                  className="sr-only"
-                />
-                {tool}
-              </label>
-            ))}
-          </div>
+          <label className="block text-sm font-medium text-brand-dark mb-3">Builtin Tools</label>
+
+          {!toolMetadata ? (
+            <p className="text-sm text-brand-shade3">Loading tool metadata...</p>
+          ) : (
+            <div className="space-y-4">
+              {/* Safe Zone */}
+              {toolsByZone.safe.length > 0 && (
+                <div className="border border-green-200 rounded-card p-3">
+                  <p className="text-xs font-semibold text-green-700 mb-2">Safe — No security risk</p>
+                  <div className="flex flex-wrap gap-2">
+                    {toolsByZone.safe.map((tool) => renderToolChip(tool, 'safe'))}
+                  </div>
+                </div>
+              )}
+
+              {/* Caution Zone */}
+              {toolsByZone.caution.length > 0 && (
+                <div className="border border-yellow-200 rounded-card p-3">
+                  <p className="text-xs font-semibold text-yellow-700 mb-2">Caution — Read-only access, external content</p>
+                  <div className="flex flex-wrap gap-2">
+                    {toolsByZone.caution.map((tool) => renderToolChip(tool, 'caution'))}
+                  </div>
+                </div>
+              )}
+
+              {/* Dangerous Zone — collapsed by default */}
+              <div className="border-2 border-red-300 rounded-card overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setDangerousExpanded(!dangerousExpanded)}
+                  className="w-full flex items-center justify-between px-3 py-2 bg-red-50 text-red-800 text-sm font-semibold hover:bg-red-100 transition-colors"
+                >
+                  <span>Dangerous Tools — Filesystem & Command Access</span>
+                  <span className="text-red-500">{dangerousExpanded ? '▲' : '▼'}</span>
+                </button>
+
+                {dangerousExpanded && (
+                  <div className="p-3 space-y-3">
+                    <p className="text-xs text-red-700 leading-relaxed">
+                      These tools grant the agent direct access to the server filesystem and shell.
+                      Enable only for trusted coding agents running in isolated environments.
+                    </p>
+
+                    <div className="flex flex-wrap gap-2">
+                      {toolsByZone.dangerous.map((tool) => (
+                        <div key={tool.name} className="flex flex-col">
+                          {renderToolChip(tool, 'dangerous')}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* execute_command extra warning */}
+                    {(form.tools ?? []).includes('execute_command') && (
+                      <div className="mt-2 p-3 bg-red-100 border border-red-400 rounded-btn text-xs text-red-900 leading-relaxed">
+                        <strong>CRITICAL WARNING:</strong> execute_command allows the agent to run ARBITRARY shell commands
+                        with the server process permissions. This includes installing software, modifying system files,
+                        accessing the network, and deleting data. Never enable for user-facing agents.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* MCP Servers */}

@@ -18,6 +18,7 @@ import type {
   HealthResponse,
   Setting,
   LoginResponse,
+  ToolMetadata,
 } from '../types';
 
 const BASE_URL = '/api/v1';
@@ -186,6 +187,11 @@ class APIClient {
   }
   updateSetting(key: string, value: string) {
     return this.request<Setting>('PUT', `/settings/${encodeURIComponent(key)}`, { value });
+  }
+
+  // ---- Tools ----
+  listToolMetadata() {
+    return this.request<ToolMetadata[]>('GET', '/tools/metadata');
   }
 
   // ---- Config ----
