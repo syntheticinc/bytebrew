@@ -326,7 +326,7 @@ func main() {
 			r.Delete("/api/v1/tasks/{id}", taskHandler.Cancel)
 			r.Post("/api/v1/tasks/{id}/input", taskHandler.ProvideInput)
 
-			configHandler := deliveryhttp.NewConfigHandler(&configReloaderAdapter{registry: agentRegistry}, &configImportExportAdapter{repo: agentRepo})
+			configHandler := deliveryhttp.NewConfigHandler(&configReloaderAdapter{registry: agentRegistry}, &configImportExportAdapter{agentRepo: agentRepo, db: pgDB})
 			r.Post("/api/v1/config/reload", configHandler.Reload)
 			r.Post("/api/v1/config/import", configHandler.Import)
 			r.Get("/api/v1/config/export", configHandler.Export)

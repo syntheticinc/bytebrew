@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/ws"
@@ -616,18 +619,74 @@ func (a *configReloaderAdapter) AgentsCount() int {
 	return a.registry.Count()
 }
 
-// configImportExportAdapter bridges AgentRepository to the http.ConfigImportExporter interface.
-// Phase 5 skeleton — full YAML import/export will be implemented when config_repo gains the methods.
+// configImportExportAdapter bridges repositories to the http.ConfigImportExporter interface.
 type configImportExportAdapter struct {
-	repo *config_repo.GORMAgentRepository
+	agentRepo *config_repo.GORMAgentRepository
+	db        *gorm.DB
 }
 
-func (a *configImportExportAdapter) ImportYAML(_ context.Context, _ []byte) error {
-	return nil // TODO: implement YAML import
+func (a *configImportExportAdapter) ImportYAML(ctx context.Context, data []byte) error {
+	// Parse YAML into agent definitions
+	var importData struct {
+		Agents []struct {
+			Name         string   `yaml:"name"`
+			SystemPrompt string   `yaml:"system_prompt"`
+			Kit          string   `yaml:"kit"`
+			Lifecycle    string   `yaml:"lifecycle"`
+			MaxSteps     int      `yaml:"max_steps"`
+			Tools        []string `yaml:"tools"`
+		} `yaml:"agents"`
+	}
+	if err := yaml.Unmarshal(data, &importData); err != nil {
+		return fmt.Errorf("parse YAML: %w", err)
+	}
+
+	for _, agent := range importData.Agents {
+		rec := config_repo.AgentRecord{
+			Name:         agent.Name,
+			SystemPrompt: agent.SystemPrompt,
+			Kit:          agent.Kit,
+			Lifecycle:    agent.Lifecycle,
+			MaxSteps:     agent.MaxSteps,
+			BuiltinTools: agent.Tools,
+		}
+		if rec.Lifecycle == "" {
+			rec.Lifecycle = "persistent"
+		}
+		if rec.MaxSteps == 0 {
+			rec.MaxSteps = 50
+		}
+		_ = a.agentRepo.Create(ctx, &rec) // ignore duplicate errors
+	}
+	return nil
 }
 
-func (a *configImportExportAdapter) ExportYAML(_ context.Context) ([]byte, error) {
-	return []byte("# ByteBrew config export (not yet implemented)\n"), nil
+func (a *configImportExportAdapter) ExportYAML(ctx context.Context) ([]byte, error) {
+	agents, err := a.agentRepo.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list agents: %w", err)
+	}
+
+	var sb strings.Builder
+	sb.WriteString("# ByteBrew Engine Configuration Export\n")
+	sb.WriteString(fmt.Sprintf("# Generated: %s\n\n", time.Now().Format(time.RFC3339)))
+	sb.WriteString("agents:\n")
+	for _, a := range agents {
+		sb.WriteString(fmt.Sprintf("  - name: %q\n", a.Name))
+		sb.WriteString(fmt.Sprintf("    system_prompt: %q\n", a.SystemPrompt))
+		if a.Kit != "" {
+			sb.WriteString(fmt.Sprintf("    kit: %q\n", a.Kit))
+		}
+		sb.WriteString(fmt.Sprintf("    lifecycle: %q\n", a.Lifecycle))
+		sb.WriteString(fmt.Sprintf("    max_steps: %d\n", a.MaxSteps))
+		if len(a.BuiltinTools) > 0 {
+			sb.WriteString("    tools:\n")
+			for _, t := range a.BuiltinTools {
+				sb.WriteString(fmt.Sprintf("      - %s\n", t))
+			}
+		}
+	}
+	return []byte(sb.String()), nil
 }
 
 // taskServiceAdapter bridges task infrastructure to the http.TaskService interface.
