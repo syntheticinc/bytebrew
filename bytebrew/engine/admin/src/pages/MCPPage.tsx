@@ -3,7 +3,15 @@ import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
-import type { WellKnownMCP, CreateMCPServerRequest } from '../types';
+import type { MCPServer, WellKnownMCP, CreateMCPServerRequest } from '../types';
+
+const emptyForm: CreateMCPServerRequest = {
+  name: '',
+  type: 'stdio',
+  command: '',
+  args: [],
+  url: '',
+};
 
 export default function MCPPage() {
   const { data: servers, loading, error, refetch } = useApi(() => api.listMCPServers());
@@ -11,17 +19,30 @@ export default function MCPPage() {
 
   const [showAddCustom, setShowAddCustom] = useState(false);
   const [showWellKnown, setShowWellKnown] = useState(false);
-  const [customForm, setCustomForm] = useState<CreateMCPServerRequest>({
-    name: '',
-    type: 'stdio',
-    command: '',
-    args: [],
-    url: '',
-  });
+  const [editTarget, setEditTarget] = useState<MCPServer | null>(null);
+  const [customForm, setCustomForm] = useState<CreateMCPServerRequest>({ ...emptyForm });
   const [envInput, setEnvInput] = useState<Record<string, string>>({});
   const [argsInput, setArgsInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  function openEdit(server: MCPServer) {
+    setCustomForm({
+      name: server.name,
+      type: server.type,
+      command: server.command ?? '',
+      args: server.args ?? [],
+      url: server.url ?? '',
+    });
+    setArgsInput((server.args ?? []).join('\n'));
+    setEnvInput(server.env_vars ?? {});
+    setEditTarget(server);
+  }
+
+  function closeEdit() {
+    setEditTarget(null);
+    resetCustomForm();
+  }
 
   async function handleAddCustom(e: FormEvent) {
     e.preventDefault();
@@ -35,6 +56,26 @@ export default function MCPPage() {
       await api.createMCPServer(payload);
       setShowAddCustom(false);
       resetCustomForm();
+      refetch();
+    } catch {
+      // visible in console
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleEdit(e: FormEvent) {
+    e.preventDefault();
+    if (!editTarget) return;
+    setSaving(true);
+    try {
+      const payload: CreateMCPServerRequest = {
+        ...customForm,
+        args: argsInput ? argsInput.split('\n').map((a) => a.trim()).filter(Boolean) : [],
+        env_vars: Object.keys(envInput).length > 0 ? envInput : undefined,
+      };
+      await api.updateMCPServer(editTarget.name, payload);
+      closeEdit();
       refetch();
     } catch {
       // visible in console
@@ -79,9 +120,137 @@ export default function MCPPage() {
   }
 
   function resetCustomForm() {
-    setCustomForm({ name: '', type: 'stdio', command: '', args: [], url: '' });
+    setCustomForm({ ...emptyForm });
     setArgsInput('');
     setEnvInput({});
+  }
+
+  function renderServerForm(onSubmit: (e: FormEvent) => void, submitLabel: string, onCancel: () => void, isEdit: boolean) {
+    return (
+      <form onSubmit={onSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-brand-dark mb-1">Name</label>
+          <input
+            type="text"
+            value={customForm.name}
+            onChange={(e) => setCustomForm({ ...customForm, name: e.target.value })}
+            required
+            disabled={isEdit}
+            className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent disabled:opacity-50 disabled:bg-brand-light"
+          />
+          {isEdit && (
+            <p className="text-xs text-brand-shade3 mt-1">Name cannot be changed.</p>
+          )}
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-brand-dark mb-1">Type</label>
+          <select
+            value={customForm.type}
+            onChange={(e) => setCustomForm({ ...customForm, type: e.target.value })}
+            className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
+          >
+            <option value="stdio">stdio</option>
+            <option value="http">http</option>
+            <option value="sse">sse</option>
+          </select>
+        </div>
+        {customForm.type === 'stdio' ? (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-brand-dark mb-1">Command</label>
+              <input
+                type="text"
+                value={customForm.command}
+                onChange={(e) => setCustomForm({ ...customForm, command: e.target.value })}
+                placeholder="npx"
+                className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-brand-dark mb-1">Args (one per line)</label>
+              <textarea
+                value={argsInput}
+                onChange={(e) => setArgsInput(e.target.value)}
+                rows={3}
+                placeholder="@anthropic/playwright-mcp"
+                className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
+              />
+            </div>
+          </>
+        ) : (
+          <div>
+            <label className="block text-sm font-medium text-brand-dark mb-1">URL</label>
+            <input
+              type="url"
+              value={customForm.url}
+              onChange={(e) => setCustomForm({ ...customForm, url: e.target.value })}
+              placeholder="http://localhost:3000/mcp"
+              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
+            />
+          </div>
+        )}
+        <div>
+          <label className="block text-sm font-medium text-brand-dark mb-1">Environment Variables</label>
+          <div className="space-y-2">
+            {Object.entries(envInput).map(([key, value]) => (
+              <div key={key} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={key}
+                  readOnly
+                  className="w-1/3 px-2 py-1.5 bg-brand-light border border-brand-shade1 rounded-btn text-xs"
+                />
+                <input
+                  type="text"
+                  value={value}
+                  onChange={(e) => setEnvInput((prev) => ({ ...prev, [key]: e.target.value }))}
+                  className="flex-1 px-2 py-1.5 bg-white border border-brand-shade1 rounded-btn text-xs focus:outline-none focus:border-brand-accent"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = { ...envInput };
+                    delete next[key];
+                    setEnvInput(next);
+                  }}
+                  className="text-red-500 hover:text-red-700 text-xs"
+                >
+                  x
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                const key = prompt('Variable name:');
+                if (key && key.trim()) {
+                  setEnvInput((prev) => ({ ...prev, [key.trim()]: '' }));
+                }
+              }}
+              className="text-xs text-brand-accent hover:underline"
+            >
+              + Add variable
+            </button>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-sm text-brand-dark border border-brand-shade2 rounded-btn hover:bg-brand-light"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="px-4 py-2 text-sm text-brand-light bg-brand-accent rounded-btn hover:bg-brand-accent-hover disabled:opacity-50"
+          >
+            {saving ? 'Saving...' : submitLabel}
+          </button>
+        </div>
+      </form>
+    );
   }
 
   const alreadyAdded = new Set((servers ?? []).map((s) => s.name));
@@ -151,6 +320,12 @@ export default function MCPPage() {
                     )}
                   </div>
                 )}
+                <button
+                  onClick={() => openEdit(s)}
+                  className="text-brand-accent hover:underline text-sm"
+                >
+                  Edit
+                </button>
                 <button
                   onClick={() => setDeleteTarget(s.name)}
                   className="text-red-600 hover:text-red-800 text-sm"
@@ -229,84 +404,12 @@ export default function MCPPage() {
         }}
         title="Add Custom MCP Server"
       >
-        <form onSubmit={handleAddCustom} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-brand-dark mb-1">Name</label>
-            <input
-              type="text"
-              value={customForm.name}
-              onChange={(e) => setCustomForm({ ...customForm, name: e.target.value })}
-              required
-              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-brand-dark mb-1">Type</label>
-            <select
-              value={customForm.type}
-              onChange={(e) => setCustomForm({ ...customForm, type: e.target.value })}
-              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
-            >
-              <option value="stdio">stdio</option>
-              <option value="http">http</option>
-              <option value="sse">sse</option>
-            </select>
-          </div>
-          {customForm.type === 'stdio' ? (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-brand-dark mb-1">Command</label>
-                <input
-                  type="text"
-                  value={customForm.command}
-                  onChange={(e) => setCustomForm({ ...customForm, command: e.target.value })}
-                  placeholder="npx"
-                  className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-brand-dark mb-1">Args (one per line)</label>
-                <textarea
-                  value={argsInput}
-                  onChange={(e) => setArgsInput(e.target.value)}
-                  rows={3}
-                  placeholder="@anthropic/playwright-mcp"
-                  className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
-                />
-              </div>
-            </>
-          ) : (
-            <div>
-              <label className="block text-sm font-medium text-brand-dark mb-1">URL</label>
-              <input
-                type="url"
-                value={customForm.url}
-                onChange={(e) => setCustomForm({ ...customForm, url: e.target.value })}
-                placeholder="http://localhost:3000/mcp"
-                className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
-              />
-            </div>
-          )}
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => {
-                setShowAddCustom(false);
-                resetCustomForm();
-              }}
-              className="px-4 py-2 text-sm text-brand-dark border border-brand-shade2 rounded-btn hover:bg-brand-light"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 text-sm text-brand-light bg-brand-accent rounded-btn hover:bg-brand-accent-hover disabled:opacity-50"
-            >
-              {saving ? 'Adding...' : 'Add Server'}
-            </button>
-          </div>
-        </form>
+        {renderServerForm(handleAddCustom, 'Add Server', () => { setShowAddCustom(false); resetCustomForm(); }, false)}
+      </Modal>
+
+      {/* Edit modal */}
+      <Modal open={editTarget !== null} onClose={closeEdit} title="Edit MCP Server">
+        {renderServerForm(handleEdit, 'Save Changes', closeEdit, true)}
       </Modal>
 
       {/* Delete confirmation */}

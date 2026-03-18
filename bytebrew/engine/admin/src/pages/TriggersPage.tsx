@@ -6,22 +6,43 @@ import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 import type { Trigger, CreateTriggerRequest, AgentInfo } from '../types';
 
+const emptyForm: CreateTriggerRequest = {
+  type: 'cron',
+  title: '',
+  agent_id: 0,
+  schedule: '',
+  webhook_path: '',
+  description: '',
+  enabled: true,
+};
+
 export default function TriggersPage() {
   const { data: triggers, loading, error, refetch } = useApi(() => api.listTriggers());
   const { data: agents } = useApi(() => api.listAgents());
 
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState<CreateTriggerRequest>({
-    type: 'cron',
-    title: '',
-    agent_id: 0,
-    schedule: '',
-    webhook_path: '',
-    description: '',
-    enabled: true,
-  });
+  const [editTarget, setEditTarget] = useState<Trigger | null>(null);
+  const [form, setForm] = useState<CreateTriggerRequest>({ ...emptyForm });
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+
+  function openEdit(trigger: Trigger) {
+    setForm({
+      type: trigger.type,
+      title: trigger.title,
+      agent_id: trigger.agent_id,
+      schedule: trigger.schedule ?? '',
+      webhook_path: trigger.webhook_path ?? '',
+      description: trigger.description ?? '',
+      enabled: trigger.enabled,
+    });
+    setEditTarget(trigger);
+  }
+
+  function closeEdit() {
+    setEditTarget(null);
+    setForm({ ...emptyForm });
+  }
 
   async function handleAdd(e: FormEvent) {
     e.preventDefault();
@@ -29,7 +50,22 @@ export default function TriggersPage() {
     try {
       await api.createTrigger(form);
       setShowAdd(false);
-      setForm({ type: 'cron', title: '', agent_id: 0, schedule: '', webhook_path: '', description: '', enabled: true });
+      setForm({ ...emptyForm });
+      refetch();
+    } catch {
+      // visible in console
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleEdit(e: FormEvent) {
+    e.preventDefault();
+    if (!editTarget) return;
+    setSaving(true);
+    try {
+      await api.updateTrigger(editTarget.id, form);
+      closeEdit();
       refetch();
     } catch {
       // visible in console
@@ -47,6 +83,110 @@ export default function TriggersPage() {
     } catch {
       // visible in console
     }
+  }
+
+  function renderForm(onSubmit: (e: FormEvent) => void, submitLabel: string, onCancel: () => void) {
+    return (
+      <form onSubmit={onSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-brand-dark mb-1">Title</label>
+          <input
+            type="text"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            required
+            className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-brand-dark mb-1">Type</label>
+          <select
+            value={form.type}
+            onChange={(e) => setForm({ ...form, type: e.target.value })}
+            className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
+          >
+            <option value="cron">Cron</option>
+            <option value="webhook">Webhook</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-brand-dark mb-1">Agent</label>
+          <select
+            value={form.agent_id}
+            onChange={(e) => setForm({ ...form, agent_id: Number(e.target.value) })}
+            required
+            className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
+          >
+            <option value={0} disabled>
+              Select agent...
+            </option>
+            {(agents ?? []).map((a: AgentInfo) => (
+              <option key={a.name} value={a.name}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {form.type === 'cron' ? (
+          <div>
+            <label className="block text-sm font-medium text-brand-dark mb-1">Schedule (cron expression)</label>
+            <input
+              type="text"
+              value={form.schedule}
+              onChange={(e) => setForm({ ...form, schedule: e.target.value })}
+              placeholder="*/5 * * * *"
+              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm font-mono focus:outline-none focus:border-brand-accent"
+            />
+          </div>
+        ) : (
+          <div>
+            <label className="block text-sm font-medium text-brand-dark mb-1">Webhook Path</label>
+            <input
+              type="text"
+              value={form.webhook_path}
+              onChange={(e) => setForm({ ...form, webhook_path: e.target.value })}
+              placeholder="/hooks/deploy"
+              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm font-mono focus:outline-none focus:border-brand-accent"
+            />
+          </div>
+        )}
+        <div>
+          <label className="block text-sm font-medium text-brand-dark mb-1">Description</label>
+          <textarea
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            rows={2}
+            className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="trigger-enabled"
+            checked={form.enabled ?? true}
+            onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
+            className="rounded border-brand-shade1 text-brand-accent focus:ring-brand-accent"
+          />
+          <label htmlFor="trigger-enabled" className="text-sm text-brand-dark">Enabled</label>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-sm text-brand-dark border border-brand-shade2 rounded-btn hover:bg-brand-light"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="px-4 py-2 text-sm text-brand-light bg-brand-accent rounded-btn hover:bg-brand-accent-hover disabled:opacity-50"
+          >
+            {saving ? 'Saving...' : submitLabel}
+          </button>
+        </div>
+      </form>
+    );
   }
 
   const columns = [
@@ -77,12 +217,20 @@ export default function TriggersPage() {
       key: 'actions',
       header: '',
       render: (row: Trigger) => (
-        <button
-          onClick={() => setDeleteTarget(row.id)}
-          className="text-red-600 hover:text-red-800 text-sm"
-        >
-          Delete
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => openEdit(row)}
+            className="text-brand-accent hover:underline text-sm"
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => setDeleteTarget(row.id)}
+            className="text-red-600 hover:text-red-800 text-sm"
+          >
+            Delete
+          </button>
+        </div>
       ),
     },
   ];
@@ -113,95 +261,12 @@ export default function TriggersPage() {
 
       {/* Add trigger modal */}
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add Trigger">
-        <form onSubmit={handleAdd} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-brand-dark mb-1">Title</label>
-            <input
-              type="text"
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              required
-              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-brand-dark mb-1">Type</label>
-            <select
-              value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value })}
-              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
-            >
-              <option value="cron">Cron</option>
-              <option value="webhook">Webhook</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-brand-dark mb-1">Agent</label>
-            <select
-              value={form.agent_id}
-              onChange={(e) => setForm({ ...form, agent_id: Number(e.target.value) })}
-              required
-              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
-            >
-              <option value={0} disabled>
-                Select agent...
-              </option>
-              {(agents ?? []).map((a: AgentInfo) => (
-                <option key={a.name} value={a.name}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          {form.type === 'cron' ? (
-            <div>
-              <label className="block text-sm font-medium text-brand-dark mb-1">Schedule (cron expression)</label>
-              <input
-                type="text"
-                value={form.schedule}
-                onChange={(e) => setForm({ ...form, schedule: e.target.value })}
-                placeholder="*/5 * * * *"
-                className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm font-mono focus:outline-none focus:border-brand-accent"
-              />
-            </div>
-          ) : (
-            <div>
-              <label className="block text-sm font-medium text-brand-dark mb-1">Webhook Path</label>
-              <input
-                type="text"
-                value={form.webhook_path}
-                onChange={(e) => setForm({ ...form, webhook_path: e.target.value })}
-                placeholder="/hooks/deploy"
-                className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm font-mono focus:outline-none focus:border-brand-accent"
-              />
-            </div>
-          )}
-          <div>
-            <label className="block text-sm font-medium text-brand-dark mb-1">Description</label>
-            <textarea
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              rows={2}
-              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
-            />
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setShowAdd(false)}
-              className="px-4 py-2 text-sm text-brand-dark border border-brand-shade2 rounded-btn hover:bg-brand-light"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 text-sm text-brand-light bg-brand-accent rounded-btn hover:bg-brand-accent-hover disabled:opacity-50"
-            >
-              {saving ? 'Adding...' : 'Add Trigger'}
-            </button>
-          </div>
-        </form>
+        {renderForm(handleAdd, 'Add Trigger', () => setShowAdd(false))}
+      </Modal>
+
+      {/* Edit trigger modal */}
+      <Modal open={editTarget !== null} onClose={closeEdit} title="Edit Trigger">
+        {renderForm(handleEdit, 'Save Changes', closeEdit)}
       </Modal>
 
       {/* Delete confirmation */}

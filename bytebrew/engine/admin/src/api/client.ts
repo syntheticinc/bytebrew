@@ -108,6 +108,9 @@ class APIClient {
   createModel(data: CreateModelRequest) {
     return this.request<Model>('POST', '/models', data);
   }
+  updateModel(name: string, data: CreateModelRequest) {
+    return this.request<Model>('PUT', `/models/${encodeURIComponent(name)}`, data);
+  }
   deleteModel(name: string) {
     return this.request<void>('DELETE', `/models/${encodeURIComponent(name)}`);
   }
@@ -122,6 +125,9 @@ class APIClient {
   createMCPServer(data: CreateMCPServerRequest) {
     return this.request<MCPServer>('POST', '/mcp-servers', data);
   }
+  updateMCPServer(name: string, data: CreateMCPServerRequest) {
+    return this.request<MCPServer>('PUT', `/mcp-servers/${encodeURIComponent(name)}`, data);
+  }
   deleteMCPServer(name: string) {
     return this.request<void>('DELETE', `/mcp-servers/${encodeURIComponent(name)}`);
   }
@@ -132,6 +138,9 @@ class APIClient {
   }
   createTrigger(data: CreateTriggerRequest) {
     return this.request<Trigger>('POST', '/triggers', data);
+  }
+  updateTrigger(id: number, data: CreateTriggerRequest) {
+    return this.request<Trigger>('PUT', `/triggers/${id}`, data);
   }
   deleteTrigger(id: number) {
     return this.request<void>('DELETE', `/triggers/${id}`);
