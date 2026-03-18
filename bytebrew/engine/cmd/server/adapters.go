@@ -7,6 +7,7 @@ import (
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/ws"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/agent_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/audit"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/config_repo"
@@ -199,6 +200,14 @@ func (a *taskServiceAdapter) ListTasks(ctx context.Context, filter deliveryhttp.
 	repoFilter := config_repo.TaskFilter{}
 	if filter.AgentName != "" {
 		repoFilter.AgentName = &filter.AgentName
+	}
+	if filter.Source != "" {
+		src := domain.TaskSource(filter.Source)
+		repoFilter.Source = &src
+	}
+	if filter.Status != "" {
+		st := domain.EngineTaskStatus(filter.Status)
+		repoFilter.Status = &st
 	}
 
 	tasks, err := a.repo.List(ctx, repoFilter)
