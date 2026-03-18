@@ -23,7 +23,9 @@ type CreateTaskRequest struct {
 type TaskListFilter struct {
 	Source    string
 	AgentName string
-	Status   string
+	Status    string
+	Limit     int
+	Offset    int
 }
 
 // TaskResponse is a summary of a task for list responses.
@@ -47,6 +49,15 @@ type TaskDetailResponse struct {
 	CompletedAt string `json:"completed_at,omitempty"`
 }
 
+// PaginatedTaskResponse wraps a page of tasks with pagination metadata.
+type PaginatedTaskResponse struct {
+	Data       []TaskResponse `json:"data"`
+	Total      int64          `json:"total"`
+	Page       int            `json:"page"`
+	PerPage    int            `json:"per_page"`
+	TotalPages int            `json:"total_pages"`
+}
+
 // ProvideInputRequest is the body for POST /api/v1/tasks/{id}/input.
 type ProvideInputRequest struct {
 	Input string `json:"input"`
@@ -56,6 +67,7 @@ type ProvideInputRequest struct {
 type TaskService interface {
 	CreateTask(ctx context.Context, params CreateTaskRequest) (uint, error)
 	ListTasks(ctx context.Context, filter TaskListFilter) ([]TaskResponse, error)
+	CountTasks(ctx context.Context, filter TaskListFilter) (int64, error)
 	GetTask(ctx context.Context, id uint) (*TaskDetailResponse, error)
 	CancelTask(ctx context.Context, id uint) error
 	ProvideInput(ctx context.Context, id uint, input string) error
@@ -111,12 +123,47 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // List handles GET /api/v1/tasks.
+// Supports pagination via ?page=N&per_page=M query parameters.
+// Without pagination params, returns all tasks (backward compatible).
 func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 	filter := TaskListFilter{
 		Source:    r.URL.Query().Get("source"),
 		AgentName: r.URL.Query().Get("agent_name"),
-		Status:   r.URL.Query().Get("status"),
+		Status:    r.URL.Query().Get("status"),
 	}
+
+	pageStr := r.URL.Query().Get("page")
+	perPageStr := r.URL.Query().Get("per_page")
+
+	// No pagination params — return plain array (backward compat)
+	if pageStr == "" && perPageStr == "" {
+		tasks, err := h.service.ListTasks(r.Context(), filter)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, tasks)
+		return
+	}
+
+	page := 1
+	perPage := 20
+	if pageStr != "" {
+		if v, err := strconv.Atoi(pageStr); err == nil && v > 0 {
+			page = v
+		}
+	}
+	if perPageStr != "" {
+		if v, err := strconv.Atoi(perPageStr); err == nil && v > 0 {
+			if v > 100 {
+				v = 100
+			}
+			perPage = v
+		}
+	}
+
+	filter.Limit = perPage
+	filter.Offset = (page - 1) * perPage
 
 	tasks, err := h.service.ListTasks(r.Context(), filter)
 	if err != nil {
@@ -124,7 +171,24 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, tasks)
+	total, err := h.service.CountTasks(r.Context(), filter)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	totalPages := int(total) / perPage
+	if int(total)%perPage != 0 {
+		totalPages++
+	}
+
+	writeJSON(w, http.StatusOK, PaginatedTaskResponse{
+		Data:       tasks,
+		Total:      total,
+		Page:       page,
+		PerPage:    perPage,
+		TotalPages: totalPages,
+	})
 }
 
 // Get handles GET /api/v1/tasks/{id}.

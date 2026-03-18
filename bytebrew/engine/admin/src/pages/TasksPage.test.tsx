@@ -7,6 +7,7 @@ import TasksPage from './TasksPage';
 vi.mock('../api/client', () => ({
   api: {
     listTasks: vi.fn(),
+    listTasksPaginated: vi.fn(),
     getTask: vi.fn(),
     cancelTask: vi.fn(),
   },
@@ -37,24 +38,13 @@ describe('TasksPage', () => {
   });
 
   it('renders tasks table', async () => {
-    mockApi.listTasks.mockResolvedValue([
-      {
-        id: 1,
-        title: 'Deploy API',
-        agent_name: 'developer',
-        status: 'completed',
-        source: 'api',
-        created_at: '2026-03-17T10:00:00Z',
-      },
-      {
-        id: 2,
-        title: 'Run tests',
-        agent_name: 'developer',
-        status: 'in_progress',
-        source: 'dashboard',
-        created_at: '2026-03-17T11:00:00Z',
-      },
-    ]);
+    mockApi.listTasksPaginated.mockResolvedValue({
+      data: [
+        { id: 1, title: 'Deploy API', agent_name: 'developer', status: 'completed', source: 'api', created_at: '2026-03-17T10:00:00Z' },
+        { id: 2, title: 'Run tests', agent_name: 'developer', status: 'in_progress', source: 'dashboard', created_at: '2026-03-17T11:00:00Z' },
+      ],
+      total: 2, page: 1, per_page: 20, total_pages: 1,
+    });
 
     renderPage();
 
@@ -67,7 +57,7 @@ describe('TasksPage', () => {
   });
 
   it('shows empty state', async () => {
-    mockApi.listTasks.mockResolvedValue([]);
+    mockApi.listTasksPaginated.mockResolvedValue({ data: [], total: 0, page: 1, per_page: 20, total_pages: 0 });
     renderPage();
 
     await waitFor(() => {

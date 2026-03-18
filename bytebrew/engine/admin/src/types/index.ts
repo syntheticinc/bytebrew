@@ -131,6 +131,14 @@ export interface TaskDetailResponse extends TaskResponse {
   completed_at?: string;
 }
 
+export interface PaginatedTaskResponse {
+  data: TaskResponse[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+}
+
 // ============================================================================
 // Trigger types
 // ============================================================================

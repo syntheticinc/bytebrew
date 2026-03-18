@@ -5,6 +5,7 @@ import (
 	"time"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/http"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/agent_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/audit"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/config_repo"
@@ -145,12 +146,27 @@ func (a *taskServiceHTTPAdapter) CreateTask(_ context.Context, _ deliveryhttp.Cr
 	return 0, nil
 }
 
-func (a *taskServiceHTTPAdapter) ListTasks(ctx context.Context, filter deliveryhttp.TaskListFilter) ([]deliveryhttp.TaskResponse, error) {
-	repoFilter := config_repo.TaskFilter{}
+func (a *taskServiceHTTPAdapter) buildRepoFilter(filter deliveryhttp.TaskListFilter) config_repo.TaskFilter {
+	repoFilter := config_repo.TaskFilter{
+		Limit:  filter.Limit,
+		Offset: filter.Offset,
+	}
 	if filter.AgentName != "" {
 		repoFilter.AgentName = &filter.AgentName
 	}
-	tasks, err := a.repo.List(ctx, repoFilter)
+	if filter.Source != "" {
+		src := domain.TaskSource(filter.Source)
+		repoFilter.Source = &src
+	}
+	if filter.Status != "" {
+		st := domain.EngineTaskStatus(filter.Status)
+		repoFilter.Status = &st
+	}
+	return repoFilter
+}
+
+func (a *taskServiceHTTPAdapter) ListTasks(ctx context.Context, filter deliveryhttp.TaskListFilter) ([]deliveryhttp.TaskResponse, error) {
+	tasks, err := a.repo.List(ctx, a.buildRepoFilter(filter))
 	if err != nil {
 		return nil, err
 	}
@@ -166,6 +182,10 @@ func (a *taskServiceHTTPAdapter) ListTasks(ctx context.Context, filter deliveryh
 		})
 	}
 	return result, nil
+}
+
+func (a *taskServiceHTTPAdapter) CountTasks(ctx context.Context, filter deliveryhttp.TaskListFilter) (int64, error) {
+	return a.repo.Count(ctx, a.buildRepoFilter(filter))
 }
 
 func (a *taskServiceHTTPAdapter) GetTask(ctx context.Context, id uint) (*deliveryhttp.TaskDetailResponse, error) {

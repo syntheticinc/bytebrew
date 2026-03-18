@@ -78,6 +78,17 @@ func (r *GORMTaskRepository) List(ctx context.Context, filter TaskFilter) ([]dom
 	return tasks, nil
 }
 
+// Count returns the total number of tasks matching the filter (ignoring Limit/Offset).
+func (r *GORMTaskRepository) Count(ctx context.Context, filter TaskFilter) (int64, error) {
+	q := r.db.WithContext(ctx).Model(&models.TaskModel{})
+	q = applyTaskFilter(q, filter)
+	var count int64
+	if err := q.Count(&count).Error; err != nil {
+		return 0, fmt.Errorf("count tasks: %w", err)
+	}
+	return count, nil
+}
+
 // UpdateStatus transitions a task to a new status and optionally sets a result string.
 func (r *GORMTaskRepository) UpdateStatus(ctx context.Context, id uint, status domain.EngineTaskStatus, result string) error {
 	var m models.TaskModel

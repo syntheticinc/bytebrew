@@ -914,8 +914,11 @@ func (a *taskServiceAdapter) CreateTask(_ context.Context, _ deliveryhttp.Create
 	return 0, nil // TODO: wire task creation through TaskWorker
 }
 
-func (a *taskServiceAdapter) ListTasks(ctx context.Context, filter deliveryhttp.TaskListFilter) ([]deliveryhttp.TaskResponse, error) {
-	repoFilter := config_repo.TaskFilter{}
+func (a *taskServiceAdapter) buildRepoFilter(filter deliveryhttp.TaskListFilter) config_repo.TaskFilter {
+	repoFilter := config_repo.TaskFilter{
+		Limit:  filter.Limit,
+		Offset: filter.Offset,
+	}
 	if filter.AgentName != "" {
 		repoFilter.AgentName = &filter.AgentName
 	}
@@ -927,8 +930,11 @@ func (a *taskServiceAdapter) ListTasks(ctx context.Context, filter deliveryhttp.
 		st := domain.EngineTaskStatus(filter.Status)
 		repoFilter.Status = &st
 	}
+	return repoFilter
+}
 
-	tasks, err := a.repo.List(ctx, repoFilter)
+func (a *taskServiceAdapter) ListTasks(ctx context.Context, filter deliveryhttp.TaskListFilter) ([]deliveryhttp.TaskResponse, error) {
+	tasks, err := a.repo.List(ctx, a.buildRepoFilter(filter))
 	if err != nil {
 		return nil, err
 	}
@@ -945,6 +951,10 @@ func (a *taskServiceAdapter) ListTasks(ctx context.Context, filter deliveryhttp.
 		})
 	}
 	return result, nil
+}
+
+func (a *taskServiceAdapter) CountTasks(ctx context.Context, filter deliveryhttp.TaskListFilter) (int64, error) {
+	return a.repo.Count(ctx, a.buildRepoFilter(filter))
 }
 
 func (a *taskServiceAdapter) GetTask(ctx context.Context, id uint) (*deliveryhttp.TaskDetailResponse, error) {

@@ -9,6 +9,7 @@ import type {
   CreateMCPServerRequest,
   TaskResponse,
   TaskDetailResponse,
+  PaginatedTaskResponse,
   Trigger,
   CreateTriggerRequest,
   APIToken,
@@ -150,6 +151,10 @@ class APIClient {
   listTasks(params?: Record<string, string>) {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
     return this.request<TaskResponse[]>('GET', `/tasks${qs}`);
+  }
+  listTasksPaginated(params: Record<string, string>) {
+    const qs = '?' + new URLSearchParams(params).toString();
+    return this.request<PaginatedTaskResponse>('GET', `/tasks${qs}`);
   }
   getTask(id: number) {
     return this.request<TaskDetailResponse>('GET', `/tasks/${id}`);
