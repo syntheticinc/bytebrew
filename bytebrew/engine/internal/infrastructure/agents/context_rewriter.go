@@ -2,19 +2,11 @@ package agents
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
-	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/utils"
 	"github.com/cloudwego/eino/flow/agent/react"
 	"github.com/cloudwego/eino/schema"
 )
-
-// PlanProvider defines interface for getting active plan (consumer-side interface for context_rewriter)
-type PlanProvider interface {
-	GetActivePlan(ctx context.Context, sessionID string) (*domain.Plan, error)
-}
 
 // charsPerToken is the approximate ratio of characters to tokens for most LLMs
 // This is a rough estimation: 1 token ≈ 4 characters for English text
@@ -53,7 +45,7 @@ func messageChars(msg *schema.Message) int {
 
 // NewContextRewriterWithLogging creates a context rewriter with logging
 // maxContextTokens is the maximum context size in TOKENS (not characters)
-func NewContextRewriterWithLogging(maxContextTokens int, contextLogger *ContextLogger, planManager PlanProvider, sessionID string) react.MessageModifier {
+func NewContextRewriterWithLogging(maxContextTokens int, contextLogger *ContextLogger) react.MessageModifier {
 	// Convert token limit to character limit for internal calculations
 	maxContextChars := tokensToChars(maxContextTokens)
 
@@ -97,17 +89,6 @@ func NewContextRewriterWithLogging(maxContextTokens int, contextLogger *ContextL
 				systemPrompt = msg
 			} else {
 				conversationMessages = append(conversationMessages, msg)
-			}
-		}
-
-		// NEW: If plan exists, compress completed steps into summaries
-		if planManager != nil && sessionID != "" {
-			plan, err := planManager.GetActivePlan(ctx, sessionID)
-			if err == nil && plan != nil {
-				conversationMessages = compressCompletedPlanSteps(ctx, conversationMessages, plan)
-				completed, total := plan.Progress()
-				slog.DebugContext(ctx, "compressed completed plan steps",
-					"plan_id", plan.ID, "completed_steps", completed, "total_steps", total)
 			}
 		}
 
@@ -290,77 +271,7 @@ func NewContextRewriterWithLogging(maxContextTokens int, contextLogger *ContextL
 // NewContextRewriter creates a context rewriter that compresses context when it exceeds maxContextTokens
 // maxContextTokens is the maximum context size in TOKENS (not characters)
 func NewContextRewriter(maxContextTokens int) react.MessageModifier {
-	return NewContextRewriterWithLogging(maxContextTokens, nil, nil, "")
+	return NewContextRewriterWithLogging(maxContextTokens, nil)
 }
 
-// compressCompletedPlanSteps replaces tool results from completed steps with summaries
-// This significantly reduces token usage while preserving critical information
-func compressCompletedPlanSteps(ctx context.Context, messages []*schema.Message, plan *domain.Plan) []*schema.Message {
-	// Build map: assistant message index -> plan step
-	// Strategy: Map assistant messages to plan steps chronologically
-	assistantToPlanStep := make(map[int]int)
-
-	assistantIdx := 0
-	completedStepIdx := 0
-
-	// Find completed steps in order
-	completedSteps := make([]*domain.PlanStep, 0)
-	for _, step := range plan.Steps {
-		if step.Status == domain.StepStatusCompleted {
-			completedSteps = append(completedSteps, step)
-		}
-	}
-
-	// Map assistant messages to completed steps
-	for i, msg := range messages {
-		if msg.Role == schema.Assistant {
-			if completedStepIdx < len(completedSteps) {
-				assistantToPlanStep[i] = completedSteps[completedStepIdx].Index
-				completedStepIdx++
-			}
-			assistantIdx++
-		}
-	}
-
-	// Compress tool results that belong to completed steps
-	for assistantIdx, stepIdx := range assistantToPlanStep {
-		step := plan.Steps[stepIdx]
-
-		// Find tool results after this assistant message
-		for i := assistantIdx + 1; i < len(messages) && i < assistantIdx+10; i++ {
-			msg := messages[i]
-			if msg.Role == schema.Tool {
-				originalLen := len(msg.Content)
-
-				// Only compress if content is substantial (>500 chars)
-				if originalLen > 500 {
-					// Use step result if available, otherwise truncate content
-					summary := step.Result
-					if summary == "" {
-						summary = utils.Truncate(msg.Content, 200)
-					}
-
-					messages[i].Content = fmt.Sprintf(
-						"[PLAN STEP %d COMPLETED: %s]\nTool: %s\nSummary: %s",
-						stepIdx+1, step.Description, msg.Name, summary,
-					)
-
-					savings := originalLen - len(messages[i].Content)
-					slog.DebugContext(ctx, "compressed tool result for plan step",
-						"step", stepIdx+1,
-						"tool", msg.Name,
-						"original_chars", originalLen,
-						"compressed_chars", len(messages[i].Content),
-						"savings_chars", savings,
-						"savings_tokens", charsToTokens(savings))
-				}
-			} else if msg.Role == schema.Assistant {
-				// Stop when we hit next assistant message
-				break
-			}
-		}
-	}
-
-	return messages
-}
 

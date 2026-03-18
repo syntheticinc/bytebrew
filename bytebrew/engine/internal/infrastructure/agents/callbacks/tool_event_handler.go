@@ -21,12 +21,11 @@ type ToolCallRecorder interface {
 
 // ToolEventHandler handles tool start/end callbacks.
 type ToolEventHandler struct {
-	emitter     *EventEmitter
-	counter     *StepCounter
-	model       *ModelEventHandler
-	planEmitter *PlanProgressEmitter
-	recorder    ToolCallRecorder
-	sessionID   string
+	emitter   *EventEmitter
+	counter   *StepCounter
+	model     *ModelEventHandler
+	recorder  ToolCallRecorder
+	sessionID string
 }
 
 // NewToolEventHandler creates a new ToolEventHandler.
@@ -34,17 +33,15 @@ func NewToolEventHandler(
 	emitter *EventEmitter,
 	counter *StepCounter,
 	model *ModelEventHandler,
-	planEmitter *PlanProgressEmitter,
 	recorder ToolCallRecorder,
 	sessionID string,
 ) *ToolEventHandler {
 	return &ToolEventHandler{
-		emitter:     emitter,
-		counter:     counter,
-		model:       model,
-		planEmitter: planEmitter,
-		recorder:    recorder,
-		sessionID:   sessionID,
+		emitter:   emitter,
+		counter:   counter,
+		model:     model,
+		recorder:  recorder,
+		sessionID: sessionID,
 	}
 }
 

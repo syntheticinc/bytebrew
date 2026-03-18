@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/agents"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/repository"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/tools"
@@ -30,32 +29,6 @@ type storageComponents struct {
 	SessionStorage   *persistence.SQLiteSessionStorage
 	AgentRunStorage  agentservice.AgentRunStorage
 	ContextReminders []turn_executor.ContextReminderProvider
-}
-
-// createPlanStorage creates plan manager with SQLite or memory-only storage.
-func createPlanStorage(cfg config.Config) *agents.PlanManager {
-	planDBPath := cfg.PlanStorage.DBPath
-	if planDBPath == "" {
-		planDBPath = "./data/plans.db"
-	}
-	planStorage, err := persistence.NewSQLitePlanStorage(planDBPath)
-	if err != nil {
-		slog.Error("failed to create plan storage, plans will not be persisted", "error", err)
-		planStorage = nil
-	}
-	if planStorage != nil {
-		slog.Info("plan storage initialized", "db_path", planDBPath)
-	}
-
-	planManager := agents.NewPlanManager(planStorage)
-	if planStorage != nil {
-		slog.Info("plan manager initialized with SQLite storage")
-	}
-	if planStorage == nil {
-		slog.Warn("plan manager initialized without storage (memory-only)")
-	}
-
-	return planManager
 }
 
 // createWorkStorage creates work DB, work manager, agent pool, session storage.

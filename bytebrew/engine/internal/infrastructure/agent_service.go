@@ -123,9 +123,6 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 
 	wireEngineToPool(agentPool, ec)
 
-	// 7b. Create plan manager for AgentService
-	planManager := createPlanStorage(cfg)
-
 	// 8. Add security reminder (highest priority -- last in context for max recency bias)
 	contextReminders := storageCmp.ContextReminders
 	contextReminders = append(contextReminders, agents.NewSecurityReminderProvider())
@@ -133,7 +130,6 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 	// 9. Create AgentService
 	agentService, err := agentservice.New(agentservice.Config{
 		ChatModel:        chatModel,
-		PlanManager:      planManager,
 		TaskManager:      storageCmp.WorkManager,
 		SubtaskManager:   storageCmp.WorkManager,
 		AgentPool:        agentPool,

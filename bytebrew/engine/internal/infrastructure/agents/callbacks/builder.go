@@ -14,7 +14,6 @@ type BuilderConfig struct {
 	EventCallback    func(event *domain.AgentEvent) error
 	ChunkCallback    func(chunk string) error
 	Store            *agents.StepContentStore
-	PlanManager      PlanProvider
 	SessionID        string
 	AgentID          string // "supervisor" or "code-agent-{uuid}"
 	ToolCallRecorder ToolCallRecorder
@@ -27,7 +26,6 @@ type AgentCallbackBuilder struct {
 	emitter      *EventEmitter
 	modelHandler *ModelEventHandler
 	toolHandler  *ToolEventHandler
-	planEmitter  *PlanProgressEmitter
 }
 
 // NewBuilder creates and wires all callback components.
@@ -41,16 +39,14 @@ func NewBuilder(cfg BuilderConfig) *AgentCallbackBuilder {
 	emitter := NewEventEmitter(cfg.EventCallback, agentID)
 	extractor := agents.NewReasoningExtractor()
 
-	planEmitter := NewPlanProgressEmitter(emitter, counter, cfg.PlanManager, cfg.SessionID)
 	modelHandler := NewModelEventHandler(emitter, counter, extractor, cfg.Store, cfg.ChunkCallback)
-	toolHandler := NewToolEventHandler(emitter, counter, modelHandler, planEmitter, cfg.ToolCallRecorder, cfg.SessionID)
+	toolHandler := NewToolEventHandler(emitter, counter, modelHandler, cfg.ToolCallRecorder, cfg.SessionID)
 
 	return &AgentCallbackBuilder{
 		counter:      counter,
 		emitter:      emitter,
 		modelHandler: modelHandler,
 		toolHandler:  toolHandler,
-		planEmitter:  planEmitter,
 	}
 }
 

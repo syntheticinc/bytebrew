@@ -38,17 +38,6 @@ type ToolDependenciesProvider interface {
 	GetDependencies(sessionID, projectKey string) tools.ToolDependencies
 }
 
-// PlanManager provides plan management (pass-through to engine)
-type PlanManager interface {
-	CreatePlan(ctx context.Context, sessionID, goal string, steps []*domain.PlanStep) (*domain.Plan, error)
-	GetActivePlan(ctx context.Context, sessionID string) (*domain.Plan, error)
-	UpdateStepStatus(ctx context.Context, sessionID string, stepIdx int, status domain.PlanStepStatus, result string) error
-	UpdatePlanStatus(ctx context.Context, sessionID string, status domain.PlanStatus) error
-	AddStep(ctx context.Context, sessionID, description, reasoning string) error
-	RemoveStep(ctx context.Context, sessionID string, stepIndex int) error
-	ModifyStep(ctx context.Context, sessionID string, stepIndex int, description, reasoning string) error
-}
-
 // ToolCallRecorder records tool calls (pass-through to engine)
 type ToolCallRecorder interface {
 	RecordToolCall(sessionID, toolName string)
@@ -71,7 +60,6 @@ type EngineAdapter struct {
 	agentConfig      *config.AgentConfig
 	modelName        string
 	// pass-through deps
-	planManager      PlanManager
 	contextReminders []ContextReminderProvider
 	toolCallRecorder ToolCallRecorder
 }
@@ -85,7 +73,6 @@ type Config struct {
 	ChatModel        model.ToolCallingChatModel
 	AgentConfig      *config.AgentConfig
 	ModelName        string
-	PlanManager      PlanManager
 	ContextReminders []ContextReminderProvider
 	ToolCallRecorder ToolCallRecorder
 }
@@ -116,7 +103,6 @@ func NewEngineAdapter(cfg Config) (*EngineAdapter, error) {
 		chatModel:        cfg.ChatModel,
 		agentConfig:      cfg.AgentConfig,
 		modelName:        cfg.ModelName,
-		planManager:      cfg.PlanManager,
 		contextReminders: cfg.ContextReminders,
 		toolCallRecorder: cfg.ToolCallRecorder,
 	}, nil
@@ -166,7 +152,6 @@ func (e *EngineAdapter) ExecuteTurn(
 		ChunkCallback:     chunkCallback,
 		EventCallback:     eventCallback,
 		ContextReminders:  engineReminders,
-		PlanManager:       convertPlanManagerToEngine(e.planManager),
 		ToolCallRecorder:  convertToolCallRecorderToEngine(e.toolCallRecorder),
 		ModelName:         e.modelName,
 		AgentConfig:       e.agentConfig,
@@ -229,46 +214,6 @@ func convertContextRemindersToEngine(providers []ContextReminderProvider) []reac
 		result[i] = &contextReminderEngineAdapter{provider: p}
 	}
 	return result
-}
-
-// planManagerEngineAdapter adapts turn_executor.PlanManager to react.PlanManager interface
-type planManagerEngineAdapter struct {
-	pm PlanManager
-}
-
-func (a *planManagerEngineAdapter) CreatePlan(ctx context.Context, sessionID, goal string, steps []*domain.PlanStep) (*domain.Plan, error) {
-	return a.pm.CreatePlan(ctx, sessionID, goal, steps)
-}
-
-func (a *planManagerEngineAdapter) GetActivePlan(ctx context.Context, sessionID string) (*domain.Plan, error) {
-	return a.pm.GetActivePlan(ctx, sessionID)
-}
-
-func (a *planManagerEngineAdapter) UpdateStepStatus(ctx context.Context, sessionID string, stepIdx int, status domain.PlanStepStatus, result string) error {
-	return a.pm.UpdateStepStatus(ctx, sessionID, stepIdx, status, result)
-}
-
-func (a *planManagerEngineAdapter) UpdatePlanStatus(ctx context.Context, sessionID string, status domain.PlanStatus) error {
-	return a.pm.UpdatePlanStatus(ctx, sessionID, status)
-}
-
-func (a *planManagerEngineAdapter) AddStep(ctx context.Context, sessionID, description, reasoning string) error {
-	return a.pm.AddStep(ctx, sessionID, description, reasoning)
-}
-
-func (a *planManagerEngineAdapter) RemoveStep(ctx context.Context, sessionID string, stepIndex int) error {
-	return a.pm.RemoveStep(ctx, sessionID, stepIndex)
-}
-
-func (a *planManagerEngineAdapter) ModifyStep(ctx context.Context, sessionID string, stepIndex int, description, reasoning string) error {
-	return a.pm.ModifyStep(ctx, sessionID, stepIndex, description, reasoning)
-}
-
-func convertPlanManagerToEngine(pm PlanManager) react.PlanManager {
-	if pm == nil {
-		return nil
-	}
-	return &planManagerEngineAdapter{pm: pm}
 }
 
 // toolCallRecorderEngineAdapter adapts turn_executor.ToolCallRecorder to react.ToolCallRecorder

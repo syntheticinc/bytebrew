@@ -63,36 +63,6 @@ func (m *mockToolDependenciesProvider) GetDependencies(sessionID, projectKey str
 	return m.deps
 }
 
-type mockPlanManager struct{}
-
-func (m *mockPlanManager) CreatePlan(ctx context.Context, sessionID, goal string, steps []*domain.PlanStep) (*domain.Plan, error) {
-	return nil, nil
-}
-
-func (m *mockPlanManager) GetActivePlan(ctx context.Context, sessionID string) (*domain.Plan, error) {
-	return nil, nil
-}
-
-func (m *mockPlanManager) UpdateStepStatus(ctx context.Context, sessionID string, stepIdx int, status domain.PlanStepStatus, result string) error {
-	return nil
-}
-
-func (m *mockPlanManager) UpdatePlanStatus(ctx context.Context, sessionID string, status domain.PlanStatus) error {
-	return nil
-}
-
-func (m *mockPlanManager) AddStep(ctx context.Context, sessionID, description, reasoning string) error {
-	return nil
-}
-
-func (m *mockPlanManager) RemoveStep(ctx context.Context, sessionID string, stepIndex int) error {
-	return nil
-}
-
-func (m *mockPlanManager) ModifyStep(ctx context.Context, sessionID string, stepIndex int, description, reasoning string) error {
-	return nil
-}
-
 type mockContextReminderProvider struct {
 	reminder string
 	priority int
@@ -338,7 +308,6 @@ func TestEngineAdapter_ExecuteTurn_WithOptionalDeps(t *testing.T) {
 		},
 	}
 
-	mockPlan := &mockPlanManager{}
 	mockReminder := &mockContextReminderProvider{
 		reminder: "test reminder",
 		priority: 50,
@@ -352,7 +321,6 @@ func TestEngineAdapter_ExecuteTurn_WithOptionalDeps(t *testing.T) {
 		ToolResolver:     &mockToolResolver{},
 		ToolDeps:         &mockToolDependenciesProvider{},
 		ChatModel:        &mockChatModelAdapter{},
-		PlanManager:      mockPlan,
 		ContextReminders: []ContextReminderProvider{mockReminder},
 		ToolCallRecorder: mockRecorder,
 	})
@@ -370,7 +338,6 @@ func TestEngineAdapter_ExecuteTurn_WithOptionalDeps(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify optional dependencies were passed
-	assert.NotNil(t, capturedCfg.PlanManager)
 	assert.NotNil(t, capturedCfg.ContextReminders)
 	assert.Len(t, capturedCfg.ContextReminders, 1)
 	assert.NotNil(t, capturedCfg.ToolCallRecorder)

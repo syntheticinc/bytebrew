@@ -25,7 +25,6 @@ type Agent struct {
 	modelName         string
 	historyMessages   []*schema.Message
 	stepContentStore  *agents.StepContentStore
-	planManager       PlanManager
 	sessionID         string
 	agentID           string   // "supervisor" or "code-agent-{uuid}"
 	toolNames         []string // List of available tool names for system prompt injection
@@ -163,12 +162,6 @@ func NewAgent(ctx context.Context, config AgentConfig) (*Agent, error) {
 
 			// Build list of context reminder providers
 			var reminderProviders []ContextReminderProvider
-			if config.PlanManager != nil {
-				// PlanManager implements ContextReminderProvider
-				if provider, ok := config.PlanManager.(ContextReminderProvider); ok {
-					reminderProviders = append(reminderProviders, provider)
-				}
-			}
 			// Add external providers (e.g., WorkContextReminder)
 			reminderProviders = append(reminderProviders, config.ContextReminderProviders...)
 
@@ -192,8 +185,6 @@ func NewAgent(ctx context.Context, config AgentConfig) (*Agent, error) {
 			agentConfig.MessageRewriter = agents.NewContextRewriterWithLogging(
 				config.AgentConfig.MaxContextSize,
 				contextLogger,
-				config.PlanManager,
-				config.SessionID,
 			)
 		}
 
@@ -224,7 +215,6 @@ func NewAgent(ctx context.Context, config AgentConfig) (*Agent, error) {
 		modelName:         config.ModelName,
 		historyMessages:   config.HistoryMessages,
 		stepContentStore:  stepContentStore,
-		planManager:       config.PlanManager,
 		sessionID:         config.SessionID,
 		agentID:           agentID,
 		toolNames:         toolNames,
@@ -305,7 +295,6 @@ func (a *Agent) RunWithCallbacks(ctx context.Context, input string, eventCallbac
 	cb := callbacks.NewBuilder(callbacks.BuilderConfig{
 		EventCallback:    eventCallback,
 		Store:            a.stepContentStore,
-		PlanManager:      a.planManager,
 		SessionID:        a.sessionID,
 		AgentID:          a.agentID,
 		ToolCallRecorder: a.toolCallRecorder,
@@ -372,8 +361,7 @@ func (a *Agent) RunWithCallbacks(ctx context.Context, input string, eventCallbac
 		cb = callbacks.NewBuilder(callbacks.BuilderConfig{
 			EventCallback:    eventCallback,
 			Store:            a.stepContentStore,
-			PlanManager:      a.planManager,
-			SessionID:        a.sessionID,
+				SessionID:        a.sessionID,
 			AgentID:          a.agentID,
 			ToolCallRecorder: a.toolCallRecorder,
 		})
@@ -434,7 +422,6 @@ func (a *Agent) Stream(ctx context.Context, input string, callback func(chunk st
 		EventCallback:    eventCallback,
 		ChunkCallback:    wrappedCallback,
 		Store:            a.stepContentStore,
-		PlanManager:      a.planManager,
 		SessionID:        a.sessionID,
 		AgentID:          a.agentID,
 		ToolCallRecorder: a.toolCallRecorder,
@@ -508,8 +495,7 @@ func (a *Agent) Stream(ctx context.Context, input string, callback func(chunk st
 			EventCallback:    eventCallback,
 			ChunkCallback:    wrappedCallback,
 			Store:            a.stepContentStore,
-			PlanManager:      a.planManager,
-			SessionID:        a.sessionID,
+				SessionID:        a.sessionID,
 			AgentID:          a.agentID,
 			ToolCallRecorder: a.toolCallRecorder,
 		})

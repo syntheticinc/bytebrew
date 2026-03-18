@@ -46,7 +46,6 @@ type ExecutionConfig struct {
 
 	// Pass-through to react.Agent
 	ContextReminders []react.ContextReminderProvider
-	PlanManager      react.PlanManager
 	ToolCallRecorder react.ToolCallRecorder
 	ModelName        string
 	AgentConfig      *config.AgentConfig
@@ -141,7 +140,6 @@ func (e *Engine) Execute(ctx context.Context, cfg ExecutionConfig) (*ExecutionRe
 		AgentConfig:              e.buildEffectiveAgentConfig(cfg),
 		ModelName:                cfg.ModelName,
 		HistoryMessages:          historyMessages,
-		PlanManager:              cfg.PlanManager,
 		ContextReminderProviders: cfg.ContextReminders,
 		ToolCallRecorder:         cfg.ToolCallRecorder,
 		AgentID:                  cfg.AgentID,

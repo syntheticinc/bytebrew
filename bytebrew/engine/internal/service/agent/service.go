@@ -64,21 +64,9 @@ type WorkSubtaskManager interface {
 type AgentPoolManager interface{}
 
 
-// PlanManager defines interface for plan orchestration (consumer-side interface)
-type PlanManager interface {
-	CreatePlan(ctx context.Context, sessionID, goal string, steps []*domain.PlanStep) (*domain.Plan, error)
-	GetActivePlan(ctx context.Context, sessionID string) (*domain.Plan, error)
-	UpdateStepStatus(ctx context.Context, sessionID string, stepIdx int, status domain.PlanStepStatus, result string) error
-	UpdatePlanStatus(ctx context.Context, sessionID string, status domain.PlanStatus) error
-	AddStep(ctx context.Context, sessionID, description, reasoning string) error
-	RemoveStep(ctx context.Context, sessionID string, stepIndex int) error
-	ModifyStep(ctx context.Context, sessionID string, stepIndex int, description, reasoning string) error
-}
-
 // Service handles agent orchestration and flow execution
 type Service struct {
 	chatModel        ChatModel
-	planManager      PlanManager
 	taskManager      TaskManager
 	subtaskManager   WorkSubtaskManager
 	agentPool        AgentPoolManager
@@ -96,7 +84,6 @@ type Service struct {
 // Config holds configuration for Agent Service
 type Config struct {
 	ChatModel        ChatModel
-	PlanManager      PlanManager
 	TaskManager      TaskManager
 	SubtaskManager   WorkSubtaskManager
 	AgentPool        AgentPoolManager
@@ -133,7 +120,6 @@ func New(cfg Config) (*Service, error) {
 
 	return &Service{
 		chatModel:        cfg.ChatModel,
-		planManager:      cfg.PlanManager,
 		taskManager:      cfg.TaskManager,
 		subtaskManager:   cfg.SubtaskManager,
 		agentPool:        cfg.AgentPool,

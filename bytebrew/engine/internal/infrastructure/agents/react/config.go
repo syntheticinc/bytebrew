@@ -1,25 +1,11 @@
 package react
 
 import (
-	"context"
-
-	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/config"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 )
-
-// PlanManager defines interface for plan orchestration (consumer-side interface)
-type PlanManager interface {
-	CreatePlan(ctx context.Context, sessionID, goal string, steps []*domain.PlanStep) (*domain.Plan, error)
-	GetActivePlan(ctx context.Context, sessionID string) (*domain.Plan, error)
-	UpdateStepStatus(ctx context.Context, sessionID string, stepIdx int, status domain.PlanStepStatus, result string) error
-	UpdatePlanStatus(ctx context.Context, sessionID string, status domain.PlanStatus) error
-	AddStep(ctx context.Context, sessionID, description, reasoning string) error
-	RemoveStep(ctx context.Context, sessionID string, stepIndex int) error
-	ModifyStep(ctx context.Context, sessionID string, stepIndex int, description, reasoning string) error
-}
 
 // ToolCallRecorder defines interface for recording tool calls and results.
 // Consumer-side interface: defined here where it's used.
@@ -37,7 +23,6 @@ type AgentConfig struct {
 	AgentConfig              *config.AgentConfig
 	ModelName                string            // Model name for reasoning extraction
 	HistoryMessages          []*schema.Message // Conversation history (user/assistant messages)
-	PlanManager              PlanManager       // Plan manager for planning system
 	ContextReminderProviders []ContextReminderProvider // External context reminder providers (e.g., WorkContextReminder)
 	ToolCallRecorder         ToolCallRecorder  // Records tool calls for efficiency reminders
 	SequentialTools          bool   // if true, tool calls execute sequentially (not parallel)
