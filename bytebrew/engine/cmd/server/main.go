@@ -315,7 +315,7 @@ func main() {
 		// Protected endpoints
 		// Chat endpoint (SSE streaming — requires auth)
 		// ChatService adapter gets sessionRegistry/sessProcessor wired later (after they're created)
-		chatAdapter := &chatServiceAdapter{}
+		chatAdapter = &chatServiceAdapter{}
 		chatHandler := deliveryhttp.NewChatHandler(chatAdapter)
 		r.Group(func(r chi.Router) {
 			r.Use(authMW.Authenticate)

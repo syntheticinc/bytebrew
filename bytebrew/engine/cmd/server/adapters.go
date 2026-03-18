@@ -521,14 +521,25 @@ func (a *chatServiceAdapter) Chat(agentName, message, userID, sessionID string) 
 		a.sessProcessor.StartProcessing(context.Background(), sessionID)
 		a.sessionRegistry.EnqueueMessage(sessionID, message)
 
-		// Stream events until done
-		for evt := range eventCh {
-			sseEvt := convertSessionEventToSSE(evt)
-			if sseEvt != nil {
-				ch <- *sseEvt
-				if sseEvt.Type == "done" {
+		// Stream events until done (with timeout)
+		timeout := time.After(2 * time.Minute)
+		for {
+			select {
+			case evt, ok := <-eventCh:
+				if !ok {
+					ch <- deliveryhttp.SSEEvent{Type: "done", Data: `{"status":"completed"}`}
 					return
 				}
+				sseEvt := convertSessionEventToSSE(evt)
+				if sseEvt != nil {
+					ch <- *sseEvt
+					if sseEvt.Type == "done" {
+						return
+					}
+				}
+			case <-timeout:
+				ch <- deliveryhttp.SSEEvent{Type: "done", Data: `{"status":"timeout"}`}
+				return
 			}
 		}
 	}()
