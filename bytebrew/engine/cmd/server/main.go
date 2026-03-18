@@ -24,6 +24,7 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/audit"
 	mcpinfra "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/mcp"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/task"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/turn_executor"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/embedded"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure"
@@ -491,9 +492,18 @@ func main() {
 	}
 
 	// Engine components are always available (server fails to start otherwise)
+	// Use AgentRegistry as FlowProvider if available (DB agents), fallback to legacy FlowManager
+	flowProvider := turn_executor.FlowProvider(components.FlowManager)
+	if agentRegistry != nil && agentRegistry.Count() > 0 {
+		flowProvider = agentRegistry
+		slog.InfoContext(ctx, "Using AgentRegistry as FlowProvider", "agents", agentRegistry.Count())
+	} else {
+		slog.InfoContext(ctx, "Using legacy FlowManager as FlowProvider")
+	}
+
 	factory := infrastructure.NewEngineTurnExecutorFactory(
 		components.Engine,
-		components.FlowManager,
+		flowProvider,
 		components.AgentToolResolver,
 		components.ModelSelector,
 		components.AgentConfig,

@@ -16,7 +16,7 @@ import (
 // Implements grpc.TurnExecutorFactory interface (consumer-side).
 type EngineTurnExecutorFactory struct {
 	engine        *engine.Engine
-	flowManager   *agentservice.FlowManager
+	flowManager   turn_executor.FlowProvider
 	toolResolver  *tools.AgentToolResolver
 	modelSelector *llm.ModelSelector
 	agentConfig   *config.AgentConfig
@@ -33,7 +33,7 @@ type EngineTurnExecutorFactory struct {
 // NewEngineTurnExecutorFactory creates a new factory for Engine-based TurnExecutors.
 func NewEngineTurnExecutorFactory(
 	engine *engine.Engine,
-	flowManager *agentservice.FlowManager,
+	flowManager turn_executor.FlowProvider,
 	toolResolver *tools.AgentToolResolver,
 	modelSelector *llm.ModelSelector,
 	agentConfig *config.AgentConfig,

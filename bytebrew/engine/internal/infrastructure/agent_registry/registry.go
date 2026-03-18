@@ -77,6 +77,16 @@ func (r *AgentRegistry) Get(name string) (*RegisteredAgent, error) {
 	return agent, nil
 }
 
+// GetFlow implements the FlowProvider interface used by EngineAdapter and AgentPool.
+// This allows AgentRegistry to be a drop-in replacement for FlowManager.
+func (r *AgentRegistry) GetFlow(_ context.Context, flowType domain.FlowType) (*domain.Flow, error) {
+	agent, err := r.Get(string(flowType))
+	if err != nil {
+		return nil, err
+	}
+	return agent.Flow, nil
+}
+
 // List returns all registered agent names in alphabetical order.
 func (r *AgentRegistry) List() []string {
 	r.mu.RLock()
