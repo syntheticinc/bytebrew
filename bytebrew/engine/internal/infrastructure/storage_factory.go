@@ -2,106 +2,78 @@ package infrastructure
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 
-	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/repository"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/tools"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	agentservice "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/agent"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/engine"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/turn_executor"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/work"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/config"
 	einotool "github.com/cloudwego/eino/components/tool"
-	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
+	"github.com/glebarez/sqlite"
+	"fmt"
+	"os"
+	"path/filepath"
 )
 
 // storageComponents holds all storage-related components created during initialization.
 type storageComponents struct {
 	WorkManager      *work.Manager
-	SessionStorage   *persistence.SQLiteSessionStorage
+	SessionStorage   *persistence.SessionStorage
 	AgentRunStorage  agentservice.AgentRunStorage
 	ContextReminders []turn_executor.ContextReminderProvider
 }
 
-// createWorkStorage creates work DB, work manager, agent pool, session storage.
-func createWorkStorage(cfg config.Config, modelSelector agentservice.AgentModelSelector) *storageComponents {
-	workDBPath := cfg.WorkStorage.DBPath
-	if workDBPath == "" {
-		workDBPath = "./data/work.db"
-	}
-
-	workDB, err := persistence.NewWorkDB(workDBPath)
-	if err != nil {
-		slog.Error("failed to create work DB, multi-agent features disabled", "error", err)
+// createWorkStorage creates work manager, agent pool, session storage from pgDB.
+func createWorkStorage(db *gorm.DB) *storageComponents {
+	if db == nil {
+		slog.Error("no database connection, multi-agent features disabled")
 		return &storageComponents{}
 	}
-	slog.Info("work DB initialized", "db_path", workDBPath)
-
-	return initWorkComponents(workDB, modelSelector, &cfg.Agent)
+	return initWorkComponents(db)
 }
 
-// initWorkComponents initializes all work-related components from a work DB.
-func initWorkComponents(workDB *sql.DB, modelSelector agentservice.AgentModelSelector, agentCfg *config.AgentConfig) *storageComponents {
+// initWorkComponents initializes all work-related components from a GORM DB.
+func initWorkComponents(db *gorm.DB) *storageComponents {
 	ctx := context.Background()
 	result := &storageComponents{}
 
-	taskStorage, err := persistence.NewSQLiteTaskStorage(workDB)
-	if err != nil {
-		slog.Error("failed to create task storage", "error", err)
-	}
-
-	subtaskStorage, err := persistence.NewSQLiteSubtaskStorage(workDB)
-	if err != nil {
-		slog.Error("failed to create subtask storage", "error", err)
-	}
-
-	agentRunStorage, err := persistence.NewSQLiteAgentRunStorage(workDB)
-	if err != nil {
-		slog.Error("failed to create agent run storage", "error", err)
-	}
+	taskStorage := persistence.NewTaskStorage(db)
+	subtaskStorage := persistence.NewSubtaskStorage(db)
+	agentRunStorage := persistence.NewAgentRunStorage(db)
 	result.AgentRunStorage = agentRunStorage
 
-	sessionStorage, err := persistence.NewSQLiteSessionStorage(workDB)
-	if err != nil {
-		slog.Error("failed to create session storage", "error", err)
-	}
+	sessionStorage := persistence.NewSessionStorage(db)
 	result.SessionStorage = sessionStorage
 
 	// Startup cleanup: orphaned agent runs and active sessions from previous crash
-	if agentRunStorage != nil {
-		cleaned, cleanErr := agentRunStorage.CleanupOrphanedRuns(ctx)
-		if cleanErr != nil {
-			slog.Error("failed to cleanup orphaned agent runs", "error", cleanErr)
-		} else if cleaned > 0 {
-			slog.Info("cleaned up orphaned agent runs from previous crash", "count", cleaned)
-		}
+	cleaned, cleanErr := agentRunStorage.CleanupOrphanedRuns(ctx)
+	if cleanErr != nil {
+		slog.Error("failed to cleanup orphaned agent runs", "error", cleanErr)
+	} else if cleaned > 0 {
+		slog.Info("cleaned up orphaned agent runs from previous crash", "count", cleaned)
 	}
 
-	if sessionStorage != nil {
-		suspended, suspendErr := sessionStorage.SuspendActiveSessions(ctx)
-		if suspendErr != nil {
-			slog.Error("failed to suspend active sessions", "error", suspendErr)
-		} else if suspended > 0 {
-			slog.Info("suspended active sessions from previous crash", "count", suspended)
-		}
+	suspended, suspendErr := sessionStorage.SuspendActiveSessions(ctx)
+	if suspendErr != nil {
+		slog.Error("failed to suspend active sessions", "error", suspendErr)
+	} else if suspended > 0 {
+		slog.Info("suspended active sessions from previous crash", "count", suspended)
 	}
 
-	if taskStorage != nil && subtaskStorage != nil {
-		result.WorkManager = work.New(taskStorage, subtaskStorage)
-		slog.Info("work manager initialized")
+	result.WorkManager = work.New(taskStorage, subtaskStorage)
+	slog.Info("work manager initialized")
 
-		// Create context reminder for work status
-		workReminder := work.NewWorkContextReminder(result.WorkManager)
-		result.ContextReminders = append(result.ContextReminders, workReminder)
-	}
+	// Create context reminder for work status
+	workReminder := work.NewWorkContextReminder(result.WorkManager)
+	result.ContextReminders = append(result.ContextReminders, workReminder)
 
 	return result
 }
@@ -121,7 +93,7 @@ func createEngine(
 	agentPoolAdapter *agentservice.AgentPoolAdapter,
 	webSearchTool, webFetchTool einotool.InvokableTool,
 ) (*engineComponents, error) {
-	// 1. Create engine DB (snapshot + message storage)
+	// 1. Create engine DB (snapshot + message storage) — still SQLite for now
 	engineDBPath := "./data/engine.db"
 	if err := os.MkdirAll(filepath.Dir(engineDBPath), 0755); err != nil {
 		return nil, fmt.Errorf("create engine data directory: %w", err)
@@ -256,4 +228,24 @@ func createEngineTables(db *gorm.DB) error {
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_session_created ON message(created_at)`)
 
 	return nil
+}
+
+// NewRuntimeDB is a convenience function that returns the existing pgDB reference.
+// Kept for backward compatibility where a separate runtime DB handle was expected.
+func NewRuntimeDB(db *gorm.DB) *gorm.DB {
+	return db
+}
+
+// MigrateRuntimeTables runs migration for runtime-only tables.
+// Called separately from models.AutoMigrate if needed.
+func MigrateRuntimeTables(db *gorm.DB) error {
+	return db.AutoMigrate(
+		&models.RuntimeSessionModel{},
+		&models.RuntimeTaskModel{},
+		&models.RuntimeSubtaskModel{},
+		&models.RuntimeAgentRunModel{},
+		&models.RuntimeDeviceModel{},
+		&models.RuntimeConfigKV{},
+		&models.RuntimeSessionEventModel{},
+	)
 }

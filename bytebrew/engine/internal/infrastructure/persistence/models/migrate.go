@@ -2,7 +2,7 @@ package models
 
 import "gorm.io/gorm"
 
-// AutoMigrate registers all 16 engine tables and runs GORM auto-migration.
+// AutoMigrate registers all engine tables and runs GORM auto-migration.
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
 		// Config tables (11)
@@ -18,11 +18,20 @@ func AutoMigrate(db *gorm.DB) error {
 		&TriggerModel{},
 		&SettingModel{},
 
-		// Runtime tables (5)
+		// Dashboard runtime tables (5)
 		&SessionModel{},
 		&TaskModel{},
 		&SessionEventModel{},
 		&APITokenModel{},
 		&AuditLogModel{},
+
+		// Agent runtime tables (7)
+		&RuntimeSessionModel{},
+		&RuntimeTaskModel{},
+		&RuntimeSubtaskModel{},
+		&RuntimeAgentRunModel{},
+		&RuntimeDeviceModel{},
+		&RuntimeConfigKV{},
+		&RuntimeSessionEventModel{},
 	)
 }

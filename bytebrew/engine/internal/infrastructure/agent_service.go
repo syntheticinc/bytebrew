@@ -19,6 +19,7 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/errors"
 	"github.com/cloudwego/eino/components/model"
 	einotool "github.com/cloudwego/eino/components/tool"
+	"gorm.io/gorm"
 )
 
 // InfraComponents holds all infrastructure components created during initialization
@@ -27,7 +28,7 @@ type InfraComponents struct {
 	WorkManager      *work.Manager
 	AgentPool        *agentservice.AgentPool
 	AgentPoolAdapter *agentservice.AgentPoolAdapter
-	SessionStorage   *persistence.SQLiteSessionStorage
+	SessionStorage   *persistence.SessionStorage
 	ChatModel        model.ToolCallingChatModel // kept for backward compatibility
 	ModelSelector    *llm.ModelSelector
 	// Engine components
@@ -62,6 +63,7 @@ func NewAgentService(cfg config.Config) (*agentservice.Service, error) {
 type InfraComponentsConfig struct {
 	Config      config.Config
 	LicenseInfo *domain.LicenseInfo // nil = CE mode (all features enabled)
+	DB          *gorm.DB            // PostgreSQL GORM DB for runtime storage
 }
 
 // NewInfraComponents creates all infrastructure components including WorkManager and AgentPool.
@@ -82,7 +84,7 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 	modelSelector := createModelSelector(cfg, chatModel, modelName)
 
 	// 2. Create work storage, agent pool, session storage
-	storageCmp := createWorkStorage(cfg, modelSelector)
+	storageCmp := createWorkStorage(icc.DB)
 
 	var agentPool *agentservice.AgentPool
 	var agentPoolAdapter *agentservice.AgentPoolAdapter

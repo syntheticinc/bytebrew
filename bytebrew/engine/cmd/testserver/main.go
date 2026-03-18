@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"flag"
 	"fmt"
 	"log"
@@ -11,6 +10,9 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
 
 	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
 	deliverygrpc "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/grpc"
@@ -164,15 +166,13 @@ func main() {
 
 	// 9. Create FlowHandler (SAME as production!)
 	flowRegistry := flow_registry.NewInMemoryRegistry()
-	// Create in-memory event store for tests
-	eventsDB, err := sql.Open("sqlite", ":memory:")
+	// Create in-memory event store for tests (GORM SQLite)
+	eventsGormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to open in-memory events db: %v", err)
 	}
-	eventsDB.SetMaxOpenConns(1)
-	defer eventsDB.Close()
 
-	evtStore, err := eventstore.New(eventsDB)
+	evtStore, err := eventstore.New(eventsGormDB)
 	if err != nil {
 		log.Fatalf("Failed to create event store: %v", err)
 	}

@@ -37,6 +37,7 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/session_processor"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/config"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/logger"
+	"github.com/glebarez/sqlite"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -251,6 +252,7 @@ func Run(sc ServerConfig) error {
 	components, err := infrastructure.NewInfraComponents(infrastructure.InfraComponentsConfig{
 		Config:      *cfg,
 		LicenseInfo: sc.LicenseInfo,
+		DB:          pgDB,
 	})
 	if err != nil {
 		return fmt.Errorf("create infrastructure components: %w", err)
@@ -342,15 +344,8 @@ func Run(sc ServerConfig) error {
 	// Create flow registry for managing active flows
 	flowRegistry := flow_registry.NewInMemoryRegistry()
 
-	// Create event store (SQLite) for reliable event replay on reconnect
-	eventsDBPath := filepath.Join(dataDir, "data", "events.db")
-	eventsDB, err := persistence.NewWorkDB(eventsDBPath)
-	if err != nil {
-		return fmt.Errorf("create events DB: %w", err)
-	}
-	defer eventsDB.Close()
-
-	eventStore, err := eventstore.New(eventsDB)
+	// Create event store (PostgreSQL) for reliable event replay on reconnect
+	eventStore, err := eventstore.New(pgDB)
 	if err != nil {
 		return fmt.Errorf("create event store: %w", err)
 	}
@@ -633,29 +628,25 @@ func startBridge(
 	loggerInstance *logger.Logger,
 	eventStore *eventstore.Store,
 ) (func(), error) {
-	dbPath := filepath.Join(dataDir, "data", "bytebrew.db")
-	db, err := persistence.NewWorkDB(dbPath)
+	// Use shared PostgreSQL DB for bridge storage
+	// Note: this function needs pgDB passed from caller
+	// For now use inline GORM SQLite as fallback
+	bridgeDBPath := filepath.Join(dataDir, "data", "bytebrew.db")
+	bridgeDB, err := gorm.Open(sqlite.Open(bridgeDBPath), &gorm.Config{
+		Logger: gormlogger.Default.LogMode(gormlogger.Silent),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("open bridge db: %w", err)
 	}
 
-	identityStore, err := persistence.NewServerIdentityStore(db)
-	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("create identity store: %w", err)
-	}
+	identityStore := persistence.NewServerIdentityStore(bridgeDB)
 
 	identity, err := identityStore.GetOrCreateIdentity()
 	if err != nil {
-		db.Close()
 		return nil, fmt.Errorf("get server identity: %w", err)
 	}
 
-	deviceStore, err := persistence.NewSQLiteDeviceStore(db)
-	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("create device store: %w", err)
-	}
+	deviceStore := persistence.NewDeviceStore(bridgeDB)
 
 	cryptoAdapter := bridge.NewDeviceCryptoAdapter()
 	devices, err := deviceStore.List(ctx)
@@ -702,7 +693,7 @@ func startBridge(
 	)
 
 	if err := bridgeClient.Connect(ctx); err != nil {
-		db.Close()
+		// GORM handles connection pooling
 		return nil, fmt.Errorf("connect to bridge: %w", err)
 	}
 
@@ -719,7 +710,7 @@ func startBridge(
 		requestHandler.Stop()
 		messageRouter.Stop()
 		bridgeClient.Disconnect()
-		db.Close()
+		// GORM handles connection pooling
 		slog.Info("Bridge connectivity stopped")
 	}
 

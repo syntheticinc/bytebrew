@@ -272,6 +272,7 @@ func main() {
 	components, err := infrastructure.NewInfraComponents(infrastructure.InfraComponentsConfig{
 		Config:      *cfg,
 		LicenseInfo: licenseInfo,
+		DB:          pgDB,
 	})
 	if err != nil {
 		log.Fatalf("Failed to create infrastructure components: %v", err)
@@ -468,15 +469,8 @@ func main() {
 	// Create flow registry for managing active flows
 	flowRegistry := flow_registry.NewInMemoryRegistry()
 
-	// Create event store (SQLite) for reliable event replay on reconnect
-	eventsDBPath := filepath.Join(dataDir, "data", "events.db")
-	eventsDB, err := persistence.NewWorkDB(eventsDBPath)
-	if err != nil {
-		log.Fatalf("Failed to create events DB: %v", err)
-	}
-	defer eventsDB.Close()
-
-	eventStore, err := eventstore.New(eventsDB)
+	// Create event store (PostgreSQL) for reliable event replay on reconnect
+	eventStore, err := eventstore.New(pgDB)
 	if err != nil {
 		log.Fatalf("Failed to create event store: %v", err)
 	}
@@ -621,7 +615,7 @@ func main() {
 	// Start bridge connectivity if enabled
 	var bridgeCleanup func()
 	if cfg.Bridge.Enabled && cfg.Bridge.URL != "" {
-		cleanup, err := startBridge(ctx, cfg, dataDir, sessionRegistry, sessProcessor, wsHandler, loggerInstance, eventStore)
+		cleanup, err := startBridge(ctx, cfg, dataDir, sessionRegistry, sessProcessor, wsHandler, loggerInstance, eventStore, pgDB)
 		if err != nil {
 			slog.Error("Failed to start bridge connectivity", "error", err)
 		} else {
@@ -764,33 +758,23 @@ func startBridge(
 	wsHandler *ws.ConnectionHandler,
 	loggerInstance *logger.Logger,
 	eventStore *eventstore.Store,
+	bridgeDB *gorm.DB,
 ) (func(), error) {
-	// Open shared SQLite database for device store and server identity
-	dbPath := filepath.Join(dataDir, "data", "bytebrew.db")
-	db, err := persistence.NewWorkDB(dbPath)
-	if err != nil {
-		return nil, fmt.Errorf("open bridge db: %w", err)
+	db := bridgeDB
+	if db == nil {
+		return nil, fmt.Errorf("database required for bridge")
 	}
 
 	// Get or create persistent server identity (server_id + X25519 keypair)
-	identityStore, err := persistence.NewServerIdentityStore(db)
-	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("create identity store: %w", err)
-	}
+	identityStore := persistence.NewServerIdentityStore(bridgeDB)
 
 	identity, err := identityStore.GetOrCreateIdentity()
 	if err != nil {
-		db.Close()
 		return nil, fmt.Errorf("get server identity: %w", err)
 	}
 
 	// Create device store for paired mobile devices
-	deviceStore, err := persistence.NewSQLiteDeviceStore(db)
-	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("create device store: %w", err)
-	}
+	deviceStore := persistence.NewDeviceStore(db)
 
 	// Create crypto adapter and load existing device secrets
 	cryptoAdapter := bridge.NewDeviceCryptoAdapter()
@@ -852,7 +836,7 @@ func startBridge(
 
 	// Connect to bridge relay
 	if err := bridgeClient.Connect(ctx); err != nil {
-		db.Close()
+		// GORM handles connection pooling
 		return nil, fmt.Errorf("connect to bridge: %w", err)
 	}
 
@@ -871,7 +855,7 @@ func startBridge(
 		requestHandler.Stop()
 		messageRouter.Stop()
 		bridgeClient.Disconnect()
-		db.Close()
+		// GORM handles connection pooling
 		slog.Info("Bridge connectivity stopped")
 	}
 

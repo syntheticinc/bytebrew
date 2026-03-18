@@ -2,42 +2,32 @@ package persistence
 
 import (
 	"crypto/rand"
-	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"log/slog"
 
 	"github.com/google/uuid"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
 	"golang.org/x/crypto/curve25519"
+	"gorm.io/gorm"
 )
 
-const createConfigTableSQL = `
-CREATE TABLE IF NOT EXISTS config (
-	key TEXT PRIMARY KEY,
-	value TEXT NOT NULL
-);
-`
-
-// ServerIdentity holds the stable server identity (ID + X25519 keypair)
+// ServerIdentity holds the stable server identity (ID + X25519 keypair).
 type ServerIdentity struct {
 	ID         string
 	PublicKey  []byte
 	PrivateKey []byte
 }
 
-// ServerIdentityStore manages persistent server identity in SQLite
+// ServerIdentityStore manages persistent server identity in PostgreSQL (GORM).
 type ServerIdentityStore struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
-// NewServerIdentityStore creates a new identity store using the shared DB.
-func NewServerIdentityStore(db *sql.DB) (*ServerIdentityStore, error) {
-	if _, err := db.Exec(createConfigTableSQL); err != nil {
-		return nil, fmt.Errorf("create config table: %w", err)
-	}
-
-	slog.Info("server identity store initialized")
-	return &ServerIdentityStore{db: db}, nil
+// NewServerIdentityStore creates a new identity store.
+func NewServerIdentityStore(db *gorm.DB) *ServerIdentityStore {
+	slog.Info("server identity store initialized (PostgreSQL)")
+	return &ServerIdentityStore{db: db}
 }
 
 // GetOrCreateIdentity loads the existing identity or generates a new one.
@@ -113,23 +103,21 @@ func (s *ServerIdentityStore) generateAndSave() (*ServerIdentity, error) {
 		return nil, fmt.Errorf("compute public key: %w", err)
 	}
 
-	tx, err := s.db.Begin()
-	if err != nil {
-		return nil, fmt.Errorf("begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	for _, kv := range []struct{ key, value string }{
-		{"server_id", serverID},
-		{"server_public_key", hex.EncodeToString(publicKey)},
-		{"server_private_key", hex.EncodeToString(privateKey)},
-	} {
-		if _, err := tx.Exec(`INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)`, kv.key, kv.value); err != nil {
-			return nil, fmt.Errorf("save config %s: %w", kv.key, err)
+	// Use a transaction to save all config entries atomically
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		for _, kv := range []struct{ key, value string }{
+			{"server_id", serverID},
+			{"server_public_key", hex.EncodeToString(publicKey)},
+			{"server_private_key", hex.EncodeToString(privateKey)},
+		} {
+			m := models.RuntimeConfigKV{Key: kv.key, Value: kv.value}
+			if upsertErr := tx.Save(&m).Error; upsertErr != nil {
+				return fmt.Errorf("save config %s: %w", kv.key, upsertErr)
+			}
 		}
-	}
-
-	if err := tx.Commit(); err != nil {
+		return nil
+	})
+	if err != nil {
 		return nil, fmt.Errorf("commit identity: %w", err)
 	}
 
@@ -141,13 +129,13 @@ func (s *ServerIdentityStore) generateAndSave() (*ServerIdentity, error) {
 }
 
 func (s *ServerIdentityStore) getConfig(key string) (string, error) {
-	var value string
-	err := s.db.QueryRow(`SELECT value FROM config WHERE key = ?`, key).Scan(&value)
-	if err == sql.ErrNoRows {
+	var m models.RuntimeConfigKV
+	err := s.db.Where("key = ?", key).First(&m).Error
+	if err == gorm.ErrRecordNotFound {
 		return "", nil
 	}
 	if err != nil {
 		return "", fmt.Errorf("query config %s: %w", key, err)
 	}
-	return value, nil
+	return m.Value, nil
 }

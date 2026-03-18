@@ -8,14 +8,14 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence"
 )
 
-// DeviceStoreAdapter adapts persistence.SQLiteDeviceStore to the bridge.DeviceStore interface.
+// DeviceStoreAdapter adapts persistence.DeviceStore to the bridge.DeviceStore interface.
 // The bridge layer operates without request-scoped context, so we use context.Background().
 type DeviceStoreAdapter struct {
-	store *persistence.SQLiteDeviceStore
+	store *persistence.DeviceStore
 }
 
-// NewDeviceStoreAdapter creates a new adapter wrapping the given SQLiteDeviceStore.
-func NewDeviceStoreAdapter(store *persistence.SQLiteDeviceStore) *DeviceStoreAdapter {
+// NewDeviceStoreAdapter creates a new adapter wrapping the given DeviceStore.
+func NewDeviceStoreAdapter(store *persistence.DeviceStore) *DeviceStoreAdapter {
 	return &DeviceStoreAdapter{store: store}
 }
 
