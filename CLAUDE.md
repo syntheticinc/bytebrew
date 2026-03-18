@@ -4,12 +4,15 @@
 Общайся на русском языке.
 
 ## Stack
-- Backend: Go (bytebrew-srv) — gRPC server, port **60401**
-- CLI: TypeScript/Bun (bytebrew-cli) — Ink TUI
-- Cloud API: Go (bytebrew-cloud-api) — REST API
-- Cloud Web: React/Vite (bytebrew-cloud-web)
-- Mobile: Flutter (bytebrew-mobile-app)
-- Communication: gRPC (srv↔cli), REST (cloud)
+- Engine: Go (bytebrew/engine) — gRPC + REST API + SSE, PostgreSQL (GORM)
+- Admin: React SPA (bytebrew/engine/admin) — Vite + Tailwind
+- CLI: TypeScript/Bun (bytebrew/cli) — Ink TUI
+- Mobile: Flutter (bytebrew/mobile)
+- Bridge: Go (bytebrew/bridge) — WS relay
+- Cloud API: Go (bytebrew/cloud-api) — REST API
+- Cloud Web: React/Vite (bytebrew/cloud-web)
+- Code BFF: Go (bytebrew-code/server) — proxy to Engine
+- Communication: gRPC (engine↔cli), REST (cloud, admin), WS (cli/mobile)
 
 ## Architecture (CRITICAL)
 
@@ -73,19 +76,25 @@ Delivery → Usecase → Domain ← Infrastructure
 
 ## Commands
 ```bash
-# Server
-cd bytebrew-srv && go run ./cmd/server
+# Engine (server)
+cd bytebrew/engine && go run ./cmd/server
+cd bytebrew/engine && go run ./cmd/ce        # CE (no license)
+
+# Admin Dashboard
+cd bytebrew/engine/admin && npm run dev      # dev server
+cd bytebrew/engine/admin && npm run build    # production build
 
 # CLI (runtime: bun, не node — из-за bun:sqlite)
-cd bytebrew-cli && bun run build
+cd bytebrew/cli && bun run build
 
 # Tests
-cd bytebrew-srv && go test ./...
-cd bytebrew-cli && bun test
+cd bytebrew/engine && go test ./...
+cd bytebrew/cli && bun test
+cd bytebrew/engine/admin && npx vitest
 
 # Cloud
-cd bytebrew-cloud-api && go run ./cmd/server
-cd bytebrew-cloud-web && npm run build
+cd bytebrew/cloud-api && go run ./cmd/server
+cd bytebrew/cloud-web && npm run build
 
 # Kill server (read port from port file)
 cat "$APPDATA/bytebrew/server.port"  # get PID
@@ -266,7 +275,7 @@ taskkill /F /PID <pid>
 
 **НИКОГДА без `-C` на тестовый проект!**
 ```bash
-cd bytebrew-cli
+cd bytebrew/cli
 bun dist/index.js -C ../test-project ask --headless "prompt"
 ```
 
