@@ -35,6 +35,18 @@ func (r *GORMLLMProviderRepository) Create(ctx context.Context, model *models.LL
 	return nil
 }
 
+// Update updates an LLM provider model by ID.
+func (r *GORMLLMProviderRepository) Update(ctx context.Context, id uint, model *models.LLMProviderModel) error {
+	result := r.db.WithContext(ctx).Model(&models.LLMProviderModel{}).Where("id = ?", id).Updates(model)
+	if result.Error != nil {
+		return fmt.Errorf("update llm provider: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("llm provider not found: %d", id)
+	}
+	return nil
+}
+
 // Delete removes an LLM provider model by ID.
 func (r *GORMLLMProviderRepository) Delete(ctx context.Context, id uint) error {
 	result := r.db.WithContext(ctx).Delete(&models.LLMProviderModel{}, id)

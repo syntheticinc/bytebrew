@@ -136,6 +136,7 @@ type OpenRouterConfig struct {
 // AnthropicConfig holds Anthropic configuration
 type AnthropicConfig struct {
 	APIKey  string        `mapstructure:"api_key"`
+	BaseURL string        `mapstructure:"base_url"`
 	Model   string        `mapstructure:"model"`
 	Timeout time.Duration `mapstructure:"timeout"`
 }

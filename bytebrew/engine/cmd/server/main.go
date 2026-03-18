@@ -377,6 +377,15 @@ func main() {
 		r.Post("/api/v1/webhooks/{path}", func(w http.ResponseWriter, req *http.Request) {
 			webhookPath := chi.URLParam(req, "path")
 			w.Header().Set("Content-Type", "application/json")
+
+			var body struct {
+				Title       string `json:"title"`
+				Description string `json:"description"`
+				Message     string `json:"message"`
+			}
+			// Best-effort parse; empty body is fine.
+			_ = json.NewDecoder(req.Body).Decode(&body)
+
 			t := &domain.EngineTask{
 				Title:     "Webhook: " + webhookPath,
 				AgentName: "supervisor",
@@ -385,6 +394,16 @@ func main() {
 				Status:    domain.EngineTaskStatusPending,
 				Mode:      domain.TaskModeBackground,
 			}
+			if body.Title != "" {
+				t.Title = body.Title
+			}
+			if body.Description != "" {
+				t.Description = body.Description
+			}
+			if body.Message != "" && t.Description == "" {
+				t.Description = body.Message
+			}
+
 			if err := taskRepo.Create(req.Context(), t); err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte(`{"error":"` + err.Error() + `"}`))

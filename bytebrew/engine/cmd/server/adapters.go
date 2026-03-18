@@ -275,6 +275,54 @@ func (a *modelServiceAdapter) CreateModel(ctx context.Context, req deliveryhttp.
 	}, nil
 }
 
+func (a *modelServiceAdapter) UpdateModel(ctx context.Context, name string, req deliveryhttp.CreateModelRequest) (*deliveryhttp.ModelResponse, error) {
+	providers, err := a.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var targetID uint
+	for _, p := range providers {
+		if p.Name == name {
+			targetID = p.ID
+			break
+		}
+	}
+	if targetID == 0 {
+		return nil, fmt.Errorf("model not found: %s", name)
+	}
+
+	model := &models.LLMProviderModel{
+		Name:            req.Name,
+		Type:            req.Type,
+		BaseURL:         req.BaseURL,
+		ModelName:       req.ModelName,
+		APIKeyEncrypted: req.APIKey,
+	}
+	if err := a.repo.Update(ctx, targetID, model); err != nil {
+		return nil, err
+	}
+
+	// Re-read to get updated timestamps
+	updated, err := a.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range updated {
+		if p.ID == targetID {
+			return &deliveryhttp.ModelResponse{
+				ID:        p.ID,
+				Name:      p.Name,
+				Type:      p.Type,
+				BaseURL:   p.BaseURL,
+				ModelName: p.ModelName,
+				HasAPIKey: p.APIKeyEncrypted != "",
+				CreatedAt: p.CreatedAt.Format(time.RFC3339),
+			}, nil
+		}
+	}
+	return nil, fmt.Errorf("model not found after update: %s", name)
+}
+
 func (a *modelServiceAdapter) DeleteModel(ctx context.Context, name string) error {
 	// Find by name first, then delete by ID
 	providers, err := a.repo.List(ctx)
@@ -363,6 +411,78 @@ func (a *mcpServiceAdapter) CreateMCPServer(ctx context.Context, req deliveryhtt
 	return resp, nil
 }
 
+func (a *mcpServiceAdapter) UpdateMCPServer(ctx context.Context, name string, req deliveryhttp.CreateMCPServerRequest) (*deliveryhttp.MCPServerResponse, error) {
+	servers, err := a.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var targetID uint
+	for _, s := range servers {
+		if s.Name == name {
+			targetID = s.ID
+			break
+		}
+	}
+	if targetID == 0 {
+		return nil, fmt.Errorf("mcp server not found: %s", name)
+	}
+
+	model := &models.MCPServerModel{
+		Name:    req.Name,
+		Type:    req.Type,
+		Command: req.Command,
+		URL:     req.URL,
+	}
+	if len(req.Args) > 0 {
+		data, _ := json.Marshal(req.Args)
+		model.Args = string(data)
+	}
+	if len(req.EnvVars) > 0 {
+		data, _ := json.Marshal(req.EnvVars)
+		model.EnvVars = string(data)
+	}
+	if err := a.repo.Update(ctx, targetID, model); err != nil {
+		return nil, err
+	}
+
+	// Re-read to get updated state
+	updated, err := a.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range updated {
+		if s.ID == targetID {
+			resp := &deliveryhttp.MCPServerResponse{
+				ID:          s.ID,
+				Name:        s.Name,
+				Type:        s.Type,
+				Command:     s.Command,
+				URL:         s.URL,
+				IsWellKnown: s.IsWellKnown,
+				Agents:      []string{},
+			}
+			if s.Args != "" {
+				_ = json.Unmarshal([]byte(s.Args), &resp.Args)
+			}
+			if s.EnvVars != "" {
+				_ = json.Unmarshal([]byte(s.EnvVars), &resp.EnvVars)
+			}
+			if s.Runtime != nil {
+				resp.Status = &deliveryhttp.MCPStatusInfo{
+					Status:        s.Runtime.Status,
+					StatusMessage: s.Runtime.StatusMessage,
+					ToolsCount:    s.Runtime.ToolsCount,
+				}
+				if s.Runtime.ConnectedAt != nil {
+					resp.Status.ConnectedAt = s.Runtime.ConnectedAt.Format(time.RFC3339)
+				}
+			}
+			return resp, nil
+		}
+	}
+	return nil, fmt.Errorf("mcp server not found after update: %s", name)
+}
+
 func (a *mcpServiceAdapter) DeleteMCPServer(ctx context.Context, name string) error {
 	servers, err := a.repo.List(ctx)
 	if err != nil {
@@ -435,6 +555,50 @@ func (a *triggerServiceAdapter) CreateTrigger(ctx context.Context, req deliveryh
 		Enabled:     model.Enabled,
 		CreatedAt:   model.CreatedAt.Format(time.RFC3339),
 	}, nil
+}
+
+func (a *triggerServiceAdapter) UpdateTrigger(ctx context.Context, id uint, req deliveryhttp.CreateTriggerRequest) (*deliveryhttp.TriggerResponse, error) {
+	model := &models.TriggerModel{
+		Type:        req.Type,
+		Title:       req.Title,
+		AgentID:     req.AgentID,
+		Schedule:    req.Schedule,
+		WebhookPath: req.WebhookPath,
+		Description: req.Description,
+	}
+	if req.Enabled != nil {
+		model.Enabled = *req.Enabled
+	}
+	if err := a.repo.Update(ctx, id, model); err != nil {
+		return nil, err
+	}
+
+	// Re-read to get updated state with agent preloaded
+	triggers, err := a.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range triggers {
+		if t.ID == id {
+			resp := &deliveryhttp.TriggerResponse{
+				ID:          t.ID,
+				Type:        t.Type,
+				Title:       t.Title,
+				AgentID:     t.AgentID,
+				AgentName:   t.Agent.Name,
+				Schedule:    t.Schedule,
+				WebhookPath: t.WebhookPath,
+				Description: t.Description,
+				Enabled:     t.Enabled,
+				CreatedAt:   t.CreatedAt.Format(time.RFC3339),
+			}
+			if t.LastFiredAt != nil {
+				resp.LastFiredAt = t.LastFiredAt.Format(time.RFC3339)
+			}
+			return resp, nil
+		}
+	}
+	return nil, fmt.Errorf("trigger not found after update: %d", id)
 }
 
 func (a *triggerServiceAdapter) DeleteTrigger(ctx context.Context, id uint) error {

@@ -33,6 +33,7 @@ type CreateModelRequest struct {
 type ModelService interface {
 	ListModels(ctx context.Context) ([]ModelResponse, error)
 	CreateModel(ctx context.Context, req CreateModelRequest) (*ModelResponse, error)
+	UpdateModel(ctx context.Context, name string, req CreateModelRequest) (*ModelResponse, error)
 	DeleteModel(ctx context.Context, name string) error
 }
 
@@ -51,6 +52,7 @@ func (h *ModelHandler) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", h.List)
 	r.Post("/", h.Create)
+	r.Put("/{name}", h.Update)
 	r.Delete("/{name}", h.Delete)
 	return r
 }
@@ -91,6 +93,28 @@ func (h *ModelHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, model)
+}
+
+// Update handles PUT /api/v1/models/{name}.
+func (h *ModelHandler) Update(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		writeJSONError(w, http.StatusBadRequest, "model name is required")
+		return
+	}
+
+	var req CreateModelRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %s", err.Error()))
+		return
+	}
+
+	result, err := h.service.UpdateModel(r.Context(), name, req)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 // Delete handles DELETE /api/v1/models/{name}.

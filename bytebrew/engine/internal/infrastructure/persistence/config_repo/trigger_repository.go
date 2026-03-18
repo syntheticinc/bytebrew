@@ -35,6 +35,18 @@ func (r *GORMTriggerRepository) Create(ctx context.Context, model *models.Trigge
 	return nil
 }
 
+// Update updates a trigger model by ID.
+func (r *GORMTriggerRepository) Update(ctx context.Context, id uint, model *models.TriggerModel) error {
+	result := r.db.WithContext(ctx).Model(&models.TriggerModel{}).Where("id = ?", id).Updates(model)
+	if result.Error != nil {
+		return fmt.Errorf("update trigger: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("trigger not found: %d", id)
+	}
+	return nil
+}
+
 // Delete removes a trigger model by ID.
 func (r *GORMTriggerRepository) Delete(ctx context.Context, id uint) error {
 	result := r.db.WithContext(ctx).Delete(&models.TriggerModel{}, id)

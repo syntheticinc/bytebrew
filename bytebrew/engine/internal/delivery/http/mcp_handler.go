@@ -45,6 +45,7 @@ type CreateMCPServerRequest struct {
 type MCPService interface {
 	ListMCPServers(ctx context.Context) ([]MCPServerResponse, error)
 	CreateMCPServer(ctx context.Context, req CreateMCPServerRequest) (*MCPServerResponse, error)
+	UpdateMCPServer(ctx context.Context, name string, req CreateMCPServerRequest) (*MCPServerResponse, error)
 	DeleteMCPServer(ctx context.Context, name string) error
 }
 
@@ -63,6 +64,7 @@ func (h *MCPHandler) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", h.List)
 	r.Post("/", h.Create)
+	r.Put("/{name}", h.Update)
 	r.Delete("/{name}", h.Delete)
 	return r
 }
@@ -99,6 +101,28 @@ func (h *MCPHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, server)
+}
+
+// Update handles PUT /api/v1/mcp-servers/{name}.
+func (h *MCPHandler) Update(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		writeJSONError(w, http.StatusBadRequest, "mcp server name is required")
+		return
+	}
+
+	var req CreateMCPServerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %s", err.Error()))
+		return
+	}
+
+	result, err := h.service.UpdateMCPServer(r.Context(), name, req)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 // Delete handles DELETE /api/v1/mcp-servers/{name}.

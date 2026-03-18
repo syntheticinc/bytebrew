@@ -39,6 +39,7 @@ type CreateTriggerRequest struct {
 type TriggerService interface {
 	ListTriggers(ctx context.Context) ([]TriggerResponse, error)
 	CreateTrigger(ctx context.Context, req CreateTriggerRequest) (*TriggerResponse, error)
+	UpdateTrigger(ctx context.Context, id uint, req CreateTriggerRequest) (*TriggerResponse, error)
 	DeleteTrigger(ctx context.Context, id uint) error
 }
 
@@ -57,6 +58,7 @@ func (h *TriggerHandler) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", h.List)
 	r.Post("/", h.Create)
+	r.Put("/{id}", h.Update)
 	r.Delete("/{id}", h.Delete)
 	return r
 }
@@ -97,6 +99,28 @@ func (h *TriggerHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, trigger)
+}
+
+// Update handles PUT /api/v1/triggers/{id}.
+func (h *TriggerHandler) Update(w http.ResponseWriter, r *http.Request) {
+	id, err := parseIDParam(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	var req CreateTriggerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %s", err.Error()))
+		return
+	}
+
+	result, err := h.service.UpdateTrigger(r.Context(), id, req)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 // Delete handles DELETE /api/v1/triggers/{id}.

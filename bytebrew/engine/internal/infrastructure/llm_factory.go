@@ -3,6 +3,7 @@ package infrastructure
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
 
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/llm"
@@ -23,6 +24,8 @@ func createChatModel(cfg config.Config) (model.ToolCallingChatModel, error) {
 		return createOpenRouterModel(ctx, cfg.LLM.OpenRouter)
 	case "ollama":
 		return createOllamaModel(ctx, cfg.LLM.Ollama)
+	case "anthropic":
+		return createAnthropicModel(ctx, cfg.LLM.Anthropic)
 	default:
 		return nil, errors.New(errors.CodeInvalidInput, "unsupported LLM provider: "+cfg.LLM.DefaultProvider)
 	}
@@ -60,6 +63,41 @@ func createOllamaModel(ctx context.Context, cfg config.OllamaConfig) (model.Tool
 		return nil, errors.Wrap(err, errors.CodeInternal, "failed to create ollama chat model")
 	}
 	return chatModel, nil
+}
+
+func createAnthropicModel(ctx context.Context, cfg config.AnthropicConfig) (model.ToolCallingChatModel, error) {
+	baseURL := "https://api.anthropic.com/v1"
+	if cfg.BaseURL != "" {
+		baseURL = cfg.BaseURL
+	}
+
+	httpClient := &http.Client{Timeout: cfg.Timeout}
+	httpClient.Transport = &anthropicTransport{
+		base: http.DefaultTransport,
+	}
+
+	anthropicCfg := &openai.ChatModelConfig{
+		BaseURL:    baseURL,
+		Model:      cfg.Model,
+		APIKey:     cfg.APIKey,
+		HTTPClient: httpClient,
+	}
+	chatModel, err := openai.NewChatModel(ctx, anthropicCfg)
+	if err != nil {
+		return nil, errors.Wrap(err, errors.CodeInternal, "failed to create anthropic model")
+	}
+	return chatModel, nil
+}
+
+// anthropicTransport adds the required anthropic-version header to all requests.
+type anthropicTransport struct {
+	base http.RoundTripper
+}
+
+func (t *anthropicTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req = req.Clone(req.Context())
+	req.Header.Set("anthropic-version", "2023-06-01")
+	return t.base.RoundTrip(req)
 }
 
 // wrapWithDebugModel wraps the chat model with debug logging if BYTEBREW_DEBUG_MODEL is set.
