@@ -144,10 +144,10 @@ export default function AgentsPage() {
               </pre>
             </DetailSection>
 
-            {selected.tools.length > 0 && (
+            {selected.tools?.length > 0 && (
               <DetailSection title="Tools">
                 <div className="flex flex-wrap gap-1.5">
-                  {selected.tools.map((t) => (
+                  {selected.tools?.map((t) => (
                     <span key={t} className="px-2 py-0.5 bg-brand-light border border-brand-shade1 rounded text-xs text-brand-dark">
                       {t}
                     </span>
@@ -156,10 +156,10 @@ export default function AgentsPage() {
               </DetailSection>
             )}
 
-            {selected.mcp_servers.length > 0 && (
+            {selected.mcp_servers?.length > 0 && (
               <DetailSection title="MCP Servers">
                 <div className="flex flex-wrap gap-1.5">
-                  {selected.mcp_servers.map((s) => (
+                  {selected.mcp_servers?.map((s) => (
                     <span key={s} className="px-2 py-0.5 bg-purple-50 border border-purple-200 rounded text-xs text-purple-700">
                       {s}
                     </span>
@@ -168,10 +168,10 @@ export default function AgentsPage() {
               </DetailSection>
             )}
 
-            {selected.can_spawn.length > 0 && (
+            {selected.can_spawn?.length > 0 && (
               <DetailSection title="Can Spawn">
                 <div className="flex flex-wrap gap-1.5">
-                  {selected.can_spawn.map((a) => (
+                  {selected.can_spawn?.map((a) => (
                     <span key={a} className="px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
                       {a}
                     </span>
@@ -180,10 +180,10 @@ export default function AgentsPage() {
               </DetailSection>
             )}
 
-            {selected.confirm_before.length > 0 && (
+            {selected.confirm_before?.length > 0 && (
               <DetailSection title="Confirm Before">
                 <div className="flex flex-wrap gap-1.5">
-                  {selected.confirm_before.map((t) => (
+                  {selected.confirm_before?.map((t) => (
                     <span key={t} className="px-2 py-0.5 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
                       {t}
                     </span>
@@ -198,7 +198,7 @@ export default function AgentsPage() {
                 {selected.escalation.webhook_url && (
                   <DetailRow label="Webhook">{selected.escalation.webhook_url}</DetailRow>
                 )}
-                {selected.escalation.triggers.length > 0 && (
+                {selected.escalation?.triggers?.length > 0 && (
                   <DetailRow label="Triggers">{selected.escalation.triggers.join(', ')}</DetailRow>
                 )}
               </DetailSection>
