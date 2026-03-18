@@ -98,12 +98,12 @@ export default function AgentEditPage() {
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">
+      <h1 className="text-2xl font-bold text-brand-dark mb-6">
         {isNew ? 'Create Agent' : `Edit: ${name}`}
       </h1>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-btn text-sm text-red-700">
           {error}
         </div>
       )}
@@ -111,7 +111,7 @@ export default function AgentEditPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Name */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+          <label className="block text-sm font-medium text-brand-dark mb-1">Name</label>
           <input
             type="text"
             value={form.name}
@@ -120,18 +120,18 @@ export default function AgentEditPage() {
             disabled={!isNew}
             pattern="^[a-z][a-z0-9-]*$"
             placeholder="my-agent"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+            className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent disabled:bg-brand-light disabled:text-brand-shade3"
           />
-          <p className="mt-1 text-xs text-gray-500">Lowercase letters, numbers, and hyphens. Must start with a letter.</p>
+          <p className="mt-1 text-xs text-brand-shade3">Lowercase letters, numbers, and hyphens. Must start with a letter.</p>
         </div>
 
         {/* Model */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
+          <label className="block text-sm font-medium text-brand-dark mb-1">Model</label>
           <select
             value={form.model_id ?? ''}
             onChange={(e) => updateField('model_id', e.target.value ? Number(e.target.value) : undefined)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent"
           >
             <option value="">Default model</option>
             {(models ?? []).map((m) => (
@@ -144,23 +144,23 @@ export default function AgentEditPage() {
 
         {/* System Prompt */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">System Prompt</label>
+          <label className="block text-sm font-medium text-brand-dark mb-1">System Prompt</label>
           <textarea
             value={form.system_prompt}
             onChange={(e) => updateField('system_prompt', e.target.value)}
             required
             rows={10}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm font-mono focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent"
           />
         </div>
 
         {/* Kit */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Kit</label>
+          <label className="block text-sm font-medium text-brand-dark mb-1">Kit</label>
           <select
             value={form.kit ?? ''}
             onChange={(e) => updateField('kit', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent"
           >
             <option value="">None</option>
             <option value="developer">Developer</option>
@@ -170,22 +170,22 @@ export default function AgentEditPage() {
         {/* Lifecycle + Execution */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Lifecycle</label>
+            <label className="block text-sm font-medium text-brand-dark mb-1">Lifecycle</label>
             <select
               value={form.lifecycle}
               onChange={(e) => updateField('lifecycle', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent"
             >
               <option value="persistent">Persistent</option>
               <option value="spawn">Spawn</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tool Execution</label>
+            <label className="block text-sm font-medium text-brand-dark mb-1">Tool Execution</label>
             <select
               value={form.tool_execution}
               onChange={(e) => updateField('tool_execution', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent"
             >
               <option value="sequential">Sequential</option>
               <option value="parallel">Parallel</option>
@@ -196,18 +196,18 @@ export default function AgentEditPage() {
         {/* Max Steps + Max Context */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Max Steps</label>
+            <label className="block text-sm font-medium text-brand-dark mb-1">Max Steps</label>
             <input
               type="number"
               value={form.max_steps}
               onChange={(e) => updateField('max_steps', Number(e.target.value))}
               min={1}
               max={500}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Max Context Size</label>
+            <label className="block text-sm font-medium text-brand-dark mb-1">Max Context Size</label>
             <input
               type="number"
               value={form.max_context_size}
@@ -215,22 +215,22 @@ export default function AgentEditPage() {
               min={1000}
               max={200000}
               step={1000}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent"
             />
           </div>
         </div>
 
         {/* Builtin Tools */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Builtin Tools</label>
+          <label className="block text-sm font-medium text-brand-dark mb-2">Builtin Tools</label>
           <div className="flex flex-wrap gap-2">
             {BUILTIN_TOOLS.map((tool) => (
               <label
                 key={tool}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm cursor-pointer transition-colors ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn border text-sm cursor-pointer transition-colors ${
                   form.tools?.includes(tool)
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400'
+                    ? 'border-brand-accent bg-brand-accent/10 text-brand-accent'
+                    : 'border-brand-shade1 bg-white text-brand-shade3 hover:border-brand-shade2'
                 }`}
               >
                 <input
@@ -247,18 +247,18 @@ export default function AgentEditPage() {
 
         {/* MCP Servers */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">MCP Servers</label>
+          <label className="block text-sm font-medium text-brand-dark mb-2">MCP Servers</label>
           {(mcpServers ?? []).length === 0 ? (
-            <p className="text-sm text-gray-500">No MCP servers configured.</p>
+            <p className="text-sm text-brand-shade3">No MCP servers configured.</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {(mcpServers ?? []).map((s) => (
                 <label
                   key={s.name}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm cursor-pointer transition-colors ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn border text-sm cursor-pointer transition-colors ${
                     form.mcp_servers?.includes(s.name)
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400'
+                      ? 'border-brand-accent bg-brand-accent/10 text-brand-accent'
+                      : 'border-brand-shade1 bg-white text-brand-shade3 hover:border-brand-shade2'
                   }`}
                 >
                   <input
@@ -276,18 +276,18 @@ export default function AgentEditPage() {
 
         {/* Can Spawn */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Can Spawn</label>
+          <label className="block text-sm font-medium text-brand-dark mb-2">Can Spawn</label>
           {otherAgents.length === 0 ? (
-            <p className="text-sm text-gray-500">No other agents available.</p>
+            <p className="text-sm text-brand-shade3">No other agents available.</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {otherAgents.map((a) => (
                 <label
                   key={a.name}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm cursor-pointer transition-colors ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn border text-sm cursor-pointer transition-colors ${
                     form.can_spawn?.includes(a.name)
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400'
+                      ? 'border-brand-accent bg-brand-accent/10 text-brand-accent'
+                      : 'border-brand-shade1 bg-white text-brand-shade3 hover:border-brand-shade2'
                   }`}
                 >
                   <input
@@ -305,7 +305,7 @@ export default function AgentEditPage() {
 
         {/* Confirm Before */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Before (tools requiring user confirmation)</label>
+          <label className="block text-sm font-medium text-brand-dark mb-1">Confirm Before (tools requiring user confirmation)</label>
           <div className="flex gap-2 mb-2">
             <input
               type="text"
@@ -318,12 +318,12 @@ export default function AgentEditPage() {
                 }
               }}
               placeholder="Tool name..."
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent"
             />
             <button
               type="button"
               onClick={addConfirmBefore}
-              className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-sm hover:bg-gray-200"
+              className="px-3 py-2 bg-brand-light border border-brand-shade1 rounded-btn text-sm hover:bg-brand-shade1/50"
             >
               Add
             </button>
@@ -353,18 +353,18 @@ export default function AgentEditPage() {
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 pt-4 border-t">
+        <div className="flex gap-3 pt-4 border-t border-brand-shade1">
           <button
             type="submit"
             disabled={saving}
-            className="px-6 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            className="px-6 py-2 bg-brand-accent text-brand-light rounded-btn text-sm font-medium hover:bg-brand-accent-hover disabled:opacity-50 transition-colors"
           >
             {saving ? 'Saving...' : isNew ? 'Create Agent' : 'Save Changes'}
           </button>
           <button
             type="button"
             onClick={() => navigate('/agents')}
-            className="px-6 py-2 text-gray-700 border border-gray-300 rounded-md text-sm hover:bg-gray-50 transition-colors"
+            className="px-6 py-2 text-brand-dark border border-brand-shade2 rounded-btn text-sm hover:bg-brand-light transition-colors"
           >
             Cancel
           </button>

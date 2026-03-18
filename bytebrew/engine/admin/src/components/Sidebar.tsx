@@ -23,8 +23,8 @@ export default function Sidebar() {
   const { logout } = useAuth();
 
   return (
-    <aside className="w-60 bg-gray-900 text-gray-100 flex flex-col min-h-screen">
-      <div className="px-4 py-5 border-b border-gray-700">
+    <aside className="w-60 bg-brand-dark text-brand-light flex flex-col min-h-screen">
+      <div className="px-4 py-5 border-b border-brand-dark-alt">
         <h1 className="text-lg font-bold tracking-wide">ByteBrew Admin</h1>
       </div>
 
@@ -34,14 +34,14 @@ export default function Sidebar() {
             key={item.to}
             to={item.to}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              `flex items-center gap-3 px-3 py-2 rounded-btn text-sm font-medium transition-colors ${
                 isActive
-                  ? 'bg-gray-700 text-white'
-                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                  ? 'bg-brand-dark-alt text-white border-l-2 border-brand-accent'
+                  : 'text-brand-shade2 hover:bg-brand-dark-alt hover:text-white'
               }`
             }
           >
-            <span className="w-6 h-6 flex items-center justify-center bg-gray-700 rounded text-xs font-bold">
+            <span className="w-6 h-6 flex items-center justify-center bg-brand-dark-alt rounded text-xs font-bold">
               {item.icon}
             </span>
             {item.label}
@@ -49,10 +49,10 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="px-4 py-4 border-t border-gray-700">
+      <div className="px-4 py-4 border-t border-brand-dark-alt">
         <button
           onClick={logout}
-          className="w-full px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-800 rounded-md transition-colors text-left"
+          className="w-full px-3 py-2 text-sm text-brand-shade2 hover:text-white hover:bg-brand-dark-alt rounded-btn transition-colors text-left"
         >
           Logout
         </button>

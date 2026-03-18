@@ -330,6 +330,19 @@ func main() {
 			tokenHandler := deliveryhttp.NewTokenHandler(&tokenRepoAdapter{repo: apiTokenRepo})
 			r.Post("/api/v1/auth/tokens", tokenHandler.CreateToken)
 			r.Get("/api/v1/auth/tokens", tokenHandler.ListTokens)
+
+			// Settings, Models, MCP Servers (stub endpoints for admin dashboard)
+			r.Get("/api/v1/settings", stubJSONHandler(`{"byok_enabled":false,"byok_allowed_providers":[]}`))
+			r.Put("/api/v1/settings", stubJSONHandler(`{"ok":true}`))
+			r.Get("/api/v1/models", stubJSONHandler(`[]`))
+			r.Post("/api/v1/models", stubJSONHandler(`{"id":1}`))
+			r.Delete("/api/v1/models/{id}", stubJSONHandler(`{"ok":true}`))
+			r.Get("/api/v1/mcp-servers", stubJSONHandler(`[]`))
+			r.Post("/api/v1/mcp-servers", stubJSONHandler(`{"id":1}`))
+			r.Delete("/api/v1/mcp-servers/{id}", stubJSONHandler(`{"ok":true}`))
+			r.Get("/api/v1/triggers", stubJSONHandler(`[]`))
+			r.Post("/api/v1/triggers", stubJSONHandler(`{"id":1}`))
+			r.Delete("/api/v1/triggers/{id}", stubJSONHandler(`{"ok":true}`))
 			r.Delete("/api/v1/auth/tokens/{id}", tokenHandler.DeleteToken)
 		})
 
@@ -381,7 +394,7 @@ func main() {
 	factory := infrastructure.NewEngineTurnExecutorFactory(
 		components.Engine,
 		components.FlowManager,
-		components.ToolResolver,
+		components.AgentToolResolver,
 		components.ModelSelector,
 		components.AgentConfig,
 		components.WorkManager,     // taskManager (может быть nil)

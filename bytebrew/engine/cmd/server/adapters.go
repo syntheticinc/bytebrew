@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/http"
@@ -132,6 +133,14 @@ func (a *tokenRepoAdapter) Delete(ctx context.Context, id string) error {
 
 func (a *tokenRepoAdapter) VerifyToken(ctx context.Context, tokenHash string) (string, int, error) {
 	return a.repo.VerifyToken(ctx, tokenHash)
+}
+
+// stubJSONHandler returns a handler that writes a static JSON response.
+func stubJSONHandler(json string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(json))
+	}
 }
 
 // chatServiceAdapter bridges agent execution to the http.ChatService interface.

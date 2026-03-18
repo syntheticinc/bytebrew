@@ -22,34 +22,34 @@ export default function DataTable<T extends Record<string, any>>({
 }: DataTableProps<T>) {
   if (data.length === 0) {
     return (
-      <div className="text-center py-12 text-gray-500">{emptyMessage}</div>
+      <div className="text-center py-12 text-brand-shade3">{emptyMessage}</div>
     );
   }
 
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
+      <table className="min-w-full divide-y divide-brand-shade1">
+        <thead>
           <tr>
             {columns.map((col) => (
               <th
                 key={col.key}
-                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                className="px-4 py-3 text-left text-xs font-medium text-brand-shade3 uppercase tracking-wider"
               >
                 {col.header}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
+        <tbody className="bg-white divide-y divide-brand-shade1">
           {data.map((row) => (
             <tr
               key={String(row[keyField])}
               onClick={() => onRowClick?.(row)}
-              className={onRowClick ? 'cursor-pointer hover:bg-gray-50' : ''}
+              className={onRowClick ? 'cursor-pointer hover:bg-brand-light' : ''}
             >
               {columns.map((col) => (
-                <td key={col.key} className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                <td key={col.key} className="px-4 py-3 text-sm text-brand-dark whitespace-nowrap">
                   {col.render ? col.render(row) : String(row[col.key] ?? '')}
                 </td>
               ))}

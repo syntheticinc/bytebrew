@@ -60,14 +60,14 @@ export default function TasksPage() {
       key: 'source',
       header: 'Source',
       render: (row: TaskResponse) => (
-        <span className="text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded">{row.source}</span>
+        <span className="text-xs text-brand-shade3 bg-brand-light px-2 py-0.5 rounded">{row.source}</span>
       ),
     },
     {
       key: 'created_at',
       header: 'Created',
       render: (row: TaskResponse) => (
-        <span className="text-xs text-gray-500">
+        <span className="text-xs text-brand-shade3">
           {new Date(row.created_at).toLocaleString()}
         </span>
       ),
@@ -77,10 +77,10 @@ export default function TasksPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
+        <h1 className="text-2xl font-bold text-brand-dark">Tasks</h1>
         <button
           onClick={refetch}
-          className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+          className="px-4 py-2 text-sm text-brand-dark border border-brand-shade2 rounded-btn hover:bg-brand-light"
         >
           Refresh
         </button>
@@ -91,7 +91,7 @@ export default function TasksPage() {
         <select
           value={filters['status'] ?? ''}
           onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-          className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+          className="px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
         >
           <option value="">All statuses</option>
           {STATUS_OPTIONS.filter(Boolean).map((s) => (
@@ -103,7 +103,7 @@ export default function TasksPage() {
         <select
           value={filters['source'] ?? ''}
           onChange={(e) => setFilters({ ...filters, source: e.target.value })}
-          className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+          className="px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
         >
           <option value="">All sources</option>
           {SOURCE_OPTIONS.filter(Boolean).map((s) => (
@@ -117,15 +117,15 @@ export default function TasksPage() {
           placeholder="Agent name..."
           value={filters['agent_name'] ?? ''}
           onChange={(e) => setFilters({ ...filters, agent_name: e.target.value })}
-          className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+          className="px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
         />
       </div>
 
-      {loading && <div className="text-gray-500">Loading tasks...</div>}
+      {loading && <div className="text-brand-shade3">Loading tasks...</div>}
       {error && <div className="text-red-600">Error: {error}</div>}
 
       {!loading && !error && (
-        <div className="bg-white rounded-lg shadow">
+        <div className="bg-white rounded-card border border-brand-shade1">
           <DataTable
             columns={columns}
             data={tasks ?? []}
@@ -145,7 +145,7 @@ export default function TasksPage() {
           selectedTask && ['pending', 'in_progress', 'needs_input'].includes(selectedTask.status) ? (
             <button
               onClick={() => handleCancel(selectedTask.id)}
-              className="px-4 py-2 text-sm text-white bg-red-600 rounded-md hover:bg-red-700"
+              className="px-4 py-2 text-sm text-white bg-red-600 rounded-btn hover:bg-red-700"
             >
               Cancel Task
             </button>
@@ -153,48 +153,48 @@ export default function TasksPage() {
         }
       >
         {loadingDetail ? (
-          <div className="text-gray-500">Loading...</div>
+          <div className="text-brand-shade3">Loading...</div>
         ) : selectedTask ? (
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-500">Status</span>
+              <span className="text-brand-shade3">Status</span>
               <StatusBadge status={selectedTask.status} />
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-500">Agent</span>
-              <span>{selectedTask.agent_name}</span>
+              <span className="text-brand-shade3">Agent</span>
+              <span className="text-brand-dark">{selectedTask.agent_name}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-500">Source</span>
-              <span>{selectedTask.source}</span>
+              <span className="text-brand-shade3">Source</span>
+              <span className="text-brand-dark">{selectedTask.source}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-500">Mode</span>
-              <span>{selectedTask.mode}</span>
+              <span className="text-brand-shade3">Mode</span>
+              <span className="text-brand-dark">{selectedTask.mode}</span>
             </div>
             {selectedTask.description && (
               <div>
-                <span className="text-gray-500">Description</span>
-                <p className="mt-1 text-gray-700">{selectedTask.description}</p>
+                <span className="text-brand-shade3">Description</span>
+                <p className="mt-1 text-brand-dark">{selectedTask.description}</p>
               </div>
             )}
             {selectedTask.result && (
               <div>
-                <span className="text-gray-500">Result</span>
-                <pre className="mt-1 p-2 bg-gray-50 rounded text-xs whitespace-pre-wrap">
+                <span className="text-brand-shade3">Result</span>
+                <pre className="mt-1 p-2 bg-brand-light rounded-btn text-xs whitespace-pre-wrap">
                   {selectedTask.result}
                 </pre>
               </div>
             )}
             {selectedTask.error && (
               <div>
-                <span className="text-gray-500">Error</span>
-                <pre className="mt-1 p-2 bg-red-50 rounded text-xs text-red-700 whitespace-pre-wrap">
+                <span className="text-brand-shade3">Error</span>
+                <pre className="mt-1 p-2 bg-red-50 rounded-btn text-xs text-red-700 whitespace-pre-wrap">
                   {selectedTask.error}
                 </pre>
               </div>
             )}
-            <div className="flex justify-between text-xs text-gray-400">
+            <div className="flex justify-between text-xs text-brand-shade3">
               <span>Created: {new Date(selectedTask.created_at).toLocaleString()}</span>
               {selectedTask.completed_at && (
                 <span>Completed: {new Date(selectedTask.completed_at).toLocaleString()}</span>

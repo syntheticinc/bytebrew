@@ -23,8 +23,18 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!settings) return;
     const map: Record<string, string> = {};
-    for (const s of settings) {
-      map[s.key] = s.value;
+    if (Array.isArray(settings)) {
+      for (const s of settings) {
+        map[s.key] = s.value;
+      }
+    } else if (typeof settings === 'object') {
+      // Handle flat object response from stub API
+      if (settings.byok_enabled !== undefined) map['byok.enabled'] = String(settings.byok_enabled);
+      if (Array.isArray(settings.byok_allowed_providers)) {
+        map['byok.allow_openai'] = settings.byok_allowed_providers.includes('openai') ? 'true' : 'false';
+        map['byok.allow_anthropic'] = settings.byok_allowed_providers.includes('anthropic') ? 'true' : 'false';
+        map['byok.allow_ollama'] = settings.byok_allowed_providers.includes('ollama') ? 'true' : 'false';
+      }
     }
     setLocalSettings(map);
   }, [settings]);
@@ -44,30 +54,30 @@ export default function SettingsPage() {
     }
   }
 
-  if (loading) return <div className="text-gray-500">Loading settings...</div>;
+  if (loading) return <div className="text-brand-shade3">Loading settings...</div>;
   if (error) return <div className="text-red-600">Error: {error}</div>;
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
+      <h1 className="text-2xl font-bold text-brand-dark mb-6">Settings</h1>
 
       {/* BYOK Configuration */}
       <section className="mb-8">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">BYOK (Bring Your Own Key)</h2>
-        <div className="bg-white rounded-lg shadow divide-y">
+        <h2 className="text-lg font-semibold text-brand-dark mb-4">BYOK (Bring Your Own Key)</h2>
+        <div className="bg-white rounded-card border border-brand-shade1 divide-y divide-brand-shade1">
           {BYOK_KEYS.map((item) => {
             const enabled = localSettings[item.key] === 'true';
             return (
               <div key={item.key} className="flex items-center justify-between px-4 py-3">
                 <div>
-                  <div className="text-sm font-medium text-gray-900">{item.label}</div>
-                  <div className="text-xs text-gray-500">{item.description}</div>
+                  <div className="text-sm font-medium text-brand-dark">{item.label}</div>
+                  <div className="text-xs text-brand-shade3">{item.description}</div>
                 </div>
                 <button
                   onClick={() => handleToggle(item.key)}
                   disabled={savingKey === item.key}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    enabled ? 'bg-blue-600' : 'bg-gray-200'
+                    enabled ? 'bg-brand-accent' : 'bg-brand-shade2'
                   } ${savingKey === item.key ? 'opacity-50' : ''}`}
                 >
                   <span
@@ -84,8 +94,8 @@ export default function SettingsPage() {
 
       {/* General Settings */}
       <section className="mb-8">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">General</h2>
-        <div className="bg-white rounded-lg shadow divide-y">
+        <h2 className="text-lg font-semibold text-brand-dark mb-4">General</h2>
+        <div className="bg-white rounded-card border border-brand-shade1 divide-y divide-brand-shade1">
           <SettingRow
             label="Logging Level"
             settingKey="logging.level"
@@ -102,18 +112,18 @@ export default function SettingsPage() {
 
       {/* Environment Variables (read-only, masked) */}
       <section>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Security (Environment Variables)</h2>
-        <p className="text-sm text-gray-500 mb-3">
+        <h2 className="text-lg font-semibold text-brand-dark mb-4">Security (Environment Variables)</h2>
+        <p className="text-sm text-brand-shade3 mb-3">
           These values are set via environment variables and cannot be changed from the dashboard.
         </p>
-        <div className="bg-white rounded-lg shadow divide-y">
+        <div className="bg-white rounded-card border border-brand-shade1 divide-y divide-brand-shade1">
           {ENV_VARS.map((env) => (
             <div key={env.name} className="flex items-center justify-between px-4 py-3">
               <div>
-                <div className="text-sm font-mono text-gray-900">{env.name}</div>
-                <div className="text-xs text-gray-500">{env.description}</div>
+                <div className="text-sm font-mono text-brand-dark">{env.name}</div>
+                <div className="text-xs text-brand-shade3">{env.description}</div>
               </div>
-              <span className="text-sm text-gray-400 font-mono">*****</span>
+              <span className="text-sm text-brand-shade3 font-mono">*****</span>
             </div>
           ))}
         </div>
@@ -158,7 +168,7 @@ function SettingRow({
 
   return (
     <div className="flex items-center justify-between px-4 py-3">
-      <div className="text-sm font-medium text-gray-900">{label}</div>
+      <div className="text-sm font-medium text-brand-dark">{label}</div>
       <div className="flex items-center gap-2">
         {type === 'select' && options ? (
           <select
@@ -166,7 +176,7 @@ function SettingRow({
             onChange={(e) => {
               setLocalValue(e.target.value);
             }}
-            className="px-2 py-1 border border-gray-300 rounded text-sm"
+            className="px-2 py-1 bg-white border border-brand-shade1 rounded-btn text-sm focus:outline-none focus:border-brand-accent"
           >
             {options.map((o) => (
               <option key={o} value={o}>
@@ -179,14 +189,14 @@ function SettingRow({
             type="text"
             value={localValue}
             onChange={(e) => setLocalValue(e.target.value)}
-            className="px-2 py-1 border border-gray-300 rounded text-sm w-48"
+            className="px-2 py-1 bg-white border border-brand-shade1 rounded-btn text-sm w-48 focus:outline-none focus:border-brand-accent"
           />
         )}
         {localValue !== value && (
           <button
             onClick={save}
             disabled={saving}
-            className="px-3 py-1 text-xs text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50"
+            className="px-3 py-1 text-xs text-brand-light bg-brand-accent rounded-btn hover:bg-brand-accent-hover disabled:opacity-50"
           >
             {saving ? '...' : 'Save'}
           </button>

@@ -34,18 +34,18 @@ export default function AgentsPage() {
       header: 'Kit',
       render: (row: AgentInfo) =>
         row.kit ? (
-          <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium">
+          <span className="px-2 py-0.5 bg-brand-accent/10 text-brand-accent rounded text-xs font-medium">
             {row.kit}
           </span>
         ) : (
-          <span className="text-gray-400">-</span>
+          <span className="text-brand-shade3">-</span>
         ),
     },
     { key: 'tools_count', header: 'Tools' },
     {
       key: 'has_knowledge',
       header: 'Knowledge',
-      render: (row: AgentInfo) => (row.has_knowledge ? <StatusBadge status="active" /> : <span className="text-gray-400">-</span>),
+      render: (row: AgentInfo) => (row.has_knowledge ? <StatusBadge status="active" /> : <span className="text-brand-shade3">-</span>),
     },
     {
       key: 'actions',
@@ -57,7 +57,7 @@ export default function AgentsPage() {
               e.stopPropagation();
               navigate(`/agents/${row.name}/edit`);
             }}
-            className="text-blue-600 hover:text-blue-800 text-sm"
+            className="text-brand-accent hover:text-brand-accent-hover text-sm"
           >
             Edit
           </button>
@@ -75,22 +75,22 @@ export default function AgentsPage() {
     },
   ];
 
-  if (loading) return <div className="text-gray-500">Loading agents...</div>;
+  if (loading) return <div className="text-brand-shade3">Loading agents...</div>;
   if (error) return <div className="text-red-600">Error: {error}</div>;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Agents</h1>
+        <h1 className="text-2xl font-bold text-brand-dark">Agents</h1>
         <button
           onClick={() => navigate('/agents/new')}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
+          className="px-4 py-2 bg-brand-accent text-brand-light rounded-btn text-sm font-medium hover:bg-brand-accent-hover transition-colors"
         >
           Create Agent
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow">
+      <div className="bg-white rounded-card border border-brand-shade1">
         <DataTable
           columns={columns}
           data={agents ?? []}
@@ -108,22 +108,22 @@ export default function AgentsPage() {
           <>
             <button
               onClick={() => setDeleteTarget(null)}
-              className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+              className="px-4 py-2 text-sm text-brand-dark border border-brand-shade2 rounded-btn hover:bg-brand-light"
             >
               Cancel
             </button>
             <button
               onClick={handleDelete}
               disabled={deleting}
-              className="px-4 py-2 text-sm text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50"
+              className="px-4 py-2 text-sm text-white bg-red-600 rounded-btn hover:bg-red-700 disabled:opacity-50"
             >
               {deleting ? 'Deleting...' : 'Delete'}
             </button>
           </>
         }
       >
-        <p className="text-sm text-gray-600">
-          Are you sure you want to delete agent <strong>{deleteTarget}</strong>? This action cannot
+        <p className="text-sm text-brand-shade3">
+          Are you sure you want to delete agent <strong className="text-brand-dark">{deleteTarget}</strong>? This action cannot
           be undone.
         </p>
       </Modal>

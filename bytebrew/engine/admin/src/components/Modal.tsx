@@ -28,14 +28,14 @@ export default function Modal({ open, onClose, title, children, footer }: ModalP
     <dialog
       ref={dialogRef}
       onClose={onClose}
-      className="rounded-lg shadow-xl p-0 backdrop:bg-black/50 max-w-lg w-full"
+      className="rounded-card border border-brand-shade1 p-0 backdrop:bg-black/50 max-w-lg w-full"
     >
       <div className="p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+          <h2 className="text-lg font-semibold text-brand-dark">{title}</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+            className="text-brand-shade3 hover:text-brand-dark text-xl leading-none"
           >
             x
           </button>
