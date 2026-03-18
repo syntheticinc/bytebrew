@@ -346,6 +346,27 @@ func main() {
 			r.Delete("/api/v1/auth/tokens/{id}", tokenHandler.DeleteToken)
 		})
 
+		// Webhook route (public, no auth — triggered by external services)
+		r.Post("/api/v1/webhooks/{path}", func(w http.ResponseWriter, req *http.Request) {
+			webhookPath := chi.URLParam(req, "path")
+			w.Header().Set("Content-Type", "application/json")
+			t := &domain.EngineTask{
+				Title:     "Webhook: " + webhookPath,
+				AgentName: "supervisor",
+				Source:    domain.TaskSourceWebhook,
+				SourceID:  webhookPath,
+				Status:    domain.EngineTaskStatusPending,
+				Mode:      domain.TaskModeBackground,
+			}
+			if err := taskRepo.Create(req.Context(), t); err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(`{"error":"` + err.Error() + `"}`))
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
+			w.Write([]byte(fmt.Sprintf(`{"task_id":%d}`, t.ID)))
+		})
+
 		go func() {
 			if err := httpSrv.Start(); err != nil && err != http.ErrServerClosed {
 				slog.Error("HTTP server error", "error", err)

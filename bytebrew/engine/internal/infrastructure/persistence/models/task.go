@@ -22,9 +22,9 @@ type TaskModel struct {
 	StartedAt    *time.Time
 	CompletedAt  *time.Time
 
-	Session    *SessionModel `gorm:"foreignKey:SessionID"`
-	ParentTask *TaskModel    `gorm:"foreignKey:ParentTaskID"`
-	SubTasks   []TaskModel   `gorm:"foreignKey:ParentTaskID"`
+	// Session association disabled — tasks can exist without sessions (webhook, cron, API)
+	ParentTask *TaskModel  `gorm:"foreignKey:ParentTaskID"`
+	SubTasks   []TaskModel `gorm:"foreignKey:ParentTaskID"`
 }
 
 func (TaskModel) TableName() string { return "tasks" }
