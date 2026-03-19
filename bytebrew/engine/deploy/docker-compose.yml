@@ -1,0 +1,68 @@
+# ByteBrew Engine — Production Docker Compose
+# Usage: cp .env.example .env && docker compose up -d
+
+services:
+  engine:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "${ENGINE_PORT:-8443}:8443"
+    environment:
+      - DATABASE_URL=postgresql://bytebrew:${POSTGRES_PASSWORD:-bytebrew}@db:5432/bytebrew?sslmode=disable
+      - BYTEBREW_ADMIN_USER=${ADMIN_USER:-admin}
+      - BYTEBREW_ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-}
+      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      - BRIDGE_ENABLED=${BRIDGE_ENABLED:-false}
+      - BRIDGE_URL=${BRIDGE_URL:-}
+      - BRIDGE_AUTH_TOKEN=${BRIDGE_AUTH_TOKEN:-}
+    volumes:
+      - engine-data:/var/lib/bytebrew
+      - engine-logs:/var/log/bytebrew
+      - ./config.yaml:/etc/bytebrew/bytebrew.yaml:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8443/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: bytebrew
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bytebrew}
+      POSTGRES_DB: bytebrew
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bytebrew -d bytebrew"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Optional: Local LLM via Ollama
+  # Uncomment to use local models instead of cloud API
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama-data:/root/.ollama
+  #   restart: unless-stopped
+
+volumes:
+  engine-data:
+  engine-logs:
+  pg-data:
+  # ollama-data:
