@@ -468,8 +468,10 @@ func main() {
 						_ = json.Unmarshal([]byte(srv.Args), &args)
 					}
 					transport = mcpinfra.NewStdioTransport(srv.Command, args, nil)
-				case "http", "sse":
+				case "http":
 					transport = mcpinfra.NewHTTPTransport(srv.URL)
+				case "sse":
+					transport = mcpinfra.NewSSETransport(srv.URL)
 				default:
 					slog.Warn("Unknown MCP server type", "name", srv.Name, "type", srv.Type)
 					continue

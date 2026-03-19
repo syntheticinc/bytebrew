@@ -1,0 +1,261 @@
+package mcp
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"strings"
+	"sync"
+	"time"
+)
+
+// SSETransport connects to an MCP server via SSE (Server-Sent Events).
+// Per MCP spec: GET /sse for server→client events, POST /message for client→server requests.
+type SSETransport struct {
+	baseURL    string
+	client     *http.Client
+	messageURL string // discovered from SSE endpoint event
+
+	mu       sync.Mutex
+	pending  map[interface{}]chan *Response
+	cancel   context.CancelFunc
+	closed   bool
+}
+
+// NewSSETransport creates a transport for MCP SSE servers.
+// baseURL should be the SSE endpoint URL (e.g., "http://server:3001/sse").
+func NewSSETransport(baseURL string) *SSETransport {
+	return &SSETransport{
+		baseURL: baseURL,
+		client:  &http.Client{Timeout: 30 * time.Second},
+		pending: make(map[interface{}]chan *Response),
+	}
+}
+
+func (t *SSETransport) Start(ctx context.Context) error {
+	ctx, t.cancel = context.WithCancel(ctx)
+
+	// Connect to SSE endpoint
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.baseURL, nil)
+	if err != nil {
+		return fmt.Errorf("create SSE request: %w", err)
+	}
+	req.Header.Set("Accept", "text/event-stream")
+
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("connect to SSE: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return fmt.Errorf("SSE server returned %d", resp.StatusCode)
+	}
+
+	// Start reading SSE events in background
+	go t.readSSE(ctx, resp.Body)
+
+	// Wait briefly for endpoint event
+	time.Sleep(100 * time.Millisecond)
+
+	return nil
+}
+
+func (t *SSETransport) Send(ctx context.Context, req *Request) (*Response, error) {
+	t.mu.Lock()
+	if t.closed {
+		t.mu.Unlock()
+		return nil, fmt.Errorf("transport closed")
+	}
+
+	// Create response channel for this request ID
+	ch := make(chan *Response, 1)
+	t.pending[req.ID] = ch
+	t.mu.Unlock()
+
+	defer func() {
+		t.mu.Lock()
+		delete(t.pending, req.ID)
+		t.mu.Unlock()
+	}()
+
+	// POST request to message endpoint
+	msgURL := t.getMessageURL()
+	if msgURL == "" {
+		return nil, fmt.Errorf("message endpoint not discovered yet")
+	}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, msgURL, bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	httpResp, err := t.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("send message: %w", err)
+	}
+	httpResp.Body.Close()
+
+	if httpResp.StatusCode >= 400 {
+		return nil, fmt.Errorf("message endpoint returned %d", httpResp.StatusCode)
+	}
+
+	// Wait for response via SSE
+	select {
+	case resp := <-ch:
+		return resp, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(30 * time.Second):
+		return nil, fmt.Errorf("timeout waiting for SSE response")
+	}
+}
+
+func (t *SSETransport) Notify(ctx context.Context, req *Request) {
+	msgURL := t.getMessageURL()
+	if msgURL == "" {
+		return
+	}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		return
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, msgURL, bytes.NewReader(data))
+	if err != nil {
+		return
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := t.client.Do(httpReq)
+	if err != nil {
+		return
+	}
+	resp.Body.Close()
+}
+
+func (t *SSETransport) Close() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	t.closed = true
+	if t.cancel != nil {
+		t.cancel()
+	}
+
+	// Close all pending channels
+	for id, ch := range t.pending {
+		close(ch)
+		delete(t.pending, id)
+	}
+
+	return nil
+}
+
+func (t *SSETransport) getMessageURL() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.messageURL
+}
+
+func (t *SSETransport) setMessageURL(url string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// If relative URL, resolve against base
+	if strings.HasPrefix(url, "/") {
+		// Extract base from SSE URL (scheme + host)
+		base := t.baseURL
+		if idx := strings.Index(base, "://"); idx != -1 {
+			rest := base[idx+3:]
+			if slashIdx := strings.Index(rest, "/"); slashIdx != -1 {
+				base = base[:idx+3+slashIdx]
+			}
+		}
+		url = base + url
+	}
+
+	t.messageURL = url
+}
+
+// readSSE processes the SSE stream from the server.
+func (t *SSETransport) readSSE(ctx context.Context, body io.ReadCloser) {
+	defer body.Close()
+
+	scanner := bufio.NewScanner(body)
+	var eventType string
+
+	for scanner.Scan() {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		line := scanner.Text()
+
+		if line == "" {
+			eventType = ""
+			continue
+		}
+
+		if strings.HasPrefix(line, "event: ") {
+			eventType = strings.TrimPrefix(line, "event: ")
+			continue
+		}
+
+		if strings.HasPrefix(line, "data: ") {
+			data := strings.TrimPrefix(line, "data: ")
+			t.handleSSEData(eventType, data)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		slog.Warn("SSE transport: stream error", "error", err)
+	}
+}
+
+func (t *SSETransport) handleSSEData(eventType, data string) {
+	switch eventType {
+	case "endpoint":
+		// Server announces its message endpoint
+		t.setMessageURL(strings.TrimSpace(data))
+		slog.Info("SSE transport: discovered message endpoint", "url", data)
+
+	case "message":
+		// JSON-RPC response
+		var resp Response
+		if err := json.Unmarshal([]byte(data), &resp); err != nil {
+			slog.Warn("SSE transport: failed to parse response", "error", err)
+			return
+		}
+
+		t.mu.Lock()
+		if ch, ok := t.pending[resp.ID]; ok {
+			ch <- &resp
+		}
+		t.mu.Unlock()
+
+	default:
+		slog.Debug("SSE transport: unknown event", "type", eventType, "data", data[:min(len(data), 100)])
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
