@@ -123,12 +123,14 @@ export function ChatPage() {
       setSelectedAgent(name);
       setSearchParams({ agent: name });
       sessionStorage.setItem('bytebrew_last_agent', name);
+      setSidebarOpen(false);
     },
     [setSearchParams],
   );
 
   const handleSelectSession = useCallback((id: string) => {
     setActiveSessionId(id);
+    setSidebarOpen(false);
   }, []);
 
   const handleNewSession = useCallback(() => {
@@ -210,11 +212,24 @@ export function ChatPage() {
   }, [clear]);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <div className="flex h-screen bg-brand-dark">
+      {/* Mobile backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="flex w-60 flex-shrink-0 flex-col border-r border-brand-shade3/15 bg-brand-dark">
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-brand-shade3/15 bg-brand-dark transition-transform duration-200
+        md:relative md:translate-x-0 md:flex-shrink-0
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
         {/* Logo + Logout */}
         <div className="flex items-center justify-between border-b border-brand-shade3/15 px-4 py-3">
           <h1 className="text-sm font-bold text-brand-light">
@@ -291,7 +306,16 @@ export function ChatPage() {
       {/* Main */}
       <main className="flex flex-1 flex-col">
         {/* Header */}
-        <header className="flex items-center border-b border-brand-shade3/15 px-6 py-3">
+        <header className="flex items-center border-b border-brand-shade3/15 px-4 py-3 md:px-6">
+          {/* Mobile hamburger */}
+          <button
+            className="mr-3 text-brand-shade3 transition-colors hover:text-brand-light md:hidden"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-brand-accent" />
             <span className="text-sm font-medium text-brand-light">

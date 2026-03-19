@@ -674,16 +674,23 @@ func (a *chatServiceAdapter) Chat(agentName, message, userID, sessionID string) 
 	if sessionID == "" {
 		sessionID = fmt.Sprintf("rest-%d", time.Now().UnixNano())
 	}
-	a.sessionRegistry.CreateSession(sessionID, "", userID, "", "", agentName)
 
-	// Persist session to DB for query by web-client
-	if a.sessionRepo != nil {
-		_ = a.sessionRepo.Create(context.Background(), &models.SessionModel{
-			ID:        sessionID,
-			AgentName: agentName,
-			UserID:    userID,
-			Status:    "active",
-		})
+	// Reuse existing session or create new one
+	if !a.sessionRegistry.HasSession(sessionID) {
+		a.sessionRegistry.CreateSession(sessionID, "", userID, "", "", agentName)
+
+		// Persist session to DB for query by web-client
+		if a.sessionRepo != nil {
+			_ = a.sessionRepo.Create(context.Background(), &models.SessionModel{
+				ID:        sessionID,
+				AgentName: agentName,
+				UserID:    userID,
+				Status:    "active",
+			})
+		}
+	} else if a.sessionRepo != nil {
+		// Touch updated_at for existing session
+		_ = a.sessionRepo.TouchUpdatedAt(context.Background(), sessionID)
 	}
 
 	// Subscribe to SSE events from session
