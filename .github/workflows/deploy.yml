@@ -4,9 +4,9 @@ on:
   push:
     branches: [main]
     paths:
-      - 'bytebrew-cloud-api/**'
-      - 'bytebrew-cloud-web/**'
-      - 'bytebrew-bridge/**'
+      - 'bytebrew/cloud-api/**'
+      - 'bytebrew/cloud-web/**'
+      - 'bytebrew/bridge/**'
       - 'deploy/**'
       - '.github/workflows/deploy.yml'
 
@@ -32,13 +32,13 @@ jobs:
 
       - name: Build API binary
         run: |
-          cd bytebrew-cloud-api
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../build/bytebrew-cloud-api ./cmd/server
+          cd bytebrew/cloud-api
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../../build/bytebrew-cloud-api ./cmd/server
 
       - name: Build Bridge binary
         run: |
-          cd bytebrew-bridge
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../build/bytebrew-bridge ./cmd/bridge
+          cd bytebrew/bridge
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../../build/bytebrew-bridge ./cmd/bridge
 
       # --- Build Frontend ---
       - uses: actions/setup-node@v4
@@ -46,10 +46,14 @@ jobs:
           node-version: '22'
 
       - name: Build frontend
+        env:
+          VITE_API_URL: https://api.bytebrew.ai
+          VITE_SHOW_EE_PRICING: ''
+          VITE_SHOW_CODE_SITE: ''
         run: |
-          cd bytebrew-cloud-web
+          cd bytebrew/cloud-web
           npm ci
-          VITE_API_URL=https://api.bytebrew.ai npm run build
+          npm run build
 
       # --- Upload artifacts ---
       - name: Upload API binary
@@ -70,14 +74,16 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: frontend-bundle
-          path: bytebrew-cloud-web/dist/
+          path: bytebrew/cloud-web/dist/
           retention-days: 1
 
       - name: Upload deploy config
         uses: actions/upload-artifact@v4
         with:
           name: deploy-config
-          path: deploy/config.production.yaml
+          path: |
+            deploy/config.production.yaml
+            deploy/Caddyfile
           retention-days: 1
 
   deploy:
@@ -100,7 +106,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: frontend-bundle
-          path: bytebrew-cloud-web/dist/
+          path: bytebrew/cloud-web/dist/
 
       - name: Download deploy config
         uses: actions/download-artifact@v4
@@ -126,7 +132,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: deploy
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: "build/bytebrew-cloud-api,build/bytebrew-bridge,bytebrew-cloud-web/dist/*,deploy/config.production.yaml"
+          source: "build/bytebrew-cloud-api,build/bytebrew-bridge,bytebrew/cloud-web/dist/*,deploy/config.production.yaml"
           target: "/tmp/bytebrew-deploy"
 
       - name: Configure secrets
@@ -178,7 +184,14 @@ jobs:
             sudo mv /tmp/bytebrew-deploy/build/bytebrew-bridge /usr/local/bin/bytebrew-bridge
             sudo chmod +x /usr/local/bin/bytebrew-bridge
             sudo rm -rf /var/www/bytebrew-cloud-web
-            sudo mv /tmp/bytebrew-deploy/bytebrew-cloud-web/dist /var/www/bytebrew-cloud-web
+            sudo mv /tmp/bytebrew-deploy/bytebrew/cloud-web/dist /var/www/bytebrew-cloud-web
+
+            # Update Caddy config if changed
+            if [ -f /tmp/bytebrew-deploy/deploy/Caddyfile ]; then
+              sudo cp /tmp/bytebrew-deploy/deploy/Caddyfile /etc/caddy/Caddyfile
+              sudo systemctl reload caddy
+            fi
+
             sudo systemctl start bytebrew-cloud-api
             sudo systemctl start bytebrew-bridge
             rm -rf /tmp/bytebrew-deploy

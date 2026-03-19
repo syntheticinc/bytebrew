@@ -1,10 +1,19 @@
 @import "tailwindcss";
 
-:root {
-  --color-primary: #6366f1;
-  --color-primary-hover: #4f46e5;
+@theme {
+  --color-brand-accent: #D7513E;
+  --color-brand-accent-hover: #C04635;
+  --color-brand-dark: #111111;
+  --color-brand-dark-alt: #1F1F1F;
+  --color-brand-light: #F7F8F1;
+  --color-brand-shade1: #DFD8D0;
+  --color-brand-shade2: #CBC9BC;
+  --color-brand-shade3: #87867F;
+  --font-mono: "IBM Plex Mono", monospace;
+  --radius-card: 12px;
+  --radius-btn: 10px;
 }
 
 body {
-  @apply bg-gray-950 text-gray-100 antialiased;
+  @apply bg-brand-dark text-brand-light antialiased;
 }

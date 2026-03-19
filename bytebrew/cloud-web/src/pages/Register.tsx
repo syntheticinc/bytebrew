@@ -31,7 +31,7 @@ export function RegisterPage() {
     try {
       const res = await registerApi(email, password);
       login(res.access_token, res.refresh_token, email);
-      window.location.href = '/billing';
+      window.location.href = '/dashboard';
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -45,20 +45,20 @@ export function RegisterPage() {
   return (
     <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-white text-center">Sign Up</h1>
-        <p className="mt-2 text-sm text-gray-400 text-center">
+        <h1 className="text-2xl font-bold text-brand-light text-center">Sign Up</h1>
+        <p className="mt-2 text-sm text-brand-shade2 text-center">
           Create your account to get started.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">
           {error && (
-            <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
+            <div className="rounded-[10px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
               {error}
             </div>
           )}
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
+            <label htmlFor="email" className="block text-sm font-medium text-brand-shade2 mb-1">
               Email
             </label>
             <input
@@ -67,13 +67,13 @@ export function RegisterPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full rounded-[10px] border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
               placeholder="you@example.com"
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">
+            <label htmlFor="password" className="block text-sm font-medium text-brand-shade2 mb-1">
               Password
             </label>
             <input
@@ -82,7 +82,7 @@ export function RegisterPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full rounded-[10px] border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
               placeholder="At least 8 characters"
             />
           </div>
@@ -90,7 +90,7 @@ export function RegisterPage() {
           <div>
             <label
               htmlFor="confirmPassword"
-              className="block text-sm font-medium text-gray-300 mb-1"
+              className="block text-sm font-medium text-brand-shade2 mb-1"
             >
               Confirm Password
             </label>
@@ -100,7 +100,7 @@ export function RegisterPage() {
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full rounded-[10px] border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
               placeholder="Repeat your password"
             />
           </div>
@@ -108,23 +108,23 @@ export function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-indigo-600 py-2.5 text-sm font-medium text-white hover:bg-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full rounded-[10px] bg-brand-accent py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Creating account...' : 'Create Account'}
           </button>
         </form>
 
-        <p className="mt-4 text-center text-xs text-gray-500">
+        <p className="mt-4 text-center text-xs text-brand-shade3">
           By creating an account, you agree to our{' '}
-          <Link to="/terms" className="text-indigo-400 hover:text-indigo-300">
+          <Link to="/terms" className="text-brand-accent hover:text-brand-accent-hover">
             Terms of Service
           </Link>
           .
         </p>
 
-        <p className="mt-6 text-center text-sm text-gray-400">
+        <p className="mt-6 text-center text-sm text-brand-shade2">
           Already have an account?{' '}
-          <Link to="/login" className="text-indigo-400 hover:text-indigo-300">
+          <Link to="/login" className="text-brand-accent hover:text-brand-accent-hover">
             Sign in
           </Link>
         </p>

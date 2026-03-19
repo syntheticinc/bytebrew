@@ -15,6 +15,10 @@ import { TeamPage } from '../pages/Team';
 import { ForgotPasswordPage } from '../pages/ForgotPassword';
 import { ResetPasswordPage } from '../pages/ResetPassword';
 import { TermsPage } from '../pages/Terms';
+import { PricingPage } from '../pages/Pricing';
+import { DownloadPage } from '../pages/Download';
+import { PrivacyPage } from '../pages/Privacy';
+import { DocsPage } from '../pages/Docs';
 
 const rootRoute = createRootRoute({
   component: RootLayout,
@@ -92,6 +96,30 @@ const termsRoute = createRoute({
   component: TermsPage,
 });
 
+const pricingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/pricing',
+  component: PricingPage,
+});
+
+const downloadRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/download',
+  component: DownloadPage,
+});
+
+const privacyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/privacy',
+  component: PrivacyPage,
+});
+
+const docsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/docs',
+  component: DocsPage,
+});
+
 export const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -105,4 +133,8 @@ export const routeTree = rootRoute.addChildren([
   forgotPasswordRoute,
   resetPasswordRoute,
   termsRoute,
+  pricingRoute,
+  downloadRoute,
+  privacyRoute,
+  docsRoute,
 ]);

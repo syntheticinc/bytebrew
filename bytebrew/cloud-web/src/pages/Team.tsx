@@ -13,8 +13,23 @@ import { ApiError } from '../api/client';
 import { useAuth } from '../lib/auth';
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
+import { SHOW_CODE_SITE } from '../lib/feature-flags';
 
 export function TeamPage() {
+  if (!SHOW_CODE_SITE) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-20 text-center">
+        <h1 className="text-2xl font-bold text-brand-light">Feature Not Available</h1>
+        <p className="mt-4 text-brand-shade2">
+          Team management is not available in the current version.
+        </p>
+        <Link to="/dashboard" className="mt-6 inline-block text-brand-accent hover:text-brand-accent-hover">
+          &larr; Back to Dashboard
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <AuthGuard>
       <TeamContent />
@@ -31,8 +46,8 @@ function TeamContent() {
   if (usageQuery.isLoading) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-10">
-        <h1 className="text-2xl font-bold text-white">Team</h1>
-        <div className="mt-8 text-gray-400">Loading...</div>
+        <h1 className="text-2xl font-bold text-brand-light">Team</h1>
+        <div className="mt-8 text-brand-shade2">Loading...</div>
       </div>
     );
   }
@@ -47,18 +62,18 @@ function TeamContent() {
 function UpgradePrompt() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-white">Team</h1>
-      <div className="mt-8 rounded-xl border border-gray-800 bg-gray-900/50 p-6 text-center">
-        <h2 className="text-lg font-semibold text-white">
+      <h1 className="text-2xl font-bold text-brand-light">Team</h1>
+      <div className="mt-8 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5 text-center">
+        <h2 className="text-lg font-semibold text-brand-light">
           Upgrade to Teams
         </h2>
-        <p className="mt-2 text-sm text-gray-400">
+        <p className="mt-2 text-sm text-brand-shade2">
           Team management is available on the Teams plan. Upgrade to invite
           members and manage seats.
         </p>
         <Link
           to="/billing"
-          className="mt-4 inline-block rounded-lg bg-indigo-600 px-6 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors"
+          className="mt-4 inline-block rounded-[10px] bg-brand-accent px-6 py-2 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
         >
           View Plans
         </Link>
@@ -82,8 +97,8 @@ function TeamManager() {
   if (teamQuery.isLoading) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-10">
-        <h1 className="text-2xl font-bold text-white">Team</h1>
-        <div className="mt-8 text-gray-400">Loading team...</div>
+        <h1 className="text-2xl font-bold text-brand-light">Team</h1>
+        <div className="mt-8 text-brand-shade2">Loading team...</div>
       </div>
     );
   }
@@ -98,8 +113,8 @@ function TeamManager() {
   if (teamQuery.error) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-10">
-        <h1 className="text-2xl font-bold text-white">Team</h1>
-        <div className="mt-4 rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
+        <h1 className="text-2xl font-bold text-brand-light">Team</h1>
+        <div className="mt-4 rounded-[10px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
           Failed to load team data
         </div>
       </div>
@@ -142,18 +157,18 @@ function CreateTeamView() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-white">Team</h1>
+      <h1 className="text-2xl font-bold text-brand-light">Team</h1>
 
-      <div className="mt-8 rounded-xl border border-gray-800 bg-gray-900/50 p-6">
-        <h2 className="text-base font-semibold text-white">
+      <div className="mt-8 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
+        <h2 className="text-base font-semibold text-brand-light">
           Create Your Team
         </h2>
-        <p className="mt-2 text-sm text-gray-400">
+        <p className="mt-2 text-sm text-brand-shade2">
           Set up your team to invite members and manage seats.
         </p>
 
         {error && (
-          <div className="mt-4 rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
+          <div className="mt-4 rounded-[10px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
             {error}
           </div>
         )}
@@ -164,12 +179,12 @@ function CreateTeamView() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Team name"
-            className="flex-1 rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-sm text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none"
+            className="flex-1 rounded-[10px] border border-brand-shade3/30 bg-brand-dark px-4 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none"
           />
           <button
             type="submit"
             disabled={mutation.isPending || !name.trim()}
-            className="rounded-lg bg-indigo-600 px-6 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
+            className="rounded-[10px] bg-brand-accent px-6 py-2 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors disabled:opacity-50"
           >
             {mutation.isPending ? 'Creating...' : 'Create Team'}
           </button>
@@ -190,22 +205,22 @@ function TeamView({
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">{team.team_name}</h1>
-        <span className="text-sm text-gray-400">
+        <h1 className="text-2xl font-bold text-brand-light">{team.team_name}</h1>
+        <span className="text-sm text-brand-shade2">
           {usedSeats} active {usedSeats === 1 ? 'seat' : 'seats'} · $30/seat/month
         </span>
       </div>
 
       {/* Members */}
-      <div className="mt-8 rounded-xl border border-gray-800 bg-gray-900/50 p-6">
-        <h2 className="text-base font-semibold text-white">Members</h2>
+      <div className="mt-8 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
+        <h2 className="text-base font-semibold text-brand-light">Members</h2>
         <MembersTable members={team.members} />
       </div>
 
       {/* Pending Invites */}
       {pendingInvites.length > 0 && (
-        <div className="mt-6 rounded-xl border border-gray-800 bg-gray-900/50 p-6">
-          <h2 className="text-base font-semibold text-white">
+        <div className="mt-6 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
+          <h2 className="text-base font-semibold text-brand-light">
             Pending Invites
           </h2>
           <PendingInvitesList invites={pendingInvites} />
@@ -213,8 +228,8 @@ function TeamView({
       )}
 
       {/* Invite Form */}
-      <div className="mt-6 rounded-xl border border-gray-800 bg-gray-900/50 p-6">
-        <h2 className="text-base font-semibold text-white">Invite Member</h2>
+      <div className="mt-6 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
+        <h2 className="text-base font-semibold text-brand-light">Invite Member</h2>
         <InviteForm />
       </div>
     </div>
@@ -245,7 +260,7 @@ function MembersTable({ members }: { members: TeamMember[] }) {
   return (
     <div className="mt-4">
       {error && (
-        <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
+        <div className="mb-4 rounded-[10px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
           {error}
         </div>
       )}
@@ -253,12 +268,12 @@ function MembersTable({ members }: { members: TeamMember[] }) {
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-gray-800">
-              <th className="pb-3 font-medium text-gray-400">Email</th>
-              <th className="pb-3 font-medium text-gray-400">Role</th>
-              <th className="pb-3 font-medium text-gray-400">Joined</th>
+            <tr className="border-b border-brand-shade3/15">
+              <th className="pb-3 font-medium text-brand-shade2">Email</th>
+              <th className="pb-3 font-medium text-brand-shade2">Role</th>
+              <th className="pb-3 font-medium text-brand-shade2">Joined</th>
               {isAdmin && (
-                <th className="pb-3 font-medium text-gray-400 text-right">
+                <th className="pb-3 font-medium text-brand-shade2 text-right">
                   Actions
                 </th>
               )}
@@ -273,12 +288,12 @@ function MembersTable({ members }: { members: TeamMember[] }) {
               return (
                 <tr
                   key={member.id}
-                  className="border-b border-gray-800/50 last:border-0"
+                  className="border-b border-brand-shade3/10 last:border-0"
                 >
-                  <td className="py-3 text-gray-200">
+                  <td className="py-3 text-brand-shade1">
                     {member.email}
                     {isSelf && (
-                      <span className="ml-2 text-xs text-gray-500">
+                      <span className="ml-2 text-xs text-brand-shade3">
                         (you)
                       </span>
                     )}
@@ -288,13 +303,13 @@ function MembersTable({ members }: { members: TeamMember[] }) {
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                         member.role === 'admin'
                           ? 'bg-purple-600/20 text-purple-400'
-                          : 'bg-gray-700/50 text-gray-300'
+                          : 'bg-brand-shade3/15 text-brand-shade2'
                       }`}
                     >
                       {member.role}
                     </span>
                   </td>
-                  <td className="py-3 text-gray-400">
+                  <td className="py-3 text-brand-shade2">
                     {new Date(member.joined_at).toLocaleDateString()}
                   </td>
                   {isAdmin && (
@@ -326,11 +341,11 @@ function PendingInvitesList({ invites }: { invites: TeamInvite[] }) {
       {invites.map((invite) => (
         <div
           key={invite.id}
-          className="flex items-center justify-between rounded-lg bg-gray-800/50 border border-gray-700 p-3"
+          className="flex items-center justify-between rounded-[10px] bg-brand-dark border border-brand-shade3/20 p-3"
         >
           <div>
-            <p className="text-sm text-gray-200">{invite.email}</p>
-            <p className="text-xs text-gray-500">
+            <p className="text-sm text-brand-shade1">{invite.email}</p>
+            <p className="text-xs text-brand-shade3">
               Expires{' '}
               {new Date(invite.expires_at).toLocaleDateString()}
             </p>
@@ -380,13 +395,13 @@ function InviteForm() {
   return (
     <div className="mt-4">
       {error && (
-        <div className="mb-3 rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
+        <div className="mb-3 rounded-[10px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="mb-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3 text-sm text-emerald-400">
+        <div className="mb-3 rounded-[10px] bg-emerald-500/10 border border-emerald-500/20 p-3 text-sm text-emerald-400">
           {success}
         </div>
       )}
@@ -397,17 +412,17 @@ function InviteForm() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="colleague@example.com"
-          className="flex-1 rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-sm text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none"
+          className="flex-1 rounded-[10px] border border-brand-shade3/30 bg-brand-dark px-4 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none"
         />
         <button
           type="submit"
           disabled={mutation.isPending || !email.trim()}
-          className="rounded-lg bg-indigo-600 px-6 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
+          className="rounded-[10px] bg-brand-accent px-6 py-2 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors disabled:opacity-50"
         >
           {mutation.isPending ? 'Sending...' : 'Send Invite'}
         </button>
       </form>
-      <p className="mt-2 text-xs text-gray-500">
+      <p className="mt-2 text-xs text-brand-shade3">
         Adding a member will add $30/month to your bill (prorated)
       </p>
     </div>

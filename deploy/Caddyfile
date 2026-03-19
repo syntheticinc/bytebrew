@@ -28,3 +28,17 @@ api.bytebrew.ai {
 bridge.bytebrew.ai {
     reverse_proxy h2c://127.0.0.1:8443
 }
+
+code.bytebrew.ai {
+    redir https://bytebrew.ai{uri}
+}
+
+get.bytebrew.ai {
+    root * /var/www/releases
+    file_server browse
+    encode gzip
+}
+
+docs.bytebrew.ai {
+    redir https://bytebrew.ai{uri}
+}

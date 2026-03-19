@@ -73,14 +73,14 @@ export function PricingTable({ onSelectPlan, currentTier }: PricingTableProps) {
       {/* Period toggle */}
       <div className="flex items-center justify-center gap-3 mb-10">
         <span
-          className={`text-sm ${period === 'monthly' ? 'text-white font-medium' : 'text-gray-400'}`}
+          className={`text-sm ${period === 'monthly' ? 'text-brand-light font-medium' : 'text-brand-shade2'}`}
         >
           Monthly
         </span>
         <button
           onClick={() => setPeriod(period === 'monthly' ? 'annual' : 'monthly')}
           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-            period === 'annual' ? 'bg-indigo-600' : 'bg-gray-600'
+            period === 'annual' ? 'bg-brand-accent' : 'bg-brand-shade3'
           }`}
         >
           <span
@@ -90,7 +90,7 @@ export function PricingTable({ onSelectPlan, currentTier }: PricingTableProps) {
           />
         </button>
         <span
-          className={`text-sm ${period === 'annual' ? 'text-white font-medium' : 'text-gray-400'}`}
+          className={`text-sm ${period === 'annual' ? 'text-brand-light font-medium' : 'text-brand-shade2'}`}
         >
           Annual
           <span className="ml-1 text-emerald-400 text-xs font-medium">Save ~17%</span>
@@ -113,22 +113,22 @@ export function PricingTable({ onSelectPlan, currentTier }: PricingTableProps) {
           return (
             <div
               key={plan.id}
-              className={`rounded-xl border p-6 flex flex-col ${
+              className={`rounded-[12px] border p-5 flex flex-col ${
                 plan.highlighted
-                  ? 'border-indigo-500 bg-gray-900/80 ring-1 ring-indigo-500/50'
-                  : 'border-gray-700 bg-gray-900/50'
+                  ? 'border-brand-accent bg-brand-dark-alt ring-1 ring-brand-accent/50'
+                  : 'border-brand-shade3/20 bg-brand-dark-alt'
               }`}
             >
-              <h3 className="text-lg font-semibold text-white">{plan.name}</h3>
-              <p className="mt-1 text-sm text-gray-400">{plan.description}</p>
+              <h3 className="text-lg font-semibold text-brand-light">{plan.name}</h3>
+              <p className="mt-1 text-sm text-brand-shade2">{plan.description}</p>
 
               <div className="mt-4">
-                <span className="text-3xl font-bold text-white">{priceLabel}</span>
+                <span className="text-3xl font-bold text-brand-light">{priceLabel}</span>
               </div>
 
               <ul className="mt-6 space-y-2 flex-1">
                 {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2 text-sm text-gray-300">
+                  <li key={feature} className="flex items-start gap-2 text-sm text-brand-shade2">
                     <svg
                       className="h-4 w-4 mt-0.5 text-emerald-400 shrink-0"
                       fill="none"
@@ -150,12 +150,12 @@ export function PricingTable({ onSelectPlan, currentTier }: PricingTableProps) {
               <button
                 onClick={() => onSelectPlan(plan.id === 'trial' ? 'personal' : plan.id, period)}
                 disabled={isCurrent}
-                className={`mt-6 w-full rounded-lg py-2.5 text-sm font-medium transition-colors ${
+                className={`mt-6 w-full rounded-[10px] py-2.5 text-sm font-medium transition-colors ${
                   isCurrent
-                    ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                    ? 'bg-brand-shade3/20 text-brand-shade3 cursor-not-allowed'
                     : plan.highlighted
-                      ? 'bg-indigo-600 text-white hover:bg-indigo-500'
-                      : 'bg-gray-700 text-white hover:bg-gray-600'
+                      ? 'bg-brand-accent text-white hover:bg-brand-accent-hover'
+                      : 'bg-brand-shade3/20 text-brand-light hover:bg-brand-shade3/30'
                 }`}
               >
                 {isCurrent ? 'Current Plan' : plan.id === 'trial' ? 'Start Trial' : 'Upgrade'}

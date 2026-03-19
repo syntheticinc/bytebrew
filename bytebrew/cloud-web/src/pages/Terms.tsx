@@ -1,15 +1,17 @@
+import { Link } from '@tanstack/react-router';
+
 export function TermsPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-white">Terms of Service</h1>
-      <p className="mt-2 text-sm text-gray-400">Last updated: February 23, 2026</p>
+      <h1 className="text-2xl font-bold text-brand-light">Terms of Service</h1>
+      <p className="mt-2 text-sm text-brand-shade2">Last updated: March 2026</p>
 
-      <div className="mt-8 space-y-8 text-sm text-gray-300 leading-relaxed">
+      <div className="mt-8 space-y-8 text-sm text-brand-shade2 leading-relaxed">
         <div>
-          <h2 className="text-lg font-semibold text-white">1. Introduction</h2>
+          <h2 className="text-lg font-semibold text-brand-light">1. Introduction</h2>
           <p className="mt-2">
             Welcome to ByteBrew Cloud, a software-as-a-service platform that provides AI agent
-            capabilities including LLM proxy, licensing, and team collaboration tools. These Terms of
+            engine platform including agent orchestration, tool management, and cloud services. These Terms of
             Service ("Terms") govern your access to and use of ByteBrew Cloud services ("Service").
           </p>
           <p className="mt-2">
@@ -19,7 +21,7 @@ export function TermsPage() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold text-white">2. Account</h2>
+          <h2 className="text-lg font-semibold text-brand-light">2. Account</h2>
           <p className="mt-2">
             You must create an account to use the Service. You are responsible for maintaining the
             confidentiality of your account credentials and for all activity that occurs under your
@@ -33,13 +35,17 @@ export function TermsPage() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold text-white">3. Subscription & Billing</h2>
+          <h2 className="text-lg font-semibold text-brand-light">3. Subscription & Billing</h2>
           <p className="mt-2">
             The Service offers paid subscription plans billed through Stripe. Subscriptions
             automatically renew at the end of each billing period unless cancelled before the renewal
             date.
           </p>
-          <p className="mt-2 font-medium text-white">
+          <p className="mt-2">
+            The Community Edition is free forever with no usage limits. Enterprise Edition features
+            require a paid subscription.
+          </p>
+          <p className="mt-2 font-medium text-brand-light">
             All payments are non-refundable.
           </p>
           <p className="mt-2">
@@ -54,9 +60,9 @@ export function TermsPage() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold text-white">4. Acceptable Use</h2>
+          <h2 className="text-lg font-semibold text-brand-light">4. Acceptable Use</h2>
           <p className="mt-2">You agree not to:</p>
-          <ul className="mt-2 list-disc list-inside space-y-1 text-gray-400">
+          <ul className="mt-2 list-disc list-inside space-y-1 text-brand-shade3">
             <li>Abuse, overload, or interfere with the API or any part of the Service</li>
             <li>Reverse engineer, decompile, or disassemble the Service or its components</li>
             <li>Generate excessive or unreasonable load on the Service infrastructure</li>
@@ -67,7 +73,7 @@ export function TermsPage() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold text-white">5. Intellectual Property</h2>
+          <h2 className="text-lg font-semibold text-brand-light">5. Intellectual Property</h2>
           <p className="mt-2">
             The Service, including all software, documentation, and associated intellectual property,
             is owned by ByteBrew Cloud and its licensors. Your subscription grants you a limited,
@@ -81,21 +87,23 @@ export function TermsPage() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold text-white">6. Data & Privacy</h2>
+          <h2 className="text-lg font-semibold text-brand-light">6. Data & Privacy</h2>
           <p className="mt-2">
-            We process your data solely to provide and improve the Service. LLM queries are proxied
-            through our infrastructure to third-party model providers. We do not store the content of
-            your prompts or model responses beyond what is necessary for real-time processing.
+            We process your data solely to provide and improve the Service. ByteBrew Engine is
+            self-hosted. Optional cloud services (licensing, updates) connect to bytebrew.ai.
           </p>
           <p className="mt-2">
             We may collect usage metadata (such as request counts, feature usage, and performance
-            metrics) to operate and improve the Service. For full details on how we handle your data,
-            please refer to our Privacy Policy (to be published).
+            metrics) to operate and improve the Service. For details, see our{' '}
+            <Link to="/privacy" className="text-brand-accent hover:text-brand-accent-hover">
+              Privacy Policy
+            </Link>
+            .
           </p>
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold text-white">7. Limitation of Liability</h2>
+          <h2 className="text-lg font-semibold text-brand-light">7. Limitation of Liability</h2>
           <p className="mt-2">
             The Service is provided on an "AS IS" and "AS AVAILABLE" basis without warranties of any
             kind, whether express or implied, including but not limited to implied warranties of
@@ -110,7 +118,7 @@ export function TermsPage() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold text-white">8. Termination</h2>
+          <h2 className="text-lg font-semibold text-brand-light">8. Termination</h2>
           <p className="mt-2">
             We may suspend or terminate your access to the Service at any time if you violate these
             Terms or engage in conduct that we reasonably determine to be harmful to the Service, its
@@ -124,7 +132,7 @@ export function TermsPage() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold text-white">9. Changes to Terms</h2>
+          <h2 className="text-lg font-semibold text-brand-light">9. Changes to Terms</h2>
           <p className="mt-2">
             We may update these Terms from time to time. We will notify you of material changes via
             email or through a notice on the Service website. Your continued use of the Service after
@@ -133,12 +141,12 @@ export function TermsPage() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold text-white">10. Contact</h2>
+          <h2 className="text-lg font-semibold text-brand-light">10. Contact</h2>
           <p className="mt-2">
             If you have questions about these Terms, please contact us at{' '}
             <a
               href="mailto:support@bytebrewcloud.dev"
-              className="text-indigo-400 hover:text-indigo-300"
+              className="text-brand-accent hover:text-brand-accent-hover"
             >
               support@bytebrewcloud.dev
             </a>

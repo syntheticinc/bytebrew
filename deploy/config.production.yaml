@@ -4,6 +4,7 @@ server:
 cors:
   allowed_origins:
     - "https://bytebrew.ai"
+    - "https://code.bytebrew.ai"
 
 auth:
   access_token_ttl: 15m
