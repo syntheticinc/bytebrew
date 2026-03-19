@@ -730,9 +730,18 @@ func convertSessionEventToSSE(evt *pb.SessionEvent) *deliveryhttp.SSEEvent {
 	case pb.SessionEventType_SESSION_EVENT_ANSWER_CHUNK:
 		return &deliveryhttp.SSEEvent{Type: "message_delta", Data: fmt.Sprintf(`{"content":%q}`, evt.Content)}
 	case pb.SessionEventType_SESSION_EVENT_TOOL_EXECUTION_START:
-		return &deliveryhttp.SSEEvent{Type: "tool_call", Data: fmt.Sprintf(`{"tool":%q,"content":%q}`, evt.ToolName, evt.Content)}
+		args := evt.Content
+		if args == "" && len(evt.ToolArguments) > 0 {
+			argsJSON, _ := json.Marshal(evt.ToolArguments)
+			args = string(argsJSON)
+		}
+		return &deliveryhttp.SSEEvent{Type: "tool_call", Data: fmt.Sprintf(`{"tool":%q,"content":%q}`, evt.ToolName, args)}
 	case pb.SessionEventType_SESSION_EVENT_TOOL_EXECUTION_END:
-		return &deliveryhttp.SSEEvent{Type: "tool_result", Data: fmt.Sprintf(`{"tool":%q,"content":%q}`, evt.ToolName, evt.Content)}
+		result := evt.Content
+		if result == "" {
+			result = evt.ToolResultSummary
+		}
+		return &deliveryhttp.SSEEvent{Type: "tool_result", Data: fmt.Sprintf(`{"tool":%q,"content":%q}`, evt.ToolName, result)}
 	case pb.SessionEventType_SESSION_EVENT_PROCESSING_STOPPED:
 		return &deliveryhttp.SSEEvent{Type: "done", Data: `{"status":"completed"}`}
 	default:

@@ -139,7 +139,7 @@ export function ChatPage() {
               </div>
             </div>
           ) : (
-            <div className="mx-auto flex max-w-3xl flex-col gap-3">
+            <div className="mx-auto flex max-w-5xl flex-col gap-3">
               {messages.map((msg) => (
                 <ChatMessage key={msg.id} message={msg} />
               ))}
@@ -155,7 +155,7 @@ export function ChatPage() {
 
         {/* Input */}
         <div className="border-t border-brand-shade3/15 px-6 py-4">
-          <div className="mx-auto max-w-3xl">
+          <div className="mx-auto max-w-5xl">
             <ChatInput
               onSend={handleSend}
               onStop={stop}
