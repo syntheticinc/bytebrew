@@ -212,6 +212,28 @@ export interface Setting {
 }
 
 // ============================================================================
+// Audit types
+// ============================================================================
+
+export interface AuditEntry {
+  id: number;
+  timestamp: string;
+  actor_type: string;
+  actor_id: string;
+  action: string;
+  resource: string;
+  details: string;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+}
+
+// ============================================================================
 // Auth types
 // ============================================================================
 

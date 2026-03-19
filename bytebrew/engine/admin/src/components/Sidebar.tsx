@@ -17,6 +17,7 @@ const navigation: NavItem[] = [
   { to: '/api-keys', label: 'API Keys', icon: 'K' },
   { to: '/settings', label: 'Settings', icon: 'S' },
   { to: '/config', label: 'Config', icon: 'C' },
+  { to: '/audit', label: 'Audit Log', icon: 'L' },
 ];
 
 export default function Sidebar() {

@@ -5,15 +5,23 @@ export default function ConfigPage() {
   const [reloading, setReloading] = useState(false);
   const [reloadResult, setReloadResult] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportedYaml, setExportedYaml] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
+  const [importYaml, setImportYaml] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [copySuccess, setCopySuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function clearMessages() {
+    setError(null);
+    setReloadResult(null);
+    setImportResult(null);
+  }
 
   async function handleReload() {
     setReloading(true);
-    setError(null);
-    setReloadResult(null);
+    clearMessages();
     try {
       const res = await api.reloadConfig();
       setReloadResult(`Config reloaded. ${res.agents_count} agents loaded.`);
@@ -26,16 +34,10 @@ export default function ConfigPage() {
 
   async function handleExport() {
     setExporting(true);
-    setError(null);
+    clearMessages();
     try {
       const yaml = await api.exportConfig();
-      const blob = new Blob([yaml], { type: 'application/x-yaml' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'bytebrew-config.yaml';
-      a.click();
-      URL.revokeObjectURL(url);
+      setExportedYaml(yaml);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Export failed');
     } finally {
@@ -43,17 +45,41 @@ export default function ConfigPage() {
     }
   }
 
+  function handleDownload() {
+    if (!exportedYaml) return;
+    const blob = new Blob([exportedYaml], { type: 'application/x-yaml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'bytebrew-config.yaml';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleCopy() {
+    if (!exportedYaml) return;
+    try {
+      await navigator.clipboard.writeText(exportedYaml);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch {
+      setError('Failed to copy to clipboard');
+    }
+  }
+
   async function handleImport() {
-    const file = fileInputRef.current?.files?.[0];
-    if (!file) return;
+    const yamlContent = importYaml.trim();
+    if (!yamlContent) {
+      setError('No YAML content to import. Paste YAML or upload a file.');
+      return;
+    }
 
     setImporting(true);
-    setError(null);
-    setImportResult(null);
+    clearMessages();
     try {
-      const text = await file.text();
-      const res = await api.importConfig(text);
+      const res = await api.importConfig(yamlContent);
       setImportResult(`Config imported. ${res.agents_count} agents loaded.`);
+      setImportYaml('');
       if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed');
@@ -62,8 +88,19 @@ export default function ConfigPage() {
     }
   }
 
+  async function handleFileSelect() {
+    const file = fileInputRef.current?.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setImportYaml(text);
+    } catch {
+      setError('Failed to read file');
+    }
+  }
+
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-3xl">
       <h1 className="text-2xl font-bold text-brand-light mb-6">Configuration</h1>
 
       {error && (
@@ -102,42 +139,81 @@ export default function ConfigPage() {
       {/* Export */}
       <section className="mb-8">
         <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15 p-5">
-          <h2 className="text-lg font-semibold text-brand-light mb-2">Export</h2>
+          <h2 className="text-lg font-semibold text-brand-light mb-2">Export Configuration</h2>
           <p className="text-sm text-brand-shade3 mb-4">
-            Download current configuration as YAML file.
+            Fetch current configuration as YAML. Preview, copy, or download.
           </p>
-          <button
-            onClick={handleExport}
-            disabled={exporting}
-            className="px-4 py-2 bg-brand-dark border border-brand-shade3/30 text-brand-shade2 rounded-btn text-sm font-medium hover:bg-brand-dark hover:text-brand-light disabled:opacity-50 transition-colors"
-          >
-            {exporting ? 'Exporting...' : 'Export YAML'}
-          </button>
+          <div className="flex gap-3 mb-4">
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="px-4 py-2 bg-brand-accent text-brand-light rounded-btn text-sm font-medium hover:bg-brand-accent-hover disabled:opacity-50 transition-colors"
+            >
+              {exporting ? 'Exporting...' : 'Export Configuration'}
+            </button>
+            {exportedYaml && (
+              <>
+                <button
+                  onClick={handleDownload}
+                  className="px-4 py-2 bg-brand-dark border border-brand-shade3/30 text-brand-shade2 rounded-btn text-sm font-medium hover:text-brand-light transition-colors"
+                >
+                  Download YAML
+                </button>
+                <button
+                  onClick={handleCopy}
+                  className="px-4 py-2 bg-brand-dark border border-brand-shade3/30 text-brand-shade2 rounded-btn text-sm font-medium hover:text-brand-light transition-colors"
+                >
+                  {copySuccess ? 'Copied!' : 'Copy to Clipboard'}
+                </button>
+              </>
+            )}
+          </div>
+          {exportedYaml && (
+            <pre className="p-4 bg-brand-dark rounded-btn border border-brand-shade3/15 text-xs text-brand-shade2 font-mono whitespace-pre-wrap max-h-96 overflow-y-auto">
+              {exportedYaml}
+            </pre>
+          )}
         </div>
       </section>
 
       {/* Import */}
-      <section>
+      <section className="mb-8">
         <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15 p-5">
-          <h2 className="text-lg font-semibold text-brand-light mb-2">Import</h2>
+          <h2 className="text-lg font-semibold text-brand-light mb-2">Import Configuration</h2>
           <p className="text-sm text-brand-shade3 mb-4">
-            Upload a YAML config file. It will be parsed and saved to the database, then reloaded.
+            Paste YAML content or upload a .yaml/.yml file. It will be parsed and saved to the database, then reloaded.
           </p>
-          <div className="flex items-center gap-3">
+          <div className="mb-4">
+            <label className="block text-xs font-medium text-brand-shade3 uppercase tracking-wider mb-2">
+              Upload file
+            </label>
             <input
               ref={fileInputRef}
               type="file"
               accept=".yaml,.yml"
+              onChange={handleFileSelect}
               className="text-sm text-brand-shade3 file:mr-4 file:py-2 file:px-4 file:rounded-btn file:border-0 file:text-sm file:font-medium file:bg-brand-dark file:text-brand-shade2 hover:file:bg-brand-shade3/20"
             />
-            <button
-              onClick={handleImport}
-              disabled={importing}
-              className="px-4 py-2 bg-brand-dark border border-brand-shade3/30 text-brand-shade2 rounded-btn text-sm font-medium hover:text-brand-light disabled:opacity-50 transition-colors"
-            >
-              {importing ? 'Importing...' : 'Import'}
-            </button>
           </div>
+          <div className="mb-4">
+            <label className="block text-xs font-medium text-brand-shade3 uppercase tracking-wider mb-2">
+              Or paste YAML
+            </label>
+            <textarea
+              value={importYaml}
+              onChange={(e) => setImportYaml(e.target.value)}
+              rows={10}
+              placeholder="agents:&#10;  - name: my-agent&#10;    system_prompt: ..."
+              className="w-full p-3 bg-brand-dark border border-brand-shade3/30 rounded-btn text-sm text-brand-light font-mono placeholder:text-brand-shade3/50 focus:outline-none focus:border-brand-accent resize-y"
+            />
+          </div>
+          <button
+            onClick={handleImport}
+            disabled={importing || !importYaml.trim()}
+            className="px-4 py-2 bg-brand-accent text-brand-light rounded-btn text-sm font-medium hover:bg-brand-accent-hover disabled:opacity-50 transition-colors"
+          >
+            {importing ? 'Importing...' : 'Import Configuration'}
+          </button>
         </div>
       </section>
     </div>

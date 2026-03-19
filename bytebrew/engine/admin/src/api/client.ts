@@ -19,6 +19,8 @@ import type {
   Setting,
   LoginResponse,
   ToolMetadata,
+  AuditEntry,
+  PaginatedResponse,
 } from '../types';
 
 const BASE_URL = '/api/v1';
@@ -202,7 +204,53 @@ class APIClient {
     return this.request<string>('GET', '/config/export');
   }
   importConfig(yamlContent: string) {
-    return this.request<{ imported: boolean; agents_count: number }>('POST', '/config/import', yamlContent);
+    return this.requestRaw<{ imported: boolean; agents_count: number }>('POST', '/config/import', yamlContent, 'text/yaml');
+  }
+
+  // ---- Audit ----
+  listAuditLogs(params: Record<string, string> = {}) {
+    const qs = Object.keys(params).length ? '?' + new URLSearchParams(params).toString() : '';
+    return this.request<PaginatedResponse<AuditEntry>>('GET', `/audit${qs}`);
+  }
+
+  /**
+   * Send a request with a raw (non-JSON) body.
+   */
+  private async requestRaw<T>(method: string, path: string, body: string, contentType: string): Promise<T> {
+    const headers: Record<string, string> = { 'Content-Type': contentType };
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+
+    const res = await fetch(`${BASE_URL}${path}`, {
+      method,
+      headers,
+      body,
+    });
+
+    if (res.status === 401) {
+      this.clearToken();
+      window.location.href = '/login';
+      throw new Error('Unauthorized');
+    }
+
+    if (!res.ok) {
+      const text = await res.text();
+      let message = text;
+      try {
+        const json = JSON.parse(text) as { error?: string };
+        if (json.error) message = json.error;
+      } catch {
+        // use raw text
+      }
+      throw new Error(message);
+    }
+
+    const ct = res.headers.get('Content-Type') ?? '';
+    if (ct.includes('application/json')) {
+      return (await res.json()) as T;
+    }
+    return (await res.text()) as unknown as T;
   }
 }
 

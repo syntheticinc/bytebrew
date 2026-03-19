@@ -12,6 +12,7 @@ import TasksPage from './pages/TasksPage';
 import SettingsPage from './pages/SettingsPage';
 import APIKeysPage from './pages/APIKeysPage';
 import ConfigPage from './pages/ConfigPage';
+import AuditPage from './pages/AuditPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('jwt');
@@ -45,6 +46,7 @@ export default function App() {
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/api-keys" element={<APIKeysPage />} />
             <Route path="/config" element={<ConfigPage />} />
+            <Route path="/audit" element={<AuditPage />} />
             <Route path="/" element={<Navigate to="/health" replace />} />
           </Route>
           <Route path="*" element={<Navigate to="/health" replace />} />
