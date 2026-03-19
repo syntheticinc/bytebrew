@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { useChat } from '../hooks/useChat';
 import { useAuth } from '../hooks/useAuth';
 import { ChatMessage } from '../components/ChatMessage';
 import { ChatInput } from '../components/ChatInput';
 import { AgentSelector } from '../components/AgentSelector';
+import { ThinkingIndicator } from '../components/ThinkingIndicator';
 import type { AgentInfo } from '../types';
 
 export function ChatPage() {
@@ -21,9 +22,10 @@ export function ChatPage() {
 
   useEffect(() => {
     api.listAgents().then((data) => {
-      setAgents(data);
-      if (!selectedAgent && data.length > 0 && data[0]) {
-        setSelectedAgent(data[0].name);
+      const filtered = data.filter((a) => a.name);
+      setAgents(filtered);
+      if (!selectedAgent && filtered.length > 0 && filtered[0]) {
+        setSelectedAgent(filtered[0].name);
       }
       setAgentsLoading(false);
     }).catch(() => {
@@ -85,18 +87,18 @@ export function ChatPage() {
 
         <div className="border-t border-brand-shade3/15 p-3">
           <nav className="flex flex-col gap-1">
-            <a
-              href="/agents"
+            <Link
+              to="/agents"
               className="rounded-btn px-3 py-1.5 text-xs text-brand-shade3 transition-colors hover:bg-brand-shade3/10 hover:text-brand-light"
             >
               All Agents
-            </a>
-            <a
-              href="/tasks"
+            </Link>
+            <Link
+              to="/tasks"
               className="rounded-btn px-3 py-1.5 text-xs text-brand-shade3 transition-colors hover:bg-brand-shade3/10 hover:text-brand-light"
             >
               Tasks
-            </a>
+            </Link>
           </nav>
         </div>
       </aside>
@@ -141,6 +143,11 @@ export function ChatPage() {
               {messages.map((msg) => (
                 <ChatMessage key={msg.id} message={msg} />
               ))}
+              {streaming && messages.length > 0 && messages[messages.length - 1]?.role === 'user' && (
+                <div className="flex justify-start animate-fade-in">
+                  <ThinkingIndicator />
+                </div>
+              )}
               <div ref={messagesEndRef} />
             </div>
           )}

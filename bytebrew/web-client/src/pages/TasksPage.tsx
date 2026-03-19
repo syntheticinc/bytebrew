@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
 import { StatusBadge } from '../components/StatusBadge';
@@ -36,16 +37,16 @@ export function TasksPage() {
       {/* Header */}
       <header className="border-b border-brand-shade3/15 px-6 py-4">
         <div className="mx-auto flex max-w-5xl items-center justify-between">
-          <a href="/chat" className="text-sm font-bold text-brand-light">
+          <Link to="/chat" className="text-sm font-bold text-brand-light">
             Byte<span className="text-brand-accent">Brew</span>
-          </a>
+          </Link>
           <nav className="flex items-center gap-4">
-            <a href="/chat" className="text-xs text-brand-shade3 hover:text-brand-light">
+            <Link to="/chat" className="text-xs text-brand-shade3 hover:text-brand-light">
               Chat
-            </a>
-            <a href="/agents" className="text-xs text-brand-shade3 hover:text-brand-light">
+            </Link>
+            <Link to="/agents" className="text-xs text-brand-shade3 hover:text-brand-light">
               Agents
-            </a>
+            </Link>
             <button onClick={logout} className="text-xs text-brand-shade3 hover:text-brand-light">
               Logout
             </button>

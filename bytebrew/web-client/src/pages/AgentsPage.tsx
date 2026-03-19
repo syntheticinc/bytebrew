@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
 import type { AgentInfo } from '../types';
@@ -15,7 +15,7 @@ export function AgentsPage() {
     api
       .listAgents()
       .then((data) => {
-        setAgents(data);
+        setAgents(data.filter((a) => a.name));
         setLoading(false);
       })
       .catch((err: Error) => {
@@ -29,16 +29,16 @@ export function AgentsPage() {
       {/* Header */}
       <header className="border-b border-brand-shade3/15 px-6 py-4">
         <div className="mx-auto flex max-w-5xl items-center justify-between">
-          <a href="/chat" className="text-sm font-bold text-brand-light">
+          <Link to="/chat" className="text-sm font-bold text-brand-light">
             Byte<span className="text-brand-accent">Brew</span>
-          </a>
+          </Link>
           <nav className="flex items-center gap-4">
-            <a href="/chat" className="text-xs text-brand-shade3 hover:text-brand-light">
+            <Link to="/chat" className="text-xs text-brand-shade3 hover:text-brand-light">
               Chat
-            </a>
-            <a href="/tasks" className="text-xs text-brand-shade3 hover:text-brand-light">
+            </Link>
+            <Link to="/tasks" className="text-xs text-brand-shade3 hover:text-brand-light">
               Tasks
-            </a>
+            </Link>
             <button onClick={logout} className="text-xs text-brand-shade3 hover:text-brand-light">
               Logout
             </button>

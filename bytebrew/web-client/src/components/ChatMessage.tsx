@@ -1,3 +1,5 @@
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { ChatMessage as ChatMessageType } from '../types';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { ToolCallCard } from './ToolCallCard';
@@ -21,7 +23,9 @@ export function ChatMessage({ message }: ChatMessageProps) {
       return (
         <div className="flex justify-start animate-fade-in">
           <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-brand-dark-alt px-4 py-2 text-brand-light">
-            <p className="whitespace-pre-wrap break-words">{message.content}</p>
+            <div className="markdown-body">
+              <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
+            </div>
           </div>
         </div>
       );
