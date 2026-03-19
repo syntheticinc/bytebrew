@@ -182,6 +182,9 @@ func (a *agentManagerAdapter) CreateAgent(ctx context.Context, req deliveryhttp.
 
 func (a *agentManagerAdapter) UpdateAgent(ctx context.Context, name string, req deliveryhttp.CreateAgentRequest) (*deliveryhttp.AgentDetail, error) {
 	rec := agentRequestToRecord(req)
+	if rec.Name == "" {
+		rec.Name = name // preserve original name if not provided in body
+	}
 	if err := a.repo.Update(ctx, name, &rec); err != nil {
 		return nil, fmt.Errorf("update agent: %w", err)
 	}
@@ -1259,4 +1262,62 @@ func (a *toolMetadataAdapter) GetAllToolMetadata() []deliveryhttp.ToolMetadataRe
 		}
 	}
 	return result
+}
+
+// knowledgeStatsAdapter bridges GORMKnowledgeRepository to http.KnowledgeStats.
+type knowledgeStatsAdapter struct {
+	repo *config_repo.GORMKnowledgeRepository
+}
+
+func (a *knowledgeStatsAdapter) GetStats(ctx context.Context, agentName string) (docCount int, chunkCount int, lastIndexed *time.Time, err error) {
+	return a.repo.GetStats(ctx, agentName)
+}
+
+// knowledgeReindexerAdapter bridges Knowledge Indexer to http.KnowledgeReindexer.
+type knowledgeReindexerAdapter struct {
+	indexer  interface{ IndexFolder(ctx context.Context, agentName string, folderPath string) error }
+	registry *agent_registry.AgentRegistry
+}
+
+func (a *knowledgeReindexerAdapter) Reindex(ctx context.Context, agentName string) error {
+	agent, err := a.registry.Get(agentName)
+	if err != nil {
+		return fmt.Errorf("agent not found: %s", agentName)
+	}
+	if agent.Record.KnowledgePath == "" {
+		return fmt.Errorf("agent %s has no knowledge_path configured", agentName)
+	}
+	return a.indexer.IndexFolder(ctx, agentName, agent.Record.KnowledgePath)
+}
+
+// auditServiceHTTPAdapter bridges GORMAuditRepository to http.AuditService.
+type auditServiceHTTPAdapter struct {
+	repo *config_repo.GORMAuditRepository
+}
+
+func (a *auditServiceHTTPAdapter) ListAuditLogs(ctx context.Context, actorType, action, resource string, from, to *time.Time, page, perPage int) ([]deliveryhttp.AuditResponse, int64, error) {
+	filters := config_repo.AuditFilters{
+		ActorType: actorType,
+		Action:    action,
+		Resource:  resource,
+		From:      from,
+		To:        to,
+	}
+	logs, total, err := a.repo.List(ctx, filters, page, perPage)
+	if err != nil {
+		return nil, 0, err
+	}
+	result := make([]deliveryhttp.AuditResponse, 0, len(logs))
+	for _, l := range logs {
+		result = append(result, deliveryhttp.AuditResponse{
+			ID:        l.ID,
+			Timestamp: l.Timestamp.Format(time.RFC3339),
+			ActorType: l.ActorType,
+			ActorID:   l.ActorID,
+			Action:    l.Action,
+			Resource:  l.Resource,
+			Details:   l.Details,
+		})
+	}
+	return result, total, nil
 }

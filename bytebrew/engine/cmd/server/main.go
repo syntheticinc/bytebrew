@@ -35,6 +35,8 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/flow_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/indexing"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/knowledge"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/portfile"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/eventstore"
@@ -224,6 +226,8 @@ func main() {
 	var agentRepo *config_repo.GORMAgentRepository
 	var taskRepo *config_repo.GORMTaskRepository
 	var apiTokenRepo *config_repo.GORMAPITokenRepository
+	var knowledgeRepo *config_repo.GORMKnowledgeRepository
+	var knowledgeIndexer *knowledge.Indexer
 	var bootstrapCfg *config.BootstrapConfig
 	bootstrapCfg, bootstrapErr := config.LoadBootstrap(*configPath)
 	if bootstrapErr != nil {
@@ -246,6 +250,17 @@ func main() {
 		agentRepo = config_repo.NewGORMAgentRepository(pgDB)
 		taskRepo = config_repo.NewGORMTaskRepository(pgDB)
 		apiTokenRepo = config_repo.NewGORMAPITokenRepository(pgDB)
+		knowledgeRepo = config_repo.NewGORMKnowledgeRepository(pgDB)
+
+		// Knowledge indexer (requires Ollama embeddings)
+		ollamaURL := "http://localhost:11434"
+		if cfg != nil {
+			if u := cfg.LLM.Ollama.BaseURL; u != "" {
+				ollamaURL = u
+			}
+		}
+		embClient := indexing.NewEmbeddingsClient(ollamaURL, "nomic-embed-text", 768)
+		knowledgeIndexer = knowledge.NewIndexer(embClient, knowledgeRepo, slog.Default())
 		agentRegistry = agent_registry.New(agentRepo)
 		if loadErr := agentRegistry.Load(ctx); loadErr != nil {
 			slog.Error("Failed to load agents from database", "error", loadErr)
@@ -382,6 +397,29 @@ func main() {
 			// Tool metadata (security zones for admin UI)
 			toolMetaHandler := deliveryhttp.NewToolMetadataHandler(&toolMetadataAdapter{})
 			r.Get("/api/v1/tools/metadata", toolMetaHandler.List)
+
+			// Knowledge endpoints
+			if knowledgeRepo != nil {
+				knowledgeStatsAdapter := &knowledgeStatsAdapter{repo: knowledgeRepo}
+				var knowledgeReindexAdapter deliveryhttp.KnowledgeReindexer
+				if knowledgeIndexer != nil && agentRegistry != nil {
+					knowledgeReindexAdapter = &knowledgeReindexerAdapter{
+						indexer:  knowledgeIndexer,
+						registry: agentRegistry,
+					}
+				}
+				knowledgeHandler := deliveryhttp.NewKnowledgeHandler(knowledgeStatsAdapter, knowledgeReindexAdapter)
+				r.Get("/api/v1/agents/{name}/knowledge/status", knowledgeHandler.Status)
+				r.Post("/api/v1/agents/{name}/knowledge/reindex", knowledgeHandler.Reindex)
+			}
+
+			// Audit log
+			if pgDB != nil {
+				auditRepo := config_repo.NewGORMAuditRepository(pgDB)
+				auditServiceAdapt := &auditServiceHTTPAdapter{repo: auditRepo}
+				auditHandler := deliveryhttp.NewAuditHandler(auditServiceAdapt)
+				r.Get("/api/v1/audit", auditHandler.List)
+			}
 		})
 
 		// Webhook route (public, no auth — triggered by external services)
