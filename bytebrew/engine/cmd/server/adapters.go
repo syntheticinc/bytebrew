@@ -655,6 +655,7 @@ func stubJSONHandler(jsonStr string) http.HandlerFunc {
 type chatServiceAdapter struct {
 	sessionRegistry *flow_registry.SessionRegistry
 	sessProcessor   *session_processor.Processor
+	sessionRepo     *config_repo.GORMSessionRepository
 }
 
 func (a *chatServiceAdapter) Chat(agentName, message, userID, sessionID string) (<-chan deliveryhttp.SSEEvent, error) {
@@ -674,6 +675,16 @@ func (a *chatServiceAdapter) Chat(agentName, message, userID, sessionID string) 
 		sessionID = fmt.Sprintf("rest-%d", time.Now().UnixNano())
 	}
 	a.sessionRegistry.CreateSession(sessionID, "", userID, "", "", agentName)
+
+	// Persist session to DB for query by web-client
+	if a.sessionRepo != nil {
+		_ = a.sessionRepo.Create(context.Background(), &models.SessionModel{
+			ID:        sessionID,
+			AgentName: agentName,
+			UserID:    userID,
+			Status:    "active",
+		})
+	}
 
 	// Subscribe to SSE events from session
 	eventCh, cleanup := a.sessionRegistry.Subscribe(sessionID)
@@ -1004,6 +1015,97 @@ func (a *taskServiceAdapter) CancelTask(ctx context.Context, id uint) error {
 
 func (a *taskServiceAdapter) ProvideInput(_ context.Context, _ uint, _ string) error {
 	return nil // TODO: wire input channel to task session
+}
+
+// sessionServiceAdapter bridges GORMSessionRepository to the http.SessionService interface.
+type sessionServiceAdapter struct {
+	repo *config_repo.GORMSessionRepository
+}
+
+func (a *sessionServiceAdapter) ListSessions(ctx context.Context, agentName, userID, status string, page, perPage int) ([]deliveryhttp.SessionResponse, int64, error) {
+	sessions, total, err := a.repo.List(ctx, agentName, userID, status, page, perPage)
+	if err != nil {
+		return nil, 0, err
+	}
+	result := make([]deliveryhttp.SessionResponse, 0, len(sessions))
+	for _, s := range sessions {
+		result = append(result, deliveryhttp.SessionResponse{
+			ID:        s.ID,
+			Title:     s.Title,
+			AgentName: s.AgentName,
+			UserID:    s.UserID,
+			Status:    s.Status,
+			CreatedAt: s.CreatedAt.Format(time.RFC3339),
+			UpdatedAt: s.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+	return result, total, nil
+}
+
+func (a *sessionServiceAdapter) GetSession(ctx context.Context, id string) (*deliveryhttp.SessionResponse, error) {
+	s, err := a.repo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if s == nil {
+		return nil, nil
+	}
+	return &deliveryhttp.SessionResponse{
+		ID:        s.ID,
+		Title:     s.Title,
+		AgentName: s.AgentName,
+		UserID:    s.UserID,
+		Status:    s.Status,
+		CreatedAt: s.CreatedAt.Format(time.RFC3339),
+		UpdatedAt: s.UpdatedAt.Format(time.RFC3339),
+	}, nil
+}
+
+func (a *sessionServiceAdapter) CreateSession(ctx context.Context, req deliveryhttp.CreateSessionRequest) (*deliveryhttp.SessionResponse, error) {
+	id := req.ID
+	if id == "" {
+		id = fmt.Sprintf("web-%d", time.Now().UnixNano())
+	}
+	session := &models.SessionModel{
+		ID:        id,
+		Title:     req.Title,
+		AgentName: req.AgentName,
+		UserID:    req.UserID,
+		Status:    "active",
+	}
+	if err := a.repo.Create(ctx, session); err != nil {
+		return nil, err
+	}
+	return &deliveryhttp.SessionResponse{
+		ID:        session.ID,
+		Title:     session.Title,
+		AgentName: session.AgentName,
+		UserID:    session.UserID,
+		Status:    session.Status,
+		CreatedAt: session.CreatedAt.Format(time.RFC3339),
+		UpdatedAt: session.UpdatedAt.Format(time.RFC3339),
+	}, nil
+}
+
+func (a *sessionServiceAdapter) UpdateSession(ctx context.Context, id string, req deliveryhttp.UpdateSessionRequest) (*deliveryhttp.SessionResponse, error) {
+	updates := make(map[string]interface{})
+	if req.Title != nil {
+		updates["title"] = *req.Title
+	}
+	if req.Status != nil {
+		updates["status"] = *req.Status
+	}
+	if len(updates) == 0 {
+		return a.GetSession(ctx, id)
+	}
+	if err := a.repo.Update(ctx, id, updates); err != nil {
+		return nil, err
+	}
+	return a.GetSession(ctx, id)
+}
+
+func (a *sessionServiceAdapter) DeleteSession(ctx context.Context, id string) error {
+	return a.repo.Delete(ctx, id)
 }
 
 // toolMetadataAdapter bridges tools.GetAllToolMetadata to the http.ToolMetadataProvider interface.

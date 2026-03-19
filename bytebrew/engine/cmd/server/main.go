@@ -370,6 +370,11 @@ func main() {
 			settingHandler := deliveryhttp.NewSettingHandler(&settingServiceAdapter{repo: settingRepo})
 			r.Mount("/api/v1/settings", settingHandler.Routes())
 
+			// Sessions
+			sessionRepo := config_repo.NewGORMSessionRepository(pgDB)
+			sessionHandler := deliveryhttp.NewSessionHandler(&sessionServiceAdapter{repo: sessionRepo})
+			r.Mount("/api/v1/sessions", sessionHandler.Routes())
+
 			r.Delete("/api/v1/auth/tokens/{id}", tokenHandler.DeleteToken)
 
 			// Tool metadata (security zones for admin UI)
@@ -543,6 +548,7 @@ func main() {
 	if chatAdapter != nil {
 		chatAdapter.sessionRegistry = sessionRegistry
 		chatAdapter.sessProcessor = sessProcessor
+		chatAdapter.sessionRepo = config_repo.NewGORMSessionRepository(pgDB)
 		slog.Info("ChatService REST wired to SessionProcessor")
 	}
 
