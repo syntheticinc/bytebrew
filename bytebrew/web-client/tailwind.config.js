@@ -31,12 +31,17 @@ export default {
           from: { opacity: '0', transform: 'translateY(4px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
         },
+        'slide-in-right': {
+          from: { transform: 'translateX(100%)' },
+          to: { transform: 'translateX(0)' },
+        },
       },
       animation: {
         'bounce-dot-1': 'bounce-dots 1.4s infinite ease-in-out both',
         'bounce-dot-2': 'bounce-dots 1.4s infinite ease-in-out both 0.16s',
         'bounce-dot-3': 'bounce-dots 1.4s infinite ease-in-out both 0.32s',
         'fade-in': 'fade-in 0.2s ease-out',
+        'slide-in-right': 'slide-in-right 0.25s ease-out',
       },
     },
   },

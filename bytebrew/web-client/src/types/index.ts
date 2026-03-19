@@ -64,6 +64,15 @@ export interface TaskResponse {
   created_at: string;
 }
 
+export interface TaskDetailResponse extends TaskResponse {
+  description: string;
+  mode: string;
+  result: string;
+  error: string;
+  started_at: string;
+  completed_at: string;
+}
+
 export interface LoginResponse {
   token: string;
 }

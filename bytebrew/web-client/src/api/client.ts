@@ -6,6 +6,8 @@ import type {
   HealthResponse,
   LoginResponse,
   PaginatedTaskResponse,
+  TaskDetailResponse,
+  TaskResponse,
 } from '../types';
 
 const BASE_URL = '/api/v1';
@@ -86,6 +88,18 @@ class ByteBrewClient {
   listTasks(params: Record<string, string> = {}) {
     const qs = Object.keys(params).length ? '?' + new URLSearchParams(params).toString() : '';
     return this.request<PaginatedTaskResponse>('GET', `/tasks${qs}`);
+  }
+
+  getTask(id: number) {
+    return this.request<TaskDetailResponse>('GET', `/tasks/${id}`);
+  }
+
+  createTask(data: { title: string; description?: string; agent_name: string }) {
+    return this.request<TaskResponse>('POST', '/tasks', data);
+  }
+
+  cancelTask(id: number) {
+    return this.request<void>('DELETE', `/tasks/${id}`);
   }
 
   // Health
