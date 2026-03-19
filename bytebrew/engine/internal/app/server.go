@@ -313,7 +313,7 @@ func Run(sc ServerConfig) error {
 			// Config
 			configHandler := deliveryhttp.NewConfigHandler(
 				&configReloaderHTTPAdapter{registry: agentRegistry},
-				&configImportExportHTTPAdapter{},
+				&configImportExportHTTPAdapter{db: pgDB},
 			)
 			r.Post("/api/v1/config/reload", configHandler.Reload)
 			r.Post("/api/v1/config/import", configHandler.Import)
