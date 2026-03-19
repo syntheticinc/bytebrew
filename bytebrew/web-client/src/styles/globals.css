@@ -42,7 +42,7 @@
 
   /* Markdown body inside assistant chat bubbles */
   .markdown-body {
-    @apply text-sm leading-relaxed break-words overflow-hidden;
+    @apply text-sm leading-relaxed break-words;
   }
 
   .markdown-body p {
@@ -82,11 +82,11 @@
   }
 
   .markdown-body ul {
-    @apply list-disc pl-5 mb-2;
+    @apply list-disc pl-6 mb-2;
   }
 
   .markdown-body ol {
-    @apply list-decimal pl-5 mb-2;
+    @apply list-decimal pl-6 mb-2;
   }
 
   .markdown-body li {
