@@ -5,7 +5,9 @@ import type {
   ChatEventType,
   HealthResponse,
   LoginResponse,
+  PaginatedSessionResponse,
   PaginatedTaskResponse,
+  SessionResponse,
   TaskDetailResponse,
   TaskResponse,
 } from '../types';
@@ -100,6 +102,24 @@ class ByteBrewClient {
 
   cancelTask(id: number) {
     return this.request<void>('DELETE', `/tasks/${id}`);
+  }
+
+  // Sessions
+  listSessions(agentName?: string) {
+    const qs = agentName ? `?agent=${encodeURIComponent(agentName)}` : '';
+    return this.request<PaginatedSessionResponse>('GET', `/sessions${qs}`);
+  }
+
+  createSession(data: { title?: string; agent_name: string }) {
+    return this.request<SessionResponse>('POST', '/sessions', { ...data, user_id: 'web-client' });
+  }
+
+  updateSession(id: string, data: { title?: string; status?: string }) {
+    return this.request<SessionResponse>('PUT', `/sessions/${encodeURIComponent(id)}`, data);
+  }
+
+  deleteSession(id: string) {
+    return this.request<void>('DELETE', `/sessions/${encodeURIComponent(id)}`);
   }
 
   // Health

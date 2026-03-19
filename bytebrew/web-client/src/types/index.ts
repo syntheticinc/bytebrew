@@ -75,6 +75,24 @@ export interface TaskDetailResponse extends TaskResponse {
   completed_at: string;
 }
 
+export interface SessionResponse {
+  id: string;
+  title: string;
+  agent_name: string;
+  user_id: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PaginatedSessionResponse {
+  data: SessionResponse[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+}
+
 export interface LoginResponse {
   token: string;
 }

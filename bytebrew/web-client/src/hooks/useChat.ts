@@ -3,11 +3,10 @@ import { api } from '../api/client';
 import type { ChatMessage, ChatEvent } from '../types';
 
 const STORAGE_KEY = 'bytebrew_chat_';
-const SESSION_KEY = 'bytebrew_session_';
 
-function loadMessages(agent: string): ChatMessage[] {
+function loadMessages(sessionId: string): ChatMessage[] {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY + agent);
+    const raw = sessionStorage.getItem(STORAGE_KEY + sessionId);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as ChatMessage[];
     return parsed.map((m) => ({ ...m, timestamp: new Date(m.timestamp) }));
@@ -16,50 +15,56 @@ function loadMessages(agent: string): ChatMessage[] {
   }
 }
 
-function saveMessages(agent: string, messages: ChatMessage[]) {
-  if (!agent) return;
+function saveMessages(sessionId: string, messages: ChatMessage[]) {
+  if (!sessionId) return;
   try {
-    sessionStorage.setItem(STORAGE_KEY + agent, JSON.stringify(messages));
+    sessionStorage.setItem(STORAGE_KEY + sessionId, JSON.stringify(messages));
   } catch {
     // ignore quota errors
   }
 }
 
-function getSessionId(agent: string): string {
-  const existing = sessionStorage.getItem(SESSION_KEY + agent);
-  if (existing) return existing;
-  const id = 'web-' + crypto.randomUUID();
-  sessionStorage.setItem(SESSION_KEY + agent, id);
-  return id;
+export function clearSessionMessages(sessionId: string) {
+  sessionStorage.removeItem(STORAGE_KEY + sessionId);
 }
 
-function clearSessionId(agent: string) {
-  sessionStorage.removeItem(SESSION_KEY + agent);
+interface UseChatOptions {
+  currentAgent: string | null;
+  sessionId: string | null;
+  onFirstAssistantResponse?: (firstUserMessage: string) => void;
 }
 
-export function useChat(currentAgent: string | null) {
+export function useChat({ sessionId, onFirstAssistantResponse }: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>(() =>
-    currentAgent ? loadMessages(currentAgent) : [],
+    sessionId ? loadMessages(sessionId) : [],
   );
   const [streaming, setStreaming] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
   const assistantContentRef = useRef('');
-  const agentRef = useRef(currentAgent);
+  const sessionRef = useRef(sessionId);
+  const gotFirstAssistantRef = useRef(false);
+  const firstUserMessageRef = useRef('');
 
-  // When agent changes, load saved messages
+  // When session changes, load saved messages
   useEffect(() => {
-    if (currentAgent && currentAgent !== agentRef.current) {
-      agentRef.current = currentAgent;
-      setMessages(loadMessages(currentAgent));
+    if (sessionId !== sessionRef.current) {
+      sessionRef.current = sessionId;
+      gotFirstAssistantRef.current = false;
+      firstUserMessageRef.current = '';
+      if (sessionId) {
+        setMessages(loadMessages(sessionId));
+      } else {
+        setMessages([]);
+      }
       setStreaming(false);
       controllerRef.current?.abort();
     }
-  }, [currentAgent]);
+  }, [sessionId]);
 
   // Persist messages on change
   useEffect(() => {
-    if (agentRef.current) {
-      saveMessages(agentRef.current, messages);
+    if (sessionRef.current) {
+      saveMessages(sessionRef.current, messages);
     }
   }, [messages]);
 
@@ -86,10 +91,19 @@ export function useChat(currentAgent: string | null) {
         });
         break;
 
-      case 'message_delta':
+      case 'message_delta': {
         assistantContentRef.current += event.data.content as string;
+        const content = assistantContentRef.current;
+
+        // Fire title callback on first assistant content
+        if (!gotFirstAssistantRef.current && content.length > 0) {
+          gotFirstAssistantRef.current = true;
+          if (firstUserMessageRef.current && onFirstAssistantResponse) {
+            onFirstAssistantResponse(firstUserMessageRef.current);
+          }
+        }
+
         setMessages((prev) => {
-          const content = assistantContentRef.current;
           const last = prev[prev.length - 1];
           if (last?.role === 'assistant') {
             return [...prev.slice(0, -1), { ...last, content }];
@@ -106,11 +120,20 @@ export function useChat(currentAgent: string | null) {
           ];
         });
         break;
+      }
 
       case 'message': {
         const msgContent = event.data.content as string;
         if (!msgContent) break;
         assistantContentRef.current = msgContent;
+
+        if (!gotFirstAssistantRef.current) {
+          gotFirstAssistantRef.current = true;
+          if (firstUserMessageRef.current && onFirstAssistantResponse) {
+            onFirstAssistantResponse(firstUserMessageRef.current);
+          }
+        }
+
         setMessages((prev) => {
           const last = prev[prev.length - 1];
           if (last?.role === 'assistant') {
@@ -232,9 +255,11 @@ export function useChat(currentAgent: string | null) {
         setStreaming(false);
         break;
     }
-  }, []);
+  }, [onFirstAssistantResponse]);
 
   const send = useCallback((agent: string, text: string) => {
+    if (!sessionId) return;
+
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -244,18 +269,19 @@ export function useChat(currentAgent: string | null) {
     setMessages((prev) => [...prev, userMsg]);
     setStreaming(true);
     assistantContentRef.current = '';
+    gotFirstAssistantRef.current = false;
+    firstUserMessageRef.current = text;
 
-    const sessionId = getSessionId(agent);
     controllerRef.current = api.chat(agent, text, handleEvent, sessionId);
-  }, [handleEvent]);
+  }, [handleEvent, sessionId]);
 
   const respond = useCallback((agent: string, text: string) => {
+    if (!sessionId) return;
     setStreaming(true);
     assistantContentRef.current = '';
 
-    const sessionId = getSessionId(agent);
     controllerRef.current = api.chat(agent, text, handleEvent, sessionId);
-  }, [handleEvent]);
+  }, [handleEvent, sessionId]);
 
   const stop = useCallback(() => {
     controllerRef.current?.abort();
@@ -264,9 +290,8 @@ export function useChat(currentAgent: string | null) {
 
   const clear = useCallback(() => {
     setMessages([]);
-    if (agentRef.current) {
-      sessionStorage.removeItem(STORAGE_KEY + agentRef.current);
-      clearSessionId(agentRef.current);
+    if (sessionRef.current) {
+      sessionStorage.removeItem(STORAGE_KEY + sessionRef.current);
     }
   }, []);
 
