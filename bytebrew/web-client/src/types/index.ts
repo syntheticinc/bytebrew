@@ -39,9 +39,11 @@ export interface ChatEvent {
 
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant' | 'thinking' | 'tool_call' | 'tool_result' | 'error';
+  role: 'user' | 'assistant' | 'thinking' | 'tool_call' | 'tool_result' | 'error' | 'confirmation' | 'info';
   content: string;
   toolName?: string;
+  confirmArgs?: Record<string, unknown>;
+  confirmPrompt?: string;
   timestamp: Date;
 }
 

@@ -94,7 +94,7 @@ class ByteBrewClient {
   }
 
   // SSE Chat
-  chat(agent: string, message: string, onEvent: (event: ChatEvent) => void): AbortController {
+  chat(agent: string, message: string, onEvent: (event: ChatEvent) => void, sessionId?: string): AbortController {
     const controller = new AbortController();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -107,7 +107,7 @@ class ByteBrewClient {
     fetch(`${BASE_URL}/agents/${encodeURIComponent(agent)}/chat`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ message, user_id: 'web-client' }),
+      body: JSON.stringify({ message, user_id: 'web-client', ...(sessionId && { session_id: sessionId }) }),
       signal: controller.signal,
     })
       .then(async (res) => {

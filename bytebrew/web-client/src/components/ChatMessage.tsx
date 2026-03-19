@@ -3,12 +3,14 @@ import remarkGfm from 'remark-gfm';
 import type { ChatMessage as ChatMessageType } from '../types';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { ToolCallCard } from './ToolCallCard';
+import { ConfirmationCard } from './ConfirmationCard';
 
 interface ChatMessageProps {
   message: ChatMessageType;
+  onConfirmRespond?: (answer: 'yes' | 'no') => void;
 }
 
-export function ChatMessage({ message }: ChatMessageProps) {
+export function ChatMessage({ message, onConfirmRespond }: ChatMessageProps) {
   switch (message.role) {
     case 'user':
       return (
@@ -75,6 +77,27 @@ export function ChatMessage({ message }: ChatMessageProps) {
         <div className="animate-fade-in">
           <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-400 break-words">
             <span className="font-medium">Error:</span> {message.content}
+          </div>
+        </div>
+      );
+
+    case 'confirmation':
+      return (
+        <div className="max-w-[90%] animate-fade-in">
+          <ConfirmationCard
+            toolName={message.toolName ?? 'unknown'}
+            args={message.confirmArgs ?? {}}
+            prompt={message.confirmPrompt ?? message.content}
+            onRespond={onConfirmRespond ?? (() => {})}
+          />
+        </div>
+      );
+
+    case 'info':
+      return (
+        <div className="animate-fade-in">
+          <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 px-4 py-2 text-sm text-yellow-400 break-words">
+            {message.content}
           </div>
         </div>
       );

@@ -17,7 +17,7 @@ export function ChatPage() {
   const [selectedAgent, setSelectedAgent] = useState<string | null>(
     searchParams.get('agent') || sessionStorage.getItem('bytebrew_last_agent'),
   );
-  const { messages, streaming, send, stop, clear } = useChat(selectedAgent);
+  const { messages, streaming, send, respond, stop, clear } = useChat(selectedAgent);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,6 +52,14 @@ export function ChatPage() {
       send(selectedAgent, text);
     },
     [selectedAgent, send],
+  );
+
+  const handleConfirmRespond = useCallback(
+    (answer: 'yes' | 'no') => {
+      if (!selectedAgent) return;
+      respond(selectedAgent, answer);
+    },
+    [selectedAgent, respond],
   );
 
   return (
@@ -141,7 +149,7 @@ export function ChatPage() {
           ) : (
             <div className="mx-auto flex max-w-5xl flex-col gap-3">
               {messages.map((msg) => (
-                <ChatMessage key={msg.id} message={msg} />
+                <ChatMessage key={msg.id} message={msg} onConfirmRespond={handleConfirmRespond} />
               ))}
               {streaming && messages.length > 0 && messages[messages.length - 1]?.role === 'user' && (
                 <div className="flex justify-start animate-fade-in">
