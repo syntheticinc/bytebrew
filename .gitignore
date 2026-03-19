@@ -96,5 +96,16 @@ test-project
 *.bun-build
 *.tsbuildinfo
 bytebrew-cloud-web/node_modules
+**/node_modules/
+**/.vite/
+
+# Playwright MCP
+.playwright-mcp/
+
+# Screenshots (testing artifacts)
+*.png
+
+# Vite build output
+**/dist/
 
 query.txt
