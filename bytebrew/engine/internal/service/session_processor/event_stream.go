@@ -170,6 +170,7 @@ func (s *EventStream) convertEvent(event *domain.AgentEvent) *pb.SessionEvent {
 			Type:              pb.SessionEventType_SESSION_EVENT_TOOL_EXECUTION_END,
 			ToolName:          toolName,
 			CallId:            callID,
+			Content:           SanitizeUTF8(event.Content),
 			ToolResultSummary: summary,
 			ToolHasError:      event.Error != nil,
 			AgentId:           agentID,

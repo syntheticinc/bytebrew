@@ -107,7 +107,7 @@ class ByteBrewClient {
 
   // Sessions
   listSessions(agentName?: string) {
-    const qs = agentName ? `?agent=${encodeURIComponent(agentName)}` : '';
+    const qs = agentName ? `?agent_name=${encodeURIComponent(agentName)}` : '';
     return this.request<PaginatedSessionResponse>('GET', `/sessions${qs}`);
   }
 
