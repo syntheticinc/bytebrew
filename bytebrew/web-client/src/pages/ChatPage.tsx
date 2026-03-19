@@ -226,7 +226,7 @@ export function ChatPage() {
       {/* Sidebar */}
       <aside className={`
         fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-brand-shade3/15 bg-brand-dark transition-transform duration-200
-        md:relative md:translate-x-0 md:flex-shrink-0
+        md:static md:z-auto md:translate-x-0 md:flex-shrink-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         {/* Logo + Logout */}
