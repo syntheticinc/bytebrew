@@ -230,10 +230,8 @@ export function ChatPage() {
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         {/* Logo + Logout */}
-        <div className="flex items-center justify-between border-b border-brand-shade3/15 px-4 py-3">
-          <h1 className="text-sm font-bold text-brand-light">
-            Byte<span className="text-brand-accent">Brew</span>
-          </h1>
+        <div className="flex items-center justify-between border-b border-brand-shade3/15 px-4 py-2">
+          <img src="/logo-dark.svg" alt="ByteBrew" className="h-8" />
           <button
             onClick={logout}
             className="text-xs text-brand-shade3 transition-colors hover:text-brand-light"
@@ -349,7 +347,8 @@ export function ChatPage() {
             </div>
           ) : messages.length === 0 ? (
             <div className="flex h-full items-center justify-center">
-              <div className="text-center">
+              <div className="flex flex-col items-center text-center">
+                <img src="/logo-dark.svg" alt="ByteBrew" className="mb-4 h-12 opacity-30" />
                 <p className="text-lg font-medium text-brand-shade3">
                   Start a conversation
                 </p>

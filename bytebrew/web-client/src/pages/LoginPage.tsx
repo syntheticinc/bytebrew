@@ -29,11 +29,9 @@ export function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="rounded-card bg-brand-dark-alt p-8 shadow-lg">
           {/* Logo */}
-          <div className="mb-8 text-center">
-            <h1 className="text-2xl font-bold text-brand-light">
-              Byte<span className="text-brand-accent">Brew</span>
-            </h1>
-            <p className="mt-2 text-sm text-brand-shade3">Connect to ByteBrew Engine</p>
+          <div className="mb-8 flex flex-col items-center">
+            <img src="/logo-dark.svg" alt="ByteBrew" className="mb-3 h-10" />
+            <p className="text-sm text-brand-shade3">Connect to ByteBrew Engine</p>
           </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
