@@ -261,6 +261,10 @@ func main() {
 		}
 		embClient := indexing.NewEmbeddingsClient(ollamaURL, "nomic-embed-text", 768)
 		knowledgeIndexer = knowledge.NewIndexer(embClient, knowledgeRepo, slog.Default())
+
+		// Wire knowledge deps into agent tool resolver (for auto-injection)
+		// This will be set after engineComponents are created
+		_ = embClient // used below when setting resolver knowledge
 		agentRegistry = agent_registry.New(agentRepo)
 		if loadErr := agentRegistry.Load(ctx); loadErr != nil {
 			slog.Error("Failed to load agents from database", "error", loadErr)
@@ -291,6 +295,19 @@ func main() {
 	})
 	if err != nil {
 		log.Fatalf("Failed to create infrastructure components: %v", err)
+	}
+
+	// Wire knowledge search into agent tool resolver
+	if knowledgeRepo != nil && components != nil && components.AgentToolResolver != nil {
+		ollamaURL2 := "http://localhost:11434"
+		if cfg != nil {
+			if u := cfg.LLM.Ollama.BaseURL; u != "" {
+				ollamaURL2 = u
+			}
+		}
+		embClient2 := indexing.NewEmbeddingsClient(ollamaURL2, "nomic-embed-text", 768)
+		components.AgentToolResolver.SetKnowledge(knowledgeRepo, embClient2)
+		slog.InfoContext(ctx, "knowledge search wired into agent tool resolver")
 	}
 
 	// Create KitRegistry and register known kits.

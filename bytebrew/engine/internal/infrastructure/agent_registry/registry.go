@@ -172,5 +172,6 @@ func toFlow(rec config_repo.AgentRecord) *domain.Flow {
 		ToolExecution:  rec.ToolExecution,
 		Lifecycle:      lifecycle,
 		Spawn:          spawn,
+		KnowledgePath:  rec.KnowledgePath,
 	}
 }

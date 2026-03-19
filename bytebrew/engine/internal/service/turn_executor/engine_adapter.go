@@ -123,6 +123,8 @@ func (e *EngineAdapter) ExecuteTurn(
 
 	// 2. Get tool dependencies
 	toolDeps := e.toolDeps.GetDependencies(sessionID, projectKey)
+	toolDeps.AgentName = flow.Name
+	toolDeps.KnowledgePath = flow.KnowledgePath
 
 	// 3. Resolve tools from flow.ToolNames
 	resolvedTools, err := e.toolResolver.Resolve(ctx, flow.ToolNames, toolDeps)

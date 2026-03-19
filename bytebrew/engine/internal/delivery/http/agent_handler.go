@@ -23,6 +23,7 @@ type AgentDetail struct {
 	AgentInfo
 	ModelID        *uint            `json:"model_id,omitempty"`
 	SystemPrompt   string           `json:"system_prompt"`
+	KnowledgePath  string           `json:"knowledge_path,omitempty"`
 	Tools          []string         `json:"tools"`
 	CanSpawn       []string         `json:"can_spawn,omitempty"`
 	Lifecycle      string           `json:"lifecycle"`
@@ -47,6 +48,7 @@ type CreateAgentRequest struct {
 	ModelID        *uint            `json:"model_id,omitempty"`
 	SystemPrompt   string           `json:"system_prompt"`
 	Kit            string           `json:"kit,omitempty"`
+	KnowledgePath  string           `json:"knowledge_path,omitempty"`
 	Lifecycle      string           `json:"lifecycle,omitempty"`
 	ToolExecution  string           `json:"tool_execution,omitempty"`
 	MaxSteps       int              `json:"max_steps,omitempty"`

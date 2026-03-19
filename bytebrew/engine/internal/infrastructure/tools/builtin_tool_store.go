@@ -58,8 +58,10 @@ type Kit interface {
 
 // AgentToolResolver composes tools for a specific agent from various sources.
 type AgentToolResolver struct {
-	builtins    *BuiltinToolStore
-	kitProvider KitProvider
+	builtins          *BuiltinToolStore
+	kitProvider       KitProvider
+	knowledgeSearcher KnowledgeSearcher
+	knowledgeEmbedder KnowledgeEmbedder
 }
 
 // NewAgentToolResolver creates a new AgentToolResolver.
@@ -70,6 +72,12 @@ func NewAgentToolResolver(builtins *BuiltinToolStore) *AgentToolResolver {
 // SetKitProvider configures the kit provider for kit-based tool resolution.
 func (r *AgentToolResolver) SetKitProvider(kp KitProvider) {
 	r.kitProvider = kp
+}
+
+// SetKnowledge configures knowledge search dependencies for auto-injection.
+func (r *AgentToolResolver) SetKnowledge(searcher KnowledgeSearcher, embedder KnowledgeEmbedder) {
+	r.knowledgeSearcher = searcher
+	r.knowledgeEmbedder = embedder
 }
 
 // ResolveContext holds per-agent resolution context.
@@ -133,8 +141,17 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 	}
 
 	// Knowledge search — auto-inject when agent has KnowledgePath configured
-	if rc.Agent.Record.KnowledgePath != "" && rc.KnowledgeSearcher != nil && rc.KnowledgeEmbedder != nil {
-		knowledgeTool := NewKnowledgeSearchTool(rc.Agent.Record.Name, rc.KnowledgeSearcher, rc.KnowledgeEmbedder)
+	// Use ResolveContext deps first, fallback to resolver-level deps
+	ks := rc.KnowledgeSearcher
+	ke := rc.KnowledgeEmbedder
+	if ks == nil {
+		ks = r.knowledgeSearcher
+	}
+	if ke == nil {
+		ke = r.knowledgeEmbedder
+	}
+	if rc.Agent.Record.KnowledgePath != "" && ks != nil && ke != nil {
+		knowledgeTool := NewKnowledgeSearchTool(rc.Agent.Record.Name, ks, ke)
 		tools = append(tools, knowledgeTool)
 	}
 
@@ -167,6 +184,12 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 		t = NewSafeToolWrapper(t, name, riskLevel)
 		t = NewCancellableToolWrapper(t)
 		resolved = append(resolved, t)
+	}
+
+	// Knowledge auto-injection via legacy Resolve path
+	if deps.KnowledgePath != "" && deps.AgentName != "" && r.knowledgeSearcher != nil && r.knowledgeEmbedder != nil {
+		knowledgeTool := NewKnowledgeSearchTool(deps.AgentName, r.knowledgeSearcher, r.knowledgeEmbedder)
+		resolved = append(resolved, knowledgeTool)
 	}
 
 	return resolved, nil

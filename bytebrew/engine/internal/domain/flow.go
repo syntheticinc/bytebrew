@@ -29,6 +29,7 @@ type Flow struct {
 	ToolExecution  string // "sequential" or "parallel"
 	Lifecycle      LifecyclePolicy
 	Spawn          SpawnPolicy
+	KnowledgePath  string // path to knowledge folder for RAG
 }
 
 // Validate validates the Flow configuration
