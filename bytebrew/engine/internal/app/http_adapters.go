@@ -696,6 +696,40 @@ func splitCSV(s string) []string {
 	return result
 }
 
+// auditServiceHTTPAdapter bridges GORMAuditRepository to the http.AuditService interface.
+type auditServiceHTTPAdapter struct {
+	repo *config_repo.GORMAuditRepository
+}
+
+func (a *auditServiceHTTPAdapter) ListAuditLogs(ctx context.Context, actorType, action, resource string, from, to *time.Time, page, perPage int) ([]deliveryhttp.AuditResponse, int64, error) {
+	filters := config_repo.AuditFilters{
+		ActorType: actorType,
+		Action:    action,
+		Resource:  resource,
+		From:      from,
+		To:        to,
+	}
+
+	logs, total, err := a.repo.List(ctx, filters, page, perPage)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	result := make([]deliveryhttp.AuditResponse, 0, len(logs))
+	for _, l := range logs {
+		result = append(result, deliveryhttp.AuditResponse{
+			ID:        l.ID,
+			Timestamp: l.Timestamp.Format(time.RFC3339),
+			ActorType: l.ActorType,
+			ActorID:   l.ActorID,
+			Action:    l.Action,
+			Resource:  l.Resource,
+			Details:   l.Details,
+		})
+	}
+	return result, total, nil
+}
+
 // isEnvPlaceholder checks if a value is an env var placeholder like "${VAR_NAME}".
 func isEnvPlaceholder(v string) bool {
 	return strings.HasPrefix(v, "${") && strings.HasSuffix(v, "}")

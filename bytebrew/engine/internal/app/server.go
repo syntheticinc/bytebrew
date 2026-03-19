@@ -373,6 +373,11 @@ func Run(sc ServerConfig) error {
 				r.Post("/api/v1/agents/{name}/knowledge/reindex", knowledgeHandler.Reindex)
 			}
 
+			// Audit logs
+			auditRepo := config_repo.NewGORMAuditRepository(pgDB)
+			auditHandler := deliveryhttp.NewAuditHandler(&auditServiceHTTPAdapter{repo: auditRepo})
+			r.Get("/api/v1/audit", auditHandler.List)
+
 			// API Tokens
 			tokenHandler := deliveryhttp.NewTokenHandler(&tokenRepoHTTPAdapter{repo: apiTokenRepo})
 			r.Post("/api/v1/auth/tokens", tokenHandler.CreateToken)
