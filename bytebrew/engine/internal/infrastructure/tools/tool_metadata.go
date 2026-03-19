@@ -91,6 +91,11 @@ var toolMetadataRegistry = map[string]ToolMetadata{
 		Description:  "Performs semantic code search using embeddings. Finds conceptually related code even when exact keywords don't match.",
 		SecurityZone: ZoneCaution,
 	},
+	"knowledge_search": {
+		Name:         "knowledge_search",
+		Description:  "Searches the agent's knowledge base using semantic similarity. Finds relevant information from indexed documents (markdown, text) even when exact keywords don't match.",
+		SecurityZone: ZoneSafe,
+	},
 	"search_code": {
 		Name:         "search_code",
 		Description:  "Searches code by symbol name across the project. Finds function, class, and variable definitions by name or pattern.",

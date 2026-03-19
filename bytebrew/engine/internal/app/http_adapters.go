@@ -787,3 +787,36 @@ func (a *taskServiceHTTPAdapter) CancelTask(ctx context.Context, id uint) error 
 func (a *taskServiceHTTPAdapter) ProvideInput(_ context.Context, _ uint, _ string) error {
 	return nil
 }
+
+// knowledgeStatsHTTPAdapter bridges GORMKnowledgeRepository to the http.KnowledgeStats interface.
+type knowledgeStatsHTTPAdapter struct {
+	repo *config_repo.GORMKnowledgeRepository
+}
+
+func (a *knowledgeStatsHTTPAdapter) GetStats(ctx context.Context, agentName string) (int, int, *time.Time, error) {
+	return a.repo.GetStats(ctx, agentName)
+}
+
+// knowledgeReindexerHTTPAdapter bridges knowledge.Indexer to the http.KnowledgeReindexer interface.
+type knowledgeReindexerHTTPAdapter struct {
+	indexer  knowledgeIndexer
+	registry *agent_registry.AgentRegistry
+}
+
+// knowledgeIndexer is the consumer-side interface for indexing.
+type knowledgeIndexer interface {
+	IndexFolder(ctx context.Context, agentName string, folderPath string) error
+}
+
+func (a *knowledgeReindexerHTTPAdapter) Reindex(ctx context.Context, agentName string) error {
+	agent, err := a.registry.Get(agentName)
+	if err != nil {
+		return fmt.Errorf("agent not found: %s", agentName)
+	}
+	if agent.Record.KnowledgePath == "" {
+		return fmt.Errorf("agent %s has no knowledge_path configured", agentName)
+	}
+	slog.InfoContext(ctx, "starting knowledge reindex",
+		"agent", agentName, "path", agent.Record.KnowledgePath)
+	return a.indexer.IndexFolder(ctx, agentName, agent.Record.KnowledgePath)
+}

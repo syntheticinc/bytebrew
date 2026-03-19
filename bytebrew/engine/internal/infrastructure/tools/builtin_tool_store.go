@@ -80,6 +80,8 @@ type ResolveContext struct {
 	ConfirmRequester ConfirmationRequester    // nil if no confirmation support
 	Spawner          GenericAgentSpawner      // nil if spawn not available
 	Inspector        GenericAgentInspector    // nil if inspect not available
+	KnowledgeSearcher KnowledgeSearcher       // nil if no knowledge DB
+	KnowledgeEmbedder KnowledgeEmbedder       // nil if no embeddings
 }
 
 // ResolveForAgent returns tools available to a specific agent.
@@ -128,6 +130,12 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 				tools[i] = NewConfirmationWrapper(t, rc.ConfirmRequester)
 			}
 		}
+	}
+
+	// Knowledge search — auto-inject when agent has KnowledgePath configured
+	if rc.Agent.Record.KnowledgePath != "" && rc.KnowledgeSearcher != nil && rc.KnowledgeEmbedder != nil {
+		knowledgeTool := NewKnowledgeSearchTool(rc.Agent.Record.Name, rc.KnowledgeSearcher, rc.KnowledgeEmbedder)
+		tools = append(tools, knowledgeTool)
 	}
 
 	// Phase 3: Kit tools — append tools provided by the agent's kit

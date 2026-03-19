@@ -27,6 +27,8 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/agent_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/bridge"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/flow_registry"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/indexing"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/knowledge"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/kit"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/config_repo"
@@ -263,6 +265,41 @@ func Run(sc ServerConfig) error {
 	kitRegistry.Register(developer.New())
 	slog.InfoContext(ctx, "Kit registry initialized", "kits", kitRegistry.List())
 
+	// Knowledge indexing infrastructure (created before HTTP so endpoints can use it)
+	var knowledgeRepo *config_repo.GORMKnowledgeRepository
+	var knowledgeIndexer *knowledge.Indexer
+	var embeddingsClient *indexing.EmbeddingsClient
+	if pgDB != nil {
+		knowledgeRepo = config_repo.NewGORMKnowledgeRepository(pgDB)
+		embeddingsClient = indexing.NewEmbeddingsClient(
+			indexing.DefaultOllamaURL,
+			indexing.DefaultEmbedModel,
+			indexing.DefaultDimension,
+		)
+		knowledgeIndexer = knowledge.NewIndexer(embeddingsClient, knowledgeRepo, slog.Default())
+
+		// Background indexing for agents with KnowledgePath on startup
+		if agentRegistry != nil {
+			for _, name := range agentRegistry.List() {
+				agent, err := agentRegistry.Get(name)
+				if err != nil || agent.Record.KnowledgePath == "" {
+					continue
+				}
+				agentName := name
+				folderPath := agent.Record.KnowledgePath
+				go func() {
+					bgCtx := context.Background()
+					slog.InfoContext(bgCtx, "starting background knowledge indexing",
+						"agent", agentName, "path", folderPath)
+					if err := knowledgeIndexer.IndexFolder(bgCtx, agentName, folderPath); err != nil {
+						slog.ErrorContext(bgCtx, "background knowledge indexing failed",
+							"agent", agentName, "error", err)
+					}
+				}()
+			}
+		}
+	}
+
 	// HTTP REST API server (Phase 5) — starts only when bootstrap config is available.
 	var httpServer *deliveryhttp.Server
 	if agentRegistry != nil && bootstrapCfg != nil {
@@ -318,6 +355,23 @@ func Run(sc ServerConfig) error {
 			r.Post("/api/v1/config/reload", configHandler.Reload)
 			r.Post("/api/v1/config/import", configHandler.Import)
 			r.Get("/api/v1/config/export", configHandler.Export)
+
+			// Knowledge
+			if knowledgeRepo != nil {
+				var reindexer deliveryhttp.KnowledgeReindexer
+				if knowledgeIndexer != nil {
+					reindexer = &knowledgeReindexerHTTPAdapter{
+						indexer:  knowledgeIndexer,
+						registry: agentRegistry,
+					}
+				}
+				knowledgeHandler := deliveryhttp.NewKnowledgeHandler(
+					&knowledgeStatsHTTPAdapter{repo: knowledgeRepo},
+					reindexer,
+				)
+				r.Get("/api/v1/agents/{name}/knowledge/status", knowledgeHandler.Status)
+				r.Post("/api/v1/agents/{name}/knowledge/reindex", knowledgeHandler.Reindex)
+			}
 
 			// API Tokens
 			tokenHandler := deliveryhttp.NewTokenHandler(&tokenRepoHTTPAdapter{repo: apiTokenRepo})
