@@ -98,7 +98,7 @@ export default function TriggersPage() {
       key: 'type',
       header: 'Type',
       render: (row: Trigger) => (
-        <span className={`px-2 py-0.5 rounded text-xs font-medium ${row.type === 'cron' ? 'bg-brand-accent/10 text-brand-accent' : 'bg-purple-100 text-purple-700'}`}>
+        <span className={`px-2 py-0.5 rounded text-xs font-medium ${row.type === 'cron' ? 'bg-brand-accent/15 text-brand-accent' : 'bg-purple-500/15 text-purple-400'}`}>
           {row.type}
         </span>
       ),
@@ -124,7 +124,7 @@ export default function TriggersPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-brand-dark">Triggers</h1>
+        <h1 className="text-2xl font-bold text-brand-light">Triggers</h1>
         <button
           onClick={openCreate}
           className="px-4 py-2 bg-brand-accent text-brand-light rounded-btn text-sm font-medium hover:bg-brand-accent-hover transition-colors"
@@ -188,7 +188,7 @@ export default function TriggersPage() {
 
             {selected.description && (
               <DetailSection title="Description">
-                <p className="text-sm text-brand-dark">{selected.description}</p>
+                <p className="text-sm text-brand-light">{selected.description}</p>
               </DetailSection>
             )}
 
@@ -261,7 +261,7 @@ export default function TriggersPage() {
             onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
             className="rounded border-brand-shade1 text-brand-accent focus:ring-brand-accent"
           />
-          <label htmlFor="trigger-enabled" className="text-sm text-brand-dark">Enabled</label>
+          <label htmlFor="trigger-enabled" className="text-sm text-brand-light">Enabled</label>
         </div>
       </FormModal>
 

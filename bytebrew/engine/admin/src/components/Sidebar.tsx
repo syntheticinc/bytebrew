@@ -24,8 +24,9 @@ export default function Sidebar() {
 
   return (
     <aside className="w-60 bg-brand-dark text-brand-light flex flex-col min-h-screen">
-      <div className="px-4 py-5 border-b border-brand-dark-alt">
-        <h1 className="text-lg font-bold tracking-wide">ByteBrew Admin</h1>
+      <div className="px-4 py-5 border-b border-brand-shade3/15">
+        <img src="/logo-dark.svg" alt="ByteBrew" className="h-6" />
+        <span className="text-xs text-brand-shade3 mt-1 block">Admin Dashboard</span>
       </div>
 
       <nav className="flex-1 py-4 space-y-1 px-2">
@@ -49,7 +50,7 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="px-4 py-4 border-t border-brand-dark-alt">
+      <div className="px-4 py-4 border-t border-brand-shade3/15">
         <button
           onClick={logout}
           className="w-full px-3 py-2 text-sm text-brand-shade2 hover:text-white hover:bg-brand-dark-alt rounded-btn transition-colors text-left"

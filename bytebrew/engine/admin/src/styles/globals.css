@@ -3,7 +3,39 @@
 @tailwind utilities;
 
 @layer base {
+  html, body, #root {
+    @apply h-full;
+  }
+
   body {
-    @apply bg-brand-light font-mono text-brand-dark;
+    @apply bg-brand-dark font-mono text-brand-light antialiased;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #87867F #1F1F1F;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #1F1F1F;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #87867F;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #CBC9BC;
+  }
+
+  /* Dark theme for native select dropdowns */
+  select option {
+    background-color: #1F1F1F;
+    color: #F7F8F1;
   }
 }

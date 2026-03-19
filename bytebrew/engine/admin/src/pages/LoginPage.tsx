@@ -26,55 +26,62 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-brand-dark">
-      <div className="bg-white rounded-card border border-brand-shade1 p-8 w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-brand-dark mb-1">ByteBrew Admin</h1>
-        <p className="text-sm text-brand-shade3 mb-6">Sign in to manage your engine</p>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-btn text-sm text-red-700">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="username" className="block text-sm font-medium text-brand-dark mb-1">
-              Username
-            </label>
-            <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              autoFocus
-              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent"
-            />
+    <div className="flex min-h-screen items-center justify-center bg-brand-dark px-4">
+      <div className="w-full max-w-sm">
+        <div className="rounded-card bg-brand-dark-alt p-8 shadow-lg">
+          {/* Logo */}
+          <div className="mb-8 flex flex-col items-center">
+            <img src="/logo-dark.svg" alt="ByteBrew" className="mb-3 h-10" />
+            <p className="text-sm text-brand-shade3">Sign in to manage your engine</p>
           </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-brand-dark mb-1">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent"
-            />
-          </div>
+          {error && (
+            <div className="mb-4 p-3 rounded-btn border border-red-500/30 bg-red-500/10 text-sm text-red-400">
+              {error}
+            </div>
+          )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2 px-4 bg-brand-accent text-brand-light rounded-btn text-sm font-medium hover:bg-brand-accent-hover focus:outline-none focus:ring-2 focus:ring-brand-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {loading ? 'Signing in...' : 'Sign in'}
-          </button>
-        </form>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div>
+              <label htmlFor="username" className="mb-1 block text-xs font-medium text-brand-shade2">
+                Username
+              </label>
+              <input
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                autoFocus
+                placeholder="admin"
+                className="w-full rounded-btn border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 outline-none transition-colors focus:border-brand-accent"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="password" className="mb-1 block text-xs font-medium text-brand-shade2">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder="password"
+                className="w-full rounded-btn border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 outline-none transition-colors focus:border-brand-accent"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading || !username || !password}
+              className="mt-2 w-full rounded-btn bg-brand-accent py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-accent-hover disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Signing in...' : 'Sign in'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

@@ -18,7 +18,7 @@ interface FormFieldProps {
 }
 
 const inputClasses =
-  'w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent disabled:bg-brand-light disabled:text-brand-shade3 disabled:opacity-60 transition-colors';
+  'w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent disabled:bg-brand-dark disabled:text-brand-shade3 disabled:opacity-60 transition-colors';
 
 export default function FormField({
   label,
@@ -45,7 +45,7 @@ export default function FormField({
 
   return (
     <div className={className}>
-      <label htmlFor={id} className="block text-sm font-medium text-brand-dark mb-1">
+      <label htmlFor={id} className="block text-sm font-medium text-brand-light mb-1">
         {label}
         {required && <span className="text-brand-accent ml-0.5">*</span>}
       </label>
@@ -97,7 +97,7 @@ export default function FormField({
         <p className="mt-1 text-xs text-brand-shade3">{hint}</p>
       )}
       {hasError && (
-        <p className="mt-1 text-xs text-red-600">{error}</p>
+        <p className="mt-1 text-xs text-red-400">{error}</p>
       )}
     </div>
   );

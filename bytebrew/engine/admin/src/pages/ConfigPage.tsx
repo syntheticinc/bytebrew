@@ -64,10 +64,10 @@ export default function ConfigPage() {
 
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-bold text-brand-dark mb-6">Configuration</h1>
+      <h1 className="text-2xl font-bold text-brand-light mb-6">Configuration</h1>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-btn text-sm text-red-700">
+        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-btn text-sm text-red-400">
           {error}
         </div>
       )}
@@ -84,8 +84,8 @@ export default function ConfigPage() {
 
       {/* Reload */}
       <section className="mb-8">
-        <div className="bg-white rounded-card border border-brand-shade1 p-5">
-          <h2 className="text-lg font-semibold text-brand-dark mb-2">Hot Reload</h2>
+        <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15 p-5">
+          <h2 className="text-lg font-semibold text-brand-light mb-2">Hot Reload</h2>
           <p className="text-sm text-brand-shade3 mb-4">
             Reload agent configuration from the database. Changes take effect immediately.
           </p>
@@ -101,15 +101,15 @@ export default function ConfigPage() {
 
       {/* Export */}
       <section className="mb-8">
-        <div className="bg-white rounded-card border border-brand-shade1 p-5">
-          <h2 className="text-lg font-semibold text-brand-dark mb-2">Export</h2>
+        <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15 p-5">
+          <h2 className="text-lg font-semibold text-brand-light mb-2">Export</h2>
           <p className="text-sm text-brand-shade3 mb-4">
             Download current configuration as YAML file.
           </p>
           <button
             onClick={handleExport}
             disabled={exporting}
-            className="px-4 py-2 bg-brand-light border border-brand-shade2 text-brand-dark rounded-btn text-sm font-medium hover:bg-brand-shade1/50 disabled:opacity-50 transition-colors"
+            className="px-4 py-2 bg-brand-dark border border-brand-shade3/30 text-brand-shade2 rounded-btn text-sm font-medium hover:bg-brand-dark hover:text-brand-light disabled:opacity-50 transition-colors"
           >
             {exporting ? 'Exporting...' : 'Export YAML'}
           </button>
@@ -118,8 +118,8 @@ export default function ConfigPage() {
 
       {/* Import */}
       <section>
-        <div className="bg-white rounded-card border border-brand-shade1 p-5">
-          <h2 className="text-lg font-semibold text-brand-dark mb-2">Import</h2>
+        <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15 p-5">
+          <h2 className="text-lg font-semibold text-brand-light mb-2">Import</h2>
           <p className="text-sm text-brand-shade3 mb-4">
             Upload a YAML config file. It will be parsed and saved to the database, then reloaded.
           </p>
@@ -128,12 +128,12 @@ export default function ConfigPage() {
               ref={fileInputRef}
               type="file"
               accept=".yaml,.yml"
-              className="text-sm text-brand-shade3 file:mr-4 file:py-2 file:px-4 file:rounded-btn file:border-0 file:text-sm file:font-medium file:bg-brand-light file:text-brand-dark hover:file:bg-brand-shade1/50"
+              className="text-sm text-brand-shade3 file:mr-4 file:py-2 file:px-4 file:rounded-btn file:border-0 file:text-sm file:font-medium file:bg-brand-dark file:text-brand-shade2 hover:file:bg-brand-shade3/20"
             />
             <button
               onClick={handleImport}
               disabled={importing}
-              className="px-4 py-2 bg-brand-light border border-brand-shade2 text-brand-dark rounded-btn text-sm font-medium hover:bg-brand-shade1/50 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 bg-brand-dark border border-brand-shade3/30 text-brand-shade2 rounded-btn text-sm font-medium hover:text-brand-light disabled:opacity-50 transition-colors"
             >
               {importing ? 'Importing...' : 'Import'}
             </button>

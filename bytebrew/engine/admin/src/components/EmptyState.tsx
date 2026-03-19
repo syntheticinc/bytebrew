@@ -14,7 +14,7 @@ export default function EmptyState({ icon, message, description, action }: Empty
       {icon && (
         <div className="text-4xl mb-4 opacity-60">{icon}</div>
       )}
-      <p className="text-base font-medium text-brand-dark mb-1">{message}</p>
+      <p className="text-base font-medium text-brand-light mb-1">{message}</p>
       {description && (
         <p className="text-sm text-brand-shade3 mb-4 text-center max-w-sm">{description}</p>
       )}

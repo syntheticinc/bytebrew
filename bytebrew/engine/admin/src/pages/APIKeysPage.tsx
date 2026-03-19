@@ -107,7 +107,7 @@ export default function APIKeysPage() {
             e.stopPropagation();
             setDeleteTarget(row.id);
           }}
-          className="text-red-600 hover:text-red-800 text-sm"
+          className="text-red-400 hover:text-red-300 text-sm"
         >
           Revoke
         </button>
@@ -116,12 +116,12 @@ export default function APIKeysPage() {
   ];
 
   if (loading) return <div className="text-brand-shade3">Loading tokens...</div>;
-  if (error) return <div className="text-red-600">Error: {error}</div>;
+  if (error) return <div className="text-red-400">Error: {error}</div>;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-brand-dark">API Keys</h1>
+        <h1 className="text-2xl font-bold text-brand-light">API Keys</h1>
         <button
           onClick={() => setShowCreate(true)}
           className="px-4 py-2 bg-brand-accent text-brand-light rounded-btn text-sm font-medium hover:bg-brand-accent-hover transition-colors"
@@ -130,7 +130,7 @@ export default function APIKeysPage() {
         </button>
       </div>
 
-      <div className="bg-white rounded-card border border-brand-shade1">
+      <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15">
         <DataTable
           columns={columns}
           data={tokens ?? []}
@@ -151,18 +151,18 @@ export default function APIKeysPage() {
       >
         <form onSubmit={handleCreate} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-brand-dark mb-1">Token Name</label>
+            <label className="block text-sm font-medium text-brand-light mb-1">Token Name</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
               placeholder="my-integration"
-              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
+              className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light placeholder-brand-shade3 focus:outline-none focus:border-brand-accent"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-brand-dark mb-2">Scopes</label>
+            <label className="block text-sm font-medium text-brand-light mb-2">Scopes</label>
             <div className="space-y-2">
               {SCOPES.map((s) => (
                 <label key={s.bit} className="flex items-center gap-2 cursor-pointer">
@@ -170,9 +170,9 @@ export default function APIKeysPage() {
                     type="checkbox"
                     checked={(scopesMask & s.bit) !== 0}
                     onChange={() => toggleScope(s.bit)}
-                    className="rounded border-brand-shade2 text-brand-accent focus:ring-brand-accent"
+                    className="rounded border-brand-shade3/30 text-brand-accent focus:ring-brand-accent bg-brand-dark"
                   />
-                  <span className="text-sm text-brand-dark">{s.label}</span>
+                  <span className="text-sm text-brand-light">{s.label}</span>
                   <span className="text-xs text-brand-shade3">({s.description})</span>
                 </label>
               ))}
@@ -186,7 +186,7 @@ export default function APIKeysPage() {
                 setName('');
                 setScopesMask(0);
               }}
-              className="px-4 py-2 text-sm text-brand-dark border border-brand-shade2 rounded-btn hover:bg-brand-light"
+              className="px-4 py-2 text-sm text-brand-shade2 border border-brand-shade3/30 rounded-btn hover:bg-brand-dark hover:text-brand-light transition-colors"
             >
               Cancel
             </button>
@@ -211,7 +211,7 @@ export default function APIKeysPage() {
         title="Token Created"
       >
         <div className="space-y-4">
-          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-btn text-sm text-yellow-800">
+          <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-btn text-sm text-yellow-400">
             Save this token now. It will not be shown again.
           </div>
           <div className="flex items-center gap-2">
@@ -219,11 +219,11 @@ export default function APIKeysPage() {
               type="text"
               value={createdToken ?? ''}
               readOnly
-              className="flex-1 px-3 py-2 border border-brand-shade1 rounded-card text-sm font-mono bg-brand-light"
+              className="flex-1 px-3 py-2 border border-brand-shade3/30 rounded-card text-sm font-mono bg-brand-dark text-brand-light"
             />
             <button
               onClick={copyToken}
-              className="px-3 py-2 text-sm bg-brand-light border border-brand-shade1 rounded-btn hover:bg-brand-shade1/50"
+              className="px-3 py-2 text-sm bg-brand-dark border border-brand-shade3/30 rounded-btn text-brand-shade2 hover:text-brand-light transition-colors"
             >
               {copied ? 'Copied!' : 'Copy'}
             </button>
@@ -240,7 +240,7 @@ export default function APIKeysPage() {
           <>
             <button
               onClick={() => setDeleteTarget(null)}
-              className="px-4 py-2 text-sm text-brand-dark border border-brand-shade2 rounded-btn hover:bg-brand-light"
+              className="px-4 py-2 text-sm text-brand-shade2 border border-brand-shade3/30 rounded-btn hover:bg-brand-dark hover:text-brand-light transition-colors"
             >
               Cancel
             </button>
@@ -253,7 +253,7 @@ export default function APIKeysPage() {
           </>
         }
       >
-        <p className="text-sm text-brand-shade3">
+        <p className="text-sm text-brand-shade2">
           Revoke this API token? Any integrations using this token will stop working.
         </p>
       </Modal>

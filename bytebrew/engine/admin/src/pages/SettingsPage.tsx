@@ -56,29 +56,29 @@ export default function SettingsPage() {
   }
 
   if (loading) return <div className="text-brand-shade3">Loading settings...</div>;
-  if (error) return <div className="text-red-600">Error: {error}</div>;
+  if (error) return <div className="text-red-400">Error: {error}</div>;
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-2xl font-bold text-brand-dark mb-6">Settings</h1>
+      <h1 className="text-2xl font-bold text-brand-light mb-6">Settings</h1>
 
       {/* BYOK Configuration */}
       <section className="mb-8">
-        <h2 className="text-lg font-semibold text-brand-dark mb-4">BYOK (Bring Your Own Key)</h2>
-        <div className="bg-white rounded-card border border-brand-shade1 divide-y divide-brand-shade1">
+        <h2 className="text-lg font-semibold text-brand-light mb-4">BYOK (Bring Your Own Key)</h2>
+        <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15 divide-y divide-brand-shade3/10">
           {BYOK_KEYS.map((item) => {
             const enabled = localSettings[item.key] === 'true';
             return (
               <div key={item.key} className="flex items-center justify-between px-4 py-3">
                 <div>
-                  <div className="text-sm font-medium text-brand-dark">{item.label}</div>
+                  <div className="text-sm font-medium text-brand-light">{item.label}</div>
                   <div className="text-xs text-brand-shade3">{item.description}</div>
                 </div>
                 <button
                   onClick={() => handleToggle(item.key)}
                   disabled={savingKey === item.key}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    enabled ? 'bg-brand-accent' : 'bg-brand-shade2'
+                    enabled ? 'bg-brand-accent' : 'bg-brand-shade3/30'
                   } ${savingKey === item.key ? 'opacity-50' : ''}`}
                 >
                   <span
@@ -95,8 +95,8 @@ export default function SettingsPage() {
 
       {/* General Settings */}
       <section className="mb-8">
-        <h2 className="text-lg font-semibold text-brand-dark mb-4">General</h2>
-        <div className="bg-white rounded-card border border-brand-shade1 divide-y divide-brand-shade1">
+        <h2 className="text-lg font-semibold text-brand-light mb-4">General</h2>
+        <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15 divide-y divide-brand-shade3/10">
           <SettingRow
             label="Logging Level"
             settingKey="logging.level"
@@ -113,15 +113,15 @@ export default function SettingsPage() {
 
       {/* Environment Variables (read-only, masked) */}
       <section>
-        <h2 className="text-lg font-semibold text-brand-dark mb-4">Security (Environment Variables)</h2>
+        <h2 className="text-lg font-semibold text-brand-light mb-4">Security (Environment Variables)</h2>
         <p className="text-sm text-brand-shade3 mb-3">
           These values are set via environment variables and cannot be changed from the dashboard.
         </p>
-        <div className="bg-white rounded-card border border-brand-shade1 divide-y divide-brand-shade1">
+        <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15 divide-y divide-brand-shade3/10">
           {ENV_VARS.map((env) => (
             <div key={env.name} className="flex items-center justify-between px-4 py-3">
               <div>
-                <div className="text-sm font-mono text-brand-dark">{env.name}</div>
+                <div className="text-sm font-mono text-brand-light">{env.name}</div>
                 <div className="text-xs text-brand-shade3">{env.description}</div>
               </div>
               <span className="text-sm text-brand-shade3 font-mono">*****</span>
@@ -169,7 +169,7 @@ function SettingRow({
 
   return (
     <div className="flex items-center justify-between px-4 py-3">
-      <div className="text-sm font-medium text-brand-dark">{label}</div>
+      <div className="text-sm font-medium text-brand-light">{label}</div>
       <div className="flex items-center gap-2">
         {type === 'select' && options ? (
           <select
@@ -177,7 +177,7 @@ function SettingRow({
             onChange={(e) => {
               setLocalValue(e.target.value);
             }}
-            className="px-2 py-1 bg-white border border-brand-shade1 rounded-btn text-sm focus:outline-none focus:border-brand-accent"
+            className="px-2 py-1 bg-brand-dark border border-brand-shade3/30 rounded-btn text-sm text-brand-light focus:outline-none focus:border-brand-accent"
           >
             {options.map((o) => (
               <option key={o} value={o}>
@@ -190,7 +190,7 @@ function SettingRow({
             type="text"
             value={localValue}
             onChange={(e) => setLocalValue(e.target.value)}
-            className="px-2 py-1 bg-white border border-brand-shade1 rounded-btn text-sm w-48 focus:outline-none focus:border-brand-accent"
+            className="px-2 py-1 bg-brand-dark border border-brand-shade3/30 rounded-btn text-sm text-brand-light w-48 focus:outline-none focus:border-brand-accent"
           />
         )}
         {localValue !== value && (

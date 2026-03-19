@@ -41,9 +41,9 @@ export default function DataTable<T extends Record<string, any>>({
 
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-brand-shade1">
+      <table className="min-w-full divide-y divide-brand-shade3/15">
         <thead>
-          <tr className="bg-brand-light/50">
+          <tr className="bg-brand-dark">
             {columns.map((col) => (
               <th
                 key={col.key}
@@ -54,7 +54,7 @@ export default function DataTable<T extends Record<string, any>>({
             ))}
           </tr>
         </thead>
-        <tbody className="bg-white divide-y divide-brand-shade1/50">
+        <tbody className="bg-brand-dark-alt divide-y divide-brand-shade3/10">
           {data.map((row) => {
             const rowKey = String(row[keyField]);
             const isActive = activeKey != null && String(activeKey) === rowKey;
@@ -67,15 +67,15 @@ export default function DataTable<T extends Record<string, any>>({
                   'transition-colors',
                   onRowClick ? 'cursor-pointer' : '',
                   isActive
-                    ? 'bg-brand-accent/5 border-l-2 border-l-brand-accent'
+                    ? 'bg-brand-accent/10 border-l-2 border-l-brand-accent'
                     : 'border-l-2 border-l-transparent',
-                  !isActive && onRowClick ? 'hover:bg-brand-light/70' : '',
+                  !isActive && onRowClick ? 'hover:bg-brand-dark' : '',
                 ]
                   .filter(Boolean)
                   .join(' ')}
               >
                 {columns.map((col) => (
-                  <td key={col.key} className={`px-4 py-3 text-sm text-brand-dark ${col.className ?? ''}`}>
+                  <td key={col.key} className={`px-4 py-3 text-sm text-brand-light ${col.className ?? ''}`}>
                     {col.render ? col.render(row) : String(row[col.key] ?? '')}
                   </td>
                 ))}

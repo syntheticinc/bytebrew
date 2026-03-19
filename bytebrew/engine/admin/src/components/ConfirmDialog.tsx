@@ -36,7 +36,7 @@ export default function ConfirmDialog({
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-brand-dark border border-brand-shade2 rounded-btn hover:bg-brand-light transition-colors"
+            className="px-4 py-2 text-sm text-brand-shade2 border border-brand-shade3/30 rounded-btn hover:bg-brand-dark hover:text-brand-light transition-colors"
           >
             Cancel
           </button>
@@ -50,7 +50,7 @@ export default function ConfirmDialog({
         </div>
       }
     >
-      <div className="text-sm text-brand-shade3">{message}</div>
+      <div className="text-sm text-brand-shade2">{message}</div>
     </Modal>
   );
 }

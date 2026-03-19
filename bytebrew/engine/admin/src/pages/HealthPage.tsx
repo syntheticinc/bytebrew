@@ -13,18 +13,18 @@ export default function HealthPage() {
   }, [refetch]);
 
   if (loading && !health) return <div className="text-brand-shade3">Loading health...</div>;
-  if (error) return <div className="text-red-600">Error: {error}</div>;
+  if (error) return <div className="text-red-400">Error: {error}</div>;
   if (!health) return null;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-brand-dark">Health</h1>
+        <h1 className="text-2xl font-bold text-brand-light">Health</h1>
         <div className="flex items-center gap-3">
           <span className="text-xs text-brand-shade3">Auto-refreshes every 30s</span>
           <button
             onClick={refetch}
-            className="px-4 py-2 text-sm text-brand-dark border border-brand-shade2 rounded-btn hover:bg-brand-light"
+            className="px-4 py-2 text-sm text-brand-shade2 border border-brand-shade3/30 rounded-btn hover:bg-brand-dark-alt hover:text-brand-light transition-colors"
           >
             Refresh
           </button>
@@ -33,27 +33,27 @@ export default function HealthPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Status */}
-        <div className="bg-white rounded-card border border-brand-shade1 p-5">
+        <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15 p-5">
           <div className="text-sm font-medium text-brand-shade3 mb-2">Status</div>
           <StatusBadge status={health.status} className="text-sm" />
         </div>
 
         {/* Version */}
-        <div className="bg-white rounded-card border border-brand-shade1 p-5">
+        <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15 p-5">
           <div className="text-sm font-medium text-brand-shade3 mb-2">Version</div>
-          <div className="text-lg font-semibold text-brand-dark">{health.version || 'dev'}</div>
+          <div className="text-lg font-semibold text-brand-light">{health.version || 'dev'}</div>
         </div>
 
         {/* Uptime */}
-        <div className="bg-white rounded-card border border-brand-shade1 p-5">
+        <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15 p-5">
           <div className="text-sm font-medium text-brand-shade3 mb-2">Uptime</div>
-          <div className="text-lg font-semibold text-brand-dark">{health.uptime}</div>
+          <div className="text-lg font-semibold text-brand-light">{health.uptime}</div>
         </div>
 
         {/* Agents */}
-        <div className="bg-white rounded-card border border-brand-shade1 p-5">
+        <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15 p-5">
           <div className="text-sm font-medium text-brand-shade3 mb-2">Agents</div>
-          <div className="text-lg font-semibold text-brand-dark">{health.agents_count}</div>
+          <div className="text-lg font-semibold text-brand-light">{health.agents_count}</div>
         </div>
       </div>
     </div>
