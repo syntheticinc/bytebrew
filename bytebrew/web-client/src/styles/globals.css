@@ -3,6 +3,10 @@
 @tailwind utilities;
 
 @layer base {
+  html, body, #root {
+    @apply h-full;
+  }
+
   body {
     @apply bg-brand-dark font-mono text-brand-light antialiased;
   }
