@@ -13,7 +13,14 @@ import type {
   TaskResponse,
 } from '../types';
 
-const BASE_URL = '/api/v1';
+// API base URL — configurable via:
+// 1. window.__BYTEBREW_API_URL__ (runtime, set in index.html before app loads)
+// 2. VITE_API_URL env variable (build-time)
+// 3. Default: /api/v1 (relative, works with proxy)
+const BASE_URL =
+  (window as unknown as Record<string, string>).__BYTEBREW_API_URL__ ||
+  import.meta.env.VITE_API_URL ||
+  '/api/v1';
 
 class ByteBrewClient {
   private token: string | null = null;
