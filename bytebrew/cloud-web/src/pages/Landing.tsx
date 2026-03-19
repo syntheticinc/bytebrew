@@ -625,7 +625,7 @@ function InstallSection() {
         </p>
 
         <TerminalBlock
-          command="curl -fsSL https://get.bytebrew.ai/docker-compose.yml -o docker-compose.yml && docker compose up -d"
+          command="curl -fsSL https://bytebrew.ai/releases/docker-compose.yml -o docker-compose.yml && docker compose up -d"
         />
 
         <p className="mt-6 text-center text-sm text-brand-shade3">

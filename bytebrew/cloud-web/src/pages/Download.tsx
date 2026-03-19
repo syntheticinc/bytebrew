@@ -53,7 +53,7 @@ export function DownloadPage() {
               </span>
               <h3 className="text-sm font-medium text-brand-light">Download configuration</h3>
             </div>
-            <TerminalBlock command="curl -fsSL https://get.bytebrew.ai/docker-compose.yml -o docker-compose.yml" />
+            <TerminalBlock command="curl -fsSL https://bytebrew.ai/releases/docker-compose.yml -o docker-compose.yml" />
           </div>
 
           {/* Step 2 */}
@@ -110,14 +110,14 @@ export function DownloadPage() {
           {/* Linux/macOS */}
           <div>
             <h3 className="text-sm font-medium text-brand-light mb-3">Linux / macOS</h3>
-            <TerminalBlock command="curl -fsSL https://get.bytebrew.ai/install.sh | bash" />
+            <TerminalBlock command="curl -fsSL https://bytebrew.ai/releases/install.sh | bash" />
           </div>
 
           {/* Windows */}
           <div>
             <h3 className="text-sm font-medium text-brand-light mb-3">Windows (PowerShell)</h3>
             <TerminalBlock
-              command="irm https://get.bytebrew.ai/install.ps1 | iex"
+              command="irm https://bytebrew.ai/releases/install.ps1 | iex"
               prefix=">"
             />
           </div>

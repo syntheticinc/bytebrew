@@ -230,7 +230,7 @@ function QuickStartContent() {
           Download the Docker Compose file and start the engine. This spins up two containers:
           the ByteBrew Engine and a PostgreSQL database.
         </p>
-        <CodeBlock>{`curl -fsSL https://get.bytebrew.ai/docker-compose.yml -o docker-compose.yml
+        <CodeBlock>{`curl -fsSL https://bytebrew.ai/releases/docker-compose.yml -o docker-compose.yml
 docker compose up -d`}</CodeBlock>
         <p className="text-sm text-brand-shade3 mt-3">
           The engine starts on port <Ic>8080</Ic> (API) and <Ic>8443</Ic> (Admin Dashboard).
