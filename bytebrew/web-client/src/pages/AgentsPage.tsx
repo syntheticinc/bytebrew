@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
+import { AgentDetailModal } from '../components/AgentDetailModal';
 import type { AgentInfo } from '../types';
 
 export function AgentsPage() {
@@ -10,6 +11,7 @@ export function AgentsPage() {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -39,6 +41,9 @@ export function AgentsPage() {
             <Link to="/tasks" className="text-xs text-brand-shade3 hover:text-brand-light">
               Tasks
             </Link>
+            <Link to="/health" className="text-xs text-brand-shade3 hover:text-brand-light">
+              Health
+            </Link>
             <button onClick={logout} className="text-xs text-brand-shade3 hover:text-brand-light">
               Logout
             </button>
@@ -64,10 +69,9 @@ export function AgentsPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {agents.map((agent) => (
-              <button
+              <div
                 key={agent.name}
-                onClick={() => navigate(`/chat?agent=${encodeURIComponent(agent.name)}`)}
-                className="group rounded-card border border-brand-shade3/15 bg-brand-dark-alt p-5 text-left transition-all hover:border-brand-accent/30 hover:shadow-lg"
+                className="group rounded-card border border-brand-shade3/15 bg-brand-dark-alt p-5 transition-all hover:border-brand-accent/30 hover:shadow-lg"
               >
                 <h3 className="font-bold text-brand-light group-hover:text-brand-accent">
                   {agent.name}
@@ -92,11 +96,33 @@ export function AgentsPage() {
                     </span>
                   )}
                 </div>
-              </button>
+                <div className="mt-4 flex items-center gap-2">
+                  <button
+                    onClick={() => navigate(`/chat?agent=${encodeURIComponent(agent.name)}`)}
+                    className="rounded-btn bg-brand-accent px-3 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-brand-accent-hover"
+                  >
+                    Chat
+                  </button>
+                  <button
+                    onClick={() => setSelectedAgent(agent.name)}
+                    className="rounded-btn border border-brand-shade3/20 px-3 py-1.5 text-[11px] font-medium text-brand-shade2 transition-colors hover:border-brand-shade3/40 hover:text-brand-light"
+                  >
+                    Details
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Agent Detail Modal */}
+      {selectedAgent && (
+        <AgentDetailModal
+          agentName={selectedAgent}
+          onClose={() => setSelectedAgent(null)}
+        />
+      )}
     </div>
   );
 }

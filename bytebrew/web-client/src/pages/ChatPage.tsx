@@ -107,6 +107,12 @@ export function ChatPage() {
             >
               Tasks
             </Link>
+            <Link
+              to="/health"
+              className="rounded-btn px-3 py-1.5 text-xs text-brand-shade3 transition-colors hover:bg-brand-shade3/10 hover:text-brand-light"
+            >
+              Health
+            </Link>
           </nav>
         </div>
       </aside>

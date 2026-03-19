@@ -4,6 +4,7 @@ import { LoginPage } from './pages/LoginPage';
 import { ChatPage } from './pages/ChatPage';
 import { AgentsPage } from './pages/AgentsPage';
 import { TasksPage } from './pages/TasksPage';
+import { HealthPage } from './pages/HealthPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -40,6 +41,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <TasksPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/health"
+            element={
+              <ProtectedRoute>
+                <HealthPage />
               </ProtectedRoute>
             }
           />

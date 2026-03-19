@@ -12,6 +12,8 @@ export interface AgentDetail extends AgentInfo {
   can_spawn: string[];
   lifecycle: string;
   max_steps: number;
+  tool_execution?: string;
+  max_context_size?: number;
 }
 
 export interface HealthResponse {

@@ -75,6 +75,9 @@ export function TasksPage() {
             <Link to="/agents" className="text-xs text-brand-shade3 hover:text-brand-light">
               Agents
             </Link>
+            <Link to="/health" className="text-xs text-brand-shade3 hover:text-brand-light">
+              Health
+            </Link>
             <button onClick={logout} className="text-xs text-brand-shade3 hover:text-brand-light">
               Logout
             </button>
