@@ -96,3 +96,11 @@ export interface PaginatedSessionResponse {
 export interface LoginResponse {
   token: string;
 }
+
+export interface MessageResponse {
+  id: string;
+  role: string;
+  content: string;
+  tool_name: string;
+  created_at: string;
+}

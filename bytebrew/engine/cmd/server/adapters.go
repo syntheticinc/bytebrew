@@ -656,6 +656,7 @@ type chatServiceAdapter struct {
 	sessionRegistry *flow_registry.SessionRegistry
 	sessProcessor   *session_processor.Processor
 	sessionRepo     *config_repo.GORMSessionRepository
+	messageRepo     *config_repo.GORMMessageRepository
 }
 
 func (a *chatServiceAdapter) Chat(agentName, message, userID, sessionID string) (<-chan deliveryhttp.SSEEvent, error) {
@@ -693,6 +694,19 @@ func (a *chatServiceAdapter) Chat(agentName, message, userID, sessionID string) 
 		_ = a.sessionRepo.TouchUpdatedAt(context.Background(), sessionID)
 	}
 
+	// Save user message to DB (non-blocking)
+	if a.messageRepo != nil {
+		go func() {
+			_ = a.messageRepo.SaveMessage(context.Background(), &models.RuntimeMessageModel{
+				ID:          fmt.Sprintf("msg-%d", time.Now().UnixNano()),
+				SessionID:   sessionID,
+				MessageType: "user",
+				Sender:      userID,
+				Content:     message,
+			})
+		}()
+	}
+
 	// Subscribe to SSE events from session
 	eventCh, cleanup := a.sessionRegistry.Subscribe(sessionID)
 
@@ -720,6 +734,8 @@ func (a *chatServiceAdapter) Chat(agentName, message, userID, sessionID string) 
 				sseEvt := convertSessionEventToSSE(evt)
 				if sseEvt != nil {
 					ch <- *sseEvt
+					// Save persistent message types to DB (async, don't block stream)
+					a.saveSSEEventMessage(sessionID, evt, sseEvt)
 					if sseEvt.Type == "done" {
 						return
 					}
@@ -732,6 +748,64 @@ func (a *chatServiceAdapter) Chat(agentName, message, userID, sessionID string) 
 	}()
 
 	return ch, nil
+}
+
+// saveSSEEventMessage persists relevant SSE events as messages in the database.
+// Runs asynchronously to avoid blocking the SSE stream.
+func (a *chatServiceAdapter) saveSSEEventMessage(sessionID string, evt *pb.SessionEvent, sseEvt *deliveryhttp.SSEEvent) {
+	if a.messageRepo == nil || evt == nil || sseEvt == nil {
+		return
+	}
+
+	var msg *models.RuntimeMessageModel
+
+	switch sseEvt.Type {
+	case "message":
+		if evt.Content == "" {
+			return // skip empty messages
+		}
+		msg = &models.RuntimeMessageModel{
+			ID:          fmt.Sprintf("msg-%d", time.Now().UnixNano()),
+			SessionID:   sessionID,
+			MessageType: "assistant",
+			Content:     evt.Content,
+		}
+	case "tool_call":
+		metadata := fmt.Sprintf(`{"tool":"%s"}`, evt.ToolName)
+		msg = &models.RuntimeMessageModel{
+			ID:          fmt.Sprintf("msg-%d", time.Now().UnixNano()),
+			SessionID:   sessionID,
+			MessageType: "tool_call",
+			Content:     evt.Content,
+			Metadata:    metadata,
+		}
+	case "tool_result":
+		content := evt.Content
+		if content == "" {
+			content = evt.ToolResultSummary
+		}
+		metadata := fmt.Sprintf(`{"tool":"%s"}`, evt.ToolName)
+		msg = &models.RuntimeMessageModel{
+			ID:          fmt.Sprintf("msg-%d", time.Now().UnixNano()),
+			SessionID:   sessionID,
+			MessageType: "tool_result",
+			Content:     content,
+			Metadata:    metadata,
+		}
+	case "error":
+		msg = &models.RuntimeMessageModel{
+			ID:          fmt.Sprintf("msg-%d", time.Now().UnixNano()),
+			SessionID:   sessionID,
+			MessageType: "error",
+			Content:     evt.Content,
+		}
+	default:
+		return
+	}
+
+	go func() {
+		_ = a.messageRepo.SaveMessage(context.Background(), msg)
+	}()
 }
 
 // convertSessionEventToSSE converts a gRPC SessionEvent to an SSE event.
@@ -1026,7 +1100,8 @@ func (a *taskServiceAdapter) ProvideInput(_ context.Context, _ uint, _ string) e
 
 // sessionServiceAdapter bridges GORMSessionRepository to the http.SessionService interface.
 type sessionServiceAdapter struct {
-	repo *config_repo.GORMSessionRepository
+	repo        *config_repo.GORMSessionRepository
+	messageRepo *config_repo.GORMMessageRepository
 }
 
 func (a *sessionServiceAdapter) ListSessions(ctx context.Context, agentName, userID, status string, page, perPage int) ([]deliveryhttp.SessionResponse, int64, error) {
@@ -1112,7 +1187,61 @@ func (a *sessionServiceAdapter) UpdateSession(ctx context.Context, id string, re
 }
 
 func (a *sessionServiceAdapter) DeleteSession(ctx context.Context, id string) error {
+	if a.messageRepo != nil {
+		_ = a.messageRepo.DeleteBySession(ctx, id)
+	}
 	return a.repo.Delete(ctx, id)
+}
+
+// messageServiceAdapter bridges GORMMessageRepository to the http.MessageService interface.
+type messageServiceAdapter struct {
+	repo *config_repo.GORMMessageRepository
+}
+
+func (a *messageServiceAdapter) ListMessages(ctx context.Context, sessionID string) ([]deliveryhttp.MessageResponse, error) {
+	messages, err := a.repo.ListBySession(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]deliveryhttp.MessageResponse, 0, len(messages))
+	seen := make(map[string]bool) // deduplicate by content+role
+	for _, m := range messages {
+		// Skip empty messages
+		if m.Content == "" {
+			continue
+		}
+
+		// Map role: "agent" → "assistant"
+		role := m.MessageType
+		if role == "agent" {
+			role = "assistant"
+		}
+
+		// Deduplicate: same role + same content = skip
+		dedup := role + ":" + m.Content
+		if seen[dedup] {
+			continue
+		}
+		seen[dedup] = true
+
+		resp := deliveryhttp.MessageResponse{
+			ID:        m.ID,
+			Role:      role,
+			Content:   m.Content,
+			CreatedAt: m.CreatedAt.Format(time.RFC3339),
+		}
+		// Extract tool_name from metadata JSON if present
+		if m.Metadata != "" {
+			var meta struct {
+				Tool string `json:"tool"`
+			}
+			if json.Unmarshal([]byte(m.Metadata), &meta) == nil && meta.Tool != "" {
+				resp.ToolName = meta.Tool
+			}
+		}
+		result = append(result, resp)
+	}
+	return result, nil
 }
 
 // toolMetadataAdapter bridges tools.GetAllToolMetadata to the http.ToolMetadataProvider interface.

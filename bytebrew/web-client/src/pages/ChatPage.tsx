@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { api } from '../api/client';
-import { useChat, clearSessionMessages } from '../hooks/useChat';
+import { useChat } from '../hooks/useChat';
 import { useAuth } from '../hooks/useAuth';
 import { ChatMessage } from '../components/ChatMessage';
 import { ChatInput } from '../components/ChatInput';
@@ -52,7 +52,7 @@ export function ChatPage() {
     [activeSessionId, sessions],
   );
 
-  const { messages, streaming, send, respond, stop, clear } = useChat({
+  const { messages, streaming, loadingHistory, send, respond, stop, clear } = useChat({
     currentAgent: selectedAgent,
     sessionId: activeSessionId,
     onFirstAssistantResponse: handleFirstAssistantResponse,
@@ -156,7 +156,6 @@ export function ChatPage() {
   const handleDeleteSession = useCallback(
     (id: string) => {
       api.deleteSession(id).then(() => {
-        clearSessionMessages(id);
         setSessions((prev) => {
           const next = prev.filter((s) => s.id !== id);
           // If deleted session was active, switch to most recent
@@ -338,7 +337,17 @@ export function ChatPage() {
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {messages.length === 0 ? (
+          {loadingHistory ? (
+            <div className="flex h-full items-center justify-center">
+              <div className="flex items-center gap-2 text-brand-shade3">
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <span className="text-sm">Loading messages...</span>
+              </div>
+            </div>
+          ) : messages.length === 0 ? (
             <div className="flex h-full items-center justify-center">
               <div className="text-center">
                 <p className="text-lg font-medium text-brand-shade3">

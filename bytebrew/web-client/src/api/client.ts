@@ -5,6 +5,7 @@ import type {
   ChatEventType,
   HealthResponse,
   LoginResponse,
+  MessageResponse,
   PaginatedSessionResponse,
   PaginatedTaskResponse,
   SessionResponse,
@@ -120,6 +121,10 @@ class ByteBrewClient {
 
   deleteSession(id: string) {
     return this.request<void>('DELETE', `/sessions/${encodeURIComponent(id)}`);
+  }
+
+  listMessages(sessionId: string) {
+    return this.request<MessageResponse[]>('GET', `/sessions/${encodeURIComponent(sessionId)}/messages`);
   }
 
   // Health

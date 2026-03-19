@@ -53,14 +53,34 @@ type SessionService interface {
 	DeleteSession(ctx context.Context, id string) error
 }
 
+// MessageResponse is the API representation of a chat message.
+type MessageResponse struct {
+	ID        string `json:"id"`
+	Role      string `json:"role"`
+	Content   string `json:"content"`
+	ToolName  string `json:"tool_name,omitempty"`
+	CreatedAt string `json:"created_at"`
+}
+
+// MessageService provides message query operations for a session.
+type MessageService interface {
+	ListMessages(ctx context.Context, sessionID string) ([]MessageResponse, error)
+}
+
 // SessionHandler serves /api/v1/sessions endpoints.
 type SessionHandler struct {
-	service SessionService
+	service    SessionService
+	messageSvc MessageService
 }
 
 // NewSessionHandler creates a SessionHandler.
 func NewSessionHandler(service SessionService) *SessionHandler {
 	return &SessionHandler{service: service}
+}
+
+// SetMessageService sets the optional MessageService for listing chat history.
+func (h *SessionHandler) SetMessageService(svc MessageService) {
+	h.messageSvc = svc
 }
 
 // Routes returns a chi router with session endpoints mounted.
@@ -69,6 +89,7 @@ func (h *SessionHandler) Routes() http.Handler {
 	r.Get("/", h.List)
 	r.Post("/", h.Create)
 	r.Get("/{id}", h.Get)
+	r.Get("/{id}/messages", h.ListMessages)
 	r.Put("/{id}", h.Update)
 	r.Delete("/{id}", h.Delete)
 	return r
@@ -200,4 +221,26 @@ func (h *SessionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ListMessages handles GET /api/v1/sessions/{id}/messages.
+func (h *SessionHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeJSONError(w, http.StatusBadRequest, "id parameter is required")
+		return
+	}
+
+	if h.messageSvc == nil {
+		writeJSON(w, http.StatusOK, []MessageResponse{})
+		return
+	}
+
+	messages, err := h.messageSvc.ListMessages(r.Context(), id)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, messages)
 }

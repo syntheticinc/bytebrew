@@ -1,31 +1,21 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { api } from '../api/client';
-import type { ChatMessage, ChatEvent } from '../types';
+import type { ChatMessage, ChatEvent, MessageResponse } from '../types';
 
-const STORAGE_KEY = 'bytebrew_chat_';
-
-function loadMessages(sessionId: string): ChatMessage[] {
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY + sessionId);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as ChatMessage[];
-    return parsed.map((m) => ({ ...m, timestamp: new Date(m.timestamp) }));
-  } catch {
-    return [];
-  }
-}
-
-function saveMessages(sessionId: string, messages: ChatMessage[]) {
-  if (!sessionId) return;
-  try {
-    sessionStorage.setItem(STORAGE_KEY + sessionId, JSON.stringify(messages));
-  } catch {
-    // ignore quota errors
-  }
-}
-
-export function clearSessionMessages(sessionId: string) {
-  sessionStorage.removeItem(STORAGE_KEY + sessionId);
+function mapServerMessages(raw: MessageResponse[]): ChatMessage[] {
+  return raw
+    .filter((m) => {
+      // Only map roles the UI understands
+      const validRoles = ['user', 'assistant', 'tool_call', 'tool_result'];
+      return validRoles.includes(m.role);
+    })
+    .map((m) => ({
+      id: m.id,
+      role: m.role as ChatMessage['role'],
+      content: m.content,
+      toolName: m.tool_name || undefined,
+      timestamp: new Date(m.created_at),
+    }));
 }
 
 interface UseChatOptions {
@@ -35,38 +25,44 @@ interface UseChatOptions {
 }
 
 export function useChat({ sessionId, onFirstAssistantResponse }: UseChatOptions) {
-  const [messages, setMessages] = useState<ChatMessage[]>(() =>
-    sessionId ? loadMessages(sessionId) : [],
-  );
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
   const assistantContentRef = useRef('');
   const sessionRef = useRef(sessionId);
   const gotFirstAssistantRef = useRef(false);
   const firstUserMessageRef = useRef('');
 
-  // When session changes, load saved messages
+  // When session changes, load messages from server
   useEffect(() => {
-    if (sessionId !== sessionRef.current) {
-      sessionRef.current = sessionId;
-      gotFirstAssistantRef.current = false;
-      firstUserMessageRef.current = '';
-      if (sessionId) {
-        setMessages(loadMessages(sessionId));
-      } else {
-        setMessages([]);
-      }
-      setStreaming(false);
-      controllerRef.current?.abort();
-    }
-  }, [sessionId]);
+    sessionRef.current = sessionId;
+    gotFirstAssistantRef.current = false;
+    firstUserMessageRef.current = '';
+    controllerRef.current?.abort();
+    setStreaming(false);
 
-  // Persist messages on change
-  useEffect(() => {
-    if (sessionRef.current) {
-      saveMessages(sessionRef.current, messages);
+    if (!sessionId) {
+      setMessages([]);
+      return;
     }
-  }, [messages]);
+
+    setLoadingHistory(true);
+    api.listMessages(sessionId)
+      .then((raw) => {
+        // Guard against stale response after session switched again
+        if (sessionRef.current !== sessionId) return;
+        setMessages(mapServerMessages(raw));
+      })
+      .catch(() => {
+        if (sessionRef.current !== sessionId) return;
+        setMessages([]);
+      })
+      .finally(() => {
+        if (sessionRef.current !== sessionId) return;
+        setLoadingHistory(false);
+      });
+  }, [sessionId]);
 
   const handleEvent = useCallback((event: ChatEvent) => {
     switch (event.type) {
@@ -290,10 +286,7 @@ export function useChat({ sessionId, onFirstAssistantResponse }: UseChatOptions)
 
   const clear = useCallback(() => {
     setMessages([]);
-    if (sessionRef.current) {
-      sessionStorage.removeItem(STORAGE_KEY + sessionRef.current);
-    }
   }, []);
 
-  return { messages, streaming, send, respond, stop, clear };
+  return { messages, streaming, loadingHistory, send, respond, stop, clear };
 }

@@ -372,7 +372,9 @@ func main() {
 
 			// Sessions
 			sessionRepo := config_repo.NewGORMSessionRepository(pgDB)
-			sessionHandler := deliveryhttp.NewSessionHandler(&sessionServiceAdapter{repo: sessionRepo})
+			messageRepo := config_repo.NewGORMMessageRepository(pgDB)
+			sessionHandler := deliveryhttp.NewSessionHandler(&sessionServiceAdapter{repo: sessionRepo, messageRepo: messageRepo})
+			sessionHandler.SetMessageService(&messageServiceAdapter{repo: messageRepo})
 			r.Mount("/api/v1/sessions", sessionHandler.Routes())
 
 			r.Delete("/api/v1/auth/tokens/{id}", tokenHandler.DeleteToken)
@@ -549,6 +551,7 @@ func main() {
 		chatAdapter.sessionRegistry = sessionRegistry
 		chatAdapter.sessProcessor = sessProcessor
 		chatAdapter.sessionRepo = config_repo.NewGORMSessionRepository(pgDB)
+		chatAdapter.messageRepo = config_repo.NewGORMMessageRepository(pgDB)
 		slog.Info("ChatService REST wired to SessionProcessor")
 	}
 
