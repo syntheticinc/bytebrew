@@ -139,13 +139,13 @@ export function AgentDetailModal({ agentName, onClose }: AgentDetailModalProps) 
                 </div>
 
                 {/* Tools */}
-                {agent.tools.length > 0 && (
+                {(agent.tools?.length ?? 0) > 0 && (
                   <div>
                     <label className="mb-2 block text-[10px] font-medium uppercase tracking-wider text-brand-shade3">
-                      Tools ({agent.tools.length})
+                      Tools ({agent.tools?.length ?? 0})
                     </label>
                     <div className="flex flex-wrap gap-1.5">
-                      {agent.tools.map((tool) => (
+                      {(agent.tools ?? []).map((tool) => (
                         <span
                           key={tool}
                           className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${toolColor(tool)}`}
@@ -158,13 +158,13 @@ export function AgentDetailModal({ agentName, onClose }: AgentDetailModalProps) 
                 )}
 
                 {/* Can Spawn */}
-                {agent.can_spawn.length > 0 && (
+                {(agent.can_spawn?.length ?? 0) > 0 && (
                   <div>
                     <label className="mb-2 block text-[10px] font-medium uppercase tracking-wider text-brand-shade3">
                       Can Spawn
                     </label>
                     <div className="flex flex-wrap gap-1.5">
-                      {agent.can_spawn.map((name) => (
+                      {(agent.can_spawn ?? []).map((name) => (
                         <span
                           key={name}
                           className="inline-flex items-center rounded-full bg-brand-shade3/10 px-2.5 py-0.5 text-[11px] font-medium text-brand-shade2"
