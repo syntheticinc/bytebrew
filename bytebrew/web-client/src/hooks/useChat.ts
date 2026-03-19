@@ -1,12 +1,54 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { api } from '../api/client';
 import type { ChatMessage } from '../types';
 
-export function useChat() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+const STORAGE_KEY = 'bytebrew_chat_';
+
+function loadMessages(agent: string): ChatMessage[] {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY + agent);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as ChatMessage[];
+    return parsed.map((m) => ({ ...m, timestamp: new Date(m.timestamp) }));
+  } catch {
+    return [];
+  }
+}
+
+function saveMessages(agent: string, messages: ChatMessage[]) {
+  if (!agent) return;
+  try {
+    sessionStorage.setItem(STORAGE_KEY + agent, JSON.stringify(messages));
+  } catch {
+    // ignore quota errors
+  }
+}
+
+export function useChat(currentAgent: string | null) {
+  const [messages, setMessages] = useState<ChatMessage[]>(() =>
+    currentAgent ? loadMessages(currentAgent) : [],
+  );
   const [streaming, setStreaming] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
   const assistantContentRef = useRef('');
+  const agentRef = useRef(currentAgent);
+
+  // When agent changes, load saved messages
+  useEffect(() => {
+    if (currentAgent && currentAgent !== agentRef.current) {
+      agentRef.current = currentAgent;
+      setMessages(loadMessages(currentAgent));
+      setStreaming(false);
+      controllerRef.current?.abort();
+    }
+  }, [currentAgent]);
+
+  // Persist messages on change
+  useEffect(() => {
+    if (agentRef.current) {
+      saveMessages(agentRef.current, messages);
+    }
+  }, [messages]);
 
   const send = useCallback((agent: string, text: string) => {
     const userMsg: ChatMessage = {
@@ -64,9 +106,8 @@ export function useChat() {
           break;
 
         case 'message': {
-          // MessageCompleted — replace with final content (not append)
           const msgContent = event.data.content as string;
-          if (!msgContent) break; // ignore empty message events
+          if (!msgContent) break;
           assistantContentRef.current = msgContent;
           setMessages((prev) => {
             const content = msgContent;
@@ -141,6 +182,9 @@ export function useChat() {
 
   const clear = useCallback(() => {
     setMessages([]);
+    if (agentRef.current) {
+      sessionStorage.removeItem(STORAGE_KEY + agentRef.current);
+    }
   }, []);
 
   return { messages, streaming, send, stop, clear };

@@ -12,12 +12,12 @@ import type { AgentInfo } from '../types';
 export function ChatPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { logout } = useAuth();
-  const { messages, streaming, send, stop, clear } = useChat();
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(
-    searchParams.get('agent'),
+    searchParams.get('agent') || sessionStorage.getItem('bytebrew_last_agent'),
   );
+  const { messages, streaming, send, stop, clear } = useChat(selectedAgent);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,9 +41,9 @@ export function ChatPage() {
     (name: string) => {
       setSelectedAgent(name);
       setSearchParams({ agent: name });
-      clear();
+      sessionStorage.setItem('bytebrew_last_agent', name);
     },
-    [setSearchParams, clear],
+    [setSearchParams],
   );
 
   const handleSend = useCallback(
