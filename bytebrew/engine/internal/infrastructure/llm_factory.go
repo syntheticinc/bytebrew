@@ -5,14 +5,13 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/config"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/errors"
-	"github.com/cloudwego/eino-ext/components/model/ollama"
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"
-	ollamaapi "github.com/eino-contrib/ollama/api"
 )
 
 // createChatModel creates a ToolCallingChatModel based on provider config.
@@ -56,18 +55,33 @@ func createOpenRouterModel(ctx context.Context, cfg config.OpenRouterConfig) (mo
 }
 
 func createOllamaModel(ctx context.Context, cfg config.OllamaConfig) (model.ToolCallingChatModel, error) {
-	ollamaCfg := &ollama.ChatModelConfig{
-		BaseURL: cfg.BaseURL,
+	baseURL := cfg.BaseURL
+
+	// Use OpenAI-compatible adapter for tool calling support.
+	// Ollama's native Eino adapter doesn't properly support tool calling,
+	// but Ollama exposes an OpenAI-compatible endpoint at /v1.
+	// Auto-convert /api URLs to /v1 for compatibility.
+	if strings.HasSuffix(baseURL, "/api") {
+		baseURL = strings.TrimSuffix(baseURL, "/api") + "/v1"
+		slog.InfoContext(ctx, "Converting Ollama native API to OpenAI-compatible endpoint",
+			"original", cfg.BaseURL, "converted", baseURL)
+	}
+	if !strings.Contains(baseURL, "/v1") {
+		baseURL = strings.TrimRight(baseURL, "/") + "/v1"
+	}
+
+	openaiCfg := &openai.ChatModelConfig{
+		BaseURL: baseURL,
 		Model:   cfg.Model,
+		APIKey:  "ollama", // Ollama ignores API key but field is required
 	}
-	if cfg.Thinking {
-		thinking := ollamaapi.ThinkValue{Value: true}
-		ollamaCfg.Thinking = &thinking
-	}
-	chatModel, err := ollama.NewChatModel(ctx, ollamaCfg)
+
+	chatModel, err := openai.NewChatModel(ctx, openaiCfg)
 	if err != nil {
-		return nil, errors.Wrap(err, errors.CodeInternal, "failed to create ollama chat model")
+		return nil, errors.Wrap(err, errors.CodeInternal, "failed to create ollama chat model (via OpenAI-compatible endpoint)")
 	}
+	slog.InfoContext(ctx, "Ollama model created via OpenAI-compatible endpoint",
+		"base_url", baseURL, "model", cfg.Model)
 	return chatModel, nil
 }
 
