@@ -4,6 +4,10 @@ import "gorm.io/gorm"
 
 // AutoMigrate registers all engine tables and runs GORM auto-migration.
 func AutoMigrate(db *gorm.DB) error {
+	// Ensure pgvector extension exists (required for Knowledge/RAG vector search).
+	// Silently ignored if extension is not available (non-pgvector PostgreSQL).
+	db.Exec("CREATE EXTENSION IF NOT EXISTS vector")
+
 	return db.AutoMigrate(
 		// Config tables (11)
 		&AgentModel{},

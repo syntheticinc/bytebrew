@@ -101,11 +101,12 @@ func createEngine(
 	agentEngine := engine.New(snapshotRepo, messageRepo)
 	slog.Info("engine initialized (PostgreSQL)")
 
-	// Load flows.yaml
+	// Load flows.yaml (optional — not required in bootstrap/Docker mode)
 	flowsPath := filepath.Join(cfg.ConfigDir, "flows.yaml")
 	flowsCfg, err := config.LoadFlowsConfig(flowsPath)
 	if err != nil {
-		return nil, fmt.Errorf("load flows config: %w", err)
+		slog.Info("No flows.yaml found — using empty flows config (configure agents via Admin Dashboard)", "path", flowsPath)
+		flowsCfg = &config.FlowsConfig{}
 	}
 
 	flowManager, err := agentservice.NewFlowManager(flowsCfg, cfg.Agent.Prompts)

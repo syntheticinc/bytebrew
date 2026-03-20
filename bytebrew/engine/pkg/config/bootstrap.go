@@ -40,8 +40,15 @@ type BootstrapSecurity struct {
 	AdminPassword string `mapstructure:"admin_password"`
 }
 
-// LoadBootstrap loads only the bootstrap config from a YAML file.
-// Environment variable placeholders (${VAR}) in string fields are expanded.
+// LoadBootstrap loads the bootstrap config from a YAML file.
+// If the config file is not found, falls back to environment variables:
+//   - DATABASE_URL — PostgreSQL connection string (required)
+//   - ADMIN_USER — admin username (optional, default: "admin")
+//   - ADMIN_PASSWORD — admin password (optional, default: "admin")
+//   - ENGINE_HOST — listen host (optional, default: "0.0.0.0")
+//   - ENGINE_PORT — listen port (optional, default: 8443)
+//
+// Environment variable placeholders (${VAR}) in YAML string fields are also expanded.
 func LoadBootstrap(path string) (*BootstrapConfig, error) {
 	if path == "" {
 		return nil, fmt.Errorf("config path is required")
@@ -52,7 +59,8 @@ func LoadBootstrap(path string) (*BootstrapConfig, error) {
 	v.SetConfigType("yaml")
 
 	if err := v.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("read config %s: %w", path, err)
+		// Config file not found — try environment variables
+		return loadBootstrapFromEnv()
 	}
 
 	var cfg BootstrapConfig
@@ -73,6 +81,45 @@ func LoadBootstrap(path string) (*BootstrapConfig, error) {
 	}
 
 	return &cfg, nil
+}
+
+// loadBootstrapFromEnv constructs BootstrapConfig from environment variables.
+// This enables zero-config Docker deployments where everything is passed via env.
+func loadBootstrapFromEnv() (*BootstrapConfig, error) {
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		return nil, fmt.Errorf("no config file found and DATABASE_URL environment variable is not set")
+	}
+
+	cfg := DefaultBootstrapConfig()
+	cfg.Database.URL = dbURL
+
+	if host := os.Getenv("ENGINE_HOST"); host != "" {
+		cfg.Engine.Host = host
+	} else {
+		cfg.Engine.Host = "0.0.0.0"
+	}
+
+	if portStr := os.Getenv("ENGINE_PORT"); portStr != "" {
+		port := 8443
+		fmt.Sscanf(portStr, "%d", &port)
+		cfg.Engine.Port = port
+	} else {
+		cfg.Engine.Port = 8443
+	}
+
+	if user := os.Getenv("ADMIN_USER"); user != "" {
+		cfg.Security.AdminUser = user
+	}
+	if pass := os.Getenv("ADMIN_PASSWORD"); pass != "" {
+		cfg.Security.AdminPassword = pass
+	}
+
+	if err := validateBootstrap(cfg); err != nil {
+		return nil, fmt.Errorf("validate env-based config: %w", err)
+	}
+
+	return cfg, nil
 }
 
 // expandBootstrapEnvVars expands ${VAR} placeholders in all string fields of BootstrapConfig.

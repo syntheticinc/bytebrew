@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"runtime"
 	"syscall"
 	"time"
@@ -130,13 +131,19 @@ func Run(sc ServerConfig) error {
 		configPath = filepath.Join(wd, configPath)
 	}
 
-	// Load configuration
-	cfg, err := config.Load(configPath)
-	if err != nil {
-		return fmt.Errorf("load config: %w", err)
+	// Load configuration — if config file doesn't exist, use defaults (env-var mode for Docker)
+	var cfg *config.Config
+	if _, statErr := os.Stat(configPath); os.IsNotExist(statErr) && !sc.ConfigExplicit {
+		log.Printf("No config file at %s — using defaults (configure via environment variables or Admin Dashboard)", configPath)
+		cfg = config.DefaultConfig()
+	} else {
+		var loadErr error
+		cfg, loadErr = config.Load(configPath)
+		if loadErr != nil {
+			return fmt.Errorf("load config: %w", loadErr)
+		}
+		log.Printf("Config loaded: default_provider=%s, ollama_model=%s", cfg.LLM.DefaultProvider, cfg.LLM.Ollama.Model)
 	}
-
-	log.Printf("Config loaded: default_provider=%s, ollama_model=%s", cfg.LLM.DefaultProvider, cfg.LLM.Ollama.Model)
 
 	// Override bridge config from flag
 	if sc.BridgeURL != "" {
@@ -385,6 +392,31 @@ func Run(sc ServerConfig) error {
 			r.Delete("/api/v1/auth/tokens/{id}", tokenHandler.DeleteToken)
 		})
 
+		// Serve Admin Dashboard SPA (static files)
+		adminDir := "/usr/share/bytebrew/admin"
+		if _, statErr := os.Stat(adminDir); statErr == nil {
+			spaFS := http.Dir(adminDir)
+			r.Get("/admin/*", func(w http.ResponseWriter, req *http.Request) {
+				// Strip /admin prefix for file lookup
+				filePath := strings.TrimPrefix(req.URL.Path, "/admin")
+				if filePath == "" || filePath == "/" {
+					filePath = "/index.html"
+				}
+				// Try serving the file; if not found, serve index.html (SPA routing)
+				if _, err := os.Stat(filepath.Join(adminDir, filePath)); os.IsNotExist(err) {
+					http.ServeFile(w, req, filepath.Join(adminDir, "index.html"))
+					return
+				}
+				http.StripPrefix("/admin", http.FileServer(spaFS)).ServeHTTP(w, req)
+			})
+			r.Get("/admin", func(w http.ResponseWriter, req *http.Request) {
+				http.Redirect(w, req, "/admin/", http.StatusMovedPermanently)
+			})
+			slog.InfoContext(ctx, "Admin Dashboard served", "path", adminDir)
+		} else {
+			slog.InfoContext(ctx, "Admin Dashboard not found (optional)", "path", adminDir)
+		}
+
 		go func() {
 			if err := httpServer.Start(); err != nil && err != http.ErrServerClosed {
 				slog.Error("HTTP server error", "error", err)
@@ -394,8 +426,14 @@ func Run(sc ServerConfig) error {
 	}
 	_ = kitRegistry // available for Kit resolution in AgentToolResolver
 
-	// Initialize gRPC server
-	grpcServer, err := initializeGRPCServer(cfg, loggerInstance, sc.LicenseInfo, sc.Managed)
+	// Initialize gRPC server.
+	// When HTTP REST API is active (bootstrap mode), gRPC uses a random port
+	// to avoid port conflicts. CLI discovers the gRPC port via the port file.
+	grpcUsesRandomPort := httpServer != nil
+	if grpcUsesRandomPort {
+		cfg.Server.Port = 0 // force random port for gRPC
+	}
+	grpcServer, err := initializeGRPCServer(cfg, loggerInstance, sc.LicenseInfo, sc.Managed || grpcUsesRandomPort)
 	if err != nil {
 		return fmt.Errorf("initialize gRPC server: %w", err)
 	}
@@ -415,11 +453,13 @@ func Run(sc ServerConfig) error {
 	// Create FlowHandler with multi-agent support
 	pingInterval := 2 * time.Second
 	flowHandlerCfg := grpc.FlowHandlerConfig{
-		AgentService:           components.AgentService,
-		ToolCallHistoryCleaner: components.AgentService.GetToolCallHistoryReminder(),
-		PingInterval:           pingInterval,
-		FlowRegistry:           flowRegistry,
-		SessionRegistry:        sessionRegistry,
+		AgentService: components.AgentService,
+		PingInterval: pingInterval,
+		FlowRegistry: flowRegistry,
+		SessionRegistry: sessionRegistry,
+	}
+	if components.AgentService != nil {
+		flowHandlerCfg.ToolCallHistoryCleaner = components.AgentService.GetToolCallHistoryReminder()
 	}
 
 	// Engine components are always available

@@ -129,28 +129,33 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 	contextReminders := storageCmp.ContextReminders
 	contextReminders = append(contextReminders, agents.NewSecurityReminderProvider())
 
-	// 9. Create AgentService
-	agentService, err := agentservice.New(agentservice.Config{
-		ChatModel:        chatModel,
-		TaskManager:      storageCmp.WorkManager,
-		SubtaskManager:   storageCmp.WorkManager,
-		AgentPool:        agentPool,
-		ContextReminders: contextReminders,
-		WebSearchTool:    webSearchTool,
-		WebFetchTool:     webFetchTool,
-		MaxSteps:         cfg.Agent.MaxSteps,
-		AgentConfig:      agentConfig,
-		ModelName:        modelName,
-		Streaming:        cfg.LLM.Streaming,
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, errors.CodeInternal, "failed to create agent service")
+	// 9. Create AgentService (optional — nil when no LLM configured in Docker/bootstrap mode)
+	var agentService *agentservice.Service
+	if chatModel != nil {
+		var svcErr error
+		agentService, svcErr = agentservice.New(agentservice.Config{
+			ChatModel:        chatModel,
+			TaskManager:      storageCmp.WorkManager,
+			SubtaskManager:   storageCmp.WorkManager,
+			AgentPool:        agentPool,
+			ContextReminders: contextReminders,
+			WebSearchTool:    webSearchTool,
+			WebFetchTool:     webFetchTool,
+			MaxSteps:         cfg.Agent.MaxSteps,
+			AgentConfig:      agentConfig,
+			ModelName:        modelName,
+			Streaming:        cfg.LLM.Streaming,
+		})
+		if svcErr != nil {
+			return nil, errors.Wrap(svcErr, errors.CodeInternal, "failed to create agent service")
+		}
+		slog.Info("agent service created with multi-agent support",
+			"work_manager", storageCmp.WorkManager != nil,
+			"agent_pool", agentPool != nil,
+			"engine", ec.Engine != nil)
+	} else {
+		slog.Info("agent service skipped — no LLM model configured. Configure models via Admin Dashboard to enable chat.")
 	}
-
-	slog.Info("agent service created with multi-agent support",
-		"work_manager", storageCmp.WorkManager != nil,
-		"agent_pool", agentPool != nil,
-		"engine", ec.Engine != nil)
 
 	return &InfraComponents{
 		AgentService:     agentService,

@@ -16,10 +16,16 @@ import (
 )
 
 // createChatModel creates a ToolCallingChatModel based on provider config.
+// Returns nil, nil when no provider is configured (configless Docker mode).
 func createChatModel(cfg config.Config) (model.ToolCallingChatModel, error) {
 	ctx := context.Background()
 
 	switch cfg.LLM.DefaultProvider {
+	case "":
+		// No LLM configured — Engine starts without a default model.
+		// Models are configured later through Admin Dashboard or YAML import.
+		slog.InfoContext(ctx, "No default LLM provider configured — configure models via Admin Dashboard")
+		return nil, nil
 	case "openrouter":
 		return createOpenRouterModel(ctx, cfg.LLM.OpenRouter)
 	case "ollama":

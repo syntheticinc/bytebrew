@@ -214,6 +214,20 @@ func DefaultAgentConfig() *AgentConfig {
 	}
 }
 
+// DefaultConfig returns a minimal Config with sensible defaults.
+// Used when no config file is provided (e.g. Docker deployments with env vars only).
+func DefaultConfig() *Config {
+	return &Config{
+		Server: ServerConfig{
+			Host: "0.0.0.0",
+			Port: 8443,
+		},
+		Logging: LoggingConfig{
+			Level: "info",
+		},
+	}
+}
+
 // Load loads configuration from file and environment variables
 func Load(configPath string) (*Config, error) {
 	// Load .env file if it exists (optional)
