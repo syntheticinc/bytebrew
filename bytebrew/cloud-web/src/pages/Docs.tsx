@@ -262,6 +262,19 @@ models:
           your shell (<Ic>export OPENAI_API_KEY=sk-...</Ic>) or in a <Ic>.env</Ic> file next
           to <Ic>docker-compose.yml</Ic>. Never hardcode secrets in YAML.
         </Callout>
+
+        <Callout type="tip" title="Prefer a visual editor?">
+          Skip the YAML file and use the Admin Dashboard instead.
+          Open <Ic>http://localhost:8443/admin</Ic>, log in, and click <strong className="text-brand-shade2">Create Agent</strong>.
+          The dashboard lets you configure everything visually — model, system prompt,
+          tools, security zones, spawn rules, and more.
+          <img
+            src="/screenshots/admin-agents.png"
+            alt="Admin Dashboard — Agents list with Create Agent button"
+            className="mt-3 w-full max-w-4xl rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5"
+            loading="lazy"
+          />
+        </Callout>
       </QuickStartStep>
 
       <QuickStartStep n={3} title="Send your first message">
@@ -305,6 +318,12 @@ data: {"session_id":"a1b2c3d4","tokens":42}`}</CodeBlock>
           models, tools, and triggers through a visual interface. Default credentials
           are configured via <Ic>ADMIN_USER</Ic> and <Ic>ADMIN_PASSWORD</Ic> environment variables.
         </p>
+        <img
+          src="/screenshots/admin-health.png"
+          alt="Admin Dashboard — Health page showing engine status and connected agents"
+          className="mt-3 w-full max-w-4xl rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5"
+          loading="lazy"
+        />
       </QuickStartStep>
 
       <SectionDivider />

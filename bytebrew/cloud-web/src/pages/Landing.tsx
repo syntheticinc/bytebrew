@@ -188,7 +188,7 @@ function SolutionSection() {
           ByteBrew Engine: AI agent infrastructure that just works
         </h2>
         <p className="text-center text-brand-shade3 mb-14 max-w-2xl mx-auto">
-          Configure in YAML. Deploy with Docker. Scale when ready.
+          Configure visually or in YAML. Deploy with Docker. Scale when ready.
         </p>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
@@ -287,24 +287,51 @@ function HowItWorksSection() {
 
         <div className="space-y-16">
           {/* Step 1: Configure */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             <div>
               <StepBadge n={1} />
               <h3 className="mt-3 text-xl font-semibold text-brand-light">Configure</h3>
               <p className="mt-2 text-brand-shade3 leading-relaxed">
-                Write a YAML config for your agents. Define system prompts, tools, spawn relationships, and triggers. No code required.
+                Create your agent visually through the Admin Dashboard, or define everything in YAML for version control and CI/CD.
               </p>
             </div>
-            <div className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark p-4 overflow-x-auto">
-              <pre className="font-mono text-sm text-brand-shade2 leading-relaxed">
-                <span className="text-brand-shade3"># agents.yaml</span>{'\n'}
-                <span className="text-brand-accent">agents</span>:{'\n'}
-                {'  '}<span className="text-brand-accent">my-agent</span>:{'\n'}
-                {'    '}<span className="text-brand-shade3">model</span>: <span className="text-emerald-400">glm-5</span>{'\n'}
-                {'    '}<span className="text-brand-shade3">system</span>: <span className="text-emerald-400">"You are a helpful assistant"</span>{'\n'}
-                {'    '}<span className="text-brand-shade3">tools</span>:{'\n'}
-                {'      '}- <span className="text-emerald-400">knowledge_search</span>
-              </pre>
+            <div className="space-y-4">
+              {/* Option A: Admin Dashboard */}
+              <div className="rounded-[12px] border border-brand-accent/30 bg-brand-accent/5 p-4">
+                <p className="text-xs font-semibold text-brand-accent uppercase tracking-wider mb-2">Option A: Admin Dashboard</p>
+                <p className="text-sm text-brand-shade3 leading-relaxed mb-3">
+                  Open the Admin Dashboard and create your agent visually. Set the model, system prompt, tools, and spawn rules — no YAML needed.
+                </p>
+                <div className="rounded-[8px] border border-brand-shade3/15 overflow-hidden">
+                  <img
+                    src="/screenshots/admin-agents.png"
+                    alt="Admin Dashboard — Agents list with Create Agent button"
+                    className="w-full"
+                    loading="lazy"
+                  />
+                </div>
+              </div>
+
+              {/* OR separator */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-brand-shade3/15" />
+                <span className="text-xs font-medium text-brand-shade3 uppercase tracking-wider">or</span>
+                <div className="flex-1 h-px bg-brand-shade3/15" />
+              </div>
+
+              {/* Option B: YAML */}
+              <div className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark p-4">
+                <p className="text-xs font-semibold text-brand-shade3 uppercase tracking-wider mb-2">Option B: YAML (GitOps)</p>
+                <pre className="font-mono text-sm text-brand-shade2 leading-relaxed overflow-x-auto">
+                  <span className="text-brand-shade3"># agents.yaml</span>{'\n'}
+                  <span className="text-brand-accent">agents</span>:{'\n'}
+                  {'  '}<span className="text-brand-accent">my-agent</span>:{'\n'}
+                  {'    '}<span className="text-brand-shade3">model</span>: <span className="text-emerald-400">glm-5</span>{'\n'}
+                  {'    '}<span className="text-brand-shade3">system</span>: <span className="text-emerald-400">"You are a helpful assistant"</span>{'\n'}
+                  {'    '}<span className="text-brand-shade3">tools</span>:{'\n'}
+                  {'      '}- <span className="text-emerald-400">knowledge_search</span>
+                </pre>
+              </div>
             </div>
           </div>
 
@@ -485,17 +512,42 @@ function ProductShowcaseSection() {
           See it in action
         </h2>
         <p className="text-center text-brand-shade3 mb-14 max-w-2xl mx-auto">
-          ByteBrew comes with a ready-to-use web client. Use it as-is, or build your own UI on top of the REST API.
+          ByteBrew comes with a ready-to-use web client and a full Admin Dashboard. Use them as-is, or build your own UI on top of the REST API.
         </p>
 
-        {/* Main screenshot — sales consultation */}
-        <div className="max-w-4xl mx-auto rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5 mb-12">
-          <img
-            src="/screenshots/chat-with-tools.png"
-            alt="ByteBrew Web Client — AI sales agent recommending laptops with web search tool calls and structured markdown response"
-            className="w-full"
-            loading="lazy"
-          />
+        {/* Two showcases in a grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+          {/* Web Client */}
+          <div>
+            <h3 className="text-lg font-semibold text-brand-light mb-2">Web Client — Chat Interface</h3>
+            <p className="text-sm text-brand-shade3 leading-relaxed mb-4">
+              Ready-to-use chat interface with multi-agent sidebar, tool calls, and rich markdown. Open source — fork and customize.
+            </p>
+            <div className="rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5" style={{ aspectRatio: '16/9' }}>
+              <img
+                src="/screenshots/chat-with-tools.png"
+                alt="ByteBrew Web Client — AI sales agent recommending laptops with web search tool calls and structured markdown response"
+                className="w-full h-full object-cover object-top"
+                loading="lazy"
+              />
+            </div>
+          </div>
+
+          {/* Admin Dashboard */}
+          <div>
+            <h3 className="text-lg font-semibold text-brand-light mb-2">Admin Dashboard — Visual Management</h3>
+            <p className="text-sm text-brand-shade3 leading-relaxed mb-4">
+              Configure agents, models, MCP servers, triggers, and API keys through a visual interface. No YAML required.
+            </p>
+            <div className="rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5" style={{ aspectRatio: '16/9' }}>
+              <img
+                src="/screenshots/admin-agent-detail.png"
+                alt="Admin Dashboard — Agent detail panel with model, system prompt, tools, and spawn rules configuration"
+                className="w-full h-full object-cover object-top"
+                loading="lazy"
+              />
+            </div>
+          </div>
         </div>
 
         {/* Feature highlights grid */}
@@ -513,9 +565,9 @@ function ProductShowcaseSection() {
             </p>
           </div>
           <div className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark p-5">
-            <h3 className="text-sm font-semibold text-brand-light mb-2">Open Source Client</h3>
+            <h3 className="text-sm font-semibold text-brand-light mb-2">Visual Agent Editor</h3>
             <p className="text-xs text-brand-shade3 leading-relaxed">
-              The web client is open source. Fork it, customize it, embed it in your product. Or use the REST API to build your own UI from scratch.
+              Create and configure agents through the Admin Dashboard. Set models, prompts, tools, security zones, and spawn rules — all without touching YAML.
             </p>
           </div>
         </div>
