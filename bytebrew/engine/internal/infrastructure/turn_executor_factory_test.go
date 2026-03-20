@@ -202,6 +202,8 @@ func TestEngineTurnExecutorFactory_CreateForSession(t *testing.T) {
 		nil, // webSearchTool
 		nil, // webFetchTool
 		nil, // contextRemindersGetter
+		nil, // modelCache
+		nil, // agentModelResolver
 	)
 
 	// Execute
@@ -243,6 +245,8 @@ func TestEngineTurnExecutorFactory_CreateForSession_WithProxy(t *testing.T) {
 		nil,
 		nil,
 		nil, // contextRemindersGetter
+		nil, // modelCache
+		nil, // agentModelResolver
 	)
 
 	// Execute
@@ -299,6 +303,8 @@ func TestEngineTurnExecutorFactory_CreateForSession_NilProxy(t *testing.T) {
 		nil,
 		nil,
 		nil, // contextRemindersGetter
+		nil, // modelCache
+		nil, // agentModelResolver
 	)
 
 	// Execute with nil proxy
@@ -342,6 +348,8 @@ func TestEngineTurnExecutorFactory_CreateForSession_WithWebTools(t *testing.T) {
 		mockWebSearch,
 		mockWebFetch,
 		nil, // contextRemindersGetter
+		nil, // modelCache
+		nil, // agentModelResolver
 	)
 
 	executor := factory.CreateForSession(&mockClientProxy{}, "session-1", "project-1", "", "", "supervisor")

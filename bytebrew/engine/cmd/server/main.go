@@ -595,6 +595,8 @@ func main() {
 		components.WebSearchTool,
 		components.WebFetchTool,
 		components.AgentService.GetContextReminders,
+		components.ModelCache,
+		agentRegistry,
 	)
 	flowHandlerCfg.TurnExecutorFactory = factory
 

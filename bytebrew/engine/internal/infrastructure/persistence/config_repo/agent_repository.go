@@ -13,6 +13,7 @@ import (
 // Contains all agent config from DB (agent + tools + spawn + escalation + MCP).
 type AgentRecord struct {
 	Name           string
+	ModelID        *uint
 	ModelName      string
 	SystemPrompt   string
 	Kit            string
@@ -247,7 +248,8 @@ func toAgentRecord(a models.AgentModel) (AgentRecord, error) {
 		MaxContextSize: a.MaxContextSize,
 	}
 
-	// Model name
+	// Model ID and name
+	rec.ModelID = a.ModelID
 	if a.Model != nil {
 		rec.ModelName = a.Model.Name
 	}

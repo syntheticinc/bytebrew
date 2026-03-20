@@ -162,6 +162,8 @@ func main() {
 		nil,
 		nil,
 		nil, // contextRemindersGetter — not needed in test
+		nil, // modelCache
+		nil, // agentModelResolver
 	)
 
 	// 9. Create FlowHandler (SAME as production!)

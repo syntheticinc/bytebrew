@@ -38,6 +38,7 @@ type InfraComponents struct {
 	ToolDepsProvider  *tools.DefaultToolDepsProvider
 	// Additional dependencies for TurnExecutorFactory
 	ModelName        string
+	ModelCache       *llm.ModelCache
 	WebSearchTool    einotool.InvokableTool
 	WebFetchTool     einotool.InvokableTool
 	AgentConfig      *config.AgentConfig // effective config with defaults applied
@@ -83,7 +84,13 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 	chatModel = wrapWithDebugModel(chatModel)
 	modelSelector := createModelSelector(cfg, chatModel, modelName)
 
-	// 2. Create work storage, agent pool, session storage
+	// 2. Create model cache (for dynamic model resolution from DB)
+	var modelCache *llm.ModelCache
+	if icc.DB != nil {
+		modelCache = llm.NewModelCache(icc.DB)
+	}
+
+	// 3. Create work storage, agent pool, session storage
 	storageCmp := createWorkStorage(icc.DB)
 
 	var agentPool *agentservice.AgentPool
@@ -170,6 +177,7 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 		AgentToolResolver: ec.AgentToolResolver,
 		ToolDepsProvider:  ec.ToolDepsProvider,
 		ModelName:        modelName,
+		ModelCache:       modelCache,
 		WebSearchTool:    webSearchTool,
 		WebFetchTool:     webFetchTool,
 		AgentConfig:      agentConfig,

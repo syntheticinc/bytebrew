@@ -936,9 +936,15 @@ func (a *agentManagerHTTPAdapter) resolveModelID(_ context.Context, modelName st
 	return &llm.ID
 }
 
+// ModelCacheInvalidator allows invalidating cached model clients when models are modified.
+type ModelCacheInvalidator interface {
+	Invalidate(modelID uint)
+}
+
 // modelServiceHTTPAdapter bridges GORMLLMProviderRepository to the http.ModelService interface.
 type modelServiceHTTPAdapter struct {
-	repo *config_repo.GORMLLMProviderRepository
+	repo       *config_repo.GORMLLMProviderRepository
+	modelCache ModelCacheInvalidator
 }
 
 func (m *modelServiceHTTPAdapter) ListModels(ctx context.Context) ([]deliveryhttp.ModelResponse, error) {
@@ -1019,6 +1025,11 @@ func (m *modelServiceHTTPAdapter) UpdateModel(ctx context.Context, name string, 
 		return nil, fmt.Errorf("update model: %w", err)
 	}
 
+	// Invalidate cached client so next access picks up changes.
+	if m.modelCache != nil {
+		m.modelCache.Invalidate(existing.ID)
+	}
+
 	// Re-read to get updated fields.
 	hasKey := existing.APIKeyEncrypted != ""
 	if req.APIKey != "" {
@@ -1050,7 +1061,14 @@ func (m *modelServiceHTTPAdapter) DeleteModel(ctx context.Context, name string) 
 
 	for _, p := range providers {
 		if p.Name == name {
-			return m.repo.Delete(ctx, p.ID)
+			if err := m.repo.Delete(ctx, p.ID); err != nil {
+				return err
+			}
+			// Invalidate cached client for the deleted model.
+			if m.modelCache != nil {
+				m.modelCache.Invalidate(p.ID)
+			}
+			return nil
 		}
 	}
 	return fmt.Errorf("model not found: %s", name)

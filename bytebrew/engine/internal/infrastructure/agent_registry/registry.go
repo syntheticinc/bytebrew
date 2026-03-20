@@ -130,6 +130,19 @@ func (r *AgentRegistry) GetDefault() (*RegisteredAgent, error) {
 	return r.agents[firstName], nil
 }
 
+// ResolveModelID returns the ModelID for the given agent name, or nil if not found.
+// Implements infrastructure.AgentModelResolver interface.
+func (r *AgentRegistry) ResolveModelID(agentName string) *uint {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	agent, ok := r.agents[agentName]
+	if !ok {
+		return nil
+	}
+	return agent.Record.ModelID
+}
+
 // Count returns the number of registered agents.
 func (r *AgentRegistry) Count() int {
 	r.mu.RLock()

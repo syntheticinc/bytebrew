@@ -383,7 +383,7 @@ func Run(sc ServerConfig) error {
 
 			// Models (full CRUD)
 			llmProviderRepo := config_repo.NewGORMLLMProviderRepository(pgDB)
-			modelService := &modelServiceHTTPAdapter{repo: llmProviderRepo}
+			modelService := &modelServiceHTTPAdapter{repo: llmProviderRepo, modelCache: components.ModelCache}
 			modelHandler := deliveryhttp.NewModelHandler(modelService)
 			r.Mount("/api/v1/models", modelHandler.Routes())
 
@@ -505,6 +505,12 @@ func Run(sc ServerConfig) error {
 	if agentRegistry != nil {
 		flowProvider = agentRegistry
 	}
+	// Resolve AgentModelResolver (nil-safe: factory handles nil gracefully)
+	var agentModelResolver infrastructure.AgentModelResolver
+	if agentRegistry != nil {
+		agentModelResolver = agentRegistry
+	}
+
 	factory := infrastructure.NewEngineTurnExecutorFactory(
 		components.Engine,
 		flowProvider,
@@ -522,6 +528,8 @@ func Run(sc ServerConfig) error {
 			}
 			return nil
 		},
+		components.ModelCache,
+		agentModelResolver,
 	)
 	flowHandlerCfg.TurnExecutorFactory = factory
 
@@ -554,7 +562,7 @@ func Run(sc ServerConfig) error {
 			registry:    sessionRegistry,
 			processor:   sessProcessor,
 			agents:      agentRegistry,
-			chatEnabled: components.AgentService != nil,
+			chatEnabled: components.AgentService != nil || components.ModelCache != nil,
 		}
 		chatHandler := deliveryhttp.NewChatHandler(chatService)
 
