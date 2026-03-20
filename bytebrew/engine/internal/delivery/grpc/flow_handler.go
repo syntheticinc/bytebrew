@@ -61,7 +61,7 @@ type SessionStorage interface {
 // TurnExecutorFactory creates a TurnExecutor for the given proxy/session.
 // Consumer-side interface defined in FlowHandler.
 type TurnExecutorFactory interface {
-	CreateForSession(proxy tools.ClientOperationsProxy, sessionID, projectKey, projectRoot, platform string) orchestrator.TurnExecutor
+	CreateForSession(proxy tools.ClientOperationsProxy, sessionID, projectKey, projectRoot, platform, agentName string) orchestrator.TurnExecutor
 }
 
 // FlowHandler handles FlowService gRPC requests

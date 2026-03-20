@@ -500,9 +500,14 @@ func Run(sc ServerConfig) error {
 	}
 
 	// Engine components are always available
+	// Use AgentRegistry as FlowProvider (replaces legacy FlowManager for agent resolution)
+	var flowProvider turn_executor.FlowProvider = components.FlowManager
+	if agentRegistry != nil {
+		flowProvider = agentRegistry
+	}
 	factory := infrastructure.NewEngineTurnExecutorFactory(
 		components.Engine,
-		components.FlowManager,
+		flowProvider,
 		components.AgentToolResolver,
 		components.ModelSelector,
 		components.AgentConfig,

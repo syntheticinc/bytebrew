@@ -59,6 +59,7 @@ type EngineAdapter struct {
 	chatModel        model.ToolCallingChatModel
 	agentConfig      *config.AgentConfig
 	modelName        string
+	agentName        string
 	// pass-through deps
 	contextReminders []ContextReminderProvider
 	toolCallRecorder ToolCallRecorder
@@ -73,6 +74,7 @@ type Config struct {
 	ChatModel        model.ToolCallingChatModel
 	AgentConfig      *config.AgentConfig
 	ModelName        string
+	AgentName        string
 	ContextReminders []ContextReminderProvider
 	ToolCallRecorder ToolCallRecorder
 }
@@ -103,6 +105,7 @@ func NewEngineAdapter(cfg Config) (*EngineAdapter, error) {
 		chatModel:        cfg.ChatModel,
 		agentConfig:      cfg.AgentConfig,
 		modelName:        cfg.ModelName,
+		agentName:        cfg.AgentName,
 		contextReminders: cfg.ContextReminders,
 		toolCallRecorder: cfg.ToolCallRecorder,
 	}, nil
@@ -115,10 +118,10 @@ func (e *EngineAdapter) ExecuteTurn(
 	chunkCallback func(chunk string) error,
 	eventCallback func(event *domain.AgentEvent) error,
 ) error {
-	// 1. Get flow config for supervisor
-	flow, err := e.flowProvider.GetFlow(ctx, domain.FlowType("supervisor"))
+	// 1. Get flow config for the agent
+	flow, err := e.flowProvider.GetFlow(ctx, domain.FlowType(e.agentName))
 	if err != nil {
-		return fmt.Errorf("get supervisor flow: %w", err)
+		return fmt.Errorf("get flow %q: %w", e.agentName, err)
 	}
 
 	// 2. Get tool dependencies
@@ -145,7 +148,7 @@ func (e *EngineAdapter) ExecuteTurn(
 	}
 	execCfg := engine.ExecutionConfig{
 		SessionID:         sessionID,
-		AgentID:           "supervisor",
+		AgentID:           e.agentName,
 		Flow:              flow,
 		Tools:             baseTools,
 		Input:             question,
@@ -180,7 +183,7 @@ func (e *EngineAdapter) ExecuteTurn(
 			Timestamp:  time.Now(),
 			Content:    result.Answer,
 			IsComplete: true,
-			AgentID:    "supervisor",
+			AgentID:    e.agentName,
 		})
 	}
 

@@ -163,7 +163,7 @@ func createTurnExecutor(t *testing.T, scenario, projectRoot string) *turnExecuto
 		taskMgr, subtaskMgr, agentPoolAdapter, nil, nil, nil,
 	)
 
-	executor := factory.CreateForSession(proxy, "test-session", "test-project", projectRoot, "linux")
+	executor := factory.CreateForSession(proxy, "test-session", "test-project", projectRoot, "linux", "supervisor")
 	require.NotNil(t, executor, "TurnExecutor must not be nil")
 
 	return &turnExecutorSetup{

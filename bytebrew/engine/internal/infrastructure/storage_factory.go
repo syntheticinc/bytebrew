@@ -159,7 +159,7 @@ func wireEngineToPool(
 	agentPool.SetEngine(ec.Engine, ec.FlowManager, ec.AgentToolResolver, ec.ToolDepsProvider)
 	slog.Info("engine wired to agent pool")
 
-	// Set MaxConcurrent from supervisor flow
+	// Set MaxConcurrent from supervisor flow (legacy: uses "supervisor" as default flow for spawn config)
 	ctx := context.Background()
 	supervisorFlow, err := ec.FlowManager.GetFlow(ctx, domain.FlowType("supervisor"))
 	if err != nil {

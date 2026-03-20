@@ -65,7 +65,7 @@ func (h *FlowHandler) runSingleAgentMode(
 		defer h.cleanupFlowResources(req.SessionId, activeFlow)
 
 		// Create TurnExecutor via Engine (same path as supervisor mode)
-		turnExecutor := h.turnExecutorFactory.CreateForSession(proxy, req.SessionId, req.ProjectKey, projectRoot, platform)
+		turnExecutor := h.turnExecutorFactory.CreateForSession(proxy, req.SessionId, req.ProjectKey, projectRoot, platform, "supervisor")
 
 		err = turnExecutor.ExecuteTurn(ctx, req.SessionId, req.ProjectKey, task,
 			createChunkCallback(ctx, streamWriter, req.SessionId),

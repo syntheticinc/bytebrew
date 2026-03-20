@@ -63,7 +63,7 @@ func newMockAgentService() *agent.Service {
 // mockTurnExecutorFactory implements TurnExecutorFactory for testing
 type mockTurnExecutorFactory struct{}
 
-func (f *mockTurnExecutorFactory) CreateForSession(proxy tools.ClientOperationsProxy, sessionID, projectKey, projectRoot, platform string) orchestrator.TurnExecutor {
+func (f *mockTurnExecutorFactory) CreateForSession(proxy tools.ClientOperationsProxy, sessionID, projectKey, projectRoot, platform, agentName string) orchestrator.TurnExecutor {
 	return &mockTurnExecutor{}
 }
 

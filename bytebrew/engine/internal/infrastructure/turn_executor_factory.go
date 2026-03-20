@@ -63,7 +63,7 @@ func NewEngineTurnExecutorFactory(
 func (f *EngineTurnExecutorFactory) CreateForSession(
 	proxy tools.ClientOperationsProxy,
 	sessionID, projectKey string,
-	projectRoot, platform string,
+	projectRoot, platform, agentName string,
 ) orchestrator.TurnExecutor {
 	// Create per-session ToolDepsProvider with proxy for this session
 	toolDeps := tools.NewDefaultToolDepsProvider(
@@ -99,9 +99,10 @@ func (f *EngineTurnExecutorFactory) CreateForSession(
 		FlowProvider:     f.flowManager,
 		ToolResolver:     f.toolResolver,
 		ToolDeps:         toolDeps,
-		ChatModel:        f.modelSelector.Select(domain.FlowType("supervisor")),
+		ChatModel:        f.modelSelector.Select(domain.FlowType(agentName)),
 		AgentConfig:      f.agentConfig,
-		ModelName:        f.modelSelector.ModelName(domain.FlowType("supervisor")),
+		ModelName:        f.modelSelector.ModelName(domain.FlowType(agentName)),
+		AgentName:        agentName,
 		ContextReminders: contextReminders,
 	})
 

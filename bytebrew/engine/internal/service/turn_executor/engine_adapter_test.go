@@ -260,6 +260,7 @@ func TestEngineAdapter_ExecuteTurn(t *testing.T) {
 		ChatModel:    mockChatModel,
 		AgentConfig:  agentConfig,
 		ModelName:    "test-model",
+		AgentName:    "supervisor",
 	})
 	require.NoError(t, err)
 
@@ -370,7 +371,7 @@ func TestEngineAdapter_ExecuteTurn_FlowProviderError(t *testing.T) {
 	)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "get supervisor flow")
+	assert.Contains(t, err.Error(), "get flow")
 }
 
 // Test 5: ExecuteTurn handles tool resolver error

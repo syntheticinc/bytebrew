@@ -27,7 +27,7 @@ type SessionRegistry interface {
 
 // TurnExecutorFactory creates a TurnExecutor for a given session (consumer-side interface).
 type TurnExecutorFactory interface {
-	CreateForSession(proxy tools.ClientOperationsProxy, sessionID, projectKey, projectRoot, platform string) orchestrator.TurnExecutor
+	CreateForSession(proxy tools.ClientOperationsProxy, sessionID, projectKey, projectRoot, platform, agentName string) orchestrator.TurnExecutor
 }
 
 // AgentPoolRegistrar registers per-session resources on the AgentPool (consumer-side interface).
@@ -136,7 +136,7 @@ func (p *Processor) processMessages(ctx context.Context, sessionID string) {
 }
 
 func (p *Processor) processMessage(ctx context.Context, sessionID, message string) {
-	projectRoot, platform, projectKey, _, _, ok := p.registry.GetSessionContext(sessionID)
+	projectRoot, platform, projectKey, _, agentName, ok := p.registry.GetSessionContext(sessionID)
 	if !ok {
 		slog.ErrorContext(ctx, "[SessionProcessor] session context not found", "session_id", sessionID)
 		return
@@ -184,7 +184,7 @@ func (p *Processor) processMessage(ctx context.Context, sessionID, message strin
 	proxy := tools.NewLocalClientOperationsProxy(projectRoot, tools.WithAskUserHandler(askUserHandler))
 	defer proxy.Dispose()
 
-	turnExecutor := p.factory.CreateForSession(proxy, sessionID, projectKey, projectRoot, platform)
+	turnExecutor := p.factory.CreateForSession(proxy, sessionID, projectKey, projectRoot, platform, agentName)
 
 	chunkCallback := func(chunk string) error {
 		eventStream.PublishAnswerChunk(chunk)

@@ -121,7 +121,7 @@ type mockTurnExecutorFactory struct {
 	executor *mockTurnExecutor
 }
 
-func (f *mockTurnExecutorFactory) CreateForSession(_ tools.ClientOperationsProxy, _, _, _, _ string) orchestrator.TurnExecutor {
+func (f *mockTurnExecutorFactory) CreateForSession(_ tools.ClientOperationsProxy, _, _, _, _, _ string) orchestrator.TurnExecutor {
 	return f.executor
 }
 
