@@ -8,15 +8,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
 
+	pb "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen"
 	deliveryhttp "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/agent_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/audit"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/flow_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/config_repo"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/session_processor"
 )
 
 // agentCounterHTTPAdapter bridges AgentRegistry to the http.AgentCounter interface.
@@ -735,6 +739,323 @@ func isEnvPlaceholder(v string) bool {
 	return strings.HasPrefix(v, "${") && strings.HasSuffix(v, "}")
 }
 
+// agentManagerHTTPAdapter bridges GORMAgentRepository + AgentRegistry to the http.AgentManager interface.
+type agentManagerHTTPAdapter struct {
+	repo     *config_repo.GORMAgentRepository
+	registry *agent_registry.AgentRegistry
+	db       *gorm.DB
+}
+
+func (a *agentManagerHTTPAdapter) ListAgents(ctx context.Context) ([]deliveryhttp.AgentInfo, error) {
+	records, err := a.repo.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list agents: %w", err)
+	}
+
+	result := make([]deliveryhttp.AgentInfo, 0, len(records))
+	for _, rec := range records {
+		result = append(result, deliveryhttp.AgentInfo{
+			Name:         rec.Name,
+			ToolsCount:   len(rec.BuiltinTools) + len(rec.CustomTools),
+			Kit:          rec.Kit,
+			HasKnowledge: rec.KnowledgePath != "",
+		})
+	}
+	return result, nil
+}
+
+func (a *agentManagerHTTPAdapter) GetAgent(ctx context.Context, name string) (*deliveryhttp.AgentDetail, error) {
+	rec, err := a.repo.GetByName(ctx, name)
+	if err != nil {
+		return nil, nil
+	}
+
+	tools := make([]string, 0, len(rec.BuiltinTools)+len(rec.CustomTools))
+	tools = append(tools, rec.BuiltinTools...)
+	for _, ct := range rec.CustomTools {
+		tools = append(tools, ct.Name)
+	}
+
+	detail := &deliveryhttp.AgentDetail{
+		AgentInfo: deliveryhttp.AgentInfo{
+			Name:         rec.Name,
+			ToolsCount:   len(tools),
+			Kit:          rec.Kit,
+			HasKnowledge: rec.KnowledgePath != "",
+		},
+		SystemPrompt:   rec.SystemPrompt,
+		KnowledgePath:  rec.KnowledgePath,
+		Tools:          tools,
+		CanSpawn:       rec.CanSpawn,
+		Lifecycle:      rec.Lifecycle,
+		ToolExecution:  rec.ToolExecution,
+		MaxSteps:       rec.MaxSteps,
+		MaxContextSize: rec.MaxContextSize,
+		ConfirmBefore:  rec.ConfirmBefore,
+		MCPServers:     rec.MCPServers,
+	}
+
+	// Load MCP servers separately (GORM many2many has naming issues).
+	mcpNames, err := a.loadMCPServersForAgent(ctx, name)
+	if err == nil {
+		detail.MCPServers = mcpNames
+	}
+
+	// Resolve model ID for the response.
+	detail.ModelID = a.resolveModelID(ctx, rec.ModelName)
+
+	if rec.Escalation != nil {
+		detail.Escalation = &deliveryhttp.AgentEscalation{
+			Action:     rec.Escalation.Action,
+			WebhookURL: rec.Escalation.WebhookURL,
+			Triggers:   rec.Escalation.Triggers,
+		}
+	}
+
+	return detail, nil
+}
+
+func (a *agentManagerHTTPAdapter) CreateAgent(ctx context.Context, req deliveryhttp.CreateAgentRequest) (*deliveryhttp.AgentDetail, error) {
+	record := a.toAgentRecord(req)
+	if err := a.repo.Create(ctx, record); err != nil {
+		return nil, fmt.Errorf("create agent: %w", err)
+	}
+
+	if err := a.registry.Reload(ctx); err != nil {
+		slog.ErrorContext(ctx, "failed to reload agent registry after create", "error", err)
+	}
+
+	return a.GetAgent(ctx, req.Name)
+}
+
+func (a *agentManagerHTTPAdapter) UpdateAgent(ctx context.Context, name string, req deliveryhttp.CreateAgentRequest) (*deliveryhttp.AgentDetail, error) {
+	record := a.toAgentRecord(req)
+	if err := a.repo.Update(ctx, name, record); err != nil {
+		return nil, fmt.Errorf("update agent: %w", err)
+	}
+
+	if err := a.registry.Reload(ctx); err != nil {
+		slog.ErrorContext(ctx, "failed to reload agent registry after update", "error", err)
+	}
+
+	// Use the updated name (could have been renamed).
+	lookupName := req.Name
+	if lookupName == "" {
+		lookupName = name
+	}
+	return a.GetAgent(ctx, lookupName)
+}
+
+func (a *agentManagerHTTPAdapter) DeleteAgent(ctx context.Context, name string) error {
+	if err := a.repo.Delete(ctx, name); err != nil {
+		return fmt.Errorf("delete agent: %w", err)
+	}
+
+	if err := a.registry.Reload(ctx); err != nil {
+		slog.ErrorContext(ctx, "failed to reload agent registry after delete", "error", err)
+	}
+
+	return nil
+}
+
+func (a *agentManagerHTTPAdapter) toAgentRecord(req deliveryhttp.CreateAgentRequest) *config_repo.AgentRecord {
+	rec := &config_repo.AgentRecord{
+		Name:           req.Name,
+		SystemPrompt:   req.SystemPrompt,
+		Kit:            req.Kit,
+		KnowledgePath:  req.KnowledgePath,
+		Lifecycle:      req.Lifecycle,
+		ToolExecution:  req.ToolExecution,
+		MaxSteps:       req.MaxSteps,
+		MaxContextSize: req.MaxContextSize,
+		ConfirmBefore:  req.ConfirmBefore,
+		BuiltinTools:   req.Tools,
+		CanSpawn:       req.CanSpawn,
+		MCPServers:     req.MCPServers,
+	}
+
+	// Resolve model ID to model name.
+	if req.ModelID != nil {
+		var llm models.LLMProviderModel
+		if err := a.db.First(&llm, *req.ModelID).Error; err == nil {
+			rec.ModelName = llm.Name
+		}
+	}
+
+	if req.Escalation != nil {
+		rec.Escalation = &config_repo.EscalationRecord{
+			Action:     req.Escalation.Action,
+			WebhookURL: req.Escalation.WebhookURL,
+			Triggers:   req.Escalation.Triggers,
+		}
+	}
+
+	// Apply defaults.
+	if rec.Lifecycle == "" {
+		rec.Lifecycle = "persistent"
+	}
+	if rec.ToolExecution == "" {
+		rec.ToolExecution = "sequential"
+	}
+	if rec.MaxSteps == 0 {
+		rec.MaxSteps = 50
+	}
+	if rec.MaxContextSize == 0 {
+		rec.MaxContextSize = 16000
+	}
+
+	return rec
+}
+
+func (a *agentManagerHTTPAdapter) loadMCPServersForAgent(_ context.Context, name string) ([]string, error) {
+	var agent models.AgentModel
+	if err := a.db.Where("name = ?", name).First(&agent).Error; err != nil {
+		return nil, err
+	}
+
+	var agentMCPs []models.AgentMCPServer
+	if err := a.db.Preload("MCPServer").Where("agent_id = ?", agent.ID).Find(&agentMCPs).Error; err != nil {
+		return nil, err
+	}
+
+	names := make([]string, 0, len(agentMCPs))
+	for _, am := range agentMCPs {
+		names = append(names, am.MCPServer.Name)
+	}
+	return names, nil
+}
+
+func (a *agentManagerHTTPAdapter) resolveModelID(_ context.Context, modelName string) *uint {
+	if modelName == "" {
+		return nil
+	}
+	var llm models.LLMProviderModel
+	if err := a.db.Where("name = ?", modelName).First(&llm).Error; err != nil {
+		return nil
+	}
+	return &llm.ID
+}
+
+// modelServiceHTTPAdapter bridges GORMLLMProviderRepository to the http.ModelService interface.
+type modelServiceHTTPAdapter struct {
+	repo *config_repo.GORMLLMProviderRepository
+}
+
+func (m *modelServiceHTTPAdapter) ListModels(ctx context.Context) ([]deliveryhttp.ModelResponse, error) {
+	providers, err := m.repo.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list models: %w", err)
+	}
+
+	result := make([]deliveryhttp.ModelResponse, 0, len(providers))
+	for _, p := range providers {
+		result = append(result, deliveryhttp.ModelResponse{
+			ID:        p.ID,
+			Name:      p.Name,
+			Type:      p.Type,
+			BaseURL:   p.BaseURL,
+			ModelName: p.ModelName,
+			HasAPIKey: p.APIKeyEncrypted != "",
+			CreatedAt: p.CreatedAt.Format(time.RFC3339),
+		})
+	}
+	return result, nil
+}
+
+func (m *modelServiceHTTPAdapter) CreateModel(ctx context.Context, req deliveryhttp.CreateModelRequest) (*deliveryhttp.ModelResponse, error) {
+	provider := &models.LLMProviderModel{
+		Name:            req.Name,
+		Type:            req.Type,
+		BaseURL:         req.BaseURL,
+		ModelName:       req.ModelName,
+		APIKeyEncrypted: req.APIKey,
+	}
+
+	if err := m.repo.Create(ctx, provider); err != nil {
+		return nil, fmt.Errorf("create model: %w", err)
+	}
+
+	return &deliveryhttp.ModelResponse{
+		ID:        provider.ID,
+		Name:      provider.Name,
+		Type:      provider.Type,
+		BaseURL:   provider.BaseURL,
+		ModelName: provider.ModelName,
+		HasAPIKey: provider.APIKeyEncrypted != "",
+		CreatedAt: provider.CreatedAt.Format(time.RFC3339),
+	}, nil
+}
+
+func (m *modelServiceHTTPAdapter) UpdateModel(ctx context.Context, name string, req deliveryhttp.CreateModelRequest) (*deliveryhttp.ModelResponse, error) {
+	// Find existing by name.
+	providers, err := m.repo.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list models for update: %w", err)
+	}
+
+	var existing *models.LLMProviderModel
+	for i := range providers {
+		if providers[i].Name == name {
+			existing = &providers[i]
+			break
+		}
+	}
+	if existing == nil {
+		return nil, fmt.Errorf("model not found: %s", name)
+	}
+
+	update := &models.LLMProviderModel{
+		Name:      req.Name,
+		Type:      req.Type,
+		BaseURL:   req.BaseURL,
+		ModelName: req.ModelName,
+	}
+	// Only update API key if provided (empty means keep existing).
+	if req.APIKey != "" {
+		update.APIKeyEncrypted = req.APIKey
+	}
+
+	if err := m.repo.Update(ctx, existing.ID, update); err != nil {
+		return nil, fmt.Errorf("update model: %w", err)
+	}
+
+	// Re-read to get updated fields.
+	hasKey := existing.APIKeyEncrypted != ""
+	if req.APIKey != "" {
+		hasKey = true
+	}
+
+	respName := req.Name
+	if respName == "" {
+		respName = existing.Name
+	}
+
+	return &deliveryhttp.ModelResponse{
+		ID:        existing.ID,
+		Name:      respName,
+		Type:      req.Type,
+		BaseURL:   req.BaseURL,
+		ModelName: req.ModelName,
+		HasAPIKey: hasKey,
+		CreatedAt: existing.CreatedAt.Format(time.RFC3339),
+	}, nil
+}
+
+func (m *modelServiceHTTPAdapter) DeleteModel(ctx context.Context, name string) error {
+	// Find existing by name.
+	providers, err := m.repo.List(ctx)
+	if err != nil {
+		return fmt.Errorf("list models for delete: %w", err)
+	}
+
+	for _, p := range providers {
+		if p.Name == name {
+			return m.repo.Delete(ctx, p.ID)
+		}
+	}
+	return fmt.Errorf("model not found: %s", name)
+}
+
 // taskServiceHTTPAdapter bridges task infrastructure to the http.TaskService interface.
 type taskServiceHTTPAdapter struct {
 	repo *config_repo.GORMTaskRepository
@@ -853,4 +1174,151 @@ func (a *knowledgeReindexerHTTPAdapter) Reindex(ctx context.Context, agentName s
 	slog.InfoContext(ctx, "starting knowledge reindex",
 		"agent", agentName, "path", agent.Record.KnowledgePath)
 	return a.indexer.IndexFolder(ctx, agentName, agent.Record.KnowledgePath)
+}
+
+// chatServiceHTTPAdapter bridges SessionRegistry + SessionProcessor to the
+// deliveryhttp.ChatService interface for the REST chat endpoint.
+type chatServiceHTTPAdapter struct {
+	registry     *flow_registry.SessionRegistry
+	processor    *session_processor.Processor
+	agents       *agent_registry.AgentRegistry
+	chatEnabled  bool // false when no LLM model configured
+}
+
+// Chat creates (or resumes) a session, enqueues the message, subscribes to
+// events, and returns an SSEEvent channel that closes when processing stops.
+func (a *chatServiceHTTPAdapter) Chat(agentName, message, userID, sessionID string) (<-chan deliveryhttp.SSEEvent, error) {
+	if !a.chatEnabled {
+		return nil, fmt.Errorf("chat not available: no LLM model configured at startup. Add a model via Admin Dashboard and restart the Engine")
+	}
+
+	if a.agents == nil {
+		return nil, fmt.Errorf("no agents configured")
+	}
+
+	if _, err := a.agents.Get(agentName); err != nil {
+		return nil, fmt.Errorf("agent not found: %s", agentName)
+	}
+
+	// Create a new session if none provided.
+	if sessionID == "" {
+		sessionID = uuid.New().String()
+	}
+
+	// Create session in registry (idempotent — reuses existing if already present).
+	if !a.registry.HasSession(sessionID) {
+		a.registry.CreateSession(sessionID, "", userID, "", "", agentName)
+	}
+
+	// Subscribe BEFORE enqueueing so we don't miss events.
+	eventCh, cleanup := a.registry.Subscribe(sessionID)
+
+	// Enqueue the user message.
+	if err := a.registry.EnqueueMessage(sessionID, message); err != nil {
+		cleanup()
+		return nil, fmt.Errorf("enqueue message: %w", err)
+	}
+
+	// Start processing (idempotent).
+	ctx := context.Background()
+	a.processor.StartProcessing(ctx, sessionID)
+
+	// Fan-out: read proto events, convert to SSE, close when processing stops.
+	sseCh := make(chan deliveryhttp.SSEEvent, 64)
+	go func() {
+		defer close(sseCh)
+		defer cleanup()
+
+		for protoEvent := range eventCh {
+			sseEvent := convertSessionEventToSSE(protoEvent, sessionID)
+			if sseEvent == nil {
+				continue
+			}
+			sseCh <- *sseEvent
+
+			// Close after "done" — processing has stopped.
+			if sseEvent.Type == "done" {
+				return
+			}
+		}
+	}()
+
+	return sseCh, nil
+}
+
+// convertSessionEventToSSE maps a pb.SessionEvent to an SSEEvent.
+// Returns nil for event types that should not be forwarded over SSE.
+func convertSessionEventToSSE(event *pb.SessionEvent, sessionID string) *deliveryhttp.SSEEvent {
+	switch event.GetType() {
+	case pb.SessionEventType_SESSION_EVENT_REASONING:
+		return sseEventJSON("thinking", map[string]interface{}{
+			"content": event.GetContent(),
+		})
+
+	case pb.SessionEventType_SESSION_EVENT_ANSWER_CHUNK:
+		return sseEventJSON("message_delta", map[string]interface{}{
+			"content": event.GetContent(),
+		})
+
+	case pb.SessionEventType_SESSION_EVENT_ANSWER:
+		return sseEventJSON("message", map[string]interface{}{
+			"content": event.GetContent(),
+		})
+
+	case pb.SessionEventType_SESSION_EVENT_TOOL_EXECUTION_START:
+		data := map[string]interface{}{
+			"tool":    event.GetToolName(),
+			"call_id": event.GetCallId(),
+		}
+		if args := event.GetToolArguments(); len(args) > 0 {
+			data["arguments"] = args
+		}
+		return sseEventJSON("tool_call", data)
+
+	case pb.SessionEventType_SESSION_EVENT_TOOL_EXECUTION_END:
+		return sseEventJSON("tool_result", map[string]interface{}{
+			"tool":      event.GetToolName(),
+			"call_id":   event.GetCallId(),
+			"content":   event.GetToolResultSummary(),
+			"has_error": event.GetToolHasError(),
+		})
+
+	case pb.SessionEventType_SESSION_EVENT_ASK_USER:
+		return sseEventJSON("confirmation", map[string]interface{}{
+			"content": event.GetContent(),
+			"call_id": event.GetCallId(),
+		})
+
+	case pb.SessionEventType_SESSION_EVENT_PROCESSING_STOPPED:
+		return sseEventJSON("done", map[string]interface{}{
+			"session_id": sessionID,
+		})
+
+	case pb.SessionEventType_SESSION_EVENT_ERROR:
+		data := map[string]interface{}{
+			"content": event.GetContent(),
+		}
+		if detail := event.GetErrorDetail(); detail != nil {
+			data["code"] = detail.GetCode()
+			data["message"] = detail.GetMessage()
+		}
+		return sseEventJSON("error", data)
+
+	default:
+		// PROCESSING_STARTED, USER_MESSAGE, PLAN_UPDATE, UNSPECIFIED — skip.
+		return nil
+	}
+}
+
+// sseEventJSON creates an SSEEvent with JSON-encoded data.
+func sseEventJSON(eventType string, data map[string]interface{}) *deliveryhttp.SSEEvent {
+	jsonBytes, err := json.Marshal(data)
+	if err != nil {
+		slog.Error("failed to marshal SSE event data", "type", eventType, "error", err)
+		return nil
+	}
+	return &deliveryhttp.SSEEvent{
+		Type: eventType,
+		Data: string(jsonBytes),
+	}
 }

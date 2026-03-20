@@ -38,6 +38,7 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/kits/developer"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/eventstore"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/session_processor"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/turn_executor"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/config"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/logger"
 	"github.com/glebarez/sqlite"
@@ -257,6 +258,32 @@ func Run(sc ServerConfig) error {
 		}
 	}
 
+	// If no LLM configured in legacy config but models exist in DB, use the first one.
+	if cfg.LLM.DefaultProvider == "" && pgDB != nil {
+		var firstModel models.LLMProviderModel
+		if err := pgDB.First(&firstModel).Error; err == nil {
+			slog.InfoContext(ctx, "Auto-configuring LLM from database model",
+				"name", firstModel.Name, "provider", firstModel.Type, "model", firstModel.ModelName)
+			switch firstModel.Type {
+			case "ollama":
+				cfg.LLM.DefaultProvider = "ollama"
+				cfg.LLM.Ollama.Model = firstModel.ModelName
+				cfg.LLM.Ollama.BaseURL = firstModel.BaseURL
+			case "openai", "openai_compatible":
+				cfg.LLM.DefaultProvider = "openrouter"
+				cfg.LLM.OpenRouter.Model = firstModel.ModelName
+				cfg.LLM.OpenRouter.APIKey = firstModel.APIKeyEncrypted
+				if firstModel.BaseURL != "" {
+					cfg.LLM.OpenRouter.BaseURL = firstModel.BaseURL
+				}
+			case "anthropic":
+				cfg.LLM.DefaultProvider = "anthropic"
+				cfg.LLM.Anthropic.Model = firstModel.ModelName
+				cfg.LLM.Anthropic.APIKey = firstModel.APIKeyEncrypted
+			}
+		}
+	}
+
 	// Create infrastructure components (AgentService + WorkManager + AgentPool)
 	components, err := infrastructure.NewInfraComponents(infrastructure.InfraComponentsConfig{
 		Config:      *cfg,
@@ -309,8 +336,10 @@ func Run(sc ServerConfig) error {
 
 	// HTTP REST API server (Phase 5) — starts only when bootstrap config is available.
 	var httpServer *deliveryhttp.Server
+	var httpPort int
+	var httpAuthMW *deliveryhttp.AuthMiddleware
 	if agentRegistry != nil && bootstrapCfg != nil {
-		httpPort := bootstrapCfg.Engine.Port
+		httpPort = bootstrapCfg.Engine.Port
 		if httpPort == 0 {
 			httpPort = 8443
 		}
@@ -320,6 +349,7 @@ func Run(sc ServerConfig) error {
 		// Auth
 		jwtSecret := bootstrapCfg.Security.AdminPassword
 		authMW := deliveryhttp.NewAuthMiddleware(jwtSecret, &tokenRepoHTTPAdapter{repo: apiTokenRepo})
+		httpAuthMW = authMW
 
 		// Audit logger
 		auditLogger := audit.NewLogger(pgDB)
@@ -341,10 +371,21 @@ func Run(sc ServerConfig) error {
 			r.Use(authMW.Authenticate)
 			r.Use(deliveryhttp.AuditMiddleware(&auditHTTPAdapter{logger: auditLogger}))
 
-			// Agents
-			agentHandler := deliveryhttp.NewAgentHandler(&agentListerHTTPAdapter{registry: agentRegistry})
+			// Agents (full CRUD)
+			agentRepo := config_repo.NewGORMAgentRepository(pgDB)
+			agentManager := &agentManagerHTTPAdapter{repo: agentRepo, registry: agentRegistry, db: pgDB}
+			agentHandler := deliveryhttp.NewAgentHandlerWithManager(agentManager)
 			r.Get("/api/v1/agents", agentHandler.List)
 			r.Get("/api/v1/agents/{name}", agentHandler.Get)
+			r.Post("/api/v1/agents", agentHandler.Create)
+			r.Put("/api/v1/agents/{name}", agentHandler.Update)
+			r.Delete("/api/v1/agents/{name}", agentHandler.Delete)
+
+			// Models (full CRUD)
+			llmProviderRepo := config_repo.NewGORMLLMProviderRepository(pgDB)
+			modelService := &modelServiceHTTPAdapter{repo: llmProviderRepo}
+			modelHandler := deliveryhttp.NewModelHandler(modelService)
+			r.Mount("/api/v1/models", modelHandler.Routes())
 
 			// Tasks
 			taskHandler := deliveryhttp.NewTaskHandler(&taskServiceHTTPAdapter{repo: taskRepo})
@@ -417,12 +458,8 @@ func Run(sc ServerConfig) error {
 			slog.InfoContext(ctx, "Admin Dashboard not found (optional)", "path", adminDir)
 		}
 
-		go func() {
-			if err := httpServer.Start(); err != nil && err != http.ErrServerClosed {
-				slog.Error("HTTP server error", "error", err)
-			}
-		}()
-		slog.InfoContext(ctx, "HTTP REST API server started", "port", httpPort)
+		// NOTE: HTTP server start is deferred until after SessionProcessor is created,
+		// so the chat endpoint can be wired with all required dependencies.
 	}
 	_ = kitRegistry // available for Kit resolution in AgentToolResolver
 
@@ -474,7 +511,12 @@ func Run(sc ServerConfig) error {
 		components.AgentPoolAdapter,
 		components.WebSearchTool,
 		components.WebFetchTool,
-		components.AgentService.GetContextReminders,
+		func() []turn_executor.ContextReminderProvider {
+			if components.AgentService != nil {
+				return components.AgentService.GetContextReminders()
+			}
+			return nil
+		},
 	)
 	flowHandlerCfg.TurnExecutorFactory = factory
 
@@ -500,6 +542,32 @@ func Run(sc ServerConfig) error {
 	}
 
 	grpcServer.RegisterServices(flowHandler)
+
+	// Wire chat endpoint and start HTTP server now that SessionProcessor is ready.
+	if httpServer != nil && agentRegistry != nil {
+		chatService := &chatServiceHTTPAdapter{
+			registry:    sessionRegistry,
+			processor:   sessProcessor,
+			agents:      agentRegistry,
+			chatEnabled: components.AgentService != nil,
+		}
+		chatHandler := deliveryhttp.NewChatHandler(chatService)
+
+		httpRouter := httpServer.Router()
+		httpRouter.Group(func(r chi.Router) {
+			if httpAuthMW != nil {
+				r.Use(httpAuthMW.Authenticate)
+			}
+			r.Post("/api/v1/agents/{name}/chat", chatHandler.Chat)
+		})
+
+		go func() {
+			if err := httpServer.Start(); err != nil && err != http.ErrServerClosed {
+				slog.Error("HTTP server error", "error", err)
+			}
+		}()
+		slog.InfoContext(ctx, "HTTP REST API server started", "port", httpPort)
+	}
 
 	// Create WS connection handler for local CLI clients
 	var agentCanceller ws.AgentCanceller
