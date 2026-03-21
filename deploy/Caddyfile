@@ -8,6 +8,12 @@ bytebrew.ai, www.bytebrew.ai {
         file_server browse
     }
 
+    handle /docs/* {
+        root * /var/www/bytebrew-docs
+        try_files {path} {path}/index.html {path}.html /docs/404.html
+        file_server
+    }
+
     handle {
         root * /var/www/bytebrew-cloud-web
         try_files {path} /index.html

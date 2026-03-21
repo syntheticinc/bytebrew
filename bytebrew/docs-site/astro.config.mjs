@@ -3,7 +3,8 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 export default defineConfig({
-  site: 'https://docs.bytebrew.ai',
+  site: 'https://bytebrew.ai',
+  base: '/docs',
   integrations: [
     starlight({
       title: 'ByteBrew Engine',
