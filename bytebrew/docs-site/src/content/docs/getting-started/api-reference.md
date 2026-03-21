@@ -174,6 +174,152 @@ curl http://localhost:8080/api/v1/agents/sales-agent \
 }
 ```
 
+### Create Agent
+
+```bash
+curl -X POST http://localhost:8080/api/v1/agents \
+  -H "Authorization: Bearer bb_your_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-agent",
+    "system_prompt": "You are a helpful assistant.",
+    "model_id": 1,
+    "tools": ["web_search", "knowledge_search"],
+    "can_spawn": ["researcher"],
+    "lifecycle": "persistent",
+    "max_steps": 50
+  }'
+```
+
+### Update Agent
+
+```bash
+curl -X PUT http://localhost:8080/api/v1/agents/my-agent \
+  -H "Authorization: Bearer bb_your_token" \
+  -H "Content-Type: application/json" \
+  -d '{"system_prompt": "Updated prompt.", "max_steps": 100}'
+```
+
+### Delete Agent
+
+```bash
+curl -X DELETE http://localhost:8080/api/v1/agents/my-agent \
+  -H "Authorization: Bearer bb_your_token"
+# Returns 204 No Content
+```
+
+## Models
+
+CRUD for LLM model providers. Requires `admin` scope.
+
+### List Models
+
+```bash
+curl http://localhost:8080/api/v1/models \
+  -H "Authorization: Bearer bb_your_token"
+```
+
+```json
+[
+  {
+    "id": 1,
+    "name": "qwen3",
+    "type": "ollama",
+    "base_url": "http://localhost:11434",
+    "model_name": "qwen3:30b-a3b",
+    "has_api_key": false,
+    "created_at": "2026-03-20T12:00:00Z"
+  }
+]
+```
+
+### Create Model
+
+```bash
+curl -X POST http://localhost:8080/api/v1/models \
+  -H "Authorization: Bearer bb_your_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-model",
+    "type": "ollama",
+    "model_name": "llama3.2",
+    "base_url": "http://localhost:11434",
+    "api_key": "ollama"
+  }'
+```
+
+Supported types: `ollama`, `openai_compatible`, `anthropic`.
+
+:::note
+Models are resolved dynamically — no Engine restart needed after adding a model. The next chat request will use the new model immediately.
+:::
+
+### Update Model
+
+```bash
+curl -X PUT http://localhost:8080/api/v1/models/my-model \
+  -H "Authorization: Bearer bb_your_token" \
+  -H "Content-Type: application/json" \
+  -d '{"api_key": "new-key", "model_name": "qwen3:70b"}'
+```
+
+API key is only updated if a non-empty value is provided.
+
+### Delete Model
+
+```bash
+curl -X DELETE http://localhost:8080/api/v1/models/my-model \
+  -H "Authorization: Bearer bb_your_token"
+# Returns 204 No Content
+```
+
+### Verify Model Connectivity
+
+Test that a model is accessible and supports tool calling before using it.
+
+```bash
+curl -X POST http://localhost:8080/api/v1/models/my-model/verify \
+  -H "Authorization: Bearer bb_your_token"
+```
+
+```json
+{
+  "connectivity": "ok",
+  "tool_calling": "supported",
+  "response_time_ms": 1240,
+  "model_name": "llama3.2",
+  "provider": "ollama",
+  "error": null
+}
+```
+
+| Field | Values | Description |
+|-------|--------|-------------|
+| connectivity | `ok`, `error` | Whether the API endpoint is accessible |
+| tool_calling | `supported`, `not_detected`, `skipped` | Whether the model generates tool calls |
+| response_time_ms | number | Latency of the ping request |
+| error | string or null | Error details if connectivity failed |
+
+:::tip
+For known providers (OpenAI, Anthropic, Google, Mistral), tool calling probe is skipped — all their models support it. Probe runs only for Ollama and custom providers.
+:::
+
+## Session Respond
+
+When an agent calls `ask_user` with structured options, the client receives a `user_input_required` SSE event. Use this endpoint to send the user's answer back to the agent.
+
+```bash
+curl -X POST http://localhost:8080/api/v1/sessions/{session_id}/respond \
+  -H "Authorization: Bearer bb_your_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "call_id": "server-ask_user-3",
+    "answers": ["Email"]
+  }'
+```
+
+The `call_id` comes from the SSE event's metadata. The agent receives the answer and continues execution.
+
 ## Sessions
 
 Manage conversation sessions. Sessions store the full message history between a user and an agent. Requires `chat` or `admin` scope.
