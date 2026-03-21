@@ -477,6 +477,6 @@ BYOK headers are only accepted when the corresponding provider is explicitly ena
 
 ## What's next
 
-- [Admin Dashboard: API Keys](/admin/api-keys/)
-- [Core Concepts: Tasks](/concepts/tasks/)
-- [Example: Sales Agent](/examples/sales-agent/)
+- [Admin Dashboard: API Keys](/docs/admin/api-keys/)
+- [Core Concepts: Tasks](/docs/concepts/tasks/)
+- [Example: Sales Agent](/docs/examples/sales-agent/)

@@ -87,6 +87,6 @@ curl -X POST http://localhost:8080/api/v1/webhooks/stripe \
 
 ## What's next
 
-- [Admin: Triggers](/admin/triggers/)
-- [Tasks & Jobs](/concepts/tasks/)
-- [Example: DevOps Monitor](/examples/devops-monitor/)
+- [Admin: Triggers](/docs/admin/triggers/)
+- [Tasks & Jobs](/docs/concepts/tasks/)
+- [Example: DevOps Monitor](/docs/examples/devops-monitor/)

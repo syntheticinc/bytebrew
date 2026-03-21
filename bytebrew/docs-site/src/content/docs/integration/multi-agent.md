@@ -198,7 +198,7 @@ agents:
       - refund_order
 ```
 
-When the agent calls `create_order`, the stream pauses with a `confirmation` event. The client must approve or reject before execution continues. See [REST API Chat: Handling confirmation events](/integration/rest-api/#handling-confirmation-events).
+When the agent calls `create_order`, the stream pauses with a `confirmation` event. The client must approve or reject before execution continues. See [REST API Chat: Handling confirmation events](/docs/integration/rest-api/#handling-confirmation-events).
 
 ## Complete multi-agent example (3 agents)
 
@@ -267,6 +267,6 @@ curl -N http://localhost:8080/api/v1/agents/project-manager/chat \
 
 ## What's next
 
-- [Core Concepts: Multi-Agent](/concepts/multi-agent/)
-- [REST API Chat](/integration/rest-api/)
-- [Example: Sales Agent](/examples/sales-agent/)
+- [Core Concepts: Multi-Agent](/docs/concepts/multi-agent/)
+- [REST API Chat](/docs/integration/rest-api/)
+- [Example: Sales Agent](/docs/examples/sales-agent/)

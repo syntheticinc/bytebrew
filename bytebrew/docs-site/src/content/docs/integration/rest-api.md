@@ -163,7 +163,7 @@ Authorization: Bearer bb_your_api_token
 
 Tokens are created in **Admin Dashboard** -> **API Keys**. Each token has scopes that limit what it can access. For chat integrations, the `chat` scope is sufficient.
 
-See [API Reference: Authentication](/getting-started/api-reference/#authentication) for details on scopes and token management.
+See [API Reference: Authentication](/docs/getting-started/api-reference/#authentication) for details on scopes and token management.
 
 ## Error handling
 
@@ -219,6 +219,6 @@ The engine enforces rate limits per API token:
 
 ## What's next
 
-- [Multi-Agent Config](/integration/multi-agent/)
-- [BYOK Integration](/integration/byok/)
-- [API Reference](/getting-started/api-reference/)
+- [Multi-Agent Config](/docs/integration/multi-agent/)
+- [BYOK Integration](/docs/integration/byok/)
+- [API Reference](/docs/getting-started/api-reference/)

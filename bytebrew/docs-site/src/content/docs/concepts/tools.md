@@ -91,6 +91,6 @@ Tool names are globally unique across your configuration. If you define a custom
 
 ## What's next
 
-- [Configuration: Tools](/getting-started/configuration/#tool-configuration-declarative-yaml)
-- [Admin: MCP Servers](/admin/mcp-servers/)
-- [Tasks & Jobs](/concepts/tasks/)
+- [Configuration: Tools](/docs/getting-started/configuration/#tool-configuration-declarative-yaml)
+- [Admin: MCP Servers](/docs/admin/mcp-servers/)
+- [Tasks & Jobs](/docs/concepts/tasks/)

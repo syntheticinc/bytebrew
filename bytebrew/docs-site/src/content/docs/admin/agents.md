@@ -72,6 +72,6 @@ agents:
 
 ## What's next
 
-- [Models](/admin/models/)
-- [MCP Servers](/admin/mcp-servers/)
-- [Core Concepts: Agents](/concepts/agents/)
+- [Models](/docs/admin/models/)
+- [MCP Servers](/docs/admin/mcp-servers/)
+- [Core Concepts: Agents](/docs/concepts/agents/)

@@ -57,5 +57,5 @@ models:
 
 ## What's next
 
-- [MCP Servers](/admin/mcp-servers/)
-- [Configuration: Models](/getting-started/configuration/#model-configuration)
+- [MCP Servers](/docs/admin/mcp-servers/)
+- [Configuration: Models](/docs/getting-started/configuration/#model-configuration)

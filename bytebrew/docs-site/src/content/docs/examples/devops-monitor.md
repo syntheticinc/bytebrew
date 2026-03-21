@@ -87,6 +87,6 @@ curl http://localhost:8080/api/v1/tasks?agent=alert-handler&status=completed \
 
 ## What's next
 
-- [Triggers](/concepts/triggers/)
-- [Tasks & Jobs](/concepts/tasks/)
-- [IoT Analyzer Example](/examples/iot-analyzer/)
+- [Triggers](/docs/concepts/triggers/)
+- [Tasks & Jobs](/docs/concepts/tasks/)
+- [IoT Analyzer Example](/docs/examples/iot-analyzer/)

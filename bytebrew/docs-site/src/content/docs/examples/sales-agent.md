@@ -140,6 +140,6 @@ curl -N http://localhost:8080/api/v1/agents/sales-supervisor/chat \
 
 ## What's next
 
-- [Multi-Agent Orchestration](/concepts/multi-agent/)
-- [Support Agent Example](/examples/support-agent/)
-- [Configuration Reference](/getting-started/configuration/)
+- [Multi-Agent Orchestration](/docs/concepts/multi-agent/)
+- [Support Agent Example](/docs/examples/support-agent/)
+- [Configuration Reference](/docs/getting-started/configuration/)

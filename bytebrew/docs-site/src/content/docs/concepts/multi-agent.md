@@ -94,6 +94,6 @@ Use your most capable (and expensive) model for the supervisor, since it handles
 
 ## What's next
 
-- [Agents & Lifecycle](/concepts/agents/)
-- [Tools](/concepts/tools/)
-- [Example: Sales Agent](/examples/sales-agent/)
+- [Agents & Lifecycle](/docs/concepts/agents/)
+- [Tools](/docs/concepts/tools/)
+- [Example: Sales Agent](/docs/examples/sales-agent/)

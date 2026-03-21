@@ -96,7 +96,7 @@ Navigate to `http://localhost:8443/admin` in your browser to manage agents, mode
 
 ## What's next
 
-- [Configuration Reference](/getting-started/configuration/)
-- [API Reference](/getting-started/api-reference/)
-- [Core Concepts: Agents](/concepts/agents/)
-- [Example: Sales Agent](/examples/sales-agent/)
+- [Configuration Reference](/docs/getting-started/configuration/)
+- [API Reference](/docs/getting-started/api-reference/)
+- [Core Concepts: Agents](/docs/concepts/agents/)
+- [Example: Sales Agent](/docs/examples/sales-agent/)

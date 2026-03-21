@@ -264,6 +264,6 @@ docker stats bytebrew-engine-1 bytebrew-postgres-1
 
 ## What's next
 
-- [Docker Deployment](/deployment/docker/)
-- [Model Selection](/deployment/model-selection/)
-- [API Reference](/getting-started/api-reference/)
+- [Docker Deployment](/docs/deployment/docker/)
+- [Model Selection](/docs/deployment/model-selection/)
+- [API Reference](/docs/getting-started/api-reference/)

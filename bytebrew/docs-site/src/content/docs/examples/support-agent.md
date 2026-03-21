@@ -87,6 +87,6 @@ curl -N http://localhost:8080/api/v1/agents/support-bot/chat \
 
 ## What's next
 
-- [Knowledge / RAG](/concepts/knowledge/)
-- [Sales Agent Example](/examples/sales-agent/)
-- [DevOps Monitor Example](/examples/devops-monitor/)
+- [Knowledge / RAG](/docs/concepts/knowledge/)
+- [Sales Agent Example](/docs/examples/sales-agent/)
+- [DevOps Monitor Example](/docs/examples/devops-monitor/)

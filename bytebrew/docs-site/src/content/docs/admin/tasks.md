@@ -57,6 +57,6 @@ curl -X DELETE http://localhost:8080/api/v1/tasks/{id} \
 
 ## What's next
 
-- [Core Concepts: Tasks](/concepts/tasks/)
-- [Triggers](/admin/triggers/)
-- [API Reference](/getting-started/api-reference/)
+- [Core Concepts: Tasks](/docs/concepts/tasks/)
+- [Triggers](/docs/admin/triggers/)
+- [API Reference](/docs/getting-started/api-reference/)

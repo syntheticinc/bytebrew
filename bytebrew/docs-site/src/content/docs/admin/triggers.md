@@ -64,6 +64,6 @@ triggers:
 
 ## What's next
 
-- [Core Concepts: Triggers](/concepts/triggers/)
-- [Configuration: Triggers](/getting-started/configuration/#trigger-configuration)
-- [Tasks](/admin/tasks/)
+- [Core Concepts: Triggers](/docs/concepts/triggers/)
+- [Configuration: Triggers](/docs/getting-started/configuration/#trigger-configuration)
+- [Tasks](/docs/admin/tasks/)

@@ -86,6 +86,6 @@ Tasks can be created from multiple sources:
 
 ## What's next
 
-- [Admin: Tasks](/admin/tasks/)
-- [Triggers](/concepts/triggers/)
-- [API Reference: Tasks](/getting-started/api-reference/#tasks)
+- [Admin: Tasks](/docs/admin/tasks/)
+- [Triggers](/docs/concepts/triggers/)
+- [API Reference: Tasks](/docs/getting-started/api-reference/#tasks)

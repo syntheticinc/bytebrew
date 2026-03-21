@@ -42,6 +42,6 @@ The current Admin Dashboard supports a single admin user. Multi-user support wit
 
 ## What's next
 
-- [Agents](/admin/agents/)
-- [Models](/admin/models/)
-- [API Keys](/admin/api-keys/)
+- [Agents](/docs/admin/agents/)
+- [Models](/docs/admin/models/)
+- [API Keys](/docs/admin/api-keys/)

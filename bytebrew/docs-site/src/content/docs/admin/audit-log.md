@@ -60,5 +60,5 @@ Audit log entries are stored in PostgreSQL and retained indefinitely by default.
 
 ## What's next
 
-- [API Keys](/admin/api-keys/)
-- [Settings](/admin/settings/)
+- [API Keys](/docs/admin/api-keys/)
+- [Settings](/docs/admin/settings/)

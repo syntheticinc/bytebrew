@@ -1,36 +1,105 @@
 ---
-title: ByteBrew Engine Documentation
-description: Self-hosted AI agent platform. Deploy intelligent agents with tools, RAG, multi-agent orchestration, and triggers.
-template: splash
-hero:
-  tagline: Self-hosted AI agent platform with tools, RAG, multi-agent orchestration, and triggers. One Docker command to deploy.
-  image:
-    file: ../../assets/logo.svg
-  actions:
-    - text: Quick Start
-      link: /getting-started/quick-start/
-      icon: right-arrow
-    - text: GitHub
-      link: https://github.com/syntheticinc/bytebrew
-      icon: external
-      variant: minimal
+title: Quick Start
+description: Get ByteBrew Engine running with Docker in under 5 minutes.
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-## Get started
+Get ByteBrew Engine running with Docker in under 5 minutes. By the end of this guide, you will have a working AI agent that responds to messages over a REST API.
 
-<CardGrid stagger>
-  <Card title="Quick Start" icon="rocket">
-    Get ByteBrew Engine running with Docker in under 5 minutes. Create your first agent and send a message via REST API.
-  </Card>
-  <Card title="Configuration" icon="setting">
-    Complete reference for agents, models, tools, MCP servers, and triggers. YAML and Admin Dashboard.
-  </Card>
-  <Card title="Multi-Agent" icon="puzzle">
-    Build teams of specialized agents that collaborate on complex tasks using the orchestrator pattern.
-  </Card>
-  <Card title="Examples" icon="open-book">
-    Production-ready configurations: Sales Agent, Support Agent, DevOps Monitor, IoT Analyzer.
-  </Card>
+:::note[Prerequisites]
+You need `docker` and `docker compose` installed. ByteBrew Engine runs on Linux, macOS, and Windows (WSL2). Minimum 2 GB RAM for the engine + PostgreSQL.
+:::
+
+## Step 1: Start the Engine
+
+Download the Docker Compose file and start the engine. This spins up two containers: the ByteBrew Engine and a PostgreSQL database.
+
+```bash
+curl -fsSL https://bytebrew.ai/releases/docker-compose.yml -o docker-compose.yml
+docker compose up -d
+```
+
+The engine starts on port `8080` (API) and `8443` (Admin Dashboard). Verify it is running:
+
+```bash
+curl http://localhost:8080/api/v1/health
+# {"status":"ok","version":"1.0.0","agents_count":0}
+```
+
+## Step 2: Create your first agent
+
+Create an `agents.yaml` file in the same directory as your `docker-compose.yml`. This file defines your agents, models, and tools:
+
+```yaml title="agents.yaml"
+agents:
+  my-agent:
+    model: glm-5
+    system: "You are a helpful assistant for our product."
+    tools:
+      - knowledge_search
+
+models:
+  glm-5:
+    provider: openai
+    api_key: ${OPENAI_API_KEY}
+```
+
+:::tip[Environment variables]
+The `${OPENAI_API_KEY}` syntax references an environment variable. Set it in your shell (`export OPENAI_API_KEY=sk-...`) or in a `.env` file next to `docker-compose.yml`. Never hardcode secrets in YAML.
+:::
+
+:::tip[Prefer a visual editor?]
+Skip the YAML file and use the Admin Dashboard instead. Open `http://localhost:8443/admin`, log in, and click **Create Agent**. The dashboard lets you configure everything visually — model, system prompt, tools, security zones, spawn rules, and more.
+:::
+
+## Step 3: Send your first message
+
+Use the REST API to talk to your agent. The response streams back as Server-Sent Events (SSE), so you see tokens as they are generated:
+
+```bash
+curl -N http://localhost:8080/api/v1/agents/my-agent/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello, what can you do?"}'
+```
+
+## Step 4: See the response
+
+The engine returns a stream of SSE events. Each event has a `type` field that tells you what kind of data it contains:
+
+```
+event: content
+data: {"text":"Hello! I'm your product assistant. "}
+
+event: content
+data: {"text":"I can help you with product questions, "}
+
+event: content
+data: {"text":"documentation search, and more."}
+
+event: done
+data: {"session_id":"a1b2c3d4","tokens":42}
+```
+
+The `session_id` in the `done` event lets you continue the conversation. Pass it in subsequent requests to maintain context:
+
+```bash
+curl -N http://localhost:8080/api/v1/agents/my-agent/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Tell me more about that", "session_id": "a1b2c3d4"}'
+```
+
+## Step 5: Open the Admin Dashboard
+
+Navigate to `http://localhost:8443/admin` in your browser to manage agents, models, tools, and triggers through a visual interface. Default credentials are configured via `ADMIN_USER` and `ADMIN_PASSWORD` environment variables.
+
+---
+
+## What's next
+
+<CardGrid>
+  <LinkCard title="Configuration Reference" href="/docs/getting-started/configuration/" description="YAML reference for agents, models, tools, MCP servers, and triggers." />
+  <LinkCard title="API Reference" href="/docs/getting-started/api-reference/" description="All REST API endpoints with curl examples." />
+  <LinkCard title="Multi-Agent Orchestration" href="/docs/concepts/multi-agent/" description="Build teams of specialized agents." />
+  <LinkCard title="Sales Agent Example" href="/docs/examples/sales-agent/" description="Production-ready multi-agent sales config." />
 </CardGrid>

@@ -157,12 +157,12 @@ curl -N http://localhost:8080/api/v1/agents/my-agent/chat \
   -d '{"message": "Hello"}'
 ```
 
-BYOK must be enabled per-provider in **Settings**. See [BYOK integration guide](/integration/byok/) for details.
+BYOK must be enabled per-provider in **Settings**. See [BYOK integration guide](/docs/integration/byok/) for details.
 
 ---
 
 ## What's next
 
-- [Docker Deployment](/deployment/docker/)
-- [Production Deployment](/deployment/production/)
-- [BYOK Integration](/integration/byok/)
+- [Docker Deployment](/docs/deployment/docker/)
+- [Production Deployment](/docs/deployment/production/)
+- [BYOK Integration](/docs/integration/byok/)

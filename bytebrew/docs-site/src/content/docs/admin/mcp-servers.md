@@ -76,6 +76,6 @@ For stdio servers, check the engine logs for process spawn errors. Common causes
 
 ## What's next
 
-- [Configuration: MCP](/getting-started/configuration/#mcp-server-configuration)
-- [Core Concepts: Tools](/concepts/tools/)
-- [Agents](/admin/agents/)
+- [Configuration: MCP](/docs/getting-started/configuration/#mcp-server-configuration)
+- [Core Concepts: Tools](/docs/concepts/tools/)
+- [Agents](/docs/admin/agents/)

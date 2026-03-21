@@ -77,6 +77,6 @@ agents:
 
 ## What's next
 
-- [Agents & Lifecycle](/concepts/agents/)
-- [Tools](/concepts/tools/)
-- [Example: Support Agent](/examples/support-agent/)
+- [Agents & Lifecycle](/docs/concepts/agents/)
+- [Tools](/docs/concepts/tools/)
+- [Example: Support Agent](/docs/examples/support-agent/)

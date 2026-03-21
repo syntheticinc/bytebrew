@@ -50,6 +50,6 @@ Click the "Revoke" button next to any key in the list. Revocation is immediate -
 
 ## What's next
 
-- [API Reference: Authentication](/getting-started/api-reference/#authentication)
-- [Settings](/admin/settings/)
-- [Audit Log](/admin/audit-log/)
+- [API Reference: Authentication](/docs/getting-started/api-reference/#authentication)
+- [Settings](/docs/admin/settings/)
+- [Audit Log](/docs/admin/audit-log/)

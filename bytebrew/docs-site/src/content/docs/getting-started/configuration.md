@@ -433,6 +433,6 @@ Always configure a `secret` for production webhook triggers. Without signature v
 
 ## What's next
 
-- [API Reference](/getting-started/api-reference/)
-- [Admin Dashboard: Agents](/admin/agents/)
-- [Core Concepts: Tools](/concepts/tools/)
+- [API Reference](/docs/getting-started/api-reference/)
+- [Admin Dashboard: Agents](/docs/admin/agents/)
+- [Core Concepts: Tools](/docs/concepts/tools/)

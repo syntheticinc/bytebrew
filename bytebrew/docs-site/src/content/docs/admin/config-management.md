@@ -66,5 +66,5 @@ A common pattern is to store your `agents.yaml` in Git and deploy changes via CI
 
 ## What's next
 
-- [Audit Log](/admin/audit-log/)
-- [API Reference: Config](/getting-started/api-reference/#config)
+- [Audit Log](/docs/admin/audit-log/)
+- [API Reference: Config](/docs/getting-started/api-reference/#config)

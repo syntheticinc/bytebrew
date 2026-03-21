@@ -135,7 +135,7 @@ Back up the `pgdata` volume regularly. It contains all your configuration and co
 | `8080` | REST API (chat, agents, tasks, config, health) |
 | `8443` | Admin Dashboard (web UI) |
 
-Both ports serve HTTP. For production, put a reverse proxy (Caddy, nginx) in front for TLS. See [Production deployment](/deployment/production/).
+Both ports serve HTTP. For production, put a reverse proxy (Caddy, nginx) in front for TLS. See [Production deployment](/docs/deployment/production/).
 
 ## Troubleshooting
 
@@ -199,6 +199,6 @@ The engine runs database migrations automatically on startup. Your data and conf
 
 ## What's next
 
-- [Model Selection](/deployment/model-selection/)
-- [Production Deployment](/deployment/production/)
-- [Quick Start](/getting-started/quick-start/)
+- [Model Selection](/docs/deployment/model-selection/)
+- [Production Deployment](/docs/deployment/production/)
+- [Quick Start](/docs/getting-started/quick-start/)

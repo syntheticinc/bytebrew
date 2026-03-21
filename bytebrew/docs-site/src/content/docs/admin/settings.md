@@ -44,5 +44,5 @@ Set the logging level to `debug` temporarily when troubleshooting agent behavior
 
 ## What's next
 
-- [Config Management](/admin/config-management/)
-- [API Keys](/admin/api-keys/)
+- [Config Management](/docs/admin/config-management/)
+- [API Keys](/docs/admin/api-keys/)

@@ -94,6 +94,6 @@ BYOK headers pass through your infrastructure. Ensure your reverse proxy (Caddy,
 
 ## What's next
 
-- [REST API Chat](/integration/rest-api/)
-- [Multi-Agent Config](/integration/multi-agent/)
-- [Settings](/admin/settings/)
+- [REST API Chat](/docs/integration/rest-api/)
+- [Multi-Agent Config](/docs/integration/multi-agent/)
+- [Settings](/docs/admin/settings/)

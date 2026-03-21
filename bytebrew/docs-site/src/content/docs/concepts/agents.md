@@ -80,7 +80,7 @@ agents:
 Each agent can be configured with a unique combination of capabilities:
 
 - **Built-in tools** -- `web_search`, `knowledge_search`, `manage_tasks`, `ask_user`.
-- **Custom HTTP tools** -- declarative API calls defined in YAML (see [Tools docs](/concepts/tools/)).
+- **Custom HTTP tools** -- declarative API calls defined in YAML (see [Tools docs](/docs/concepts/tools/)).
 - **MCP servers** -- external tools via Model Context Protocol.
 - **Knowledge base (RAG)** -- auto-indexed document folder for grounded responses.
 - **Sub-agent spawning** -- ability to create and delegate to other agents.
@@ -89,6 +89,6 @@ Each agent can be configured with a unique combination of capabilities:
 
 ## What's next
 
-- [Multi-Agent Orchestration](/concepts/multi-agent/)
-- [Tools](/concepts/tools/)
-- [Admin: Agents](/admin/agents/)
+- [Multi-Agent Orchestration](/docs/concepts/multi-agent/)
+- [Tools](/docs/concepts/tools/)
+- [Admin: Agents](/docs/admin/agents/)

@@ -111,6 +111,6 @@ curl http://localhost:8080/api/v1/tasks?agent=iot-supervisor \
 
 ## What's next
 
-- [Multi-Agent Orchestration](/concepts/multi-agent/)
-- [DevOps Monitor Example](/examples/devops-monitor/)
-- [Configuration Reference](/getting-started/configuration/)
+- [Multi-Agent Orchestration](/docs/concepts/multi-agent/)
+- [DevOps Monitor Example](/docs/examples/devops-monitor/)
+- [Configuration Reference](/docs/getting-started/configuration/)
