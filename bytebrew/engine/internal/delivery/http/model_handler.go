@@ -29,12 +29,23 @@ type CreateModelRequest struct {
 	APIKey    string `json:"api_key,omitempty"`
 }
 
+// ModelVerifyResult contains the result of model connectivity verification.
+type ModelVerifyResult struct {
+	Connectivity   string  `json:"connectivity"`
+	ToolCalling    string  `json:"tool_calling"`
+	ResponseTimeMs int64   `json:"response_time_ms"`
+	ModelName      string  `json:"model_name"`
+	Provider       string  `json:"provider"`
+	Error          *string `json:"error"`
+}
+
 // ModelService provides LLM model CRUD operations.
 type ModelService interface {
 	ListModels(ctx context.Context) ([]ModelResponse, error)
 	CreateModel(ctx context.Context, req CreateModelRequest) (*ModelResponse, error)
 	UpdateModel(ctx context.Context, name string, req CreateModelRequest) (*ModelResponse, error)
 	DeleteModel(ctx context.Context, name string) error
+	VerifyModel(ctx context.Context, name string) (*ModelVerifyResult, error)
 }
 
 // ModelHandler serves /api/v1/models endpoints.
@@ -54,6 +65,7 @@ func (h *ModelHandler) Routes() http.Handler {
 	r.Post("/", h.Create)
 	r.Put("/{name}", h.Update)
 	r.Delete("/{name}", h.Delete)
+	r.Post("/{name}/verify", h.Verify)
 	return r
 }
 
@@ -130,4 +142,20 @@ func (h *ModelHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Verify handles POST /api/v1/models/{name}/verify.
+func (h *ModelHandler) Verify(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		writeJSONError(w, http.StatusBadRequest, "model name is required")
+		return
+	}
+
+	result, err := h.service.VerifyModel(r.Context(), name)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }

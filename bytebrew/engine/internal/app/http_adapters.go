@@ -18,6 +18,7 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/agent_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/audit"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/flow_registry"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/config_repo"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/session_processor"
@@ -1072,6 +1073,49 @@ func (m *modelServiceHTTPAdapter) DeleteModel(ctx context.Context, name string) 
 		}
 	}
 	return fmt.Errorf("model not found: %s", name)
+}
+
+func (m *modelServiceHTTPAdapter) VerifyModel(ctx context.Context, name string) (*deliveryhttp.ModelVerifyResult, error) {
+	providers, err := m.repo.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list models for verify: %w", err)
+	}
+
+	var dbModel *models.LLMProviderModel
+	for i := range providers {
+		if providers[i].Name == name {
+			dbModel = &providers[i]
+			break
+		}
+	}
+	if dbModel == nil {
+		return nil, fmt.Errorf("model not found: %s", name)
+	}
+
+	client, err := llm.CreateClientFromDBModel(*dbModel)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to create client: %s", err.Error())
+		return &deliveryhttp.ModelVerifyResult{
+			Connectivity: "error",
+			ToolCalling:  "skipped",
+			ModelName:    dbModel.ModelName,
+			Provider:     dbModel.Type,
+			Error:        &errMsg,
+		}, nil
+	}
+
+	verifyCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	vr := llm.VerifyModel(verifyCtx, client, dbModel.ModelName, dbModel.Type)
+	return &deliveryhttp.ModelVerifyResult{
+		Connectivity:   vr.Connectivity,
+		ToolCalling:    vr.ToolCalling,
+		ResponseTimeMs: vr.ResponseTimeMs,
+		ModelName:      vr.ModelName,
+		Provider:       vr.Provider,
+		Error:          vr.Error,
+	}, nil
 }
 
 // taskServiceHTTPAdapter bridges task infrastructure to the http.TaskService interface.

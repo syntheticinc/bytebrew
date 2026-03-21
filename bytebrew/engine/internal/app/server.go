@@ -565,6 +565,7 @@ func Run(sc ServerConfig) error {
 			chatEnabled: components.AgentService != nil || components.ModelCache != nil,
 		}
 		chatHandler := deliveryhttp.NewChatHandler(chatService)
+		respondHandler := deliveryhttp.NewRespondHandler(sessionRegistry)
 
 		httpRouter := httpServer.Router()
 		httpRouter.Group(func(r chi.Router) {
@@ -572,6 +573,7 @@ func Run(sc ServerConfig) error {
 				r.Use(httpAuthMW.Authenticate)
 			}
 			r.Post("/api/v1/agents/{name}/chat", chatHandler.Chat)
+			r.Post("/api/v1/sessions/{id}/respond", respondHandler.Respond)
 		})
 
 		go func() {
