@@ -3,7 +3,7 @@
 :root {
   --sl-color-accent-low: #2a1511;
   --sl-color-accent: #D7513E;
-  --sl-color-accent-high: #f0c0b8;
+  --sl-color-accent-high: #DFD8D0;
   --sl-font: 'IBM Plex Mono', ui-monospace, monospace;
   --sl-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 }
@@ -11,14 +11,12 @@
 :root[data-theme='dark'] {
   --sl-color-accent-low: #2a1511;
   --sl-color-accent: #D7513E;
-  --sl-color-accent-high: #f0c0b8;
-  /* Slightly lighter than main site (#111111) for better docs readability */
+  --sl-color-accent-high: #DFD8D0;
+  /* Brand-aligned backgrounds — slightly lighter than #111111 for readability */
   --sl-color-bg: #181a1f;
-  --sl-color-bg-nav: #14161a;
-  --sl-color-bg-sidebar: #14161a;
-  --sl-color-black: #111315;
-  /* Code blocks — subtle contrast, not pure black */
-  --sl-color-bg-inline-code: rgba(215, 81, 62, 0.08);
+  --sl-color-bg-nav: #141414;
+  --sl-color-bg-sidebar: #141414;
+  --sl-color-black: #111111;
 }
 
 :root[data-theme='light'] {
@@ -27,7 +25,7 @@
   --sl-color-accent-high: #7a2a1f;
 }
 
-/* Smaller headings for docs content (less aggressive than defaults) */
+/* Smaller headings for docs content */
 .sl-markdown-content h1 {
   font-size: 1.75rem;
   margin-top: 0;
@@ -48,59 +46,59 @@
   margin-top: 1.25rem;
 }
 
-/* Code blocks — brand-aligned dark with subtle border */
+/* Code blocks — brand dark-alt background */
 :root[data-theme='dark'] .expressive-code {
-  --ec-frm-edBg: #1e2028;
-  --ec-frm-edActTabBg: #1e2028;
+  --ec-frm-edBg: #1F1F1F;
+  --ec-frm-edActTabBg: #1F1F1F;
   --ec-frm-frameBoxShdCssVal: none;
 }
 
-/* Inline code — subtle accent tint */
+/* Inline code — brand colors only */
 :root[data-theme='dark'] .sl-markdown-content :not(pre) > code {
-  background: rgba(215, 81, 62, 0.1);
-  color: #e8b4ac;
-  border: 1px solid rgba(215, 81, 62, 0.15);
+  background: #1F1F1F;
+  color: #CBC9BC;
+  border: 1px solid rgba(135, 134, 127, 0.2);
   padding: 0.15em 0.35em;
   border-radius: 4px;
   font-size: 0.88em;
 }
 
-/* Sidebar — slightly tighter spacing */
+/* Sidebar */
 nav[aria-label="Main"] a {
   font-size: 0.85rem;
 }
 
-/* Table styling — cleaner borders */
+/* Tables */
 :root[data-theme='dark'] .sl-markdown-content table {
-  border-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(135, 134, 127, 0.15);
 }
 
 :root[data-theme='dark'] .sl-markdown-content th {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(135, 134, 127, 0.05);
 }
 
-/* Callouts / Asides — brand-aligned, no purple */
+/* Callouts — brand-aligned, using shade3 borders and dark-alt backgrounds */
 :root[data-theme='dark'] .starlight-aside {
-  border-color: rgba(215, 81, 62, 0.3);
-  background: rgba(215, 81, 62, 0.06);
+  border-color: rgba(135, 134, 127, 0.3);
+  background: rgba(135, 134, 127, 0.06);
 }
 
 :root[data-theme='dark'] .starlight-aside--note {
-  border-color: rgba(130, 160, 200, 0.3);
-  background: rgba(130, 160, 200, 0.06);
+  border-color: rgba(135, 134, 127, 0.3);
+  background: rgba(135, 134, 127, 0.06);
 }
 
 :root[data-theme='dark'] .starlight-aside--tip {
-  border-color: rgba(100, 180, 120, 0.3);
-  background: rgba(100, 180, 120, 0.06);
+  border-color: rgba(135, 134, 127, 0.3);
+  background: rgba(135, 134, 127, 0.06);
 }
 
 :root[data-theme='dark'] .starlight-aside--caution {
-  border-color: rgba(220, 180, 60, 0.3);
-  background: rgba(220, 180, 60, 0.06);
+  border-color: rgba(215, 81, 62, 0.3);
+  background: rgba(215, 81, 62, 0.05);
 }
 
 :root[data-theme='dark'] .starlight-aside--danger {
   border-color: rgba(215, 81, 62, 0.4);
-  background: rgba(215, 81, 62, 0.08);
+  background: rgba(215, 81, 62, 0.07);
 }
