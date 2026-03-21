@@ -1,0 +1,25 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+  --sl-color-accent-low: #2a1511;
+  --sl-color-accent: #D7513E;
+  --sl-color-accent-high: #f0c0b8;
+  --sl-font: 'IBM Plex Mono', ui-monospace, monospace;
+  --sl-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+:root[data-theme='dark'] {
+  --sl-color-accent-low: #2a1511;
+  --sl-color-accent: #D7513E;
+  --sl-color-accent-high: #f0c0b8;
+  --sl-color-bg-nav: #0d0f12;
+  --sl-color-bg-sidebar: #0d0f12;
+  --sl-color-bg: #111318;
+  --sl-color-black: #0d0f12;
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #fbe8e5;
+  --sl-color-accent: #C04635;
+  --sl-color-accent-high: #7a2a1f;
+}

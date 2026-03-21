@@ -40,5 +40,8 @@ get.bytebrew.ai {
 }
 
 docs.bytebrew.ai {
-    redir https://bytebrew.ai{uri}
+    root * /var/www/docs-bytebrew
+    try_files {path} {path}/index.html {path}.html /404.html
+    file_server
+    encode gzip
 }

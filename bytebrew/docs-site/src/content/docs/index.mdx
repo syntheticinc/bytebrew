@@ -1,0 +1,36 @@
+---
+title: ByteBrew Engine Documentation
+description: Self-hosted AI agent platform. Deploy intelligent agents with tools, RAG, multi-agent orchestration, and triggers.
+template: splash
+hero:
+  tagline: Self-hosted AI agent platform with tools, RAG, multi-agent orchestration, and triggers. One Docker command to deploy.
+  image:
+    file: ../../assets/logo.svg
+  actions:
+    - text: Quick Start
+      link: /getting-started/quick-start/
+      icon: right-arrow
+    - text: GitHub
+      link: https://github.com/syntheticinc/bytebrew
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Get started
+
+<CardGrid stagger>
+  <Card title="Quick Start" icon="rocket">
+    Get ByteBrew Engine running with Docker in under 5 minutes. Create your first agent and send a message via REST API.
+  </Card>
+  <Card title="Configuration" icon="setting">
+    Complete reference for agents, models, tools, MCP servers, and triggers. YAML and Admin Dashboard.
+  </Card>
+  <Card title="Multi-Agent" icon="puzzle">
+    Build teams of specialized agents that collaborate on complex tasks using the orchestrator pattern.
+  </Card>
+  <Card title="Examples" icon="open-book">
+    Production-ready configurations: Sales Agent, Support Agent, DevOps Monitor, IoT Analyzer.
+  </Card>
+</CardGrid>
