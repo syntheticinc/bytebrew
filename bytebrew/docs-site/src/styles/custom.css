@@ -20,9 +20,64 @@
 }
 
 :root[data-theme='light'] {
-  --sl-color-accent-low: #fbe8e5;
+  --sl-color-accent-low: #f5ebe9;
   --sl-color-accent: #C04635;
   --sl-color-accent-high: #7a2a1f;
+  /* Warm off-white, not pure white — easier on eyes */
+  --sl-color-bg: #F7F8F1;
+  --sl-color-bg-nav: #EDEDE6;
+  --sl-color-bg-sidebar: #EDEDE6;
+  --sl-color-white: #F7F8F1;
+  --sl-color-gray-1: #DFD8D0;
+  --sl-color-gray-2: #CBC9BC;
+  --sl-color-gray-3: #87867F;
+  --sl-color-gray-4: #555550;
+  --sl-color-gray-5: #333330;
+  --sl-color-gray-6: #1F1F1F;
+  --sl-color-black: #111111;
+}
+
+/* Light theme — inline code */
+:root[data-theme='light'] .sl-markdown-content :not(pre) > code {
+  background: #EDEDE6;
+  color: #333330;
+  border: 1px solid rgba(135, 134, 127, 0.25);
+}
+
+/* Light theme — code blocks */
+:root[data-theme='light'] .expressive-code {
+  --ec-frm-edBg: #EDEDE6;
+  --ec-frm-edActTabBg: #EDEDE6;
+}
+
+/* Light theme — callouts */
+:root[data-theme='light'] .starlight-aside {
+  border-color: rgba(135, 134, 127, 0.3);
+  background: rgba(135, 134, 127, 0.06);
+}
+
+:root[data-theme='light'] .starlight-aside--caution {
+  border-color: rgba(192, 70, 53, 0.3);
+  background: rgba(192, 70, 53, 0.05);
+}
+
+:root[data-theme='light'] .starlight-aside--danger {
+  border-color: rgba(192, 70, 53, 0.4);
+  background: rgba(192, 70, 53, 0.07);
+}
+
+/* Light theme — tables */
+:root[data-theme='light'] .sl-markdown-content table {
+  border-color: rgba(135, 134, 127, 0.2);
+}
+
+:root[data-theme='light'] .sl-markdown-content th {
+  background: rgba(135, 134, 127, 0.08);
+}
+
+/* Light theme — logo should be visible (use dark version) */
+:root[data-theme='light'] .site-title img {
+  filter: none;
 }
 
 /* Smaller headings for docs content */

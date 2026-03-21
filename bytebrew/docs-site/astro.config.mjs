@@ -8,7 +8,11 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'ByteBrew Engine',
-      logo: { src: './src/assets/logo.svg', replacesTitle: true },
+      logo: {
+        dark: './src/assets/logo.svg',
+        light: './src/assets/logo-light.png',
+        replacesTitle: true,
+      },
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/syntheticinc/bytebrew' },
       ],
