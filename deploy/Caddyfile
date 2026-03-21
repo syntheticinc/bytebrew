@@ -8,9 +8,10 @@ bytebrew.ai, www.bytebrew.ai {
         file_server browse
     }
 
-    handle /docs/* {
+    @docs path /docs /docs/*
+    handle @docs {
         root * /var/www/bytebrew-docs
-        try_files {path} {path}/index.html {path}.html /docs/404.html
+        try_files {path} {path}/index.html {path}.html /docs/index.html
         file_server
     }
 
