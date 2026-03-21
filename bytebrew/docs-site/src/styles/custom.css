@@ -12,14 +12,69 @@
   --sl-color-accent-low: #2a1511;
   --sl-color-accent: #D7513E;
   --sl-color-accent-high: #f0c0b8;
-  --sl-color-bg-nav: #0d0f12;
-  --sl-color-bg-sidebar: #0d0f12;
-  --sl-color-bg: #111318;
-  --sl-color-black: #0d0f12;
+  /* Slightly lighter than main site (#111111) for better docs readability */
+  --sl-color-bg: #181a1f;
+  --sl-color-bg-nav: #14161a;
+  --sl-color-bg-sidebar: #14161a;
+  --sl-color-black: #111315;
+  /* Code blocks — subtle contrast, not pure black */
+  --sl-color-bg-inline-code: rgba(215, 81, 62, 0.08);
 }
 
 :root[data-theme='light'] {
   --sl-color-accent-low: #fbe8e5;
   --sl-color-accent: #C04635;
   --sl-color-accent-high: #7a2a1f;
+}
+
+/* Smaller headings for docs content (less aggressive than defaults) */
+.sl-markdown-content h1 {
+  font-size: 1.75rem;
+  margin-top: 0;
+}
+
+.sl-markdown-content h2 {
+  font-size: 1.35rem;
+  margin-top: 2rem;
+}
+
+.sl-markdown-content h3 {
+  font-size: 1.1rem;
+  margin-top: 1.5rem;
+}
+
+.sl-markdown-content h4 {
+  font-size: 0.95rem;
+  margin-top: 1.25rem;
+}
+
+/* Code blocks — brand-aligned dark with subtle border */
+:root[data-theme='dark'] .expressive-code {
+  --ec-frm-edBg: #1e2028;
+  --ec-frm-edActTabBg: #1e2028;
+  --ec-frm-frameBoxShdCssVal: none;
+}
+
+/* Inline code — subtle accent tint */
+:root[data-theme='dark'] .sl-markdown-content :not(pre) > code {
+  background: rgba(215, 81, 62, 0.1);
+  color: #e8b4ac;
+  border: 1px solid rgba(215, 81, 62, 0.15);
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  font-size: 0.88em;
+}
+
+/* Sidebar — slightly tighter spacing */
+nav[aria-label="Main"] a {
+  font-size: 0.85rem;
+}
+
+/* Table styling — cleaner borders */
+:root[data-theme='dark'] .sl-markdown-content table {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme='dark'] .sl-markdown-content th {
+  background: rgba(255, 255, 255, 0.03);
 }
