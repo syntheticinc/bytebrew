@@ -14,7 +14,7 @@ version: "3.8"
 
 services:
   engine:
-    image: ghcr.io/syntheticinc/bytebrew-engine:latest
+    image: bytebrew/engine:latest
     ports:
       - "8080:8080"    # REST API
       - "8443:8443"    # Admin Dashboard
@@ -109,7 +109,7 @@ Linux example:
 ```yaml
 services:
   engine:
-    image: ghcr.io/syntheticinc/bytebrew-engine:latest
+    image: bytebrew/engine:latest
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # ... rest of config
