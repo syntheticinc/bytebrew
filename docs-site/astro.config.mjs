@@ -20,10 +20,15 @@ export default defineConfig({
       head: [
         {
           tag: 'script',
-          content: `document.addEventListener('DOMContentLoaded', () => {
-            const logo = document.querySelector('.site-title');
-            if (logo) logo.href = 'https://bytebrew.ai';
-          });`,
+          content: `(function() {
+            function fixLogo() {
+              var logo = document.querySelector('a.site-title');
+              if (logo) logo.href = 'https://bytebrew.ai';
+            }
+            fixLogo();
+            document.addEventListener('DOMContentLoaded', fixLogo);
+            if (document.readyState !== 'loading') fixLogo();
+          })();`,
         },
       ],
       sidebar: [

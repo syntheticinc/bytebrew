@@ -62,6 +62,10 @@ models:
 The `${OPENAI_API_KEY}` syntax references an environment variable. Set it in your shell (`export OPENAI_API_KEY=sk-...`) or in a `.env` file next to `docker-compose.yml`. Never hardcode secrets in YAML.
 :::
 
+:::tip[Web chat interface]
+For a visual chat interface, add `bytebrew/web-client:latest` to your docker-compose (see [examples](https://github.com/syntheticinc/bytebrew-examples)).
+:::
+
 :::tip[Prefer a visual editor?]
 Skip the YAML file and use the Admin Dashboard instead. Open `http://localhost:8443/admin`, log in, and click **Create Agent**. The dashboard lets you configure everything visually -- model, system prompt, tools, security zones, spawn rules, and more.
 :::
