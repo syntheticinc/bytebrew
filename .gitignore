@@ -109,4 +109,8 @@ bytebrew-cloud-web/node_modules
 # Vite build output
 **/dist/
 
-query.txt
+query.txt# Claude Code workspace files (not in git)
+.agents/
+.claude/
+CLAUDE.md
+.mcp.json
