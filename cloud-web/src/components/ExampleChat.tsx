@@ -2,10 +2,19 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '../lib/auth';
 import { refreshAccessToken } from '../api/auth';
 
+interface ToolCallInfo {
+  id: string;
+  tool: string;
+  arguments?: string;
+  status: 'calling' | 'completed' | 'error';
+  result?: string;
+}
+
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  toolCalls?: ToolCallInfo[];
 }
 
 interface ExampleChatProps {
@@ -37,7 +46,7 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
 
   const streamChat = useCallback(async (userMessage: string, currentSessionId: string | null) => {
     const assistantId = crypto.randomUUID();
-    setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '' }]);
+    setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '', toolCalls: [] }]);
     setIsStreaming(true);
     setError(null);
 
@@ -138,12 +147,51 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
             try {
               const data = JSON.parse(line.slice(6));
 
-              // Only accumulate content from deltas, ignore full message
-              if (data.content && currentEvent !== 'message') {
-                fullContent += data.content;
+              if (currentEvent === 'tool_call') {
+                const argsStr = data.arguments
+                  ? (typeof data.arguments === 'string' ? data.arguments : JSON.stringify(data.arguments))
+                  : undefined;
+                const toolCall: ToolCallInfo = {
+                  id: data.call_id || crypto.randomUUID(),
+                  tool: data.tool || 'unknown',
+                  arguments: argsStr,
+                  status: 'calling',
+                };
                 setMessages(prev =>
-                  prev.map(m => m.id === assistantId ? { ...m, content: fullContent } : m)
+                  prev.map(m =>
+                    m.id === assistantId
+                      ? { ...m, toolCalls: [...(m.toolCalls || []), toolCall] }
+                      : m
+                  )
                 );
+              } else if (currentEvent === 'tool_result') {
+                const callId = data.call_id;
+                const hasError = data.has_error === true;
+                const content = data.content || '';
+                setMessages(prev =>
+                  prev.map(m => {
+                    if (m.id !== assistantId) return m;
+                    const updated = (m.toolCalls || []).map(tc =>
+                      tc.id === callId
+                        ? { ...tc, status: (hasError ? 'error' : 'completed') as ToolCallInfo['status'], result: content }
+                        : tc
+                    );
+                    return { ...m, toolCalls: updated };
+                  })
+                );
+              } else if (data.content && currentEvent !== 'message') {
+                // Filter raw JSON objects that are tool results leaked into text
+                const chunk = data.content as string;
+                const trimmedChunk = chunk.trimStart();
+                const looksLikeJson =
+                  trimmedChunk.startsWith('{') &&
+                  (trimmedChunk.includes('"id"') || trimmedChunk.includes('"count"') || trimmedChunk.includes('"products"'));
+                if (!looksLikeJson) {
+                  fullContent += chunk;
+                  setMessages(prev =>
+                    prev.map(m => m.id === assistantId ? { ...m, content: fullContent } : m)
+                  );
+                }
               }
 
               if (data.session_id) {
@@ -232,13 +280,54 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
             className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[80%] rounded-[10px] px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
+              className={`max-w-[80%] rounded-[10px] px-4 py-2.5 text-sm leading-relaxed ${
                 msg.role === 'user'
-                  ? 'bg-brand-accent text-white'
+                  ? 'bg-brand-accent text-white whitespace-pre-wrap'
                   : 'bg-brand-dark-alt text-brand-light border border-brand-shade3/15'
               }`}
             >
-              {msg.content}
+              {/* Tool calls for assistant messages */}
+              {msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0 && (
+                <div className="space-y-1.5 mb-2">
+                  {msg.toolCalls.map((tc) => (
+                    <div
+                      key={tc.id}
+                      className="bg-slate-800/50 border-l-2 border-orange-500/50 rounded px-3 py-1.5 text-sm"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs">
+                          {tc.status === 'calling' ? '\u2699\uFE0F' : tc.status === 'error' ? '\u274C' : '\u2705'}
+                        </span>
+                        <span className="font-mono font-semibold text-orange-400">{tc.tool}</span>
+                        {tc.arguments && (
+                          <span className="text-slate-400 font-mono text-xs truncate max-w-[200px]">
+                            ({tc.arguments.length > 60 ? tc.arguments.slice(0, 60) + '...' : tc.arguments})
+                          </span>
+                        )}
+                      </div>
+                      {tc.status === 'calling' && (
+                        <div className="text-slate-500 text-xs mt-0.5 animate-pulse">Running...</div>
+                      )}
+                      {tc.status === 'completed' && tc.result && (
+                        <div className="text-slate-300 text-xs mt-0.5 break-words">
+                          <span className="text-slate-500 mr-1">{'\u2192'}</span>
+                          {tc.result.length > 120 ? tc.result.slice(0, 120) + '...' : tc.result}
+                        </div>
+                      )}
+                      {tc.status === 'error' && tc.result && (
+                        <div className="text-red-400 text-xs mt-0.5 break-words">
+                          <span className="mr-1">{'\u2192'}</span>
+                          {tc.result.length > 120 ? tc.result.slice(0, 120) + '...' : tc.result}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Text content */}
+              <span className="whitespace-pre-wrap">{msg.content}</span>
+
               {msg.role === 'assistant' && isStreaming && msg.id === messages[messages.length - 1]?.id && (
                 <span className="inline-block w-1.5 h-4 bg-brand-accent ml-0.5 animate-pulse" />
               )}
