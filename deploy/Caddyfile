@@ -28,6 +28,22 @@ bytebrew.ai, www.bytebrew.ai {
         file_server
     }
 
+    # Example demo API proxies
+    handle /examples/hr-assistant/api/* {
+        uri strip_prefix /examples/hr-assistant/api
+        reverse_proxy 127.0.0.1:3001
+    }
+
+    handle /examples/support-agent/api/* {
+        uri strip_prefix /examples/support-agent/api
+        reverse_proxy 127.0.0.1:3002
+    }
+
+    handle /examples/sales-agent/api/* {
+        uri strip_prefix /examples/sales-agent/api
+        reverse_proxy 127.0.0.1:3003
+    }
+
     handle {
         root * /var/www/bytebrew-cloud-web
         try_files {path} /index.html
