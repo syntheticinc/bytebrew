@@ -10,9 +10,16 @@ interface ToolCallInfo {
   result?: string;
 }
 
+interface AskUserQuestion {
+  text: string;
+  options?: { label: string }[];
+  default?: string;
+}
+
 type MessageSegment =
   | { type: 'text'; content: string }
-  | { type: 'tool'; toolCall: ToolCallInfo };
+  | { type: 'tool'; toolCall: ToolCallInfo }
+  | { type: 'ask_user'; callId: string; questions: AskUserQuestion[]; answered: boolean; answer?: string };
 
 interface ChatMessage {
   id: string;
@@ -31,7 +38,9 @@ const MAX_MESSAGES_PER_HOUR = 15;
 const STORAGE_KEY_ACCESS = 'bytebrew_access_token';
 const STORAGE_KEY_REFRESH = 'bytebrew_refresh_token';
 
-function ToolCallBlock({ tc }: { tc: ToolCallInfo }) {
+function ToolCallBlock({ tc, expanded, onToggle }: { tc: ToolCallInfo; expanded: boolean; onToggle: () => void }) {
+  const hasLongResult = tc.result != null && tc.result.length > 120;
+
   return (
     <div className="bg-slate-800/50 border-l-2 border-orange-500/50 rounded px-3 py-1.5 text-sm my-1.5">
       <div className="flex items-center gap-1.5">
@@ -49,17 +58,73 @@ function ToolCallBlock({ tc }: { tc: ToolCallInfo }) {
         <div className="text-slate-500 text-xs mt-0.5 animate-pulse">Running...</div>
       )}
       {tc.status === 'completed' && tc.result && (
-        <div className="text-slate-300 text-xs mt-0.5 break-words">
-          <span className="text-slate-500 mr-1">{'\u2192'}</span>
-          {tc.result.length > 120 ? tc.result.slice(0, 120) + '...' : tc.result}
+        <div
+          className={`text-xs mt-0.5 break-words ${hasLongResult ? 'cursor-pointer select-none' : ''}`}
+          onClick={hasLongResult ? onToggle : undefined}
+        >
+          <span className="text-slate-500 mr-1">
+            {hasLongResult ? (expanded ? '\u25BE' : '\u25B8') : '\u2192'}
+          </span>
+          {expanded ? (
+            <pre className="text-slate-300 mt-1 overflow-x-auto whitespace-pre-wrap font-mono inline">{tc.result}</pre>
+          ) : (
+            <span className="text-slate-300">
+              {tc.result.length > 120 ? tc.result.slice(0, 120) + '...' : tc.result}
+            </span>
+          )}
         </div>
       )}
       {tc.status === 'error' && tc.result && (
-        <div className="text-red-400 text-xs mt-0.5 break-words">
-          <span className="mr-1">{'\u2192'}</span>
-          {tc.result.length > 120 ? tc.result.slice(0, 120) + '...' : tc.result}
+        <div
+          className={`text-xs mt-0.5 break-words ${hasLongResult ? 'cursor-pointer select-none' : ''}`}
+          onClick={hasLongResult ? onToggle : undefined}
+        >
+          <span className="mr-1">
+            {hasLongResult ? (expanded ? '\u25BE' : '\u25B8') : '\u2192'}
+          </span>
+          {expanded ? (
+            <pre className="text-red-400 mt-1 overflow-x-auto whitespace-pre-wrap font-mono inline">{tc.result}</pre>
+          ) : (
+            <span className="text-red-400">
+              {tc.result.length > 120 ? tc.result.slice(0, 120) + '...' : tc.result}
+            </span>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+function AskUserBlock({ segment, onAnswer }: {
+  segment: Extract<MessageSegment, { type: 'ask_user' }>;
+  onAnswer: (callId: string, answer: string) => void;
+}) {
+  return (
+    <div className="bg-blue-900/20 border-l-2 border-blue-400/50 rounded px-3 py-2 my-2">
+      {segment.questions.map((q, i) => (
+        <div key={i} className="mb-2 last:mb-0">
+          <p className="text-sm text-brand-light mb-1.5">{q.text}</p>
+          {!segment.answered && q.options && (
+            <div className="flex flex-wrap gap-1.5">
+              {q.options.map((opt) => (
+                <button
+                  key={opt.label}
+                  onClick={() => onAnswer(segment.callId, opt.label)}
+                  className="rounded-md border border-blue-400/30 px-2.5 py-1 text-xs text-blue-300 hover:bg-blue-400/10 hover:border-blue-400/50 transition-colors"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {segment.answered && segment.answer && (
+            <div className="text-xs text-blue-300 mt-1">
+              <span className="text-blue-400/60 mr-1">{'\u21B3'}</span>
+              {segment.answer}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -76,13 +141,50 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [messagesUsed, setMessagesUsed] = useState(0);
+  const [messagesRemaining, setMessagesRemaining] = useState(MAX_MESSAGES_PER_HOUR);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expandedToolIds, setExpandedToolIds] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  const messagesRemaining = MAX_MESSAGES_PER_HOUR - messagesUsed;
+
+  const toggleToolExpand = useCallback((toolId: string) => {
+    setExpandedToolIds(prev => {
+      const next = new Set(prev);
+      if (next.has(toolId)) {
+        next.delete(toolId);
+      } else {
+        next.add(toolId);
+      }
+      return next;
+    });
+  }, []);
+
+  const respondToAskUser = useCallback(async (callId: string, answer: string) => {
+    if (!sessionId) return;
+    const token = localStorage.getItem(STORAGE_KEY_ACCESS);
+    try {
+      await fetch(`${apiUrl}/v1/sessions/${sessionId}/respond`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ call_id: callId, response: answer }),
+      });
+      setMessages(prev => prev.map(m => ({
+        ...m,
+        segments: m.segments.map(seg =>
+          seg.type === 'ask_user' && seg.callId === callId
+            ? { ...seg, answered: true, answer }
+            : seg
+        ),
+      })));
+    } catch (err) {
+      console.error('Failed to respond to ask_user:', err);
+    }
+  }, [sessionId, apiUrl]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -122,6 +224,7 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
       });
 
       if (response.status === 429) {
+        setMessagesRemaining(0);
         setError('Rate limit exceeded. Try again later.');
         setMessages(prev => prev.filter(m => m.id !== assistantId));
         setIsStreaming(false);
@@ -232,6 +335,21 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
                   }
                 }
                 updateMessage();
+              } else if (currentEvent === 'confirmation') {
+                flushText();
+                try {
+                  const questions = JSON.parse(data.content) as AskUserQuestion[];
+                  segments.push({
+                    type: 'ask_user',
+                    callId: data.call_id || '',
+                    questions,
+                    answered: false,
+                  });
+                } catch {
+                  // If content isn't valid JSON questions, show as text
+                  currentText += data.content || '';
+                }
+                updateMessage();
               } else if (data.content && currentEvent !== 'message') {
                 const chunk = data.content as string;
                 if (!isJsonToolResult(chunk)) {
@@ -291,7 +409,7 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
       };
 
       setMessages(prev => [...prev, userMsg]);
-      setMessagesUsed(prev => prev + 1);
+      setMessagesRemaining(prev => Math.max(0, prev - 1));
       setInput('');
 
       streamChat(trimmed, sessionId);
@@ -344,7 +462,14 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
                 <>
                   {msg.segments.map((seg, i) =>
                     seg.type === 'tool' ? (
-                      <ToolCallBlock key={seg.toolCall.id} tc={seg.toolCall} />
+                      <ToolCallBlock
+                        key={seg.toolCall.id}
+                        tc={seg.toolCall}
+                        expanded={expandedToolIds.has(seg.toolCall.id)}
+                        onToggle={() => toggleToolExpand(seg.toolCall.id)}
+                      />
+                    ) : seg.type === 'ask_user' ? (
+                      <AskUserBlock key={seg.callId} segment={seg} onAnswer={respondToAskUser} />
                     ) : (
                       seg.content ? (
                         <span key={i} className="whitespace-pre-wrap">{seg.content}</span>
