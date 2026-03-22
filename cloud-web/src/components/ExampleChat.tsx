@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '../lib/auth';
+import { refreshAccessToken } from '../api/auth';
 
 interface ChatMessage {
   id: string;
@@ -15,6 +16,7 @@ interface ExampleChatProps {
 
 const MAX_MESSAGES_PER_HOUR = 15;
 const STORAGE_KEY_ACCESS = 'bytebrew_access_token';
+const STORAGE_KEY_REFRESH = 'bytebrew_refresh_token';
 
 export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps) {
   const { isAuthenticated, triggerAuthPopup } = useAuth();
@@ -43,7 +45,19 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
     abortRef.current = controller;
 
     try {
-      const token = localStorage.getItem(STORAGE_KEY_ACCESS);
+      // Get fresh token (refresh if expired)
+      let token = localStorage.getItem(STORAGE_KEY_ACCESS);
+      if (!token) {
+        const refreshToken = localStorage.getItem(STORAGE_KEY_REFRESH);
+        if (refreshToken) {
+          try {
+            token = await refreshAccessToken(refreshToken);
+            localStorage.setItem(STORAGE_KEY_ACCESS, token);
+          } catch {
+            // refresh failed
+          }
+        }
+      }
       const body: Record<string, string> = { message: userMessage };
       if (currentSessionId) body.session_id = currentSessionId;
 
@@ -65,7 +79,22 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
       }
 
       if (response.status === 401) {
-        setError('Authentication required.');
+        // Try refreshing token
+        const refreshToken = localStorage.getItem(STORAGE_KEY_REFRESH);
+        if (refreshToken && token) {
+          try {
+            const newToken = await refreshAccessToken(refreshToken);
+            localStorage.setItem(STORAGE_KEY_ACCESS, newToken);
+            // Retry with new token
+            setMessages(prev => prev.filter(m => m.id !== assistantId));
+            setIsStreaming(false);
+            streamChat(userMessage, currentSessionId);
+            return;
+          } catch {
+            // refresh failed
+          }
+        }
+        setError('Authentication required. Please sign in again.');
         setMessages(prev => prev.filter(m => m.id !== assistantId));
         setIsStreaming(false);
         return;
