@@ -99,7 +99,7 @@ function HeroSection() {
               <span className="text-brand-shade3">$ docker compose up -d</span>{'\n'}
               <span className="text-emerald-400">Creating bytebrew-engine  ... done</span>{'\n'}
               <span className="text-emerald-400">Creating bytebrew-postgres ... done</span>{'\n'}
-              <span className="text-brand-shade3"># Agent running on http://localhost:8080</span>
+              <span className="text-brand-shade3"># Agent running on http://localhost:8443</span>
             </pre>
           </div>
         </div>
@@ -220,7 +220,7 @@ function SolutionSection() {
               {'  '}<span className="text-brand-accent">support-agent</span>:{'\n'}
               {'    '}<span className="text-brand-shade3">model</span>: <span className="text-emerald-400">claude-sonnet-4</span>{'\n'}
               {'    '}<span className="text-brand-shade3">tools</span>:{'\n'}
-              {'      '}- <span className="text-emerald-400">knowledge_search</span>{'\n'}
+              {'      '}- <span className="text-emerald-400">web_search</span>{'\n'}
               {'      '}- <span className="text-emerald-400">create_ticket</span>{'\n'}
               {'\n'}
               <span className="text-brand-accent">triggers</span>:{'\n'}
@@ -302,13 +302,8 @@ function HowItWorksSection() {
                 <p className="text-sm text-brand-shade3 leading-relaxed mb-3">
                   Open the Admin Dashboard and create your agent visually. Set the model, system prompt, tools, and spawn rules — no YAML needed.
                 </p>
-                <div className="rounded-[8px] border border-brand-shade3/15 overflow-hidden">
-                  <img
-                    src="/screenshots/admin-agents.png"
-                    alt="Admin Dashboard — Agents list with Create Agent button"
-                    className="w-full"
-                    loading="lazy"
-                  />
+                <div className="rounded-[8px] border border-brand-shade3/15 overflow-hidden bg-brand-dark flex items-center justify-center py-10">
+                  <span className="text-sm text-brand-shade3">Admin Dashboard &mdash; Agents list</span>
                 </div>
               </div>
 
@@ -329,7 +324,7 @@ function HowItWorksSection() {
                   {'    '}<span className="text-brand-shade3">model</span>: <span className="text-emerald-400">glm-5</span>{'\n'}
                   {'    '}<span className="text-brand-shade3">system</span>: <span className="text-emerald-400">"You are a helpful assistant"</span>{'\n'}
                   {'    '}<span className="text-brand-shade3">tools</span>:{'\n'}
-                  {'      '}- <span className="text-emerald-400">knowledge_search</span>
+                  {'      '}- <span className="text-emerald-400">web_search</span>
                 </pre>
               </div>
             </div>
@@ -350,8 +345,8 @@ function HowItWorksSection() {
                 <span className="text-emerald-400">Creating bytebrew-postgres ... done</span>{'\n'}
                 <span className="text-emerald-400">Creating bytebrew-engine  ... done</span>{'\n'}
                 {'\n'}
-                <span className="text-brand-shade3">$</span> <span className="text-brand-light">curl localhost:8080/health</span>{'\n'}
-                <span className="text-emerald-400">{'{"status":"ok","agents":1}'}</span>
+                <span className="text-brand-shade3">$</span> <span className="text-brand-light">curl localhost:8443/api/v1/health</span>{'\n'}
+                <span className="text-emerald-400">{'{"status":"ok"}'}</span>
               </pre>
             </div>
           </div>
@@ -367,12 +362,17 @@ function HowItWorksSection() {
             </div>
             <div className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark p-4 overflow-x-auto">
               <pre className="font-mono text-sm text-brand-shade2 leading-relaxed">
-                <span className="text-brand-shade3">$</span> <span className="text-brand-light">curl -N localhost:8080/v1/chat \</span>{'\n'}
-                {'  '}<span className="text-brand-light">-d '{'"'}agent":"my-agent","message":"Hello"{'"'}'</span>{'\n'}
+                <span className="text-brand-shade3">$</span> <span className="text-brand-light">curl -N localhost:8443/api/v1/agents/my-agent/chat \</span>{'\n'}
+                {'  '}<span className="text-brand-light">-d '{'"'}message":"Hello"{'"'}'</span>{'\n'}
                 {'\n'}
-                <span className="text-brand-shade3">{'data: {"type":"content","text":"Hello! How can"}'}</span>{'\n'}
-                <span className="text-brand-shade3">{'data: {"type":"content","text":" I help you?"}'}</span>{'\n'}
-                <span className="text-brand-shade3">{'data: {"type":"done"}'}</span>
+                <span className="text-brand-shade3">{'event: message_delta'}</span>{'\n'}
+                <span className="text-brand-shade3">{'data: {"content":"Hello! How can"}'}</span>{'\n'}
+                {'\n'}
+                <span className="text-brand-shade3">{'event: message_delta'}</span>{'\n'}
+                <span className="text-brand-shade3">{'data: {"content":" I help you?"}'}</span>{'\n'}
+                {'\n'}
+                <span className="text-brand-shade3">{'event: done'}</span>{'\n'}
+                <span className="text-brand-shade3">{'data: {"session_id":"abc-123"}'}</span>
               </pre>
             </div>
           </div>
@@ -523,13 +523,8 @@ function ProductShowcaseSection() {
             <p className="text-sm text-brand-shade3 leading-relaxed mb-4">
               Ready-to-use chat interface with multi-agent sidebar, tool calls, and rich markdown. Open source — fork and customize.
             </p>
-            <div className="rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5" style={{ aspectRatio: '16/9' }}>
-              <img
-                src="/screenshots/chat-with-tools.png"
-                alt="ByteBrew Web Client — AI sales agent recommending laptops with web search tool calls and structured markdown response"
-                className="w-full h-full object-cover object-top"
-                loading="lazy"
-              />
+            <div className="rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5 bg-brand-dark flex items-center justify-center" style={{ aspectRatio: '16/9' }}>
+              <span className="text-sm text-brand-shade3">Web Client &mdash; Chat with tool calls</span>
             </div>
           </div>
 
@@ -539,13 +534,8 @@ function ProductShowcaseSection() {
             <p className="text-sm text-brand-shade3 leading-relaxed mb-4">
               Configure agents, models, MCP servers, triggers, and API keys through a visual interface. No YAML required.
             </p>
-            <div className="rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5" style={{ aspectRatio: '16/9' }}>
-              <img
-                src="/screenshots/admin-agent-detail.png"
-                alt="Admin Dashboard — Agent detail panel with model, system prompt, tools, and spawn rules configuration"
-                className="w-full h-full object-cover object-top"
-                loading="lazy"
-              />
+            <div className="rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5 bg-brand-dark flex items-center justify-center" style={{ aspectRatio: '16/9' }}>
+              <span className="text-sm text-brand-shade3">Admin Dashboard &mdash; Agent configuration</span>
             </div>
           </div>
         </div>

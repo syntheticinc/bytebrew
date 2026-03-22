@@ -130,7 +130,7 @@ function DashboardContent() {
             </li>
             <li>
               <a
-                href="https://docs.bytebrew.ai"
+                href="https://bytebrew.ai/docs/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-between text-sm text-brand-shade2 hover:text-brand-light transition-colors"
@@ -141,7 +141,7 @@ function DashboardContent() {
             </li>
             <li>
               <a
-                href="#"
+                href="https://github.com/syntheticinc/bytebrew-examples"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-between text-sm text-brand-shade2 hover:text-brand-light transition-colors"

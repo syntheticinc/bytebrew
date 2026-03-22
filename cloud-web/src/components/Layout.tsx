@@ -182,6 +182,19 @@ function AuthenticatedNav({
 }) {
   return (
     <>
+      <Link to="/docs" className={navLinkClass}>
+        Docs
+      </Link>
+      <Link to="/examples" className={navLinkClass}>
+        Examples
+      </Link>
+      <Link to="/pricing" className={navLinkClass}>
+        Pricing
+      </Link>
+      <Link to="/download" className={navLinkClass}>
+        Download
+      </Link>
+      <div className="h-4 w-px bg-brand-shade3/30" />
       <Link to="/dashboard" className={navLinkClass}>
         Dashboard
       </Link>
@@ -216,6 +229,19 @@ function AuthenticatedNavMobile({
 }) {
   return (
     <>
+      <Link to="/docs" className={mobileNavLinkClass} onClick={onLinkClick}>
+        Docs
+      </Link>
+      <Link to="/examples" className={mobileNavLinkClass} onClick={onLinkClick}>
+        Examples
+      </Link>
+      <Link to="/pricing" className={mobileNavLinkClass} onClick={onLinkClick}>
+        Pricing
+      </Link>
+      <Link to="/download" className={mobileNavLinkClass} onClick={onLinkClick}>
+        Download
+      </Link>
+      <div className="border-t border-brand-shade3/15 my-1" />
       <Link to="/dashboard" className={mobileNavLinkClass} onClick={onLinkClick}>
         Dashboard
       </Link>
