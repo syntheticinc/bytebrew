@@ -4,7 +4,7 @@ package bytebrew.v1;
 
 import "common.proto";
 
-option go_package = "github.com/syntheticinc/bytebrew/bytebrew/engine/api/proto/gen;bytebrewv1";
+option go_package = "github.com/syntheticinc/bytebrew/engine/api/proto/gen;bytebrewv1";
 
 // IndexingService handles code indexing from client to server
 // Note: Indexing happens on CLIENT side, server only stores metadata
