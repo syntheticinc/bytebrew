@@ -213,44 +213,73 @@
 - git clone → cd hr-assistant → cp .env.example .env → docker compose up -d
 - **Ожидание:** engine + db + mcp-server + service стартуют, health OK
 
-### TC-EXAMPLE-02: HR chat works
-- POST /api/v1/chat/hr-assistant {"message": "What's the PTO policy?"}
-- **Ожидание:** knowledge_search tool call, policy answer
+### TC-EXAMPLE-02: HR — Knowledge Search (RAG)
+- POST /chat/hr-assistant {"message": "What's the PTO policy for employees with 2+ years?"}
+- **Ожидание:** SSE содержит tool_call event с tool="knowledge_search"
+- **Ожидание:** ответ цитирует конкретный документ (pto-policy.md)
+- **Ожидание:** ответ содержит конкретные цифры (15/20/25 days by tenure)
+- **Это агент, не LLM:** использует RAG для поиска по knowledge base
 
-### TC-EXAMPLE-03: Support Agent self-hosted
-- cd support-agent → docker compose up -d → health OK
+### TC-EXAMPLE-03: HR — Structured Q&A (ask_user)
+- POST /chat/hr-assistant {"message": "I want to request time off"}
+- **Ожидание:** SSE содержит user_input_required event
+- **Ожидание:** agent спрашивает конкретные вопросы (dates, type, reason)
+- **Это агент, не LLM:** использует ask_user tool для structured interaction
 
-### TC-EXAMPLE-04: Support multi-agent spawn
-- POST /api/v1/chat/support-router {"message": "My API returns 500 errors"}
-- **Ожидание:** agent_spawn event → technical agent → parallel diagnostics
+### TC-EXAMPLE-04: HR — Escalation
+- POST /chat/hr-assistant {"message": "I have a complex FMLA situation that needs human review"}
+- **Ожидание:** agent детектирует escalation trigger
+- **Ожидание:** SSE содержит escalation event или сообщение об эскалации
+- **Это агент, не LLM:** автоматически эскалирует на основе триггеров
 
-### TC-EXAMPLE-05: Sales Agent self-hosted
-- cd sales-agent → docker compose up -d → health OK
+### TC-EXAMPLE-05: Support — Multi-agent spawn
+- POST /chat/support-router {"message": "My API is returning 500 errors since this morning"}
+- **Ожидание:** SSE содержит agent_spawn event (technical agent)
+- **Ожидание:** technical agent запускает ПАРАЛЛЕЛЬНЫЕ tool calls (check_service_status + get_error_logs)
+- **Ожидание:** ответ содержит результаты диагностики
+- **Это агент, не LLM:** router решает куда направить, specialist agent делает параллельную диагностику
 
-### TC-EXAMPLE-06: Sales confirmation flow
-- POST /api/v1/chat/sales-agent {"message": "Create a quote for 5 ThinkPads"}
-- **Ожидание:** confirmation_required event → approve → quote created
+### TC-EXAMPLE-06: Support — Billing routing
+- POST /chat/support-router {"message": "I was double-charged on my last invoice"}
+- **Ожидание:** SSE содержит agent_spawn event (billing agent, не technical)
+- **Ожидание:** billing agent вызывает MCP tools (get_customer, process_refund)
+- **Это агент, не LLM:** router маршрутизирует по типу проблемы
 
-### TC-EXAMPLE-07: Hosted demos health
+### TC-EXAMPLE-07: Sales — Product search + Quote with confirmation
+- POST /chat/sales-agent {"message": "I need 5 laptops for my team, budget $1200 each"}
+- **Ожидание:** agent вызывает search_products + check_inventory
+- **Ожидание:** agent предлагает товары с ценами и наличием
+- При запросе quote → SSE содержит confirmation_required event
+- **Это агент, не LLM:** использует MCP tools для реального каталога, requires confirmation для quote
+
+### TC-EXAMPLE-08: Sales — Discount with business rules
+- POST /chat/sales-agent {"message": "Can I get a 20% bulk discount?"}
+- **Ожидание:** agent проверяет max_discount_percent setting (15%)
+- **Ожидание:** agent отказывает ("max discount is 15%") или предлагает 15%
+- **Это агент, не LLM:** следует бизнес-правилам из Settings
+
+### TC-EXAMPLE-09: Hosted demos health
 - curl https://bytebrew.ai/examples/hr-assistant/api/v1/health → 200
 - curl https://bytebrew.ai/examples/support-agent/api/v1/health → 200
 - curl https://bytebrew.ai/examples/sales-agent/api/v1/health → 200
 
-### TC-EXAMPLE-08: Hosted demo chat
-- POST https://bytebrew.ai/examples/hr-assistant/api/v1/chat/hr-assistant → real SSE response (не mock)
+### TC-EXAMPLE-10: Hosted HR demo — real agent response
+- Отправить сообщение через UI на bytebrew.ai/examples/hr-assistant
+- **Ожидание:** реальный ответ от Engine (не mock), streaming SSE
+- **Ожидание:** если MCP tools подключены — tool calls видны в ответе
 
 ---
 
-## Итого: 88 TC
+## Итого: 91 TC
 
-| Категория | Кол-во |
-|-----------|--------|
-| TC-SITE | 16 |
-| TC-INST | 7 |
-| TC-ADMIN | 18 |
-| TC-API | 12 |
-| TC-CHAT | 7 |
-| TC-DOC | 8 |
-| TC-CLOUD | 11 |
-| TC-EXAMPLE | 8 |
-| **ВСЕГО** | **87** |
+| Категория | Кол-во | Покрытие |
+|-----------|--------|----------|
+| TC-SITE | 16 | Сайт, docs, темы, скриншоты, порты |
+| TC-INST | 7 | Docker install, update, restart |
+| TC-ADMIN | 18 | Dashboard CRUD, auth, UX |
+| TC-API | 12 | REST API, errors |
+| TC-CHAT | 7 | SSE streaming, sessions |
+| TC-DOC | 8 | Документация = реальность |
+| TC-CLOUD | 11 | /examples/, auth popup, dashboard links |
+| TC-EXAMPLE | 10 | **Агентное поведение** (tools, spawn, RAG, confirmation) |
+| **ВСЕГО** | **89** |
