@@ -24,11 +24,11 @@ proto: ## Generate protobuf code
 
 build: ## Build the binary
 	@echo "Building $(BINARY_NAME)..."
-	go build -ldflags "-X main.version=$$(cat ../VERSION) -X main.commit=$$(git rev-parse --short HEAD) -X main.date=$$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o bin/$(BINARY_NAME) ./cmd/server
+	go build -ldflags "-X main.version=$$(cat ../VERSION) -X main.commit=$$(git rev-parse --short HEAD) -X main.date=$$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o bin/$(BINARY_NAME) ./cmd/ce
 
 build-release: ## Build obfuscated release binary (requires: go install mvdan.cc/garble@latest)
 	@echo "Building obfuscated $(BINARY_NAME)..."
-	garble -literals -tiny build -ldflags "-s -w -X main.version=$$(cat ../VERSION) -X main.commit=$$(git rev-parse --short HEAD) -X main.date=$$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o bin/$(BINARY_NAME) ./cmd/server
+	garble -literals -tiny build -ldflags "-s -w -X main.version=$$(cat ../VERSION) -X main.commit=$$(git rev-parse --short HEAD) -X main.date=$$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o bin/$(BINARY_NAME) ./cmd/ce
 
 run: build ## Run the server
 	@echo "Running $(BINARY_NAME)..."

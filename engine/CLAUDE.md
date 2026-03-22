@@ -9,7 +9,7 @@
 ## Structure
 ```
 bytebrew-srv/
-├── cmd/server/            # Entry point
+├── cmd/ce/                # Production entry point (Community Edition)
 ├── cmd/testserver/        # Test server with MockChatModel
 ├── internal/
 │   ├── domain/            # Pure entities (NO external deps, NO tags)
@@ -23,7 +23,7 @@ bytebrew-srv/
 
 ## Commands
 ```bash
-go run ./cmd/server              # Start server (port 60401)
+go run ./cmd/ce                  # Start server
 go test ./...                    # Unit tests
 go test -tags prompt -v -timeout 300s ./tests/prompt_regression/...  # Prompt regression
 ```

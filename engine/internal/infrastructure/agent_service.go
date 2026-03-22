@@ -223,7 +223,7 @@ func createWebTools(cfg config.Config) (einotool.InvokableTool, einotool.Invokab
 }
 
 // ValidateLicense validates the license from config. Always returns a LicenseInfo (fallback to Blocked).
-// Called from cmd/server (legacy). CE binary skips this entirely.
+// Called from legacy code. CE binary skips this entirely.
 func ValidateLicense(cfg config.LicenseConfig) *domain.LicenseInfo {
 	if cfg.PublicKeyHex == "" {
 		return domain.BlockedLicense()

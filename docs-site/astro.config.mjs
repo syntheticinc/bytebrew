@@ -17,6 +17,15 @@ export default defineConfig({
         { icon: 'github', label: 'GitHub', href: 'https://github.com/syntheticinc/bytebrew' },
       ],
       customCss: ['./src/styles/custom.css'],
+      head: [
+        {
+          tag: 'script',
+          content: `document.addEventListener('DOMContentLoaded', () => {
+            const logo = document.querySelector('.site-title');
+            if (logo) logo.href = 'https://bytebrew.ai';
+          });`,
+        },
+      ],
       sidebar: [
         {
           label: 'Getting Started',

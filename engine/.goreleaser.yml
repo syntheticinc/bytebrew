@@ -7,7 +7,7 @@ before:
 
 builds:
   - id: bytebrew-srv
-    main: ./cmd/server
+    main: ./cmd/ce
     binary: bytebrew-srv
     ldflags:
       - -s -w
