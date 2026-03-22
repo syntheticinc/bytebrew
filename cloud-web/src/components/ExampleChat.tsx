@@ -47,7 +47,7 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
       const body: Record<string, string> = { message: userMessage };
       if (currentSessionId) body.session_id = currentSessionId;
 
-      const response = await fetch(`${apiUrl}/api/v1/chat/${agentName}`, {
+      const response = await fetch(`${apiUrl}/v1/chat/${agentName}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

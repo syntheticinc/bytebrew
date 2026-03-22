@@ -302,8 +302,8 @@ function HowItWorksSection() {
                 <p className="text-sm text-brand-shade3 leading-relaxed mb-3">
                   Open the Admin Dashboard and create your agent visually. Set the model, system prompt, tools, and spawn rules — no YAML needed.
                 </p>
-                <div className="rounded-[8px] border border-brand-shade3/15 overflow-hidden bg-brand-dark flex items-center justify-center py-10">
-                  <span className="text-sm text-brand-shade3">Admin Dashboard &mdash; Agents list</span>
+                <div className="rounded-[8px] border border-brand-shade3/15 overflow-hidden">
+                  <img src="/screenshots/admin-agents.png" alt="Admin Dashboard — Agents list with Create Agent button" className="w-full" />
                 </div>
               </div>
 
@@ -523,8 +523,8 @@ function ProductShowcaseSection() {
             <p className="text-sm text-brand-shade3 leading-relaxed mb-4">
               Ready-to-use chat interface with multi-agent sidebar, tool calls, and rich markdown. Open source — fork and customize.
             </p>
-            <div className="rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5 bg-brand-dark flex items-center justify-center" style={{ aspectRatio: '16/9' }}>
-              <span className="text-sm text-brand-shade3">Web Client &mdash; Chat with tool calls</span>
+            <div className="rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5">
+              <img src="/screenshots/admin-agents.png" alt="ByteBrew Web Client — AI sales agent recommending laptops with web search tool calls and structured markdown response" className="w-full" />
             </div>
           </div>
 
@@ -534,8 +534,8 @@ function ProductShowcaseSection() {
             <p className="text-sm text-brand-shade3 leading-relaxed mb-4">
               Configure agents, models, MCP servers, triggers, and API keys through a visual interface. No YAML required.
             </p>
-            <div className="rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5 bg-brand-dark flex items-center justify-center" style={{ aspectRatio: '16/9' }}>
-              <span className="text-sm text-brand-shade3">Admin Dashboard &mdash; Agent configuration</span>
+            <div className="rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5">
+              <img src="/screenshots/admin-agent-detail.png" alt="Admin Dashboard — Agent detail panel with model, system prompt, tools, and spawn rules configuration" className="w-full" />
             </div>
           </div>
         </div>

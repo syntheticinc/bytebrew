@@ -175,7 +175,7 @@ export function EnginePricingTable() {
           <FeatureList features={CUSTOM_FEATURES} />
 
           <a
-            href="mailto:sales@bytebrew.ai"
+            href="mailto:info@bytebrew.ai"
             className="mt-6 w-full rounded-[10px] bg-brand-shade3/20 py-2.5 text-sm font-medium text-brand-light hover:bg-brand-shade3/30 transition-colors text-center block"
           >
             Talk to Sales
@@ -201,7 +201,7 @@ function EECardPreview() {
       <FeatureList features={EE_FEATURES_PREVIEW} />
 
       <a
-        href="mailto:hello@bytebrew.ai"
+        href="mailto:info@bytebrew.ai"
         className="mt-6 w-full rounded-[10px] bg-brand-shade3/20 py-2.5 text-sm font-medium text-brand-light hover:bg-brand-shade3/30 transition-colors text-center block"
       >
         Join Waitlist
