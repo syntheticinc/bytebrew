@@ -130,6 +130,13 @@ func (e *EngineAdapter) ExecuteTurn(
 	toolDeps.KnowledgePath = flow.KnowledgePath
 	toolDeps.MCPServers = flow.MCPServers
 
+	// Populate spawn targets from flow's SpawnPolicy
+	canSpawn := make([]string, len(flow.Spawn.AllowedFlows))
+	for i, ft := range flow.Spawn.AllowedFlows {
+		canSpawn[i] = string(ft)
+	}
+	toolDeps.CanSpawn = canSpawn
+
 	// 3. Resolve tools from flow.ToolNames
 	resolvedTools, err := e.toolResolver.Resolve(ctx, flow.ToolNames, toolDeps)
 	if err != nil {

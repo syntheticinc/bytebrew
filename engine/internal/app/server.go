@@ -368,6 +368,11 @@ func Run(sc ServerConfig) error {
 		components.AgentToolResolver.SetKnowledge(knowledgeRepo, embeddingsClient)
 	}
 
+	// Wire spawner into AgentToolResolver for HTTP chat path spawn support
+	if components.AgentToolResolver != nil && components.AgentPoolAdapter != nil {
+		components.AgentToolResolver.SetSpawner(components.AgentPoolAdapter, components.AgentPoolAdapter)
+	}
+
 	// HTTP REST API server (Phase 5) — starts only when bootstrap config is available.
 	var httpServer *deliveryhttp.Server
 	var httpPort int
@@ -643,6 +648,14 @@ func Run(sc ServerConfig) error {
 		flowHandlerCfg.WorkManager = components.WorkManager
 		flowHandlerCfg.SessionStorage = components.SessionStorage
 		sessProcessor.SetAgentPoolRegistrar(components.AgentPool)
+		// Re-wire AgentPool with AgentRegistry as FlowProvider (replaces legacy FlowManager)
+		// so spawned agents can resolve flows from DB, not just YAML
+		if agentRegistry != nil {
+			components.AgentPool.SetEngine(
+				components.Engine, agentRegistry,
+				components.AgentToolResolver, components.ToolDepsProvider,
+			)
+		}
 		loggerInstance.InfoContext(ctx, "Multi-agent mode enabled (Supervisor + Code Agents)")
 	} else {
 		loggerInstance.InfoContext(ctx, "Single-agent mode (no WorkStorage)")

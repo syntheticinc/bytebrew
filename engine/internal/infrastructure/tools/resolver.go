@@ -23,5 +23,6 @@ type ToolDependencies struct {
 	ChunkStore         *indexing.ChunkStore
 	Embedder           *indexing.EmbeddingsClient
 	MCPServers         []string           // MCP server names for legacy Resolve path
+	CanSpawn           []string           // target agent names this agent can spawn (legacy Resolve path)
 }
 

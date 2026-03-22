@@ -51,9 +51,7 @@ func (r *AgentRun) Validate() error {
 	if r.ID == "" {
 		return fmt.Errorf("id is required")
 	}
-	if r.SubtaskID == "" {
-		return fmt.Errorf("subtask_id is required")
-	}
+	// SubtaskID optional — HTTP chat path may spawn agents without task/subtask context
 	if r.SessionID == "" {
 		return fmt.Errorf("session_id is required")
 	}

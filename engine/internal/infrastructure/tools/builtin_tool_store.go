@@ -72,6 +72,8 @@ type AgentToolResolver struct {
 	knowledgeSearcher KnowledgeSearcher
 	knowledgeEmbedder KnowledgeEmbedder
 	mcpProvider       MCPClientProvider
+	spawner           GenericAgentSpawner
+	inspector         GenericAgentInspector
 }
 
 // NewAgentToolResolver creates a new AgentToolResolver.
@@ -93,6 +95,12 @@ func (r *AgentToolResolver) SetKnowledge(searcher KnowledgeSearcher, embedder Kn
 // SetMCPProvider configures the MCP client provider for MCP tool resolution.
 func (r *AgentToolResolver) SetMCPProvider(provider MCPClientProvider) {
 	r.mcpProvider = provider
+}
+
+// SetSpawner configures the spawner and inspector for spawn tool resolution via legacy Resolve path.
+func (r *AgentToolResolver) SetSpawner(spawner GenericAgentSpawner, inspector GenericAgentInspector) {
+	r.spawner = spawner
+	r.inspector = inspector
 }
 
 // ResolveContext holds per-agent resolution context.
@@ -212,6 +220,14 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 	if deps.KnowledgePath != "" && deps.AgentName != "" && r.knowledgeSearcher != nil && r.knowledgeEmbedder != nil {
 		knowledgeTool := NewKnowledgeSearchTool(deps.AgentName, r.knowledgeSearcher, r.knowledgeEmbedder)
 		resolved = append(resolved, knowledgeTool)
+	}
+
+	// Spawn tools via legacy Resolve path
+	if r.spawner != nil && len(deps.CanSpawn) > 0 {
+		for _, targetName := range deps.CanSpawn {
+			spawnTool := NewSpawnTool(targetName, deps.SessionID, r.spawner, r.inspector)
+			resolved = append(resolved, spawnTool)
+		}
 	}
 
 	// MCP tools via legacy Resolve path

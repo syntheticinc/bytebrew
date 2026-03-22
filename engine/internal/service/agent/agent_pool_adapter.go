@@ -92,6 +92,18 @@ func (a *AgentPoolAdapter) StopAgent(agentID string) error {
 	return a.pool.StopAgent(agentID)
 }
 
+// SpawnAgent implements tools.GenericAgentSpawner by delegating to AgentPool.SpawnWithDescription.
+func (a *AgentPoolAdapter) SpawnAgent(ctx context.Context, params tools.SpawnParams) (string, error) {
+	return a.pool.SpawnWithDescription(
+		ctx,
+		params.SessionID,
+		"", // projectKey — not needed for spawn via tool
+		domain.FlowType(params.AgentName),
+		params.Description,
+		params.Blocking,
+	)
+}
+
 func (a *AgentPoolAdapter) RestartAgent(ctx context.Context, agentID string, blocking bool) (string, error) {
 	return a.pool.RestartAgent(ctx, agentID, blocking)
 }
