@@ -269,7 +269,20 @@
 - Отправить сообщение через UI на bytebrew.ai/examples/hr-assistant
 - Отправить сообщение через UI на bytebrew.ai/examples/sales-agent
 - **Ожидание:** реальные ответы от Engine (не mock), streaming SSE
-- **Ожидание:** MCP tool calls видны в ответе (JSON данные + форматированный текст)
+- **Ожидание:** MCP tool calls видны inline между текстом (tool name, arguments, result)
+- **Ожидание:** tool call results expandable (клик → полный JSON)
+
+### TC-EXAMPLE-11: Rate limit persistence
+- Отправить несколько сообщений → счётчик уменьшается
+- Обновить страницу (F5) → счётчик НЕ сбрасывается (синхронизация с сервером)
+- **Ожидание:** счётчик совпадает с серверным значением из /health endpoint
+- **Ожидание:** при исчерпании лимита → input disabled, сообщение "Rate limit reached"
+
+### TC-EXAMPLE-12: Web Client в docker-compose
+- git clone → cd hr-assistant → docker compose up -d
+- **Ожидание:** web-client доступен на http://localhost:3000
+- **Ожидание:** login admin/changeme → sidebar с агентами → chat работает
+- **Ожидание:** tool calls видны с expandable деталями, markdown rendering
 
 ---
 
@@ -284,8 +297,8 @@
 | TC-CHAT | 7 | SSE streaming, sessions |
 | TC-DOC | 8 | Документация = реальность |
 | TC-CLOUD | 11 | /examples/, auth popup, dashboard links |
-| TC-EXAMPLE | 10 | **Агентное поведение** (MCP tools, RAG, escalation, settings) |
-| **ВСЕГО** | **89** |
+| TC-EXAMPLE | 12 | **Агентное поведение** (MCP tools, RAG, rate limit, web-client) |
+| **ВСЕГО** | **91** |
 
 ### Примечания к TC-EXAMPLE
 - Multi-agent spawn (can_spawn) работает через gRPC/WS path (CLI, mobile), но не через HTTP REST API path (web demos)
