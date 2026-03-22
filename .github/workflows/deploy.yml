@@ -19,7 +19,7 @@ concurrency:
 #   VPS_SSH_KEY  - Private SSH key for the 'deploy' user on VPS
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -57,65 +57,7 @@ jobs:
           npm ci
           npm run build
 
-      # --- Upload artifacts ---
-      - name: Upload API binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: api-binary
-          path: build/bytebrew-cloud-api
-          retention-days: 1
-
-      - name: Upload frontend bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-bundle
-          path: cloud-web/dist/
-          retention-days: 1
-
-      - name: Upload docs bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: docs-bundle
-          path: docs-site/dist/
-          retention-days: 1
-
-      - name: Upload deploy config
-        uses: actions/upload-artifact@v4
-        with:
-          name: deploy-config
-          path: |
-            deploy/config.production.yaml
-            deploy/Caddyfile
-          retention-days: 1
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download API binary
-        uses: actions/download-artifact@v4
-        with:
-          name: api-binary
-          path: build/
-
-      - name: Download frontend bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-bundle
-          path: cloud-web/dist/
-
-      - name: Download docs bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: docs-bundle
-          path: docs-site/dist/
-
-      - name: Download deploy config
-        uses: actions/download-artifact@v4
-        with:
-          name: deploy-config
-          path: deploy/
-
+      # --- Deploy (single job, no artifacts) ---
       - name: Backup and stop service
         uses: appleboy/ssh-action@v1
         with:
@@ -132,7 +74,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: deploy
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: "build/bytebrew-cloud-api,cloud-web/dist/*,docs-site/dist/*,deploy/config.production.yaml,deploy/Caddyfile"
+          source: "build/bytebrew-cloud-api,cloud-web/dist,docs-site/dist,deploy/config.production.yaml,deploy/Caddyfile"
           target: "/tmp/bytebrew-deploy"
 
       - name: Configure secrets
@@ -179,7 +121,8 @@ jobs:
 
             # Install cloud-web frontend
             sudo rm -rf /var/www/bytebrew-cloud-web
-            sudo mv /tmp/bytebrew-deploy/cloud-web/dist /var/www/bytebrew-cloud-web
+            sudo mkdir -p /var/www/bytebrew-cloud-web
+            sudo cp -r /tmp/bytebrew-deploy/cloud-web/dist/* /var/www/bytebrew-cloud-web/
 
             # Install docs site
             sudo rm -rf /var/www/bytebrew-docs/docs/_astro
