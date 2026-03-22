@@ -119,9 +119,9 @@ const mobileNavLinkClass = 'block text-sm text-brand-shade2 hover:text-brand-lig
 function UnauthenticatedNav() {
   return (
     <>
-      <Link to="/docs" className={navLinkClass}>
+      <a href="/docs" className={navLinkClass}>
         Docs
-      </Link>
+      </a>
       <Link to="/examples" className={navLinkClass}>
         Examples
       </Link>
@@ -147,9 +147,9 @@ function UnauthenticatedNav() {
 function UnauthenticatedNavMobile({ onLinkClick }: { onLinkClick: () => void }) {
   return (
     <>
-      <Link to="/docs" className={mobileNavLinkClass} onClick={onLinkClick}>
+      <a href="/docs" className={mobileNavLinkClass} onClick={onLinkClick}>
         Docs
-      </Link>
+      </a>
       <Link to="/examples" className={mobileNavLinkClass} onClick={onLinkClick}>
         Examples
       </Link>
@@ -182,9 +182,9 @@ function AuthenticatedNav({
 }) {
   return (
     <>
-      <Link to="/docs" className={navLinkClass}>
+      <a href="/docs" className={navLinkClass}>
         Docs
-      </Link>
+      </a>
       <Link to="/examples" className={navLinkClass}>
         Examples
       </Link>
@@ -229,9 +229,9 @@ function AuthenticatedNavMobile({
 }) {
   return (
     <>
-      <Link to="/docs" className={mobileNavLinkClass} onClick={onLinkClick}>
+      <a href="/docs" className={mobileNavLinkClass} onClick={onLinkClick}>
         Docs
-      </Link>
+      </a>
       <Link to="/examples" className={mobileNavLinkClass} onClick={onLinkClick}>
         Examples
       </Link>
