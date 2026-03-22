@@ -156,7 +156,8 @@ func Run(sc ServerConfig) error {
 	portReader := portfile.NewReader(dataDir)
 	existingInfo, _ := portReader.Read()
 	if existingInfo != nil {
-		if portfile.IsProcessAlive(existingInfo.PID) {
+		// Skip check if the recorded PID is our own process (Docker restart scenario)
+		if existingInfo.PID != os.Getpid() && portfile.IsProcessAlive(existingInfo.PID) {
 			return fmt.Errorf("server already running (PID %d, port %d). Kill it first or use a different config",
 				existingInfo.PID, existingInfo.Port)
 		}
