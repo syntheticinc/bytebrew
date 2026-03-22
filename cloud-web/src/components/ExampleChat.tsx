@@ -10,11 +10,15 @@ interface ToolCallInfo {
   result?: string;
 }
 
+type MessageSegment =
+  | { type: 'text'; content: string }
+  | { type: 'tool'; toolCall: ToolCallInfo };
+
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  toolCalls?: ToolCallInfo[];
+  segments: MessageSegment[];
 }
 
 interface ExampleChatProps {
@@ -26,6 +30,46 @@ interface ExampleChatProps {
 const MAX_MESSAGES_PER_HOUR = 15;
 const STORAGE_KEY_ACCESS = 'bytebrew_access_token';
 const STORAGE_KEY_REFRESH = 'bytebrew_refresh_token';
+
+function ToolCallBlock({ tc }: { tc: ToolCallInfo }) {
+  return (
+    <div className="bg-slate-800/50 border-l-2 border-orange-500/50 rounded px-3 py-1.5 text-sm my-1.5">
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs">
+          {tc.status === 'calling' ? '\u2699\uFE0F' : tc.status === 'error' ? '\u274C' : '\u2705'}
+        </span>
+        <span className="font-mono font-semibold text-orange-400 text-xs">{tc.tool}</span>
+        {tc.arguments && (
+          <span className="text-slate-400 font-mono text-xs truncate max-w-[200px]">
+            ({tc.arguments.length > 60 ? tc.arguments.slice(0, 60) + '...' : tc.arguments})
+          </span>
+        )}
+      </div>
+      {tc.status === 'calling' && (
+        <div className="text-slate-500 text-xs mt-0.5 animate-pulse">Running...</div>
+      )}
+      {tc.status === 'completed' && tc.result && (
+        <div className="text-slate-300 text-xs mt-0.5 break-words">
+          <span className="text-slate-500 mr-1">{'\u2192'}</span>
+          {tc.result.length > 120 ? tc.result.slice(0, 120) + '...' : tc.result}
+        </div>
+      )}
+      {tc.status === 'error' && tc.result && (
+        <div className="text-red-400 text-xs mt-0.5 break-words">
+          <span className="mr-1">{'\u2192'}</span>
+          {tc.result.length > 120 ? tc.result.slice(0, 120) + '...' : tc.result}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function isJsonToolResult(text: string): boolean {
+  const t = text.trimStart();
+  return t.startsWith('{') &&
+    (t.includes('"id"') || t.includes('"count"') || t.includes('"products"') ||
+     t.includes('"employee_id"') || t.includes('"inventory"') || t.includes('"entries"'));
+}
 
 export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps) {
   const { isAuthenticated, triggerAuthPopup } = useAuth();
@@ -46,7 +90,7 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
 
   const streamChat = useCallback(async (userMessage: string, currentSessionId: string | null) => {
     const assistantId = crypto.randomUUID();
-    setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '', toolCalls: [] }]);
+    setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '', segments: [] }]);
     setIsStreaming(true);
     setError(null);
 
@@ -54,7 +98,6 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
     abortRef.current = controller;
 
     try {
-      // Get fresh token (refresh if expired)
       let token = localStorage.getItem(STORAGE_KEY_ACCESS);
       if (!token) {
         const refreshToken = localStorage.getItem(STORAGE_KEY_REFRESH);
@@ -62,9 +105,7 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
           try {
             token = await refreshAccessToken(refreshToken);
             localStorage.setItem(STORAGE_KEY_ACCESS, token);
-          } catch {
-            // refresh failed
-          }
+          } catch { /* refresh failed */ }
         }
       }
       const body: Record<string, string> = { message: userMessage };
@@ -88,20 +129,16 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
       }
 
       if (response.status === 401) {
-        // Try refreshing token
         const refreshToken = localStorage.getItem(STORAGE_KEY_REFRESH);
         if (refreshToken && token) {
           try {
             const newToken = await refreshAccessToken(refreshToken);
             localStorage.setItem(STORAGE_KEY_ACCESS, newToken);
-            // Retry with new token
             setMessages(prev => prev.filter(m => m.id !== assistantId));
             setIsStreaming(false);
             streamChat(userMessage, currentSessionId);
             return;
-          } catch {
-            // refresh failed
-          }
+          } catch { /* refresh failed */ }
         }
         setError('Authentication required. Please sign in again.');
         setMessages(prev => prev.filter(m => m.id !== assistantId));
@@ -126,8 +163,28 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
 
       const decoder = new TextDecoder();
       let buffer = '';
-      let fullContent = '';
       let currentEvent = '';
+      // Track segments in order: text chunks accumulate into last text segment,
+      // tool events insert tool segments breaking the text flow.
+      const segments: MessageSegment[] = [];
+      let currentText = '';
+
+      const flushText = () => {
+        if (currentText) {
+          segments.push({ type: 'text', content: currentText });
+          currentText = '';
+        }
+      };
+
+      const updateMessage = () => {
+        const content = segments
+          .filter((s): s is { type: 'text'; content: string } => s.type === 'text')
+          .map(s => s.content)
+          .join('');
+        setMessages(prev =>
+          prev.map(m => m.id === assistantId ? { ...m, content, segments: [...segments] } : m)
+        );
+      };
 
       while (true) {
         const { done, value } = await reader.read();
@@ -148,59 +205,51 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
               const data = JSON.parse(line.slice(6));
 
               if (currentEvent === 'tool_call') {
+                flushText(); // Close current text segment before tool
                 const argsStr = data.arguments
                   ? (typeof data.arguments === 'string' ? data.arguments : JSON.stringify(data.arguments))
                   : undefined;
-                const toolCall: ToolCallInfo = {
-                  id: data.call_id || crypto.randomUUID(),
-                  tool: data.tool || 'unknown',
-                  arguments: argsStr,
-                  status: 'calling',
-                };
-                setMessages(prev =>
-                  prev.map(m =>
-                    m.id === assistantId
-                      ? { ...m, toolCalls: [...(m.toolCalls || []), toolCall] }
-                      : m
-                  )
-                );
+                segments.push({
+                  type: 'tool',
+                  toolCall: {
+                    id: data.call_id || crypto.randomUUID(),
+                    tool: data.tool || 'unknown',
+                    arguments: argsStr,
+                    status: 'calling',
+                  },
+                });
+                updateMessage();
               } else if (currentEvent === 'tool_result') {
+                // Find matching tool segment and update
                 const callId = data.call_id;
                 const hasError = data.has_error === true;
-                const content = data.content || '';
-                setMessages(prev =>
-                  prev.map(m => {
-                    if (m.id !== assistantId) return m;
-                    const updated = (m.toolCalls || []).map(tc =>
-                      tc.id === callId
-                        ? { ...tc, status: (hasError ? 'error' : 'completed') as ToolCallInfo['status'], result: content }
-                        : tc
-                    );
-                    return { ...m, toolCalls: updated };
-                  })
-                );
+                for (let i = segments.length - 1; i >= 0; i--) {
+                  const seg = segments[i];
+                  if (seg.type === 'tool' && seg.toolCall.id === callId) {
+                    seg.toolCall.status = hasError ? 'error' : 'completed';
+                    seg.toolCall.result = data.content || '';
+                    break;
+                  }
+                }
+                updateMessage();
               } else if (data.content && currentEvent !== 'message') {
-                // Filter raw JSON objects that are tool results leaked into text
                 const chunk = data.content as string;
-                const trimmedChunk = chunk.trimStart();
-                const looksLikeJson =
-                  trimmedChunk.startsWith('{') &&
-                  (trimmedChunk.includes('"id"') || trimmedChunk.includes('"count"') || trimmedChunk.includes('"products"'));
-                if (!looksLikeJson) {
-                  fullContent += chunk;
+                if (!isJsonToolResult(chunk)) {
+                  currentText += chunk;
+                  // Update with accumulated text (don't flush yet — more chunks coming)
+                  const allSegments = [...segments, { type: 'text' as const, content: currentText }];
+                  const content = allSegments
+                    .filter((s): s is { type: 'text'; content: string } => s.type === 'text')
+                    .map(s => s.content)
+                    .join('');
                   setMessages(prev =>
-                    prev.map(m => m.id === assistantId ? { ...m, content: fullContent } : m)
+                    prev.map(m => m.id === assistantId ? { ...m, content, segments: allSegments } : m)
                   );
                 }
               }
 
-              if (data.session_id) {
-                setSessionId(data.session_id);
-              }
-
-              if (data.error) {
-                setError(data.error);
-              }
+              if (data.session_id) setSessionId(data.session_id);
+              if (data.error) setError(data.error);
             } catch {
               // skip non-JSON data lines
             }
@@ -208,6 +257,9 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
           }
         }
       }
+      // Flush any remaining text
+      flushText();
+      updateMessage();
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return;
       setError(`Connection error: ${err instanceof Error ? err.message : 'unknown'}`);
@@ -235,6 +287,7 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
         id: crypto.randomUUID(),
         role: 'user',
         content: trimmed,
+        segments: [{ type: 'text', content: trimmed }],
       };
 
       setMessages(prev => [...prev, userMsg]);
@@ -286,50 +339,24 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
                   : 'bg-brand-dark-alt text-brand-light border border-brand-shade3/15'
               }`}
             >
-              {/* Tool calls for assistant messages */}
-              {msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0 && (
-                <div className="space-y-1.5 mb-2">
-                  {msg.toolCalls.map((tc) => (
-                    <div
-                      key={tc.id}
-                      className="bg-slate-800/50 border-l-2 border-orange-500/50 rounded px-3 py-1.5 text-sm"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs">
-                          {tc.status === 'calling' ? '\u2699\uFE0F' : tc.status === 'error' ? '\u274C' : '\u2705'}
-                        </span>
-                        <span className="font-mono font-semibold text-orange-400">{tc.tool}</span>
-                        {tc.arguments && (
-                          <span className="text-slate-400 font-mono text-xs truncate max-w-[200px]">
-                            ({tc.arguments.length > 60 ? tc.arguments.slice(0, 60) + '...' : tc.arguments})
-                          </span>
-                        )}
-                      </div>
-                      {tc.status === 'calling' && (
-                        <div className="text-slate-500 text-xs mt-0.5 animate-pulse">Running...</div>
-                      )}
-                      {tc.status === 'completed' && tc.result && (
-                        <div className="text-slate-300 text-xs mt-0.5 break-words">
-                          <span className="text-slate-500 mr-1">{'\u2192'}</span>
-                          {tc.result.length > 120 ? tc.result.slice(0, 120) + '...' : tc.result}
-                        </div>
-                      )}
-                      {tc.status === 'error' && tc.result && (
-                        <div className="text-red-400 text-xs mt-0.5 break-words">
-                          <span className="mr-1">{'\u2192'}</span>
-                          {tc.result.length > 120 ? tc.result.slice(0, 120) + '...' : tc.result}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Text content */}
-              <span className="whitespace-pre-wrap">{msg.content}</span>
-
-              {msg.role === 'assistant' && isStreaming && msg.id === messages[messages.length - 1]?.id && (
-                <span className="inline-block w-1.5 h-4 bg-brand-accent ml-0.5 animate-pulse" />
+              {msg.role === 'assistant' ? (
+                // Render segments in order: text and tool calls interleaved
+                <>
+                  {msg.segments.map((seg, i) =>
+                    seg.type === 'tool' ? (
+                      <ToolCallBlock key={seg.toolCall.id} tc={seg.toolCall} />
+                    ) : (
+                      seg.content ? (
+                        <span key={i} className="whitespace-pre-wrap">{seg.content}</span>
+                      ) : null
+                    )
+                  )}
+                  {isStreaming && msg.id === messages[messages.length - 1]?.id && (
+                    <span className="inline-block w-1.5 h-4 bg-brand-accent ml-0.5 animate-pulse" />
+                  )}
+                </>
+              ) : (
+                <span className="whitespace-pre-wrap">{msg.content}</span>
               )}
             </div>
           </div>
