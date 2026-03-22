@@ -122,6 +122,9 @@ function UnauthenticatedNav() {
       <Link to="/docs" className={navLinkClass}>
         Docs
       </Link>
+      <Link to="/examples" className={navLinkClass}>
+        Examples
+      </Link>
       <Link to="/pricing" className={navLinkClass}>
         Pricing
       </Link>
@@ -146,6 +149,9 @@ function UnauthenticatedNavMobile({ onLinkClick }: { onLinkClick: () => void }) 
     <>
       <Link to="/docs" className={mobileNavLinkClass} onClick={onLinkClick}>
         Docs
+      </Link>
+      <Link to="/examples" className={mobileNavLinkClass} onClick={onLinkClick}>
+        Examples
       </Link>
       <Link to="/pricing" className={mobileNavLinkClass} onClick={onLinkClick}>
         Pricing

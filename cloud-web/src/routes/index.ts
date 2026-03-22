@@ -19,6 +19,8 @@ import { PricingPage } from '../pages/Pricing';
 import { DownloadPage } from '../pages/Download';
 import { PrivacyPage } from '../pages/Privacy';
 import { DocsPage } from '../pages/Docs';
+import { ExamplesPage } from '../pages/Examples';
+import { ExampleDemoPage } from '../pages/ExampleDemo';
 
 const rootRoute = createRootRoute({
   component: RootLayout,
@@ -120,6 +122,18 @@ const docsRoute = createRoute({
   component: DocsPage,
 });
 
+const examplesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/examples',
+  component: ExamplesPage,
+});
+
+const exampleDemoRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/examples/$slug',
+  component: ExampleDemoPage,
+});
+
 export const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -137,4 +151,6 @@ export const routeTree = rootRoute.addChildren([
   downloadRoute,
   privacyRoute,
   docsRoute,
+  examplesRoute,
+  exampleDemoRoute,
 ]);
