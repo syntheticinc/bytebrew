@@ -180,6 +180,11 @@ func (h *AgentHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Ensure name from URL is used (body may omit it)
+	if req.Name == "" {
+		req.Name = name
+	}
+
 	agent, err := h.manager.UpdateAgent(r.Context(), name, req)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())

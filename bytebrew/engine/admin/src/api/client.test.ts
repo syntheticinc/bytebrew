@@ -72,7 +72,7 @@ describe('APIClient', () => {
     });
 
     await expect(api.listAgents()).rejects.toThrow('Unauthorized');
-    expect(locationMock.href).toBe('/login');
+    expect(locationMock.href).toBe('/admin/login');
     expect(localStorage.getItem('jwt')).toBeNull();
   });
 

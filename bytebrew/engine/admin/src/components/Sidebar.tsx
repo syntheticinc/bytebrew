@@ -26,7 +26,7 @@ export default function Sidebar() {
   return (
     <aside className="w-60 bg-brand-dark text-brand-light flex flex-col min-h-screen">
       <div className="px-4 py-5 border-b border-brand-shade3/15">
-        <img src="/logo-dark.svg" alt="ByteBrew" className="h-6" />
+        <img src={import.meta.env.BASE_URL + 'logo-dark.svg'} alt="ByteBrew" className="h-6" />
         <span className="text-xs text-brand-shade3 mt-1 block">Admin Dashboard</span>
       </div>
 

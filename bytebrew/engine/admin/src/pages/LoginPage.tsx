@@ -31,7 +31,7 @@ export default function LoginPage() {
         <div className="rounded-card bg-brand-dark-alt p-8 shadow-lg">
           {/* Logo */}
           <div className="mb-8 flex flex-col items-center">
-            <img src="/logo-dark.svg" alt="ByteBrew" className="mb-3 h-10" />
+            <img src={import.meta.env.BASE_URL + 'logo-dark.svg'} alt="ByteBrew" className="mb-3 h-10" />
             <p className="text-sm text-brand-shade3">Sign in to manage your engine</p>
           </div>
 

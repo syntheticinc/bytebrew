@@ -23,7 +23,7 @@ func NewAgentContextRepository(db *gorm.DB) *AgentContextRepository {
 	return &AgentContextRepository{db: db}
 }
 
-// Save performs upsert by agent_id (one snapshot per agent per session)
+// Save performs upsert by (session_id, agent_id) — one snapshot per agent per session
 func (r *AgentContextRepository) Save(ctx context.Context, snapshot *domain.AgentContextSnapshot) error {
 	model := adapters.AgentContextSnapshotToModel(snapshot)
 	if model.ID == "" {
@@ -32,9 +32,9 @@ func (r *AgentContextRepository) Save(ctx context.Context, snapshot *domain.Agen
 	model.UpdatedAt = time.Now()
 
 	result := r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "agent_id"}},
+		Columns: []clause.Column{{Name: "session_id"}, {Name: "agent_id"}},
 		DoUpdates: clause.AssignmentColumns([]string{
-			"session_id", "context_data", "step_number", "token_count", "status", "updated_at", "schema_version",
+			"context_data", "step_number", "token_count", "status", "updated_at", "schema_version",
 		}),
 	}).Create(model)
 

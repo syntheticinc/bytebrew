@@ -9,7 +9,25 @@ Complete REST API reference for the ByteBrew Engine. All endpoints return JSON (
 
 All API requests must include a valid API token in the `Authorization` header. Tokens are created through the Admin Dashboard and are scoped to specific capabilities.
 
-### Creating an API token
+### Login (get a JWT token)
+
+Use the login endpoint to obtain a JWT token for API access:
+
+```bash
+curl -X POST http://localhost:8443/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "changeme"}'
+```
+
+```json
+{"token": "eyJhbG...", "expires_at": "2026-03-23T07:00:00Z"}
+```
+
+The returned JWT can be used in the `Authorization: Bearer <token>` header for all subsequent requests. JWTs expire after 24 hours.
+
+### Creating a persistent API token
+
+For long-lived integrations, create API tokens through the Admin Dashboard:
 
 - Navigate to **Admin Dashboard** -> **API Keys**
 - Click "Create API Key" and select the scopes you need
@@ -20,13 +38,13 @@ All API requests must include a valid API token in the `Authorization` header. T
 
 ```bash
 # curl
-curl http://localhost:8080/api/v1/agents \
+curl http://localhost:8443/api/v1/agents \
   -H "Authorization: Bearer bb_your_api_token"
 ```
 
 ```javascript
 // JavaScript (fetch)
-const response = await fetch('http://localhost:8080/api/v1/agents', {
+const response = await fetch('http://localhost:8443/api/v1/agents', {
   headers: { 'Authorization': 'Bearer bb_your_api_token' },
 });
 ```
@@ -35,7 +53,7 @@ const response = await fetch('http://localhost:8080/api/v1/agents', {
 # Python (requests)
 import requests
 response = requests.get(
-    'http://localhost:8080/api/v1/agents',
+    'http://localhost:8443/api/v1/agents',
     headers={'Authorization': 'Bearer bb_your_api_token'},
 )
 ```
@@ -64,7 +82,7 @@ Create separate tokens for different integrations. A chatbot frontend only needs
 {"error": "forbidden", "message": "Token does not have 'config' scope"}
 ```
 
-**Base URL:** `http://localhost:8080/api/v1`
+**Base URL:** `http://localhost:8443/api/v1`
 
 **Content-Type:** `application/json`
 
@@ -87,7 +105,7 @@ POST /api/v1/agents/{name}/chat
 
 ```bash
 # Start a new conversation
-curl -N http://localhost:8080/api/v1/agents/sales-agent/chat \
+curl -N http://localhost:8443/api/v1/agents/sales-agent/chat \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
   -d '{"message": "What laptops do you have under $1000?"}'
@@ -97,17 +115,21 @@ curl -N http://localhost:8080/api/v1/agents/sales-agent/chat \
 
 | Event | Description |
 |-------|-------------|
-| `content` | Text chunk from the agent. Concatenate all content events for the full response. |
+| `message_delta` | Text chunk from the agent. Concatenate all deltas for the full response. |
+| `message` | Complete message (sent after all deltas). |
 | `tool_call` | Agent is calling a tool. Contains tool name and input parameters. |
 | `tool_result` | Result returned from the tool execution. |
+| `agent_spawn` | A sub-agent was spawned by the current agent. |
+| `agent_result` | Result from a completed sub-agent. |
+| `user_input_required` | Agent is asking the user a question (ask_user tool). |
 | `error` | An error occurred during processing. |
-| `done` | Stream is complete. Contains session_id and token count. |
+| `done` | Stream is complete. Contains `session_id`. |
 
 ### Example response stream
 
 ```
-event: content
-data: {"text":"I found several laptops under $1000. "}
+event: message_delta
+data: {"content":"I found several laptops under $1000. "}
 
 event: tool_call
 data: {"tool":"search_products","input":{"query":"laptops under 1000","limit":"5"}}
@@ -115,17 +137,20 @@ data: {"tool":"search_products","input":{"query":"laptops under 1000","limit":"5
 event: tool_result
 data: {"tool":"search_products","output":"[{\"name\":\"ProBook 450\",\"price\":849}...]"}
 
-event: content
-data: {"text":"Here are the top options:\n\n1. **ProBook 450** — $849..."}
+event: message_delta
+data: {"content":"Here are the top options:\n\n1. **ProBook 450** — $849..."}
+
+event: message
+data: {"content":"I found several laptops under $1000. Here are the top options:\n\n1. **ProBook 450** — $849..."}
 
 event: done
-data: {"session_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","tokens":234}
+data: {"session_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890"}
 ```
 
 ### Continue the conversation
 
 ```bash
-curl -N http://localhost:8080/api/v1/agents/sales-agent/chat \
+curl -N http://localhost:8443/api/v1/agents/sales-agent/chat \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
   -d '{"message": "Tell me more about the ProBook 450", "session_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"}'
@@ -137,7 +162,7 @@ List and inspect configured agents. Requires `agents:read` or `admin` scope.
 
 ```bash
 # List all agents
-curl http://localhost:8080/api/v1/agents \
+curl http://localhost:8443/api/v1/agents \
   -H "Authorization: Bearer bb_your_token"
 ```
 
@@ -157,7 +182,7 @@ curl http://localhost:8080/api/v1/agents \
 
 ```bash
 # Get agent details
-curl http://localhost:8080/api/v1/agents/sales-agent \
+curl http://localhost:8443/api/v1/agents/sales-agent \
   -H "Authorization: Bearer bb_your_token"
 ```
 
@@ -177,7 +202,7 @@ curl http://localhost:8080/api/v1/agents/sales-agent \
 ### Create Agent
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/agents \
+curl -X POST http://localhost:8443/api/v1/agents \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -194,7 +219,7 @@ curl -X POST http://localhost:8080/api/v1/agents \
 ### Update Agent
 
 ```bash
-curl -X PUT http://localhost:8080/api/v1/agents/my-agent \
+curl -X PUT http://localhost:8443/api/v1/agents/my-agent \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
   -d '{"system_prompt": "Updated prompt.", "max_steps": 100}'
@@ -203,7 +228,7 @@ curl -X PUT http://localhost:8080/api/v1/agents/my-agent \
 ### Delete Agent
 
 ```bash
-curl -X DELETE http://localhost:8080/api/v1/agents/my-agent \
+curl -X DELETE http://localhost:8443/api/v1/agents/my-agent \
   -H "Authorization: Bearer bb_your_token"
 # Returns 204 No Content
 ```
@@ -215,7 +240,7 @@ CRUD for LLM model providers. Requires `admin` scope.
 ### List Models
 
 ```bash
-curl http://localhost:8080/api/v1/models \
+curl http://localhost:8443/api/v1/models \
   -H "Authorization: Bearer bb_your_token"
 ```
 
@@ -236,7 +261,7 @@ curl http://localhost:8080/api/v1/models \
 ### Create Model
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/models \
+curl -X POST http://localhost:8443/api/v1/models \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -257,7 +282,7 @@ Models are resolved dynamically — no Engine restart needed after adding a mode
 ### Update Model
 
 ```bash
-curl -X PUT http://localhost:8080/api/v1/models/my-model \
+curl -X PUT http://localhost:8443/api/v1/models/my-model \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
   -d '{"api_key": "new-key", "model_name": "qwen3:70b"}'
@@ -268,7 +293,7 @@ API key is only updated if a non-empty value is provided.
 ### Delete Model
 
 ```bash
-curl -X DELETE http://localhost:8080/api/v1/models/my-model \
+curl -X DELETE http://localhost:8443/api/v1/models/my-model \
   -H "Authorization: Bearer bb_your_token"
 # Returns 204 No Content
 ```
@@ -278,7 +303,7 @@ curl -X DELETE http://localhost:8080/api/v1/models/my-model \
 Test that a model is accessible and supports tool calling before using it.
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/models/my-model/verify \
+curl -X POST http://localhost:8443/api/v1/models/my-model/verify \
   -H "Authorization: Bearer bb_your_token"
 ```
 
@@ -309,7 +334,7 @@ For known providers (OpenAI, Anthropic, Google, Mistral), tool calling probe is 
 When an agent calls `ask_user` with structured options, the client receives a `user_input_required` SSE event. Use this endpoint to send the user's answer back to the agent.
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/sessions/{session_id}/respond \
+curl -X POST http://localhost:8443/api/v1/sessions/{session_id}/respond \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -326,7 +351,7 @@ Manage conversation sessions. Sessions store the full message history between a 
 
 ```bash
 # List sessions (with optional filters)
-curl "http://localhost:8080/api/v1/sessions?agent=sales-agent&limit=10" \
+curl "http://localhost:8443/api/v1/sessions?agent=sales-agent&limit=10" \
   -H "Authorization: Bearer bb_your_token"
 ```
 
@@ -345,11 +370,11 @@ curl "http://localhost:8080/api/v1/sessions?agent=sales-agent&limit=10" \
 
 ```bash
 # Get session with messages
-curl http://localhost:8080/api/v1/sessions/a1b2c3d4 \
+curl http://localhost:8443/api/v1/sessions/a1b2c3d4 \
   -H "Authorization: Bearer bb_your_token"
 
 # Delete session
-curl -X DELETE http://localhost:8080/api/v1/sessions/a1b2c3d4 \
+curl -X DELETE http://localhost:8443/api/v1/sessions/a1b2c3d4 \
   -H "Authorization: Bearer bb_your_token"
 ```
 
@@ -359,7 +384,7 @@ Create and manage agent tasks. Tasks are units of work that agents process async
 
 ```bash
 # Create a task
-curl -X POST http://localhost:8080/api/v1/tasks \
+curl -X POST http://localhost:8443/api/v1/tasks \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -381,19 +406,19 @@ curl -X POST http://localhost:8080/api/v1/tasks \
 
 ```bash
 # List tasks with filters
-curl "http://localhost:8080/api/v1/tasks?status=pending&agent=researcher" \
+curl "http://localhost:8443/api/v1/tasks?status=pending&agent=researcher" \
   -H "Authorization: Bearer bb_your_token"
 
 # Get task details
-curl http://localhost:8080/api/v1/tasks/task_abc123 \
+curl http://localhost:8443/api/v1/tasks/task_abc123 \
   -H "Authorization: Bearer bb_your_token"
 
 # Cancel a task (pending or in_progress only)
-curl -X DELETE http://localhost:8080/api/v1/tasks/task_abc123 \
+curl -X DELETE http://localhost:8443/api/v1/tasks/task_abc123 \
   -H "Authorization: Bearer bb_your_token"
 
 # Provide input to a waiting task (status: needs_input)
-curl -X POST http://localhost:8080/api/v1/tasks/task_abc123/input \
+curl -X POST http://localhost:8443/api/v1/tasks/task_abc123/input \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
   -d '{"input": "Focus on enterprise segment and include competitor analysis"}'
@@ -417,19 +442,19 @@ Manage engine configuration at runtime. Hot-reload applies changes without resta
 
 ```bash
 # Hot-reload configuration from the database
-curl -X POST http://localhost:8080/api/v1/config/reload \
+curl -X POST http://localhost:8443/api/v1/config/reload \
   -H "Authorization: Bearer bb_your_token"
 
 # Response
 # {"status":"ok","agents_loaded":4,"models_loaded":3}
 
 # Export current config as YAML (secrets are excluded)
-curl http://localhost:8080/api/v1/config/export \
+curl http://localhost:8443/api/v1/config/export \
   -H "Authorization: Bearer bb_your_token" \
   -o config-backup.yaml
 
 # Import YAML config (merges with existing)
-curl -X POST http://localhost:8080/api/v1/config/import \
+curl -X POST http://localhost:8443/api/v1/config/import \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/x-yaml" \
   --data-binary @new-config.yaml
@@ -443,7 +468,7 @@ curl -X POST http://localhost:8080/api/v1/config/import \
 Check engine status. No authentication required -- useful for load balancer health checks.
 
 ```bash
-curl http://localhost:8080/api/v1/health
+curl http://localhost:8443/api/v1/health
 ```
 
 ```json
@@ -460,7 +485,7 @@ curl http://localhost:8080/api/v1/health
 Bring Your Own Key lets API consumers override the model for a single request. This must be enabled in Settings for each provider. Useful for multi-tenant deployments where each customer provides their own API key.
 
 ```bash
-curl -N http://localhost:8080/api/v1/agents/my-agent/chat \
+curl -N http://localhost:8443/api/v1/agents/my-agent/chat \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
   -H "X-Model-Provider: anthropic" \

@@ -18,12 +18,22 @@ curl -fsSL https://bytebrew.ai/releases/docker-compose.yml -o docker-compose.yml
 docker compose up -d
 ```
 
-The engine starts on port `8080` (API) and `8443` (Admin Dashboard). Verify it is running:
+The engine starts on port `8443` — both the REST API and the Admin Dashboard are served on this single port. Verify it is running:
 
 ```bash
-curl http://localhost:8080/api/v1/health
+curl http://localhost:8443/api/v1/health
 # {"status":"ok","version":"1.0.0","agents_count":0}
 ```
+
+:::tip[Default credentials]
+The Admin Dashboard login uses `admin` / `changeme` by default. Change these by setting `ADMIN_USER` and `ADMIN_PASSWORD` in a `.env` file next to your `docker-compose.yml`:
+
+```bash
+# .env
+ADMIN_USER=myadmin
+ADMIN_PASSWORD=s3cur3-pa$$w0rd
+```
+:::
 
 ## Step 2: Create your first agent
 
@@ -36,13 +46,17 @@ agents:
     model: glm-5
     system: "You are a helpful assistant for our product."
     tools:
-      - knowledge_search
+      - web_search
 
 models:
   glm-5:
     provider: openai
     api_key: ${OPENAI_API_KEY}
 ```
+
+:::note[Available built-in tools]
+`web_search` works out of the box. `knowledge_search` requires a `knowledge:` path in the agent config — see [Knowledge / RAG](/docs/concepts/knowledge/). `manage_tasks` enables task tracking. `ask_user` pauses to ask the user a question.
+:::
 
 :::tip[Environment variables]
 The `${OPENAI_API_KEY}` syntax references an environment variable. Set it in your shell (`export OPENAI_API_KEY=sk-...`) or in a `.env` file next to `docker-compose.yml`. Never hardcode secrets in YAML.
@@ -57,7 +71,7 @@ Skip the YAML file and use the Admin Dashboard instead. Open `http://localhost:8
 Use the REST API to talk to your agent. The response streams back as Server-Sent Events (SSE), so you see tokens as they are generated:
 
 ```bash
-curl -N http://localhost:8080/api/v1/agents/my-agent/chat \
+curl -N http://localhost:8443/api/v1/agents/my-agent/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "Hello, what can you do?"}'
 ```
@@ -67,30 +81,33 @@ curl -N http://localhost:8080/api/v1/agents/my-agent/chat \
 The engine returns a stream of SSE events. Each event has a `type` field that tells you what kind of data it contains:
 
 ```
-event: content
-data: {"text":"Hello! I'm your product assistant. "}
+event: message_delta
+data: {"content":"Hello! I'm your product assistant. "}
 
-event: content
-data: {"text":"I can help you with product questions, "}
+event: message_delta
+data: {"content":"I can help you with product questions, "}
 
-event: content
-data: {"text":"documentation search, and more."}
+event: message_delta
+data: {"content":"documentation search, and more."}
+
+event: message
+data: {"content":"Hello! I'm your product assistant. I can help you with product questions, documentation search, and more."}
 
 event: done
-data: {"session_id":"a1b2c3d4","tokens":42}
+data: {"session_id":"a1b2c3d4"}
 ```
 
 The `session_id` in the `done` event lets you continue the conversation. Pass it in subsequent requests to maintain context:
 
 ```bash
-curl -N http://localhost:8080/api/v1/agents/my-agent/chat \
+curl -N http://localhost:8443/api/v1/agents/my-agent/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "Tell me more about that", "session_id": "a1b2c3d4"}'
 ```
 
 ## Step 5: Open the Admin Dashboard
 
-Navigate to `http://localhost:8443/admin` in your browser to manage agents, models, tools, and triggers through a visual interface. Default credentials are configured via `ADMIN_USER` and `ADMIN_PASSWORD` environment variables.
+Navigate to `http://localhost:8443/admin` in your browser. Log in with the default credentials (`admin` / `changeme`) or whatever you set in your `.env` file. From the dashboard you can manage agents, models, MCP servers, tools, triggers, and API keys — all without editing YAML.
 
 ---
 

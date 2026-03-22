@@ -34,7 +34,7 @@ describe('LoginPage', () => {
 
   it('renders login form', () => {
     renderWithAuth();
-    expect(screen.getByText('ByteBrew Admin')).toBeInTheDocument();
+    expect(screen.getByAltText('ByteBrew')).toBeInTheDocument();
     expect(screen.getByLabelText('Username')).toBeInTheDocument();
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();

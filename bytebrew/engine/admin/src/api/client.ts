@@ -60,7 +60,7 @@ class APIClient {
 
     if (res.status === 401) {
       this.clearToken();
-      window.location.href = '/login';
+      window.location.href = import.meta.env.BASE_URL + 'login';
       throw new Error('Unauthorized');
     }
 
@@ -230,7 +230,7 @@ class APIClient {
 
     if (res.status === 401) {
       this.clearToken();
-      window.location.href = '/login';
+      window.location.href = import.meta.env.BASE_URL + 'login';
       throw new Error('Unauthorized');
     }
 

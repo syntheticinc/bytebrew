@@ -8,6 +8,15 @@
   --sl-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 }
 
+/* Callout headings + icons — brand accent override */
+.starlight-aside .starlight-aside__title {
+  color: #D7513E !important;
+}
+
+.starlight-aside .starlight-aside__icon {
+  color: #D7513E !important;
+}
+
 :root[data-theme='dark'] {
   --sl-color-accent-low: #2a1511;
   --sl-color-accent: #D7513E;
@@ -23,18 +32,41 @@
   --sl-color-accent-low: #f5ebe9;
   --sl-color-accent: #C04635;
   --sl-color-accent-high: #7a2a1f;
-  /* Warm off-white, not pure white — easier on eyes */
-  --sl-color-bg: #F7F8F1;
-  --sl-color-bg-nav: #EDEDE6;
-  --sl-color-bg-sidebar: #EDEDE6;
-  --sl-color-white: #F7F8F1;
-  --sl-color-gray-1: #DFD8D0;
-  --sl-color-gray-2: #CBC9BC;
-  --sl-color-gray-3: #87867F;
-  --sl-color-gray-4: #555550;
-  --sl-color-gray-5: #333330;
-  --sl-color-gray-6: #1F1F1F;
-  --sl-color-black: #111111;
+}
+
+/* Light theme — ensure all text is dark and readable */
+:root[data-theme='light'] .sl-markdown-content {
+  color: #333330;
+}
+
+:root[data-theme='light'] .starlight-aside {
+  color: #444440;
+}
+
+:root[data-theme='light'] nav[aria-label="Main"] {
+  color: #333330;
+}
+
+:root[data-theme='light'] .right-sidebar {
+  color: #555550;
+}
+
+/* Light theme — sidebar group headings: dark accent for readability */
+:root[data-theme='light'] .group-label > .large {
+  color: #7a2a1f !important;
+}
+
+:root[data-theme='light'] details > summary {
+  color: #7a2a1f !important;
+}
+
+/* Light theme — sidebar links readable */
+:root[data-theme='light'] nav[aria-label="Main"] a {
+  color: #444440 !important;
+}
+
+:root[data-theme='light'] nav[aria-label="Main"] a[aria-current="page"] {
+  color: #1F1F1F !important;
 }
 
 /* Light theme — inline code */
@@ -101,6 +133,19 @@
   margin-top: 1.25rem;
 }
 
+/* Light theme — headings must be dark */
+:root[data-theme='light'] .sl-markdown-content h1,
+:root[data-theme='light'] .sl-markdown-content h2,
+:root[data-theme='light'] .sl-markdown-content h3,
+:root[data-theme='light'] .sl-markdown-content h4 {
+  color: #1F1F1F !important;
+}
+
+/* Light theme — page title */
+:root[data-theme='light'] .content-panel h1 {
+  color: #1F1F1F !important;
+}
+
 /* Code blocks — brand dark-alt background */
 :root[data-theme='dark'] .expressive-code {
   --ec-frm-edBg: #1F1F1F;
@@ -131,6 +176,7 @@ nav[aria-label="Main"] a {
 :root[data-theme='dark'] .sl-markdown-content th {
   background: rgba(135, 134, 127, 0.05);
 }
+
 
 /* Callouts — brand-aligned, using shade3 borders and dark-alt backgrounds */
 :root[data-theme='dark'] .starlight-aside {
