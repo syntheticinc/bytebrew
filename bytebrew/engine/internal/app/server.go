@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"log/slog"
@@ -12,8 +13,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -21,11 +22,11 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/grpc"
 	deliveryhttp "github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/delivery/ws"
-	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/audit"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/embedded"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/agent_registry"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/audit"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/bridge"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/flow_registry"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/infrastructure/indexing"
@@ -38,6 +39,7 @@ import (
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/kits/developer"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/eventstore"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/session_processor"
+	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/task"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/internal/service/turn_executor"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/config"
 	"github.com/syntheticinc/bytebrew/bytebrew/engine/pkg/logger"
@@ -432,6 +434,71 @@ func Run(sc ServerConfig) error {
 			r.Post("/api/v1/auth/tokens", tokenHandler.CreateToken)
 			r.Get("/api/v1/auth/tokens", tokenHandler.ListTokens)
 			r.Delete("/api/v1/auth/tokens/{id}", tokenHandler.DeleteToken)
+
+			// MCP Servers
+			mcpServerRepo := config_repo.NewGORMMCPServerRepository(pgDB)
+			mcpHandler := deliveryhttp.NewMCPHandler(&mcpServiceHTTPAdapter{repo: mcpServerRepo})
+			r.Mount("/api/v1/mcp-servers", mcpHandler.Routes())
+
+			// Triggers
+			triggerRepo := config_repo.NewGORMTriggerRepository(pgDB)
+			triggerHandler := deliveryhttp.NewTriggerHandler(&triggerServiceHTTPAdapter{repo: triggerRepo})
+			r.Mount("/api/v1/triggers", triggerHandler.Routes())
+
+			// Settings
+			settingRepo := config_repo.NewGORMSettingRepository(pgDB)
+			settingHandler := deliveryhttp.NewSettingHandler(&settingServiceHTTPAdapter{repo: settingRepo})
+			r.Mount("/api/v1/settings", settingHandler.Routes())
+
+			// Sessions
+			sessionRepo := config_repo.NewGORMSessionRepository(pgDB)
+			messageRepo := config_repo.NewGORMMessageRepository(pgDB)
+			sessionHandler := deliveryhttp.NewSessionHandler(&sessionServiceHTTPAdapter{repo: sessionRepo, messageRepo: messageRepo})
+			sessionHandler.SetMessageService(&messageServiceHTTPAdapter{repo: messageRepo})
+			r.Mount("/api/v1/sessions", sessionHandler.Routes())
+
+			// Tool metadata (security zones for admin UI)
+			toolMetaHandler := deliveryhttp.NewToolMetadataHandler(&toolMetadataHTTPAdapter{})
+			r.Get("/api/v1/tools/metadata", toolMetaHandler.List)
+		})
+
+		// Webhook route (public, no auth — triggered by external services)
+		r.Post("/api/v1/webhooks/{path}", func(w http.ResponseWriter, req *http.Request) {
+			webhookPath := chi.URLParam(req, "path")
+			w.Header().Set("Content-Type", "application/json")
+
+			var body struct {
+				Title       string `json:"title"`
+				Description string `json:"description"`
+				Message     string `json:"message"`
+			}
+			_ = json.NewDecoder(req.Body).Decode(&body)
+
+			t := &domain.EngineTask{
+				Title:     "Webhook: " + webhookPath,
+				AgentName: "supervisor",
+				Source:    domain.TaskSourceWebhook,
+				SourceID:  webhookPath,
+				Status:    domain.EngineTaskStatusPending,
+				Mode:      domain.TaskModeBackground,
+			}
+			if body.Title != "" {
+				t.Title = body.Title
+			}
+			if body.Description != "" {
+				t.Description = body.Description
+			}
+			if body.Message != "" && t.Description == "" {
+				t.Description = body.Message
+			}
+
+			if err := taskRepo.Create(req.Context(), t); err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(`{"error":"` + err.Error() + `"}`))
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
+			w.Write([]byte(fmt.Sprintf(`{"task_id":%d}`, t.ID)))
 		})
 
 		// Serve Admin Dashboard SPA (static files)
@@ -585,6 +652,24 @@ func Run(sc ServerConfig) error {
 		slog.InfoContext(ctx, "HTTP REST API server started", "port", httpPort)
 	}
 
+	// CronScheduler: load triggers from DB and start
+	var cronScheduler *task.CronScheduler
+	if taskRepo != nil {
+		cronScheduler = task.NewCronScheduler(&cronTaskCreatorHTTPAdapter{repo: taskRepo})
+		triggers, trigErr := loadTriggersFromDB(pgDB)
+		if trigErr == nil {
+			for _, t := range triggers {
+				if t.Type == "cron" && t.Schedule != "" {
+					if err := cronScheduler.AddTrigger(t.Schedule, t.Title, t.Description, t.AgentName, fmt.Sprintf("trigger-%d", t.ID)); err != nil {
+						slog.Warn("Failed to add cron trigger", "id", t.ID, "error", err)
+					}
+				}
+			}
+		}
+		cronScheduler.Start()
+		slog.InfoContext(ctx, "Cron scheduler started", "triggers", len(triggers))
+	}
+
 	// Create WS connection handler for local CLI clients
 	var agentCanceller ws.AgentCanceller
 	if components.AgentPool != nil {
@@ -669,6 +754,12 @@ func Run(sc ServerConfig) error {
 	// Shutdown bridge first (stops accepting new messages)
 	if bridgeCleanup != nil {
 		bridgeCleanup()
+	}
+
+	// Stop cron scheduler
+	if cronScheduler != nil {
+		cronScheduler.Stop()
+		slog.Info("Cron scheduler stopped")
 	}
 
 	// Remove port file on shutdown
