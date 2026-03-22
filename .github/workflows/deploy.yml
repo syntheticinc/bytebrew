@@ -4,9 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - 'bytebrew/cloud-api/**'
-      - 'bytebrew/cloud-web/**'
-      - 'bytebrew/bridge/**'
+      - 'cloud-api/**'
+      - 'cloud-web/**'
       - 'deploy/**'
       - '.github/workflows/deploy.yml'
 
@@ -32,13 +31,8 @@ jobs:
 
       - name: Build API binary
         run: |
-          cd bytebrew/cloud-api
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../../build/bytebrew-cloud-api ./cmd/server
-
-      - name: Build Bridge binary
-        run: |
-          cd bytebrew/bridge
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../../build/bytebrew-bridge ./cmd/bridge
+          cd cloud-api
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../build/bytebrew-cloud-api ./cmd/server
 
       # --- Build Frontend ---
       - uses: actions/setup-node@v4
@@ -52,7 +46,14 @@ jobs:
           VITE_SHOW_EE_PRICING: ''
           VITE_SHOW_CODE_SITE: ''
         run: |
-          cd bytebrew/cloud-web
+          cd cloud-web
+          npm ci
+          npm run build
+
+      # --- Build Docs ---
+      - name: Build docs site
+        run: |
+          cd docs-site
           npm ci
           npm run build
 
@@ -64,18 +65,18 @@ jobs:
           path: build/bytebrew-cloud-api
           retention-days: 1
 
-      - name: Upload Bridge binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: bridge-binary
-          path: build/bytebrew-bridge
-          retention-days: 1
-
       - name: Upload frontend bundle
         uses: actions/upload-artifact@v4
         with:
           name: frontend-bundle
-          path: bytebrew/cloud-web/dist/
+          path: cloud-web/dist/
+          retention-days: 1
+
+      - name: Upload docs bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-bundle
+          path: docs-site/dist/
           retention-days: 1
 
       - name: Upload deploy config
@@ -97,17 +98,17 @@ jobs:
           name: api-binary
           path: build/
 
-      - name: Download Bridge binary
-        uses: actions/download-artifact@v4
-        with:
-          name: bridge-binary
-          path: build/
-
       - name: Download frontend bundle
         uses: actions/download-artifact@v4
         with:
           name: frontend-bundle
-          path: bytebrew/cloud-web/dist/
+          path: cloud-web/dist/
+
+      - name: Download docs bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-bundle
+          path: docs-site/dist/
 
       - name: Download deploy config
         uses: actions/download-artifact@v4
@@ -123,8 +124,6 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             sudo cp /usr/local/bin/bytebrew-cloud-api /usr/local/bin/bytebrew-cloud-api.bak 2>/dev/null || true
-            sudo cp /usr/local/bin/bytebrew-bridge /usr/local/bin/bytebrew-bridge.bak 2>/dev/null || true
-            sudo systemctl stop bytebrew-bridge || true
             sudo systemctl stop bytebrew-cloud-api || true
 
       - name: Copy files to VPS
@@ -133,7 +132,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: deploy
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: "build/bytebrew-cloud-api,build/bytebrew-bridge,bytebrew/cloud-web/dist/*,deploy/config.production.yaml"
+          source: "build/bytebrew-cloud-api,cloud-web/dist/*,docs-site/dist/*,deploy/config.production.yaml,deploy/Caddyfile"
           target: "/tmp/bytebrew-deploy"
 
       - name: Configure secrets
@@ -167,14 +166,6 @@ jobs:
             sudo chown bytebrew:bytebrew /etc/bytebrew/cloud-api.env
             sudo chmod 640 /etc/bytebrew/cloud-api.env
 
-            # Update bridge env token
-            sudo tee /etc/bytebrew/bridge.env > /dev/null << 'ENVEOF'
-            BRIDGE_PORT=8443
-            BRIDGE_AUTH_TOKEN=${{ secrets.BRIDGE_AUTH_TOKEN }}
-            ENVEOF
-            sudo chown bytebrew:bytebrew /etc/bytebrew/bridge.env
-            sudo chmod 640 /etc/bytebrew/bridge.env
-
       - name: Install and verify
         uses: appleboy/ssh-action@v1
         with:
@@ -182,47 +173,38 @@ jobs:
           username: deploy
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            # Install API binary
             sudo mv /tmp/bytebrew-deploy/build/bytebrew-cloud-api /usr/local/bin/bytebrew-cloud-api
             sudo chmod +x /usr/local/bin/bytebrew-cloud-api
-            sudo mv /tmp/bytebrew-deploy/build/bytebrew-bridge /usr/local/bin/bytebrew-bridge
-            sudo chmod +x /usr/local/bin/bytebrew-bridge
-            sudo rm -rf /var/www/bytebrew-cloud-web
-            sudo mv /tmp/bytebrew-deploy/bytebrew/cloud-web/dist /var/www/bytebrew-cloud-web
 
-            # Update Caddy config if changed
+            # Install cloud-web frontend
+            sudo rm -rf /var/www/bytebrew-cloud-web
+            sudo mv /tmp/bytebrew-deploy/cloud-web/dist /var/www/bytebrew-cloud-web
+
+            # Install docs site
+            sudo rm -rf /var/www/bytebrew-docs/docs/_astro
+            sudo cp -r /tmp/bytebrew-deploy/docs-site/dist/* /var/www/bytebrew-docs/docs/
+
+            # Update Caddy config
             if [ -f /tmp/bytebrew-deploy/deploy/Caddyfile ]; then
               sudo cp /tmp/bytebrew-deploy/deploy/Caddyfile /etc/caddy/Caddyfile
               sudo systemctl reload caddy
             fi
 
             sudo systemctl start bytebrew-cloud-api
-            sudo systemctl start bytebrew-bridge
             rm -rf /tmp/bytebrew-deploy
 
             # Health check with rollback
             sleep 3
-            API_OK=true
-            BRIDGE_OK=true
             if ! curl -sf http://127.0.0.1:8080/health; then
-              API_OK=false
-            fi
-            if ! systemctl is-active --quiet bytebrew-bridge; then
-              BRIDGE_OK=false
-            fi
-            if [ "$API_OK" = false ] || [ "$BRIDGE_OK" = false ]; then
               echo "Health check failed! Rolling back..."
-              sudo systemctl stop bytebrew-bridge
               sudo systemctl stop bytebrew-cloud-api
               sudo mv /usr/local/bin/bytebrew-cloud-api.bak /usr/local/bin/bytebrew-cloud-api
-              sudo mv /usr/local/bin/bytebrew-bridge.bak /usr/local/bin/bytebrew-bridge
               sudo systemctl start bytebrew-cloud-api
-              sudo systemctl start bytebrew-bridge
               sleep 3
               sudo journalctl -u bytebrew-cloud-api --no-pager -n 50
-              sudo journalctl -u bytebrew-bridge --no-pager -n 50
               exit 1
             fi
 
             # Cleanup backups on success
             sudo rm -f /usr/local/bin/bytebrew-cloud-api.bak
-            sudo rm -f /usr/local/bin/bytebrew-bridge.bak
