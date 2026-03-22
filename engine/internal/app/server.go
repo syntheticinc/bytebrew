@@ -309,9 +309,17 @@ func Run(sc ServerConfig) error {
 	var embeddingsClient *indexing.EmbeddingsClient
 	if pgDB != nil {
 		knowledgeRepo = config_repo.NewGORMKnowledgeRepository(pgDB)
+		embedURL := indexing.DefaultOllamaURL
+		if envURL := os.Getenv("EMBED_URL"); envURL != "" {
+			embedURL = envURL
+		}
+		embedModel := indexing.DefaultEmbedModel
+		if envModel := os.Getenv("EMBED_MODEL"); envModel != "" {
+			embedModel = envModel
+		}
 		embeddingsClient = indexing.NewEmbeddingsClient(
-			indexing.DefaultOllamaURL,
-			indexing.DefaultEmbedModel,
+			embedURL,
+			embedModel,
 			indexing.DefaultDimension,
 		)
 		knowledgeIndexer = knowledge.NewIndexer(embeddingsClient, knowledgeRepo, slog.Default())
@@ -353,6 +361,11 @@ func Run(sc ServerConfig) error {
 	// Wire MCP provider into AgentToolResolver
 	if components.AgentToolResolver != nil {
 		components.AgentToolResolver.SetMCPProvider(mcpRegistry)
+	}
+
+	// Wire knowledge search into AgentToolResolver
+	if components.AgentToolResolver != nil && knowledgeRepo != nil && embeddingsClient != nil {
+		components.AgentToolResolver.SetKnowledge(knowledgeRepo, embeddingsClient)
 	}
 
 	// HTTP REST API server (Phase 5) — starts only when bootstrap config is available.

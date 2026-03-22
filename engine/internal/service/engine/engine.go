@@ -249,16 +249,43 @@ func (e *Engine) validateConfig(cfg ExecutionConfig) error {
 
 // buildEffectiveAgentConfig creates effective agent config from ExecutionConfig
 func (e *Engine) buildEffectiveAgentConfig(cfg ExecutionConfig) *config.AgentConfig {
-	if cfg.AgentConfig != nil {
+	if cfg.AgentConfig == nil {
+		// Build minimal config from Flow if AgentConfig not provided
+		return &config.AgentConfig{
+			Prompts: &config.PromptsConfig{
+				SystemPrompt: cfg.Flow.SystemPrompt,
+			},
+			MaxContextSize:                cfg.Flow.MaxContextSize,
+			EnableEnhancedToolCallChecker: true,
+		}
+	}
+
+	// Overlay Flow's system prompt when AgentConfig doesn't provide one
+	hasFlowPrompt := cfg.Flow.SystemPrompt != ""
+	hasConfigPrompt := cfg.AgentConfig.Prompts != nil && cfg.AgentConfig.Prompts.SystemPrompt != ""
+	needsOverlay := hasFlowPrompt && !hasConfigPrompt
+
+	if !needsOverlay && cfg.AgentConfig.EnableEnhancedToolCallChecker {
 		return cfg.AgentConfig
 	}
-	// Build minimal config from Flow if AgentConfig not provided
-	return &config.AgentConfig{
-		Prompts: &config.PromptsConfig{
-			SystemPrompt: cfg.Flow.SystemPrompt,
-		},
-		MaxContextSize: cfg.Flow.MaxContextSize,
+
+	result := *cfg.AgentConfig
+	// Always enable enhanced tool call checker for streaming compatibility
+	result.EnableEnhancedToolCallChecker = true
+
+	if needsOverlay {
+		if result.Prompts == nil {
+			result.Prompts = &config.PromptsConfig{}
+		} else {
+			promptsCopy := *result.Prompts
+			result.Prompts = &promptsCopy
+		}
+		result.Prompts.SystemPrompt = cfg.Flow.SystemPrompt
+		if result.MaxContextSize == 0 && cfg.Flow.MaxContextSize > 0 {
+			result.MaxContextSize = cfg.Flow.MaxContextSize
+		}
 	}
+	return &result
 }
 
 // saveSnapshot saves the current execution state

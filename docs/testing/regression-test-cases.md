@@ -207,7 +207,7 @@
 
 ---
 
-## TC-EXAMPLE: bytebrew-examples repo (8 TC)
+## TC-EXAMPLE: bytebrew-examples repo (10 TC)
 
 ### TC-EXAMPLE-01: HR Assistant self-hosted
 - git clone → cd hr-assistant → cp .env.example .env → docker compose up -d
@@ -215,58 +215,58 @@
 
 ### TC-EXAMPLE-02: HR — Knowledge Search (RAG)
 - POST /chat/hr-assistant {"message": "What's the PTO policy for employees with 2+ years?"}
-- **Ожидание:** SSE содержит tool_call event с tool="knowledge_search"
-- **Ожидание:** ответ цитирует конкретный документ (pto-policy.md)
+- **Ожидание:** agent вызывает knowledge_search tool
+- **Ожидание:** ответ содержит данные из pto-policy.md (accrual table)
 - **Ожидание:** ответ содержит конкретные цифры (15/20/25 days by tenure)
-- **Это агент, не LLM:** использует RAG для поиска по knowledge base
+- **Это агент, не LLM:** использует RAG для поиска по knowledge base (57 chunks, 5 документов)
 
-### TC-EXAMPLE-03: HR — Structured Q&A (ask_user)
-- POST /chat/hr-assistant {"message": "I want to request time off"}
-- **Ожидание:** SSE содержит user_input_required event
-- **Ожидание:** agent спрашивает конкретные вопросы (dates, type, reason)
-- **Это агент, не LLM:** использует ask_user tool для structured interaction
+### TC-EXAMPLE-03: HR — Employee Lookup + Leave Balance (MCP tools)
+- POST /chat/hr-assistant {"message": "Look up employee EMP001 and check their leave balance"}
+- **Ожидание:** agent вызывает get_employee tool → возвращает данные сотрудника
+- **Ожидание:** agent вызывает get_leave_balance tool → возвращает остатки отпусков
+- **Это агент, не LLM:** использует MCP tools для работы с HR данными
 
-### TC-EXAMPLE-04: HR — Escalation
-- POST /chat/hr-assistant {"message": "I have a complex FMLA situation that needs human review"}
-- **Ожидание:** agent детектирует escalation trigger
-- **Ожидание:** SSE содержит escalation event или сообщение об эскалации
-- **Это агент, не LLM:** автоматически эскалирует на основе триггеров
+### TC-EXAMPLE-04: HR — Escalation trigger
+- POST /chat/hr-assistant {"message": "I have a complex situation and I need to escalate this to a human"}
+- **Ожидание:** agent распознаёт ключевое слово "escalate" или "need human"
+- **Ожидание:** agent говорит что эскалирует к HR специалисту
+- **Это агент, не LLM:** реагирует на configured escalation triggers
 
-### TC-EXAMPLE-05: Support — Multi-agent spawn
+### TC-EXAMPLE-05: Support — Technical diagnostics (MCP tools)
 - POST /chat/support-router {"message": "My API is returning 500 errors since this morning"}
-- **Ожидание:** SSE содержит agent_spawn event (technical agent)
-- **Ожидание:** technical agent запускает ПАРАЛЛЕЛЬНЫЕ tool calls (check_service_status + get_error_logs)
-- **Ожидание:** ответ содержит результаты диагностики
-- **Это агент, не LLM:** router решает куда направить, specialist agent делает параллельную диагностику
+- **Ожидание:** agent вызывает check_service_status tool → статус API gateway
+- **Ожидание:** agent вызывает get_customer или get_error_logs для диагностики
+- **Ожидание:** ответ содержит данные диагностики (uptime, error rate)
+- **Это агент, не LLM:** использует MCP tools для реальной диагностики
 
-### TC-EXAMPLE-06: Support — Billing routing
-- POST /chat/support-router {"message": "I was double-charged on my last invoice"}
-- **Ожидание:** SSE содержит agent_spawn event (billing agent, не technical)
-- **Ожидание:** billing agent вызывает MCP tools (get_customer, process_refund)
-- **Это агент, не LLM:** router маршрутизирует по типу проблемы
+### TC-EXAMPLE-06: Support — Billing + Customer lookup (MCP tools)
+- POST /chat/support-router {"message": "I was double-charged, my customer ID is CUST-001"}
+- **Ожидание:** agent вызывает get_customer tool → данные клиента
+- **Ожидание:** agent анализирует подписку и предлагает действия (refund, ticket)
+- **Это агент, не LLM:** использует MCP tools для работы с клиентскими данными
 
-### TC-EXAMPLE-07: Sales — Product search + Quote with confirmation
+### TC-EXAMPLE-07: Sales — Product search (MCP tools)
 - POST /chat/sales-agent {"message": "I need 5 laptops for my team, budget $1200 each"}
-- **Ожидание:** agent вызывает search_products + check_inventory
-- **Ожидание:** agent предлагает товары с ценами и наличием
-- При запросе quote → SSE содержит confirmation_required event
-- **Это агент, не LLM:** использует MCP tools для реального каталога, requires confirmation для quote
+- **Ожидание:** agent вызывает search_products tool → список ноутбуков
+- **Ожидание:** ответ содержит конкретные продукты с ценами и спецификациями
+- **Это агент, не LLM:** использует MCP tools для реального каталога товаров
 
-### TC-EXAMPLE-08: Sales — Discount with business rules
+### TC-EXAMPLE-08: Sales — Discount with business rules (Settings)
 - POST /chat/sales-agent {"message": "Can I get a 20% bulk discount?"}
-- **Ожидание:** agent проверяет max_discount_percent setting (15%)
-- **Ожидание:** agent отказывает ("max discount is 15%") или предлагает 15%
-- **Это агент, не LLM:** следует бизнес-правилам из Settings
+- **Ожидание:** agent вызывает get_settings tool → max_discount_percent=15
+- **Ожидание:** agent отказывает или предлагает максимум 15%
+- **Это агент, не LLM:** следует бизнес-правилам из Settings API
 
 ### TC-EXAMPLE-09: Hosted demos health
 - curl https://bytebrew.ai/examples/hr-assistant/api/v1/health → 200
 - curl https://bytebrew.ai/examples/support-agent/api/v1/health → 200
 - curl https://bytebrew.ai/examples/sales-agent/api/v1/health → 200
 
-### TC-EXAMPLE-10: Hosted HR demo — real agent response
+### TC-EXAMPLE-10: Hosted demos — real agent responses via UI
 - Отправить сообщение через UI на bytebrew.ai/examples/hr-assistant
-- **Ожидание:** реальный ответ от Engine (не mock), streaming SSE
-- **Ожидание:** если MCP tools подключены — tool calls видны в ответе
+- Отправить сообщение через UI на bytebrew.ai/examples/sales-agent
+- **Ожидание:** реальные ответы от Engine (не mock), streaming SSE
+- **Ожидание:** MCP tool calls видны в ответе (JSON данные + форматированный текст)
 
 ---
 
@@ -281,5 +281,10 @@
 | TC-CHAT | 7 | SSE streaming, sessions |
 | TC-DOC | 8 | Документация = реальность |
 | TC-CLOUD | 11 | /examples/, auth popup, dashboard links |
-| TC-EXAMPLE | 10 | **Агентное поведение** (tools, spawn, RAG, confirmation) |
+| TC-EXAMPLE | 10 | **Агентное поведение** (MCP tools, RAG, escalation, settings) |
 | **ВСЕГО** | **89** |
+
+### Примечания к TC-EXAMPLE
+- Multi-agent spawn (can_spawn) работает через gRPC/WS path (CLI, mobile), но не через HTTP REST API path (web demos)
+- Hosted demos демонстрируют: MCP tool calls, Knowledge Search (RAG), parallel tool execution, escalation triggers, business rules через Settings
+- confirm_before работает через gRPC path, в HTTP REST API path confirmation events передаются но UI не обрабатывает их интерактивно

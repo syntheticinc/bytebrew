@@ -214,6 +214,19 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 		resolved = append(resolved, knowledgeTool)
 	}
 
+	// MCP tools via legacy Resolve path
+	if r.mcpProvider != nil && len(deps.MCPServers) > 0 {
+		for _, serverName := range deps.MCPServers {
+			mcpTools, err := r.mcpProvider.GetMCPTools(serverName)
+			if err != nil {
+				slog.WarnContext(ctx, "failed to get MCP tools in legacy Resolve, skipping",
+					"server", serverName, "error", err)
+				continue
+			}
+			resolved = append(resolved, mcpTools...)
+		}
+	}
+
 	return resolved, nil
 }
 

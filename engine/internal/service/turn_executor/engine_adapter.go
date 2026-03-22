@@ -128,6 +128,7 @@ func (e *EngineAdapter) ExecuteTurn(
 	toolDeps := e.toolDeps.GetDependencies(sessionID, projectKey)
 	toolDeps.AgentName = flow.Name
 	toolDeps.KnowledgePath = flow.KnowledgePath
+	toolDeps.MCPServers = flow.MCPServers
 
 	// 3. Resolve tools from flow.ToolNames
 	resolvedTools, err := e.toolResolver.Resolve(ctx, flow.ToolNames, toolDeps)

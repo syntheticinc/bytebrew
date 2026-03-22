@@ -29,7 +29,8 @@ type Flow struct {
 	ToolExecution  string // "sequential" or "parallel"
 	Lifecycle      LifecyclePolicy
 	Spawn          SpawnPolicy
-	KnowledgePath  string // path to knowledge folder for RAG
+	KnowledgePath  string   // path to knowledge folder for RAG
+	MCPServers     []string // MCP server names configured for this agent
 }
 
 // Validate validates the Flow configuration

@@ -22,5 +22,6 @@ type ToolDependencies struct {
 	WebFetchTool       tool.InvokableTool // pre-created
 	ChunkStore         *indexing.ChunkStore
 	Embedder           *indexing.EmbeddingsClient
+	MCPServers         []string           // MCP server names for legacy Resolve path
 }
 

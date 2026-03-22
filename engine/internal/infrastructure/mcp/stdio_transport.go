@@ -26,8 +26,10 @@ func NewStdioTransport(command string, args []string, env []string) *StdioTransp
 	return &StdioTransport{command: command, args: args, env: env}
 }
 
-func (t *StdioTransport) Start(ctx context.Context) error {
-	t.cmd = exec.CommandContext(ctx, t.command, t.args...)
+func (t *StdioTransport) Start(_ context.Context) error {
+	// Use background context for the subprocess lifetime — the process must survive
+	// beyond the initial connection handshake. Shutdown is handled via Close().
+	t.cmd = exec.Command(t.command, t.args...)
 	if len(t.env) > 0 {
 		t.cmd.Env = append(t.cmd.Environ(), t.env...)
 	}
