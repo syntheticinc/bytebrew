@@ -32,6 +32,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/indexing"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/knowledge"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/kit"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/mcp"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
@@ -335,6 +336,23 @@ func Run(sc ServerConfig) error {
 				}()
 			}
 		}
+	}
+
+	// Initialize MCP client connections from database
+	mcpRegistry := mcp.NewClientRegistry()
+	if pgDB != nil {
+		mcpServerRepo := config_repo.NewGORMMCPServerRepository(pgDB)
+		mcpServers, mcpErr := mcpServerRepo.List(ctx)
+		if mcpErr != nil {
+			slog.Warn("failed to load MCP servers from database", "error", mcpErr)
+		} else {
+			connectMCPServers(ctx, mcpServers, mcpRegistry)
+		}
+	}
+
+	// Wire MCP provider into AgentToolResolver
+	if components.AgentToolResolver != nil {
+		components.AgentToolResolver.SetMCPProvider(mcpRegistry)
 	}
 
 	// HTTP REST API server (Phase 5) — starts only when bootstrap config is available.
@@ -762,6 +780,10 @@ func Run(sc ServerConfig) error {
 		slog.Info("Cron scheduler stopped")
 	}
 
+	// Close MCP client connections
+	mcpRegistry.CloseAll()
+	slog.Info("MCP clients closed")
+
 	// Remove port file on shutdown
 	if err := portWriter.Remove(); err != nil {
 		slog.Warn("Failed to remove port file", "error", err)
@@ -989,4 +1011,39 @@ func startBridge(
 	}
 
 	return cleanup, nil
+}
+
+// connectMCPServers connects to MCP servers and registers them in the registry.
+func connectMCPServers(ctx context.Context, mcpServers []models.MCPServerModel, registry *mcp.ClientRegistry) {
+	for _, srv := range mcpServers {
+		var transport mcp.Transport
+		switch srv.Type {
+		case "stdio":
+			var args []string
+			if srv.Args != "" {
+				_ = json.Unmarshal([]byte(srv.Args), &args)
+			}
+			transport = mcp.NewStdioTransport(srv.Command, args, nil)
+		case "http":
+			transport = mcp.NewHTTPTransport(srv.URL)
+		case "sse":
+			transport = mcp.NewSSETransport(srv.URL)
+		default:
+			slog.Warn("unknown MCP server type, skipping", "name", srv.Name, "type", srv.Type)
+			continue
+		}
+
+		client := mcp.NewClient(srv.Name, transport)
+		connectCtx, connectCancel := context.WithTimeout(ctx, 10*time.Second)
+		if err := client.Connect(connectCtx); err != nil {
+			slog.Warn("MCP server unavailable, skipping", "name", srv.Name, "error", err)
+			connectCancel()
+			continue
+		}
+		connectCancel()
+
+		tools := client.ListTools()
+		slog.Info("MCP server connected", "name", srv.Name, "tools", len(tools))
+		registry.Register(srv.Name, client)
+	}
 }

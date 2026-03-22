@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 
 	"github.com/cloudwego/eino/components/tool"
@@ -56,12 +57,21 @@ type Kit interface {
 	PostToolCall(ctx context.Context, session domain.KitSession, toolName string, result string) *domain.Enrichment
 }
 
+// MCPClientProvider provides MCP tools for a given MCP server name.
+// Defined on the consumer side (AgentToolResolver).
+type MCPClientProvider interface {
+	// GetMCPTools returns Eino-compatible tools for the named MCP server.
+	// Returns nil, nil if the server is not connected.
+	GetMCPTools(name string) ([]tool.InvokableTool, error)
+}
+
 // AgentToolResolver composes tools for a specific agent from various sources.
 type AgentToolResolver struct {
 	builtins          *BuiltinToolStore
 	kitProvider       KitProvider
 	knowledgeSearcher KnowledgeSearcher
 	knowledgeEmbedder KnowledgeEmbedder
+	mcpProvider       MCPClientProvider
 }
 
 // NewAgentToolResolver creates a new AgentToolResolver.
@@ -78,6 +88,11 @@ func (r *AgentToolResolver) SetKitProvider(kp KitProvider) {
 func (r *AgentToolResolver) SetKnowledge(searcher KnowledgeSearcher, embedder KnowledgeEmbedder) {
 	r.knowledgeSearcher = searcher
 	r.knowledgeEmbedder = embedder
+}
+
+// SetMCPProvider configures the MCP client provider for MCP tool resolution.
+func (r *AgentToolResolver) SetMCPProvider(provider MCPClientProvider) {
+	r.mcpProvider = provider
 }
 
 // ResolveContext holds per-agent resolution context.
@@ -162,6 +177,13 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 	}
 	tools = append(tools, kitTools...)
 
+	// MCP tools — append tools from connected MCP servers configured for this agent
+	mcpTools, err := r.resolveMCPTools(rc)
+	if err != nil {
+		return nil, fmt.Errorf("resolve mcp tools for agent %q: %w", rc.Agent.Record.Name, err)
+	}
+	tools = append(tools, mcpTools...)
+
 	return tools, nil
 }
 
@@ -208,4 +230,23 @@ func (r *AgentToolResolver) resolveKitTools(rc ResolveContext) ([]tool.Invokable
 	}
 
 	return kit.Tools(*rc.KitSession), nil
+}
+
+// resolveMCPTools returns tools from MCP servers configured for the agent.
+func (r *AgentToolResolver) resolveMCPTools(rc ResolveContext) ([]tool.InvokableTool, error) {
+	if r.mcpProvider == nil || len(rc.Agent.Record.MCPServers) == 0 {
+		return nil, nil
+	}
+
+	var result []tool.InvokableTool
+	for _, serverName := range rc.Agent.Record.MCPServers {
+		mcpTools, err := r.mcpProvider.GetMCPTools(serverName)
+		if err != nil {
+			slog.Warn("failed to get MCP tools, skipping server",
+				"server", serverName, "agent", rc.Agent.Record.Name, "error", err)
+			continue
+		}
+		result = append(result, mcpTools...)
+	}
+	return result, nil
 }

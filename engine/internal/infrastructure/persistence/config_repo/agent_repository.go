@@ -68,12 +68,19 @@ func (r *GORMAgentRepository) List(ctx context.Context) ([]AgentRecord, error) {
 		return nil, fmt.Errorf("list agents: %w", err)
 	}
 
+	// Load MCP server names for all agents in one query
+	mcpByAgent, err := r.loadAllAgentMCPServers(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load mcp servers: %w", err)
+	}
+
 	records := make([]AgentRecord, 0, len(agents))
 	for _, a := range agents {
 		rec, err := toAgentRecord(a)
 		if err != nil {
 			return nil, fmt.Errorf("convert agent %q: %w", a.Name, err)
 		}
+		rec.MCPServers = mcpByAgent[a.ID]
 		records = append(records, rec)
 	}
 	return records, nil
@@ -99,6 +106,14 @@ func (r *GORMAgentRepository) GetByName(ctx context.Context, name string) (*Agen
 	if err != nil {
 		return nil, fmt.Errorf("convert agent %q: %w", name, err)
 	}
+
+	// Load MCP server names separately (GORM many2many infers wrong column names)
+	mcpNames, err := r.loadMCPServersForAgent(ctx, agent.ID)
+	if err != nil {
+		return nil, fmt.Errorf("load mcp servers for agent %q: %w", name, err)
+	}
+	rec.MCPServers = mcpNames
+
 	return &rec, nil
 }
 
@@ -432,6 +447,34 @@ func (r *GORMAgentRepository) createMCPAssociationsWithTx(tx *gorm.DB, agentID u
 		}
 	}
 	return nil
+}
+
+// loadAllAgentMCPServers loads MCP server names for all agents in a single query.
+func (r *GORMAgentRepository) loadAllAgentMCPServers(ctx context.Context) (map[uint][]string, error) {
+	var joins []models.AgentMCPServer
+	if err := r.db.WithContext(ctx).Preload("MCPServer").Find(&joins).Error; err != nil {
+		return nil, fmt.Errorf("load agent mcp servers: %w", err)
+	}
+
+	result := make(map[uint][]string)
+	for _, j := range joins {
+		result[j.AgentID] = append(result[j.AgentID], j.MCPServer.Name)
+	}
+	return result, nil
+}
+
+// loadMCPServersForAgent loads MCP server names for a single agent.
+func (r *GORMAgentRepository) loadMCPServersForAgent(ctx context.Context, agentID uint) ([]string, error) {
+	var joins []models.AgentMCPServer
+	if err := r.db.WithContext(ctx).Preload("MCPServer").Where("agent_id = ?", agentID).Find(&joins).Error; err != nil {
+		return nil, fmt.Errorf("load mcp servers: %w", err)
+	}
+
+	names := make([]string, 0, len(joins))
+	for _, j := range joins {
+		names = append(names, j.MCPServer.Name)
+	}
+	return names, nil
 }
 
 // deleteEscalation removes escalation and its triggers for an agent.
