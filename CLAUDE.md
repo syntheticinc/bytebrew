@@ -7,8 +7,10 @@
 - Engine: Go (bytebrew/engine) — gRPC + REST API + SSE, PostgreSQL (GORM)
 - Admin: React SPA (bytebrew/engine/admin) — Vite + Tailwind
 - CLI: TypeScript/Bun (bytebrew/cli) — Ink TUI
-- Mobile: Flutter (bytebrew/mobile)
-- Bridge: Go (bytebrew/bridge) — WS relay
+- Mobile: Flutter (separate repo: syntheticinc/bytebrew-mobile)
+- Bridge: Go (separate repo: syntheticinc/bytebrew-bridge) — WS relay
+- Web Client: React/Vite (separate repo: syntheticinc/bytebrew-web-client)
+- Relay: Go (separate repo: syntheticinc/bytebrew-relay)
 - Cloud API: Go (bytebrew/cloud-api) — REST API
 - Cloud Web: React/Vite (bytebrew/cloud-web)
 - Code BFF: Go (bytebrew-code/server) — proxy to Engine
