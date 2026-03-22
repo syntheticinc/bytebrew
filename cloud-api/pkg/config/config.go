@@ -23,6 +23,12 @@ type Config struct {
 	DeepInfra DeepInfraConfig `mapstructure:"deepinfra"`
 	Email        EmailConfig        `mapstructure:"email"`
 	ModelRouting ModelRoutingConfig `mapstructure:"model_routing"`
+	Google       GoogleConfig       `mapstructure:"google"`
+}
+
+// GoogleConfig holds Google OAuth settings. Optional -- if ClientID is empty, Google login is disabled.
+type GoogleConfig struct {
+	ClientID string `mapstructure:"client_id"`
 }
 
 // ModelRoutingConfig maps agent roles to LLM model IDs.
@@ -138,6 +144,7 @@ func Load(configPath string) (*Config, error) {
 		{"stripe.prices.teams_annual", "STRIPE_PRICES_TEAMS_ANNUAL"},
 		{"deepinfra.api_key", "DEEPINFRA_API_KEY"},
 		{"email.resend_api_key", "EMAIL_RESEND_API_KEY"},
+		{"google.client_id", "GOOGLE_CLIENT_ID"},
 	} {
 		_ = v.BindEnv(b.key, b.env)
 	}

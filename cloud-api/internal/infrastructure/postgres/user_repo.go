@@ -146,6 +146,67 @@ func (r *UserRepository) UpdatePasswordAndClearResetToken(ctx context.Context, u
 	return nil
 }
 
+// GetByGoogleID returns a user by Google ID, or nil if not found.
+func (r *UserRepository) GetByGoogleID(ctx context.Context, googleID string) (*domain.User, error) {
+	row, err := r.queries.GetUserByGoogleID(ctx, pgtype.Text{String: googleID, Valid: true})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get user by google id: %w", err)
+	}
+	return mapGetUserByGoogleIDRow(row), nil
+}
+
+// CreateGoogleUser inserts a new user authenticated via Google.
+func (r *UserRepository) CreateGoogleUser(ctx context.Context, email, googleID string) (*domain.User, error) {
+	row, err := r.queries.CreateGoogleUser(ctx, sqlcgen.CreateGoogleUserParams{
+		Email:    email,
+		GoogleID: pgtype.Text{String: googleID, Valid: true},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create google user: %w", err)
+	}
+	return mapCreateGoogleUserRow(row), nil
+}
+
+// LinkGoogleID links a Google ID to an existing user.
+func (r *UserRepository) LinkGoogleID(ctx context.Context, userID, googleID string) error {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return fmt.Errorf("parse user ID: %w", err)
+	}
+	if err := r.queries.LinkGoogleID(ctx, sqlcgen.LinkGoogleIDParams{
+		ID:       uid,
+		GoogleID: pgtype.Text{String: googleID, Valid: true},
+	}); err != nil {
+		return fmt.Errorf("link google id: %w", err)
+	}
+	return nil
+}
+
+// mapGetUserByGoogleIDRow maps GetUserByGoogleIDRow to domain.User.
+func mapGetUserByGoogleIDRow(row sqlcgen.GetUserByGoogleIDRow) *domain.User {
+	return &domain.User{
+		ID:           uuidToString(row.ID),
+		Email:        row.Email,
+		PasswordHash: row.PasswordHash,
+		GoogleID:     textToStringPtr(row.GoogleID),
+		CreatedAt:    timestamptzToTimeValue(row.CreatedAt),
+	}
+}
+
+// mapCreateGoogleUserRow maps CreateGoogleUserRow to domain.User.
+func mapCreateGoogleUserRow(row sqlcgen.CreateGoogleUserRow) *domain.User {
+	return &domain.User{
+		ID:           uuidToString(row.ID),
+		Email:        row.Email,
+		PasswordHash: row.PasswordHash,
+		GoogleID:     textToStringPtr(row.GoogleID),
+		CreatedAt:    timestamptzToTimeValue(row.CreatedAt),
+	}
+}
+
 // mapUser maps a full sqlcgen.User (with reset fields) to domain.User.
 func mapUser(row sqlcgen.User) *domain.User {
 	return &domain.User{

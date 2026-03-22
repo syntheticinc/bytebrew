@@ -17,6 +17,7 @@ type Querier interface {
 	CreateSubscription(ctx context.Context, arg CreateSubscriptionParams) (CreateSubscriptionRow, error)
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error)
 	CreateTeamInvite(ctx context.Context, arg CreateTeamInviteParams) (TeamInvite, error)
+	CreateGoogleUser(ctx context.Context, arg CreateGoogleUserParams) (CreateGoogleUserRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	DeleteUserByID(ctx context.Context, id pgtype.UUID) error
 	GetStripeCustomerByUserID(ctx context.Context, userID pgtype.UUID) (StripeCustomer, error)
@@ -26,11 +27,13 @@ type Querier interface {
 	GetTeamByUserID(ctx context.Context, userID pgtype.UUID) (Team, error)
 	GetTeamInviteByToken(ctx context.Context, token string) (TeamInvite, error)
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
+	GetUserByGoogleID(ctx context.Context, googleID pgtype.Text) (GetUserByGoogleIDRow, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (GetUserByIDRow, error)
 	GetUserByResetToken(ctx context.Context, passwordResetToken pgtype.Text) (User, error)
 	GetUserIDByStripeCustomerID(ctx context.Context, customerID string) (pgtype.UUID, error)
 	IncrementProxySteps(ctx context.Context, userID pgtype.UUID) error
 	InsertProcessedEvent(ctx context.Context, arg InsertProcessedEventParams) error
+	LinkGoogleID(ctx context.Context, arg LinkGoogleIDParams) error
 	IsEventProcessed(ctx context.Context, eventID string) (bool, error)
 	ListPendingInvites(ctx context.Context, teamID pgtype.UUID) ([]TeamInvite, error)
 	ListTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]ListTeamMembersRow, error)

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/google_login"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/login"
+	"github.com/syntheticinc/bytebrew/cloud-api/pkg/errors"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/refresh_auth"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/register"
 )
@@ -22,19 +24,25 @@ type refreshAuthUsecase interface {
 	Execute(ctx context.Context, input refresh_auth.Input) (*refresh_auth.Output, error)
 }
 
+type googleLoginUsecase interface {
+	Execute(ctx context.Context, input google_login.Input) (*google_login.Output, error)
+}
+
 // AuthHandler handles authentication endpoints.
 type AuthHandler struct {
 	registerUC    registerUsecase
 	loginUC       loginUsecase
 	refreshAuthUC refreshAuthUsecase
+	googleLoginUC googleLoginUsecase
 }
 
 // NewAuthHandler creates a new AuthHandler.
-func NewAuthHandler(registerUC registerUsecase, loginUC loginUsecase, refreshAuthUC refreshAuthUsecase) *AuthHandler {
+func NewAuthHandler(registerUC registerUsecase, loginUC loginUsecase, refreshAuthUC refreshAuthUsecase, googleLoginUC googleLoginUsecase) *AuthHandler {
 	return &AuthHandler{
 		registerUC:    registerUC,
 		loginUC:       loginUC,
 		refreshAuthUC: refreshAuthUC,
+		googleLoginUC: googleLoginUC,
 	}
 }
 
@@ -84,6 +92,38 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	out, err := h.loginUC.Execute(r.Context(), login.Input{
 		Email:    req.Email,
 		Password: req.Password,
+	})
+	if err != nil {
+		Error(w, err)
+		return
+	}
+
+	JSON(w, http.StatusOK, authResponse{
+		AccessToken:  out.AccessToken,
+		RefreshToken: out.RefreshToken,
+		UserID:       out.UserID,
+	})
+}
+
+type googleLoginRequest struct {
+	IDToken string `json:"id_token"`
+}
+
+// GoogleLogin handles POST /auth/google.
+func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
+	if h.googleLoginUC == nil {
+		Error(w, errors.Unavailable("google login is not configured", nil))
+		return
+	}
+
+	var req googleLoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, invalidBodyError)
+		return
+	}
+
+	out, err := h.googleLoginUC.Execute(r.Context(), google_login.Input{
+		IDToken: req.IDToken,
 	})
 	if err != nil {
 		Error(w, err)

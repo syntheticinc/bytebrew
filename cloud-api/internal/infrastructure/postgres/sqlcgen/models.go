@@ -67,6 +67,7 @@ type User struct {
 	ID                     pgtype.UUID        `json:"id"`
 	Email                  string             `json:"email"`
 	PasswordHash           string             `json:"password_hash"`
+	GoogleID               pgtype.Text        `json:"google_id"`
 	CreatedAt              pgtype.Timestamptz `json:"created_at"`
 	PasswordResetToken     pgtype.Text        `json:"password_reset_token"`
 	PasswordResetExpiresAt pgtype.Timestamptz `json:"password_reset_expires_at"`

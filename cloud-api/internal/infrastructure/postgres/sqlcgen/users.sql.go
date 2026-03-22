@@ -178,3 +178,76 @@ func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPassword
 	_, err := q.db.Exec(ctx, updateUserPassword, arg.ID, arg.PasswordHash)
 	return err
 }
+
+const getUserByGoogleID = `-- name: GetUserByGoogleID :one
+SELECT id, email, password_hash, google_id, created_at
+FROM users
+WHERE google_id = $1
+`
+
+type GetUserByGoogleIDRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	Email        string             `json:"email"`
+	PasswordHash string             `json:"password_hash"`
+	GoogleID     pgtype.Text        `json:"google_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetUserByGoogleID(ctx context.Context, googleID pgtype.Text) (GetUserByGoogleIDRow, error) {
+	row := q.db.QueryRow(ctx, getUserByGoogleID, googleID)
+	var i GetUserByGoogleIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.GoogleID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createGoogleUser = `-- name: CreateGoogleUser :one
+INSERT INTO users (email, password_hash, google_id)
+VALUES ($1, '', $2)
+RETURNING id, email, password_hash, google_id, created_at
+`
+
+type CreateGoogleUserParams struct {
+	Email    string      `json:"email"`
+	GoogleID pgtype.Text `json:"google_id"`
+}
+
+type CreateGoogleUserRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	Email        string             `json:"email"`
+	PasswordHash string             `json:"password_hash"`
+	GoogleID     pgtype.Text        `json:"google_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) CreateGoogleUser(ctx context.Context, arg CreateGoogleUserParams) (CreateGoogleUserRow, error) {
+	row := q.db.QueryRow(ctx, createGoogleUser, arg.Email, arg.GoogleID)
+	var i CreateGoogleUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.GoogleID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const linkGoogleID = `-- name: LinkGoogleID :exec
+UPDATE users SET google_id = $2 WHERE id = $1
+`
+
+type LinkGoogleIDParams struct {
+	ID       pgtype.UUID `json:"id"`
+	GoogleID pgtype.Text `json:"google_id"`
+}
+
+func (q *Queries) LinkGoogleID(ctx context.Context, arg LinkGoogleIDParams) error {
+	_, err := q.db.Exec(ctx, linkGoogleID, arg.ID, arg.GoogleID)
+	return err
+}

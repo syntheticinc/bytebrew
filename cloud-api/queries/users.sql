@@ -4,7 +4,7 @@ VALUES ($1, $2)
 RETURNING id, email, password_hash, created_at;
 
 -- name: GetUserByEmail :one
-SELECT id, email, password_hash, created_at
+SELECT id, email, password_hash, google_id, created_at
 FROM users
 WHERE email = $1;
 
@@ -39,3 +39,16 @@ WHERE id = $1;
 UPDATE users
 SET password_hash = $2, password_reset_token = NULL, password_reset_expires_at = NULL
 WHERE id = $1;
+
+-- name: GetUserByGoogleID :one
+SELECT id, email, password_hash, google_id, created_at
+FROM users
+WHERE google_id = $1;
+
+-- name: CreateGoogleUser :one
+INSERT INTO users (email, password_hash, google_id)
+VALUES ($1, '', $2)
+RETURNING id, email, password_hash, google_id, created_at;
+
+-- name: LinkGoogleID :exec
+UPDATE users SET google_id = $2 WHERE id = $1;

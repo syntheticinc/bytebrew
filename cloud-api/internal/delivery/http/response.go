@@ -64,6 +64,8 @@ func mapCodeToHTTPStatus(code string) int {
 		return http.StatusNotFound
 	case errors.CodeAlreadyExists:
 		return http.StatusConflict
+	case errors.CodeUnavailable:
+		return http.StatusServiceUnavailable
 	default:
 		return http.StatusInternalServerError
 	}

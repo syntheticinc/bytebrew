@@ -25,6 +25,7 @@ import (
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/delivery/http/middleware"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/infrastructure/crypto"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/infrastructure/email"
+	googleinfra "github.com/syntheticinc/bytebrew/cloud-api/internal/infrastructure/google"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/infrastructure/postgres"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/infrastructure/ratelimit"
 	stripeinfra "github.com/syntheticinc/bytebrew/cloud-api/internal/infrastructure/stripe"
@@ -36,6 +37,7 @@ import (
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/create_team"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/delete_account"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/forgot_password"
+	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/google_login"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/get_usage"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/handle_webhook"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/invite_member"
@@ -116,6 +118,16 @@ func main() {
 	tokenVerifier := &tokenVerifierAdapter{signer: tokenSigner}
 	licenseVerifier := &licenseVerifierAdapter{publicKey: publicKey}
 
+	// Google OAuth (optional)
+	var googleLoginUC *google_login.Usecase
+	if cfg.Google.ClientID != "" {
+		googleVerifier := googleinfra.NewTokenVerifier(cfg.Google.ClientID)
+		googleLoginUC = google_login.New(googleVerifier, userRepo, tokenSigner)
+		slog.Info("Google OAuth enabled")
+	} else {
+		slog.Info("Google OAuth disabled (no google.client_id)")
+	}
+
 	// Usecases
 	registerUC := register.New(userRepo, tokenSigner, passwordHasher)
 	loginUC := login.New(userRepo, tokenSigner, passwordHasher)
@@ -183,7 +195,7 @@ func main() {
 	resetPasswordUC := reset_password.New(userRepo, userRepo, passwordHasher)
 
 	// Handlers & Router
-	authHandler := httpdelivery.NewAuthHandler(registerUC, loginUC, refreshAuthUC)
+	authHandler := httpdelivery.NewAuthHandler(registerUC, loginUC, refreshAuthUC, googleLoginUC)
 	licenseHandler := httpdelivery.NewLicenseHandler(activateUC, refreshUC)
 	teamHandler := httpdelivery.NewTeamHandler(createTeamUC, inviteMemberUC, acceptInviteUC, removeMemberUC, listMembersUC)
 	accountHandler := httpdelivery.NewAccountHandler(changePasswordUC, deleteAccountUC, forgotPasswordUC, resetPasswordUC)

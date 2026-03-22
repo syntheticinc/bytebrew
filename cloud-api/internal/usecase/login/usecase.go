@@ -71,6 +71,10 @@ func (u *Usecase) Execute(ctx context.Context, input Input) (*Output, error) {
 		return nil, errors.Unauthorized("invalid credentials")
 	}
 
+	if user.IsGoogleOnly() {
+		return nil, errors.Unauthorized("this account uses Google sign-in, please use Google login")
+	}
+
 	if err := u.passwordHasher.Compare(user.PasswordHash, input.Password); err != nil {
 		return nil, errors.Unauthorized("invalid credentials")
 	}
