@@ -118,6 +118,7 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
       const decoder = new TextDecoder();
       let buffer = '';
       let fullContent = '';
+      let currentEvent = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -128,11 +129,17 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
         buffer = lines.pop() || '';
 
         for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim();
+            continue;
+          }
+
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6));
 
-              if (data.content) {
+              // Only accumulate content from deltas, ignore full message
+              if (data.content && currentEvent !== 'message') {
                 fullContent += data.content;
                 setMessages(prev =>
                   prev.map(m => m.id === assistantId ? { ...m, content: fullContent } : m)
@@ -149,18 +156,7 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
             } catch {
               // skip non-JSON data lines
             }
-          }
-
-          if (line.startsWith('event: message_delta')) {
-            // next data line has delta content
-          }
-
-          if (line.startsWith('event: message')) {
-            // next data line has full message — we already built it from deltas
-          }
-
-          if (line.startsWith('event: error')) {
-            // next data line has error
+            currentEvent = '';
           }
         }
       }
