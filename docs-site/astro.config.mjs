@@ -71,10 +71,9 @@ export default defineConfig({
         {
           label: 'Examples',
           items: [
-            { label: 'Sales Agent', slug: 'examples/sales-agent' },
+            { label: 'HR Assistant', slug: 'examples/hr-assistant' },
             { label: 'Support Agent', slug: 'examples/support-agent' },
-            { label: 'DevOps Monitor', slug: 'examples/devops-monitor' },
-            { label: 'IoT Analyzer', slug: 'examples/iot-analyzer' },
+            { label: 'Sales Agent', slug: 'examples/sales-agent' },
           ],
         },
       ],

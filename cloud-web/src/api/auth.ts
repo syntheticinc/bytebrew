@@ -42,6 +42,12 @@ export async function deleteAccount(password: string): Promise<void> {
   });
 }
 
+export async function googleLogin(idToken: string): Promise<AuthResponse> {
+  return api.request<AuthResponse>('POST', '/api/v1/auth/google', {
+    id_token: idToken,
+  });
+}
+
 export async function forgotPassword(email: string): Promise<void> {
   await api.request<{ message: string }>('POST', '/api/v1/auth/forgot-password', {
     email,

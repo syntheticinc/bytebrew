@@ -48,6 +48,7 @@ jobs:
       - name: Build frontend
         env:
           VITE_API_URL: https://api.bytebrew.ai
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           VITE_SHOW_EE_PRICING: ''
           VITE_SHOW_CODE_SITE: ''
         run: |
@@ -160,6 +161,8 @@ jobs:
             STRIPE_PRICES_TEAMS_ANNUAL=${{ secrets.STRIPE_PRICES_TEAMS_ANNUAL }}
             DEEPINFRA_API_KEY=${{ secrets.DEEPINFRA_API_KEY }}
             EMAIL_RESEND_API_KEY=${{ secrets.EMAIL_RESEND_API_KEY }}
+            GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+            GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
             ENVEOF
             sudo chown bytebrew:bytebrew /etc/bytebrew/cloud-api.env
             sudo chmod 640 /etc/bytebrew/cloud-api.env
