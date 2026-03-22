@@ -167,12 +167,12 @@ export default function MCPPage() {
   ];
 
   if (loading) return <div className="text-brand-shade3">Loading MCP servers...</div>;
-  if (error) return <div className="text-red-600">Error: {error}</div>;
+  if (error) return <div className="text-red-400">Error: {error}</div>;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-brand-dark">MCP Servers</h1>
+        <h1 className="text-2xl font-bold text-brand-light">MCP Servers</h1>
         <div className="flex gap-2">
           <button
             onClick={() => setShowWellKnown(true)}
@@ -189,7 +189,7 @@ export default function MCPPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-card border border-brand-shade1">
+      <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15">
         <DataTable
           columns={columns}
           data={servers ?? []}
@@ -218,7 +218,7 @@ export default function MCPPage() {
               </button>
               <button
                 onClick={() => setDeleteTarget(selected.name)}
-                className="px-4 py-2 text-red-600 border border-red-200 rounded-btn text-sm font-medium hover:bg-red-50 transition-colors"
+                className="px-4 py-2 text-red-400 border border-red-500/30 rounded-btn text-sm font-medium hover:bg-red-500/10 transition-colors"
               >
                 Remove
               </button>
@@ -299,7 +299,7 @@ export default function MCPPage() {
             return (
               <div
                 key={wk.name}
-                className={`border border-brand-shade1 rounded-card p-3 ${added ? 'opacity-50' : ''}`}
+                className={`border border-brand-shade3/30 rounded-card p-3 ${added ? 'opacity-50' : ''}`}
               >
                 <div className="flex items-center justify-between">
                   <div>

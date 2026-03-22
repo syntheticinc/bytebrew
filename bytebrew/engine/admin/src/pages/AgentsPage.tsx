@@ -72,12 +72,12 @@ export default function AgentsPage() {
   ];
 
   if (loading) return <div className="text-brand-shade3">Loading agents...</div>;
-  if (error) return <div className="text-red-600">Error: {error}</div>;
+  if (error) return <div className="text-red-400">Error: {error}</div>;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-brand-dark">Agents</h1>
+        <h1 className="text-2xl font-bold text-brand-light">Agents</h1>
         <button
           onClick={() => navigate('/agents/new')}
           className="px-4 py-2 bg-brand-accent text-brand-light rounded-btn text-sm font-medium hover:bg-brand-accent-hover transition-colors"
@@ -86,7 +86,7 @@ export default function AgentsPage() {
         </button>
       </div>
 
-      <div className="bg-white rounded-card border border-brand-shade1">
+      <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15">
         <DataTable
           columns={columns}
           data={agents ?? []}
@@ -115,7 +115,7 @@ export default function AgentsPage() {
               </button>
               <button
                 onClick={() => setDeleteTarget(selected.name)}
-                className="px-4 py-2 text-red-600 border border-red-200 rounded-btn text-sm font-medium hover:bg-red-50 transition-colors"
+                className="px-4 py-2 text-red-400 border border-red-500/30 rounded-btn text-sm font-medium hover:bg-red-500/10 transition-colors"
               >
                 Delete
               </button>
@@ -139,7 +139,7 @@ export default function AgentsPage() {
             </DetailSection>
 
             <DetailSection title="System Prompt">
-              <pre className="p-3 bg-brand-light rounded-btn text-xs whitespace-pre-wrap max-h-48 overflow-y-auto border border-brand-shade1/50">
+              <pre className="p-3 bg-brand-dark rounded-btn text-xs text-brand-shade2 whitespace-pre-wrap max-h-48 overflow-y-auto border border-brand-shade3/15">
                 {selected.system_prompt}
               </pre>
             </DetailSection>
@@ -148,7 +148,7 @@ export default function AgentsPage() {
               <DetailSection title="Tools">
                 <div className="flex flex-wrap gap-1.5">
                   {selected.tools?.map((t) => (
-                    <span key={t} className="px-2 py-0.5 bg-brand-light border border-brand-shade1 rounded text-xs text-brand-dark">
+                    <span key={t} className="px-2 py-0.5 bg-brand-dark border border-brand-shade3/30 rounded text-xs text-brand-light">
                       {t}
                     </span>
                   ))}
@@ -160,7 +160,7 @@ export default function AgentsPage() {
               <DetailSection title="MCP Servers">
                 <div className="flex flex-wrap gap-1.5">
                   {selected.mcp_servers?.map((s) => (
-                    <span key={s} className="px-2 py-0.5 bg-purple-50 border border-purple-200 rounded text-xs text-purple-700">
+                    <span key={s} className="px-2 py-0.5 bg-purple-500/10 border border-purple-500/30 rounded text-xs text-purple-400">
                       {s}
                     </span>
                   ))}
@@ -172,7 +172,7 @@ export default function AgentsPage() {
               <DetailSection title="Can Spawn">
                 <div className="flex flex-wrap gap-1.5">
                   {selected.can_spawn?.map((a) => (
-                    <span key={a} className="px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                    <span key={a} className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/30 rounded text-xs text-blue-400">
                       {a}
                     </span>
                   ))}
@@ -184,7 +184,7 @@ export default function AgentsPage() {
               <DetailSection title="Confirm Before">
                 <div className="flex flex-wrap gap-1.5">
                   {selected.confirm_before?.map((t) => (
-                    <span key={t} className="px-2 py-0.5 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                    <span key={t} className="px-2 py-0.5 bg-yellow-500/10 border border-yellow-500/30 rounded text-xs text-yellow-400">
                       {t}
                     </span>
                   ))}
@@ -214,7 +214,7 @@ export default function AgentsPage() {
         title="Delete Agent"
         message={
           <>
-            Are you sure you want to delete agent <strong className="text-brand-dark">{deleteTarget}</strong>?
+            Are you sure you want to delete agent <strong className="text-brand-light">{deleteTarget}</strong>?
             This action cannot be undone.
           </>
         }
