@@ -148,6 +148,21 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Sync rate limit from server on mount
+  useEffect(() => {
+    const token = localStorage.getItem(STORAGE_KEY_ACCESS);
+    if (!token) return;
+    fetch(`${apiUrl}/v1/health`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data?.rate_limit?.remaining != null) {
+          setMessagesRemaining(data.rate_limit.remaining);
+        }
+      })
+      .catch(() => { /* ignore */ });
+  }, [apiUrl]);
 
   const toggleToolExpand = useCallback((toolId: string) => {
     setExpandedToolIds(prev => {
