@@ -27,7 +27,7 @@ When you send a message to `POST /api/v1/agents/{name}/chat`, the engine respond
 
 ```
 event: thinking
-data: {"text":"Let me search for that information..."}
+data: {"content":"Let me search for that information..."}
 
 event: tool_call
 data: {"tool":"search_products","input":{"query":"laptops under 1000"}}
@@ -36,13 +36,13 @@ event: tool_result
 data: {"tool":"search_products","output":"[{\"name\":\"ProBook 450\",\"price\":849}]"}
 
 event: message_delta
-data: {"text":"I found "}
+data: {"content":"I found "}
 
 event: message_delta
-data: {"text":"several options for you:\n\n"}
+data: {"content":"several options for you:\n\n"}
 
 event: message_delta
-data: {"text":"1. **ProBook 450** — $849"}
+data: {"content":"1. **ProBook 450** — $849"}
 
 event: done
 data: {"session_id":"sess_abc123","tokens":156}
@@ -61,13 +61,13 @@ To approve or reject:
 
 ```bash
 # Approve
-curl -X POST http://localhost:8080/api/v1/confirmations/conf_xyz \
+curl -X POST http://localhost:8443/api/v1/confirmations/conf_xyz \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
   -d '{"action": "approve"}'
 
 # Reject
-curl -X POST http://localhost:8080/api/v1/confirmations/conf_xyz \
+curl -X POST http://localhost:8443/api/v1/confirmations/conf_xyz \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
   -d '{"action": "reject", "reason": "Customer changed their mind"}'
@@ -85,7 +85,7 @@ data: {"question":"Which shipping method do you prefer?","options":["Standard","
 Provide the response:
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/inputs/inp_456 \
+curl -X POST http://localhost:8443/api/v1/inputs/inp_456 \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
   -d '{"response": "Express"}'
@@ -98,7 +98,7 @@ curl -X POST http://localhost:8080/api/v1/inputs/inp_456 \
 Omit `session_id` to start a new conversation:
 
 ```bash
-curl -N http://localhost:8080/api/v1/agents/my-agent/chat \
+curl -N http://localhost:8443/api/v1/agents/my-agent/chat \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
   -d '{"message": "Hello, I need help with my order"}'
@@ -111,7 +111,7 @@ The `done` event returns a `session_id`. Save it for continuations.
 Pass `session_id` to continue a conversation with full history:
 
 ```bash
-curl -N http://localhost:8080/api/v1/agents/my-agent/chat \
+curl -N http://localhost:8443/api/v1/agents/my-agent/chat \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
   -d '{"message": "Can you check order #12345?", "session_id": "sess_abc123"}'
@@ -120,14 +120,14 @@ curl -N http://localhost:8080/api/v1/agents/my-agent/chat \
 ### Listing sessions
 
 ```bash
-curl "http://localhost:8080/api/v1/sessions?agent=my-agent&limit=20" \
+curl "http://localhost:8443/api/v1/sessions?agent=my-agent&limit=20" \
   -H "Authorization: Bearer bb_your_token"
 ```
 
 ### Deleting a session
 
 ```bash
-curl -X DELETE http://localhost:8080/api/v1/sessions/sess_abc123 \
+curl -X DELETE http://localhost:8443/api/v1/sessions/sess_abc123 \
   -H "Authorization: Bearer bb_your_token"
 ```
 
@@ -136,7 +136,7 @@ curl -X DELETE http://localhost:8080/api/v1/sessions/sess_abc123 \
 For clients that cannot handle SSE, set `stream: false` in the request body:
 
 ```bash
-curl http://localhost:8080/api/v1/agents/my-agent/chat \
+curl http://localhost:8443/api/v1/agents/my-agent/chat \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
   -d '{"message": "Hello", "stream": false}'

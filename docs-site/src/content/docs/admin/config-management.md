@@ -16,7 +16,7 @@ Apply configuration changes from the database without restarting the engine. Thi
 
 ```bash
 # Hot reload via API
-curl -X POST http://localhost:8080/api/v1/config/reload \
+curl -X POST http://localhost:8443/api/v1/config/reload \
   -H "Authorization: Bearer bb_admin_token"
 
 # Response
@@ -29,7 +29,7 @@ Download the current configuration as a YAML file. Useful for backups, version c
 
 ```bash
 # Export via API
-curl http://localhost:8080/api/v1/config/export \
+curl http://localhost:8443/api/v1/config/export \
   -H "Authorization: Bearer bb_admin_token" \
   -o config-backup.yaml
 ```
@@ -44,7 +44,7 @@ Upload a YAML file to merge with or replace the current configuration. This is t
 
 ```bash
 # Import via API
-curl -X POST http://localhost:8080/api/v1/config/import \
+curl -X POST http://localhost:8443/api/v1/config/import \
   -H "Authorization: Bearer bb_admin_token" \
   -H "Content-Type: application/x-yaml" \
   --data-binary @new-config.yaml

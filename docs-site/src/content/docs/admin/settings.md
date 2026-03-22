@@ -16,7 +16,7 @@ BYOK allows API consumers to override the model for a single request by passing 
 
 ```bash
 # BYOK headers in a request (when enabled for the provider)
-curl -N http://localhost:8080/api/v1/agents/my-agent/chat \
+curl -N http://localhost:8443/api/v1/agents/my-agent/chat \
   -H "Authorization: Bearer bb_your_token" \
   -H "X-Model-Provider: anthropic" \
   -H "X-Model-API-Key: sk-ant-customer-key" \

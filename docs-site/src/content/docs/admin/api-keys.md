@@ -30,7 +30,7 @@ The full API key is shown only once at creation time. It is hashed before storag
 
 ```bash
 # Use an API key in requests
-curl http://localhost:8080/api/v1/agents \
+curl http://localhost:8443/api/v1/agents \
   -H "Authorization: Bearer bb_your_api_token"
 
 # Example: key with chat + tasks scopes
@@ -38,7 +38,7 @@ curl http://localhost:8080/api/v1/agents \
 # Cannot call: /config/reload, API key management, settings
 
 # Example: key with config scope only (CI/CD)
-curl -X POST http://localhost:8080/api/v1/config/reload \
+curl -X POST http://localhost:8443/api/v1/config/reload \
   -H "Authorization: Bearer bb_cicd_deploy_token"
 ```
 

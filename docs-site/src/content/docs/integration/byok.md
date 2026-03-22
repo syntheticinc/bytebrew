@@ -28,7 +28,7 @@ All three headers must be present for BYOK to activate. If any header is missing
 ## curl example
 
 ```bash
-curl -N http://localhost:8080/api/v1/agents/my-agent/chat \
+curl -N http://localhost:8443/api/v1/agents/my-agent/chat \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
   -H "X-Model-Provider: anthropic" \
@@ -42,7 +42,7 @@ The agent's system prompt, tools, and all other configuration remain unchanged. 
 ## JavaScript example
 
 ```javascript
-const response = await fetch('http://localhost:8080/api/v1/agents/my-agent/chat', {
+const response = await fetch('http://localhost:8443/api/v1/agents/my-agent/chat', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer bb_your_token',

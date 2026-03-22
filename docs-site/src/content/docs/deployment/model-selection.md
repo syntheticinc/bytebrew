@@ -100,7 +100,7 @@ curl http://localhost:11434/v1/chat/completions \
 
 ```bash
 # Import a model configuration via YAML
-curl -X POST http://localhost:8080/api/v1/config/import \
+curl -X POST http://localhost:8443/api/v1/config/import \
   -H "Authorization: Bearer bb_admin_token" \
   -H "Content-Type: application/x-yaml" \
   -d '
@@ -112,7 +112,7 @@ models:
 '
 
 # Reload to apply
-curl -X POST http://localhost:8080/api/v1/config/reload \
+curl -X POST http://localhost:8443/api/v1/config/reload \
   -H "Authorization: Bearer bb_admin_token"
 ```
 
@@ -148,7 +148,7 @@ models:
 Bring Your Own Key lets API consumers override the model for a single request by passing headers:
 
 ```bash
-curl -N http://localhost:8080/api/v1/agents/my-agent/chat \
+curl -N http://localhost:8443/api/v1/agents/my-agent/chat \
   -H "Authorization: Bearer bb_your_token" \
   -H "X-Model-Provider: anthropic" \
   -H "X-Model-API-Key: sk-ant-customer-key" \

@@ -257,7 +257,7 @@ models:
 Test it:
 
 ```bash
-curl -N http://localhost:8080/api/v1/agents/project-manager/chat \
+curl -N http://localhost:8443/api/v1/agents/project-manager/chat \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
   -d '{"message": "Write a blog post about the future of AI agents in enterprise software"}'

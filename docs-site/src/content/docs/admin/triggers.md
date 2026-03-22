@@ -47,7 +47,7 @@ triggers:
     secret: ${WEBHOOK_SECRET}          # Signature verification
 
 # Trigger the webhook externally:
-# curl -X POST http://localhost:8080/api/v1/webhooks/orders \
+# curl -X POST http://localhost:8443/api/v1/webhooks/orders \
 #   -H "X-Webhook-Secret: your-secret" \
 #   -H "Content-Type: application/json" \
 #   -d '{"order_id": "12345", "event": "created"}'

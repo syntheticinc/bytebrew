@@ -42,7 +42,7 @@ services:
   engine:
     image: ghcr.io/syntheticinc/bytebrew-engine:latest
     ports:
-      - "127.0.0.1:8080:8080"    # Only bind to localhost (Caddy proxies)
+      - "127.0.0.1:8443:8443"    # Only bind to localhost (Caddy proxies)
       - "127.0.0.1:8443:8443"
     env_file: .env
     environment:
@@ -101,12 +101,12 @@ Create `/etc/caddy/Caddyfile`:
 engine.yourdomain.com {
     # API endpoint
     handle /api/* {
-        reverse_proxy localhost:8080
+        reverse_proxy localhost:8443
     }
 
     # Webhook endpoints
     handle /webhooks/* {
-        reverse_proxy localhost:8080
+        reverse_proxy localhost:8443
     }
 
     # Admin Dashboard
@@ -116,7 +116,7 @@ engine.yourdomain.com {
 
     # Default: API
     handle {
-        reverse_proxy localhost:8080
+        reverse_proxy localhost:8443
     }
 }
 ```
@@ -218,7 +218,7 @@ The `/api/v1/health` endpoint is unauthenticated and designed for monitoring:
 
 ```bash
 # Simple health check script
-curl -sf http://localhost:8080/api/v1/health > /dev/null || echo "ByteBrew Engine is DOWN"
+curl -sf http://localhost:8443/api/v1/health > /dev/null || echo "ByteBrew Engine is DOWN"
 ```
 
 ### UptimeRobot / Uptime Kuma

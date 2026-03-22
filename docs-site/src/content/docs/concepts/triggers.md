@@ -59,7 +59,7 @@ triggers:
 
 ```bash
 # External service sends a POST request:
-curl -X POST http://localhost:8080/api/v1/webhooks/stripe \
+curl -X POST http://localhost:8443/api/v1/webhooks/stripe \
   -H "X-Webhook-Secret: whsec_your_secret" \
   -H "Content-Type: application/json" \
   -d '{

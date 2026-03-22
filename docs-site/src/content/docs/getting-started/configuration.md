@@ -419,7 +419,7 @@ When a `secret` is configured, the engine verifies incoming requests using HMAC-
 
 ```bash
 # Sending a verified webhook request
-curl -X POST http://localhost:8080/api/v1/webhooks/orders \
+curl -X POST http://localhost:8443/api/v1/webhooks/orders \
   -H "X-Webhook-Secret: whsec_your_secret_here" \
   -H "Content-Type: application/json" \
   -d '{"order_id": "12345", "event": "created", "total": 99.99}'

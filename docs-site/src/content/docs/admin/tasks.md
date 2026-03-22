@@ -33,7 +33,7 @@ The agent starts working on the task immediately. You can track progress in the 
 
 ```bash
 # Create a task
-curl -X POST http://localhost:8080/api/v1/tasks \
+curl -X POST http://localhost:8443/api/v1/tasks \
   -H "Authorization: Bearer bb_token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -43,13 +43,13 @@ curl -X POST http://localhost:8080/api/v1/tasks \
   }'
 
 # Provide input to a waiting task
-curl -X POST http://localhost:8080/api/v1/tasks/{id}/input \
+curl -X POST http://localhost:8443/api/v1/tasks/{id}/input \
   -H "Authorization: Bearer bb_token" \
   -H "Content-Type: application/json" \
   -d '{"input": "Focus on enterprise segment"}'
 
 # Cancel a task
-curl -X DELETE http://localhost:8080/api/v1/tasks/{id} \
+curl -X DELETE http://localhost:8443/api/v1/tasks/{id} \
   -H "Authorization: Bearer bb_token"
 ```
 

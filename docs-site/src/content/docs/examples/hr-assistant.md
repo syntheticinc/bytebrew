@@ -45,7 +45,7 @@ cd bytebrew-examples/hr-assistant
 docker compose up
 ```
 
-Open the Admin Dashboard at `http://localhost:8080/admin` to upload your policy documents to the Knowledge Base, then start chatting at `http://localhost:8080`.
+Open the Admin Dashboard at `http://localhost:8443/admin` to upload your policy documents to the Knowledge Base, then start chatting at `http://localhost:8443`.
 
 ## Agent configuration
 

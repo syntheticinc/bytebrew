@@ -16,7 +16,7 @@ services:
   engine:
     image: bytebrew/engine:latest
     ports:
-      - "8080:8080"    # REST API
+      - "8080:8443"    # REST API
       - "8443:8443"    # Admin Dashboard
     environment:
       - DATABASE_URL=postgres://bytebrew:bytebrew@postgres:5432/bytebrew?sslmode=disable
@@ -70,7 +70,7 @@ docker compose up -d
 Verify:
 
 ```bash
-curl http://localhost:8080/api/v1/health
+curl http://localhost:8443/api/v1/health
 # {"status":"ok","version":"1.0.0","agents_count":0}
 ```
 
@@ -154,7 +154,7 @@ If ports 8080 or 8443 are already in use:
 ```yaml
 # Change the host-side port (left of the colon)
 ports:
-  - "9080:8080"    # API accessible at localhost:9080
+  - "9080:8443"    # API accessible at localhost:9080
   - "9443:8443"    # Dashboard at localhost:9443
 ```
 

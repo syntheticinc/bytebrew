@@ -48,7 +48,7 @@ cd bytebrew-examples/sales-agent
 docker compose up
 ```
 
-Open Admin Dashboard at `http://localhost:8080/admin` to configure business rules under Settings, then chat at `http://localhost:8080`.
+Open Admin Dashboard at `http://localhost:8443/admin` to configure business rules under Settings, then chat at `http://localhost:8443`.
 
 ### BYOK setup
 
@@ -183,7 +183,7 @@ All business rules are managed as Engine Settings through the Admin Dashboard or
 
 ```bash
 # Update max discount via API
-curl -X PUT http://localhost:8080/api/v1/settings/max_discount_pct \
+curl -X PUT http://localhost:8443/api/v1/settings/max_discount_pct \
   -H "Authorization: Bearer $API_KEY" \
   -d '{"value": "25"}'
 ```

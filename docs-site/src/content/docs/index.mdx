@@ -20,10 +20,10 @@ curl -fsSL https://bytebrew.ai/releases/docker-compose.yml -o docker-compose.yml
 docker compose up -d
 ```
 
-The engine starts on port `8080` (API) and `8443` (Admin Dashboard). Verify it is running:
+The engine starts on port `8443` — both the REST API and Admin Dashboard. Verify it is running:
 
 ```bash
-curl http://localhost:8080/api/v1/health
+curl http://localhost:8443/api/v1/health
 # {"status":"ok","version":"1.0.0","agents_count":0}
 ```
 
@@ -58,7 +58,7 @@ Skip the YAML file and use the Admin Dashboard instead. Open `http://localhost:8
 Use the REST API to talk to your agent. The response streams back as Server-Sent Events (SSE), so you see tokens as they are generated:
 
 ```bash
-curl -N http://localhost:8080/api/v1/agents/my-agent/chat \
+curl -N http://localhost:8443/api/v1/agents/my-agent/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "Hello, what can you do?"}'
 ```
@@ -68,23 +68,23 @@ curl -N http://localhost:8080/api/v1/agents/my-agent/chat \
 The engine returns a stream of SSE events. Each event has a `type` field that tells you what kind of data it contains:
 
 ```
-event: content
-data: {"text":"Hello! I'm your product assistant. "}
+event: message_delta
+data: {"content":"Hello! I'm your product assistant. "}
 
-event: content
-data: {"text":"I can help you with product questions, "}
+event: message_delta
+data: {"content":"I can help you with product questions, "}
 
-event: content
-data: {"text":"documentation search, and more."}
+event: message_delta
+data: {"content":"documentation search, and more."}
 
 event: done
-data: {"session_id":"a1b2c3d4","tokens":42}
+data: {"session_id":"a1b2c3d4"}
 ```
 
 The `session_id` in the `done` event lets you continue the conversation. Pass it in subsequent requests to maintain context:
 
 ```bash
-curl -N http://localhost:8080/api/v1/agents/my-agent/chat \
+curl -N http://localhost:8443/api/v1/agents/my-agent/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "Tell me more about that", "session_id": "a1b2c3d4"}'
 ```
