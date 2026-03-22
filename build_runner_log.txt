@@ -1,6 +1,0 @@
-﻿Running build hooks...Running build hooks...  0s riverpod_generator on 94 inputs; integration_test/auth_e2e_test.dart
-  9s riverpod_generator on 94 inputs: 4 skipped, 1 same; spent 7s┬аanalyzing, 2s┬аresolving; lib/core/domain/agent_info.dart
-  9s riverpod_generator on 94 inputs: 73 skipped, 1 output, 4 same, 16 no-op; spent 7s┬аanalyzing, 2s┬аresolving
-  0s source_gen:combining_builder on 94 inputs; integration_test/auth_e2e_test.dart
-  0s source_gen:combining_builder on 94 inputs: 84 skipped, 1 output, 4 same, 5 no-op
-  Built with build_runner/jit in 10s; wrote 10 outputs.
