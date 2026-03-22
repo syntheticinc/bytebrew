@@ -209,9 +209,12 @@
 
 ## TC-EXAMPLE: bytebrew-examples repo (10 TC)
 
-### TC-EXAMPLE-01: HR Assistant self-hosted
+### TC-EXAMPLE-01: HR Assistant self-hosted + Web Client
 - git clone → cd hr-assistant → cp .env.example .env → docker compose up -d
-- **Ожидание:** engine + db + mcp-server + service стартуют, health OK
+- **Ожидание:** engine + db + mcp-server + web-client стартуют, health OK
+- **Ожидание:** http://localhost:3000 → Web Client загружается
+- **Ожидание:** Web Client показывает agent hr-assistant в списке
+- **Ожидание:** можно отправить сообщение → SSE streaming → tool calls видны
 
 ### TC-EXAMPLE-02: HR — Knowledge Search (RAG)
 - POST /chat/hr-assistant {"message": "What's the PTO policy for employees with 2+ years?"}
