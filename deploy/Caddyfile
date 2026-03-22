@@ -30,17 +30,17 @@ bytebrew.ai, www.bytebrew.ai {
 
     # Example demo API proxies
     handle /examples/hr-assistant/api/* {
-        uri strip_prefix /examples/hr-assistant/api
+        uri strip_prefix /examples/hr-assistant
         reverse_proxy 127.0.0.1:3001
     }
 
     handle /examples/support-agent/api/* {
-        uri strip_prefix /examples/support-agent/api
+        uri strip_prefix /examples/support-agent
         reverse_proxy 127.0.0.1:3002
     }
 
     handle /examples/sales-agent/api/* {
-        uri strip_prefix /examples/sales-agent/api
+        uri strip_prefix /examples/sales-agent
         reverse_proxy 127.0.0.1:3003
     }
 
