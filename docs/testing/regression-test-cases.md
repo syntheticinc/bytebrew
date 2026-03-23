@@ -1312,7 +1312,82 @@
 
 ---
 
-## Итого: 96 TC
+## TC-AUTH: Email Verification + Google Auth (10 TC)
+
+### TC-AUTH-01: Register sends verification email
+**Шаги:** POST /api/v1/auth/register с email + password
+**Ожидание:** 201 с `{user_id, message}`, НЕ содержит access_token. Resend отправляет email.
+**PASS:** `{"data":{"user_id":"...","message":"registration successful, please check your email"}}`
+
+### TC-AUTH-02: Login before verification blocked
+**Шаги:** POST /api/v1/auth/login с тем же email/password
+**Ожидание:** Ошибка `EMAIL_NOT_VERIFIED`
+**PASS:** `{"error":{"code":"EMAIL_NOT_VERIFIED","message":"please verify your email before logging in"}}`
+
+### TC-AUTH-03: Verify email with token
+**Шаги:** POST /api/v1/auth/verify-email с `{"token":"xxx"}` (из DB или email link)
+**Ожидание:** 200 с `{access_token, refresh_token, user_id}`
+**PASS:** JWT tokens returned, email_verified=true в DB
+
+### TC-AUTH-04: Login after verification
+**Шаги:** POST /api/v1/auth/login с verified email
+**Ожидание:** 200 с JWT tokens
+**PASS:** Login successful
+
+### TC-AUTH-05: Resend verification
+**Шаги:** POST /api/v1/auth/resend-verification с `{"email":"xxx"}`
+**Ожидание:** 200 с message (не раскрывает существование аккаунта)
+**PASS:** `{"data":{"message":"if an account exists with this email, a verification link has been sent"}}`
+
+### TC-AUTH-06: Expired/used token
+**Шаги:** POST /api/v1/auth/verify-email с использованным или несуществующим token
+**Ожидание:** Ошибка `INVALID_INPUT`
+**PASS:** `{"error":{"code":"INVALID_INPUT","message":"invalid or expired verification token"}}`
+
+### TC-AUTH-07: Google login auto-verifies email
+**Шаги:** POST /api/v1/auth/google с valid Google ID token
+**Ожидание:** JWT tokens, email_verified=true автоматически
+
+### TC-AUTH-08: Google Sign-In button on Login page
+**Шаги:** Открыть /login в браузере
+**Ожидание:** Кнопка "Sign in with Google" видна, разделитель "or"
+
+### TC-AUTH-09: Google Sign-In button on Register page
+**Шаги:** Открыть /register в браузере
+**Ожидание:** Кнопка "Sign up with Google" видна, разделитель "or"
+
+### TC-AUTH-10: Register duplicate email
+**Шаги:** POST /api/v1/auth/register с уже зарегистрированным email
+**Ожидание:** Ошибка `ALREADY_EXISTS`
+**PASS:** `{"error":{"code":"ALREADY_EXISTS","message":"email already registered"}}`
+
+---
+
+## TC-MCP: MCP Documentation Server (5 TC)
+
+### TC-MCP-01: MCP server health
+**Шаги:** curl https://mcp.bytebrew.ai/health
+**Ожидание:** 200 OK
+
+### TC-MCP-02: Tools list via MCP protocol
+**Шаги:** Подключиться к MCP SSE, отправить `tools/list`
+**Ожидание:** Возвращает tools: search_docs, get_doc, list_docs
+
+### TC-MCP-03: search_docs functional test
+**Шаги:** MCP `tools/call` с `search_docs(query: "how to configure multi-agent")`
+**Ожидание:** Возвращает релевантные passages из документации
+
+### TC-MCP-04: Quality — ответ содержит конкретные примеры
+**Шаги:** `search_docs(query: "YAML example for MCP server configuration")`
+**Ожидание:** Ответ содержит YAML пример с `type: stdio` или `type: sse`
+
+### TC-MCP-05: Quality — Claude Code integration
+**Шаги:** В Claude Code с подключённым MCP: "How do I add a new agent with web_search tool?"
+**Ожидание:** Ответ ссылается на правильную документацию, содержит рабочий YAML пример
+
+---
+
+## Итого: 111 TC
 
 | Категория | Кол-во | Покрытие |
 |-----------|--------|----------|
@@ -1323,9 +1398,11 @@
 | TC-CHAT | 7 | SSE streaming, sessions |
 | TC-DOC | 13 | Документация = реальность + контент валидация |
 | TC-CLOUD | 11 | /examples/, auth popup, dashboard links |
-| TC-EXAMPLE | 12 | **Агентное поведение** (MCP tools, RAG, rate limit, web-client) |
-| **ВСЕГО** | **96** |
+| TC-EXAMPLE | 12 | Агентное поведение (MCP tools, RAG, rate limit, web-client) |
+| TC-AUTH | 10 | Email verification, Google auth |
+| TC-MCP | 5 | MCP docs server (functional + quality) |
+| **ВСЕГО** | **111** |
 
 ### Примечания
-- Multi-agent spawn работает через HTTP REST API (spawn_billing/spawn_technical) и через gRPC/WS
-- confirm_before работает через gRPC path, в HTTP REST API confirmation events передаются но ExampleChat UI обрабатывает их (ask_user блоки с кнопками)
+- Multi-agent spawn работает через HTTP REST API и gRPC/WS
+- TC-MCP-04/05 — quality tests: проверяют не только работоспособность но и качество RAG ответов
