@@ -18,6 +18,7 @@ export function LandingPage() {
   return (
     <div>
       <HeroSection />
+      <MCPDocsSection />
       <ProblemSection />
       <SolutionSection />
       <HowItWorksSection onImageClick={setLightboxSrc} />
@@ -25,7 +26,6 @@ export function LandingPage() {
       <ProductShowcaseSection onImageClick={setLightboxSrc} />
       <UseCasesSection />
       <ComparisonSection />
-      <MCPDocsSection />
       <InstallSection />
       <PricingSection />
       <FreeForeverBanner />
@@ -693,19 +693,12 @@ const MCP_CODE: Record<'claude' | 'codex' | 'other', { code: string; prefix?: st
     prefix: '$',
   },
   codex: {
-    code: `# ~/.codex/config.toml
-[mcp_servers.bytebrew-docs]
-url = "https://mcp.bytebrew.ai/sse"`,
+    code: 'codex mcp add bytebrew-docs https://mcp.bytebrew.ai/sse',
+    prefix: '$',
   },
   other: {
-    code: `{
-  "mcpServers": {
-    "bytebrew-docs": {
-      "type": "sse",
-      "url": "https://mcp.bytebrew.ai/sse"
-    }
-  }
-}`,
+    code: 'MCP SSE endpoint: https://mcp.bytebrew.ai/sse',
+    prefix: '#',
   },
 };
 
