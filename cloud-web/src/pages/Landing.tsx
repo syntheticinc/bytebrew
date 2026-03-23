@@ -32,14 +32,13 @@ export function LandingPage() {
 
       {lightboxSrc && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-zoom-out"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer"
           onClick={() => setLightboxSrc(null)}
         >
           <img
             src={lightboxSrc}
             alt=""
             className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
           />
         </div>
       )}
@@ -329,7 +328,7 @@ function HowItWorksSection({ onImageClick }: { onImageClick: (src: string) => vo
                   Open the Admin Dashboard and create your agent visually. Set the model, system prompt, tools, and spawn rules — no YAML needed.
                 </p>
                 <div className="rounded-[8px] border border-brand-shade3/15 overflow-hidden">
-                  <img src="/screenshots/admin-agents.png" alt="Admin Dashboard — Agents list with Create Agent button" className="w-full cursor-zoom-in" onClick={() => onImageClick('/screenshots/admin-agents.png')} />
+                  <img src="/screenshots/admin-agents.png" alt="Admin Dashboard — Agents list with Create Agent button" className="w-full cursor-pointer hover:opacity-80 transition-opacity" onClick={() => onImageClick('/screenshots/admin-agents.png')} />
                 </div>
               </div>
 
@@ -550,7 +549,7 @@ function ProductShowcaseSection({ onImageClick }: { onImageClick: (src: string) 
               Ready-to-use chat interface with multi-agent sidebar, tool calls, and rich markdown. Open source — fork and customize.
             </p>
             <div className="rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5">
-              <img src="/screenshots/admin-agents.png" alt="ByteBrew Web Client — AI sales agent recommending laptops with web search tool calls and structured markdown response" className="w-full cursor-zoom-in" onClick={() => onImageClick('/screenshots/admin-agents.png')} />
+              <img src="/screenshots/admin-agents.png" alt="ByteBrew Web Client — AI sales agent recommending laptops with web search tool calls and structured markdown response" className="w-full cursor-pointer hover:opacity-80 transition-opacity" onClick={() => onImageClick('/screenshots/admin-agents.png')} />
             </div>
           </div>
 
@@ -561,7 +560,7 @@ function ProductShowcaseSection({ onImageClick }: { onImageClick: (src: string) 
               Configure agents, models, MCP servers, triggers, and API keys through a visual interface. No YAML required.
             </p>
             <div className="rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5">
-              <img src="/screenshots/admin-agent-detail.png" alt="Admin Dashboard — Agent detail panel with model, system prompt, tools, and spawn rules configuration" className="w-full cursor-zoom-in" onClick={() => onImageClick('/screenshots/admin-agent-detail.png')} />
+              <img src="/screenshots/admin-agent-detail.png" alt="Admin Dashboard — Agent detail panel with model, system prompt, tools, and spawn rules configuration" className="w-full cursor-pointer hover:opacity-80 transition-opacity" onClick={() => onImageClick('/screenshots/admin-agent-detail.png')} />
             </div>
           </div>
         </div>
