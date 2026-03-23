@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -369,35 +370,72 @@ type searchResult struct {
 	source  string
 }
 
-// fileNameToURL maps documentation file names to their public URLs on bytebrew.ai.
-func fileNameToURL(fileName string) string {
-	m := map[string]string{
-		"quick-start.md":     "https://bytebrew.ai/docs/getting-started/quick-start/",
-		"configuration.md":  "https://bytebrew.ai/docs/getting-started/configuration/",
-		"api-reference.md":  "https://bytebrew.ai/docs/getting-started/api-reference/",
-		"agents.md":         "https://bytebrew.ai/docs/concepts/agents/",
-		"multi-agent.md":    "https://bytebrew.ai/docs/concepts/multi-agent/",
-		"tools.md":          "https://bytebrew.ai/docs/concepts/tools/",
-		"tasks.md":          "https://bytebrew.ai/docs/concepts/tasks/",
-		"knowledge.md":      "https://bytebrew.ai/docs/concepts/knowledge/",
-		"triggers.md":       "https://bytebrew.ai/docs/concepts/triggers/",
-		"docker.md":         "https://bytebrew.ai/docs/deployment/docker/",
-		"model-selection.md": "https://bytebrew.ai/docs/deployment/model-selection/",
-		"production.md":     "https://bytebrew.ai/docs/deployment/production/",
-		"rest-api.md":       "https://bytebrew.ai/docs/integration/rest-api/",
-		"byok.md":           "https://bytebrew.ai/docs/integration/byok/",
-		"hr-assistant.md":   "https://bytebrew.ai/docs/examples/hr-assistant/",
-		"support-agent.md":  "https://bytebrew.ai/docs/examples/support-agent/",
-		"sales-agent.md":    "https://bytebrew.ai/docs/examples/sales-agent/",
-		"login.md":          "https://bytebrew.ai/docs/admin/login/",
-		"mcp-servers.md":    "https://bytebrew.ai/docs/admin/mcp-servers/",
-		"models.md":         "https://bytebrew.ai/docs/admin/models/",
-		"settings.md":       "https://bytebrew.ai/docs/admin/settings/",
-		"api-keys.md":       "https://bytebrew.ai/docs/admin/api-keys/",
-		"config-management.md": "https://bytebrew.ai/docs/admin/config-management/",
-		"audit-log.md":      "https://bytebrew.ai/docs/admin/audit-log/",
+// docURLMap is populated at startup from the sitemap.
+var docURLMap = make(map[string]string)
+
+// loadDocURLMap fetches the sitemap and builds a slug→URL mapping.
+func loadDocURLMap(sitemapURL string) {
+	resp, err := http.Get(sitemapURL)
+	if err != nil {
+		log.Printf("warning: failed to fetch sitemap index: %v", err)
+		return
 	}
-	if url, ok := m[fileName]; ok {
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	// Extract sitemap URLs from index
+	sitemapURLs := extractXMLValues(string(body), "loc")
+	for _, su := range sitemapURLs {
+		loadSitemapURLs(su)
+	}
+	log.Printf("loaded %d doc URL mappings from sitemap", len(docURLMap))
+}
+
+func loadSitemapURLs(sitemapURL string) {
+	resp, err := http.Get(sitemapURL)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	urls := extractXMLValues(string(body), "loc")
+	for _, u := range urls {
+		// Extract slug: https://bytebrew.ai/docs/concepts/agents/ → agents
+		u = strings.TrimSuffix(u, "/")
+		parts := strings.Split(u, "/")
+		if len(parts) > 0 {
+			slug := parts[len(parts)-1]
+			if slug != "" && slug != "docs" {
+				docURLMap[slug+".md"] = u + "/"
+				docURLMap[slug+".mdx"] = u + "/"
+			}
+		}
+	}
+}
+
+func extractXMLValues(xml, tag string) []string {
+	var results []string
+	open := "<" + tag + ">"
+	close := "</" + tag + ">"
+	for {
+		start := strings.Index(xml, open)
+		if start == -1 {
+			break
+		}
+		xml = xml[start+len(open):]
+		end := strings.Index(xml, close)
+		if end == -1 {
+			break
+		}
+		results = append(results, xml[:end])
+		xml = xml[end+len(close):]
+	}
+	return results
+}
+
+func fileNameToURL(fileName string) string {
+	if url, ok := docURLMap[fileName]; ok {
 		return url
 	}
 	return ""
@@ -502,6 +540,10 @@ func (s *Server) keywordSearch(ctx context.Context, keyword string, limit int) (
 
 func main() {
 	cfg := loadConfig()
+
+	// Load doc URL mapping from sitemap (for linking results to docs pages)
+	sitemapURL := envOr("SITEMAP_URL", "https://bytebrew.ai/docs/sitemap-index.xml")
+	loadDocURLMap(sitemapURL)
 
 	srv, err := NewServer(cfg)
 	if err != nil {
