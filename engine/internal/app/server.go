@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"runtime"
 	"strings"
 	"syscall"
@@ -317,10 +318,16 @@ func Run(sc ServerConfig) error {
 		if envModel := os.Getenv("EMBED_MODEL"); envModel != "" {
 			embedModel = envModel
 		}
+		embedDim := indexing.DefaultDimension
+		if envDim := os.Getenv("EMBED_DIM"); envDim != "" {
+			if d, err := strconv.Atoi(envDim); err == nil && d > 0 {
+				embedDim = d
+			}
+		}
 		embeddingsClient = indexing.NewEmbeddingsClient(
 			embedURL,
 			embedModel,
-			indexing.DefaultDimension,
+			embedDim,
 		)
 		knowledgeIndexer = knowledge.NewIndexer(embeddingsClient, knowledgeRepo, slog.Default())
 

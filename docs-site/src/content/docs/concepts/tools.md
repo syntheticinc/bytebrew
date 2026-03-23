@@ -116,6 +116,8 @@ Tool names are globally unique across your configuration. If you define a custom
 
 ## Tool Confirmation (`confirm_before`)
 
+Human-in-the-loop safety gate for destructive actions. The `confirm_before` configuration requires explicit user approval before a tool executes. Use this for any tool that creates orders, modifies data, sends emails, runs commands, or has other irreversible side effects.
+
 Tools listed in `confirm_before` require user approval before execution:
 
 ```yaml

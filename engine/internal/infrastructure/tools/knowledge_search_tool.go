@@ -82,7 +82,7 @@ func (t *KnowledgeSearchTool) InvokableRun(ctx context.Context, argumentsInJSON 
 	}
 
 	if args.Limit <= 0 {
-		args.Limit = 5
+		args.Limit = 10
 	}
 	if args.Limit > 20 {
 		args.Limit = 20

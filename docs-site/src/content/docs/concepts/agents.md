@@ -51,7 +51,7 @@ Use `spawn` for sub-agents in a multi-agent setup. When a supervisor spawns a re
 
 ## System prompts
 
-The system prompt is the most important configuration for an agent. It defines the agent's personality, capabilities, constraints, and output format. You can set it inline or load it from a file:
+Configure the agent's identity, instructions, and behavior using the `system:` field in YAML or via the Admin Dashboard. The system prompt is the most important configuration for an agent -- it defines the agent's personality, role, capabilities, constraints, and output format. You can set it inline, as a multi-line block, or load it from an external file:
 
 ```yaml
 agents:
