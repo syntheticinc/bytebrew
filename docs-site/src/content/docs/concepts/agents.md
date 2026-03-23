@@ -79,11 +79,11 @@ agents:
 
 Each agent can be configured with a unique combination of capabilities:
 
-- **Built-in tools** -- `web_search`, `knowledge_search`, `manage_tasks`, `ask_user`.
-- **Custom HTTP tools** -- declarative API calls defined in YAML (see [Tools docs](/docs/concepts/tools/)).
-- **MCP servers** -- external tools via Model Context Protocol.
-- **Knowledge base (RAG)** -- auto-indexed document folder for grounded responses.
-- **Sub-agent spawning** -- ability to create and delegate to other agents.
+- **Built-in tools** -- `web_search`, `knowledge_search`, `manage_tasks`, `ask_user`, and more (see [Tools docs](/docs/concepts/tools/)).
+- **Custom HTTP tools** -- declarative API calls defined in YAML with `type: http` (see [Tools docs](/docs/concepts/tools/)).
+- **MCP servers** -- connect external APIs via Model Context Protocol (stdio or SSE transport).
+- **Knowledge base (RAG)** -- auto-indexed document folder for grounded responses (`.md` and `.txt` files).
+- **Sub-agent spawning** -- ability to create and delegate to other agents via `can_spawn`.
 
 ---
 

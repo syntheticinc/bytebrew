@@ -490,7 +490,8 @@ func (s *Server) parseSSEResponse(r io.Reader) (string, error) {
 			data := strings.TrimPrefix(line, "data: ")
 
 			switch eventType {
-			case "message_delta", "message":
+			case "message_delta":
+				// Only collect streaming deltas — skip "message" (full duplicate)
 				var payload struct {
 					Content string `json:"content"`
 				}
