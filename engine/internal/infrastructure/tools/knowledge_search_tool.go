@@ -16,6 +16,7 @@ import (
 // KnowledgeSearcher performs vector similarity search on knowledge chunks.
 type KnowledgeSearcher interface {
 	SearchSimilar(ctx context.Context, agentName string, embedding pgvector.Vector, limit int) ([]models.KnowledgeChunk, error)
+	SearchByKeyword(ctx context.Context, agentName string, keyword string, limit int) ([]models.KnowledgeChunk, error)
 }
 
 // KnowledgeEmbedder generates embeddings for search queries.
@@ -98,11 +99,34 @@ func (t *KnowledgeSearchTool) InvokableRun(ctx context.Context, argumentsInJSON 
 		return fmt.Sprintf("[ERROR] Failed to embed query: %v", err), nil
 	}
 
-	// Search similar chunks
+	// Hybrid search: vector similarity + keyword fallback
 	chunks, err := t.repo.SearchSimilar(ctx, t.agentName, pgvector.NewVector(embedding), args.Limit)
 	if err != nil {
 		slog.ErrorContext(ctx, "[KnowledgeSearchTool] search failed", "error", err)
 		return fmt.Sprintf("[ERROR] Search failed: %v", err), nil
+	}
+
+	// Hybrid: merge keyword results to catch terms that embedding misses
+	// Extract significant words from query for keyword search
+	queryWords := strings.Fields(args.Query)
+	for _, word := range queryWords {
+		if len(word) < 4 {
+			continue // skip short words (the, how, for, etc.)
+		}
+		kwChunks, kwErr := t.repo.SearchByKeyword(ctx, t.agentName, word, 3)
+		if kwErr != nil || len(kwChunks) == 0 {
+			continue
+		}
+		seen := make(map[string]bool, len(chunks))
+		for _, c := range chunks {
+			seen[c.ID] = true
+		}
+		for _, c := range kwChunks {
+			if !seen[c.ID] {
+				chunks = append(chunks, c)
+				seen[c.ID] = true
+			}
+		}
 	}
 
 	if len(chunks) == 0 {

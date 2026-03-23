@@ -99,6 +99,19 @@ func (r *GORMKnowledgeRepository) SearchSimilar(ctx context.Context, agentName s
 	return chunks, nil
 }
 
+// SearchByKeyword finds chunks containing the keyword in their content (case-insensitive).
+func (r *GORMKnowledgeRepository) SearchByKeyword(ctx context.Context, agentName string, keyword string, limit int) ([]models.KnowledgeChunk, error) {
+	var chunks []models.KnowledgeChunk
+	err := r.db.WithContext(ctx).
+		Where("agent_name = ? AND content ILIKE ?", agentName, "%"+keyword+"%").
+		Limit(limit).
+		Find(&chunks).Error
+	if err != nil {
+		return nil, fmt.Errorf("search by keyword: %w", err)
+	}
+	return chunks, nil
+}
+
 // GetStats returns document count, chunk count, and last indexed time for an agent.
 func (r *GORMKnowledgeRepository) GetStats(ctx context.Context, agentName string) (docCount int, chunkCount int, lastIndexed *time.Time, err error) {
 	var dc int64

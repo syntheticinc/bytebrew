@@ -1,12 +1,11 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	_ "github.com/lib/pq"
 )
 
 // ---------------------------------------------------------------------------
@@ -43,7 +43,7 @@ type rpcError struct {
 }
 
 // ---------------------------------------------------------------------------
-// MCP tool definitions
+// MCP Tool definitions
 // ---------------------------------------------------------------------------
 
 var tools = []map[string]interface{}{
@@ -68,18 +68,20 @@ var tools = []map[string]interface{}{
 // ---------------------------------------------------------------------------
 
 type Config struct {
-	Port       string
-	EngineURL  string
-	EngineUser string
-	EnginePass string
+	Port        string
+	DatabaseURL string
+	OllamaURL   string
+	EmbedModel  string
+	AgentName   string
 }
 
 func loadConfig() Config {
 	return Config{
-		Port:       envOr("PORT", "8090"),
-		EngineURL:  envOr("ENGINE_URL", "http://localhost:8443"),
-		EngineUser: envOr("ENGINE_USER", "admin"),
-		EnginePass: envOr("ENGINE_PASS", "changeme"),
+		Port:        envOr("PORT", "8090"),
+		DatabaseURL: envOr("DATABASE_URL", "postgres://bytebrew:bytebrew@localhost:5432/bytebrew?sslmode=disable"),
+		OllamaURL:   envOr("OLLAMA_URL", "http://localhost:11434"),
+		EmbedModel:  envOr("EMBED_MODEL", "nomic-embed-text"),
+		AgentName:   envOr("AGENT_NAME", "docs-assistant"),
 	}
 }
 
@@ -91,7 +93,7 @@ func envOr(key, fallback string) string {
 }
 
 // ---------------------------------------------------------------------------
-// SSE session
+// SSE Session
 // ---------------------------------------------------------------------------
 
 type sseSession struct {
@@ -105,23 +107,35 @@ type sseSession struct {
 // ---------------------------------------------------------------------------
 
 type Server struct {
-	cfg         Config
-	engineToken string
-	tokenMu     sync.Mutex
-	mu          sync.Mutex
-	sessions    map[string]*sseSession
+	cfg      Config
+	db       *sql.DB
+	mu       sync.Mutex
+	sessions map[string]*sseSession
 }
 
-func NewServer(cfg Config) *Server {
+func NewServer(cfg Config) (*Server, error) {
+	db, err := sql.Open("postgres", cfg.DatabaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("open db: %w", err)
+	}
+	if err := db.Ping(); err != nil {
+		return nil, fmt.Errorf("ping db: %w", err)
+	}
 	return &Server{
 		cfg:      cfg,
+		db:       db,
 		sessions: make(map[string]*sseSession),
-	}
+	}, nil
 }
 
 // ---------------------------------------------------------------------------
-// HTTP handlers
+// HTTP Handlers
 // ---------------------------------------------------------------------------
+
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"status":"ok"}`))
+}
 
 func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
@@ -150,20 +164,15 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	// Send endpoint event.
 	fmt.Fprintf(w, "event: endpoint\ndata: /messages?sessionId=%s\n\n", sess.id)
 	flusher.Flush()
-
-	log.Printf("[sse] session %s connected", sess.id)
 
 	ctx := r.Context()
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("[sse] session %s disconnected", sess.id)
 			return
 		case msg, ok := <-sess.messages:
 			if !ok {
@@ -186,334 +195,266 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sessionID := r.URL.Query().Get("sessionId")
-	if sessionID == "" {
-		http.Error(w, "sessionId required", http.StatusBadRequest)
-		return
-	}
-
 	s.mu.Lock()
-	sess, ok := s.sessions[sessionID]
+	sess, exists := s.sessions[sessionID]
 	s.mu.Unlock()
-	if !ok {
+
+	if !exists {
 		http.Error(w, "session not found", http.StatusNotFound)
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "read body failed", http.StatusBadRequest)
-		return
-	}
-
 	var req jsonRPCRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		http.Error(w, "invalid JSON-RPC", http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
 
-	log.Printf("[rpc] session=%s method=%s id=%v", sessionID, req.Method, req.ID)
-
-	// Notifications have no ID and don't expect a response.
+	// Notifications (no ID) — no response needed
 	if req.ID == nil {
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
 
-	resp := s.handleRPC(r.Context(), &req)
+	var resp jsonRPCResponse
+	resp.JSONRPC = "2.0"
+	resp.ID = req.ID
 
-	data, err := json.Marshal(resp)
-	if err != nil {
-		log.Printf("[rpc] marshal error: %v", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
+	switch req.Method {
+	case "initialize":
+		resp.Result = map[string]interface{}{
+			"protocolVersion": "2024-11-05",
+			"capabilities":   map[string]interface{}{"tools": map[string]interface{}{}},
+			"serverInfo":     map[string]interface{}{"name": "bytebrew-docs", "version": "1.0.0"},
+		}
+	case "tools/list":
+		resp.Result = map[string]interface{}{"tools": tools}
+	case "tools/call":
+		result := s.handleToolCall(r.Context(), req.Params)
+		resp.Result = result
+	default:
+		resp.Error = &rpcError{Code: -32601, Message: "method not found: " + req.Method}
 	}
 
+	data, _ := json.Marshal(resp)
 	select {
 	case sess.messages <- data:
 	default:
-		log.Printf("[rpc] session %s buffer full, dropping response", sessionID)
+		log.Printf("session %s: message channel full, dropping", sessionID)
 	}
-
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	_, _ = w.Write([]byte(`{"status":"ok"}`))
-}
-
-// ---------------------------------------------------------------------------
-// JSON-RPC dispatch
-// ---------------------------------------------------------------------------
-
-func (s *Server) handleRPC(ctx context.Context, req *jsonRPCRequest) *jsonRPCResponse {
-	switch req.Method {
-	case "initialize":
-		return s.handleInitialize(req)
-	case "tools/list":
-		return s.handleToolsList(req)
-	case "tools/call":
-		return s.handleToolsCall(ctx, req)
-	default:
-		return &jsonRPCResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-			Error:   &rpcError{Code: -32601, Message: fmt.Sprintf("method not found: %s", req.Method)},
-		}
-	}
-}
-
-func (s *Server) handleInitialize(req *jsonRPCRequest) *jsonRPCResponse {
-	return &jsonRPCResponse{
-		JSONRPC: "2.0",
-		ID:      req.ID,
-		Result: map[string]interface{}{
-			"protocolVersion": "2024-11-05",
-			"capabilities": map[string]interface{}{
-				"tools": map[string]interface{}{},
-			},
-			"serverInfo": map[string]interface{}{
-				"name":    "bytebrew-docs",
-				"version": "1.0.0",
-			},
-		},
-	}
-}
-
-func (s *Server) handleToolsList(req *jsonRPCRequest) *jsonRPCResponse {
-	return &jsonRPCResponse{
-		JSONRPC: "2.0",
-		ID:      req.ID,
-		Result: map[string]interface{}{
-			"tools": tools,
-		},
-	}
-}
-
-func (s *Server) handleToolsCall(ctx context.Context, req *jsonRPCRequest) *jsonRPCResponse {
-	var params struct {
+func (s *Server) handleToolCall(ctx context.Context, params json.RawMessage) interface{} {
+	var p struct {
 		Name      string          `json:"name"`
 		Arguments json.RawMessage `json:"arguments"`
 	}
-	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return &jsonRPCResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-			Error:   &rpcError{Code: -32602, Message: "invalid params"},
+	if err := json.Unmarshal(params, &p); err != nil {
+		return map[string]interface{}{
+			"content": []map[string]interface{}{
+				{"type": "text", "text": fmt.Sprintf("error: %v", err)},
+			},
 		}
 	}
 
-	if params.Name != "search_docs" {
-		return &jsonRPCResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-			Error:   &rpcError{Code: -32602, Message: fmt.Sprintf("unknown tool: %s", params.Name)},
+	if p.Name != "search_docs" {
+		return map[string]interface{}{
+			"content": []map[string]interface{}{
+				{"type": "text", "text": "unknown tool: " + p.Name},
+			},
 		}
 	}
 
 	var args struct {
 		Query string `json:"query"`
 	}
-	if err := json.Unmarshal(params.Arguments, &args); err != nil {
-		return &jsonRPCResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-			Error:   &rpcError{Code: -32602, Message: "invalid arguments"},
-		}
-	}
+	json.Unmarshal(p.Arguments, &args)
 
-	if args.Query == "" {
-		return &jsonRPCResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-			Error:   &rpcError{Code: -32602, Message: "query is required"},
-		}
-	}
-
-	result, err := s.queryEngine(ctx, args.Query)
+	result, err := s.searchDocs(ctx, args.Query)
 	if err != nil {
-		log.Printf("[engine] query error: %v", err)
-		return &jsonRPCResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-			Result: map[string]interface{}{
-				"content": []map[string]interface{}{
-					{"type": "text", "text": fmt.Sprintf("Error querying docs: %v", err)},
-				},
+		return map[string]interface{}{
+			"content": []map[string]interface{}{
+				{"type": "text", "text": fmt.Sprintf("search error: %v", err)},
 			},
 		}
 	}
 
-	return &jsonRPCResponse{
-		JSONRPC: "2.0",
-		ID:      req.ID,
-		Result: map[string]interface{}{
-			"content": []map[string]interface{}{
-				{"type": "text", "text": result},
-			},
+	return map[string]interface{}{
+		"content": []map[string]interface{}{
+			{"type": "text", "text": result},
 		},
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Engine integration
+// Direct RAG search (no LLM — embedding + vector + keyword)
 // ---------------------------------------------------------------------------
 
-func (s *Server) login(ctx context.Context) (string, error) {
-	body, err := json.Marshal(map[string]string{
-		"username": s.cfg.EngineUser,
-		"password": s.cfg.EnginePass,
-	})
+func (s *Server) searchDocs(ctx context.Context, query string) (string, error) {
+	if query == "" {
+		return "Please provide a search query.", nil
+	}
+
+	// 1. Get embedding from Ollama
+	embedding, err := s.embed(ctx, query)
 	if err != nil {
-		return "", fmt.Errorf("marshal login: %w", err)
+		return "", fmt.Errorf("embed query: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		s.cfg.EngineURL+"/api/v1/auth/login", bytes.NewReader(body))
+	// 2. Vector search
+	vectorResults, err := s.vectorSearch(ctx, embedding, 10)
 	if err != nil {
-		return "", fmt.Errorf("create login request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("login request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("login failed (%d): %s", resp.StatusCode, string(b))
+		return "", fmt.Errorf("vector search: %w", err)
 	}
 
-	var loginResp struct {
-		Token string `json:"token"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&loginResp); err != nil {
-		return "", fmt.Errorf("decode login response: %w", err)
-	}
-	return loginResp.Token, nil
-}
-
-func (s *Server) getToken(ctx context.Context) (string, error) {
-	s.tokenMu.Lock()
-	defer s.tokenMu.Unlock()
-
-	if s.engineToken != "" {
-		return s.engineToken, nil
-	}
-
-	token, err := s.login(ctx)
-	if err != nil {
-		return "", err
-	}
-	s.engineToken = token
-	return token, nil
-}
-
-func (s *Server) queryEngine(ctx context.Context, query string) (string, error) {
-	token, err := s.getToken(ctx)
-	if err != nil {
-		return "", fmt.Errorf("get token: %w", err)
-	}
-
-	result, err := s.doChat(ctx, token, query)
-	if err != nil {
-		// Token may have expired — retry with fresh login.
-		s.tokenMu.Lock()
-		s.engineToken = ""
-		s.tokenMu.Unlock()
-
-		token, loginErr := s.getToken(ctx)
-		if loginErr != nil {
-			return "", fmt.Errorf("re-login: %w", loginErr)
+	// 3. Keyword search (hybrid)
+	words := strings.Fields(query)
+	var keywordResults []searchResult
+	for _, word := range words {
+		if len(word) < 4 {
+			continue
 		}
-		result, err = s.doChat(ctx, token, query)
+		kw, err := s.keywordSearch(ctx, word, 3)
 		if err != nil {
-			return "", fmt.Errorf("chat after re-login: %w", err)
+			continue
+		}
+		keywordResults = append(keywordResults, kw...)
+	}
+
+	// 4. Merge and deduplicate
+	seen := make(map[string]bool)
+	var merged []searchResult
+	for _, r := range vectorResults {
+		if !seen[r.id] {
+			seen[r.id] = true
+			merged = append(merged, r)
 		}
 	}
-	return result, nil
+	for _, r := range keywordResults {
+		if !seen[r.id] {
+			seen[r.id] = true
+			merged = append(merged, r)
+		}
+	}
+
+	if len(merged) == 0 {
+		return "No results found in the documentation for: \"" + query + "\". Try different search terms.", nil
+	}
+
+	// 5. Format results
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("## Documentation search results for \"%s\"\n\n", query))
+	limit := 10
+	if len(merged) < limit {
+		limit = len(merged)
+	}
+	for i := 0; i < limit; i++ {
+		r := merged[i]
+		sb.WriteString(fmt.Sprintf("### Result %d (Source: %s)\n", i+1, r.source))
+		sb.WriteString(r.content)
+		sb.WriteString("\n\n")
+	}
+	return sb.String(), nil
 }
 
-func (s *Server) doChat(ctx context.Context, token, query string) (string, error) {
+type searchResult struct {
+	id      string
+	content string
+	source  string
+}
+
+func (s *Server) embed(ctx context.Context, text string) ([]float32, error) {
 	body, err := json.Marshal(map[string]interface{}{
-		"message": query,
-		"stream":  true,
+		"model": s.cfg.EmbedModel,
+		"input": text,
 	})
 	if err != nil {
-		return "", fmt.Errorf("marshal chat: %w", err)
+		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		s.cfg.EngineURL+"/api/v1/agents/docs-assistant/chat", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.OllamaURL+"/api/embed", bytes.NewReader(body))
 	if err != nil {
-		return "", fmt.Errorf("create chat request: %w", err)
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("chat request: %w", err)
+		return nil, fmt.Errorf("ollama request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusUnauthorized {
-		return "", fmt.Errorf("unauthorized")
-	}
 	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("chat failed (%d): %s", resp.StatusCode, string(b))
+		return nil, fmt.Errorf("ollama returned %d", resp.StatusCode)
 	}
 
-	return s.parseSSEResponse(resp.Body)
+	var result struct {
+		Embeddings [][]float32 `json:"embeddings"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode ollama response: %w", err)
+	}
+	if len(result.Embeddings) == 0 || len(result.Embeddings[0]) == 0 {
+		return nil, fmt.Errorf("empty embedding")
+	}
+	return result.Embeddings[0], nil
 }
 
-func (s *Server) parseSSEResponse(r io.Reader) (string, error) {
-	scanner := bufio.NewScanner(r)
-	var (
-		content   strings.Builder
-		eventType string
-	)
+func (s *Server) vectorSearch(ctx context.Context, embedding []float32, limit int) ([]searchResult, error) {
+	// Format embedding as pgvector literal: [0.1,0.2,...]
+	parts := make([]string, len(embedding))
+	for i, v := range embedding {
+		parts[i] = fmt.Sprintf("%f", v)
+	}
+	vecStr := "[" + strings.Join(parts, ",") + "]"
 
-	for scanner.Scan() {
-		line := scanner.Text()
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT c.id, c.content, COALESCE(d.file_name, c.agent_name) as source
+		 FROM knowledge_chunks c
+		 LEFT JOIN knowledge_documents d ON c.document_id = d.id
+		 WHERE c.agent_name = $1
+		 ORDER BY c.embedding <=> $2::vector
+		 LIMIT $3`,
+		s.cfg.AgentName, vecStr, limit)
+	if err != nil {
+		return nil, fmt.Errorf("vector query: %w", err)
+	}
+	defer rows.Close()
 
-		if strings.HasPrefix(line, "event: ") {
-			eventType = strings.TrimPrefix(line, "event: ")
+	var results []searchResult
+	for rows.Next() {
+		var r searchResult
+		if err := rows.Scan(&r.id, &r.content, &r.source); err != nil {
 			continue
 		}
+		results = append(results, r)
+	}
+	return results, nil
+}
 
-		if strings.HasPrefix(line, "data: ") {
-			data := strings.TrimPrefix(line, "data: ")
+func (s *Server) keywordSearch(ctx context.Context, keyword string, limit int) ([]searchResult, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT c.id, c.content, COALESCE(d.file_name, c.agent_name) as source
+		 FROM knowledge_chunks c
+		 LEFT JOIN knowledge_documents d ON c.document_id = d.id
+		 WHERE c.agent_name = $1 AND c.content ILIKE '%' || $2 || '%'
+		 LIMIT $3`,
+		s.cfg.AgentName, keyword, limit)
+	if err != nil {
+		return nil, fmt.Errorf("keyword query: %w", err)
+	}
+	defer rows.Close()
 
-			switch eventType {
-			case "message_delta":
-				// Only collect streaming deltas — skip "message" (full duplicate)
-				var payload struct {
-					Content string `json:"content"`
-				}
-				if err := json.Unmarshal([]byte(data), &payload); err == nil && payload.Content != "" {
-					content.WriteString(payload.Content)
-				}
-			case "done":
-				// Stream finished.
-			}
-			eventType = ""
+	var results []searchResult
+	for rows.Next() {
+		var r searchResult
+		if err := rows.Scan(&r.id, &r.content, &r.source); err != nil {
 			continue
 		}
+		results = append(results, r)
 	}
-
-	if err := scanner.Err(); err != nil {
-		return content.String(), fmt.Errorf("scan sse: %w", err)
-	}
-
-	if content.Len() == 0 {
-		return "(no response from docs-assistant)", nil
-	}
-	return content.String(), nil
+	return results, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -522,41 +463,36 @@ func (s *Server) parseSSEResponse(r io.Reader) (string, error) {
 
 func main() {
 	cfg := loadConfig()
-	srv := NewServer(cfg)
+
+	srv, err := NewServer(cfg)
+	if err != nil {
+		log.Fatalf("create server: %v", err)
+	}
+	defer srv.db.Close()
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/health", srv.handleHealth)
 	mux.HandleFunc("/sse", srv.handleSSE)
 	mux.HandleFunc("/messages", srv.handleMessages)
-	mux.HandleFunc("/health", srv.handleHealth)
 
 	httpSrv := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      mux,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 0, // SSE needs no write timeout
-		IdleTimeout:  120 * time.Second,
+		Addr:    ":" + cfg.Port,
+		Handler: mux,
 	}
 
-	// Graceful shutdown.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	go func() {
-		log.Printf("[server] listening on :%s", cfg.Port)
-		log.Printf("[server] engine: %s, agent: docs-assistant", cfg.EngineURL)
-		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("[server] listen error: %v", err)
-		}
-	}()
-
-	<-ctx.Done()
-	log.Println("[server] shutting down...")
-
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	if err := httpSrv.Shutdown(shutdownCtx); err != nil {
-		log.Printf("[server] shutdown error: %v", err)
+	go func() {
+		<-ctx.Done()
+		log.Println("shutting down...")
+		shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutCancel()
+		httpSrv.Shutdown(shutCtx)
+	}()
+
+	log.Printf("MCP docs server starting on :%s (direct RAG, no LLM)", cfg.Port)
+	if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("server error: %v", err)
 	}
-	log.Println("[server] stopped")
 }
