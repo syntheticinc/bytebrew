@@ -127,20 +127,35 @@ claude mcp add bytebrew-docs --transport sse https://mcp.bytebrew.ai/sse
 
 ### OpenAI Codex
 
-Add to `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.bytebrew-docs]
-url = "https://mcp.bytebrew.ai/sse"
+```bash
+codex mcp add bytebrew-docs https://mcp.bytebrew.ai/sse
 ```
 
 ### Other MCP clients
 
-Use the SSE endpoint `https://mcp.bytebrew.ai/sse` with your MCP-compatible client.
+SSE endpoint: `https://mcp.bytebrew.ai/sse` -- use with Cursor, Windsurf, or any MCP-compatible client.
 
 :::tip
 After connecting, ask questions like "How do I configure multi-agent spawn?" or "What SSE event types does the chat API return?" -- your assistant will search our documentation automatically.
 :::
+
+---
+
+## Try a complete example
+
+Want to see a fully configured agent with MCP tools, knowledge base, and multi-agent spawn?
+
+```bash
+git clone https://github.com/syntheticinc/bytebrew-examples
+cd bytebrew-examples/hr-assistant
+cp .env.example .env  # add your LLM API key
+docker compose up -d
+# Open http://localhost:3000 — chat with the HR assistant
+```
+
+Each example includes a Web Client, Admin Dashboard, MCP tool server, and pre-configured agents -- ready to use in 30 seconds.
+
+See all examples: [HR Assistant](/docs/examples/hr-assistant/) | [Support Agent](/docs/examples/support-agent/) | [Sales Agent](/docs/examples/sales-agent/)
 
 ---
 
