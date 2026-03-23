@@ -735,14 +735,22 @@ function MCPDocsSection() {
         </div>
 
         {/* Code block */}
-        {tab.prefix ? (
-          <TerminalBlock command={tab.code} />
-        ) : (
-          <div className="relative rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5 overflow-x-auto">
-            <pre className="font-mono text-sm text-brand-shade2 leading-relaxed whitespace-pre">
-              {tab.code}
-            </pre>
+        {activeTab === 'other' ? (
+          <div className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-6 text-center">
+            <p className="text-sm text-brand-shade3 mb-3">SSE Endpoint</p>
+            <div className="flex items-center justify-center gap-3">
+              <code className="text-lg font-mono text-brand-accent">https://mcp.bytebrew.ai/sse</code>
+              <button
+                onClick={() => navigator.clipboard.writeText('https://mcp.bytebrew.ai/sse')}
+                className="rounded-[6px] border border-brand-shade3/20 px-3 py-1 text-xs text-brand-shade2 hover:text-brand-light hover:border-brand-shade3/40 transition-colors"
+              >
+                Copy
+              </button>
+            </div>
+            <p className="text-xs text-brand-shade3 mt-3">Use this URL with any MCP-compatible client (Cursor, Windsurf, etc.)</p>
           </div>
+        ) : (
+          <TerminalBlock command={tab.code} />
         )}
 
         <p className="mt-6 text-center text-sm text-brand-shade3">
