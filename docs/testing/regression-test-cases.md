@@ -1385,9 +1385,27 @@
 **Шаги:** В Claude Code с подключённым MCP: "How do I add a new agent with web_search tool?"
 **Ожидание:** Ответ ссылается на правильную документацию, содержит рабочий YAML пример
 
+### TC-MCP-06: Landing page — MCP section visible
+**Шаги:** Открыть https://bytebrew.ai, скроллить до секции "AI-Native Documentation"
+**Ожидание:** 3 таба (Claude Code, Codex, Other), код для подключения, переключалка работает
+
+### TC-MCP-07: Docs — MCP instructions in Quick Start
+**Шаги:** Открыть https://bytebrew.ai/docs/getting-started/quick-start/
+**Ожидание:** Секция "Connect your AI assistant" с инструкциями для Claude Code, Codex, Other
+
+### TC-MCP-08: Claude Code add command works
+**Шаги:** `claude mcp add bytebrew-docs --transport sse https://mcp.bytebrew.ai/sse`
+**Ожидание:** MCP сервер добавлен, `search_docs` tool доступен
+
+### TC-MCP-09: Codex config works
+**Предусловие:** Codex CLI установлен
+**Шаги:** Добавить `[mcp_servers.bytebrew-docs] url = "https://mcp.bytebrew.ai/sse"` в `~/.codex/config.toml`
+**Ожидание:** Codex может вызвать search_docs tool
+**Примечание:** НЕ ТЕСТИРОВАНО — добавлено на основании документации Codex, требует ручной проверки
+
 ---
 
-## Итого: 111 TC
+## Итого: 115 TC
 
 | Категория | Кол-во | Покрытие |
 |-----------|--------|----------|
@@ -1400,7 +1418,7 @@
 | TC-CLOUD | 11 | /examples/, auth popup, dashboard links |
 | TC-EXAMPLE | 12 | Агентное поведение (MCP tools, RAG, rate limit, web-client) |
 | TC-AUTH | 10 | Email verification, Google auth |
-| TC-MCP | 5 | MCP docs server (functional + quality) |
+| TC-MCP | 9 | MCP docs server (functional + quality + integration) |
 | **ВСЕГО** | **111** |
 
 ### Примечания

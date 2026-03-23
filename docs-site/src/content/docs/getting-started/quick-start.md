@@ -115,6 +115,35 @@ Navigate to `http://localhost:8443/admin` in your browser. Log in with the defau
 
 ---
 
+## Connect your AI assistant
+
+ByteBrew provides an MCP server with full documentation search. Connect it to your AI coding assistant for instant answers.
+
+### Claude Code
+
+```bash
+claude mcp add bytebrew-docs --transport sse https://mcp.bytebrew.ai/sse
+```
+
+### OpenAI Codex
+
+Add to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.bytebrew-docs]
+url = "https://mcp.bytebrew.ai/sse"
+```
+
+### Other MCP clients
+
+Use the SSE endpoint `https://mcp.bytebrew.ai/sse` with your MCP-compatible client.
+
+:::tip
+After connecting, ask questions like "How do I configure multi-agent spawn?" or "What SSE event types does the chat API return?" -- your assistant will search our documentation automatically.
+:::
+
+---
+
 ## What's next
 
 - [Configuration Reference](/docs/getting-started/configuration/)

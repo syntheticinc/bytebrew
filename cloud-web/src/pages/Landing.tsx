@@ -25,6 +25,7 @@ export function LandingPage() {
       <ProductShowcaseSection onImageClick={setLightboxSrc} />
       <UseCasesSection />
       <ComparisonSection />
+      <MCPDocsSection />
       <InstallSection />
       <PricingSection />
       <FreeForeverBanner />
@@ -677,7 +678,91 @@ function ComparisonSection() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  8. Install / Quick Start                                           */
+/*  8a. MCP Docs                                                       */
+/* ------------------------------------------------------------------ */
+
+const MCP_TABS = [
+  { key: 'claude' as const, label: 'Claude Code' },
+  { key: 'codex' as const, label: 'Codex' },
+  { key: 'other' as const, label: 'Other' },
+] as const;
+
+const MCP_CODE: Record<'claude' | 'codex' | 'other', { code: string; prefix?: string }> = {
+  claude: {
+    code: 'claude mcp add bytebrew-docs --transport sse https://mcp.bytebrew.ai/sse',
+    prefix: '$',
+  },
+  codex: {
+    code: `# ~/.codex/config.toml
+[mcp_servers.bytebrew-docs]
+url = "https://mcp.bytebrew.ai/sse"`,
+  },
+  other: {
+    code: `{
+  "mcpServers": {
+    "bytebrew-docs": {
+      "type": "sse",
+      "url": "https://mcp.bytebrew.ai/sse"
+    }
+  }
+}`,
+  },
+};
+
+function MCPDocsSection() {
+  const [activeTab, setActiveTab] = useState<'claude' | 'codex' | 'other'>('claude');
+  const tab = MCP_CODE[activeTab];
+
+  return (
+    <section className="py-20 px-4 border-t border-brand-shade3/15 bg-brand-dark">
+      <div className="max-w-3xl mx-auto">
+        <h2 className="text-3xl font-bold text-center text-brand-light mb-2">
+          AI-Native Documentation
+        </h2>
+        <p className="text-center text-brand-shade3 mb-10 max-w-2xl mx-auto">
+          Connect your AI coding assistant to ByteBrew docs. Get accurate answers about
+          configuration, API, deployment, and more &mdash; powered by RAG over our documentation.
+        </p>
+
+        {/* Tabs */}
+        <div className="flex items-center justify-center gap-2 mb-6">
+          {MCP_TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              className={`rounded-[8px] px-5 py-2 text-sm font-medium transition-colors ${
+                activeTab === t.key
+                  ? 'bg-brand-accent text-white'
+                  : 'bg-brand-dark-alt text-brand-shade2 hover:text-brand-light'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Code block */}
+        {tab.prefix ? (
+          <TerminalBlock command={tab.code} />
+        ) : (
+          <div className="relative rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5 overflow-x-auto">
+            <pre className="font-mono text-sm text-brand-shade2 leading-relaxed whitespace-pre">
+              {tab.code}
+            </pre>
+          </div>
+        )}
+
+        <p className="mt-6 text-center text-sm text-brand-shade3">
+          After connecting, ask your AI assistant about ByteBrew &mdash; it will search our
+          documentation automatically.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  8b. Install / Quick Start                                          */
 /* ------------------------------------------------------------------ */
 
 function InstallSection() {
