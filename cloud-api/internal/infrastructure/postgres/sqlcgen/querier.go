@@ -14,10 +14,10 @@ type Querier interface {
 	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (TeamMember, error)
 	ClearPasswordResetToken(ctx context.Context, id pgtype.UUID) error
 	CountTeamMembers(ctx context.Context, teamID pgtype.UUID) (int64, error)
+	CreateGoogleUser(ctx context.Context, arg CreateGoogleUserParams) (CreateGoogleUserRow, error)
 	CreateSubscription(ctx context.Context, arg CreateSubscriptionParams) (CreateSubscriptionRow, error)
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error)
 	CreateTeamInvite(ctx context.Context, arg CreateTeamInviteParams) (TeamInvite, error)
-	CreateGoogleUser(ctx context.Context, arg CreateGoogleUserParams) (CreateGoogleUserRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	DeleteUserByID(ctx context.Context, id pgtype.UUID) error
 	GetStripeCustomerByUserID(ctx context.Context, userID pgtype.UUID) (StripeCustomer, error)
@@ -29,17 +29,20 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
 	GetUserByGoogleID(ctx context.Context, googleID pgtype.Text) (GetUserByGoogleIDRow, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (GetUserByIDRow, error)
-	GetUserByResetToken(ctx context.Context, passwordResetToken pgtype.Text) (User, error)
+	GetUserByResetToken(ctx context.Context, passwordResetToken pgtype.Text) (GetUserByResetTokenRow, error)
+	GetUserByVerificationToken(ctx context.Context, verificationToken pgtype.Text) (GetUserByVerificationTokenRow, error)
 	GetUserIDByStripeCustomerID(ctx context.Context, customerID string) (pgtype.UUID, error)
 	IncrementProxySteps(ctx context.Context, userID pgtype.UUID) error
 	InsertProcessedEvent(ctx context.Context, arg InsertProcessedEventParams) error
-	LinkGoogleID(ctx context.Context, arg LinkGoogleIDParams) error
 	IsEventProcessed(ctx context.Context, eventID string) (bool, error)
+	LinkGoogleID(ctx context.Context, arg LinkGoogleIDParams) error
 	ListPendingInvites(ctx context.Context, teamID pgtype.UUID) ([]TeamInvite, error)
 	ListTeamMembers(ctx context.Context, teamID pgtype.UUID) ([]ListTeamMembersRow, error)
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) error
 	ResetProxyStepsUsed(ctx context.Context, userID pgtype.UUID) error
+	SetEmailVerified(ctx context.Context, id pgtype.UUID) error
 	SetPasswordResetToken(ctx context.Context, arg SetPasswordResetTokenParams) error
+	SetVerificationToken(ctx context.Context, arg SetVerificationTokenParams) error
 	UpdateInviteStatus(ctx context.Context, arg UpdateInviteStatusParams) error
 	UpdatePasswordAndClearResetToken(ctx context.Context, arg UpdatePasswordAndClearResetTokenParams) error
 	UpdateStripeSubscriptionID(ctx context.Context, arg UpdateStripeSubscriptionIDParams) error

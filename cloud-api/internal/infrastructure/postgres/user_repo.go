@@ -28,7 +28,7 @@ func NewUserRepository(db sqlcgen.DBTX) *UserRepository {
 func (r *UserRepository) Create(ctx context.Context, user *domain.User) (*domain.User, error) {
 	row, err := r.queries.CreateUser(ctx, sqlcgen.CreateUserParams{
 		Email:        user.Email,
-		PasswordHash: user.PasswordHash,
+		PasswordHash: pgtype.Text{String: user.PasswordHash, Valid: true},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
@@ -72,7 +72,7 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, userID, newHash str
 	}
 	if err := r.queries.UpdateUserPassword(ctx, sqlcgen.UpdateUserPasswordParams{
 		ID:           uid,
-		PasswordHash: newHash,
+		PasswordHash: pgtype.Text{String: newHash, Valid: true},
 	}); err != nil {
 		return fmt.Errorf("update password: %w", err)
 	}
@@ -116,7 +116,7 @@ func (r *UserRepository) GetByResetToken(ctx context.Context, token string) (*do
 		}
 		return nil, fmt.Errorf("get user by reset token: %w", err)
 	}
-	return mapUser(row), nil
+	return mapGetUserByResetTokenRow(row), nil
 }
 
 // ClearResetToken removes the password reset token for a user.
@@ -139,7 +139,7 @@ func (r *UserRepository) UpdatePasswordAndClearResetToken(ctx context.Context, u
 	}
 	if err := r.queries.UpdatePasswordAndClearResetToken(ctx, sqlcgen.UpdatePasswordAndClearResetTokenParams{
 		ID:           uid,
-		PasswordHash: newHash,
+		PasswordHash: pgtype.Text{String: newHash, Valid: true},
 	}); err != nil {
 		return fmt.Errorf("update password and clear token: %w", err)
 	}
@@ -185,34 +185,84 @@ func (r *UserRepository) LinkGoogleID(ctx context.Context, userID, googleID stri
 	return nil
 }
 
+// SetVerificationToken stores an email verification token with an expiration time.
+func (r *UserRepository) SetVerificationToken(ctx context.Context, userID, token string, expiresAt time.Time) error {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return fmt.Errorf("parse user ID: %w", err)
+	}
+	if err := r.queries.SetVerificationToken(ctx, sqlcgen.SetVerificationTokenParams{
+		ID:                    uid,
+		VerificationToken:     pgtype.Text{String: token, Valid: true},
+		VerificationExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
+	}); err != nil {
+		return fmt.Errorf("set verification token: %w", err)
+	}
+	return nil
+}
+
+// GetByVerificationToken returns a user by a valid (non-expired) verification token, or nil if not found.
+func (r *UserRepository) GetByVerificationToken(ctx context.Context, token string) (*domain.User, error) {
+	row, err := r.queries.GetUserByVerificationToken(ctx, pgtype.Text{String: token, Valid: true})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get user by verification token: %w", err)
+	}
+	return mapGetUserByVerificationTokenRow(row), nil
+}
+
+// SetEmailVerified marks a user's email as verified and clears the verification token.
+func (r *UserRepository) SetEmailVerified(ctx context.Context, userID string) error {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return fmt.Errorf("parse user ID: %w", err)
+	}
+	if err := r.queries.SetEmailVerified(ctx, uid); err != nil {
+		return fmt.Errorf("set email verified: %w", err)
+	}
+	return nil
+}
+
+// textToString converts pgtype.Text to string (returns empty string if NULL).
+func textToString(t pgtype.Text) string {
+	if !t.Valid {
+		return ""
+	}
+	return t.String
+}
+
 // mapGetUserByGoogleIDRow maps GetUserByGoogleIDRow to domain.User.
 func mapGetUserByGoogleIDRow(row sqlcgen.GetUserByGoogleIDRow) *domain.User {
 	return &domain.User{
-		ID:           uuidToString(row.ID),
-		Email:        row.Email,
-		PasswordHash: row.PasswordHash,
-		GoogleID:     textToStringPtr(row.GoogleID),
-		CreatedAt:    timestamptzToTimeValue(row.CreatedAt),
+		ID:            uuidToString(row.ID),
+		Email:         row.Email,
+		PasswordHash:  textToString(row.PasswordHash),
+		GoogleID:      textToStringPtr(row.GoogleID),
+		EmailVerified: row.EmailVerified,
+		CreatedAt:     timestamptzToTimeValue(row.CreatedAt),
 	}
 }
 
 // mapCreateGoogleUserRow maps CreateGoogleUserRow to domain.User.
 func mapCreateGoogleUserRow(row sqlcgen.CreateGoogleUserRow) *domain.User {
 	return &domain.User{
-		ID:           uuidToString(row.ID),
-		Email:        row.Email,
-		PasswordHash: row.PasswordHash,
-		GoogleID:     textToStringPtr(row.GoogleID),
-		CreatedAt:    timestamptzToTimeValue(row.CreatedAt),
+		ID:            uuidToString(row.ID),
+		Email:         row.Email,
+		PasswordHash:  textToString(row.PasswordHash),
+		GoogleID:      textToStringPtr(row.GoogleID),
+		EmailVerified: row.EmailVerified,
+		CreatedAt:     timestamptzToTimeValue(row.CreatedAt),
 	}
 }
 
-// mapUser maps a full sqlcgen.User (with reset fields) to domain.User.
-func mapUser(row sqlcgen.User) *domain.User {
+// mapGetUserByResetTokenRow maps GetUserByResetTokenRow to domain.User.
+func mapGetUserByResetTokenRow(row sqlcgen.GetUserByResetTokenRow) *domain.User {
 	return &domain.User{
 		ID:                   uuidToString(row.ID),
 		Email:                row.Email,
-		PasswordHash:         row.PasswordHash,
+		PasswordHash:         textToString(row.PasswordHash),
 		CreatedAt:            timestamptzToTimeValue(row.CreatedAt),
 		PasswordResetToken:   textToStringPtr(row.PasswordResetToken),
 		PasswordResetExpires: timestamptzToTime(row.PasswordResetExpiresAt),
@@ -222,29 +272,44 @@ func mapUser(row sqlcgen.User) *domain.User {
 // mapCreateUserRow maps CreateUserRow to domain.User.
 func mapCreateUserRow(row sqlcgen.CreateUserRow) *domain.User {
 	return &domain.User{
-		ID:           uuidToString(row.ID),
-		Email:        row.Email,
-		PasswordHash: row.PasswordHash,
-		CreatedAt:    timestamptzToTimeValue(row.CreatedAt),
+		ID:            uuidToString(row.ID),
+		Email:         row.Email,
+		PasswordHash:  textToString(row.PasswordHash),
+		EmailVerified: row.EmailVerified,
+		CreatedAt:     timestamptzToTimeValue(row.CreatedAt),
 	}
 }
 
 // mapGetUserByEmailRow maps GetUserByEmailRow to domain.User.
 func mapGetUserByEmailRow(row sqlcgen.GetUserByEmailRow) *domain.User {
 	return &domain.User{
-		ID:           uuidToString(row.ID),
-		Email:        row.Email,
-		PasswordHash: row.PasswordHash,
-		CreatedAt:    timestamptzToTimeValue(row.CreatedAt),
+		ID:            uuidToString(row.ID),
+		Email:         row.Email,
+		PasswordHash:  textToString(row.PasswordHash),
+		GoogleID:      textToStringPtr(row.GoogleID),
+		EmailVerified: row.EmailVerified,
+		CreatedAt:     timestamptzToTimeValue(row.CreatedAt),
 	}
 }
 
 // mapGetUserByIDRow maps GetUserByIDRow to domain.User.
 func mapGetUserByIDRow(row sqlcgen.GetUserByIDRow) *domain.User {
 	return &domain.User{
-		ID:           uuidToString(row.ID),
-		Email:        row.Email,
-		PasswordHash: row.PasswordHash,
-		CreatedAt:    timestamptzToTimeValue(row.CreatedAt),
+		ID:            uuidToString(row.ID),
+		Email:         row.Email,
+		PasswordHash:  textToString(row.PasswordHash),
+		EmailVerified: row.EmailVerified,
+		CreatedAt:     timestamptzToTimeValue(row.CreatedAt),
+	}
+}
+
+// mapGetUserByVerificationTokenRow maps GetUserByVerificationTokenRow to domain.User.
+func mapGetUserByVerificationTokenRow(row sqlcgen.GetUserByVerificationTokenRow) *domain.User {
+	return &domain.User{
+		ID:            uuidToString(row.ID),
+		Email:         row.Email,
+		PasswordHash:  textToString(row.PasswordHash),
+		EmailVerified: row.EmailVerified,
+		CreatedAt:     timestamptzToTimeValue(row.CreatedAt),
 	}
 }

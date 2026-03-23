@@ -79,6 +79,10 @@ func (u *Usecase) Execute(ctx context.Context, input Input) (*Output, error) {
 		return nil, errors.Unauthorized("invalid credentials")
 	}
 
+	if !user.EmailVerified {
+		return nil, errors.New(errors.CodeEmailNotVerified, "please verify your email before logging in")
+	}
+
 	accessToken, err := u.tokenSigner.SignAccessToken(user.ID, user.Email)
 	if err != nil {
 		return nil, errors.Internal("sign access token", err)

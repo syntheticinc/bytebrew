@@ -66,6 +66,8 @@ func mapCodeToHTTPStatus(code string) int {
 		return http.StatusConflict
 	case errors.CodeUnavailable:
 		return http.StatusServiceUnavailable
+	case errors.CodeEmailNotVerified:
+		return http.StatusForbidden
 	default:
 		return http.StatusInternalServerError
 	}

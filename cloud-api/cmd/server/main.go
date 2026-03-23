@@ -48,7 +48,9 @@ import (
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/refresh_license"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/register"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/remove_member"
+	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/resend_verification"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/reset_password"
+	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/verify_email"
 	"github.com/syntheticinc/bytebrew/cloud-api/migrations"
 	"github.com/syntheticinc/bytebrew/cloud-api/pkg/config"
 )
@@ -129,8 +131,11 @@ func main() {
 	}
 
 	// Usecases
-	registerUC := register.New(userRepo, tokenSigner, passwordHasher)
+	tokenGenerator := crypto.NewSecureTokenGenerator()
+	registerUC := register.New(userRepo, passwordHasher, tokenGenerator, emailSender, cfg.Email.FrontendURL)
 	loginUC := login.New(userRepo, tokenSigner, passwordHasher)
+	verifyEmailUC := verify_email.New(userRepo, userRepo, tokenSigner)
+	resendVerificationUC := resend_verification.New(userRepo, userRepo, tokenGenerator, emailSender, cfg.Email.FrontendURL)
 	refreshAuthUC := refresh_auth.New(&refreshTokenVerifierAdapter{signer: tokenSigner}, tokenSigner, userRepo)
 	activateUC := activate.New(subRepo, licenseSigner, teamRepo)
 	refreshUC := refresh_license.New(subRepo, licenseSigner, licenseVerifier, teamRepo)
@@ -188,14 +193,13 @@ func main() {
 	}
 
 	// Account management
-	tokenGenerator := crypto.NewSecureTokenGenerator()
 	changePasswordUC := change_password.New(userRepo, userRepo, passwordHasher)
 	deleteAccountUC := delete_account.New(userRepo, userRepo, passwordHasher, subRepo, subCanceller)
 	forgotPasswordUC := forgot_password.New(userRepo, userRepo, emailSender, tokenGenerator, cfg.Auth.PasswordResetTTL)
 	resetPasswordUC := reset_password.New(userRepo, userRepo, passwordHasher)
 
 	// Handlers & Router
-	authHandler := httpdelivery.NewAuthHandler(registerUC, loginUC, refreshAuthUC, googleLoginUC)
+	authHandler := httpdelivery.NewAuthHandler(registerUC, loginUC, refreshAuthUC, googleLoginUC, verifyEmailUC, resendVerificationUC)
 	licenseHandler := httpdelivery.NewLicenseHandler(activateUC, refreshUC)
 	teamHandler := httpdelivery.NewTeamHandler(createTeamUC, inviteMemberUC, acceptInviteUC, removeMemberUC, listMembersUC)
 	accountHandler := httpdelivery.NewAccountHandler(changePasswordUC, deleteAccountUC, forgotPasswordUC, resetPasswordUC)
@@ -326,6 +330,7 @@ func (a *checkoutSessionAdapter) CreateCheckoutSession(ctx context.Context, para
 type emailSenderI interface {
 	SendTeamInvite(ctx context.Context, email, teamName, inviteToken string) error
 	SendPasswordReset(ctx context.Context, email, token string) error
+	SendEmailVerification(ctx context.Context, to, verificationURL string) error
 }
 
 // noopSeatUpdater is used when Stripe is not configured.

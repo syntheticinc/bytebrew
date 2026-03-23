@@ -65,6 +65,16 @@ func (r *inMemoryUserRepo) GetByEmail(_ context.Context, email string) (*domain.
 	return r.users[email], nil
 }
 
+func (r *inMemoryUserRepo) SetVerificationToken(_ context.Context, userID, token string, expiresAt time.Time) error {
+	return nil
+}
+
+type noopEmailVerificationSender struct{}
+
+func (n *noopEmailVerificationSender) SendEmailVerification(_ context.Context, to, url string) error {
+	return nil
+}
+
 type inMemorySubRepo struct {
 	mu   sync.Mutex
 	subs map[string]*domain.Subscription // key: userID
@@ -175,6 +185,7 @@ type testEnv struct {
 	publicKey   ed25519.PublicKey
 	tokenSigner *crypto.AuthTokenSigner
 	subCreator  subscriptionCreator
+	userRepo    *inMemoryUserRepoWithGetByID
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -193,13 +204,15 @@ func newTestEnv(t *testing.T) *testEnv {
 	licenseSigner := crypto.NewLicenseSigner(priv)
 	passwordHasher := crypto.NewBcryptHasher(4) // MinCost for speed
 
-	registerUC := register.New(userRepo, tokenSigner, passwordHasher)
+	tokenGen := crypto.NewSecureTokenGenerator()
+	noopEmail := &noopEmailVerificationSender{}
+	registerUC := register.New(userRepo, passwordHasher, tokenGen, noopEmail, "http://localhost:3000")
 	loginUC := login.New(userRepo, tokenSigner, passwordHasher)
 	refreshAuthUC := refresh_auth.New(&refreshTokenVerifierAdapter{signer: tokenSigner}, tokenSigner, userRepo)
 	activateUC := activate.New(subRepo, licenseSigner, nil)
 	refreshUC := refresh_license.New(subRepo, licenseSigner, &licenseVerifierAdapter{publicKey: pub}, nil)
 
-	authHandler := httpdelivery.NewAuthHandler(registerUC, loginUC, refreshAuthUC)
+	authHandler := httpdelivery.NewAuthHandler(registerUC, loginUC, refreshAuthUC, nil, nil, nil)
 	licenseHandler := httpdelivery.NewLicenseHandler(activateUC, refreshUC)
 	router := httpdelivery.NewRouter(httpdelivery.RouterConfig{
 		AuthHandler:    authHandler,
@@ -216,6 +229,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		publicKey:   pub,
 		tokenSigner: tokenSigner,
 		subCreator:  subRepo,
+		userRepo:    userRepo,
 	}
 }
 
@@ -277,6 +291,42 @@ type authResponseData struct {
 	} `json:"data"`
 }
 
+// registerAndVerify registers a user, marks email as verified, and logs in to get tokens.
+func (e *testEnv) registerAndVerify(t *testing.T, email, password string) authResponseData {
+	t.Helper()
+
+	// Register
+	regResp, err := postJSON(e.server.URL+"/api/v1/auth/register", map[string]string{
+		"email":    email,
+		"password": password,
+	})
+	require.NoError(t, err)
+	readBody(t, regResp)
+	require.Equal(t, http.StatusCreated, regResp.StatusCode)
+
+	// Verify email directly in repo
+	e.userRepo.mu.Lock()
+	for _, u := range e.userRepo.users {
+		if u.Email == email {
+			u.EmailVerified = true
+		}
+	}
+	e.userRepo.mu.Unlock()
+
+	// Login to get tokens
+	loginResp, err := postJSON(e.server.URL+"/api/v1/auth/login", map[string]string{
+		"email":    email,
+		"password": password,
+	})
+	require.NoError(t, err)
+	loginBody := readBody(t, loginResp)
+	require.Equal(t, http.StatusOK, loginResp.StatusCode)
+
+	var data authResponseData
+	require.NoError(t, json.Unmarshal(loginBody, &data))
+	return data
+}
+
 type licenseResponseData struct {
 	Data struct {
 		License string `json:"license"`
@@ -317,13 +367,25 @@ func TestRegisterLoginActivate(t *testing.T) {
 	body := readBody(t, regResp)
 	assert.Equal(t, http.StatusCreated, regResp.StatusCode)
 
-	var regData authResponseData
-	require.NoError(t, json.Unmarshal(body, &regData))
-	assert.NotEmpty(t, regData.Data.AccessToken)
-	assert.NotEmpty(t, regData.Data.RefreshToken)
-	assert.NotEmpty(t, regData.Data.UserID)
+	var regResult struct {
+		Data struct {
+			UserID  string `json:"user_id"`
+			Message string `json:"message"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(body, &regResult))
+	assert.NotEmpty(t, regResult.Data.UserID)
 
-	// Step 2: Login with same credentials
+	// Step 2: Manually verify email (simulates clicking verification link)
+	env.userRepo.mu.Lock()
+	for _, u := range env.userRepo.users {
+		if u.Email == email {
+			u.EmailVerified = true
+		}
+	}
+	env.userRepo.mu.Unlock()
+
+	// Step 3: Login with same credentials (now verified)
 	loginResp, err := postJSON(env.server.URL+"/api/v1/auth/login", map[string]string{
 		"email":    email,
 		"password": password,
@@ -335,10 +397,10 @@ func TestRegisterLoginActivate(t *testing.T) {
 	var loginData authResponseData
 	require.NoError(t, json.Unmarshal(loginBody, &loginData))
 	assert.NotEmpty(t, loginData.Data.AccessToken)
-	assert.Equal(t, regData.Data.UserID, loginData.Data.UserID)
+	assert.Equal(t, regResult.Data.UserID, loginData.Data.UserID)
 
 	// Step 3: Create subscription (register no longer creates one)
-	env.createSubscription(t, regData.Data.UserID, domain.TierPersonal)
+	env.createSubscription(t, regResult.Data.UserID, domain.TierPersonal)
 
 	// Step 4: Activate license
 	activateResp, err := postJSON(
@@ -439,17 +501,7 @@ func TestRefreshLicenseUnchanged(t *testing.T) {
 	email := "refresh@example.com"
 	password := "securepassword123"
 
-	// Register
-	regResp, err := postJSON(env.server.URL+"/api/v1/auth/register", map[string]string{
-		"email":    email,
-		"password": password,
-	})
-	require.NoError(t, err)
-	regBody := readBody(t, regResp)
-	require.Equal(t, http.StatusCreated, regResp.StatusCode)
-
-	var regData authResponseData
-	require.NoError(t, json.Unmarshal(regBody, &regData))
+	regData := env.registerAndVerify(t, email, password)
 
 	// Create subscription (register no longer creates one)
 	env.createSubscription(t, regData.Data.UserID, domain.TierPersonal)
@@ -490,17 +542,7 @@ func TestLicenseDownload(t *testing.T) {
 	email := "download@example.com"
 	password := "securepassword123"
 
-	// Register
-	regResp, err := postJSON(env.server.URL+"/api/v1/auth/register", map[string]string{
-		"email":    email,
-		"password": password,
-	})
-	require.NoError(t, err)
-	regBody := readBody(t, regResp)
-	require.Equal(t, http.StatusCreated, regResp.StatusCode)
-
-	var regData authResponseData
-	require.NoError(t, json.Unmarshal(regBody, &regData))
+	regData := env.registerAndVerify(t, email, password)
 
 	// Create subscription (register no longer creates one)
 	env.createSubscription(t, regData.Data.UserID, domain.TierPersonal)
@@ -610,16 +652,7 @@ func TestLicenseStatus(t *testing.T) {
 	password := "securepassword123"
 
 	// Register and get access token
-	regResp, err := postJSON(env.server.URL+"/api/v1/auth/register", map[string]string{
-		"email":    email,
-		"password": password,
-	})
-	require.NoError(t, err)
-	regBody := readBody(t, regResp)
-	require.Equal(t, http.StatusCreated, regResp.StatusCode)
-
-	var regData authResponseData
-	require.NoError(t, json.Unmarshal(regBody, &regData))
+	regData := env.registerAndVerify(t, email, password)
 
 	// Create subscription (register no longer creates one)
 	env.createSubscription(t, regData.Data.UserID, domain.TierPersonal)
@@ -657,16 +690,7 @@ func TestActivateWithoutSubscription(t *testing.T) {
 	env := newTestEnv(t)
 
 	// Register (no subscription created)
-	regResp, err := postJSON(env.server.URL+"/api/v1/auth/register", map[string]string{
-		"email":    "nosub@example.com",
-		"password": "securepassword123",
-	})
-	require.NoError(t, err)
-	regBody := readBody(t, regResp)
-	require.Equal(t, http.StatusCreated, regResp.StatusCode)
-
-	var regData authResponseData
-	require.NoError(t, json.Unmarshal(regBody, &regData))
+	regData := env.registerAndVerify(t, "nosub@example.com", "securepassword123")
 
 	// Activate without subscription should fail
 	activateResp, err := postJSON(
@@ -682,17 +706,7 @@ func TestActivateWithoutSubscription(t *testing.T) {
 func TestInternalErrorDoesNotLeakDetails(t *testing.T) {
 	env := newTestEnv(t)
 
-	// Register
-	regResp, err := postJSON(env.server.URL+"/api/v1/auth/register", map[string]string{
-		"email":    "leak@example.com",
-		"password": "securepassword123",
-	})
-	require.NoError(t, err)
-	regBody := readBody(t, regResp)
-	require.Equal(t, http.StatusCreated, regResp.StatusCode)
-
-	var regData authResponseData
-	require.NoError(t, json.Unmarshal(regBody, &regData))
+	regData := env.registerAndVerify(t, "leak@example.com", "securepassword123")
 
 	// Refresh with invalid license should return UNAUTHORIZED, not internal error details
 	refreshResp, err := postJSON(

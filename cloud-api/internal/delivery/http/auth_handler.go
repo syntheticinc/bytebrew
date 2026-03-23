@@ -7,9 +7,11 @@ import (
 
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/google_login"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/login"
-	"github.com/syntheticinc/bytebrew/cloud-api/pkg/errors"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/refresh_auth"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/register"
+	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/resend_verification"
+	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/verify_email"
+	"github.com/syntheticinc/bytebrew/cloud-api/pkg/errors"
 )
 
 type registerUsecase interface {
@@ -28,21 +30,40 @@ type googleLoginUsecase interface {
 	Execute(ctx context.Context, input google_login.Input) (*google_login.Output, error)
 }
 
+type verifyEmailUsecase interface {
+	Execute(ctx context.Context, input verify_email.Input) (*verify_email.Output, error)
+}
+
+type resendVerificationUsecase interface {
+	Execute(ctx context.Context, input resend_verification.Input) error
+}
+
 // AuthHandler handles authentication endpoints.
 type AuthHandler struct {
-	registerUC    registerUsecase
-	loginUC       loginUsecase
-	refreshAuthUC refreshAuthUsecase
-	googleLoginUC googleLoginUsecase
+	registerUC           registerUsecase
+	loginUC              loginUsecase
+	refreshAuthUC        refreshAuthUsecase
+	googleLoginUC        googleLoginUsecase
+	verifyEmailUC        verifyEmailUsecase
+	resendVerificationUC resendVerificationUsecase
 }
 
 // NewAuthHandler creates a new AuthHandler.
-func NewAuthHandler(registerUC registerUsecase, loginUC loginUsecase, refreshAuthUC refreshAuthUsecase, googleLoginUC googleLoginUsecase) *AuthHandler {
+func NewAuthHandler(
+	registerUC registerUsecase,
+	loginUC loginUsecase,
+	refreshAuthUC refreshAuthUsecase,
+	googleLoginUC googleLoginUsecase,
+	verifyEmailUC verifyEmailUsecase,
+	resendVerificationUC resendVerificationUsecase,
+) *AuthHandler {
 	return &AuthHandler{
-		registerUC:    registerUC,
-		loginUC:       loginUC,
-		refreshAuthUC: refreshAuthUC,
-		googleLoginUC: googleLoginUC,
+		registerUC:           registerUC,
+		loginUC:              loginUC,
+		refreshAuthUC:        refreshAuthUC,
+		googleLoginUC:        googleLoginUC,
+		verifyEmailUC:        verifyEmailUC,
+		resendVerificationUC: resendVerificationUC,
 	}
 }
 
@@ -55,6 +76,11 @@ type authResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	UserID       string `json:"user_id"`
+}
+
+type registerResponse struct {
+	UserID  string `json:"user_id"`
+	Message string `json:"message"`
 }
 
 // Register handles POST /auth/register.
@@ -74,10 +100,9 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	JSON(w, http.StatusCreated, authResponse{
-		AccessToken:  out.AccessToken,
-		RefreshToken: out.RefreshToken,
-		UserID:       out.UserID,
+	JSON(w, http.StatusCreated, registerResponse{
+		UserID:  out.UserID,
+		Message: out.Message,
 	})
 }
 
@@ -163,5 +188,57 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 
 	JSON(w, http.StatusOK, refreshResponse{
 		AccessToken: out.AccessToken,
+	})
+}
+
+type verifyEmailRequest struct {
+	Token string `json:"token"`
+}
+
+// VerifyEmail handles POST /auth/verify-email.
+func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
+	var req verifyEmailRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, invalidBodyError)
+		return
+	}
+
+	out, err := h.verifyEmailUC.Execute(r.Context(), verify_email.Input{
+		Token: req.Token,
+	})
+	if err != nil {
+		Error(w, err)
+		return
+	}
+
+	JSON(w, http.StatusOK, authResponse{
+		AccessToken:  out.AccessToken,
+		RefreshToken: out.RefreshToken,
+		UserID:       out.UserID,
+	})
+}
+
+type resendVerificationRequest struct {
+	Email string `json:"email"`
+}
+
+// ResendVerification handles POST /auth/resend-verification.
+func (h *AuthHandler) ResendVerification(w http.ResponseWriter, r *http.Request) {
+	var req resendVerificationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, invalidBodyError)
+		return
+	}
+
+	err := h.resendVerificationUC.Execute(r.Context(), resend_verification.Input{
+		Email: req.Email,
+	})
+	if err != nil {
+		Error(w, err)
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]string{
+		"message": "if an account exists with this email, a verification link has been sent",
 	})
 }

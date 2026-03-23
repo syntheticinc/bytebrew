@@ -1,20 +1,26 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useAuth } from '../lib/auth';
-import { login as loginApi } from '../api/auth';
+import { login as loginApi, resendVerification } from '../api/auth';
 import { ApiError } from '../api/client';
+import { GoogleSignInButton } from '../components/GoogleSignInButton';
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [emailNotVerified, setEmailNotVerified] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+    setEmailNotVerified(false);
+    setResendMessage('');
     setLoading(true);
 
     try {
@@ -23,13 +29,43 @@ export function LoginPage() {
       navigate({ to: '/dashboard' });
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message);
+        if (err.code === 'EMAIL_NOT_VERIFIED') {
+          setEmailNotVerified(true);
+        } else {
+          setError(err.message);
+        }
       } else {
         setError('An unexpected error occurred');
       }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleResend = async () => {
+    setResendLoading(true);
+    setResendMessage('');
+    try {
+      await resendVerification(email);
+      setResendMessage('Verification email sent!');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setResendMessage(err.message);
+      } else {
+        setResendMessage('Failed to resend. Please try again.');
+      }
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
+  const handleGoogleSuccess = (accessToken: string, refreshToken: string, googleEmail: string) => {
+    login(accessToken, refreshToken, googleEmail);
+    navigate({ to: '/dashboard' });
+  };
+
+  const handleGoogleError = (errorMessage: string) => {
+    setError(errorMessage);
   };
 
   return (
@@ -40,10 +76,41 @@ export function LoginPage() {
           Sign in to your ByteBrew account
         </p>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+        <div className="mt-8">
+          <GoogleSignInButton
+            onSuccess={handleGoogleSuccess}
+            onError={handleGoogleError}
+            text="signin_with"
+          />
+        </div>
+
+        <div className="mt-4 flex items-center gap-3">
+          <div className="h-px flex-1 bg-brand-shade3/30" />
+          <span className="text-xs text-brand-shade3">or</span>
+          <div className="h-px flex-1 bg-brand-shade3/30" />
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           {error && (
             <div className="rounded-[10px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
               {error}
+            </div>
+          )}
+
+          {emailNotVerified && (
+            <div className="rounded-[10px] bg-amber-500/10 border border-amber-500/20 p-3 text-sm text-amber-400">
+              <p>Please verify your email before signing in.</p>
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resendLoading}
+                className="mt-1 text-brand-accent hover:text-brand-accent-hover transition-colors disabled:opacity-50"
+              >
+                {resendLoading ? 'Sending...' : 'Resend verification email'}
+              </button>
+              {resendMessage && (
+                <p className="mt-1 text-xs text-brand-shade2">{resendMessage}</p>
+              )}
             </div>
           )}
 

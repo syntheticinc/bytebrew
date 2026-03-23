@@ -12,6 +12,7 @@ type User struct {
 	Email                string
 	PasswordHash         string
 	GoogleID             *string
+	EmailVerified        bool
 	CreatedAt            time.Time
 	PasswordResetToken   *string
 	PasswordResetExpires *time.Time

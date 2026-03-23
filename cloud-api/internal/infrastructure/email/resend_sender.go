@@ -62,6 +62,21 @@ func (s *ResendSender) SendPasswordReset(ctx context.Context, email, token strin
 	return s.send(ctx, email, subject, html)
 }
 
+// SendEmailVerification sends an email verification email with a link.
+func (s *ResendSender) SendEmailVerification(ctx context.Context, to, verificationURL string) error {
+	subject := "Verify your email — ByteBrew"
+	html := fmt.Sprintf(`
+<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+  <h2>Verify Your Email</h2>
+  <p>Thanks for signing up! Please verify your email address by clicking the button below:</p>
+  <a href="%s" style="display: inline-block; padding: 12px 24px; background: #4F46E5; color: white; text-decoration: none; border-radius: 6px;">Verify Email</a>
+  <p style="color: #666; font-size: 12px; margin-top: 16px;">This link expires in 24 hours. If you didn't create an account, you can safely ignore this email.</p>
+</div>
+`, verificationURL)
+
+	return s.send(ctx, to, subject, html)
+}
+
 type resendRequest struct {
 	From    string   `json:"from"`
 	To      []string `json:"to"`
@@ -128,6 +143,15 @@ func (s *NoopSender) SendPasswordReset(ctx context.Context, email, token string)
 	slog.InfoContext(ctx, "password reset email (noop)",
 		"to", email,
 		"token", token,
+	)
+	return nil
+}
+
+// SendEmailVerification logs the verification instead of sending an email.
+func (s *NoopSender) SendEmailVerification(ctx context.Context, to, verificationURL string) error {
+	slog.InfoContext(ctx, "email verification (noop)",
+		"to", to,
+		"url", verificationURL,
 	)
 	return nil
 }

@@ -16,7 +16,8 @@ const (
 	CodeTimeout          = "TIMEOUT"
 	CodeUnavailable      = "UNAVAILABLE"
 	CodePermissionDenied = "PERMISSION_DENIED"
-	CodeCancelled        = "CANCELLED"
+	CodeCancelled         = "CANCELLED"
+	CodeEmailNotVerified  = "EMAIL_NOT_VERIFIED"
 )
 
 // DomainError represents a domain-specific error with code and context

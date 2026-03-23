@@ -25,6 +25,7 @@ type UserRepository interface {
 	GetByEmail(ctx context.Context, email string) (*domain.User, error)
 	CreateGoogleUser(ctx context.Context, email, googleID string) (*domain.User, error)
 	LinkGoogleID(ctx context.Context, userID, googleID string) error
+	SetEmailVerified(ctx context.Context, userID string) error
 }
 
 // AuthTokenSigner signs authentication tokens.
@@ -83,6 +84,11 @@ func (u *Usecase) Execute(ctx context.Context, input Input) (*Output, error) {
 		return nil, errors.Internal("get user by google id", err)
 	}
 	if user != nil {
+		if !user.EmailVerified {
+			if err := u.userRepo.SetEmailVerified(ctx, user.ID); err != nil {
+				return nil, errors.Internal("set email verified", err)
+			}
+		}
 		return u.signTokens(user)
 	}
 
@@ -94,6 +100,11 @@ func (u *Usecase) Execute(ctx context.Context, input Input) (*Output, error) {
 	if user != nil {
 		if err := u.userRepo.LinkGoogleID(ctx, user.ID, claims.Sub); err != nil {
 			return nil, errors.Internal("link google id", err)
+		}
+		if !user.EmailVerified {
+			if err := u.userRepo.SetEmailVerified(ctx, user.ID); err != nil {
+				return nil, errors.Internal("set email verified", err)
+			}
 		}
 		slog.InfoContext(ctx, "linked google account to existing user", "user_id", user.ID, "email", claims.Email)
 		return u.signTokens(user)

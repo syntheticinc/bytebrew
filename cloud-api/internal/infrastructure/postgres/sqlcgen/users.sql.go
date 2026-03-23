@@ -22,22 +22,57 @@ func (q *Queries) ClearPasswordResetToken(ctx context.Context, id pgtype.UUID) e
 	return err
 }
 
+const createGoogleUser = `-- name: CreateGoogleUser :one
+INSERT INTO users (email, password_hash, google_id, email_verified)
+VALUES ($1, '', $2, true)
+RETURNING id, email, password_hash, google_id, email_verified, created_at
+`
+
+type CreateGoogleUserParams struct {
+	Email    string      `json:"email"`
+	GoogleID pgtype.Text `json:"google_id"`
+}
+
+type CreateGoogleUserRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	Email         string             `json:"email"`
+	PasswordHash  pgtype.Text        `json:"password_hash"`
+	GoogleID      pgtype.Text        `json:"google_id"`
+	EmailVerified bool               `json:"email_verified"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) CreateGoogleUser(ctx context.Context, arg CreateGoogleUserParams) (CreateGoogleUserRow, error) {
+	row := q.db.QueryRow(ctx, createGoogleUser, arg.Email, arg.GoogleID)
+	var i CreateGoogleUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.GoogleID,
+		&i.EmailVerified,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, password_hash)
 VALUES ($1, $2)
-RETURNING id, email, password_hash, created_at
+RETURNING id, email, password_hash, email_verified, created_at
 `
 
 type CreateUserParams struct {
-	Email        string `json:"email"`
-	PasswordHash string `json:"password_hash"`
+	Email        string      `json:"email"`
+	PasswordHash pgtype.Text `json:"password_hash"`
 }
 
 type CreateUserRow struct {
-	ID           pgtype.UUID        `json:"id"`
-	Email        string             `json:"email"`
-	PasswordHash string             `json:"password_hash"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ID            pgtype.UUID        `json:"id"`
+	Email         string             `json:"email"`
+	PasswordHash  pgtype.Text        `json:"password_hash"`
+	EmailVerified bool               `json:"email_verified"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
@@ -47,6 +82,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		&i.ID,
 		&i.Email,
 		&i.PasswordHash,
+		&i.EmailVerified,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -62,16 +98,18 @@ func (q *Queries) DeleteUserByID(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, created_at
+SELECT id, email, password_hash, google_id, email_verified, created_at
 FROM users
 WHERE email = $1
 `
 
 type GetUserByEmailRow struct {
-	ID           pgtype.UUID        `json:"id"`
-	Email        string             `json:"email"`
-	PasswordHash string             `json:"password_hash"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ID            pgtype.UUID        `json:"id"`
+	Email         string             `json:"email"`
+	PasswordHash  pgtype.Text        `json:"password_hash"`
+	GoogleID      pgtype.Text        `json:"google_id"`
+	EmailVerified bool               `json:"email_verified"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
@@ -81,22 +119,54 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.ID,
 		&i.Email,
 		&i.PasswordHash,
+		&i.GoogleID,
+		&i.EmailVerified,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getUserByGoogleID = `-- name: GetUserByGoogleID :one
+SELECT id, email, password_hash, google_id, email_verified, created_at
+FROM users
+WHERE google_id = $1
+`
+
+type GetUserByGoogleIDRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	Email         string             `json:"email"`
+	PasswordHash  pgtype.Text        `json:"password_hash"`
+	GoogleID      pgtype.Text        `json:"google_id"`
+	EmailVerified bool               `json:"email_verified"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetUserByGoogleID(ctx context.Context, googleID pgtype.Text) (GetUserByGoogleIDRow, error) {
+	row := q.db.QueryRow(ctx, getUserByGoogleID, googleID)
+	var i GetUserByGoogleIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.GoogleID,
+		&i.EmailVerified,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, password_hash, created_at
+SELECT id, email, password_hash, email_verified, created_at
 FROM users
 WHERE id = $1
 `
 
 type GetUserByIDRow struct {
-	ID           pgtype.UUID        `json:"id"`
-	Email        string             `json:"email"`
-	PasswordHash string             `json:"password_hash"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ID            pgtype.UUID        `json:"id"`
+	Email         string             `json:"email"`
+	PasswordHash  pgtype.Text        `json:"password_hash"`
+	EmailVerified bool               `json:"email_verified"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (GetUserByIDRow, error) {
@@ -106,6 +176,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (GetUserByIDR
 		&i.ID,
 		&i.Email,
 		&i.PasswordHash,
+		&i.EmailVerified,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -118,9 +189,18 @@ WHERE password_reset_token = $1
   AND password_reset_expires_at > NOW()
 `
 
-func (q *Queries) GetUserByResetToken(ctx context.Context, passwordResetToken pgtype.Text) (User, error) {
+type GetUserByResetTokenRow struct {
+	ID                     pgtype.UUID        `json:"id"`
+	Email                  string             `json:"email"`
+	PasswordHash           pgtype.Text        `json:"password_hash"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	PasswordResetToken     pgtype.Text        `json:"password_reset_token"`
+	PasswordResetExpiresAt pgtype.Timestamptz `json:"password_reset_expires_at"`
+}
+
+func (q *Queries) GetUserByResetToken(ctx context.Context, passwordResetToken pgtype.Text) (GetUserByResetTokenRow, error) {
 	row := q.db.QueryRow(ctx, getUserByResetToken, passwordResetToken)
-	var i User
+	var i GetUserByResetTokenRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
@@ -130,6 +210,59 @@ func (q *Queries) GetUserByResetToken(ctx context.Context, passwordResetToken pg
 		&i.PasswordResetExpiresAt,
 	)
 	return i, err
+}
+
+const getUserByVerificationToken = `-- name: GetUserByVerificationToken :one
+SELECT id, email, password_hash, email_verified, created_at
+FROM users
+WHERE verification_token = $1
+  AND verification_expires_at > NOW()
+`
+
+type GetUserByVerificationTokenRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	Email         string             `json:"email"`
+	PasswordHash  pgtype.Text        `json:"password_hash"`
+	EmailVerified bool               `json:"email_verified"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetUserByVerificationToken(ctx context.Context, verificationToken pgtype.Text) (GetUserByVerificationTokenRow, error) {
+	row := q.db.QueryRow(ctx, getUserByVerificationToken, verificationToken)
+	var i GetUserByVerificationTokenRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.EmailVerified,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const linkGoogleID = `-- name: LinkGoogleID :exec
+UPDATE users SET google_id = $2 WHERE id = $1
+`
+
+type LinkGoogleIDParams struct {
+	ID       pgtype.UUID `json:"id"`
+	GoogleID pgtype.Text `json:"google_id"`
+}
+
+func (q *Queries) LinkGoogleID(ctx context.Context, arg LinkGoogleIDParams) error {
+	_, err := q.db.Exec(ctx, linkGoogleID, arg.ID, arg.GoogleID)
+	return err
+}
+
+const setEmailVerified = `-- name: SetEmailVerified :exec
+UPDATE users
+SET email_verified = true, verification_token = NULL, verification_expires_at = NULL
+WHERE id = $1
+`
+
+func (q *Queries) SetEmailVerified(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, setEmailVerified, id)
+	return err
 }
 
 const setPasswordResetToken = `-- name: SetPasswordResetToken :exec
@@ -149,6 +282,23 @@ func (q *Queries) SetPasswordResetToken(ctx context.Context, arg SetPasswordRese
 	return err
 }
 
+const setVerificationToken = `-- name: SetVerificationToken :exec
+UPDATE users
+SET verification_token = $2, verification_expires_at = $3
+WHERE id = $1
+`
+
+type SetVerificationTokenParams struct {
+	ID                    pgtype.UUID        `json:"id"`
+	VerificationToken     pgtype.Text        `json:"verification_token"`
+	VerificationExpiresAt pgtype.Timestamptz `json:"verification_expires_at"`
+}
+
+func (q *Queries) SetVerificationToken(ctx context.Context, arg SetVerificationTokenParams) error {
+	_, err := q.db.Exec(ctx, setVerificationToken, arg.ID, arg.VerificationToken, arg.VerificationExpiresAt)
+	return err
+}
+
 const updatePasswordAndClearResetToken = `-- name: UpdatePasswordAndClearResetToken :exec
 UPDATE users
 SET password_hash = $2, password_reset_token = NULL, password_reset_expires_at = NULL
@@ -157,7 +307,7 @@ WHERE id = $1
 
 type UpdatePasswordAndClearResetTokenParams struct {
 	ID           pgtype.UUID `json:"id"`
-	PasswordHash string      `json:"password_hash"`
+	PasswordHash pgtype.Text `json:"password_hash"`
 }
 
 func (q *Queries) UpdatePasswordAndClearResetToken(ctx context.Context, arg UpdatePasswordAndClearResetTokenParams) error {
@@ -171,83 +321,10 @@ UPDATE users SET password_hash = $2 WHERE id = $1
 
 type UpdateUserPasswordParams struct {
 	ID           pgtype.UUID `json:"id"`
-	PasswordHash string      `json:"password_hash"`
+	PasswordHash pgtype.Text `json:"password_hash"`
 }
 
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
 	_, err := q.db.Exec(ctx, updateUserPassword, arg.ID, arg.PasswordHash)
-	return err
-}
-
-const getUserByGoogleID = `-- name: GetUserByGoogleID :one
-SELECT id, email, password_hash, google_id, created_at
-FROM users
-WHERE google_id = $1
-`
-
-type GetUserByGoogleIDRow struct {
-	ID           pgtype.UUID        `json:"id"`
-	Email        string             `json:"email"`
-	PasswordHash string             `json:"password_hash"`
-	GoogleID     pgtype.Text        `json:"google_id"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-}
-
-func (q *Queries) GetUserByGoogleID(ctx context.Context, googleID pgtype.Text) (GetUserByGoogleIDRow, error) {
-	row := q.db.QueryRow(ctx, getUserByGoogleID, googleID)
-	var i GetUserByGoogleIDRow
-	err := row.Scan(
-		&i.ID,
-		&i.Email,
-		&i.PasswordHash,
-		&i.GoogleID,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const createGoogleUser = `-- name: CreateGoogleUser :one
-INSERT INTO users (email, password_hash, google_id)
-VALUES ($1, '', $2)
-RETURNING id, email, password_hash, google_id, created_at
-`
-
-type CreateGoogleUserParams struct {
-	Email    string      `json:"email"`
-	GoogleID pgtype.Text `json:"google_id"`
-}
-
-type CreateGoogleUserRow struct {
-	ID           pgtype.UUID        `json:"id"`
-	Email        string             `json:"email"`
-	PasswordHash string             `json:"password_hash"`
-	GoogleID     pgtype.Text        `json:"google_id"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-}
-
-func (q *Queries) CreateGoogleUser(ctx context.Context, arg CreateGoogleUserParams) (CreateGoogleUserRow, error) {
-	row := q.db.QueryRow(ctx, createGoogleUser, arg.Email, arg.GoogleID)
-	var i CreateGoogleUserRow
-	err := row.Scan(
-		&i.ID,
-		&i.Email,
-		&i.PasswordHash,
-		&i.GoogleID,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const linkGoogleID = `-- name: LinkGoogleID :exec
-UPDATE users SET google_id = $2 WHERE id = $1
-`
-
-type LinkGoogleIDParams struct {
-	ID       pgtype.UUID `json:"id"`
-	GoogleID pgtype.Text `json:"google_id"`
-}
-
-func (q *Queries) LinkGoogleID(ctx context.Context, arg LinkGoogleIDParams) error {
-	_, err := q.db.Exec(ctx, linkGoogleID, arg.ID, arg.GoogleID)
 	return err
 }

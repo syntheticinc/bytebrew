@@ -25,9 +25,10 @@ func (m *mockUserReader) GetByEmail(ctx context.Context, email string) (*domain.
 
 func (m *mockUserReader) addUser(email, password string) {
 	m.users[email] = &domain.User{
-		ID:           "user-123",
-		Email:        email,
-		PasswordHash: "hashed-" + password,
+		ID:            "user-123",
+		Email:         email,
+		PasswordHash:  "hashed-" + password,
+		EmailVerified: true,
 	}
 }
 

@@ -60,3 +60,23 @@ export async function resetPassword(token: string, newPassword: string): Promise
     new_password: newPassword,
   });
 }
+
+export async function verifyEmail(token: string): Promise<AuthResponse> {
+  return api.request<AuthResponse>('POST', '/api/v1/auth/verify-email', { token });
+}
+
+export async function resendVerification(email: string): Promise<{ message: string }> {
+  return api.request<{ message: string }>('POST', '/api/v1/auth/resend-verification', { email });
+}
+
+interface RegisterResponse {
+  user_id: string;
+  message: string;
+}
+
+export async function registerWithVerification(email: string, password: string): Promise<RegisterResponse> {
+  return api.request<RegisterResponse>('POST', '/api/v1/auth/register', {
+    email,
+    password,
+  });
+}

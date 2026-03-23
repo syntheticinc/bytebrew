@@ -2,6 +2,7 @@ package register
 
 import (
 	"context"
+	"time"
 
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/domain"
 	"github.com/syntheticinc/bytebrew/cloud-api/pkg/errors"
@@ -13,17 +14,22 @@ import (
 type UserRepository interface {
 	Create(ctx context.Context, user *domain.User) (*domain.User, error)
 	GetByEmail(ctx context.Context, email string) (*domain.User, error)
-}
-
-// AuthTokenSigner signs authentication tokens for newly registered users.
-type AuthTokenSigner interface {
-	SignAccessToken(userID, email string) (string, error)
-	SignRefreshToken(userID string) (string, error)
+	SetVerificationToken(ctx context.Context, userID, token string, expiresAt time.Time) error
 }
 
 // PasswordHasher hashes passwords.
 type PasswordHasher interface {
 	Hash(password string) (string, error)
+}
+
+// TokenGenerator generates cryptographically secure tokens.
+type TokenGenerator interface {
+	Generate() (string, error)
+}
+
+// EmailVerificationSender sends email verification emails.
+type EmailVerificationSender interface {
+	SendEmailVerification(ctx context.Context, to, verificationURL string) error
 }
 
 // Input is the register request.
@@ -34,29 +40,38 @@ type Input struct {
 
 // Output is the register response.
 type Output struct {
-	AccessToken  string
-	RefreshToken string
-	UserID       string
+	UserID  string
+	Message string
 }
 
 // Usecase handles user registration.
 type Usecase struct {
 	userRepo       UserRepository
-	tokenSigner    AuthTokenSigner
 	passwordHasher PasswordHasher
+	tokenGen       TokenGenerator
+	emailSender    EmailVerificationSender
+	frontendURL    string
 }
 
 // New creates a new Register usecase.
-func New(userRepo UserRepository, tokenSigner AuthTokenSigner, passwordHasher PasswordHasher) *Usecase {
+func New(
+	userRepo UserRepository,
+	passwordHasher PasswordHasher,
+	tokenGen TokenGenerator,
+	emailSender EmailVerificationSender,
+	frontendURL string,
+) *Usecase {
 	return &Usecase{
 		userRepo:       userRepo,
-		tokenSigner:    tokenSigner,
 		passwordHasher: passwordHasher,
+		tokenGen:       tokenGen,
+		emailSender:    emailSender,
+		frontendURL:    frontendURL,
 	}
 }
 
-// Execute registers a new user and returns auth tokens.
-// No subscription is created — user must start Trial via Stripe.
+// Execute registers a new user and sends a verification email.
+// No tokens are returned until the email is verified.
 func (u *Usecase) Execute(ctx context.Context, input Input) (*Output, error) {
 	if input.Email == "" {
 		return nil, errors.InvalidInput("email is required")
@@ -88,19 +103,23 @@ func (u *Usecase) Execute(ctx context.Context, input Input) (*Output, error) {
 		return nil, errors.Internal("create user", err)
 	}
 
-	accessToken, err := u.tokenSigner.SignAccessToken(created.ID, created.Email)
+	token, err := u.tokenGen.Generate()
 	if err != nil {
-		return nil, errors.Internal("sign access token", err)
+		return nil, errors.Internal("generate verification token", err)
 	}
 
-	refreshToken, err := u.tokenSigner.SignRefreshToken(created.ID)
-	if err != nil {
-		return nil, errors.Internal("sign refresh token", err)
+	expiresAt := time.Now().Add(24 * time.Hour)
+	if err := u.userRepo.SetVerificationToken(ctx, created.ID, token, expiresAt); err != nil {
+		return nil, errors.Internal("save verification token", err)
+	}
+
+	verificationURL := u.frontendURL + "/verify-email?token=" + token
+	if err := u.emailSender.SendEmailVerification(ctx, created.Email, verificationURL); err != nil {
+		return nil, errors.Internal("send verification email", err)
 	}
 
 	return &Output{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		UserID:       created.ID,
+		UserID:  created.ID,
+		Message: "registration successful, please check your email to verify your account",
 	}, nil
 }

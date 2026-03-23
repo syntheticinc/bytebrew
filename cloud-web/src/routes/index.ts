@@ -21,6 +21,7 @@ import { PrivacyPage } from '../pages/Privacy';
 import { DocsPage } from '../pages/Docs';
 import { ExamplesPage } from '../pages/Examples';
 import { ExampleDemoPage } from '../pages/ExampleDemo';
+import { VerifyEmailPage } from '../pages/VerifyEmail';
 
 const rootRoute = createRootRoute({
   component: RootLayout,
@@ -134,6 +135,12 @@ const exampleDemoRoute = createRoute({
   component: ExampleDemoPage,
 });
 
+const verifyEmailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/verify-email',
+  component: VerifyEmailPage,
+});
+
 export const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -153,4 +160,5 @@ export const routeTree = rootRoute.addChildren([
   docsRoute,
   examplesRoute,
   exampleDemoRoute,
+  verifyEmailRoute,
 ]);

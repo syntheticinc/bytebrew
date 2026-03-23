@@ -68,6 +68,8 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 		r.Post("/auth/login", cfg.AuthHandler.Login)
 		r.Post("/auth/refresh", cfg.AuthHandler.RefreshToken)
 		r.Post("/auth/google", cfg.AuthHandler.GoogleLogin)
+		r.Post("/auth/verify-email", cfg.AuthHandler.VerifyEmail)
+		r.Post("/auth/resend-verification", cfg.AuthHandler.ResendVerification)
 
 		// Account public routes (no auth required)
 		if cfg.AccountHandler != nil {

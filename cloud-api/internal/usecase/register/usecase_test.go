@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/domain"
 	"github.com/syntheticinc/bytebrew/cloud-api/pkg/errors"
@@ -38,23 +39,8 @@ func (m *mockUserRepo) GetByEmail(ctx context.Context, email string) (*domain.Us
 	return m.users[email], nil
 }
 
-type mockTokenSigner struct {
-	accessErr  error
-	refreshErr error
-}
-
-func (m *mockTokenSigner) SignAccessToken(userID, email string) (string, error) {
-	if m.accessErr != nil {
-		return "", m.accessErr
-	}
-	return "access-" + userID, nil
-}
-
-func (m *mockTokenSigner) SignRefreshToken(userID string) (string, error) {
-	if m.refreshErr != nil {
-		return "", m.refreshErr
-	}
-	return "refresh-" + userID, nil
+func (m *mockUserRepo) SetVerificationToken(ctx context.Context, userID, token string, expiresAt time.Time) error {
+	return nil
 }
 
 type mockPasswordHasher struct {
@@ -72,26 +58,38 @@ func (m *mockPasswordHasher) Hash(password string) (string, error) {
 	return "hashed-" + password, nil
 }
 
+type mockTokenGenerator struct{}
+
+func (m *mockTokenGenerator) Generate() (string, error) {
+	return "test-verification-token", nil
+}
+
+type mockEmailSender struct {
+	sent bool
+}
+
+func (m *mockEmailSender) SendEmailVerification(ctx context.Context, to, verificationURL string) error {
+	m.sent = true
+	return nil
+}
+
 // --- Tests ---
 
 func TestExecute(t *testing.T) {
 	tests := []struct {
-		name       string
-		input      Input
-		setupRepo  func(*mockUserRepo)
-		accessErr  error
-		refreshErr error
-		hashErr    error
-		wantCode   string
-		wantOut    *Output
+		name      string
+		input     Input
+		setupRepo func(*mockUserRepo)
+		hashErr   error
+		wantCode  string
+		wantOut   *Output
 	}{
 		{
 			name:  "happy path",
 			input: Input{Email: "user@example.com", Password: "securepassword"},
 			wantOut: &Output{
-				AccessToken:  "access-generated-uuid",
-				RefreshToken: "refresh-generated-uuid",
-				UserID:       "generated-uuid",
+				UserID:  "generated-uuid",
+				Message: "registration successful, please check your email to verify your account",
 			},
 		},
 		{
@@ -116,18 +114,6 @@ func TestExecute(t *testing.T) {
 			wantCode: errors.CodeAlreadyExists,
 		},
 		{
-			name:      "access token signing fails",
-			input:     Input{Email: "user@example.com", Password: "securepassword"},
-			accessErr: fmt.Errorf("signing error"),
-			wantCode:  errors.CodeInternal,
-		},
-		{
-			name:       "refresh token signing fails",
-			input:      Input{Email: "user@example.com", Password: "securepassword"},
-			refreshErr: fmt.Errorf("signing error"),
-			wantCode:   errors.CodeInternal,
-		},
-		{
 			name:     "password hashing fails",
 			input:    Input{Email: "user@example.com", Password: "securepassword"},
 			hashErr:  fmt.Errorf("hash error"),
@@ -142,10 +128,13 @@ func TestExecute(t *testing.T) {
 				tt.setupRepo(repo)
 			}
 
+			emailSender := &mockEmailSender{}
 			uc := New(
 				repo,
-				&mockTokenSigner{accessErr: tt.accessErr, refreshErr: tt.refreshErr},
 				&mockPasswordHasher{hashErr: tt.hashErr},
+				&mockTokenGenerator{},
+				emailSender,
+				"https://bytebrew.ai",
 			)
 
 			got, err := uc.Execute(context.Background(), tt.input)
@@ -169,14 +158,14 @@ func TestExecute(t *testing.T) {
 			if got == nil {
 				t.Fatal("expected non-nil output")
 			}
-			if got.AccessToken != tt.wantOut.AccessToken {
-				t.Errorf("AccessToken = %q, want %q", got.AccessToken, tt.wantOut.AccessToken)
-			}
-			if got.RefreshToken != tt.wantOut.RefreshToken {
-				t.Errorf("RefreshToken = %q, want %q", got.RefreshToken, tt.wantOut.RefreshToken)
-			}
 			if got.UserID != tt.wantOut.UserID {
 				t.Errorf("UserID = %q, want %q", got.UserID, tt.wantOut.UserID)
+			}
+			if got.Message != tt.wantOut.Message {
+				t.Errorf("Message = %q, want %q", got.Message, tt.wantOut.Message)
+			}
+			if tt.wantCode == "" && !emailSender.sent {
+				t.Error("expected verification email to be sent")
 			}
 		})
 	}
