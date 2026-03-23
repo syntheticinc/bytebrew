@@ -16,12 +16,39 @@ Tools are the bridge between an agent's reasoning and the outside world. Without
 
 ## Built-in tools
 
-| Tool | Zone | Description |
-|------|------|-------------|
-| `web_search` | Safe | Search the internet for information. Returns relevant web page snippets. |
-| `knowledge_search` | Safe | Search the agent's knowledge base (RAG). Automatically injected when `knowledge:` path is set. |
-| `manage_tasks` | Safe | Create, list, update, and complete tasks. Enables persistent task tracking across sessions. |
-| `ask_user` | Safe | Pause execution and ask the user a question. Useful for clarification or confirmation. |
+### Safe Zone
+
+No side effects. Safe to run without confirmation.
+
+| Tool | Description |
+|------|-------------|
+| `ask_user` | Pause and ask user a question. Useful for clarification or confirmation. |
+| `web_search` | Search the internet for information. Returns relevant web page snippets. |
+| `knowledge_search` | Search the agent's knowledge base (RAG). Automatically injected when `knowledge:` path is set. |
+| `manage_tasks` | Create and manage work tasks. Enables persistent task tracking across sessions. |
+| `manage_subtasks` | Manage subtasks within a parent task. |
+
+### Caution Zone
+
+Operations that access external data or modify reversible state.
+
+| Tool | Description |
+|------|-------------|
+| `web_fetch` | Fetch URL content. |
+| `glob` | Find files matching a pattern. |
+| `grep_search` | Search file contents with regex. |
+| `search_code` | Find code symbols by name. |
+
+### Dangerous Zone
+
+Operations with significant side effects. Consider adding to `confirm_before`.
+
+| Tool | Description |
+|------|-------------|
+| `read_file` | Read any file from the filesystem. |
+| `write_file` | Create or overwrite files. |
+| `edit_file` | Modify file contents. |
+| `execute_command` | Run shell commands. |
 
 ## Declarative HTTP tools
 
@@ -86,6 +113,32 @@ Each agent sees only the tools listed in its configuration. This is a security a
 :::note[Tool names must be unique]
 Tool names are globally unique across your configuration. If you define a custom tool `search` and an MCP server also exposes a tool named `search`, the custom tool takes precedence and the MCP tool is shadowed.
 :::
+
+## Tool Confirmation (`confirm_before`)
+
+Tools listed in `confirm_before` require user approval before execution:
+
+```yaml
+agents:
+  sales-agent:
+    tools:
+      - create_order
+      - web_search
+    confirm_before:
+      - create_order    # Approval required before placing orders
+```
+
+When the agent calls a confirmed tool, execution pauses and a `confirmation` SSE event is sent to the client. The client approves or rejects via the respond endpoint.
+
+## Parallel vs Sequential Execution
+
+```yaml
+agents:
+  technical-agent:
+    tool_execution: parallel    # Run multiple tool calls simultaneously
+```
+
+Default is `sequential`. Use `parallel` when tools are independent (e.g., checking service status + fetching logs at the same time).
 
 ---
 

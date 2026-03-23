@@ -8,7 +8,7 @@ Retrieval-Augmented Generation (RAG) lets agents answer questions based on your 
 ## How it works
 
 - Set `knowledge: "./path/"` in agent config to enable RAG for that agent.
-- The engine auto-indexes all documents in the folder at startup (Markdown, TXT, PDF, HTML).
+- The engine auto-indexes all documents in the folder at startup. Supported formats: `.md` (Markdown) and `.txt` (Plain text).
 - A `knowledge_search` tool is injected automatically when a knowledge path is configured.
 - When the agent calls `knowledge_search`, the engine performs a vector similarity search and returns the most relevant passages.
 - The agent uses these passages to generate grounded, accurate responses.
@@ -19,8 +19,6 @@ Retrieval-Augmented Generation (RAG) lets agents answer questions based on your 
 #   ./docs/support/
 #   |-- faq.md              --> chunked, embedded, indexed
 #   |-- returns-policy.txt  --> chunked, embedded, indexed
-#   |-- product-guide.pdf   --> extracted, chunked, embedded, indexed
-#   |-- setup.html          --> parsed, chunked, embedded, indexed
 #
 #   Agent calls knowledge_search("return policy for electronics")
 #   --> Engine finds the most relevant chunks from returns-policy.txt
@@ -44,7 +42,7 @@ agents:
 ```
 
 :::note[Supported file formats]
-The engine indexes `.md`, `.txt`, `.pdf`, and `.html` files. Place files in the knowledge folder and restart the engine (or trigger a hot-reload) to index them. Sub-folders are included recursively.
+Supported formats: `.md` (Markdown) and `.txt` (Plain text). Other formats (PDF, HTML) are not currently supported. Place files in the knowledge folder and restart the engine (or trigger a hot-reload) to index them. Sub-folders are included recursively.
 :::
 
 ## Per-agent isolation

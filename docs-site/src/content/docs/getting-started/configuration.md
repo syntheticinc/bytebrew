@@ -128,6 +128,52 @@ agents:
       - edit_file               # Require human approval
 ```
 
+## Tool Confirmation (`confirm_before`)
+
+The `confirm_before` list specifies tools that require user approval before execution. When the agent calls a confirmed tool, the engine pauses execution and sends a `confirmation` SSE event to the client. The client then approves or rejects the action.
+
+```yaml
+agents:
+  sales-agent:
+    model: glm-5
+    tools:
+      - web_search
+      - create_order
+      - send_email
+    confirm_before:
+      - create_order     # Pause before placing orders
+      - send_email       # Pause before sending emails
+```
+
+### SSE event flow
+
+1. Agent decides to call `create_order`.
+2. Engine detects the tool is in `confirm_before`.
+3. Engine sends a `confirmation` SSE event with the tool name, input, and a `confirmation_id`.
+4. Client displays the pending action to the user.
+5. User approves or rejects via `POST /api/v1/confirmations/{confirmation_id}`.
+6. If approved, the tool executes and the stream continues.
+7. If rejected, the agent receives the rejection reason and adapts.
+
+```
+event: confirmation
+data: {"tool":"create_order","input":{"customer_id":"cust_123","items":"ProBook x1"},"confirmation_id":"conf_abc"}
+```
+
+```bash
+# Approve
+curl -X POST http://localhost:8443/api/v1/confirmations/conf_abc \
+  -H "Authorization: Bearer bb_your_token" \
+  -H "Content-Type: application/json" \
+  -d '{"action": "approve"}'
+
+# Reject
+curl -X POST http://localhost:8443/api/v1/confirmations/conf_abc \
+  -H "Authorization: Bearer bb_your_token" \
+  -H "Content-Type: application/json" \
+  -d '{"action": "reject", "reason": "Customer changed their mind"}'
+```
+
 ## Environment Variables
 
 ByteBrew supports `${VAR_NAME}` syntax for referencing environment variables anywhere in your YAML configuration. Variables are expanded at engine startup, so the YAML file never contains actual secrets.

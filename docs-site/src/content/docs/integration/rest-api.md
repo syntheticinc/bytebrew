@@ -207,6 +207,42 @@ async function chatWithRetry(message, maxRetries = 3) {
 }
 ```
 
+## JavaScript SSE client example
+
+Do NOT use `EventSource` -- it only supports GET requests. Use `fetch` + `ReadableStream` for POST-based SSE:
+
+```javascript
+const response = await fetch('http://localhost:8443/api/v1/agents/my-agent/chat', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer bb_your_token',
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ message: 'Hello', session_id: null }),
+});
+
+const reader = response.body.getReader();
+const decoder = new TextDecoder();
+let buffer = '';
+
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  buffer += decoder.decode(value, { stream: true });
+  const lines = buffer.split('\n');
+  buffer = lines.pop() || '';
+  let currentEvent = '';
+  for (const line of lines) {
+    if (line.startsWith('event: ')) currentEvent = line.slice(7);
+    if (line.startsWith('data: ')) {
+      const data = JSON.parse(line.slice(6));
+      if (currentEvent === 'message_delta') console.log(data.content);
+      if (currentEvent === 'done') console.log('Session:', data.session_id);
+    }
+  }
+}
+```
+
 ## Rate limiting
 
 The engine enforces rate limits per API token:

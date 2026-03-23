@@ -20,8 +20,8 @@ The `lifecycle` setting is one of the most important decisions you make when con
 
 | Lifecycle | Description |
 |-----------|-------------|
-| `persistent` | Accumulates context across sessions. Remembers previous conversations. Best for: customer-facing agents, personal assistants, support bots. |
-| `spawn` | Fresh context per invocation. No memory between calls. Terminates after completing its task and returns a summary. Best for: sub-agents, one-off research tasks, data processing. |
+| `persistent` | Maintains context within a single session (conversation). Each new session starts fresh -- there is no cross-session memory. Best for: customer-facing agents, personal assistants, support bots. |
+| `spawn` | Single-use agent. Created for a specific task, runs with fresh context, terminates after completing the task, and returns the result to the parent agent. No memory between invocations. Best for: sub-agents, one-off research tasks, data processing. |
 
 ```yaml
 agents:
