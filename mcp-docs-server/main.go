@@ -351,7 +351,12 @@ func (s *Server) searchDocs(ctx context.Context, query string) (string, error) {
 	}
 	for i := 0; i < limit; i++ {
 		r := merged[i]
-		sb.WriteString(fmt.Sprintf("### Result %d (Source: %s)\n", i+1, r.source))
+		docURL := fileNameToURL(r.source)
+		if docURL != "" {
+			sb.WriteString(fmt.Sprintf("### Result %d (Source: [%s](%s))\n", i+1, r.source, docURL))
+		} else {
+			sb.WriteString(fmt.Sprintf("### Result %d (Source: %s)\n", i+1, r.source))
+		}
 		sb.WriteString(r.content)
 		sb.WriteString("\n\n")
 	}
@@ -362,6 +367,40 @@ type searchResult struct {
 	id      string
 	content string
 	source  string
+}
+
+// fileNameToURL maps documentation file names to their public URLs on bytebrew.ai.
+func fileNameToURL(fileName string) string {
+	m := map[string]string{
+		"quick-start.md":     "https://bytebrew.ai/docs/getting-started/quick-start/",
+		"configuration.md":  "https://bytebrew.ai/docs/getting-started/configuration/",
+		"api-reference.md":  "https://bytebrew.ai/docs/getting-started/api-reference/",
+		"agents.md":         "https://bytebrew.ai/docs/concepts/agents/",
+		"multi-agent.md":    "https://bytebrew.ai/docs/concepts/multi-agent/",
+		"tools.md":          "https://bytebrew.ai/docs/concepts/tools/",
+		"tasks.md":          "https://bytebrew.ai/docs/concepts/tasks/",
+		"knowledge.md":      "https://bytebrew.ai/docs/concepts/knowledge/",
+		"triggers.md":       "https://bytebrew.ai/docs/concepts/triggers/",
+		"docker.md":         "https://bytebrew.ai/docs/deployment/docker/",
+		"model-selection.md": "https://bytebrew.ai/docs/deployment/model-selection/",
+		"production.md":     "https://bytebrew.ai/docs/deployment/production/",
+		"rest-api.md":       "https://bytebrew.ai/docs/integration/rest-api/",
+		"byok.md":           "https://bytebrew.ai/docs/integration/byok/",
+		"hr-assistant.md":   "https://bytebrew.ai/docs/examples/hr-assistant/",
+		"support-agent.md":  "https://bytebrew.ai/docs/examples/support-agent/",
+		"sales-agent.md":    "https://bytebrew.ai/docs/examples/sales-agent/",
+		"login.md":          "https://bytebrew.ai/docs/admin/login/",
+		"mcp-servers.md":    "https://bytebrew.ai/docs/admin/mcp-servers/",
+		"models.md":         "https://bytebrew.ai/docs/admin/models/",
+		"settings.md":       "https://bytebrew.ai/docs/admin/settings/",
+		"api-keys.md":       "https://bytebrew.ai/docs/admin/api-keys/",
+		"config-management.md": "https://bytebrew.ai/docs/admin/config-management/",
+		"audit-log.md":      "https://bytebrew.ai/docs/admin/audit-log/",
+	}
+	if url, ok := m[fileName]; ok {
+		return url
+	}
+	return ""
 }
 
 func (s *Server) embed(ctx context.Context, text string) ([]float32, error) {
