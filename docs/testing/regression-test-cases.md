@@ -1285,7 +1285,34 @@
 
 ---
 
-## Итого: 91 TC
+### TC-DOC-09: YAML examples valid format
+- Открыть каждую страницу docs с YAML примером
+- **Ожидание:** agents как map (name: key), не list (- name:)
+- **Ожидание:** tools как list строк, не объектов
+- **Ожидание:** mcp_servers type: stdio или sse (не http)
+
+### TC-DOC-10: curl examples work
+- Скопировать каждый curl из Quick Start и API Reference
+- Выполнить на localhost:8443
+- **Ожидание:** каждый curl возвращает описанный результат (или осмысленную ошибку если нет LLM)
+
+### TC-DOC-11: Landing page claims match reality
+- Проверить каждый feature claim на landing page
+- **Ожидание:** Multi-agent ✓, MCP tools ✓, Cron ✓, Knowledge/RAG ✓, REST+SSE+WS ✓, BYOK ✓, Admin Dashboard ✓
+
+### TC-DOC-12: Docker compose example ports
+- Открыть deployment/docker docs page
+- **Ожидание:** один порт 8443 (не два порта 8080+8443)
+- **Ожидание:** ENGINE_PORT default 8443
+
+### TC-DOC-13: API response format
+- Открыть API Reference, проверить response examples
+- **Ожидание:** GET /agents → JSON array (не {agents:[...]})
+- **Ожидание:** POST /auth/login → {"token":"..."}
+
+---
+
+## Итого: 96 TC
 
 | Категория | Кол-во | Покрытие |
 |-----------|--------|----------|
@@ -1294,12 +1321,11 @@
 | TC-ADMIN | 18 | Dashboard CRUD, auth, UX |
 | TC-API | 12 | REST API, errors |
 | TC-CHAT | 7 | SSE streaming, sessions |
-| TC-DOC | 8 | Документация = реальность |
+| TC-DOC | 13 | Документация = реальность + контент валидация |
 | TC-CLOUD | 11 | /examples/, auth popup, dashboard links |
 | TC-EXAMPLE | 12 | **Агентное поведение** (MCP tools, RAG, rate limit, web-client) |
-| **ВСЕГО** | **91** |
+| **ВСЕГО** | **96** |
 
-### Примечания к TC-EXAMPLE
-- Multi-agent spawn (can_spawn) работает через gRPC/WS path (CLI, mobile), но не через HTTP REST API path (web demos)
-- Hosted demos демонстрируют: MCP tool calls, Knowledge Search (RAG), parallel tool execution, escalation triggers, business rules через Settings
-- confirm_before работает через gRPC path, в HTTP REST API path confirmation events передаются но UI не обрабатывает их интерактивно
+### Примечания
+- Multi-agent spawn работает через HTTP REST API (spawn_billing/spawn_technical) и через gRPC/WS
+- confirm_before работает через gRPC path, в HTTP REST API confirmation events передаются но ExampleChat UI обрабатывает их (ask_user блоки с кнопками)

@@ -10,8 +10,7 @@ Model Context Protocol (MCP) is an open standard for connecting AI agents to ext
 | Type | Description |
 |------|-------------|
 | `stdio` | The engine spawns a local process and communicates over stdin/stdout. Best for npm packages and local scripts. |
-| `http` | The engine connects to a running HTTP server. Best for remote services and microservices. |
-| `sse` | The engine connects via Server-Sent Events. Best for real-time data streams. |
+| `sse` | The engine connects to a remote HTTP server via Server-Sent Events. Best for remote services and microservices. |
 
 ## Adding from catalog
 
@@ -28,7 +27,7 @@ The catalog contains pre-configured, well-known MCP servers. Adding one is a one
 For servers not in the catalog, click "Add Custom" and fill in the form:
 
 - **Name** -- unique identifier for referencing from agent configs.
-- **Type** -- stdio, http, or sse.
+- **Type** -- stdio or sse.
 - **Command / URL** -- for stdio: the command to run. For http/sse: the server URL.
 - **Args** -- command-line arguments (stdio only).
 - **Environment variables** -- key-value pairs passed to the process (stdio only).
@@ -49,12 +48,12 @@ mcp_servers:
     env:
       DATABASE_URL: ${DATABASE_URL}
 
-# HTTP: Engine connects to a running server
+# SSE: Engine connects to a running server via Server-Sent Events
   analytics:
-    type: http
+    type: sse
     url: "http://analytics-service:3000/mcp"
 
-# SSE: Engine connects via Server-Sent Events
+# SSE: Another remote MCP server
   realtime:
     type: sse
     url: "http://localhost:4000/sse"

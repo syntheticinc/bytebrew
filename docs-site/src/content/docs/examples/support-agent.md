@@ -59,7 +59,7 @@ The example includes mock billing and infrastructure APIs so you can run the ful
 ```yaml
 # agents.yaml
 agents:
-  - name: router
+  router:
     model: gpt-4o
     system_prompt: |
       You are a support router. Analyze the user's issue and spawn
@@ -71,7 +71,7 @@ agents:
       - spawn_agent
       - ask_user
 
-  - name: billing
+  billing:
     model: gpt-4o-mini
     system_prompt: |
       You are a billing support specialist. Look up invoices and
@@ -82,7 +82,7 @@ agents:
     mcp_servers:
       - billing-api
 
-  - name: technical
+  technical:
     model: gpt-4o-mini
     system_prompt: |
       You are a technical support specialist. Run diagnostics

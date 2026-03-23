@@ -59,7 +59,7 @@ Users can provide their own API key via the `X-Model-Key` header or through the 
 ```yaml
 # agents.yaml
 agents:
-  - name: sales-assistant
+  sales-assistant:
     model: gpt-4o
     byok: true
     system_prompt: |

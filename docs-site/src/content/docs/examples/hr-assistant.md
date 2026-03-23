@@ -52,7 +52,7 @@ Open the Admin Dashboard at `http://localhost:8443/admin` to upload your policy 
 ```yaml
 # agents.yaml
 agents:
-  - name: hr-assistant
+  hr-assistant:
     model: gpt-4o
     system_prompt: |
       You are an HR assistant for {{company_name}}.

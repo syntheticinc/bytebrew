@@ -167,17 +167,15 @@ curl http://localhost:8443/api/v1/agents \
 ```
 
 ```json
-{
-  "agents": [
-    {
-      "name": "sales-agent",
-      "model": "glm-5",
-      "lifecycle": "persistent",
-      "tools_count": 5,
-      "has_knowledge": true
-    }
-  ]
-}
+[
+  {
+    "name": "sales-agent",
+    "model": "glm-5",
+    "lifecycle": "persistent",
+    "tools_count": 5,
+    "has_knowledge": true
+  }
+]
 ```
 
 ```bash

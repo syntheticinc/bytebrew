@@ -332,14 +332,14 @@ tools:
 
 ## MCP Server Configuration
 
-Model Context Protocol (MCP) servers extend agent capabilities with external tools. ByteBrew supports two transport types: **stdio** (the engine spawns a local process) and **HTTP/SSE** (the engine connects to a remote server).
+Model Context Protocol (MCP) servers extend agent capabilities with external tools. ByteBrew supports two transport types: **stdio** (the engine spawns a local process) and **SSE** (the engine connects to a remote HTTP server via Server-Sent Events).
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `command` | -- | For stdio transport: the command to run (e.g., npx, python, node). |
 | `args` | `[]` | Command-line arguments for the stdio process. |
 | `env` | `{}` | Environment variables passed to the stdio process. Supports `${VAR}` syntax. |
-| `type` | `stdio` | Transport type: `http` or `sse`. Omit for stdio (default). |
+| `type` | `stdio` | Transport type: `sse` for HTTP-based MCP servers. Omit for stdio (default). |
 | `url` | -- | For HTTP/SSE transport: the server URL to connect to. |
 
 ```yaml
@@ -358,12 +358,12 @@ mcp_servers:
     env:
       DATABASE_URL: ${DATABASE_URL}
 
-  # HTTP: Engine connects to a running server
+  # SSE: Engine connects to a running server via Server-Sent Events
   analytics:
-    type: http
+    type: sse
     url: "http://analytics-service:3000/mcp"
 
-  # SSE: Engine connects via Server-Sent Events
+  # SSE: Another remote MCP server
   realtime-data:
     type: sse
     url: "http://localhost:4000/sse"

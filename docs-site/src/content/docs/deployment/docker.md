@@ -16,14 +16,12 @@ services:
   engine:
     image: bytebrew/engine:latest
     ports:
-      - "8080:8443"    # REST API
-      - "8443:8443"    # Admin Dashboard
+      - "${ENGINE_PORT:-8443}:8443"
     environment:
       - DATABASE_URL=postgres://bytebrew:bytebrew@postgres:5432/bytebrew?sslmode=disable
       - ADMIN_USER=${ADMIN_USER:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
       - LLM_API_KEY=${LLM_API_KEY}
-      - ENGINE_PORT=8080
     volumes:
       - ./agents.yaml:/app/agents.yaml:ro
       - ./knowledge:/app/knowledge:ro
@@ -82,7 +80,7 @@ curl http://localhost:8443/api/v1/health
 | `ADMIN_USER` | Yes | Username for the Admin Dashboard login. |
 | `ADMIN_PASSWORD` | Yes | Password for the Admin Dashboard login. |
 | `LLM_API_KEY` | No | Default API key referenced as `${LLM_API_KEY}` in agents.yaml. You can use any variable name. |
-| `ENGINE_PORT` | No | HTTP port for the REST API. Default: `8080`. |
+| `ENGINE_PORT` | No | HTTP port for the REST API and Admin Dashboard. Default: `8443`. |
 
 ## Understanding host.docker.internal
 
@@ -132,10 +130,9 @@ Back up the `pgdata` volume regularly. It contains all your configuration and co
 
 | Port | Service |
 |------|---------|
-| `8080` | REST API (chat, agents, tasks, config, health) |
-| `8443` | Admin Dashboard (web UI) |
+| `8443` | REST API and Admin Dashboard |
 
-Both ports serve HTTP. For production, put a reverse proxy (Caddy, nginx) in front for TLS. See [Production deployment](/docs/deployment/production/).
+The engine serves everything on a single port. For production, put a reverse proxy (Caddy, nginx) in front for TLS. See [Production deployment](/docs/deployment/production/).
 
 ## Troubleshooting
 
@@ -149,13 +146,12 @@ The LLM provider returned an out-of-memory error. This happens with large models
 
 ### Port conflicts
 
-If ports 8080 or 8443 are already in use:
+If port 8443 is already in use:
 
 ```yaml
 # Change the host-side port (left of the colon)
 ports:
-  - "9080:8443"    # API accessible at localhost:9080
-  - "9443:8443"    # Dashboard at localhost:9443
+  - "9443:8443"    # Accessible at localhost:9443
 ```
 
 ### pgvector extension errors
