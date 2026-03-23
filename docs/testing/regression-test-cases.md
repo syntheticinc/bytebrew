@@ -1403,9 +1403,34 @@
 **Ожидание:** Codex может вызвать search_docs tool
 **Примечание:** НЕ ТЕСТИРОВАНО — добавлено на основании документации Codex, требует ручной проверки
 
+### TC-MCP-10: Search results contain documentation URLs
+**Шаги:** Вызвать `search_docs(query: "triggers cron webhook")`
+**Ожидание:**
+- Каждый result содержит Source с кликабельной ссылкой на bytebrew.ai/docs/
+- URL формат: `[triggers.md](https://bytebrew.ai/docs/concepts/triggers/)`
+- URLs динамически загружаются из sitemap при старте сервера (не хардкод)
+**PASS:** Source содержит markdown ссылку на правильную страницу документации
+
+### TC-MCP-11: URL mapping updates automatically
+**Шаги:**
+1. Добавить новую страницу в docs-site
+2. `npm run build` → deploy → sitemap обновится
+3. Перезапустить MCP сервер
+4. Вызвать search_docs с запросом по новой странице
+**Ожидание:** Result содержит URL на новую страницу без изменений в коде MCP сервера
+
+### TC-MCP-12: No hallucinations in search results
+**Шаги:** Вызвать `search_docs(query: "GraphQL support")`
+**Ожидание:** "No results found" — не выдумывает несуществующие фичи
+**PASS:** Возвращает пустой результат, не галлюцинирует
+
+### TC-MCP-13: Hybrid search — keyword fallback
+**Шаги:** Вызвать `search_docs(query: "confirm_before")`
+**Ожидание:** Результаты из tools.md, configuration.md, multi-agent.md — keyword `confirm_before` матчится даже если vector similarity низкий
+
 ---
 
-## Итого: 115 TC
+## Итого: 119 TC
 
 | Категория | Кол-во | Покрытие |
 |-----------|--------|----------|
@@ -1418,8 +1443,8 @@
 | TC-CLOUD | 11 | /examples/, auth popup, dashboard links |
 | TC-EXAMPLE | 12 | Агентное поведение (MCP tools, RAG, rate limit, web-client) |
 | TC-AUTH | 10 | Email verification, Google auth |
-| TC-MCP | 9 | MCP docs server (functional + quality + integration) |
-| **ВСЕГО** | **111** |
+| TC-MCP | 13 | MCP docs server (functional + quality + URLs + hybrid search) |
+| **ВСЕГО** | **119** |
 
 ### Примечания
 - Multi-agent spawn работает через HTTP REST API и gRPC/WS
