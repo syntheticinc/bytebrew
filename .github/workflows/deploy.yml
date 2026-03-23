@@ -6,6 +6,9 @@ on:
     paths:
       - 'cloud-api/**'
       - 'cloud-web/**'
+      - 'docs-site/**'
+      - 'engine/**'
+      - 'mcp-docs-server/**'
       - 'deploy/**'
       - '.github/workflows/deploy.yml'
 
@@ -34,6 +37,12 @@ jobs:
           cd cloud-api
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../build/bytebrew-cloud-api ./cmd/server
 
+      # --- Build MCP Docs Server ---
+      - name: Build MCP docs server binary
+        run: |
+          cd mcp-docs-server
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../build/bytebrew-mcp-docs .
+
       # --- Build Frontend ---
       - uses: actions/setup-node@v4
         with:
@@ -41,7 +50,6 @@ jobs:
 
       - name: Build frontend
         env:
-          VITE_API_URL: https://api.bytebrew.ai
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           VITE_SHOW_EE_PRICING: ''
           VITE_SHOW_CODE_SITE: ''
@@ -57,8 +65,24 @@ jobs:
           npm ci
           npm run build
 
-      # --- Deploy (single job, no artifacts) ---
-      - name: Backup and stop service
+      # --- Build Docker Images ---
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Engine Docker image
+        run: |
+          cd engine
+          docker build -t bytebrew/engine:latest .
+          docker save bytebrew/engine:latest | gzip > ../build/engine.tar.gz
+
+      - name: Build MCP Docs Docker image
+        run: |
+          cd mcp-docs-server
+          docker build -t bytebrew/mcp-docs:latest .
+          docker save bytebrew/mcp-docs:latest | gzip > ../build/mcp-docs.tar.gz
+
+      # --- Deploy ---
+      - name: Backup and stop services
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -74,7 +98,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: deploy
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: "build/bytebrew-cloud-api,cloud-web/dist,docs-site/dist,deploy/config.production.yaml,deploy/Caddyfile"
+          source: "build/,cloud-web/dist,docs-site/dist,docs-site/src/content/docs,deploy/config.production.yaml,deploy/Caddyfile"
           target: "/tmp/bytebrew-deploy"
 
       - name: Configure secrets
@@ -84,12 +108,10 @@ jobs:
           username: deploy
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            # Update config (non-secrets)
             sudo cp /tmp/bytebrew-deploy/deploy/config.production.yaml /etc/bytebrew/config.yaml
             sudo chown bytebrew:bytebrew /etc/bytebrew/config.yaml
             sudo chmod 640 /etc/bytebrew/config.yaml
 
-            # Generate env file with secrets
             sudo tee /etc/bytebrew/cloud-api.env > /dev/null << 'ENVEOF'
             DATABASE_URL=${{ secrets.DATABASE_URL }}
             AUTH_JWT_SECRET=${{ secrets.AUTH_JWT_SECRET }}
@@ -128,26 +150,43 @@ jobs:
             sudo rm -rf /var/www/bytebrew-docs/docs/_astro
             sudo cp -r /tmp/bytebrew-deploy/docs-site/dist/* /var/www/bytebrew-docs/docs/
 
+            # Update docs knowledge for MCP RAG
+            sudo mkdir -p /etc/bytebrew/docs-knowledge
+            find /tmp/bytebrew-deploy/docs-site/src/content/docs -name '*.md' -o -name '*.mdx' | while read f; do
+              sudo cp "$f" /etc/bytebrew/docs-knowledge/"$(basename "$f")"
+            done
+
             # Update Caddy config
             if [ -f /tmp/bytebrew-deploy/deploy/Caddyfile ]; then
               sudo cp /tmp/bytebrew-deploy/deploy/Caddyfile /etc/caddy/Caddyfile
               sudo systemctl reload caddy
             fi
 
+            # Load Docker images
+            if [ -f /tmp/bytebrew-deploy/build/engine.tar.gz ]; then
+              docker load < /tmp/bytebrew-deploy/build/engine.tar.gz
+            fi
+            if [ -f /tmp/bytebrew-deploy/build/mcp-docs.tar.gz ]; then
+              docker load < /tmp/bytebrew-deploy/build/mcp-docs.tar.gz
+            fi
+
+            # Restart hosted stack (Engine + MCP docs + examples)
+            cd /opt/bytebrew-examples/hosted
+            docker compose up -d --remove-orphans
+
+            # Start Cloud API
             sudo systemctl start bytebrew-cloud-api
             rm -rf /tmp/bytebrew-deploy
 
-            # Health check with rollback
-            sleep 3
+            # Health checks
+            sleep 5
             if ! curl -sf http://127.0.0.1:8080/health; then
-              echo "Health check failed! Rolling back..."
+              echo "Cloud API health check failed! Rolling back..."
               sudo systemctl stop bytebrew-cloud-api
               sudo mv /usr/local/bin/bytebrew-cloud-api.bak /usr/local/bin/bytebrew-cloud-api
               sudo systemctl start bytebrew-cloud-api
-              sleep 3
-              sudo journalctl -u bytebrew-cloud-api --no-pager -n 50
               exit 1
             fi
 
-            # Cleanup backups on success
+            # Cleanup
             sudo rm -f /usr/local/bin/bytebrew-cloud-api.bak
