@@ -1,22 +1,48 @@
+import { useState, useEffect } from 'react';
 import { Link } from '@tanstack/react-router';
 import { TerminalBlock } from '../components/TerminalBlock';
 import { EnginePricingTable } from '../components/EnginePricingTable';
 
 export function LandingPage() {
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!lightboxSrc) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightboxSrc(null);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [lightboxSrc]);
+
   return (
     <div>
       <HeroSection />
       <ProblemSection />
       <SolutionSection />
-      <HowItWorksSection />
+      <HowItWorksSection onImageClick={setLightboxSrc} />
       <CapabilitiesSection />
-      <ProductShowcaseSection />
+      <ProductShowcaseSection onImageClick={setLightboxSrc} />
       <UseCasesSection />
       <ComparisonSection />
       <InstallSection />
       <PricingSection />
       <FreeForeverBanner />
       <FinalCTASection />
+
+      {lightboxSrc && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-zoom-out"
+          onClick={() => setLightboxSrc(null)}
+        >
+          <img
+            src={lightboxSrc}
+            alt=""
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -274,7 +300,7 @@ function ExplainerItem({ title, description }: { title: string; description: str
 /*  4. How It Works (3 steps)                                          */
 /* ------------------------------------------------------------------ */
 
-function HowItWorksSection() {
+function HowItWorksSection({ onImageClick }: { onImageClick: (src: string) => void }) {
   return (
     <section className="py-20 px-4 border-t border-brand-shade3/15 bg-brand-dark-alt">
       <div className="max-w-5xl mx-auto">
@@ -303,7 +329,7 @@ function HowItWorksSection() {
                   Open the Admin Dashboard and create your agent visually. Set the model, system prompt, tools, and spawn rules — no YAML needed.
                 </p>
                 <div className="rounded-[8px] border border-brand-shade3/15 overflow-hidden">
-                  <img src="/screenshots/admin-agents.png" alt="Admin Dashboard — Agents list with Create Agent button" className="w-full" />
+                  <img src="/screenshots/admin-agents.png" alt="Admin Dashboard — Agents list with Create Agent button" className="w-full cursor-zoom-in" onClick={() => onImageClick('/screenshots/admin-agents.png')} />
                 </div>
               </div>
 
@@ -504,7 +530,7 @@ const USE_CASES = [
 /*  Product Showcase — real screenshots of the web client               */
 /* ------------------------------------------------------------------ */
 
-function ProductShowcaseSection() {
+function ProductShowcaseSection({ onImageClick }: { onImageClick: (src: string) => void }) {
   return (
     <section className="py-20 px-4 border-t border-brand-shade3/15 bg-brand-dark-alt">
       <div className="max-w-6xl mx-auto">
@@ -524,7 +550,7 @@ function ProductShowcaseSection() {
               Ready-to-use chat interface with multi-agent sidebar, tool calls, and rich markdown. Open source — fork and customize.
             </p>
             <div className="rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5">
-              <img src="/screenshots/admin-agents.png" alt="ByteBrew Web Client — AI sales agent recommending laptops with web search tool calls and structured markdown response" className="w-full" />
+              <img src="/screenshots/admin-agents.png" alt="ByteBrew Web Client — AI sales agent recommending laptops with web search tool calls and structured markdown response" className="w-full cursor-zoom-in" onClick={() => onImageClick('/screenshots/admin-agents.png')} />
             </div>
           </div>
 
@@ -535,7 +561,7 @@ function ProductShowcaseSection() {
               Configure agents, models, MCP servers, triggers, and API keys through a visual interface. No YAML required.
             </p>
             <div className="rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5">
-              <img src="/screenshots/admin-agent-detail.png" alt="Admin Dashboard — Agent detail panel with model, system prompt, tools, and spawn rules configuration" className="w-full" />
+              <img src="/screenshots/admin-agent-detail.png" alt="Admin Dashboard — Agent detail panel with model, system prompt, tools, and spawn rules configuration" className="w-full cursor-zoom-in" onClick={() => onImageClick('/screenshots/admin-agent-detail.png')} />
             </div>
           </div>
         </div>
