@@ -1,18 +1,37 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useMemo, type FormEvent } from 'react';
 import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
+import { useModelRegistry } from '../hooks/useModelRegistry';
 import DataTable from '../components/DataTable';
 import DetailPanel, { DetailRow, DetailSection } from '../components/DetailPanel';
 import FormModal from '../components/FormModal';
 import FormField from '../components/FormField';
 import ConfirmDialog from '../components/ConfirmDialog';
-import type { Model, CreateModelRequest } from '../types';
+import TierBadge, { CustomModelBadge } from '../components/TierBadge';
+import type { Model, CreateModelRequest, ModelRegistryEntry } from '../types';
 
 const PROVIDER_TYPES = [
   { value: 'ollama', label: 'Ollama (local)' },
-  { value: 'openai_compatible', label: 'OpenAI Compatible (OpenRouter, vLLM, etc.)' },
+  { value: 'openai_compatible', label: 'OpenAI Compatible' },
+  { value: 'openrouter', label: 'OpenRouter' },
   { value: 'anthropic', label: 'Anthropic' },
+  { value: 'azure_openai', label: 'Azure OpenAI' },
+  { value: 'google', label: 'Google (Gemini)' },
 ];
+
+const PROVIDER_BASE_URLS: Record<string, string> = {
+  openrouter: 'https://openrouter.ai/api/v1',
+};
+
+const PROVIDER_HINTS: Record<string, string> = {
+  azure_openai: 'Use your Azure resource endpoint as Base URL (e.g. https://my-company.openai.azure.com). Model Name = deployment name.',
+  google: 'Uses native Gemini API (generateContent). No Base URL needed — just API key and model name.',
+};
+
+function providerTypeForRegistry(provider: string): string {
+  if (provider === 'openrouter') return 'openrouter';
+  return provider;
+}
 
 const emptyForm: CreateModelRequest = {
   name: '',
@@ -24,6 +43,7 @@ const emptyForm: CreateModelRequest = {
 
 export default function ModelsPage() {
   const { data: models, loading, error, refetch } = useApi(() => api.listModels());
+  const { registry, registryByModelName } = useModelRegistry();
 
   const [selected, setSelected] = useState<Model | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -31,6 +51,17 @@ export default function ModelsPage() {
   const [form, setForm] = useState<CreateModelRequest>({ ...emptyForm });
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  // Filter registry models by selected provider for the model picker
+  const registryModelsForProvider = useMemo(() => {
+    if (!registry.length) return [];
+    const providerType = providerTypeForRegistry(form.type);
+    return registry.filter((entry) => entry.provider === providerType);
+  }, [registry, form.type]);
+
+  function findRegistryEntry(modelName: string): ModelRegistryEntry | undefined {
+    return registryByModelName.get(modelName);
+  }
 
   function openCreate() {
     setForm({ ...emptyForm });
@@ -54,6 +85,24 @@ export default function ModelsPage() {
     setShowForm(false);
     setEditTarget(null);
     setForm({ ...emptyForm });
+  }
+
+  function handleProviderChange(providerType: string) {
+    const autoUrl = PROVIDER_BASE_URLS[providerType];
+    setForm((prev) => ({
+      ...prev,
+      type: providerType,
+      base_url: autoUrl ?? (providerType === prev.type ? prev.base_url : ''),
+      model_name: '',
+    }));
+  }
+
+  function handleRegistryModelSelect(registryId: string) {
+    if (!registryId) return;
+    const entry = registryByModelName.get(registryId);
+    if (entry) {
+      setForm((prev) => ({ ...prev, model_name: entry.id }));
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -88,9 +137,27 @@ export default function ModelsPage() {
   }
 
   const isEdit = editTarget !== null;
+  const isBaseUrlReadOnly = form.type in PROVIDER_BASE_URLS;
+  const providerHint = PROVIDER_HINTS[form.type];
 
   const columns = [
-    { key: 'name', header: 'Name' },
+    {
+      key: 'name',
+      header: 'Name',
+      render: (row: Model) => {
+        const entry = findRegistryEntry(row.model_name);
+        return (
+          <div className="flex items-center gap-2">
+            <span>{row.name}</span>
+            {entry ? (
+              <TierBadge tier={entry.tier} />
+            ) : (
+              <CustomModelBadge />
+            )}
+          </div>
+        );
+      },
+    },
     {
       key: 'type',
       header: 'Provider',
@@ -122,6 +189,8 @@ export default function ModelsPage() {
 
   if (loading) return <div className="text-brand-shade3">Loading models...</div>;
   if (error) return <div className="text-red-400">Error: {error}</div>;
+
+  const selectedRegistryEntry = selected ? findRegistryEntry(selected.model_name) : undefined;
 
   return (
     <div>
@@ -181,6 +250,13 @@ export default function ModelsPage() {
                 </span>
               </DetailRow>
               <DetailRow label="Model Name">{selected.model_name}</DetailRow>
+              <DetailRow label="Tier">
+                {selectedRegistryEntry ? (
+                  <TierBadge tier={selectedRegistryEntry.tier} />
+                ) : (
+                  <CustomModelBadge />
+                )}
+              </DetailRow>
               {selected.base_url && <DetailRow label="Base URL"><code className="font-mono text-xs">{selected.base_url}</code></DetailRow>}
               <DetailRow label="API Key">
                 {selected.has_api_key ? (
@@ -190,6 +266,36 @@ export default function ModelsPage() {
                 )}
               </DetailRow>
             </DetailSection>
+
+            {selectedRegistryEntry && (
+              <DetailSection title="Registry Info">
+                <DetailRow label="Display Name">{selectedRegistryEntry.display_name}</DetailRow>
+                <DetailRow label="Context Window">{selectedRegistryEntry.context_window.toLocaleString()} tokens</DetailRow>
+                <DetailRow label="Supports Tools">
+                  {selectedRegistryEntry.supports_tools ? (
+                    <span className="text-status-active font-medium text-xs">Yes</span>
+                  ) : (
+                    <span className="text-brand-shade3 text-xs">No</span>
+                  )}
+                </DetailRow>
+                {selectedRegistryEntry.description && (
+                  <DetailRow label="Description">
+                    <span className="text-xs text-brand-shade2">{selectedRegistryEntry.description}</span>
+                  </DetailRow>
+                )}
+                {selectedRegistryEntry.recommended_for?.length > 0 && (
+                  <DetailRow label="Recommended For">
+                    <div className="flex flex-wrap gap-1">
+                      {selectedRegistryEntry.recommended_for.map((use) => (
+                        <span key={use} className="px-1.5 py-0.5 bg-brand-dark border border-brand-shade3/30 rounded text-xs text-brand-shade2">
+                          {use}
+                        </span>
+                      ))}
+                    </div>
+                  </DetailRow>
+                )}
+              </DetailSection>
+            )}
 
             <DetailSection title="Timestamps">
               <DetailRow label="Created">{new Date(selected.created_at).toLocaleString()}</DetailRow>
@@ -220,9 +326,40 @@ export default function ModelsPage() {
           label="Provider"
           type="select"
           value={form.type}
-          onChange={(v) => setForm({ ...form, type: v })}
+          onChange={handleProviderChange}
           options={PROVIDER_TYPES}
         />
+
+        {providerHint && (
+          <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-btn text-xs text-blue-400 leading-relaxed">
+            {providerHint}
+          </div>
+        )}
+
+        {/* Registry model picker */}
+        {registryModelsForProvider.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-brand-light mb-1">
+              Select from Registry
+            </label>
+            <select
+              value={form.model_name}
+              onChange={(e) => handleRegistryModelSelect(e.target.value)}
+              className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
+            >
+              <option value="">-- Or type model name below --</option>
+              {registryModelsForProvider.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.display_name} (Tier {entry.tier})
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-brand-shade3">
+              Pick a known model from the registry or enter a custom model name.
+            </p>
+          </div>
+        )}
+
         <FormField
           label="Model Name"
           value={form.model_name}
@@ -235,7 +372,12 @@ export default function ModelsPage() {
           value={form.base_url ?? ''}
           onChange={(v) => setForm({ ...form, base_url: v })}
           placeholder="http://localhost:11434"
-          hint="Required for Ollama and OpenAI-compatible providers."
+          disabled={isBaseUrlReadOnly}
+          hint={
+            isBaseUrlReadOnly
+              ? 'Auto-configured for this provider.'
+              : 'Required for Ollama and OpenAI-compatible providers.'
+          }
         />
         {form.type !== 'ollama' && (
           <FormField
@@ -245,6 +387,15 @@ export default function ModelsPage() {
             onChange={(v) => setForm({ ...form, api_key: v })}
             placeholder={isEdit ? '(unchanged if empty)' : 'sk-...'}
             hint={isEdit ? 'Leave empty to keep the existing key.' : undefined}
+          />
+        )}
+        {form.type === 'azure_openai' && (
+          <FormField
+            label="API Version"
+            value={form.api_version ?? '2024-10-21'}
+            onChange={(v) => setForm({ ...form, api_version: v })}
+            placeholder="2024-10-21"
+            hint="Azure OpenAI API version (default: 2024-10-21)"
           />
         )}
       </FormModal>

@@ -22,10 +22,11 @@ type VerifyResult struct {
 // knownToolCallingProviders lists providers whose models are known to support tool calling.
 // For these providers we skip the tool probe and return "skipped".
 var knownToolCallingProviders = map[string]bool{
-	"openai":    true,
-	"anthropic": true,
-	"google":    true,
-	"mistral":   true,
+	"openai":       true,
+	"anthropic":    true,
+	"google":       true,
+	"mistral":      true,
+	"azure_openai": true,
 }
 
 // VerifyModel checks that a model is accessible and optionally probes tool calling support.

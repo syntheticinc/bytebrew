@@ -20,7 +20,8 @@ const (
 	EventTypeAgentSpawned   AgentEventType = "agent_spawned"   // Code Agent spawned
 	EventTypeAgentCompleted AgentEventType = "agent_completed" // Code Agent completed
 	EventTypeAgentFailed    AgentEventType = "agent_failed"    // Code Agent failed
-	EventTypeUserQuestion AgentEventType = "user_question" // ask_user question to client
+	EventTypeUserQuestion    AgentEventType = "user_question"    // ask_user question to client
+	EventTypeStructuredOutput AgentEventType = "structured_output" // structured data display (tables, actions)
 )
 
 // AgentError represents error information for EventTypeError

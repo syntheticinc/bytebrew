@@ -14,6 +14,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/task"
+	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 )
 
 // mcpServiceHTTPAdapter bridges GORMMCPServerRepository to the http.MCPService interface.
@@ -528,4 +529,27 @@ func (a *cronTaskCreatorHTTPAdapter) CreateFromTrigger(ctx context.Context, para
 		return 0, err
 	}
 	return t.ID, nil
+}
+
+// convertRateLimitRules converts config rate limit rules to delivery HTTP types.
+func convertRateLimitRules(cfgRules []config.RateLimitRule) []deliveryhttp.RateLimitRule {
+	rules := make([]deliveryhttp.RateLimitRule, 0, len(cfgRules))
+	for _, cr := range cfgRules {
+		tiers := make(map[string]deliveryhttp.RateLimitTier, len(cr.Tiers))
+		for name, ct := range cr.Tiers {
+			tiers[name] = deliveryhttp.RateLimitTier{
+				Requests:  ct.Requests,
+				Window:    ct.Window,
+				Unlimited: ct.Unlimited,
+			}
+		}
+		rules = append(rules, deliveryhttp.RateLimitRule{
+			Name:        cr.Name,
+			KeyHeader:   cr.KeyHeader,
+			TierHeader:  cr.TierHeader,
+			Tiers:       tiers,
+			DefaultTier: cr.DefaultTier,
+		})
+	}
+	return rules
 }

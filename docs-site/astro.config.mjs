@@ -105,6 +105,7 @@ export default defineConfig({
           items: [
             { label: 'Docker', slug: 'deployment/docker' },
             { label: 'Model Selection', slug: 'deployment/model-selection' },
+            { label: 'Model Registry', slug: 'deployment/model-registry' },
             { label: 'Production', slug: 'deployment/production' },
           ],
         },

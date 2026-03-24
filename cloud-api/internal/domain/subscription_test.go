@@ -32,6 +32,12 @@ func TestNewSubscription(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "valid engine_ee subscription",
+			userID:  "user-id",
+			tier:    TierEngineEE,
+			wantErr: false,
+		},
+		{
 			name:        "empty user ID",
 			userID:      "",
 			tier:        TierTrial,
@@ -91,6 +97,7 @@ func TestLicenseTier_IsValid(t *testing.T) {
 		{TierTrial, true},
 		{TierPersonal, true},
 		{TierTeams, true},
+		{TierEngineEE, true},
 		{"invalid", false},
 		{"", false},
 		{"free", false},
@@ -116,6 +123,7 @@ func TestLicenseTier_IsPaid(t *testing.T) {
 		{TierTrial, false},
 		{TierPersonal, true},
 		{TierTeams, true},
+		{TierEngineEE, true},
 	}
 
 	for _, tt := range tests {
@@ -135,6 +143,7 @@ func TestProxyStepsLimitForTier(t *testing.T) {
 		{TierTrial, 0},
 		{TierPersonal, 300},
 		{TierTeams, 300},
+		{TierEngineEE, 300},
 	}
 
 	for _, tt := range tests {

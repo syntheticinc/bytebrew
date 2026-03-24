@@ -53,10 +53,11 @@ export interface CreateAgentRequest {
 export interface Model {
   id: number;
   name: string;
-  type: 'ollama' | 'openai_compatible' | 'anthropic';
+  type: string;
   base_url?: string;
   model_name: string;
   has_api_key: boolean;
+  api_version?: string;
   created_at: string;
 }
 
@@ -66,6 +67,7 @@ export interface CreateModelRequest {
   base_url?: string;
   model_name: string;
   api_key?: string;
+  api_version?: string;
 }
 
 // ============================================================================
@@ -153,6 +155,8 @@ export interface Trigger {
   webhook_path?: string;
   description?: string;
   enabled: boolean;
+  on_complete_url?: string;
+  on_complete_headers?: Record<string, string>;
   last_fired_at?: string;
   created_at: string;
 }
@@ -165,6 +169,8 @@ export interface CreateTriggerRequest {
   webhook_path?: string;
   description?: string;
   enabled?: boolean;
+  on_complete_url?: string;
+  on_complete_headers?: Record<string, string>;
 }
 
 // ============================================================================
@@ -255,4 +261,28 @@ export interface ToolMetadata {
   risk_warning?: string;
   hint?: string;
   companion?: string;
+}
+
+// ============================================================================
+// Model Registry types
+// ============================================================================
+
+export interface ModelRegistryEntry {
+  id: string;
+  display_name: string;
+  provider: string;
+  tier: number; // 1 = Orchestrator, 2 = Sub-agent, 3 = Utility
+  context_window: number;
+  supports_tools: boolean;
+  pricing_input: number;
+  pricing_output: number;
+  description: string;
+  recommended_for: string[];
+}
+
+export interface RegistryProviderInfo {
+  id: string;
+  display_name: string;
+  auth_type: string;
+  website: string;
 }

@@ -200,3 +200,203 @@ func TestAskUser_RawResponseFallback(t *testing.T) {
 		t.Errorf("expected raw response fallback, got: %s", result)
 	}
 }
+
+func TestAskUser_WithInputType_SingleSelect(t *testing.T) {
+	answers := []QuestionAnswer{{Question: "Platform?", Answer: "ios"}}
+	answersJSON, _ := json.Marshal(answers)
+	asker := &simpleUserAsker{response: string(answersJSON)}
+	tool := NewAskUserTool(asker, "sess-1")
+
+	args := `{"questions":[{"text":"Platform?","input_type":"single_select","options":[{"label":"iOS","value":"ios"},{"label":"Android","value":"android"}]}]}`
+	result, err := tool.InvokableRun(context.Background(), args)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "ios") {
+		t.Errorf("expected answer with value, got: %s", result)
+	}
+
+	// Verify input_type is passed through to proxy
+	var parsedQuestions []Question
+	if err := json.Unmarshal([]byte(asker.questionsJSON), &parsedQuestions); err != nil {
+		t.Fatalf("proxy received invalid questions JSON: %v", err)
+	}
+	if parsedQuestions[0].InputType != "single_select" {
+		t.Errorf("input_type = %q, want single_select", parsedQuestions[0].InputType)
+	}
+}
+
+func TestAskUser_WithInputType_MultiSelect(t *testing.T) {
+	answers := []QuestionAnswer{{Question: "Features?", Answer: "auth,logging"}}
+	answersJSON, _ := json.Marshal(answers)
+	asker := &simpleUserAsker{response: string(answersJSON)}
+	tool := NewAskUserTool(asker, "sess-1")
+
+	args := `{"questions":[{"text":"Features?","input_type":"multi_select","options":[{"label":"Auth","value":"auth"},{"label":"Logging","value":"logging"},{"label":"Metrics","value":"metrics"}]}]}`
+	result, err := tool.InvokableRun(context.Background(), args)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "auth,logging") {
+		t.Errorf("expected multi_select answer, got: %s", result)
+	}
+
+	var parsedQuestions []Question
+	if err := json.Unmarshal([]byte(asker.questionsJSON), &parsedQuestions); err != nil {
+		t.Fatalf("proxy received invalid questions JSON: %v", err)
+	}
+	if parsedQuestions[0].InputType != "multi_select" {
+		t.Errorf("input_type = %q, want multi_select", parsedQuestions[0].InputType)
+	}
+}
+
+func TestAskUser_WithInputType_Confirm(t *testing.T) {
+	answers := []QuestionAnswer{{Question: "Deploy?", Answer: "yes"}}
+	answersJSON, _ := json.Marshal(answers)
+	asker := &simpleUserAsker{response: string(answersJSON)}
+	tool := NewAskUserTool(asker, "sess-1")
+
+	args := `{"questions":[{"text":"Deploy?","input_type":"confirm"}]}`
+	result, err := tool.InvokableRun(context.Background(), args)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "yes") {
+		t.Errorf("expected confirm answer, got: %s", result)
+	}
+
+	var parsedQuestions []Question
+	if err := json.Unmarshal([]byte(asker.questionsJSON), &parsedQuestions); err != nil {
+		t.Fatalf("proxy received invalid questions JSON: %v", err)
+	}
+	if parsedQuestions[0].InputType != "confirm" {
+		t.Errorf("input_type = %q, want confirm", parsedQuestions[0].InputType)
+	}
+}
+
+func TestAskUser_WithoutInputType(t *testing.T) {
+	// Backwards compat: no input_type should default to empty (treated as "text" by clients)
+	answers := []QuestionAnswer{{Question: "Name?", Answer: "MyProject"}}
+	answersJSON, _ := json.Marshal(answers)
+	asker := &simpleUserAsker{response: string(answersJSON)}
+	tool := NewAskUserTool(asker, "sess-1")
+
+	args := `{"questions":[{"text":"Name?"}]}`
+	result, err := tool.InvokableRun(context.Background(), args)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "MyProject") {
+		t.Errorf("expected answer, got: %s", result)
+	}
+
+	var parsedQuestions []Question
+	if err := json.Unmarshal([]byte(asker.questionsJSON), &parsedQuestions); err != nil {
+		t.Fatalf("proxy received invalid questions JSON: %v", err)
+	}
+	if parsedQuestions[0].InputType != "" {
+		t.Errorf("input_type should be empty for backwards compat, got: %q", parsedQuestions[0].InputType)
+	}
+}
+
+func TestAskUser_CustomInputType(t *testing.T) {
+	// Unknown input_type values should be passed through as-is
+	answers := []QuestionAnswer{{Question: "Team?", Answer: "team-alpha"}}
+	answersJSON, _ := json.Marshal(answers)
+	asker := &simpleUserAsker{response: string(answersJSON)}
+	tool := NewAskUserTool(asker, "sess-1")
+
+	args := `{"questions":[{"text":"Team?","input_type":"kilo_team_form","options":[{"label":"Alpha","value":"team-alpha"}]}]}`
+	result, err := tool.InvokableRun(context.Background(), args)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "team-alpha") {
+		t.Errorf("expected answer, got: %s", result)
+	}
+
+	var parsedQuestions []Question
+	if err := json.Unmarshal([]byte(asker.questionsJSON), &parsedQuestions); err != nil {
+		t.Fatalf("proxy received invalid questions JSON: %v", err)
+	}
+	if parsedQuestions[0].InputType != "kilo_team_form" {
+		t.Errorf("custom input_type not passed through, got: %q", parsedQuestions[0].InputType)
+	}
+}
+
+func TestAskUser_OptionWithValue(t *testing.T) {
+	answers := []QuestionAnswer{{Question: "Size?", Answer: "lg"}}
+	answersJSON, _ := json.Marshal(answers)
+	asker := &simpleUserAsker{response: string(answersJSON)}
+	tool := NewAskUserTool(asker, "sess-1")
+
+	args := `{"questions":[{"text":"Size?","options":[{"label":"Large","value":"lg"},{"label":"Small","value":"sm"}]}]}`
+	_, err := tool.InvokableRun(context.Background(), args)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var parsedQuestions []Question
+	if err := json.Unmarshal([]byte(asker.questionsJSON), &parsedQuestions); err != nil {
+		t.Fatalf("proxy received invalid questions JSON: %v", err)
+	}
+	if len(parsedQuestions[0].Options) != 2 {
+		t.Fatalf("expected 2 options, got %d", len(parsedQuestions[0].Options))
+	}
+	if parsedQuestions[0].Options[0].Value != "lg" {
+		t.Errorf("option[0].value = %q, want lg", parsedQuestions[0].Options[0].Value)
+	}
+	if parsedQuestions[0].Options[1].Value != "sm" {
+		t.Errorf("option[1].value = %q, want sm", parsedQuestions[0].Options[1].Value)
+	}
+}
+
+func TestAskUser_OptionWithoutValue(t *testing.T) {
+	// When value is omitted, it should be empty in JSON (client defaults to label)
+	answers := []QuestionAnswer{{Question: "Color?", Answer: "Red"}}
+	answersJSON, _ := json.Marshal(answers)
+	asker := &simpleUserAsker{response: string(answersJSON)}
+	tool := NewAskUserTool(asker, "sess-1")
+
+	args := `{"questions":[{"text":"Color?","options":[{"label":"Red"},{"label":"Blue"}]}]}`
+	_, err := tool.InvokableRun(context.Background(), args)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var parsedQuestions []Question
+	if err := json.Unmarshal([]byte(asker.questionsJSON), &parsedQuestions); err != nil {
+		t.Fatalf("proxy received invalid questions JSON: %v", err)
+	}
+	if len(parsedQuestions[0].Options) != 2 {
+		t.Fatalf("expected 2 options, got %d", len(parsedQuestions[0].Options))
+	}
+	// Value should be empty when not provided (client defaults to label)
+	if parsedQuestions[0].Options[0].Value != "" {
+		t.Errorf("option[0].value should be empty when not set, got: %q", parsedQuestions[0].Options[0].Value)
+	}
+	if parsedQuestions[0].Options[0].Label != "Red" {
+		t.Errorf("option[0].label = %q, want Red", parsedQuestions[0].Options[0].Label)
+	}
+}
+
+func TestAskUser_WithColumns(t *testing.T) {
+	answers := []QuestionAnswer{{Question: "Template?", Answer: "basic"}}
+	answersJSON, _ := json.Marshal(answers)
+	asker := &simpleUserAsker{response: string(answersJSON)}
+	tool := NewAskUserTool(asker, "sess-1")
+
+	args := `{"questions":[{"text":"Template?","input_type":"single_select","columns":3,"options":[{"label":"Basic","value":"basic"},{"label":"Pro","value":"pro"},{"label":"Enterprise","value":"enterprise"}]}]}`
+	_, err := tool.InvokableRun(context.Background(), args)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var parsedQuestions []Question
+	if err := json.Unmarshal([]byte(asker.questionsJSON), &parsedQuestions); err != nil {
+		t.Fatalf("proxy received invalid questions JSON: %v", err)
+	}
+	if parsedQuestions[0].Columns != 3 {
+		t.Errorf("columns = %d, want 3", parsedQuestions[0].Columns)
+	}
+}

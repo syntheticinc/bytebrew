@@ -7,17 +7,24 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 )
 
 // HTTPTransport connects to an MCP server via HTTP POST.
 type HTTPTransport struct {
-	url    string
-	client *http.Client
+	url            string
+	client         *http.Client
+	forwardHeaders []string
 }
 
 // NewHTTPTransport creates a transport that communicates via HTTP POST requests.
-func NewHTTPTransport(url string) *HTTPTransport {
-	return &HTTPTransport{url: url, client: &http.Client{}}
+func NewHTTPTransport(url string, forwardHeaders ...[]string) *HTTPTransport {
+	var fh []string
+	if len(forwardHeaders) > 0 {
+		fh = forwardHeaders[0]
+	}
+	return &HTTPTransport{url: url, client: &http.Client{}, forwardHeaders: fh}
 }
 
 func (t *HTTPTransport) Start(_ context.Context) error {
@@ -35,6 +42,7 @@ func (t *HTTPTransport) Send(ctx context.Context, req *Request) (*Response, erro
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	t.applyForwardHeaders(ctx, httpReq)
 
 	httpResp, err := t.client.Do(httpReq)
 	if err != nil {
@@ -64,6 +72,8 @@ func (t *HTTPTransport) Notify(ctx context.Context, req *Request) {
 		return
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	t.applyForwardHeaders(ctx, httpReq)
+
 	resp, err := t.client.Do(httpReq)
 	if err != nil {
 		return
@@ -73,4 +83,20 @@ func (t *HTTPTransport) Notify(ctx context.Context, req *Request) {
 
 func (t *HTTPTransport) Close() error {
 	return nil
+}
+
+// applyForwardHeaders copies configured headers from RequestContext to the HTTP request.
+func (t *HTTPTransport) applyForwardHeaders(ctx context.Context, httpReq *http.Request) {
+	if len(t.forwardHeaders) == 0 {
+		return
+	}
+	rc := domain.GetRequestContext(ctx)
+	if rc == nil {
+		return
+	}
+	for _, headerName := range t.forwardHeaders {
+		if val := rc.Get(headerName); val != "" {
+			httpReq.Header.Set(headerName, val)
+		}
+	}
 }

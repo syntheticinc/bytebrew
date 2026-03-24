@@ -248,6 +248,100 @@ docker compose -f /opt/bytebrew/docker-compose.yml logs engine --tail 100
 docker stats bytebrew-engine-1 bytebrew-postgres-1
 ```
 
+## Helm Chart (Kubernetes)
+
+For Kubernetes deployments, ByteBrew provides a Helm chart that packages the engine, PostgreSQL, and optional Ingress configuration.
+
+```bash
+# Install from local chart
+helm install bytebrew ./deploy/helm/bytebrew \
+  --set postgresql.external.host=db.example.com \
+  --set postgresql.external.password=secret \
+  --set ingress.enabled=true \
+  --set ingress.hosts[0].host=bytebrew.example.com
+
+# Install with values file
+helm install bytebrew ./deploy/helm/bytebrew -f values-production.yaml
+```
+
+### Key Helm values
+
+| Value | Default | Description |
+|-------|---------|-------------|
+| `replicaCount` | `1` | Number of engine replicas. |
+| `image.tag` | `latest` | Engine image tag. |
+| `postgresql.enabled` | `true` | Deploy PostgreSQL as a subchart. Set to `false` for external DB. |
+| `postgresql.external.host` | -- | External PostgreSQL host (when `postgresql.enabled=false`). |
+| `postgresql.external.password` | -- | External PostgreSQL password. |
+| `ingress.enabled` | `false` | Enable Kubernetes Ingress. |
+| `ingress.hosts[0].host` | -- | Hostname for the Ingress rule. |
+| `env.ADMIN_USER` | `admin` | Admin Dashboard username. |
+| `env.ADMIN_PASSWORD` | -- | Admin Dashboard password (set via `--set` or Secret). |
+| `serviceMonitor.enabled` | `false` | Create a Prometheus ServiceMonitor (requires prometheus-operator). |
+
+## Prometheus Metrics (EE)
+
+The engine exposes Prometheus-compatible metrics at the `/metrics` endpoint. This is an Enterprise Edition feature.
+
+### Available metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `bytebrew_http_requests_total` | Counter | `method`, `path`, `status` | Total HTTP requests by method, path, and status code. |
+| `bytebrew_http_request_duration_seconds` | Histogram | `method`, `path` | HTTP request latency in seconds. |
+| `bytebrew_active_sessions` | Gauge | -- | Number of currently active chat sessions. |
+| `bytebrew_tool_calls_total` | Counter | `tool_name`, `status` | Total tool invocations by name and outcome. |
+| `bytebrew_llm_requests_total` | Counter | `provider`, `model` | Total LLM API calls by provider and model. |
+| `bytebrew_llm_request_duration_seconds` | Histogram | `provider`, `model` | LLM API call latency in seconds. |
+
+### Scraping
+
+```bash
+# Manual check
+curl http://localhost:8443/metrics
+```
+
+### Kubernetes ServiceMonitor
+
+If you use the Prometheus Operator, enable the ServiceMonitor in the Helm chart:
+
+```yaml
+# values.yaml
+serviceMonitor:
+  enabled: true
+  interval: 15s
+  labels:
+    release: prometheus    # Must match your Prometheus selector
+```
+
+Or create a ServiceMonitor manually:
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: bytebrew-engine
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: bytebrew-engine
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+```
+
+### Grafana dashboard
+
+Import the metrics into a Grafana dashboard to monitor:
+
+- Request rate and latency (`bytebrew_http_requests_total`, `bytebrew_http_request_duration_seconds`)
+- Active sessions (`bytebrew_active_sessions`)
+- Tool call success/failure rates (`bytebrew_tool_calls_total`)
+- LLM provider latency and usage (`bytebrew_llm_requests_total`, `bytebrew_llm_request_duration_seconds`)
+
 ## Security checklist
 
 - [ ] Change default `ADMIN_USER` and `ADMIN_PASSWORD`
@@ -266,4 +360,5 @@ docker stats bytebrew-engine-1 bytebrew-postgres-1
 
 - [Docker Deployment](/docs/deployment/docker/)
 - [Model Selection](/docs/deployment/model-selection/)
+- [Model Registry](/docs/deployment/model-registry/)
 - [API Reference](/docs/getting-started/api-reference/)

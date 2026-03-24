@@ -55,6 +55,11 @@ func RegisterAllBuiltins(store *BuiltinToolStore) {
 		return NewAskUserTool(deps.Proxy, deps.SessionID)
 	})
 
+	// Structured output — display rich data blocks (tables, action buttons) to the user
+	store.Register("show_structured_output", func(deps ToolDependencies) tool.InvokableTool {
+		return NewStructuredOutputTool(deps.EventEmitter, deps.SessionID)
+	})
+
 	// LSP
 	store.Register("lsp", func(deps ToolDependencies) tool.InvokableTool {
 		return NewLspTool(deps.Proxy, deps.SessionID)

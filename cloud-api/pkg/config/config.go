@@ -103,10 +103,12 @@ type StripeConfig struct {
 
 // StripePricesConfig maps tier+period to Stripe Price IDs.
 type StripePricesConfig struct {
-	PersonalMonthly string `mapstructure:"personal_monthly"`
-	PersonalAnnual  string `mapstructure:"personal_annual"`
-	TeamsMonthly    string `mapstructure:"teams_monthly"`
-	TeamsAnnual     string `mapstructure:"teams_annual"`
+	PersonalMonthly  string `mapstructure:"personal_monthly"`
+	PersonalAnnual   string `mapstructure:"personal_annual"`
+	TeamsMonthly     string `mapstructure:"teams_monthly"`
+	TeamsAnnual      string `mapstructure:"teams_annual"`
+	EngineEEMonthly  string `mapstructure:"engine_ee_monthly"`
+	EngineEEAnnual   string `mapstructure:"engine_ee_annual"`
 }
 
 // Load reads configuration from a YAML file and optional .env file
@@ -142,6 +144,8 @@ func Load(configPath string) (*Config, error) {
 		{"stripe.prices.personal_annual", "STRIPE_PRICES_PERSONAL_ANNUAL"},
 		{"stripe.prices.teams_monthly", "STRIPE_PRICES_TEAMS_MONTHLY"},
 		{"stripe.prices.teams_annual", "STRIPE_PRICES_TEAMS_ANNUAL"},
+		{"stripe.prices.engine_ee_monthly", "STRIPE_PRICES_ENGINE_EE_MONTHLY"},
+		{"stripe.prices.engine_ee_annual", "STRIPE_PRICES_ENGINE_EE_ANNUAL"},
 		{"deepinfra.api_key", "DEEPINFRA_API_KEY"},
 		{"email.resend_api_key", "EMAIL_RESEND_API_KEY"},
 		{"google.client_id", "GOOGLE_CLIENT_ID"},

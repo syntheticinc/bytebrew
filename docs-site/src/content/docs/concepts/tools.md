@@ -22,7 +22,8 @@ No side effects. Safe to run without confirmation.
 
 | Tool | Description |
 |------|-------------|
-| `ask_user` | Pause and ask user a question. Useful for clarification or confirmation. |
+| `ask_user` | Pause and ask user structured questions. Supports `input_type` (text, single_select, multi_select, confirm) and rich options with `value`/`description`. See [ask_user details](#ask_user-structured-questions) below. |
+| `show_structured_output` | Display structured data blocks to the user (summary tables, action buttons). See [structured output](#structured-output) below. |
 | `web_search` | Search the internet for information. Returns relevant web page snippets. |
 | `knowledge_search` | Search the agent's knowledge base (RAG). Automatically injected when `knowledge:` path is set. |
 | `manage_tasks` | Create and manage work tasks. Enables persistent task tracking across sessions. |
@@ -141,6 +142,95 @@ agents:
 ```
 
 Default is `sequential`. Use `parallel` when tools are independent (e.g., checking service status + fetching logs at the same time).
+
+## ask_user: structured questions
+
+The `ask_user` tool supports rich, structured questions with typed inputs and selectable options. An agent can ask 1-5 questions in a single call. Each question supports the following fields:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `text` | Yes | The question text displayed to the user. |
+| `input_type` | No | Input type: `text` (default), `single_select`, `multi_select`, or `confirm`. |
+| `options` | No | Array of 2-5 options (for select types). Each option has `label` (required), `value` (optional), and `description` (optional). |
+| `default` | No | Default answer pre-filled for the user. |
+| `columns` | No | Grid columns for card-style layout (e.g., 2, 3). |
+
+### Examples
+
+**Single select with descriptions:**
+
+```json
+{
+  "text": "What platform are you building for?",
+  "input_type": "single_select",
+  "options": [
+    {"label": "iOS", "value": "ios", "description": "iPhone and iPad"},
+    {"label": "Android", "value": "android", "description": "Google Play"},
+    {"label": "Both", "value": "both", "description": "Cross-platform"}
+  ],
+  "columns": 3
+}
+```
+
+**Multi-select:**
+
+```json
+{
+  "text": "Which integrations do you need?",
+  "input_type": "multi_select",
+  "options": [
+    {"label": "Slack"},
+    {"label": "Email"},
+    {"label": "Webhook"},
+    {"label": "SMS"}
+  ]
+}
+```
+
+**Confirmation:**
+
+```json
+{
+  "text": "Should I proceed with the deployment?",
+  "input_type": "confirm"
+}
+```
+
+The SSE event type for ask_user is `user_input_required`. See [REST API: Handling user_input_required events](/docs/integration/rest-api/#handling-user_input_required-events) for client implementation details.
+
+## Structured output
+
+The `show_structured_output` tool lets agents present organized data to the user -- tables, summaries, and action buttons. Unlike `ask_user`, structured output is display-only and does not pause execution.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `output_type` | Yes | Type of output (e.g., `summary_table`). |
+| `title` | No | Title displayed above the output block. |
+| `description` | No | Description text. |
+| `rows` | No | Array of `{label, value}` pairs for table rows. |
+| `actions` | No | Array of `{label, type, value}` action buttons. `type` is `primary` or `secondary`. |
+
+### Example
+
+An agent analyzing a project might produce:
+
+```json
+{
+  "output_type": "summary_table",
+  "title": "Project Overview",
+  "rows": [
+    {"label": "Name", "value": "MyApp"},
+    {"label": "Framework", "value": "React + Go"},
+    {"label": "Test Coverage", "value": "87%"}
+  ],
+  "actions": [
+    {"label": "Run Tests", "type": "primary", "value": "run_tests"},
+    {"label": "Skip", "type": "secondary", "value": "skip"}
+  ]
+}
+```
+
+The client receives this as a `structured_output` SSE event. Action button clicks can be sent back as regular chat messages.
 
 ---
 

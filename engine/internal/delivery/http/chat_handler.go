@@ -1,28 +1,32 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 )
 
 // ChatService handles agent chat sessions via SSE.
 type ChatService interface {
 	// Chat starts a chat session and streams events.
 	// Returns a channel of SSE events and an error.
-	Chat(agentName, message, userID, sessionID string) (<-chan SSEEvent, error)
+	Chat(ctx context.Context, agentName, message, userID, sessionID string) (<-chan SSEEvent, error)
 }
 
 // ChatHandler serves POST /api/v1/agents/{name}/chat with SSE streaming.
 type ChatHandler struct {
-	service ChatService
+	service        ChatService
+	forwardHeaders []string // HTTP headers to capture into RequestContext
 }
 
 // NewChatHandler creates a new ChatHandler.
-func NewChatHandler(service ChatService) *ChatHandler {
-	return &ChatHandler{service: service}
+// forwardHeaders is the union of all forward_headers across MCP server configs.
+func NewChatHandler(service ChatService, forwardHeaders []string) *ChatHandler {
+	return &ChatHandler{service: service, forwardHeaders: forwardHeaders}
 }
 
 type chatRequest struct {
@@ -64,7 +68,8 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	events, err := h.service.Chat(agentName, req.Message, req.UserID, req.SessionID)
+	ctx := h.buildRequestContext(r)
+	events, err := h.service.Chat(ctx, agentName, req.Message, req.UserID, req.SessionID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -147,4 +152,26 @@ func (h *ChatHandler) handleNonStreaming(w http.ResponseWriter, agentName string
 		ToolCalls: toolCalls,
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// buildRequestContext extracts configured forward headers from the HTTP request
+// and stores them in a domain.RequestContext within the request's Go context.
+func (h *ChatHandler) buildRequestContext(r *http.Request) context.Context {
+	ctx := r.Context()
+	if len(h.forwardHeaders) == 0 {
+		return ctx
+	}
+
+	headers := make(map[string]string)
+	for _, name := range h.forwardHeaders {
+		if val := r.Header.Get(name); val != "" {
+			headers[name] = val
+		}
+	}
+	if len(headers) == 0 {
+		return ctx
+	}
+
+	rc := &domain.RequestContext{Headers: headers}
+	return domain.WithRequestContext(ctx, rc)
 }

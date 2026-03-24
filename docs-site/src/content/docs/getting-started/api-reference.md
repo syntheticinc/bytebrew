@@ -271,7 +271,7 @@ curl -X POST http://localhost:8443/api/v1/models \
   }'
 ```
 
-Supported types: `ollama`, `openai_compatible`, `anthropic`.
+Supported types: `ollama`, `openai_compatible`, `anthropic`, `azure_openai`, `google`, `openrouter`, `deepseek`, `mistral`, `xai`, `zai`.
 
 :::note
 Models are resolved dynamically — no Engine restart needed after adding a model. The next chat request will use the new model immediately.
@@ -495,6 +495,50 @@ curl -N http://localhost:8443/api/v1/agents/my-agent/chat \
 :::caution[Security consideration]
 BYOK headers are only accepted when the corresponding provider is explicitly enabled in Settings. By default, all providers are disabled for BYOK. The user-provided key is used for that single request only and is never stored.
 :::
+
+## Model Registry
+
+Browse the built-in catalog of known models and providers. No authentication required.
+
+```bash
+# List all models (filterable by provider, tier, supports_tools)
+curl "http://localhost:8443/api/v1/models/registry?provider=anthropic&tier=1"
+
+# List all providers
+curl http://localhost:8443/api/v1/models/registry/providers
+```
+
+See [Model Registry](/docs/deployment/model-registry/) for full documentation.
+
+## Tool Call Audit (EE)
+
+Query tool call history for compliance and debugging. Requires `admin` scope.
+
+```bash
+curl "http://localhost:8443/api/v1/audit/tool-calls?agent=sales-agent&from=2026-03-01" \
+  -H "Authorization: Bearer bb_your_token"
+```
+
+Returns paginated results with session ID, agent name, tool name, input/output, status, duration, and timestamp. See [REST API: Tool call audit log](/docs/integration/rest-api/#tool-call-audit-log-ee) for the full query parameter reference.
+
+## Rate Limit Usage (EE)
+
+Check current rate limit consumption for a specific key. Requires `admin` scope.
+
+```bash
+curl "http://localhost:8443/api/v1/rate-limits/usage?key_header=X-Org-Id&key_value=org-123" \
+  -H "Authorization: Bearer bb_your_token"
+```
+
+Returns rule name, key, tier, used/limit counts, window duration, and reset time. See [Configuration: Rate Limits](/docs/getting-started/configuration/#rate-limits-ee) for setup.
+
+## Prometheus Metrics (EE)
+
+```bash
+curl http://localhost:8443/metrics
+```
+
+Returns Prometheus-compatible metrics. No authentication required. See [Production: Prometheus Metrics](/docs/deployment/production/#prometheus-metrics-ee) for available metric names and Kubernetes integration.
 
 ---
 

@@ -15,6 +15,8 @@ func TestTierForPriceID(t *testing.T) {
 		PersonalAnnual:  "price_personal_a",
 		TeamsMonthly:    "price_teams_m",
 		TeamsAnnual:     "price_teams_a",
+		EngineEEMonthly: "price_engine_ee_m",
+		EngineEEAnnual:  "price_engine_ee_a",
 	})
 
 	tests := []struct {
@@ -26,6 +28,8 @@ func TestTierForPriceID(t *testing.T) {
 		{"price_personal_a", domain.TierPersonal, true},
 		{"price_teams_m", domain.TierTeams, true},
 		{"price_teams_a", domain.TierTeams, true},
+		{"price_engine_ee_m", domain.TierEngineEE, true},
+		{"price_engine_ee_a", domain.TierEngineEE, true},
 		{"price_unknown", "", false},
 	}
 
@@ -46,6 +50,8 @@ func TestPriceIDForPlan(t *testing.T) {
 		PersonalAnnual:  "price_personal_a",
 		TeamsMonthly:    "price_teams_m",
 		TeamsAnnual:     "price_teams_a",
+		EngineEEMonthly: "price_engine_ee_m",
+		EngineEEAnnual:  "price_engine_ee_a",
 	})
 
 	tests := []struct {
@@ -58,6 +64,8 @@ func TestPriceIDForPlan(t *testing.T) {
 		{"personal", "annual", "price_personal_a", false},
 		{"teams", "monthly", "price_teams_m", false},
 		{"teams", "annual", "price_teams_a", false},
+		{"engine_ee", "monthly", "price_engine_ee_m", false},
+		{"engine_ee", "annual", "price_engine_ee_a", false},
 		{"enterprise", "monthly", "", true},
 		{"personal", "weekly", "", true},
 		{"starter", "monthly", "", true},

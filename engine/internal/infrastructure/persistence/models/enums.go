@@ -23,6 +23,7 @@ const (
 	ModelProviderOllama           = "ollama"
 	ModelProviderOpenAICompatible = "openai_compatible"
 	ModelProviderAnthropic        = "anthropic"
+	ModelProviderAzureOpenAI      = "azure_openai"
 )
 
 // ToolType — agent tool classification.

@@ -1,41 +1,53 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { SHOW_EE_PRICING } from '../lib/feature-flags';
+import { getPricing, formatPriceWithInterval, type PricingData } from '../api/pricing';
 
 type Period = 'monthly' | 'annual';
+type FeatureStatus = 'available' | 'coming_soon';
+
+interface EEFeature {
+  label: string;
+  status: FeatureStatus;
+}
 
 const CE_FEATURES = [
   'Unlimited agents & spawn',
+  'Multi-agent orchestration',
   'MCP servers & declarative tools',
   'Cron, webhooks, background jobs',
   'Task system (manage_tasks)',
   'Knowledge/RAG',
+  'Model Registry & recommendations',
   'REST API + SSE + WebSocket',
   'Admin Dashboard (full CRUD)',
   'BYOK (bring your own keys)',
   'API tokens with scopes',
-  'Docker / bare metal',
+  'Docker / bare metal / Kubernetes',
 ];
 
 const EE_FEATURES_PREVIEW = [
+  'Audit Log',
+  'Rate Limiting',
+  'Prometheus Metrics',
   'Session Explorer',
   'Cost Analytics',
   'Quality Metrics',
-  'Prompt A/B Testing',
-  'Audit Log Export',
   'PII Redaction',
-  'Data Retention Policies',
 ];
 
-const EE_FEATURES_FULL = [
-  'Everything in Community Edition',
-  'Session Explorer & Replay',
-  'Cost Analytics per agent',
-  'Quality Metrics & Dashboards',
-  'Prompt A/B Testing',
-  'Audit Log Export',
-  'PII Redaction',
-  'Configurable Data Retention',
+const EE_FEATURES_FULL: EEFeature[] = [
+  { label: 'Everything in Community Edition', status: 'available' },
+  { label: 'Audit Log (tool calls API)', status: 'available' },
+  { label: 'Configurable Rate Limiting', status: 'available' },
+  { label: 'Prometheus Metrics', status: 'available' },
+  { label: 'Session Explorer & Replay', status: 'coming_soon' },
+  { label: 'Cost Analytics per agent', status: 'coming_soon' },
+  { label: 'Quality Metrics & Dashboards', status: 'coming_soon' },
+  { label: 'Prompt A/B Testing', status: 'coming_soon' },
+  { label: 'PII Redaction', status: 'coming_soon' },
+  { label: 'Configurable Data Retention', status: 'coming_soon' },
 ];
 
 const CUSTOM_FEATURES = [
@@ -47,10 +59,10 @@ const CUSTOM_FEATURES = [
   'Migration assistance',
 ];
 
-function CheckIcon() {
+function CheckIcon({ dimmed }: { dimmed?: boolean }) {
   return (
     <svg
-      className="h-4 w-4 mt-0.5 text-emerald-400 shrink-0"
+      className={`h-4 w-4 mt-0.5 shrink-0 ${dimmed ? 'text-brand-shade3' : 'text-emerald-400'}`}
       fill="none"
       viewBox="0 0 24 24"
       strokeWidth={2}
@@ -65,6 +77,14 @@ function CheckIcon() {
   );
 }
 
+function ComingSoonBadge() {
+  return (
+    <span className="ml-1.5 inline-flex items-center rounded-full bg-brand-shade3/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-shade3 ring-1 ring-inset ring-brand-shade3/20">
+      Coming Soon
+    </span>
+  );
+}
+
 function FeatureList({ features }: { features: string[] }) {
   return (
     <ul className="mt-6 space-y-2 flex-1">
@@ -72,6 +92,27 @@ function FeatureList({ features }: { features: string[] }) {
         <li key={feature} className="flex items-start gap-2 text-sm text-brand-shade2">
           <CheckIcon />
           {feature}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function EEFeatureList({ features }: { features: EEFeature[] }) {
+  return (
+    <ul className="mt-6 space-y-2 flex-1">
+      {features.map((feature) => (
+        <li
+          key={feature.label}
+          className={`flex items-start gap-2 text-sm ${
+            feature.status === 'coming_soon' ? 'text-brand-shade3' : 'text-brand-shade2'
+          }`}
+        >
+          <CheckIcon dimmed={feature.status === 'coming_soon'} />
+          <span>
+            {feature.label}
+            {feature.status === 'coming_soon' && <ComingSoonBadge />}
+          </span>
         </li>
       ))}
     </ul>
@@ -93,8 +134,25 @@ function Badge({ text, color }: { text: string; color: 'accent' | 'gray' }) {
   );
 }
 
-export function EnginePricingTable() {
+/** Invisible placeholder that matches Badge height to keep card titles aligned */
+function BadgePlaceholder() {
+  return <span className="inline-flex h-[22px]" aria-hidden="true" />;
+}
+
+interface EnginePricingTableProps {
+  onSelectPlan?: (plan: string, period: Period) => void;
+}
+
+export function EnginePricingTable({ onSelectPlan }: EnginePricingTableProps = {}) {
   const [period, setPeriod] = useState<Period>('monthly');
+
+  const pricingQuery = useQuery({
+    queryKey: ['pricing'],
+    queryFn: getPricing,
+    staleTime: 60 * 60 * 1000, // 1 hour
+    retry: 1,
+    enabled: SHOW_EE_PRICING,
+  });
 
   return (
     <div>
@@ -128,7 +186,7 @@ export function EnginePricingTable() {
       )}
 
       {/* Plan cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto items-stretch">
         {/* Community Edition */}
         <div className="rounded-[12px] border border-brand-accent bg-brand-dark-alt ring-1 ring-brand-accent/50 p-5 flex flex-col">
           <Badge text="Free Forever" color="accent" />
@@ -143,27 +201,35 @@ export function EnginePricingTable() {
 
           <FeatureList features={CE_FEATURES} />
 
-          <Link
-            to="/download"
-            className="mt-6 w-full rounded-[10px] bg-brand-accent py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors text-center block"
-          >
-            Download
-          </Link>
-          <p className="mt-3 text-xs text-brand-shade3 text-center">
-            No credit card required. No time limits.
-          </p>
+          <div className="mt-auto pt-6">
+            <Link
+              to="/download"
+              className="w-full rounded-[10px] bg-brand-accent py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors text-center block"
+            >
+              Download
+            </Link>
+            <p className="mt-3 text-xs text-brand-shade3 text-center">
+              No credit card required. No time limits.
+            </p>
+          </div>
         </div>
 
         {/* Enterprise Edition */}
         {SHOW_EE_PRICING ? (
-          <EECardPriced period={period} />
+          <EECardPriced
+            period={period}
+            onSelectPlan={onSelectPlan}
+            pricing={pricingQuery.data}
+            isLoading={pricingQuery.isLoading}
+          />
         ) : (
           <EECardPreview />
         )}
 
         {/* Custom */}
         <div className="rounded-[12px] border border-brand-shade3/20 bg-brand-dark-alt p-5 flex flex-col">
-          <h3 className="text-lg font-semibold text-brand-light">Custom</h3>
+          <BadgePlaceholder />
+          <h3 className="mt-3 text-lg font-semibold text-brand-light">Custom</h3>
           <p className="mt-1 text-sm text-brand-shade2">
             For teams requiring enterprise security.
           </p>
@@ -174,15 +240,17 @@ export function EnginePricingTable() {
 
           <FeatureList features={CUSTOM_FEATURES} />
 
-          <a
-            href="mailto:info@bytebrew.ai"
-            className="mt-6 w-full rounded-[10px] bg-brand-shade3/20 py-2.5 text-sm font-medium text-brand-light hover:bg-brand-shade3/30 transition-colors text-center block"
-          >
-            Talk to Sales
-          </a>
-          <p className="mt-3 text-xs text-brand-shade3 text-center">
-            For teams requiring enterprise security and compliance.
-          </p>
+          <div className="mt-auto pt-6">
+            <a
+              href="mailto:info@bytebrew.ai"
+              className="w-full rounded-[10px] bg-brand-shade3/20 py-2.5 text-sm font-medium text-brand-light hover:bg-brand-shade3/30 transition-colors text-center block"
+            >
+              Talk to Sales
+            </a>
+            <p className="mt-3 text-xs text-brand-shade3 text-center">
+              For teams requiring enterprise security and compliance.
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -200,21 +268,46 @@ function EECardPreview() {
 
       <FeatureList features={EE_FEATURES_PREVIEW} />
 
-      <a
-        href="mailto:info@bytebrew.ai"
-        className="mt-6 w-full rounded-[10px] bg-brand-shade3/20 py-2.5 text-sm font-medium text-brand-light hover:bg-brand-shade3/30 transition-colors text-center block"
-      >
-        Join Waitlist
-      </a>
-      <p className="mt-3 text-xs text-brand-shade3 text-center">
-        Be the first to know when EE launches.
-      </p>
+      <div className="mt-auto pt-6">
+        <a
+          href="mailto:info@bytebrew.ai"
+          className="w-full rounded-[10px] bg-brand-shade3/20 py-2.5 text-sm font-medium text-brand-light hover:bg-brand-shade3/30 transition-colors text-center block"
+        >
+          Join Waitlist
+        </a>
+        <p className="mt-3 text-xs text-brand-shade3 text-center">
+          Be the first to know when EE launches.
+        </p>
+      </div>
     </div>
   );
 }
 
-function EECardPriced({ period }: { period: Period }) {
-  const price = period === 'monthly' ? '$499/mo' : '$4,990/yr';
+interface EECardPricedProps {
+  period: Period;
+  onSelectPlan?: (plan: string, period: Period) => void;
+  pricing?: PricingData;
+  isLoading: boolean;
+}
+
+function getEEPrice(pricing: PricingData | undefined, period: Period): string {
+  const plan = pricing?.engine_ee;
+  if (!plan) return '';
+
+  const detail = period === 'monthly' ? plan.monthly : plan.annual;
+  if (!detail) return '';
+
+  return formatPriceWithInterval(detail.amount, detail.currency, detail.interval);
+}
+
+function EECardPriced({ period, onSelectPlan, pricing, isLoading }: EECardPricedProps) {
+  const price = getEEPrice(pricing, period);
+
+  const handleClick = () => {
+    if (onSelectPlan) {
+      onSelectPlan('engine_ee', period);
+    }
+  };
 
   return (
     <div className="rounded-[12px] border border-brand-accent bg-brand-dark-alt ring-1 ring-brand-accent/50 p-5 flex flex-col">
@@ -225,17 +318,37 @@ function EECardPriced({ period }: { period: Period }) {
       </p>
 
       <div className="mt-4">
-        <span className="text-3xl font-bold text-brand-light">{price}</span>
+        {isLoading ? (
+          <span className="text-3xl font-bold text-brand-shade3 animate-pulse">---</span>
+        ) : price ? (
+          <span className="text-3xl font-bold text-brand-light">{price}</span>
+        ) : (
+          <span className="text-3xl font-bold text-brand-shade3">---</span>
+        )}
       </div>
 
-      <FeatureList features={EE_FEATURES_FULL} />
+      <EEFeatureList features={EE_FEATURES_FULL} />
 
-      <Link
-        to="/register"
-        className="mt-6 w-full rounded-[10px] bg-brand-accent py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors text-center block"
-      >
-        Start Free Trial
-      </Link>
+      <div className="mt-auto pt-6">
+        {onSelectPlan ? (
+          <button
+            onClick={handleClick}
+            className="w-full rounded-[10px] bg-brand-accent py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors text-center block"
+          >
+            Subscribe
+          </button>
+        ) : (
+          <Link
+            to="/register"
+            className="w-full rounded-[10px] bg-brand-accent py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors text-center block"
+          >
+            Start Free Trial
+          </Link>
+        )}
+        <p className="mt-3 text-xs text-brand-shade3 text-center">
+          14-day free trial. No credit card required.
+        </p>
+      </div>
     </div>
   );
 }

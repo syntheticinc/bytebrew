@@ -1,0 +1,17 @@
+{{- if .Values.persistence.knowledge.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "bytebrew-engine.fullname" . }}-knowledge
+  labels:
+    {{- include "bytebrew-engine.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.knowledge.accessMode }}
+  {{- if .Values.persistence.knowledge.storageClass }}
+  storageClassName: {{ .Values.persistence.knowledge.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.knowledge.size }}
+{{- end }}

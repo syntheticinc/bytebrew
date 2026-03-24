@@ -218,7 +218,7 @@ Models define the LLM backends your agents use. ByteBrew supports any OpenAI-com
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `provider` * | -- | LLM provider type: `openai` (any OpenAI-compatible API), `anthropic`, or `ollama`. |
+| `provider` * | -- | LLM provider type: `ollama`, `openai_compatible`, `anthropic`, `azure_openai`, `google`, `openrouter`, `deepseek`, `mistral`, `xai`, or `zai`. |
 | `model` | -- | Model name as expected by the provider API (e.g., gpt-4o, claude-sonnet-4-20250514, llama3.2). |
 | `base_url` | Provider default | Custom API endpoint. Required for Ollama and third-party OpenAI-compatible providers. |
 | `api_key` | -- | API key for the provider. Use `${VAR}` syntax. Not required for Ollama. |
@@ -305,6 +305,81 @@ models:
     api_key: ${ANTHROPIC_API_KEY}
 ```
 
+### Azure OpenAI
+
+Azure-hosted OpenAI models use deployment-based URLs and require an `api_version` field:
+
+```yaml
+models:
+  gpt4-azure:
+    provider: azure_openai
+    base_url: "https://my-company.openai.azure.com"
+    model: "gpt-4o-deploy"              # Your deployment name
+    api_version: "2024-10-21"
+    api_key: ${AZURE_OPENAI_KEY}
+```
+
+The engine constructs the full Azure URL automatically: `{base_url}/openai/deployments/{model}/chat/completions?api-version={api_version}`. Authentication uses the `api-key` header instead of `Authorization: Bearer`.
+
+### Google Gemini
+
+Native Google Gemini API support via the `generateContent` endpoint:
+
+```yaml
+models:
+  gemini-pro:
+    provider: google
+    model: "gemini-3.1-pro"
+    api_key: ${GOOGLE_API_KEY}
+```
+
+Authentication uses the `x-goog-api-key` header. No `base_url` needed -- the engine uses the default Google AI API endpoint.
+
+### Preset providers
+
+Several providers have preset `base_url` values, so you only need to specify `provider`, `model`, and `api_key`:
+
+| Provider | Preset base_url |
+|----------|----------------|
+| `openrouter` | `https://openrouter.ai/api/v1` |
+| `deepseek` | `https://api.deepseek.com/v1` |
+| `mistral` | `https://api.mistral.ai/v1` |
+| `xai` | `https://api.x.ai/v1` |
+| `zai` | `https://open.bigmodel.cn/api/paas/v4` |
+
+```yaml
+models:
+  # OpenRouter — access 100+ models via one API key
+  openrouter-claude:
+    provider: openrouter
+    model: "anthropic/claude-sonnet-4-20250514"
+    api_key: ${OPENROUTER_API_KEY}
+
+  # DeepSeek — cost-effective coding model
+  deepseek-v3:
+    provider: deepseek
+    model: "deepseek-chat"
+    api_key: ${DEEPSEEK_API_KEY}
+
+  # Mistral
+  mistral-medium:
+    provider: mistral
+    model: "mistral-medium-3"
+    api_key: ${MISTRAL_API_KEY}
+
+  # xAI Grok
+  grok:
+    provider: xai
+    model: "grok-4.1"
+    api_key: ${XAI_API_KEY}
+
+  # Z.ai GLM
+  glm-5:
+    provider: zai
+    model: "glm-5"
+    api_key: ${ZAI_API_KEY}
+```
+
 ## Tool Configuration (Declarative YAML)
 
 Declarative HTTP tools let you connect agents to any REST API without writing code. You define the endpoint, parameters, and authentication in YAML -- the engine handles the HTTP request and passes the result back to the LLM.
@@ -387,6 +462,7 @@ Model Context Protocol (MCP) servers extend agent capabilities with external too
 | `env` | `{}` | Environment variables passed to the stdio process. Supports `${VAR}` syntax. |
 | `type` | `stdio` | Transport type: `sse` for HTTP-based MCP servers. Omit for stdio (default). |
 | `url` | -- | For HTTP/SSE transport: the server URL to connect to. |
+| `forward_headers` | `[]` | List of HTTP header names to forward from the incoming chat request to the MCP server. Useful for passing tenant/user context to multi-tenant MCP backends. |
 
 ```yaml
 mcp_servers:
@@ -413,7 +489,19 @@ mcp_servers:
   realtime-data:
     type: sse
     url: "http://localhost:4000/sse"
+
+  # SSE with forwarded headers — pass tenant context to multi-tenant MCP backends
+  my-platform:
+    type: sse
+    url: "http://mcp-server:8087/mcp"
+    forward_headers:
+      - "X-Org-Id"
+      - "X-User-Id"
 ```
+
+:::tip[Forward headers for multi-tenant MCP]
+When your MCP server needs to know which organization or user is making the request, use `forward_headers`. The engine extracts these headers from the incoming chat request and includes them in every HTTP request to the MCP server. This way, the MCP server can apply tenant-specific logic without requiring separate server instances per tenant.
+:::
 
 :::note[Tool discovery]
 When an MCP server connects, the engine discovers its available tools automatically. These tools appear in the agent's tool palette alongside built-in tools. You can see discovered tools and their descriptions in the Admin Dashboard under MCP Servers.
@@ -459,6 +547,24 @@ triggers:
     agent: ops-bot
 ```
 
+### Trigger `on_complete` webhook
+
+Triggers can fire a webhook callback when the agent completes its task. This is useful for notifying external systems about task results (e.g., CI pipelines, monitoring dashboards, or downstream workflows).
+
+```yaml
+triggers:
+  telemetry-check:
+    cron: "*/10 * * * *"
+    agent: monitor
+    message: "Check telemetry dashboards for anomalies"
+    on_complete:
+      webhook: "https://my-app.com/callback"
+      headers:
+        Authorization: "Bearer ${CALLBACK_TOKEN}"
+```
+
+The engine sends a POST request to the `webhook` URL when the agent finishes, with the task result in the request body. Custom `headers` are included in the callback request and support `${VAR}` syntax for secrets.
+
 ### Webhook security
 
 When a `secret` is configured, the engine verifies incoming requests using HMAC-SHA256 signature verification. The external service must include the signature in the `X-Webhook-Secret` header:
@@ -473,6 +579,46 @@ curl -X POST http://localhost:8443/api/v1/webhooks/orders \
 
 :::caution[Production webhooks]
 Always configure a `secret` for production webhook triggers. Without signature verification, anyone who knows the URL can trigger your agent.
+:::
+
+## Rate Limits (EE)
+
+Enterprise Edition supports configurable, header-based rate limiting with tiered access levels. Rate limit rules are defined at the top level of the configuration and apply to all chat API endpoints.
+
+Each rule identifies requests by a header value (e.g., `X-Org-Id`) and assigns a tier based on another header (e.g., `X-Subscription-Tier`). Each tier defines its own request quota and time window.
+
+```yaml
+rate_limits:
+  - name: "per-org"
+    key_header: "X-Org-Id"
+    tier_header: "X-Subscription-Tier"
+    tiers:
+      free:
+        requests: 50
+        window: "24h"
+      pro:
+        requests: 500
+        window: "24h"
+      enterprise:
+        unlimited: true
+    default_tier: "free"
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `name` | Unique name for this rate limit rule. |
+| `key_header` | HTTP header used to identify the requester (e.g., org ID, user ID). |
+| `tier_header` | HTTP header that specifies the requester's tier (e.g., subscription level). |
+| `tiers` | Map of tier names to rate limit parameters. |
+| `tiers.<name>.requests` | Maximum number of requests allowed within the window. |
+| `tiers.<name>.window` | Time window as a Go duration string (e.g., `1h`, `24h`, `30m`). |
+| `tiers.<name>.unlimited` | Set to `true` to allow unlimited requests for this tier. |
+| `default_tier` | Tier used when the `tier_header` is missing or contains an unknown value. |
+
+When rate limiting is active, every response includes `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers. Requests that exceed the limit receive HTTP 429.
+
+:::note[Enterprise Edition]
+Configurable rate limits are an Enterprise Edition feature. Community Edition uses a simple per-token rate limiter configured in Settings.
 :::
 
 ---

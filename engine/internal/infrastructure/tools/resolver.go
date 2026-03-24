@@ -1,9 +1,15 @@
 package tools
 
 import (
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/indexing"
 	"github.com/cloudwego/eino/components/tool"
 )
+
+// ToolEventEmitter sends agent events from tools (e.g. structured output).
+type ToolEventEmitter interface {
+	Send(event *domain.AgentEvent) error
+}
 
 // ToolDependencies holds all dependencies needed by tools
 type ToolDependencies struct {
@@ -18,6 +24,7 @@ type ToolDependencies struct {
 	SubtaskManager     SubtaskManager
 	AgentPool          AgentPoolForTool
 	EngineTaskManager  EngineTaskManager  // Phase 4: engine task CRUD
+	EventEmitter       ToolEventEmitter   // event stream for tools that emit events
 	WebSearchTool      tool.InvokableTool // pre-created (depends on API key)
 	WebFetchTool       tool.InvokableTool // pre-created
 	ChunkStore         *indexing.ChunkStore

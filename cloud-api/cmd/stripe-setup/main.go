@@ -21,7 +21,7 @@ import (
 )
 
 type productDef struct {
-	productKey string // metadata key: "personal" or "teams"
+	productKey string // metadata key: "personal", "teams", or "engine_ee"
 	name        string
 	description string
 	priceAmount int64  // in cents
@@ -61,6 +61,22 @@ var products = []productDef{
 		priceAmount: 30000, // $300/seat/yr (~17% off)
 		interval:    "year",
 		configKey:   "teams_annual",
+	},
+	{
+		productKey:  "engine_ee",
+		name:        "ByteBrew Engine Enterprise",
+		description: "Enterprise features for ByteBrew Engine: audit logs, configurable rate limiting, Prometheus metrics, and more.",
+		priceAmount: 49900, // $499/mo
+		interval:    "month",
+		configKey:   "engine_ee_monthly",
+	},
+	{
+		productKey:  "engine_ee",
+		name:        "ByteBrew Engine Enterprise",
+		description: "Enterprise features for ByteBrew Engine: audit logs, configurable rate limiting, Prometheus metrics, and more.",
+		priceAmount: 499000, // $4,990/yr (~17% off)
+		interval:    "year",
+		configKey:   "engine_ee_annual",
 	},
 }
 

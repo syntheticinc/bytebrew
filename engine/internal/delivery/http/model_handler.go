@@ -11,22 +11,24 @@ import (
 
 // ModelResponse is the API representation of an LLM provider model.
 type ModelResponse struct {
-	ID        uint   `json:"id"`
-	Name      string `json:"name"`
-	Type      string `json:"type"`
-	BaseURL   string `json:"base_url,omitempty"`
-	ModelName string `json:"model_name"`
-	HasAPIKey bool   `json:"has_api_key"`
-	CreatedAt string `json:"created_at"`
+	ID         uint   `json:"id"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	BaseURL    string `json:"base_url,omitempty"`
+	ModelName  string `json:"model_name"`
+	HasAPIKey  bool   `json:"has_api_key"`
+	APIVersion string `json:"api_version,omitempty"`
+	CreatedAt  string `json:"created_at"`
 }
 
 // CreateModelRequest is the body for POST /api/v1/models.
 type CreateModelRequest struct {
-	Name      string `json:"name"`
-	Type      string `json:"type"`
-	BaseURL   string `json:"base_url,omitempty"`
-	ModelName string `json:"model_name"`
-	APIKey    string `json:"api_key,omitempty"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	BaseURL    string `json:"base_url,omitempty"`
+	ModelName  string `json:"model_name"`
+	APIKey     string `json:"api_key,omitempty"`
+	APIVersion string `json:"api_version,omitempty"`
 }
 
 // ModelVerifyResult contains the result of model connectivity verification.
@@ -97,6 +99,33 @@ func (h *ModelHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if req.ModelName == "" {
 		writeJSONError(w, http.StatusBadRequest, "model_name is required")
 		return
+	}
+
+	// OpenRouter preset: normalize to openai_compatible with default base URL.
+	if req.Type == "openrouter" {
+		if req.APIKey == "" {
+			writeJSONError(w, http.StatusBadRequest, "api_key is required for openrouter")
+			return
+		}
+		req.Type = "openai_compatible"
+		if req.BaseURL == "" {
+			req.BaseURL = "https://openrouter.ai/api/v1"
+		}
+	}
+
+	// Azure OpenAI: require base_url and api_key, default api_version.
+	if req.Type == "azure_openai" {
+		if req.BaseURL == "" {
+			writeJSONError(w, http.StatusBadRequest, "base_url is required for azure_openai (e.g. https://myresource.openai.azure.com)")
+			return
+		}
+		if req.APIKey == "" {
+			writeJSONError(w, http.StatusBadRequest, "api_key is required for azure_openai")
+			return
+		}
+		if req.APIVersion == "" {
+			req.APIVersion = "2024-10-21"
+		}
 	}
 
 	model, err := h.service.CreateModel(r.Context(), req)

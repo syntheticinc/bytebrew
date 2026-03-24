@@ -15,16 +15,17 @@ import (
 
 // RouterConfig holds all dependencies for building the router.
 type RouterConfig struct {
-	AuthHandler    *AuthHandler
-	LicenseHandler *LicenseHandler
-	BillingHandler *BillingHandler  // nil if Stripe not configured
-	WebhookHandler *WebhookHandler  // nil if Stripe not configured
-	UsageHandler   *UsageHandler    // nil if not configured
-	ProxyHandler   *ProxyHandler    // nil if DeepInfra not configured
-	TeamHandler    *TeamHandler     // nil if not configured
-	AccountHandler *AccountHandler  // nil if not configured
-	TokenVerifier  middleware.TokenVerifier
-	CORSOrigins    []string
+	AuthHandler     *AuthHandler
+	LicenseHandler  *LicenseHandler
+	BillingHandler  *BillingHandler  // nil if Stripe not configured
+	WebhookHandler  *WebhookHandler  // nil if Stripe not configured
+	PricingHandler  *PricingHandler  // nil if Stripe not configured
+	UsageHandler    *UsageHandler    // nil if not configured
+	ProxyHandler    *ProxyHandler    // nil if DeepInfra not configured
+	TeamHandler     *TeamHandler     // nil if not configured
+	AccountHandler  *AccountHandler  // nil if not configured
+	TokenVerifier   middleware.TokenVerifier
+	CORSOrigins     []string
 }
 
 // NewRouter creates the Chi router with all routes and middleware.
@@ -75,6 +76,11 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 		if cfg.AccountHandler != nil {
 			r.Post("/auth/forgot-password", cfg.AccountHandler.ForgotPassword)
 			r.Post("/auth/reset-password", cfg.AccountHandler.ResetPassword)
+		}
+
+		// Pricing (public, no auth required)
+		if cfg.PricingHandler != nil {
+			r.Get("/pricing", cfg.PricingHandler.GetPricing)
 		}
 
 		// Protected routes

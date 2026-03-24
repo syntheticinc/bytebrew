@@ -27,9 +27,27 @@ type Config struct {
 	Provider      ProviderConfig      `mapstructure:"provider"`
 	Relay         RelayConfig         `mapstructure:"relay"`
 	Bridge        BridgeConfig        `mapstructure:"bridge"`
+	RateLimits    []RateLimitRule     `mapstructure:"rate_limits"`
 
 	// ConfigDir is the directory containing config files (set by Load, not from YAML)
 	ConfigDir string `mapstructure:"-"`
+}
+
+// RateLimitRule defines a configurable rate limiting rule based on request headers.
+// Used by Enterprise Edition for per-header rate limiting (e.g. per-org, per-user).
+type RateLimitRule struct {
+	Name        string                   `mapstructure:"name" yaml:"name" json:"name"`
+	KeyHeader   string                   `mapstructure:"key_header" yaml:"key_header" json:"key_header"`
+	TierHeader  string                   `mapstructure:"tier_header" yaml:"tier_header" json:"tier_header"`
+	Tiers       map[string]RateLimitTier `mapstructure:"tiers" yaml:"tiers" json:"tiers"`
+	DefaultTier string                   `mapstructure:"default_tier" yaml:"default_tier" json:"default_tier"`
+}
+
+// RateLimitTier defines rate limit parameters for a specific tier.
+type RateLimitTier struct {
+	Requests  int    `mapstructure:"requests" yaml:"requests" json:"requests"`
+	Window    string `mapstructure:"window" yaml:"window" json:"window"`
+	Unlimited bool   `mapstructure:"unlimited" yaml:"unlimited" json:"unlimited"`
 }
 
 // BridgeConfig holds Bridge relay connectivity configuration for mobile devices.

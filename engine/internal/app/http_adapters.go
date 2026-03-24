@@ -735,6 +735,45 @@ func (a *auditServiceHTTPAdapter) ListAuditLogs(ctx context.Context, actorType, 
 	return result, total, nil
 }
 
+// toolCallLogHTTPAdapter bridges ToolCallEventRepository to the http.ToolCallEventQuerier interface.
+type toolCallLogHTTPAdapter struct {
+	repo *config_repo.ToolCallEventRepository
+}
+
+func (a *toolCallLogHTTPAdapter) QueryToolCalls(ctx context.Context, filters deliveryhttp.ToolCallFilters, page, perPage int) ([]deliveryhttp.ToolCallEntry, int64, error) {
+	repoFilters := config_repo.ToolCallFilters{
+		SessionID: filters.SessionID,
+		AgentName: filters.AgentName,
+		ToolName:  filters.ToolName,
+		Status:    filters.Status,
+		UserID:    filters.UserID,
+		From:      filters.From,
+		To:        filters.To,
+	}
+
+	entries, total, err := a.repo.QueryToolCalls(ctx, repoFilters, page, perPage)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	result := make([]deliveryhttp.ToolCallEntry, 0, len(entries))
+	for _, e := range entries {
+		result = append(result, deliveryhttp.ToolCallEntry{
+			ID:         e.ID,
+			SessionID:  e.SessionID,
+			AgentName:  e.AgentName,
+			ToolName:   e.ToolName,
+			Input:      e.Input,
+			Output:     e.Output,
+			Status:     e.Status,
+			DurationMs: e.DurationMs,
+			UserID:     e.UserID,
+			CreatedAt:  e.CreatedAt,
+		})
+	}
+	return result, total, nil
+}
+
 // isEnvPlaceholder checks if a value is an env var placeholder like "${VAR_NAME}".
 func isEnvPlaceholder(v string) bool {
 	return strings.HasPrefix(v, "${") && strings.HasSuffix(v, "}")
@@ -957,13 +996,14 @@ func (m *modelServiceHTTPAdapter) ListModels(ctx context.Context) ([]deliveryhtt
 	result := make([]deliveryhttp.ModelResponse, 0, len(providers))
 	for _, p := range providers {
 		result = append(result, deliveryhttp.ModelResponse{
-			ID:        p.ID,
-			Name:      p.Name,
-			Type:      p.Type,
-			BaseURL:   p.BaseURL,
-			ModelName: p.ModelName,
-			HasAPIKey: p.APIKeyEncrypted != "",
-			CreatedAt: p.CreatedAt.Format(time.RFC3339),
+			ID:         p.ID,
+			Name:       p.Name,
+			Type:       p.Type,
+			BaseURL:    p.BaseURL,
+			ModelName:  p.ModelName,
+			HasAPIKey:  p.APIKeyEncrypted != "",
+			APIVersion: p.APIVersion,
+			CreatedAt:  p.CreatedAt.Format(time.RFC3339),
 		})
 	}
 	return result, nil
@@ -976,6 +1016,7 @@ func (m *modelServiceHTTPAdapter) CreateModel(ctx context.Context, req deliveryh
 		BaseURL:         req.BaseURL,
 		ModelName:       req.ModelName,
 		APIKeyEncrypted: req.APIKey,
+		APIVersion:      req.APIVersion,
 	}
 
 	if err := m.repo.Create(ctx, provider); err != nil {
@@ -983,13 +1024,14 @@ func (m *modelServiceHTTPAdapter) CreateModel(ctx context.Context, req deliveryh
 	}
 
 	return &deliveryhttp.ModelResponse{
-		ID:        provider.ID,
-		Name:      provider.Name,
-		Type:      provider.Type,
-		BaseURL:   provider.BaseURL,
-		ModelName: provider.ModelName,
-		HasAPIKey: provider.APIKeyEncrypted != "",
-		CreatedAt: provider.CreatedAt.Format(time.RFC3339),
+		ID:         provider.ID,
+		Name:       provider.Name,
+		Type:       provider.Type,
+		BaseURL:    provider.BaseURL,
+		ModelName:  provider.ModelName,
+		HasAPIKey:  provider.APIKeyEncrypted != "",
+		APIVersion: provider.APIVersion,
+		CreatedAt:  provider.CreatedAt.Format(time.RFC3339),
 	}, nil
 }
 
@@ -1012,10 +1054,11 @@ func (m *modelServiceHTTPAdapter) UpdateModel(ctx context.Context, name string, 
 	}
 
 	update := &models.LLMProviderModel{
-		Name:      req.Name,
-		Type:      req.Type,
-		BaseURL:   req.BaseURL,
-		ModelName: req.ModelName,
+		Name:       req.Name,
+		Type:       req.Type,
+		BaseURL:    req.BaseURL,
+		ModelName:  req.ModelName,
+		APIVersion: req.APIVersion,
 	}
 	// Only update API key if provided (empty means keep existing).
 	if req.APIKey != "" {
@@ -1043,13 +1086,14 @@ func (m *modelServiceHTTPAdapter) UpdateModel(ctx context.Context, name string, 
 	}
 
 	return &deliveryhttp.ModelResponse{
-		ID:        existing.ID,
-		Name:      respName,
-		Type:      req.Type,
-		BaseURL:   req.BaseURL,
-		ModelName: req.ModelName,
-		HasAPIKey: hasKey,
-		CreatedAt: existing.CreatedAt.Format(time.RFC3339),
+		ID:         existing.ID,
+		Name:       respName,
+		Type:       req.Type,
+		BaseURL:    req.BaseURL,
+		ModelName:  req.ModelName,
+		HasAPIKey:  hasKey,
+		APIVersion: req.APIVersion,
+		CreatedAt:  existing.CreatedAt.Format(time.RFC3339),
 	}, nil
 }
 
@@ -1249,7 +1293,7 @@ type chatServiceHTTPAdapter struct {
 
 // Chat creates (or resumes) a session, enqueues the message, subscribes to
 // events, and returns an SSEEvent channel that closes when processing stops.
-func (a *chatServiceHTTPAdapter) Chat(agentName, message, userID, sessionID string) (<-chan deliveryhttp.SSEEvent, error) {
+func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, agentName, message, userID, sessionID string) (<-chan deliveryhttp.SSEEvent, error) {
 	if !a.chatEnabled {
 		return nil, fmt.Errorf("chat not available: no LLM model configured at startup. Add a model via Admin Dashboard and restart the Engine")
 	}
@@ -1281,8 +1325,7 @@ func (a *chatServiceHTTPAdapter) Chat(agentName, message, userID, sessionID stri
 		return nil, fmt.Errorf("enqueue message: %w", err)
 	}
 
-	// Start processing (idempotent).
-	ctx := context.Background()
+	// Start processing with the enriched context (carries RequestContext for MCP header forwarding).
 	a.processor.StartProcessing(ctx, sessionID)
 
 	// Fan-out: read proto events, convert to SSE, close when processing stops.

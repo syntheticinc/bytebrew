@@ -13,13 +13,15 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"runtime"
+	"strconv"
+	"sync/atomic"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/syntheticinc/bytebrew/engine/internal/delivery/grpc"
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/engine/internal/delivery/ws"
@@ -37,6 +39,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm/registry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/portfile"
 	"github.com/syntheticinc/bytebrew/engine/internal/kits/developer"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/eventstore"
@@ -50,6 +53,17 @@ import (
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 )
+
+// LicenseProvider gives read access to the current license and its atomic pointer.
+// Implemented by license.LicenseWatcher for live-reloading, or nil for CE mode.
+type LicenseProvider interface {
+	// Current returns the latest validated license, or nil (CE mode).
+	Current() *domain.LicenseInfo
+	// Pointer returns the atomic pointer for use by HTTP middleware.
+	Pointer() *atomic.Pointer[domain.LicenseInfo]
+	// Stop terminates the background refresh goroutine.
+	Stop()
+}
 
 // ServerConfig holds parameters for Run that differ between CE and server (legacy).
 type ServerConfig struct {
@@ -70,6 +84,11 @@ type ServerConfig struct {
 
 	// LicenseInfo is the validated license. nil = CE mode (no restrictions).
 	LicenseInfo *domain.LicenseInfo
+
+	// LicenseProvider enables live license reloading for EE middleware.
+	// nil = CE mode (no EE gating). When set, LicenseInfo is also populated
+	// from its Current() at startup for backward compatibility with gRPC/WS.
+	LicenseProvider LicenseProvider
 
 	// Version, Commit, Date are build-time metadata.
 	Version string
@@ -355,6 +374,7 @@ func Run(sc ServerConfig) error {
 
 	// Initialize MCP client connections from database
 	mcpRegistry := mcp.NewClientRegistry()
+	var mcpForwardHeaders []string // collected from all MCP servers for chat handler context extraction
 	if pgDB != nil {
 		mcpServerRepo := config_repo.NewGORMMCPServerRepository(pgDB)
 		mcpServers, mcpErr := mcpServerRepo.List(ctx)
@@ -362,6 +382,20 @@ func Run(sc ServerConfig) error {
 			slog.Warn("failed to load MCP servers from database", "error", mcpErr)
 		} else {
 			connectMCPServers(ctx, mcpServers, mcpRegistry)
+			// Collect unique forward headers from all MCP servers
+			seen := make(map[string]bool)
+			for _, srv := range mcpServers {
+				var fh []string
+				if srv.ForwardHeaders != "" {
+					_ = json.Unmarshal([]byte(srv.ForwardHeaders), &fh)
+				}
+				for _, h := range fh {
+					if !seen[h] {
+						seen[h] = true
+						mcpForwardHeaders = append(mcpForwardHeaders, h)
+					}
+				}
+			}
 		}
 	}
 
@@ -384,6 +418,7 @@ func Run(sc ServerConfig) error {
 	var httpServer *deliveryhttp.Server
 	var httpPort int
 	var httpAuthMW *deliveryhttp.AuthMiddleware
+	var configurableRL *deliveryhttp.ConfigurableRateLimiter
 	if agentRegistry != nil && bootstrapCfg != nil {
 		httpPort = bootstrapCfg.Engine.Port
 		if httpPort == 0 {
@@ -391,6 +426,10 @@ func Run(sc ServerConfig) error {
 		}
 		httpServer = deliveryhttp.NewServer(httpPort)
 		r := httpServer.Router()
+
+		// Metrics middleware — records request count and duration for all routes.
+		// Applied before auth so every request is instrumented regardless of auth status.
+		r.Use(deliveryhttp.MetricsMiddleware)
 
 		// Auth
 		jwtSecret := bootstrapCfg.Security.AdminPassword
@@ -403,6 +442,12 @@ func Run(sc ServerConfig) error {
 		// Health (public)
 		healthHandler := deliveryhttp.NewHealthHandler(sc.Version, &agentCounterHTTPAdapter{registry: agentRegistry})
 		r.Get("/api/v1/health", healthHandler.ServeHTTP)
+
+		// Model registry (public — read-only catalog, no auth needed)
+		modelRegistry := registry.New()
+		registryHandler := deliveryhttp.NewModelRegistryHandler(modelRegistry)
+		r.Get("/api/v1/models/registry", registryHandler.List)
+		r.Get("/api/v1/models/registry/providers", registryHandler.ListProviders)
 
 		// Auth login (public)
 		authHandler := deliveryhttp.NewAuthHandler(
@@ -504,6 +549,39 @@ func Run(sc ServerConfig) error {
 			toolMetaHandler := deliveryhttp.NewToolMetadataHandler(&toolMetadataHTTPAdapter{})
 			r.Get("/api/v1/tools/metadata", toolMetaHandler.List)
 		})
+
+		// EE-only routes (require auth + valid Enterprise license).
+		if sc.LicenseProvider != nil {
+			eeMW := deliveryhttp.NewEEMiddleware(sc.LicenseProvider.Pointer())
+
+			// Prometheus /metrics endpoint (EE, no auth — Prometheus scrapes without tokens).
+			r.Group(func(r chi.Router) {
+				r.Use(eeMW.RequireEE)
+				r.Handle("/metrics", promhttp.Handler())
+			})
+
+			// Configurable rate limiter (EE) — per-header rate limiting
+			if len(cfg.RateLimits) > 0 {
+				rules := convertRateLimitRules(cfg.RateLimits)
+				configurableRL = deliveryhttp.NewConfigurableRateLimiter(rules, sc.LicenseProvider.Pointer())
+			}
+
+			r.Group(func(r chi.Router) {
+				r.Use(authMW.Authenticate)
+				r.Use(eeMW.RequireEE)
+
+				// Tool call audit log (EE)
+				toolCallRepo := config_repo.NewToolCallEventRepository(pgDB)
+				toolCallLogHandler := deliveryhttp.NewToolCallLogHandler(&toolCallLogHTTPAdapter{repo: toolCallRepo})
+				r.Get("/api/v1/audit/tool-calls", toolCallLogHandler.List)
+
+				// Rate limit usage API (EE)
+				if configurableRL != nil {
+					usageHandler := deliveryhttp.NewRateLimitUsageHandler(configurableRL)
+					r.Get("/api/v1/rate-limits/usage", usageHandler.Usage)
+				}
+			})
+		}
 
 		// Webhook route (public, no auth — triggered by external services)
 		r.Post("/api/v1/webhooks/{path}", func(w http.ResponseWriter, req *http.Request) {
@@ -683,13 +761,16 @@ func Run(sc ServerConfig) error {
 			agents:      agentRegistry,
 			chatEnabled: components.AgentService != nil || components.ModelCache != nil,
 		}
-		chatHandler := deliveryhttp.NewChatHandler(chatService)
+		chatHandler := deliveryhttp.NewChatHandler(chatService, mcpForwardHeaders)
 		respondHandler := deliveryhttp.NewRespondHandler(sessionRegistry)
 
 		httpRouter := httpServer.Router()
 		httpRouter.Group(func(r chi.Router) {
 			if httpAuthMW != nil {
 				r.Use(httpAuthMW.Authenticate)
+			}
+			if configurableRL != nil {
+				r.Use(configurableRL.Middleware)
 			}
 			r.Post("/api/v1/agents/{name}/chat", chatHandler.Chat)
 			r.Post("/api/v1/sessions/{id}/respond", respondHandler.Respond)
@@ -811,6 +892,12 @@ func Run(sc ServerConfig) error {
 	if cronScheduler != nil {
 		cronScheduler.Stop()
 		slog.Info("Cron scheduler stopped")
+	}
+
+	// Stop license watcher
+	if sc.LicenseProvider != nil {
+		sc.LicenseProvider.Stop()
+		slog.Info("License watcher stopped")
 	}
 
 	// Close MCP client connections
@@ -1049,6 +1136,11 @@ func startBridge(
 // connectMCPServers connects to MCP servers and registers them in the registry.
 func connectMCPServers(ctx context.Context, mcpServers []models.MCPServerModel, registry *mcp.ClientRegistry) {
 	for _, srv := range mcpServers {
+		var forwardHeaders []string
+		if srv.ForwardHeaders != "" {
+			_ = json.Unmarshal([]byte(srv.ForwardHeaders), &forwardHeaders)
+		}
+
 		var transport mcp.Transport
 		switch srv.Type {
 		case "stdio":
@@ -1056,11 +1148,11 @@ func connectMCPServers(ctx context.Context, mcpServers []models.MCPServerModel, 
 			if srv.Args != "" {
 				_ = json.Unmarshal([]byte(srv.Args), &args)
 			}
-			transport = mcp.NewStdioTransport(srv.Command, args, nil)
+			transport = mcp.NewStdioTransport(srv.Command, args, nil, forwardHeaders)
 		case "http":
-			transport = mcp.NewHTTPTransport(srv.URL)
+			transport = mcp.NewHTTPTransport(srv.URL, forwardHeaders)
 		case "sse":
-			transport = mcp.NewSSETransport(srv.URL)
+			transport = mcp.NewSSETransport(srv.URL, forwardHeaders)
 		default:
 			slog.Warn("unknown MCP server type, skipping", "name", srv.Name, "type", srv.Type)
 			continue

@@ -129,6 +129,9 @@ func CreateClientFromDBModel(m models.LLMProviderModel) (model.ToolCallingChatMo
 		}
 		return openai.NewChatModel(ctx, cfg)
 
+	case "azure_openai":
+		return NewAzureOpenAIChatModel(m.BaseURL, m.APIKeyEncrypted, m.ModelName, m.APIVersion)
+
 	case "anthropic":
 		baseURL := "https://api.anthropic.com/v1"
 		if m.BaseURL != "" {
@@ -145,6 +148,13 @@ func CreateClientFromDBModel(m models.LLMProviderModel) (model.ToolCallingChatMo
 			HTTPClient: httpClient,
 		}
 		return openai.NewChatModel(ctx, cfg)
+
+	case "google":
+		var opts []GeminiOption
+		if m.BaseURL != "" {
+			opts = append(opts, WithGeminiBaseURL(m.BaseURL))
+		}
+		return NewGeminiChatModel(m.APIKeyEncrypted, m.ModelName, opts...), nil
 
 	default:
 		return nil, fmt.Errorf("unsupported provider type: %s", m.Type)

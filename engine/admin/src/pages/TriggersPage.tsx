@@ -17,6 +17,8 @@ const emptyForm: CreateTriggerRequest = {
   webhook_path: '',
   description: '',
   enabled: true,
+  on_complete_url: '',
+  on_complete_headers: undefined,
 };
 
 export default function TriggersPage() {
@@ -27,11 +29,13 @@ export default function TriggersPage() {
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<Trigger | null>(null);
   const [form, setForm] = useState<CreateTriggerRequest>({ ...emptyForm });
+  const [headersText, setHeadersText] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
 
   function openCreate() {
     setForm({ ...emptyForm });
+    setHeadersText('');
     setEditTarget(null);
     setShowForm(true);
   }
@@ -45,7 +49,14 @@ export default function TriggersPage() {
       webhook_path: trigger.webhook_path ?? '',
       description: trigger.description ?? '',
       enabled: trigger.enabled,
+      on_complete_url: trigger.on_complete_url ?? '',
+      on_complete_headers: trigger.on_complete_headers,
     });
+    setHeadersText(
+      trigger.on_complete_headers
+        ? JSON.stringify(trigger.on_complete_headers, null, 2)
+        : ''
+    );
     setEditTarget(trigger);
     setShowForm(true);
   }
@@ -54,16 +65,34 @@ export default function TriggersPage() {
     setShowForm(false);
     setEditTarget(null);
     setForm({ ...emptyForm });
+    setHeadersText('');
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
     try {
+      let parsedHeaders: Record<string, string> | undefined;
+      if (headersText.trim()) {
+        try {
+          parsedHeaders = JSON.parse(headersText.trim()) as Record<string, string>;
+        } catch {
+          alert('On Complete Headers must be valid JSON');
+          setSaving(false);
+          return;
+        }
+      }
+
+      const payload: CreateTriggerRequest = {
+        ...form,
+        on_complete_url: form.on_complete_url?.trim() || undefined,
+        on_complete_headers: parsedHeaders,
+      };
+
       if (editTarget) {
-        await api.updateTrigger(editTarget.id, form);
+        await api.updateTrigger(editTarget.id, payload);
       } else {
-        await api.createTrigger(form);
+        await api.createTrigger(payload);
       }
       closeForm();
       setSelected(null);
@@ -192,6 +221,17 @@ export default function TriggersPage() {
               </DetailSection>
             )}
 
+            {selected.on_complete_url && (
+              <DetailSection title="On Complete Webhook">
+                <DetailRow label="URL"><code className="font-mono text-xs break-all">{selected.on_complete_url}</code></DetailRow>
+                {selected.on_complete_headers && Object.keys(selected.on_complete_headers).length > 0 && (
+                  <DetailRow label="Headers">
+                    <pre className="font-mono text-xs whitespace-pre-wrap">{JSON.stringify(selected.on_complete_headers, null, 2)}</pre>
+                  </DetailRow>
+                )}
+              </DetailSection>
+            )}
+
             <DetailSection title="Timestamps">
               <DetailRow label="Created">{new Date(selected.created_at).toLocaleString()}</DetailRow>
               {selected.last_fired_at && (
@@ -253,6 +293,27 @@ export default function TriggersPage() {
           onChange={(v) => setForm({ ...form, description: v })}
           rows={2}
         />
+        {/* On Complete Webhook */}
+        <div className="border border-brand-shade3/20 rounded-card p-3 space-y-3">
+          <p className="text-xs font-medium text-brand-shade3 uppercase tracking-wide">On Complete Webhook</p>
+          <FormField
+            label="Callback URL"
+            value={form.on_complete_url ?? ''}
+            onChange={(v) => setForm({ ...form, on_complete_url: v })}
+            placeholder="https://your-app.com/callback"
+            hint="Optional. Called when the triggered task completes."
+          />
+          <FormField
+            label="Headers (JSON)"
+            type="textarea"
+            value={headersText}
+            onChange={setHeadersText}
+            placeholder='{"Authorization": "Bearer token"}'
+            rows={2}
+            hint="Optional. JSON object with HTTP headers for the callback."
+          />
+        </div>
+
         <div className="flex items-center gap-2">
           <input
             type="checkbox"

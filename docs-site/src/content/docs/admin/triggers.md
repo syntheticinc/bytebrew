@@ -53,10 +53,30 @@ triggers:
 #   -d '{"order_id": "12345", "event": "created"}'
 ```
 
+## Completion webhook (`on_complete`)
+
+Triggers can fire a webhook callback when the agent finishes its task. This lets you integrate trigger results with external systems like CI pipelines, monitoring dashboards, or downstream workflows.
+
+Configure the webhook URL and optional custom headers in the trigger settings:
+
+```yaml
+triggers:
+  telemetry-check:
+    cron: "*/10 * * * *"
+    agent: monitor
+    message: "Check telemetry dashboards for anomalies"
+    on_complete:
+      webhook: "https://my-app.com/callback"
+      headers:
+        Authorization: "Bearer ${CALLBACK_TOKEN}"
+```
+
+When the agent completes, the engine sends a POST request to the `webhook` URL with the task result in the body. Custom `headers` support `${VAR}` syntax for secrets.
+
 ## Managing triggers
 
 - **Enable/disable** -- toggle triggers on and off without deleting them. Disabled triggers are retained in configuration but do not fire.
-- **Edit** -- change the schedule, agent, message, or secret at any time.
+- **Edit** -- change the schedule, agent, message, secret, or completion webhook at any time.
 - **Delete** -- permanently remove a trigger. Existing tasks created by the trigger are not affected.
 - **History** -- view recent trigger executions in the Audit Log, including task IDs and outcomes.
 

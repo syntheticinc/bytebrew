@@ -41,7 +41,7 @@ func (c *CheckoutClient) CreateCustomer(ctx context.Context, email string, metad
 type CheckoutParams struct {
 	CustomerID string
 	PriceID    string
-	Plan       string // "personal", "teams"
+	Plan       string // "personal", "teams", "engine_ee"
 	TrialDays  int64
 	SuccessURL string
 	CancelURL  string
@@ -63,7 +63,7 @@ func (c *CheckoutClient) CreateCheckoutSession(ctx context.Context, params Check
 		CancelURL:  stripe.String(params.CancelURL),
 	}
 
-	if params.TrialDays > 0 && params.Plan != "teams" {
+	if params.TrialDays > 0 && params.Plan != "teams" && params.Plan != "engine_ee" {
 		sessionParams.SubscriptionData = &stripe.CheckoutSessionSubscriptionDataParams{
 			TrialPeriodDays: stripe.Int64(params.TrialDays),
 		}

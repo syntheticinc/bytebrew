@@ -22,10 +22,12 @@ func NewPriceResolver(cfg config.StripePricesConfig) *PriceResolver {
 		priceID string
 		tier    domain.LicenseTier
 	}{
-		"personal_monthly": {cfg.PersonalMonthly, domain.TierPersonal},
-		"personal_annual":  {cfg.PersonalAnnual, domain.TierPersonal},
-		"teams_monthly":    {cfg.TeamsMonthly, domain.TierTeams},
-		"teams_annual":     {cfg.TeamsAnnual, domain.TierTeams},
+		"personal_monthly":  {cfg.PersonalMonthly, domain.TierPersonal},
+		"personal_annual":   {cfg.PersonalAnnual, domain.TierPersonal},
+		"teams_monthly":     {cfg.TeamsMonthly, domain.TierTeams},
+		"teams_annual":      {cfg.TeamsAnnual, domain.TierTeams},
+		"engine_ee_monthly": {cfg.EngineEEMonthly, domain.TierEngineEE},
+		"engine_ee_annual":  {cfg.EngineEEAnnual, domain.TierEngineEE},
 	}
 
 	for key, p := range prices {

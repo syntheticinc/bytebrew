@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -219,4 +220,94 @@ func TestModelHandler_Verify_ErrorField(t *testing.T) {
 	assert.Equal(t, "error", result.Connectivity)
 	require.NotNil(t, result.Error)
 	assert.Equal(t, "connection refused", *result.Error)
+}
+
+func TestModelHandler_Create_OpenRouterPreset(t *testing.T) {
+	tests := []struct {
+		name           string
+		req            CreateModelRequest
+		wantStatus     int
+		wantType       string
+		wantBaseURL    string
+		wantErrMessage string
+	}{
+		{
+			name: "normalizes openrouter to openai_compatible with default base URL",
+			req: CreateModelRequest{
+				Name:      "my-openrouter",
+				Type:      "openrouter",
+				ModelName: "anthropic/claude-sonnet-4-6",
+				APIKey:    "sk-or-test-key",
+			},
+			wantStatus:  http.StatusCreated,
+			wantType:    "openai_compatible",
+			wantBaseURL: "https://openrouter.ai/api/v1",
+		},
+		{
+			name: "preserves custom base URL for openrouter",
+			req: CreateModelRequest{
+				Name:      "my-openrouter-custom",
+				Type:      "openrouter",
+				ModelName: "anthropic/claude-sonnet-4-6",
+				APIKey:    "sk-or-test-key",
+				BaseURL:   "https://custom.openrouter.ai/api/v1",
+			},
+			wantStatus:  http.StatusCreated,
+			wantType:    "openai_compatible",
+			wantBaseURL: "https://custom.openrouter.ai/api/v1",
+		},
+		{
+			name: "rejects openrouter without api_key",
+			req: CreateModelRequest{
+				Name:      "no-key",
+				Type:      "openrouter",
+				ModelName: "anthropic/claude-sonnet-4-6",
+			},
+			wantStatus:     http.StatusBadRequest,
+			wantErrMessage: "api_key is required for openrouter",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedReq CreateModelRequest
+			svc := &mockModelService{
+				createFunc: func(ctx context.Context, req CreateModelRequest) (*ModelResponse, error) {
+					capturedReq = req
+					return &ModelResponse{
+						ID:        1,
+						Name:      req.Name,
+						Type:      req.Type,
+						BaseURL:   req.BaseURL,
+						ModelName: req.ModelName,
+						HasAPIKey: req.APIKey != "",
+						CreatedAt: "2026-01-01T00:00:00Z",
+					}, nil
+				},
+			}
+			handler := NewModelHandler(svc)
+
+			body, _ := json.Marshal(tt.req)
+			r := chi.NewRouter()
+			r.Mount("/api/v1/models", handler.Routes())
+
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/models/", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.wantStatus, rec.Code)
+
+			if tt.wantErrMessage != "" {
+				var errResp map[string]string
+				err := json.NewDecoder(rec.Body).Decode(&errResp)
+				require.NoError(t, err)
+				assert.Contains(t, errResp["error"], tt.wantErrMessage)
+				return
+			}
+
+			assert.Equal(t, tt.wantType, capturedReq.Type)
+			assert.Equal(t, tt.wantBaseURL, capturedReq.BaseURL)
+		})
+	}
 }

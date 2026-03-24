@@ -21,6 +21,8 @@ import type {
   ToolMetadata,
   AuditEntry,
   PaginatedResponse,
+  ModelRegistryEntry,
+  RegistryProviderInfo,
 } from '../types';
 
 const BASE_URL = '/api/v1';
@@ -211,6 +213,19 @@ class APIClient {
   listAuditLogs(params: Record<string, string> = {}) {
     const qs = Object.keys(params).length ? '?' + new URLSearchParams(params).toString() : '';
     return this.request<PaginatedResponse<AuditEntry>>('GET', `/audit${qs}`);
+  }
+
+  // ---- Model Registry ----
+  getModelRegistry(filters?: { provider?: string; tier?: number }) {
+    const params = new URLSearchParams();
+    if (filters?.provider) params.set('provider', filters.provider);
+    if (filters?.tier) params.set('tier', String(filters.tier));
+    const qs = params.toString() ? '?' + params.toString() : '';
+    return this.request<ModelRegistryEntry[]>('GET', `/models/registry${qs}`);
+  }
+
+  getRegistryProviders() {
+    return this.request<RegistryProviderInfo[]>('GET', `/models/registry/providers`);
   }
 
   /**

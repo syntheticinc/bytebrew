@@ -38,6 +38,7 @@ import (
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/delete_account"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/forgot_password"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/google_login"
+	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/get_pricing"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/get_usage"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/handle_webhook"
 	"github.com/syntheticinc/bytebrew/cloud-api/internal/usecase/invite_member"
@@ -143,6 +144,7 @@ func main() {
 	// Stripe billing (optional)
 	var billingHandler *httpdelivery.BillingHandler
 	var webhookHandler *httpdelivery.WebhookHandler
+	var pricingHandler *httpdelivery.PricingHandler
 	var seatUpdater invite_member.SeatUpdater = &noopSeatUpdater{}
 	var subCanceller delete_account.SubscriptionCanceller = &noopSubCanceller{}
 	if cfg.Stripe.SecretKey != "" {
@@ -150,6 +152,7 @@ func main() {
 
 		checkoutClient := stripeinfra.NewCheckoutClient(cfg.Stripe.SecretKey)
 		priceResolver := stripeinfra.NewPriceResolver(cfg.Stripe.Prices)
+		priceFetcher := stripeinfra.NewPriceFetcher(1 * time.Hour)
 		eventRepo := postgres.NewStripeEventRepository(pool)
 		seatUpdater = checkoutClient
 		subCanceller = checkoutClient
@@ -163,9 +166,11 @@ func main() {
 		webhookUC := handle_webhook.New(stripeCustomerRepo, subRepo, subRepo, subRepo, eventRepo, priceResolver, subRepo, teamRepo)
 		portalReturnURL := cfg.Stripe.SuccessURL[:len(cfg.Stripe.SuccessURL)-len("/success")]
 		portalUC := create_portal.New(stripeCustomerRepo, checkoutClient, portalReturnURL)
+		pricingUC := get_pricing.New(priceFetcher, priceResolver)
 
 		billingHandler = httpdelivery.NewBillingHandler(checkoutUC, portalUC)
 		webhookHandler = httpdelivery.NewWebhookHandler(webhookUC, cfg.Stripe.WebhookSecret)
+		pricingHandler = httpdelivery.NewPricingHandler(pricingUC)
 	} else {
 		slog.Info("Stripe billing disabled (no secret_key)")
 	}
@@ -208,6 +213,7 @@ func main() {
 		LicenseHandler: licenseHandler,
 		BillingHandler: billingHandler,
 		WebhookHandler: webhookHandler,
+		PricingHandler: pricingHandler,
 		UsageHandler:   usageHandler,
 		ProxyHandler:   proxyHandler,
 		TeamHandler:    teamHandler,

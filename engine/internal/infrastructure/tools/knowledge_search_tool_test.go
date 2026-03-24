@@ -20,6 +20,10 @@ func (m *mockKnowledgeSearcher) SearchSimilar(_ context.Context, _ string, _ pgv
 	return m.chunks, m.err
 }
 
+func (m *mockKnowledgeSearcher) SearchByKeyword(_ context.Context, _ string, _ string, _ int) ([]models.KnowledgeChunk, error) {
+	return m.chunks, m.err
+}
+
 type mockKnowledgeEmbedder struct {
 	embedding []float32
 	err       error

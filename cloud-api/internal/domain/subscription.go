@@ -16,25 +16,26 @@ const (
 	TierTrial    LicenseTier = "trial"
 	TierPersonal LicenseTier = "personal"
 	TierTeams    LicenseTier = "teams"
+	TierEngineEE LicenseTier = "engine_ee"
 )
 
 // ValidTiers returns all valid tiers.
 func ValidTiers() []LicenseTier {
-	return []LicenseTier{TierTrial, TierPersonal, TierTeams}
+	return []LicenseTier{TierTrial, TierPersonal, TierTeams, TierEngineEE}
 }
 
 // IsValid checks if the tier is a known value.
 func (t LicenseTier) IsValid() bool {
 	switch t {
-	case TierTrial, TierPersonal, TierTeams:
+	case TierTrial, TierPersonal, TierTeams, TierEngineEE:
 		return true
 	}
 	return false
 }
 
-// IsPaid returns true for paid tiers (Personal, Teams).
+// IsPaid returns true for paid tiers (Personal, Teams, Engine EE).
 func (t LicenseTier) IsPaid() bool {
-	return t == TierPersonal || t == TierTeams
+	return t == TierPersonal || t == TierTeams || t == TierEngineEE
 }
 
 // SubscriptionStatus represents the current state of a subscription.

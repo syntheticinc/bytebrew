@@ -12,14 +12,17 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 )
 
 // SSETransport connects to an MCP server via SSE (Server-Sent Events).
 // Per MCP spec: GET /sse for server→client events, POST /message for client→server requests.
 type SSETransport struct {
-	baseURL    string
-	client     *http.Client
-	messageURL string // discovered from SSE endpoint event
+	baseURL        string
+	client         *http.Client
+	messageURL     string // discovered from SSE endpoint event
+	forwardHeaders []string
 
 	mu       sync.Mutex
 	pending  map[interface{}]chan *Response
@@ -29,11 +32,16 @@ type SSETransport struct {
 
 // NewSSETransport creates a transport for MCP SSE servers.
 // baseURL should be the SSE endpoint URL (e.g., "http://server:3001/sse").
-func NewSSETransport(baseURL string) *SSETransport {
+func NewSSETransport(baseURL string, forwardHeaders ...[]string) *SSETransport {
+	var fh []string
+	if len(forwardHeaders) > 0 {
+		fh = forwardHeaders[0]
+	}
 	return &SSETransport{
-		baseURL: baseURL,
-		client:  &http.Client{Timeout: 30 * time.Second},
-		pending: make(map[interface{}]chan *Response),
+		baseURL:        baseURL,
+		client:         &http.Client{Timeout: 30 * time.Second},
+		pending:        make(map[interface{}]chan *Response),
+		forwardHeaders: fh,
 	}
 }
 
@@ -100,6 +108,7 @@ func (t *SSETransport) Send(ctx context.Context, req *Request) (*Response, error
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	t.applyForwardHeaders(ctx, httpReq)
 
 	httpResp, err := t.client.Do(httpReq)
 	if err != nil {
@@ -138,6 +147,7 @@ func (t *SSETransport) Notify(ctx context.Context, req *Request) {
 		return
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	t.applyForwardHeaders(ctx, httpReq)
 
 	resp, err := t.client.Do(httpReq)
 	if err != nil {
@@ -250,6 +260,22 @@ func (t *SSETransport) handleSSEData(eventType, data string) {
 
 	default:
 		slog.Debug("SSE transport: unknown event", "type", eventType, "data", data[:min(len(data), 100)])
+	}
+}
+
+// applyForwardHeaders copies configured headers from RequestContext to the HTTP request.
+func (t *SSETransport) applyForwardHeaders(ctx context.Context, httpReq *http.Request) {
+	if len(t.forwardHeaders) == 0 {
+		return
+	}
+	rc := domain.GetRequestContext(ctx)
+	if rc == nil {
+		return
+	}
+	for _, headerName := range t.forwardHeaders {
+		if val := rc.Get(headerName); val != "" {
+			httpReq.Header.Set(headerName, val)
+		}
 	}
 }
 

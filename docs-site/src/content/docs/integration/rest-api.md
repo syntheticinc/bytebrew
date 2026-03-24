@@ -19,7 +19,8 @@ When you send a message to `POST /api/v1/agents/{name}/chat`, the engine respond
 | `confirmation` | `tool`, `input`, `confirmation_id` | Requires user approval. A tool with `confirm_before` is about to execute. Send approval via the confirmation endpoint. |
 | `agent_spawn` | `agent`, `task` | Sub-agent created. The supervisor spawned a child agent to handle a subtask. |
 | `agent_result` | `agent`, `result`, `status` | Sub-agent completed or failed. Contains the summary returned by the sub-agent. |
-| `user_input_required` | `question`, `options`, `input_id` | Ask-user event. The agent called the `ask_user` tool and is waiting for a response. |
+| `user_input_required` | `question`, `options`, `input_type`, `input_id` | Ask-user event. The agent called the `ask_user` tool and is waiting for a response. See [Extended options format](#extended-user-input-options) below. |
+| `structured_output` | `output_type`, `title`, `rows`, `actions` | Structured data display (summary tables, action buttons). See [Structured output events](#structured-output-events) below. |
 | `done` | `session_id`, `tokens` | Session completed. Contains the session ID for resuming and total token count. |
 | `error` | `message`, `code` | Error occurred. The stream terminates after this event. |
 
@@ -75,12 +76,33 @@ curl -X POST http://localhost:8443/api/v1/confirmations/conf_xyz \
 
 ### Handling user_input_required events
 
-When an agent calls `ask_user`, the stream pauses:
+When an agent calls `ask_user`, the stream pauses. The event now supports extended options with `input_type`, structured `value`/`description` fields, and grid layout:
 
 ```
 event: user_input_required
-data: {"question":"Which shipping method do you prefer?","options":["Standard","Express","Overnight"],"input_id":"inp_456"}
+data: {"question":"Which shipping method do you prefer?","input_type":"single_select","options":[{"label":"Standard","value":"standard","description":"5-7 business days"},{"label":"Express","value":"express","description":"2-3 business days"},{"label":"Overnight","value":"overnight","description":"Next business day"}],"input_id":"inp_456"}
 ```
+
+#### Input types
+
+| `input_type` | Description |
+|--------------|-------------|
+| `text` | Free-text input (default). No options required. |
+| `single_select` | Pick one option from the list. |
+| `multi_select` | Pick one or more options from the list. |
+| `confirm` | Yes/No confirmation prompt. |
+
+#### Option fields
+
+Each option in the `options` array supports:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `label` | Yes | Display text shown to the user. |
+| `value` | No | Machine-readable value sent back (defaults to `label` if omitted). |
+| `description` | No | Additional context shown below the label. |
+
+The event may also include a `columns` field (integer) to hint at grid layout for card-style UIs.
 
 Provide the response:
 
@@ -88,8 +110,27 @@ Provide the response:
 curl -X POST http://localhost:8443/api/v1/inputs/inp_456 \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
-  -d '{"response": "Express"}'
+  -d '{"response": "express"}'
 ```
+
+### Structured output events
+
+The `structured_output` event delivers rich data blocks (tables, action buttons) to the client for display:
+
+```
+event: structured_output
+data: {"output_type":"summary_table","title":"Project Summary","rows":[{"label":"Name","value":"MyApp"},{"label":"Status","value":"Active"},{"label":"Users","value":"1,234"}],"actions":[{"label":"Deploy","type":"primary","value":"deploy"},{"label":"Cancel","type":"secondary","value":"cancel"}]}
+```
+
+| Field | Description |
+|-------|-------------|
+| `output_type` | Type of structured output (e.g. `summary_table`). |
+| `title` | Optional title for the output block. |
+| `description` | Optional description text. |
+| `rows` | Array of `{label, value}` pairs for table display. |
+| `actions` | Array of `{label, type, value}` action buttons (`type`: `primary` or `secondary`). |
+
+Structured output is display-only -- the client renders it but does not need to respond. If action buttons are present, the client can send the `value` back as a regular chat message.
 
 ## Session management
 
@@ -250,6 +291,129 @@ The engine enforces rate limits per API token:
 - Default: 60 requests per minute per token.
 - Configurable in engine settings.
 - Rate-limited responses return HTTP 429 with a `Retry-After` header.
+
+### Rate limit headers
+
+Every API response includes rate limit headers when configurable rate limiting is enabled (EE):
+
+| Header | Description |
+|--------|-------------|
+| `X-RateLimit-Limit` | Maximum number of requests allowed in the current window. |
+| `X-RateLimit-Remaining` | Number of requests remaining in the current window. |
+| `X-RateLimit-Reset` | Unix timestamp (seconds) when the current window resets. |
+
+```
+HTTP/1.1 200 OK
+X-RateLimit-Limit: 500
+X-RateLimit-Remaining: 487
+X-RateLimit-Reset: 1711929600
+```
+
+See [Configuration: Rate Limits](/docs/getting-started/configuration/#rate-limits-ee) for setup.
+
+## Additional API endpoints
+
+### Tool call audit log (EE)
+
+Query tool call history for auditing and debugging. Requires `admin` scope.
+
+```bash
+curl "http://localhost:8443/api/v1/audit/tool-calls?agent=sales-agent&tool=create_order&page=1&per_page=20" \
+  -H "Authorization: Bearer bb_your_token"
+```
+
+#### Query parameters
+
+| Parameter | Description |
+|-----------|-------------|
+| `session_id` | Filter by session ID. |
+| `agent` | Filter by agent name. |
+| `tool` | Filter by tool name. |
+| `status` | Filter by status: `completed` or `failed`. |
+| `user_id` | Filter by user ID. |
+| `from` | Start date (RFC3339 or YYYY-MM-DD). |
+| `to` | End date (RFC3339 or YYYY-MM-DD). |
+| `page` | Page number (default: 1). |
+| `per_page` | Results per page (default: 50, max: 100). |
+
+#### Response
+
+```json
+{
+  "data": [
+    {
+      "id": 42,
+      "session_id": "sess_abc123",
+      "agent_name": "sales-agent",
+      "tool_name": "create_order",
+      "input": "{\"customer_id\":\"cust_123\"}",
+      "output": "{\"order_id\":\"ord_456\"}",
+      "status": "completed",
+      "duration_ms": 340,
+      "user_id": "user_789",
+      "created_at": "2026-03-20T14:30:00Z"
+    }
+  ],
+  "total": 156,
+  "page": 1,
+  "per_page": 20,
+  "total_pages": 8
+}
+```
+
+### Model registry
+
+Browse the built-in catalog of known models and providers. No authentication required.
+
+```bash
+# List all models
+curl http://localhost:8443/api/v1/models/registry
+
+# Filter by provider
+curl "http://localhost:8443/api/v1/models/registry?provider=anthropic"
+
+# Filter by tier
+curl "http://localhost:8443/api/v1/models/registry?tier=1"
+
+# Filter by tool support
+curl "http://localhost:8443/api/v1/models/registry?supports_tools=true"
+
+# List all providers
+curl http://localhost:8443/api/v1/models/registry/providers
+```
+
+See [Model Registry](/docs/deployment/model-registry/) for full details.
+
+### Rate limit usage (EE)
+
+Check current rate limit usage for a specific key. Requires `admin` scope.
+
+```bash
+curl "http://localhost:8443/api/v1/rate-limits/usage?key_header=X-Org-Id&key_value=org-123" \
+  -H "Authorization: Bearer bb_your_token"
+```
+
+```json
+{
+  "rule": "per-org",
+  "key": "org-123",
+  "tier": "pro",
+  "used": 42,
+  "limit": 500,
+  "window": "24h0m0s",
+  "resets_at": "2026-03-25T00:00:00Z"
+}
+```
+
+### Prometheus metrics (EE)
+
+The engine exposes Prometheus-compatible metrics at `/metrics`. No authentication required.
+
+```bash
+curl http://localhost:8443/metrics
+```
+
+See [Production: Prometheus Metrics](/docs/deployment/production/#prometheus-metrics-ee) for available metrics and Kubernetes integration.
 
 ---
 

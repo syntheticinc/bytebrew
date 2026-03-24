@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { getPricing, formatPrice, type PricingData } from '../api/pricing';
 
 interface PricingTableProps {
   onSelectPlan: (plan: string, period: string) => void;
@@ -10,19 +12,16 @@ type Period = 'monthly' | 'annual';
 interface PlanInfo {
   id: string;
   name: string;
-  monthlyPrice: number;
-  annualPrice: number;
   description: string;
   features: string[];
   highlighted?: boolean;
+  isPerSeat?: boolean;
 }
 
 const PLANS: PlanInfo[] = [
   {
     id: 'trial',
     name: 'Trial',
-    monthlyPrice: 0,
-    annualPrice: 0,
     description: '14 days free, credit card required',
     features: [
       'Full agent functionality',
@@ -35,8 +34,6 @@ const PLANS: PlanInfo[] = [
   {
     id: 'personal',
     name: 'Personal',
-    monthlyPrice: 20,
-    annualPrice: 200,
     description: 'For individual developers',
     features: [
       'Full agent functionality',
@@ -51,8 +48,6 @@ const PLANS: PlanInfo[] = [
   {
     id: 'teams',
     name: 'Teams',
-    monthlyPrice: 30,
-    annualPrice: 300,
     description: 'For teams and organizations',
     features: [
       'Everything in Personal',
@@ -62,11 +57,42 @@ const PLANS: PlanInfo[] = [
       'Admin panel & audit log',
       'Relay support',
     ],
+    isPerSeat: true,
   },
 ];
 
+function getPriceLabel(
+  plan: PlanInfo,
+  period: Period,
+  pricing: PricingData | undefined,
+  isLoading: boolean,
+): string {
+  if (plan.id === 'trial') return 'Free';
+  if (isLoading) return '---';
+
+  const planPricing = pricing?.[plan.id];
+  const detail = period === 'monthly' ? planPricing?.monthly : planPricing?.annual;
+
+  if (!detail) {
+    // Pricing not available — show "Contact Us" instead of hardcoded values
+    return 'Contact Us';
+  }
+
+  const formatted = formatPrice(detail.amount, detail.currency);
+  const intervalSuffix = period === 'monthly' ? '/mo' : '/yr';
+  const seatSuffix = plan.isPerSeat ? '/seat' : '';
+  return `${formatted}${seatSuffix}${intervalSuffix}`;
+}
+
 export function PricingTable({ onSelectPlan, currentTier }: PricingTableProps) {
   const [period, setPeriod] = useState<Period>('monthly');
+
+  const pricingQuery = useQuery({
+    queryKey: ['pricing'],
+    queryFn: getPricing,
+    staleTime: 60 * 60 * 1000, // 1 hour
+    retry: 1,
+  });
 
   return (
     <div>
@@ -100,14 +126,7 @@ export function PricingTable({ onSelectPlan, currentTier }: PricingTableProps) {
       {/* Plan cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
         {PLANS.map((plan) => {
-          const price =
-            period === 'monthly' ? plan.monthlyPrice : plan.annualPrice;
-          const priceLabel =
-            plan.id === 'trial'
-              ? 'Free'
-              : plan.id === 'teams'
-                ? `$${price}${period === 'annual' ? '/seat/yr' : '/seat/mo'}`
-                : `$${price}${period === 'annual' ? '/yr' : '/mo'}`;
+          const priceLabel = getPriceLabel(plan, period, pricingQuery.data, pricingQuery.isLoading);
           const isCurrent = currentTier === plan.id;
 
           return (
@@ -123,7 +142,15 @@ export function PricingTable({ onSelectPlan, currentTier }: PricingTableProps) {
               <p className="mt-1 text-sm text-brand-shade2">{plan.description}</p>
 
               <div className="mt-4">
-                <span className="text-3xl font-bold text-brand-light">{priceLabel}</span>
+                <span
+                  className={`text-3xl font-bold ${
+                    pricingQuery.isLoading && plan.id !== 'trial'
+                      ? 'text-brand-shade3 animate-pulse'
+                      : 'text-brand-light'
+                  }`}
+                >
+                  {priceLabel}
+                </span>
               </div>
 
               <ul className="mt-6 space-y-2 flex-1">

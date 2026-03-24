@@ -10,6 +10,7 @@ type LLMProviderModel struct {
 	BaseURL         string    `gorm:"type:varchar(500)"`
 	ModelName       string    `gorm:"type:varchar(255);not null"`
 	APIKeyEncrypted string    `gorm:"type:varchar(1000)"`
+	APIVersion      string    `gorm:"type:varchar(30);default:''"`
 	CreatedAt       time.Time `gorm:"autoCreateTime"`
 	UpdatedAt       time.Time `gorm:"autoUpdateTime"`
 }

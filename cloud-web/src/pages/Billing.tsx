@@ -2,8 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { AuthGuard } from '../components/AuthGuard';
 import { EnginePricingTable } from '../components/EnginePricingTable';
 import { getUsage } from '../api/license';
-// createCheckout will be used when EE pricing launches (EnginePricingTable onSelectPlan)
-import { /* createCheckout, */ createPortal } from '../api/billing';
+import { createCheckout, createPortal } from '../api/billing';
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { SHOW_EE_PRICING } from '../lib/feature-flags';
@@ -73,6 +72,18 @@ function EnterpriseBilling() {
 
   const usage = usageQuery.data;
 
+  const handleSelectPlan = async (plan: string, period: string) => {
+    setError('');
+    setLoading(true);
+    try {
+      const res = await createCheckout(plan, period);
+      window.location.href = res.checkout_url;
+    } catch {
+      setError('Failed to create checkout session. Please try again.');
+      setLoading(false);
+    }
+  };
+
   const handleManageSubscription = async () => {
     setError('');
     setLoading(true);
@@ -134,7 +145,7 @@ function EnterpriseBilling() {
           <p className="text-center text-brand-shade2 mb-10">
             Choose the plan that fits your needs
           </p>
-          <EnginePricingTable />
+          <EnginePricingTable onSelectPlan={handleSelectPlan} />
           {loading && (
             <p className="mt-4 text-center text-sm text-brand-shade2">
               Redirecting to checkout...

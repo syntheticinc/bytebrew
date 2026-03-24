@@ -51,7 +51,7 @@ jobs:
       - name: Build frontend
         env:
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          VITE_SHOW_EE_PRICING: ''
+          VITE_SHOW_EE_PRICING: 'true'
           VITE_SHOW_CODE_SITE: ''
         run: |
           cd cloud-web
@@ -122,6 +122,8 @@ jobs:
             STRIPE_PRICES_PERSONAL_ANNUAL=${{ secrets.STRIPE_PRICES_PERSONAL_ANNUAL }}
             STRIPE_PRICES_TEAMS_MONTHLY=${{ secrets.STRIPE_PRICES_TEAMS_MONTHLY }}
             STRIPE_PRICES_TEAMS_ANNUAL=${{ secrets.STRIPE_PRICES_TEAMS_ANNUAL }}
+            STRIPE_PRICES_ENGINE_EE_MONTHLY=${{ secrets.STRIPE_PRICES_ENGINE_EE_MONTHLY }}
+            STRIPE_PRICES_ENGINE_EE_ANNUAL=${{ secrets.STRIPE_PRICES_ENGINE_EE_ANNUAL }}
             DEEPINFRA_API_KEY=${{ secrets.DEEPINFRA_API_KEY }}
             EMAIL_RESEND_API_KEY=${{ secrets.EMAIL_RESEND_API_KEY }}
             GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}

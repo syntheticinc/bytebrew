@@ -36,11 +36,12 @@ type AgentToolsConfig struct {
 
 // MCPServerConfig describes a Model Context Protocol server connection.
 type MCPServerConfig struct {
-	Type    string            `mapstructure:"type"` // "stdio" | "sse"
-	Command string            `mapstructure:"command"`
-	Args    []string          `mapstructure:"args"`
-	URL     string            `mapstructure:"url"`
-	Env     map[string]string `mapstructure:"env"`
+	Type           string            `mapstructure:"type"` // "stdio" | "sse"
+	Command        string            `mapstructure:"command"`
+	Args           []string          `mapstructure:"args"`
+	URL            string            `mapstructure:"url"`
+	Env            map[string]string `mapstructure:"env"`
+	ForwardHeaders []string          `mapstructure:"forward_headers"` // HTTP headers to forward from chat request to MCP server
 }
 
 // CustomToolConfig describes a custom HTTP-based tool.

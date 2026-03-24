@@ -48,7 +48,7 @@ type PriceResolver interface {
 type Input struct {
 	UserID string
 	Email  string
-	Plan   string // "personal", "teams"
+	Plan   string // "personal", "teams", "engine_ee"
 	Period string // "monthly", "annual"
 }
 
@@ -156,10 +156,10 @@ func validateInput(in Input) error {
 		return errors.InvalidInput("email is required")
 	}
 	switch in.Plan {
-	case "personal", "teams":
+	case "personal", "teams", "engine_ee":
 		// valid
 	default:
-		return errors.InvalidInput(fmt.Sprintf("invalid plan: %q, must be personal or teams", in.Plan))
+		return errors.InvalidInput(fmt.Sprintf("invalid plan: %q, must be personal, teams, or engine_ee", in.Plan))
 	}
 	switch in.Period {
 	case "monthly", "annual":

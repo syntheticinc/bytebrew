@@ -15,13 +15,14 @@ func TestConvertDomainEvent(t *testing.T) {
 		wantNil   bool
 	}{
 		{"MessageStarted to thinking", "MessageStarted", `{"id":1}`, "thinking", false},
-		{"StreamingProgress to message", "StreamingProgress", `{"delta":"hi"}`, "message", false},
+		{"StreamingProgress to message_delta", "StreamingProgress", `{"delta":"hi"}`, "message_delta", false},
 		{"MessageCompleted to message", "MessageCompleted", `{"text":"done"}`, "message", false},
 		{"ToolExecutionStarted to tool_call", "ToolExecutionStarted", `{"tool":"read"}`, "tool_call", false},
 		{"ToolExecutionCompleted to tool_result", "ToolExecutionCompleted", `{"result":"ok"}`, "tool_result", false},
 		{"ConfirmationRequired to confirmation", "ConfirmationRequired", `{"prompt":"sure?"}`, "confirmation", false},
 		{"ProcessingStopped to done", "ProcessingStopped", `{}`, "done", false},
 		{"Error to error", "Error", `{"msg":"fail"}`, "error", false},
+		{"structured_output to structured_output", "structured_output", `{"output_type":"summary_table"}`, "structured_output", false},
 		{"unknown event returns nil", "SomeRandomEvent", `{}`, "", true},
 	}
 	for _, tt := range tests {

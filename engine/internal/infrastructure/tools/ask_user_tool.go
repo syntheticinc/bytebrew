@@ -15,14 +15,17 @@ import (
 // QuestionOption represents a selectable option for a question
 type QuestionOption struct {
 	Label       string `json:"label"`
+	Value       string `json:"value,omitempty"`       // machine-readable value (defaults to Label if empty)
 	Description string `json:"description,omitempty"`
 }
 
 // Question represents a single question in the questionnaire
 type Question struct {
-	Text    string           `json:"text"`
-	Options []QuestionOption `json:"options,omitempty"` // up to 5
-	Default string           `json:"default,omitempty"`
+	Text      string           `json:"text"`
+	InputType string           `json:"input_type,omitempty"` // "text"(default), "single_select", "multi_select", "confirm"
+	Options   []QuestionOption `json:"options,omitempty"`    // up to 5
+	Default   string           `json:"default,omitempty"`
+	Columns   int              `json:"columns,omitempty"`    // grid columns for card layout (2, 3, etc)
 }
 
 // QuestionAnswer represents the user's answer to a single question
@@ -60,12 +63,14 @@ func (t *AskUserTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 		Desc: `Ask the user 1-5 structured questions. Each question can have options (2-5 choices). BLOCKING — waits for response. Use SPARINGLY.
 
 Parameter "questions" is a JSON array of question objects:
-[{"text": "What platform?", "options": [{"label": "iOS"}, {"label": "Android"}, {"label": "Both"}], "default": "Both"}]
+[{"text": "What platform?", "input_type": "single_select", "options": [{"label": "iOS", "value": "ios"}, {"label": "Android", "value": "android"}], "default": "ios"}]
 
 Each question object:
 - "text" (required): The question text
-- "options" (optional): Array of 2-5 options, each with "label" (required) and "description" (optional)
+- "input_type" (optional): "text" (default), "single_select", "multi_select", "confirm", or custom type
+- "options" (optional): Array of 2-5 options, each with "label" (required), "value" (optional, defaults to label), and "description" (optional)
 - "default" (optional): Default answer shown to user
+- "columns" (optional): Grid columns for card layout (2, 3, etc)
 
 ONLY for product/requirements:
 - "What platforms? iOS, Android, both?" — user's business need

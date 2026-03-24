@@ -20,13 +20,19 @@ ByteBrew supports these providers out of the box:
 
 | Provider | Type | API Key Required | Notes |
 |----------|------|-----------------|-------|
-| OpenAI | Cloud | Yes | Best tool calling support. Models: gpt-4o, gpt-4o-mini. |
-| Anthropic | Cloud | Yes | Native support. Models: claude-sonnet-4-20250514, claude-3-haiku. |
-| Google (Gemini) | Cloud | Yes | Via OpenAI-compatible endpoint. |
-| Mistral | Cloud | Yes | Via OpenAI-compatible endpoint. |
+| OpenAI | Cloud | Yes | Best tool calling support. Models: GPT-5.4, GPT-5.4 Mini. |
+| Anthropic | Cloud | Yes | Native support. Models: Claude Opus 4.6, Claude Sonnet 4.6, Claude Haiku 4.5. |
+| Azure OpenAI | Cloud | Yes | Azure-hosted OpenAI models. Deployment-based URLs, requires `api_version`. |
+| Google (Gemini) | Cloud | Yes | Native Gemini API support. Models: Gemini 3.1 Pro, Gemini 2.5 Flash. |
+| DeepSeek | Cloud | Yes | Cost-effective models. Preset base URL. |
+| Mistral | Cloud | Yes | Mistral AI models. Preset base URL. |
+| xAI | Cloud | Yes | Grok models. Preset base URL. |
+| Z.ai (GLM) | Cloud | Yes | GLM models. Preset base URL. |
 | Ollama | Local | No | Free, private. Requires Ollama installed on host. |
-| OpenRouter | Cloud | Yes | Aggregator. Access 100+ models via single API key. `base_url: https://openrouter.ai/api/v1` |
-| Custom (vLLM, LiteLLM) | Self-hosted | Varies | Any OpenAI-compatible API endpoint. |
+| OpenRouter | Cloud | Yes | Aggregator. Access 100+ models via single API key. Preset base URL. |
+| Custom (vLLM, LiteLLM) | Self-hosted | Varies | Any OpenAI-compatible API endpoint via `openai_compatible` provider. |
+
+See [Model Registry](/docs/deployment/model-registry/) for the full catalog of known models with capabilities, pricing, and tier classifications.
 
 ## Recommended models
 
@@ -163,6 +169,7 @@ BYOK must be enabled per-provider in **Settings**. See [BYOK integration guide](
 
 ## What's next
 
+- [Model Registry](/docs/deployment/model-registry/)
 - [Docker Deployment](/docs/deployment/docker/)
 - [Production Deployment](/docs/deployment/production/)
 - [BYOK Integration](/docs/integration/byok/)

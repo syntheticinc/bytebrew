@@ -8,22 +8,29 @@ import (
 	"io"
 	"os/exec"
 	"sync"
+
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 )
 
 // StdioTransport connects to an MCP server via stdio (subprocess).
 type StdioTransport struct {
-	command string
-	args    []string
-	env     []string
-	cmd     *exec.Cmd
-	stdin   io.WriteCloser
-	stdout  *bufio.Reader
-	mu      sync.Mutex
+	command        string
+	args           []string
+	env            []string
+	forwardHeaders []string
+	cmd            *exec.Cmd
+	stdin          io.WriteCloser
+	stdout         *bufio.Reader
+	mu             sync.Mutex
 }
 
 // NewStdioTransport creates a transport that communicates via subprocess stdin/stdout.
-func NewStdioTransport(command string, args []string, env []string) *StdioTransport {
-	return &StdioTransport{command: command, args: args, env: env}
+func NewStdioTransport(command string, args []string, env []string, forwardHeaders ...[]string) *StdioTransport {
+	var fh []string
+	if len(forwardHeaders) > 0 {
+		fh = forwardHeaders[0]
+	}
+	return &StdioTransport{command: command, args: args, env: env, forwardHeaders: fh}
 }
 
 func (t *StdioTransport) Start(_ context.Context) error {
@@ -56,6 +63,8 @@ func (t *StdioTransport) Send(ctx context.Context, req *Request) (*Response, err
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	t.injectContext(ctx, req)
+
 	data, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
@@ -80,6 +89,9 @@ func (t *StdioTransport) Send(ctx context.Context, req *Request) (*Response, err
 func (t *StdioTransport) Notify(ctx context.Context, req *Request) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
+	t.injectContext(ctx, req)
+
 	data, _ := json.Marshal(req)
 	_, _ = t.stdin.Write(append(data, '\n'))
 }
@@ -92,4 +104,35 @@ func (t *StdioTransport) Close() error {
 		return t.cmd.Process.Kill()
 	}
 	return nil
+}
+
+// injectContext adds a _context field to JSON-RPC params with forwarded headers.
+// For stdio transport, HTTP headers cannot be sent directly, so they are embedded
+// in the JSON-RPC params object as a convention.
+func (t *StdioTransport) injectContext(ctx context.Context, req *Request) {
+	if len(t.forwardHeaders) == 0 {
+		return
+	}
+	rc := domain.GetRequestContext(ctx)
+	if rc == nil {
+		return
+	}
+
+	contextMap := make(map[string]string)
+	for _, h := range t.forwardHeaders {
+		if val := rc.Get(h); val != "" {
+			contextMap[h] = val
+		}
+	}
+	if len(contextMap) == 0 {
+		return
+	}
+
+	// Ensure params is a map so we can add _context
+	params, ok := req.Params.(map[string]interface{})
+	if !ok {
+		return
+	}
+	params["_context"] = contextMap
+	req.Params = params
 }

@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
+import { useModelRegistry } from '../hooks/useModelRegistry';
+import TierBadge from '../components/TierBadge';
 import type { CreateAgentRequest, Model, MCPServer, AgentInfo, ToolMetadata, SecurityZone } from '../types';
 
 const ZONE_ORDER: SecurityZone[] = ['safe', 'caution', 'dangerous'];
@@ -75,6 +77,37 @@ export default function AgentEditPage() {
   const { data: mcpServers } = useApi<MCPServer[]>(() => api.listMCPServers());
   const { data: allAgents } = useApi<AgentInfo[]>(() => api.listAgents());
   const { data: toolMetadata } = useApi<ToolMetadata[]>(() => api.listToolMetadata());
+  const { registryByModelName } = useModelRegistry();
+
+  // Compute tier warning for the selected model
+  const tierWarning = useMemo(() => {
+    if (!form.model_id || !models) return null;
+    const selectedModel = models.find((m) => m.id === form.model_id);
+    if (!selectedModel) return null;
+
+    const registryEntry = registryByModelName.get(selectedModel.model_name);
+    const hasCanSpawn = (form.can_spawn ?? []).length > 0;
+
+    if (!registryEntry) {
+      return {
+        type: 'info' as const,
+        message: 'Model not in registry -- not tested for agent use.',
+      };
+    }
+
+    if (hasCanSpawn && registryEntry.tier >= 2) {
+      return {
+        type: 'warning' as const,
+        message: `This model (${registryEntry.display_name}) is classified as Tier ${registryEntry.tier}. It may not reliably handle complex multi-step tool calling. Consider using a Tier 1 model for orchestrator agents.`,
+        tier: registryEntry.tier,
+      };
+    }
+
+    return {
+      type: 'ok' as const,
+      tier: registryEntry.tier,
+    };
+  }, [form.model_id, form.can_spawn, models, registryByModelName]);
 
   // Group tools by security zone
   const toolsByZone = useMemo(() => {
@@ -244,12 +277,33 @@ export default function AgentEditPage() {
             className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent"
           >
             <option value="">Default model</option>
-            {(models ?? []).map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} ({m.model_name})
-              </option>
-            ))}
+            {(models ?? []).map((m) => {
+              const entry = registryByModelName.get(m.model_name);
+              return (
+                <option key={m.id} value={m.id}>
+                  {m.name} ({m.model_name}){entry ? ` - Tier ${entry.tier}` : ''}
+                </option>
+              );
+            })}
           </select>
+
+          {tierWarning?.type === 'ok' && tierWarning.tier && (
+            <div className="mt-2">
+              <TierBadge tier={tierWarning.tier} />
+            </div>
+          )}
+
+          {tierWarning?.type === 'warning' && (
+            <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-btn text-xs text-amber-800 leading-relaxed">
+              <span className="font-semibold">Warning:</span> {tierWarning.message}
+            </div>
+          )}
+
+          {tierWarning?.type === 'info' && (
+            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-btn text-xs text-blue-700 leading-relaxed">
+              {tierWarning.message}
+            </div>
+          )}
         </div>
 
         {/* System Prompt */}

@@ -31,6 +31,7 @@ For servers not in the catalog, click "Add Custom" and fill in the form:
 - **Command / URL** -- for stdio: the command to run. For http/sse: the server URL.
 - **Args** -- command-line arguments (stdio only).
 - **Environment variables** -- key-value pairs passed to the process (stdio only).
+- **Forward headers** -- list of HTTP header names to forward from the incoming chat request to the MCP server (SSE/HTTP only). Useful for multi-tenant MCP backends that need tenant context (e.g., `X-Org-Id`, `X-User-Id`).
 
 ```yaml
 # Stdio: Engine spawns the process

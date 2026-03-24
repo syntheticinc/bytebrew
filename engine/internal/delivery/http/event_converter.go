@@ -22,6 +22,8 @@ var domainToSSE = map[string]string{
 	"agent_failed":    "agent_result",
 	// User interaction (ask_user tool with structured choices)
 	"user_question": "user_input_required",
+	// Structured output (summary tables, action buttons)
+	"structured_output": "structured_output",
 }
 
 // ConvertDomainEvent maps a domain event type and payload to an SSEEvent.

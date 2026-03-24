@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "bytebrew-engine.fullname" . }}
+  labels:
+    {{- include "bytebrew-engine.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "bytebrew-engine.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+      labels:
+        {{- include "bytebrew-engine.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: engine
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8443
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "bytebrew-engine.fullname" . }}-secrets
+                  key: database-url
+            - name: ADMIN_USER
+              value: {{ .Values.config.adminUser | quote }}
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "bytebrew-engine.fullname" . }}-secrets
+                  key: admin-password
+            {{- if .Values.config.embedURL }}
+            - name: EMBED_URL
+              value: {{ .Values.config.embedURL | quote }}
+            - name: EMBED_MODEL
+              value: {{ .Values.config.embedModel | quote }}
+            - name: EMBED_DIM
+              value: {{ .Values.config.embedDim | quote }}
+            {{- end }}
+            {{- range $provider, $key := .Values.secrets.llmAPIKeys }}
+            - name: LLM_API_KEY_{{ $provider | upper }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "bytebrew-engine.fullname" $ }}-secrets
+                  key: llm-api-key-{{ $provider }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.config.agents }}
+            - name: config
+              mountPath: /etc/bytebrew/agents.yaml
+              subPath: agents.yaml
+              readOnly: true
+            {{- end }}
+            {{- if .Values.persistence.knowledge.enabled }}
+            - name: knowledge
+              mountPath: /etc/bytebrew/knowledge
+            {{- end }}
+      volumes:
+        {{- if .Values.config.agents }}
+        - name: config
+          configMap:
+            name: {{ include "bytebrew-engine.fullname" . }}-config
+        {{- end }}
+        {{- if .Values.persistence.knowledge.enabled }}
+        - name: knowledge
+          persistentVolumeClaim:
+            claimName: {{ include "bytebrew-engine.fullname" . }}-knowledge
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

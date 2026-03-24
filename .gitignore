@@ -117,3 +117,7 @@ CLAUDE.md
 !cloud-web/public/screenshots/*.png
 docs-site/dist/
 docs-site/node_modules/
+
+# Local dev configs
+config.yaml
+.env.local
