@@ -3,7 +3,7 @@
 Полный список тест-кейсов для регрессионного тестирования.
 При добавлении нового функционала — обновлять этот файл.
 
-**Последнее обновление:** 2026-03-23
+**Последнее обновление:** 2026-03-24
 **Модель для тестов:** OpenRouter `qwen/qwen3-coder-next`
 **Принцип:** все команды берутся с публичного сайта bytebrew.ai
 
@@ -3069,7 +3069,99 @@
 
 ---
 
-## Итого: 256 TC
+## TC-KILO: Integration Issues (8 TC)
+
+### TC-KILO-01: Config import принимает map формат
+**Предусловие:** Engine запущен, admin JWT получен
+**Шаги:**
+1. Подготовить YAML в map формате: `agents: my-agent: model: glm-5`
+2. POST /api/v1/config/import с Content-Type: application/x-yaml
+
+**Ожидание:**
+- 200 OK, конфигурация импортирована
+- Agent "my-agent" создан с моделью glm-5
+
+**PASS:** Config import принимает map формат
+
+### TC-KILO-02: Config import принимает array формат
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/config/import с array форматом agents
+
+**Ожидание:**
+- 200 OK, backwards compatible
+
+**PASS:** Config import принимает array формат
+
+### TC-KILO-03: Chat с ненайденной моделью — graceful error (не panic)
+**Предусловие:** Agent создан, привязанная модель удалена
+**Шаги:**
+1. POST /api/v1/agents/{name}/chat
+
+**Ожидание:**
+- HTTP 500 с error message "no model available"
+- Engine НЕ падает (no panic, no restart)
+
+**PASS:** Graceful error при ненайденной модели
+
+### TC-KILO-04: MCP tools загружаются из assigned MCP server
+**Предусловие:** MCP server создан (type: sse), agent привязан к MCP server
+**Шаги:**
+1. POST /api/v1/agents/{name}/chat с запросом использующим MCP tool
+
+**Ожидание:**
+- Agent видит MCP tools (tools_count > 1)
+- Tool call к MCP серверу выполняется
+
+**PASS:** MCP tools загружаются и вызываются
+
+### TC-KILO-05: knowledge_search без knowledge path — skip
+**Предусловие:** Agent с knowledge_search в tools, без knowledge path
+**Шаги:**
+1. POST /api/v1/agents/{name}/chat
+
+**Ожидание:**
+- Chat работает (не ошибка)
+- knowledge_search пропущен с warning в логах
+
+**PASS:** knowledge_search пропускается без ошибки
+
+### TC-KILO-06: Docker config mount path
+**Предусловие:** Docker container запущен
+**Шаги:**
+1. Mount config: `-v ./config.yaml:/config.yaml:ro`
+2. Проверить Engine загружает конфиг
+
+**Ожидание:**
+- Config загружен, agents создаются из конфига
+
+**PASS:** Docker config mount работает
+
+### TC-KILO-07: system_file relative path в Docker
+**Предусловие:** Docker container с mounted prompts directory
+**Шаги:**
+1. Agent config: `system_file: "./prompts/my-prompt.txt"`
+2. Mount: `-v ./prompts:/app/prompts:ro`
+
+**Ожидание:**
+- System prompt загружен из файла
+
+**PASS:** system_file relative path работает в Docker
+
+### TC-KILO-08: API принимает оба поля system и system_prompt
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/agents с `system: "prompt text"`
+2. POST /api/v1/agents с `system_prompt: "prompt text"`
+
+**Ожидание:**
+- Оба варианта приняты, agent создан с correct system prompt
+
+**PASS:** Оба поля system и system_prompt принимаются
+
+---
+
+## Итого: 264 TC
 
 | Категория | Кол-во | Покрытие |
 |-----------|--------|----------|
@@ -3093,7 +3185,8 @@
 | TC-RLIM | 15 | Configurable rate limiting — EE (per-header, tiers, usage) |
 | TC-HELM | 7 | Helm chart (template, lint, values, affinity) |
 | TC-METR | 6 | Prometheus metrics (/metrics, counters, histograms) |
-| **ВСЕГО** | **256** |
+| TC-KILO | 8 | Integration issues (config import, panic, MCP, Docker) |
+| **ВСЕГО** | **264** |
 
 ### Примечания
 - Multi-agent spawn работает через HTTP REST API и gRPC/WS
@@ -3103,3 +3196,4 @@
 - TC-PROV-10..19 (Gemini) — требуют Google API key
 - TC-HELM-* — требуют Helm CLI, можно проверить без K8s кластера (helm template/lint)
 - TC-METR-* — EE feature, требуют EE лицензию
+- TC-KILO-* — integration issues от Kilo IoT, TC-KILO-06/07 требуют Docker
