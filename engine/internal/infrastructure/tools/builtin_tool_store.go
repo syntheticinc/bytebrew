@@ -122,6 +122,10 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 	var tools []tool.InvokableTool
 
 	for _, name := range rc.Agent.Record.BuiltinTools {
+		// knowledge_search is auto-injected below based on KnowledgePath — skip here
+		if name == "knowledge_search" {
+			continue
+		}
 		factory, ok := r.builtins.Get(name)
 		if !ok {
 			return nil, fmt.Errorf("unknown builtin tool %q for agent %q", name, rc.Agent.Record.Name)
@@ -176,6 +180,12 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 	if rc.Agent.Record.KnowledgePath != "" && ks != nil && ke != nil {
 		knowledgeTool := NewKnowledgeSearchTool(rc.Agent.Record.Name, ks, ke)
 		tools = append(tools, knowledgeTool)
+	} else if hasToolInList(rc.Agent.Record.BuiltinTools, "knowledge_search") {
+		slog.WarnContext(ctx, "agent has knowledge_search in tools but knowledge path is not configured — skipping",
+			"agent", rc.Agent.Record.Name,
+			"knowledge_path", rc.Agent.Record.KnowledgePath,
+			"searcher_available", ks != nil,
+			"embedder_available", ke != nil)
 	}
 
 	// Phase 3: Kit tools — append tools provided by the agent's kit
@@ -202,6 +212,10 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 	var resolved []tool.InvokableTool
 
 	for _, name := range toolNames {
+		// knowledge_search is auto-injected below based on KnowledgePath — skip here
+		if name == "knowledge_search" {
+			continue
+		}
 		factory, ok := r.builtins.Get(name)
 		if !ok {
 			return nil, fmt.Errorf("resolve tool %s: unknown builtin tool", name)
@@ -220,6 +234,10 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 	if deps.KnowledgePath != "" && deps.AgentName != "" && r.knowledgeSearcher != nil && r.knowledgeEmbedder != nil {
 		knowledgeTool := NewKnowledgeSearchTool(deps.AgentName, r.knowledgeSearcher, r.knowledgeEmbedder)
 		resolved = append(resolved, knowledgeTool)
+	} else if hasToolInList(toolNames, "knowledge_search") {
+		slog.WarnContext(ctx, "knowledge_search in tool list but knowledge path not configured — skipping",
+			"agent", deps.AgentName,
+			"knowledge_path", deps.KnowledgePath)
 	}
 
 	// Spawn tools via legacy Resolve path
@@ -278,4 +296,14 @@ func (r *AgentToolResolver) resolveMCPTools(rc ResolveContext) ([]tool.Invokable
 		result = append(result, mcpTools...)
 	}
 	return result, nil
+}
+
+// hasToolInList checks if a tool name exists in the given list.
+func hasToolInList(tools []string, name string) bool {
+	for _, t := range tools {
+		if t == name {
+			return true
+		}
+	}
+	return false
 }

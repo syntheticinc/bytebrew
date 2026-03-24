@@ -21,29 +21,29 @@ const ZONE_CONFIG: Record<SecurityZone, {
   safe: {
     label: 'Safe',
     subtitle: 'No security risk',
-    borderClass: 'border-brand-shade2',
-    bgClass: 'bg-brand-light',
-    activeClass: 'border-brand-shade2 bg-brand-light text-brand-dark',
+    borderClass: 'border-brand-shade3/30',
+    bgClass: 'bg-brand-dark',
+    activeClass: 'border-status-active bg-status-active/15 text-status-active',
     labelClass: 'text-brand-shade3',
-    zoneBorderClass: 'border-brand-shade2',
+    zoneBorderClass: 'border-brand-shade3/30',
     zoneBgClass: '',
   },
   caution: {
     label: 'Caution',
     subtitle: 'Read-only access, external content',
-    borderClass: 'border-amber-600/30',
-    bgClass: 'bg-amber-50/50',
-    activeClass: 'border-amber-600 bg-amber-50 text-amber-900',
-    labelClass: 'text-amber-700',
-    zoneBorderClass: 'border-amber-600/30',
+    borderClass: 'border-amber-500/30',
+    bgClass: 'bg-amber-500/10',
+    activeClass: 'border-amber-500 bg-amber-500/15 text-amber-400',
+    labelClass: 'text-amber-400',
+    zoneBorderClass: 'border-amber-500/30',
     zoneBgClass: '',
   },
   dangerous: {
     label: 'Dangerous Tools — Filesystem & Command Access',
     subtitle: '',
     borderClass: 'border-brand-accent/50',
-    bgClass: 'bg-red-50/50',
-    activeClass: 'border-brand-accent bg-red-50 text-brand-accent',
+    bgClass: 'bg-brand-accent/10',
+    activeClass: 'border-brand-accent bg-brand-accent/15 text-brand-accent',
     labelClass: 'text-brand-accent',
     zoneBorderClass: 'border-brand-accent/50',
     zoneBgClass: '',
@@ -207,7 +207,7 @@ export default function AgentEditPage() {
       <div className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
         <label
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn border text-sm cursor-pointer transition-colors ${
-            isSelected ? cfg.activeClass : `${cfg.borderClass} bg-white text-brand-shade3 hover:${cfg.bgClass}`
+            isSelected ? cfg.activeClass : `${cfg.borderClass} bg-brand-dark-alt text-brand-shade2 hover:${cfg.bgClass}`
           }`}
         >
           <input
@@ -220,20 +220,20 @@ export default function AgentEditPage() {
         </label>
 
         {showPopover && (
-          <div className="absolute z-50 w-80 p-3 bg-white rounded-card border border-brand-shade1 shadow-lg left-0 top-full mt-1">
-            <div className="font-semibold text-brand-dark text-sm mb-1">{tool.name}</div>
+          <div className="absolute z-50 w-80 p-3 bg-brand-dark-alt rounded-card border border-brand-shade3/30 shadow-lg left-0 top-full mt-1">
+            <div className="font-semibold text-brand-light text-sm mb-1">{tool.name}</div>
             <p className="text-xs text-brand-shade3 leading-relaxed mb-1">{tool.description}</p>
             {tool.risk_warning && (
-              <p className="text-xs text-brand-accent bg-red-50/80 p-2 rounded leading-relaxed">{tool.risk_warning}</p>
+              <p className="text-xs text-brand-accent bg-brand-accent/10 p-2 rounded leading-relaxed">{tool.risk_warning}</p>
             )}
             {tool.hint && (
-              <p className="text-xs text-amber-700 bg-amber-50/80 p-2 rounded leading-relaxed mt-1">💡 {tool.hint}</p>
+              <p className="text-xs text-amber-400 bg-amber-500/10 p-2 rounded leading-relaxed mt-1">{tool.hint}</p>
             )}
           </div>
         )}
         {/* Show hint inline when tool is checked and companion is not */}
         {isSelected && tool.hint && tool.companion && !(form.tools ?? []).includes(tool.companion) && (
-          <div className="text-xs text-amber-700 mt-1 ml-6">💡 {tool.hint}</div>
+          <div className="text-xs text-amber-400 mt-1 ml-6">{tool.hint}</div>
         )}
       </div>
     );
@@ -241,12 +241,12 @@ export default function AgentEditPage() {
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-2xl font-bold text-brand-dark mb-6">
+      <h1 className="text-2xl font-bold text-brand-light mb-6">
         {isNew ? 'Create Agent' : `Edit: ${name}`}
       </h1>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-btn text-sm text-red-700">
+        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-btn text-sm text-red-400">
           {error}
         </div>
       )}
@@ -254,7 +254,7 @@ export default function AgentEditPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Name */}
         <div>
-          <label className="block text-sm font-medium text-brand-dark mb-1">Name</label>
+          <label className="block text-sm font-medium text-brand-light mb-1">Name</label>
           <input
             type="text"
             value={form.name}
@@ -263,18 +263,18 @@ export default function AgentEditPage() {
             disabled={!isNew}
             pattern="^[a-z][a-z0-9-]*$"
             placeholder="my-agent"
-            className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent disabled:bg-brand-light disabled:text-brand-shade3"
+            className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light placeholder-brand-shade3 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent disabled:bg-brand-dark-alt disabled:text-brand-shade3 disabled:opacity-60 transition-colors"
           />
           <p className="mt-1 text-xs text-brand-shade3">Lowercase letters, numbers, and hyphens. Must start with a letter.</p>
         </div>
 
         {/* Model */}
         <div>
-          <label className="block text-sm font-medium text-brand-dark mb-1">Model</label>
+          <label className="block text-sm font-medium text-brand-light mb-1">Model</label>
           <select
             value={form.model_id ?? ''}
             onChange={(e) => updateField('model_id', e.target.value ? Number(e.target.value) : undefined)}
-            className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent"
+            className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
           >
             <option value="">Default model</option>
             {(models ?? []).map((m) => {
@@ -294,13 +294,13 @@ export default function AgentEditPage() {
           )}
 
           {tierWarning?.type === 'warning' && (
-            <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-btn text-xs text-amber-800 leading-relaxed">
+            <div className="mt-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-btn text-xs text-amber-400 leading-relaxed">
               <span className="font-semibold">Warning:</span> {tierWarning.message}
             </div>
           )}
 
           {tierWarning?.type === 'info' && (
-            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-btn text-xs text-blue-700 leading-relaxed">
+            <div className="mt-2 p-3 bg-blue-500/10 border border-blue-500/30 rounded-btn text-xs text-blue-400 leading-relaxed">
               {tierWarning.message}
             </div>
           )}
@@ -308,23 +308,23 @@ export default function AgentEditPage() {
 
         {/* System Prompt */}
         <div>
-          <label className="block text-sm font-medium text-brand-dark mb-1">System Prompt</label>
+          <label className="block text-sm font-medium text-brand-light mb-1">System Prompt</label>
           <textarea
             value={form.system_prompt}
             onChange={(e) => updateField('system_prompt', e.target.value)}
             required
             rows={10}
-            className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm font-mono focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent"
+            className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light font-mono focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
           />
         </div>
 
         {/* Kit */}
         <div>
-          <label className="block text-sm font-medium text-brand-dark mb-1">Kit</label>
+          <label className="block text-sm font-medium text-brand-light mb-1">Kit</label>
           <select
             value={form.kit ?? ''}
             onChange={(e) => updateField('kit', e.target.value)}
-            className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent"
+            className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
           >
             <option value="">None</option>
             <option value="developer">Developer</option>
@@ -334,22 +334,22 @@ export default function AgentEditPage() {
         {/* Lifecycle + Execution */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-brand-dark mb-1">Lifecycle</label>
+            <label className="block text-sm font-medium text-brand-light mb-1">Lifecycle</label>
             <select
               value={form.lifecycle}
               onChange={(e) => updateField('lifecycle', e.target.value)}
-              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent"
+              className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
             >
               <option value="persistent">Persistent</option>
               <option value="spawn">Spawn</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-brand-dark mb-1">Tool Execution</label>
+            <label className="block text-sm font-medium text-brand-light mb-1">Tool Execution</label>
             <select
               value={form.tool_execution}
               onChange={(e) => updateField('tool_execution', e.target.value)}
-              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent"
+              className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
             >
               <option value="sequential">Sequential</option>
               <option value="parallel">Parallel</option>
@@ -360,18 +360,18 @@ export default function AgentEditPage() {
         {/* Max Steps + Max Context */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-brand-dark mb-1">Max Steps</label>
+            <label className="block text-sm font-medium text-brand-light mb-1">Max Steps</label>
             <input
               type="number"
               value={form.max_steps}
               onChange={(e) => updateField('max_steps', Number(e.target.value))}
               min={1}
               max={500}
-              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent"
+              className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-brand-dark mb-1">Max Context Size</label>
+            <label className="block text-sm font-medium text-brand-light mb-1">Max Context Size</label>
             <input
               type="number"
               value={form.max_context_size}
@@ -379,14 +379,14 @@ export default function AgentEditPage() {
               min={1000}
               max={200000}
               step={1000}
-              className="w-full px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent"
+              className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
             />
           </div>
         </div>
 
         {/* Builtin Tools — grouped by security zone */}
         <div>
-          <label className="block text-sm font-medium text-brand-dark mb-3">Builtin Tools</label>
+          <label className="block text-sm font-medium text-brand-light mb-3">Builtin Tools</label>
 
           {!toolMetadata ? (
             <p className="text-sm text-brand-shade3">Loading tool metadata...</p>
@@ -421,7 +421,7 @@ export default function AgentEditPage() {
                 <button
                   type="button"
                   onClick={() => setDangerousExpanded(!dangerousExpanded)}
-                  className="w-full flex items-center justify-between px-3 py-2 bg-red-50/50 text-brand-accent text-sm font-semibold hover:bg-red-50 transition-colors"
+                  className="w-full flex items-center justify-between px-3 py-2 bg-brand-accent/10 text-brand-accent text-sm font-semibold hover:bg-brand-accent/15 transition-colors"
                 >
                   <span>Dangerous Tools — Filesystem & Command Access</span>
                   <span className="text-brand-accent/60">{dangerousExpanded ? '▲' : '▼'}</span>
@@ -429,8 +429,8 @@ export default function AgentEditPage() {
 
                 {dangerousExpanded && (
                   <div className="p-3 space-y-3">
-                    <div className="p-3 bg-red-50/60 border border-brand-accent/20 rounded-btn">
-                      <p className="text-xs text-brand-dark leading-relaxed">
+                    <div className="p-3 bg-brand-accent/10 border border-brand-accent/20 rounded-btn">
+                      <p className="text-xs text-brand-shade2 leading-relaxed">
                         <span className="font-semibold text-brand-accent">Warning:</span>{' '}
                         These tools give the agent direct access to the server filesystem and shell.
                         Only enable for fully trusted agents in isolated environments.
@@ -446,7 +446,7 @@ export default function AgentEditPage() {
 
                     {/* execute_command extra warning */}
                     {(form.tools ?? []).includes('execute_command') && (
-                      <div className="mt-2 p-3 bg-red-50 border border-brand-accent/40 rounded-btn text-xs text-brand-dark leading-relaxed">
+                      <div className="mt-2 p-3 bg-red-500/10 border border-brand-accent/40 rounded-btn text-xs text-brand-shade2 leading-relaxed">
                         <strong className="text-brand-accent">CRITICAL:</strong> execute_command allows the agent to run ARBITRARY shell commands
                         with the server process permissions. This includes installing software, modifying system files,
                         accessing the network, and deleting data. Never enable for user-facing agents.
@@ -461,7 +461,7 @@ export default function AgentEditPage() {
 
         {/* MCP Servers */}
         <div>
-          <label className="block text-sm font-medium text-brand-dark mb-2">MCP Servers</label>
+          <label className="block text-sm font-medium text-brand-light mb-2">MCP Servers</label>
           {(mcpServers ?? []).length === 0 ? (
             <p className="text-sm text-brand-shade3">No MCP servers configured.</p>
           ) : (
@@ -472,7 +472,7 @@ export default function AgentEditPage() {
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn border text-sm cursor-pointer transition-colors ${
                     form.mcp_servers?.includes(s.name)
                       ? 'border-brand-accent bg-brand-accent/10 text-brand-accent'
-                      : 'border-brand-shade1 bg-white text-brand-shade3 hover:border-brand-shade2'
+                      : 'border-brand-shade3/30 bg-brand-dark-alt text-brand-shade2 hover:border-brand-shade3'
                   }`}
                 >
                   <input
@@ -490,7 +490,7 @@ export default function AgentEditPage() {
 
         {/* Can Spawn */}
         <div>
-          <label className="block text-sm font-medium text-brand-dark mb-2">Can Spawn</label>
+          <label className="block text-sm font-medium text-brand-light mb-2">Can Spawn</label>
           {otherAgents.length === 0 ? (
             <p className="text-sm text-brand-shade3">No other agents available.</p>
           ) : (
@@ -501,7 +501,7 @@ export default function AgentEditPage() {
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn border text-sm cursor-pointer transition-colors ${
                     form.can_spawn?.includes(a.name)
                       ? 'border-brand-accent bg-brand-accent/10 text-brand-accent'
-                      : 'border-brand-shade1 bg-white text-brand-shade3 hover:border-brand-shade2'
+                      : 'border-brand-shade3/30 bg-brand-dark-alt text-brand-shade2 hover:border-brand-shade3'
                   }`}
                 >
                   <input
@@ -519,7 +519,7 @@ export default function AgentEditPage() {
 
         {/* Confirm Before */}
         <div>
-          <label className="block text-sm font-medium text-brand-dark mb-1">Confirm Before (tools requiring user confirmation)</label>
+          <label className="block text-sm font-medium text-brand-light mb-1">Confirm Before (tools requiring user confirmation)</label>
           <div className="flex gap-2 mb-2">
             <input
               type="text"
@@ -532,12 +532,12 @@ export default function AgentEditPage() {
                 }
               }}
               placeholder="Tool name..."
-              className="flex-1 px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent"
+              className="flex-1 px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light placeholder-brand-shade3 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
             />
             <button
               type="button"
               onClick={addConfirmBefore}
-              className="px-3 py-2 bg-brand-light border border-brand-shade1 rounded-btn text-sm hover:bg-brand-shade1/50"
+              className="px-3 py-2 bg-brand-dark-alt border border-brand-shade3/30 rounded-btn text-sm text-brand-shade2 hover:text-brand-light hover:bg-brand-dark transition-colors"
             >
               Add
             </button>
@@ -546,7 +546,7 @@ export default function AgentEditPage() {
             {(form.confirm_before ?? []).map((t) => (
               <span
                 key={t}
-                className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800"
+                className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-500/10 border border-yellow-500/30 rounded text-xs text-yellow-400"
               >
                 {t}
                 <button
@@ -557,7 +557,7 @@ export default function AgentEditPage() {
                       (form.confirm_before ?? []).filter((x) => x !== t),
                     )
                   }
-                  className="text-yellow-600 hover:text-yellow-800"
+                  className="text-yellow-500 hover:text-yellow-300"
                 >
                   x
                 </button>

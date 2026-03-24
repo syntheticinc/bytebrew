@@ -185,6 +185,13 @@ func (p *Processor) processMessage(ctx context.Context, sessionID, message strin
 	defer proxy.Dispose()
 
 	turnExecutor := p.factory.CreateForSession(proxy, sessionID, projectKey, projectRoot, platform, agentName)
+	if turnExecutor == nil {
+		slog.ErrorContext(ctx, "[SessionProcessor] failed to create turn executor — check model configuration in Admin Dashboard",
+			"session_id", sessionID, "agent", agentName)
+		eventStream.PublishError(fmt.Errorf("no model available for agent %q — configure a model via Admin Dashboard", agentName))
+		eventStream.PublishProcessingStopped()
+		return
+	}
 
 	chunkCallback := func(chunk string) error {
 		eventStream.PublishAnswerChunk(chunk)
