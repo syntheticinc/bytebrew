@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { AuthGuard } from '../components/AuthGuard';
-import { EnginePricingTable } from '../components/EnginePricingTable';
 import { getUsage } from '../api/license';
-import { createCheckout, createPortal } from '../api/billing';
+import { createPortal } from '../api/billing';
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { SHOW_EE_PRICING } from '../lib/feature-flags';
@@ -72,18 +71,6 @@ function EnterpriseBilling() {
 
   const usage = usageQuery.data;
 
-  const handleSelectPlan = async (plan: string, period: string) => {
-    setError('');
-    setLoading(true);
-    try {
-      const res = await createCheckout(plan, period);
-      window.location.href = res.checkout_url;
-    } catch {
-      setError('Failed to create checkout session. Please try again.');
-      setLoading(false);
-    }
-  };
-
   const handleManageSubscription = async () => {
     setError('');
     setLoading(true);
@@ -96,8 +83,93 @@ function EnterpriseBilling() {
     }
   };
 
+  if (usageQuery.isLoading) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-20 text-center">
+        <p className="text-brand-shade2">Loading billing information...</p>
+      </div>
+    );
+  }
+
+  if (usageQuery.isError) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-20 text-center">
+        <div className="rounded-[12px] border border-red-500/20 bg-red-500/5 p-6">
+          <p className="text-sm text-red-400">Failed to load billing information. Please try again later.</p>
+          <button
+            onClick={() => usageQuery.refetch()}
+            className="mt-4 rounded-[10px] border border-brand-shade3/20 px-4 py-2 text-sm font-medium text-brand-shade2 hover:border-brand-shade3/40 hover:text-brand-light transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const hasSubscription = usage && usage.tier !== 'trial';
+
+  if (!hasSubscription) {
+    return <FreeTierBilling />;
+  }
+
+  return <SubscriptionBilling usage={usage} error={error} loading={loading} onManage={handleManageSubscription} />;
+}
+
+function FreeTierBilling() {
   return (
-    <div className="max-w-5xl mx-auto px-4 py-10">
+    <div className="max-w-2xl mx-auto px-4 py-20">
+      <h1 className="text-2xl font-bold text-brand-light">Billing</h1>
+
+      <div className="mt-8 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-8 text-center">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-400/10 mb-4">
+          <svg className="h-6 w-6 text-emerald-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+
+        <h2 className="text-lg font-semibold text-brand-light">
+          You're on the Free Trial
+        </h2>
+        <p className="mt-2 text-sm text-brand-shade2 leading-relaxed">
+          You have access to ByteBrew Engine with a trial license.
+          Upgrade to Enterprise Edition for full observability and compliance features.
+        </p>
+
+        <div className="mt-8">
+          <Link
+            to="/pricing"
+            className="inline-block rounded-[10px] bg-brand-accent px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
+          >
+            View pricing plans &rarr;
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface SubscriptionBillingProps {
+  usage: {
+    tier: string;
+    proxy_steps_used: number;
+    proxy_steps_limit: number;
+    proxy_steps_remaining: number;
+    byok_enabled: boolean;
+    current_period_end?: string;
+  };
+  error: string;
+  loading: boolean;
+  onManage: () => void;
+}
+
+function SubscriptionBilling({ usage, error, loading, onManage }: SubscriptionBillingProps) {
+  const usagePercent = usage.proxy_steps_limit > 0
+    ? Math.round((usage.proxy_steps_used / usage.proxy_steps_limit) * 100)
+    : 0;
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-20">
       <h1 className="text-2xl font-bold text-brand-light">Billing</h1>
 
       {error && (
@@ -106,62 +178,93 @@ function EnterpriseBilling() {
         </div>
       )}
 
-      {/* Current plan info */}
-      {usage && (
-        <div className="mt-6 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-medium text-brand-shade2">Current Plan</h2>
-              <p className="mt-1 text-lg font-semibold text-brand-light capitalize">
-                {usage.tier}
-              </p>
-            </div>
-            {usage.tier !== 'trial' && (
-              <button
-                onClick={handleManageSubscription}
-                disabled={loading}
-                className="rounded-[10px] border border-brand-shade3/20 px-4 py-2 text-sm font-medium text-brand-shade2 hover:border-brand-shade3/40 hover:text-brand-light transition-colors disabled:opacity-50"
-              >
-                Manage Subscription
-              </button>
-            )}
+      {/* Current plan card */}
+      <div className="mt-8 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-brand-shade3">Current Plan</p>
+            <h2 className="mt-1 text-xl font-semibold text-brand-light capitalize">
+              {usage.tier}
+            </h2>
           </div>
-
-          {usage.current_period_end && (
-            <p className="mt-2 text-sm text-brand-shade3">
-              {usage.tier === 'trial' ? 'Trial ends' : 'Next billing date'}:{' '}
-              {new Date(usage.current_period_end).toLocaleDateString()}
-            </p>
-          )}
+          <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-400 ring-1 ring-inset ring-emerald-400/20">
+            Active
+          </span>
         </div>
-      )}
 
-      {/* Pricing table — only for trial or no subscription */}
-      {(!usage || usage.tier === 'trial') && (
-        <div className="mt-12">
-          <h2 className="text-xl font-bold text-brand-light text-center mb-2">
-            {usage?.tier === 'trial' ? 'Upgrade Your Plan' : 'Available Plans'}
-          </h2>
-          <p className="text-center text-brand-shade2 mb-10">
-            Choose the plan that fits your needs
+        {usage.current_period_end && (
+          <p className="mt-3 text-sm text-brand-shade2">
+            Next billing date: {new Date(usage.current_period_end).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            })}
           </p>
-          <EnginePricingTable onSelectPlan={handleSelectPlan} />
-          {loading && (
-            <p className="mt-4 text-center text-sm text-brand-shade2">
-              Redirecting to checkout...
-            </p>
-          )}
-        </div>
-      )}
+        )}
 
-      {/* For paid subscribers — explain how to change plans */}
-      {usage && usage.tier !== 'trial' && (
-        <div className="mt-8 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5 text-center">
-          <p className="text-sm text-brand-shade2">
-            To change your plan, cancel your current subscription and subscribe to a new plan after the current period ends.
+        <div className="mt-6">
+          <button
+            onClick={onManage}
+            disabled={loading}
+            className="rounded-[10px] bg-brand-accent px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors disabled:opacity-50"
+          >
+            {loading ? 'Redirecting...' : 'Manage Subscription'}
+          </button>
+          <p className="mt-2 text-xs text-brand-shade3">
+            Update payment method, change plan, or cancel via Stripe.
           </p>
         </div>
+      </div>
+
+      {/* Usage stats */}
+      {usage.proxy_steps_limit > 0 && (
+        <div className="mt-6 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-6">
+          <h3 className="text-sm font-medium text-brand-shade2">Proxy Steps Usage</h3>
+
+          <div className="mt-4">
+            <div className="flex items-baseline justify-between">
+              <span className="text-2xl font-bold text-brand-light">
+                {usage.proxy_steps_used.toLocaleString()}
+              </span>
+              <span className="text-sm text-brand-shade3">
+                of {usage.proxy_steps_limit.toLocaleString()}
+              </span>
+            </div>
+
+            <div className="mt-3 h-2 rounded-full bg-brand-shade3/15 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  usagePercent >= 90 ? 'bg-red-400' : usagePercent >= 70 ? 'bg-yellow-400' : 'bg-emerald-400'
+                }`}
+                style={{ width: `${Math.min(usagePercent, 100)}%` }}
+              />
+            </div>
+
+            <p className="mt-2 text-xs text-brand-shade3">
+              {usage.proxy_steps_remaining.toLocaleString()} steps remaining ({usagePercent}% used)
+            </p>
+          </div>
+        </div>
       )}
+
+      {/* BYOK status */}
+      <div className="mt-6 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-medium text-brand-shade2">Bring Your Own Keys (BYOK)</h3>
+            <p className="mt-1 text-xs text-brand-shade3">
+              Use your own LLM API keys for unlimited usage.
+            </p>
+          </div>
+          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${
+            usage.byok_enabled
+              ? 'bg-emerald-400/10 text-emerald-400 ring-emerald-400/20'
+              : 'bg-brand-shade3/10 text-brand-shade3 ring-brand-shade3/20'
+          }`}>
+            {usage.byok_enabled ? 'Enabled' : 'Disabled'}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
