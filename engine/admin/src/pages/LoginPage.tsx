@@ -54,7 +54,7 @@ export default function LoginPage() {
                 required
                 autoFocus
                 placeholder="admin"
-                className="w-full rounded-btn border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 outline-none transition-colors focus:border-brand-accent"
+                className="w-full rounded-btn border border-brand-shade3/50 bg-brand-dark-alt px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 outline-none transition-colors focus:border-brand-accent"
               />
             </div>
 
@@ -69,7 +69,7 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 placeholder="password"
-                className="w-full rounded-btn border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 outline-none transition-colors focus:border-brand-accent"
+                className="w-full rounded-btn border border-brand-shade3/50 bg-brand-dark-alt px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 outline-none transition-colors focus:border-brand-accent"
               />
             </div>
 

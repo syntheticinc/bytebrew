@@ -33,6 +33,23 @@
     background: #CBC9BC;
   }
 
+  /* Global form element styling — dark theme readable inputs */
+  input[type='text'],
+  input[type='number'],
+  input[type='password'],
+  input[type='email'],
+  input[type='url'],
+  input[type='search'],
+  input[type='date'],
+  input[type='datetime-local'],
+  input[type='tel'],
+  textarea,
+  select {
+    @apply bg-brand-dark-alt text-brand-light border border-brand-shade3/50 rounded-btn text-sm
+           placeholder-brand-shade3 focus:outline-none focus:border-brand-accent focus:ring-1
+           focus:ring-brand-accent transition-colors;
+  }
+
   /* Dark theme for native select dropdowns */
   select option {
     background-color: #1F1F1F;

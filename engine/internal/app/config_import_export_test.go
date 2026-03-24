@@ -138,8 +138,8 @@ func TestExportYAML(t *testing.T) {
 	require.NoError(t, yaml.Unmarshal(data, &cfg))
 
 	// Agents
-	require.Len(t, cfg.Agents, 2)
-	sales := findAgentYAML(cfg.Agents, "sales")
+	require.Len(t, cfg.Agents.Items, 2)
+	sales := findAgentYAML(cfg.Agents.Items, "sales")
 	require.NotNil(t, sales)
 	assert.Equal(t, "You are a sales assistant.", sales.SystemPrompt)
 	assert.Equal(t, "gpt-4o", sales.ModelName)
@@ -156,21 +156,21 @@ func TestExportYAML(t *testing.T) {
 	assert.Equal(t, []string{"angry"}, sales.Escalation.Triggers)
 
 	// Models — API key must NOT be present
-	require.Len(t, cfg.Models, 1)
-	assert.Equal(t, "gpt-4o", cfg.Models[0].Name)
-	assert.Equal(t, "openai_compatible", cfg.Models[0].Type)
+	require.Len(t, cfg.Models.Items, 1)
+	assert.Equal(t, "gpt-4o", cfg.Models.Items[0].Name)
+	assert.Equal(t, "openai_compatible", cfg.Models.Items[0].Type)
 	assert.NotContains(t, output, "encrypted-secret")
 
 	// MCP Servers — env vars must be masked
-	require.Len(t, cfg.MCPServers, 1)
-	assert.Equal(t, "shop-api", cfg.MCPServers[0].Name)
-	assert.Equal(t, "${API_KEY}", cfg.MCPServers[0].EnvVars["API_KEY"])
+	require.Len(t, cfg.MCPServers.Items, 1)
+	assert.Equal(t, "shop-api", cfg.MCPServers.Items[0].Name)
+	assert.Equal(t, "${API_KEY}", cfg.MCPServers.Items[0].EnvVars["API_KEY"])
 
 	// Triggers
-	require.Len(t, cfg.Triggers, 1)
-	assert.Equal(t, "Morning report", cfg.Triggers[0].Title)
-	assert.Equal(t, "sales", cfg.Triggers[0].AgentName)
-	assert.Equal(t, "0 9 * * *", cfg.Triggers[0].Schedule)
+	require.Len(t, cfg.Triggers.Items, 1)
+	assert.Equal(t, "Morning report", cfg.Triggers.Items[0].Title)
+	assert.Equal(t, "sales", cfg.Triggers.Items[0].AgentName)
+	assert.Equal(t, "0 9 * * *", cfg.Triggers.Items[0].Schedule)
 }
 
 func TestImportYAML(t *testing.T) {
@@ -355,14 +355,14 @@ func TestExportImportRoundTrip(t *testing.T) {
 	require.NoError(t, yaml.Unmarshal(exported, &cfg1))
 	require.NoError(t, yaml.Unmarshal(exported2, &cfg2))
 
-	assert.Equal(t, len(cfg1.Agents), len(cfg2.Agents))
-	assert.Equal(t, len(cfg1.Models), len(cfg2.Models))
-	assert.Equal(t, len(cfg1.MCPServers), len(cfg2.MCPServers))
-	assert.Equal(t, len(cfg1.Triggers), len(cfg2.Triggers))
+	assert.Equal(t, len(cfg1.Agents.Items), len(cfg2.Agents.Items))
+	assert.Equal(t, len(cfg1.Models.Items), len(cfg2.Models.Items))
+	assert.Equal(t, len(cfg1.MCPServers.Items), len(cfg2.MCPServers.Items))
+	assert.Equal(t, len(cfg1.Triggers.Items), len(cfg2.Triggers.Items))
 
 	// Agent names match
-	for _, a1 := range cfg1.Agents {
-		a2 := findAgentYAML(cfg2.Agents, a1.Name)
+	for _, a1 := range cfg1.Agents.Items {
+		a2 := findAgentYAML(cfg2.Agents.Items, a1.Name)
 		require.NotNil(t, a2, "agent %q missing after round-trip", a1.Name)
 		assert.Equal(t, a1.SystemPrompt, a2.SystemPrompt)
 		assert.Equal(t, a1.Lifecycle, a2.Lifecycle)
@@ -378,10 +378,10 @@ func TestExportYAML_EmptyDB(t *testing.T) {
 
 	var cfg configYAML
 	require.NoError(t, yaml.Unmarshal(data, &cfg))
-	assert.Empty(t, cfg.Agents)
-	assert.Empty(t, cfg.Models)
-	assert.Empty(t, cfg.MCPServers)
-	assert.Empty(t, cfg.Triggers)
+	assert.Empty(t, cfg.Agents.Items)
+	assert.Empty(t, cfg.Models.Items)
+	assert.Empty(t, cfg.MCPServers.Items)
+	assert.Empty(t, cfg.Triggers.Items)
 }
 
 func TestSplitCSV(t *testing.T) {

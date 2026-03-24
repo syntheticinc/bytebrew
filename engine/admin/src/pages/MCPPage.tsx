@@ -325,7 +325,7 @@ export default function MCPPage() {
                         placeholder={envKey}
                         value={envInput[envKey] ?? ''}
                         onChange={(e) => setEnvInput((prev) => ({ ...prev, [envKey]: e.target.value }))}
-                        className="w-full px-2 py-1 bg-white border border-brand-shade1 rounded-btn text-xs focus:outline-none focus:border-brand-accent"
+                        className="w-full px-2 py-1 bg-brand-dark-alt border border-brand-shade3/50 rounded-btn text-xs text-brand-light placeholder-brand-shade3 focus:outline-none focus:border-brand-accent"
                       />
                     ))}
                   </div>
@@ -393,7 +393,7 @@ export default function MCPPage() {
           />
         )}
         <div>
-          <label className="block text-sm font-medium text-brand-dark mb-1">Environment Variables</label>
+          <label className="block text-sm font-medium text-brand-light mb-1">Environment Variables</label>
           <div className="space-y-2">
             {Object.entries(envInput).map(([key, value]) => (
               <div key={key} className="flex items-center gap-2">
@@ -401,13 +401,13 @@ export default function MCPPage() {
                   type="text"
                   value={key}
                   readOnly
-                  className="w-1/3 px-2 py-1.5 bg-brand-light border border-brand-shade1 rounded-btn text-xs"
+                  className="w-1/3 px-2 py-1.5 bg-brand-dark border border-brand-shade3/50 rounded-btn text-xs text-brand-shade2"
                 />
                 <input
                   type="text"
                   value={value}
                   onChange={(e) => setEnvInput((prev) => ({ ...prev, [key]: e.target.value }))}
-                  className="flex-1 px-2 py-1.5 bg-white border border-brand-shade1 rounded-btn text-xs focus:outline-none focus:border-brand-accent"
+                  className="flex-1 px-2 py-1.5 bg-brand-dark-alt border border-brand-shade3/50 rounded-btn text-xs text-brand-light focus:outline-none focus:border-brand-accent"
                 />
                 <button
                   type="button"

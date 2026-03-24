@@ -14,6 +14,7 @@ RUN npm run build
 
 FROM alpine:3.19
 RUN apk --no-cache add ca-certificates
+WORKDIR /app
 COPY --from=builder /app/bytebrew-ce /usr/local/bin/
 COPY --from=admin-builder /admin/dist /usr/share/bytebrew/admin
 EXPOSE 8443

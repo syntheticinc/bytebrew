@@ -263,7 +263,7 @@ export default function AgentEditPage() {
             disabled={!isNew}
             pattern="^[a-z][a-z0-9-]*$"
             placeholder="my-agent"
-            className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light placeholder-brand-shade3 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent disabled:bg-brand-dark-alt disabled:text-brand-shade3 disabled:opacity-60 transition-colors"
+            className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light placeholder-brand-shade3 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent disabled:bg-brand-dark disabled:text-brand-shade3 disabled:opacity-60 transition-colors"
           />
           <p className="mt-1 text-xs text-brand-shade3">Lowercase letters, numbers, and hyphens. Must start with a letter.</p>
         </div>
@@ -274,7 +274,7 @@ export default function AgentEditPage() {
           <select
             value={form.model_id ?? ''}
             onChange={(e) => updateField('model_id', e.target.value ? Number(e.target.value) : undefined)}
-            className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
+            className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
           >
             <option value="">Default model</option>
             {(models ?? []).map((m) => {
@@ -314,7 +314,7 @@ export default function AgentEditPage() {
             onChange={(e) => updateField('system_prompt', e.target.value)}
             required
             rows={10}
-            className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light font-mono focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
+            className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light font-mono focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
           />
         </div>
 
@@ -324,7 +324,7 @@ export default function AgentEditPage() {
           <select
             value={form.kit ?? ''}
             onChange={(e) => updateField('kit', e.target.value)}
-            className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
+            className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
           >
             <option value="">None</option>
             <option value="developer">Developer</option>
@@ -338,7 +338,7 @@ export default function AgentEditPage() {
             <select
               value={form.lifecycle}
               onChange={(e) => updateField('lifecycle', e.target.value)}
-              className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
+              className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
             >
               <option value="persistent">Persistent</option>
               <option value="spawn">Spawn</option>
@@ -349,7 +349,7 @@ export default function AgentEditPage() {
             <select
               value={form.tool_execution}
               onChange={(e) => updateField('tool_execution', e.target.value)}
-              className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
+              className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
             >
               <option value="sequential">Sequential</option>
               <option value="parallel">Parallel</option>
@@ -367,7 +367,7 @@ export default function AgentEditPage() {
               onChange={(e) => updateField('max_steps', Number(e.target.value))}
               min={1}
               max={500}
-              className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
+              className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
             />
           </div>
           <div>
@@ -379,7 +379,7 @@ export default function AgentEditPage() {
               min={1000}
               max={200000}
               step={1000}
-              className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
+              className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
             />
           </div>
         </div>
@@ -532,7 +532,7 @@ export default function AgentEditPage() {
                 }
               }}
               placeholder="Tool name..."
-              className="flex-1 px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light placeholder-brand-shade3 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
+              className="flex-1 px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light placeholder-brand-shade3 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
             />
             <button
               type="button"

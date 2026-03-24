@@ -147,27 +147,152 @@ type configImportExportHTTPAdapter struct {
 // --- YAML structs ---
 
 type configYAML struct {
-	Agents     []agentYAML     `yaml:"agents,omitempty"`
-	Models     []modelYAML     `yaml:"models,omitempty"`
-	MCPServers []mcpServerYAML `yaml:"mcp_servers,omitempty"`
-	Triggers   []triggerYAML   `yaml:"triggers,omitempty"`
+	Agents     flexList[agentYAML]     `yaml:"agents,omitempty"`
+	Models     flexList[modelYAML]     `yaml:"models,omitempty"`
+	MCPServers flexList[mcpServerYAML] `yaml:"mcp_servers,omitempty"`
+	Triggers   flexList[triggerYAML]   `yaml:"triggers,omitempty"`
+}
+
+// namedItem is implemented by YAML structs that can be keyed by name in map format.
+type namedItem interface {
+	agentYAML | modelYAML | mcpServerYAML | triggerYAML
+}
+
+// flexList accepts both YAML array format and map format (where map keys become the Name/Title field).
+// Map format example:
+//
+//	agents:
+//	  my-agent:
+//	    model_name: glm-5
+//
+// Array format example:
+//
+//	agents:
+//	  - name: my-agent
+//	    model_name: glm-5
+type flexList[T namedItem] struct {
+	Items []T
+}
+
+// MarshalYAML marshals as a plain array so export always uses the array format.
+func (f flexList[T]) MarshalYAML() (interface{}, error) {
+	return f.Items, nil
+}
+
+// UnmarshalYAML tries map format first (documented format), then falls back to array.
+func (f *flexList[T]) UnmarshalYAML(node *yaml.Node) error {
+	// Try array format first (sequence node)
+	if node.Kind == yaml.SequenceNode {
+		return node.Decode(&f.Items)
+	}
+
+	// Map format (mapping node): keys become the Name field
+	if node.Kind == yaml.MappingNode {
+		return f.decodeMap(node)
+	}
+
+	// Null or empty
+	if node.Kind == yaml.ScalarNode && (node.Tag == "!!null" || node.Value == "") {
+		return nil
+	}
+
+	return fmt.Errorf("expected sequence or mapping, got %v", node.Kind)
+}
+
+func (f *flexList[T]) decodeMap(node *yaml.Node) error {
+	// Mapping nodes have key-value pairs: [key1, val1, key2, val2, ...]
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		keyNode := node.Content[i]
+		valNode := node.Content[i+1]
+
+		var item T
+		if err := valNode.Decode(&item); err != nil {
+			return fmt.Errorf("decode item %q: %w", keyNode.Value, err)
+		}
+
+		// Set the name field from the map key
+		setNameFromKey(&item, keyNode.Value)
+
+		f.Items = append(f.Items, item)
+	}
+	return nil
+}
+
+// setNameFromKey injects the map key into the appropriate name field of the item.
+func setNameFromKey(item interface{}, key string) {
+	switch v := item.(type) {
+	case *agentYAML:
+		if v.Name == "" {
+			v.Name = key
+		}
+	case *modelYAML:
+		if v.Name == "" {
+			v.Name = key
+		}
+	case *mcpServerYAML:
+		if v.Name == "" {
+			v.Name = key
+		}
+	case *triggerYAML:
+		if v.Title == "" {
+			v.Title = key
+		}
+	}
 }
 
 type agentYAML struct {
-	Name           string            `yaml:"name"`
-	SystemPrompt   string            `yaml:"system_prompt"`
-	ModelName      string            `yaml:"model_name,omitempty"`
-	Kit            string            `yaml:"kit,omitempty"`
-	KnowledgePath  string            `yaml:"knowledge_path,omitempty"`
-	Lifecycle      string            `yaml:"lifecycle"`
-	ToolExecution  string            `yaml:"tool_execution"`
-	MaxSteps       int               `yaml:"max_steps"`
-	MaxContextSize int               `yaml:"max_context_size"`
-	ConfirmBefore  []string          `yaml:"confirm_before,omitempty"`
-	Tools          []string          `yaml:"tools,omitempty"`
-	CanSpawn       []string          `yaml:"can_spawn,omitempty"`
-	MCPServers     []string          `yaml:"mcp_servers,omitempty"`
-	Escalation     *escalationYAML   `yaml:"escalation,omitempty"`
+	Name           string          `yaml:"name"`
+	SystemPrompt   string          `yaml:"system_prompt"`
+	ModelName      string          `yaml:"model_name,omitempty"`
+	Kit            string          `yaml:"kit,omitempty"`
+	KnowledgePath  string          `yaml:"knowledge_path,omitempty"`
+	Lifecycle      string          `yaml:"lifecycle"`
+	ToolExecution  string          `yaml:"tool_execution"`
+	MaxSteps       int             `yaml:"max_steps"`
+	MaxContextSize int             `yaml:"max_context_size"`
+	ConfirmBefore  []string        `yaml:"confirm_before,omitempty"`
+	Tools          []string        `yaml:"tools,omitempty"`
+	CanSpawn       []string        `yaml:"can_spawn,omitempty"`
+	MCPServers     []string        `yaml:"mcp_servers,omitempty"`
+	Escalation     *escalationYAML `yaml:"escalation,omitempty"`
+}
+
+// UnmarshalYAML supports field aliases used in documentation:
+//   - "system" as alias for "system_prompt"
+//   - "model" as alias for "model_name"
+//   - "knowledge" as alias for "knowledge_path"
+func (a *agentYAML) UnmarshalYAML(node *yaml.Node) error {
+	// Use a shadow type to prevent infinite recursion.
+	type agentYAMLAlias agentYAML
+	var alias agentYAMLAlias
+	if err := node.Decode(&alias); err != nil {
+		return err
+	}
+
+	// Extract alias fields from the raw YAML node.
+	if node.Kind == yaml.MappingNode {
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			key := node.Content[i].Value
+			val := node.Content[i+1]
+			switch key {
+			case "system":
+				if alias.SystemPrompt == "" {
+					alias.SystemPrompt = val.Value
+				}
+			case "model":
+				if alias.ModelName == "" {
+					alias.ModelName = val.Value
+				}
+			case "knowledge":
+				if alias.KnowledgePath == "" {
+					alias.KnowledgePath = val.Value
+				}
+			}
+		}
+	}
+
+	*a = agentYAML(alias)
+	return nil
 }
 
 type escalationYAML struct {
@@ -225,25 +350,25 @@ func (a *configImportExportHTTPAdapter) buildExportConfig(ctx context.Context) (
 	if err != nil {
 		return nil, fmt.Errorf("export agents: %w", err)
 	}
-	cfg.Agents = agentsYAML
+	cfg.Agents.Items = agentsYAML
 
 	modelsYAML, err := a.exportModels(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("export models: %w", err)
 	}
-	cfg.Models = modelsYAML
+	cfg.Models.Items = modelsYAML
 
 	mcpYAML, err := a.exportMCPServers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("export mcp servers: %w", err)
 	}
-	cfg.MCPServers = mcpYAML
+	cfg.MCPServers.Items = mcpYAML
 
 	triggersYAML, err := a.exportTriggers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("export triggers: %w", err)
 	}
-	cfg.Triggers = triggersYAML
+	cfg.Triggers.Items = triggersYAML
 
 	return &cfg, nil
 }
@@ -396,27 +521,27 @@ func (a *configImportExportHTTPAdapter) ImportYAML(ctx context.Context, yamlData
 	}
 
 	return a.db.Transaction(func(tx *gorm.DB) error {
-		if err := a.importModels(tx, cfg.Models); err != nil {
+		if err := a.importModels(tx, cfg.Models.Items); err != nil {
 			return fmt.Errorf("import models: %w", err)
 		}
 
-		if err := a.importMCPServers(tx, cfg.MCPServers); err != nil {
+		if err := a.importMCPServers(tx, cfg.MCPServers.Items); err != nil {
 			return fmt.Errorf("import mcp servers: %w", err)
 		}
 
-		if err := a.importAgents(tx, cfg.Agents); err != nil {
+		if err := a.importAgents(tx, cfg.Agents.Items); err != nil {
 			return fmt.Errorf("import agents: %w", err)
 		}
 
-		if err := a.importTriggers(tx, cfg.Triggers); err != nil {
+		if err := a.importTriggers(tx, cfg.Triggers.Items); err != nil {
 			return fmt.Errorf("import triggers: %w", err)
 		}
 
 		slog.InfoContext(ctx, "config imported",
-			"agents", len(cfg.Agents),
-			"models", len(cfg.Models),
-			"mcp_servers", len(cfg.MCPServers),
-			"triggers", len(cfg.Triggers),
+			"agents", len(cfg.Agents.Items),
+			"models", len(cfg.Models.Items),
+			"mcp_servers", len(cfg.MCPServers.Items),
+			"triggers", len(cfg.Triggers.Items),
 		)
 		return nil
 	})

@@ -158,7 +158,7 @@ export default function APIKeysPage() {
               onChange={(e) => setName(e.target.value)}
               required
               placeholder="my-integration"
-              className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light placeholder-brand-shade3 focus:outline-none focus:border-brand-accent"
+              className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light placeholder-brand-shade3 focus:outline-none focus:border-brand-accent"
             />
           </div>
           <div>

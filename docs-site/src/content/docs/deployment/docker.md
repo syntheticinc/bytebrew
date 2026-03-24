@@ -23,8 +23,8 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
       - LLM_API_KEY=${LLM_API_KEY}
     volumes:
-      - ./agents.yaml:/app/agents.yaml:ro
-      - ./knowledge:/app/knowledge:ro
+      - ./config.yaml:/app/config.yaml:ro   # Optional: bootstrap config
+      - ./knowledge:/app/knowledge:ro        # Optional: RAG knowledge base
       - engine-data:/app/data
     depends_on:
       postgres:
@@ -119,7 +119,7 @@ services:
 |--------|---------|
 | `pgdata` | PostgreSQL database files. All agent configs, sessions, tasks, and audit logs. |
 | `engine-data` | Engine runtime data: knowledge base vector indexes, cached embeddings. |
-| `./agents.yaml` (bind mount) | Your YAML configuration file. Mounted read-only. |
+| `./config.yaml` (bind mount) | Optional bootstrap config (database URL, admin credentials). Mounted read-only. Not needed when using environment variables. |
 | `./knowledge` (bind mount) | Knowledge base documents for RAG. Mounted read-only. |
 
 :::caution[Backup strategy]

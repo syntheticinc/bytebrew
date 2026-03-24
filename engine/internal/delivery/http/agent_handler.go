@@ -43,6 +43,7 @@ type AgentEscalation struct {
 }
 
 // CreateAgentRequest is the body for POST /api/v1/agents.
+// Accepts both "system_prompt" and "system" for the system prompt field.
 type CreateAgentRequest struct {
 	Name           string           `json:"name"`
 	ModelID        *uint            `json:"model_id,omitempty"`
@@ -58,6 +59,32 @@ type CreateAgentRequest struct {
 	CanSpawn       []string         `json:"can_spawn,omitempty"`
 	MCPServers     []string         `json:"mcp_servers,omitempty"`
 	Escalation     *AgentEscalation `json:"escalation,omitempty"`
+}
+
+// UnmarshalJSON supports "system" as an alias for "system_prompt" in the JSON body.
+func (r *CreateAgentRequest) UnmarshalJSON(data []byte) error {
+	// Use a shadow type to prevent infinite recursion.
+	type createAgentAlias CreateAgentRequest
+	var alias createAgentAlias
+	if err := json.Unmarshal(data, &alias); err != nil {
+		return err
+	}
+
+	// Check for "system" alias if system_prompt is empty.
+	if alias.SystemPrompt == "" {
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(data, &raw); err == nil {
+			if val, ok := raw["system"]; ok {
+				var s string
+				if json.Unmarshal(val, &s) == nil {
+					alias.SystemPrompt = s
+				}
+			}
+		}
+	}
+
+	*r = CreateAgentRequest(alias)
+	return nil
 }
 
 // AgentLister provides agent listing and detail retrieval.

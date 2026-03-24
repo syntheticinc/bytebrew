@@ -127,7 +127,7 @@ export default function AuditPage() {
         <select
           value={filters['actor_type'] ?? ''}
           onChange={(e) => updateFilter('actor_type', e.target.value)}
-          className="px-3 py-2 bg-brand-dark-alt border border-brand-shade3/30 rounded-btn text-sm text-brand-light focus:outline-none focus:border-brand-accent"
+          className="px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-btn text-sm text-brand-light focus:outline-none focus:border-brand-accent"
         >
           <option value="">All actors</option>
           {ACTOR_TYPE_OPTIONS.filter(Boolean).map((s) => (
@@ -137,7 +137,7 @@ export default function AuditPage() {
         <select
           value={filters['action'] ?? ''}
           onChange={(e) => updateFilter('action', e.target.value)}
-          className="px-3 py-2 bg-brand-dark-alt border border-brand-shade3/30 rounded-btn text-sm text-brand-light focus:outline-none focus:border-brand-accent"
+          className="px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-btn text-sm text-brand-light focus:outline-none focus:border-brand-accent"
         >
           <option value="">All actions</option>
           {ACTION_OPTIONS.filter(Boolean).map((s) => (
@@ -147,7 +147,7 @@ export default function AuditPage() {
         <select
           value={filters['resource'] ?? ''}
           onChange={(e) => updateFilter('resource', e.target.value)}
-          className="px-3 py-2 bg-brand-dark-alt border border-brand-shade3/30 rounded-btn text-sm text-brand-light focus:outline-none focus:border-brand-accent"
+          className="px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-btn text-sm text-brand-light focus:outline-none focus:border-brand-accent"
         >
           <option value="">All resources</option>
           {RESOURCE_OPTIONS.filter(Boolean).map((s) => (
@@ -159,14 +159,14 @@ export default function AuditPage() {
           value={filters['from'] ?? ''}
           onChange={(e) => updateFilter('from', e.target.value)}
           placeholder="From"
-          className="px-3 py-2 bg-brand-dark-alt border border-brand-shade3/30 rounded-btn text-sm text-brand-light focus:outline-none focus:border-brand-accent"
+          className="px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-btn text-sm text-brand-light focus:outline-none focus:border-brand-accent"
         />
         <input
           type="date"
           value={filters['to'] ?? ''}
           onChange={(e) => updateFilter('to', e.target.value)}
           placeholder="To"
-          className="px-3 py-2 bg-brand-dark-alt border border-brand-shade3/30 rounded-btn text-sm text-brand-light focus:outline-none focus:border-brand-accent"
+          className="px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-btn text-sm text-brand-light focus:outline-none focus:border-brand-accent"
         />
         {Object.values(filters).some(Boolean) && (
           <button

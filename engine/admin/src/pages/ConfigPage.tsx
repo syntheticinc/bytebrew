@@ -204,7 +204,7 @@ export default function ConfigPage() {
               onChange={(e) => setImportYaml(e.target.value)}
               rows={10}
               placeholder="agents:&#10;  - name: my-agent&#10;    system_prompt: ..."
-              className="w-full p-3 bg-brand-dark border border-brand-shade3/30 rounded-btn text-sm text-brand-light font-mono placeholder:text-brand-shade3/50 focus:outline-none focus:border-brand-accent resize-y"
+              className="w-full p-3 bg-brand-dark-alt border border-brand-shade3/50 rounded-btn text-sm text-brand-light font-mono placeholder:text-brand-shade3 focus:outline-none focus:border-brand-accent resize-y"
             />
           </div>
           <button

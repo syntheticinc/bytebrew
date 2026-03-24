@@ -17,7 +17,7 @@ Agents are the core building blocks of ByteBrew. Each agent is an LLM-powered en
 |-----------|---------|-------------|
 | `model` * | -- | References a model defined in the models: section. Determines which LLM the agent uses for reasoning. |
 | `system` | -- | Inline system prompt string that defines the agent's personality, role, and behavior rules. |
-| `system_file` | -- | Path to a text file containing the system prompt. Mutually exclusive with system:. Useful for long prompts. |
+| `system_file` | -- | Path to a text file containing the system prompt. Resolved relative to the config file directory. Mutually exclusive with `system`. Useful for long prompts that you want to version-control separately. |
 | `lifecycle` | `persistent` | `persistent` keeps context across sessions. `spawn` creates a fresh instance per invocation and terminates after. |
 | `kit` | `none` | Preset tool bundle. `developer` adds code-related tools (read_file, edit_file, bash, etc.). |
 | `tool_execution` | `sequential` | `sequential` runs tool calls one at a time. `parallel` runs independent tool calls concurrently. |
@@ -100,6 +100,10 @@ agents:
     model: glm-5
     system_file: "./prompts/support-bot.txt"   # Loaded at startup
 ```
+
+:::note[Path resolution]
+The `system_file` path is resolved relative to the directory containing your config file. For example, if your config is at `/app/config.yaml` and you set `system_file: "./prompts/bot.txt"`, the engine reads `/app/prompts/bot.txt`.
+:::
 
 ## Security Zones Explained
 

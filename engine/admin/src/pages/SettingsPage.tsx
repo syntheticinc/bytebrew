@@ -177,7 +177,7 @@ function SettingRow({
             onChange={(e) => {
               setLocalValue(e.target.value);
             }}
-            className="px-2 py-1 bg-brand-dark border border-brand-shade3/30 rounded-btn text-sm text-brand-light focus:outline-none focus:border-brand-accent"
+            className="px-2 py-1 bg-brand-dark-alt border border-brand-shade3/50 rounded-btn text-sm text-brand-light focus:outline-none focus:border-brand-accent"
           >
             {options.map((o) => (
               <option key={o} value={o}>
