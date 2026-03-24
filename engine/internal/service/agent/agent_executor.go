@@ -38,6 +38,15 @@ func (p *AgentPool) runAgentWithEngine(
 	}
 
 	deps := toolDeps.GetDependencies(sessionID, projectKey)
+	deps.AgentName = flow.Name
+	deps.KnowledgePath = flow.KnowledgePath
+	deps.MCPServers = flow.MCPServers
+	canSpawn := make([]string, len(flow.Spawn.AllowedFlows))
+	for i, ft := range flow.Spawn.AllowedFlows {
+		canSpawn[i] = string(ft)
+	}
+	deps.CanSpawn = canSpawn
+
 	p.mu.RLock()
 	sessionProxy, ok := p.sessionProxies[sessionID]
 	p.mu.RUnlock()
