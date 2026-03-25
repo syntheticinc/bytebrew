@@ -133,4 +133,28 @@ docker pull bytebrew/engine:latest
 
 ---
 
+---
+
+## Обновление: Issue #15 — Chat empty body
+
+### Корневая причина
+
+`chatEnabled` flag устанавливался один раз при старте Engine. Если Engine стартует с `DATABASE_URL` env var без default LLM provider в конфиге — `chatEnabled = false`. Добавление модели через Dashboard или config import ПОСЛЕ старта не обновляло этот флаг → все chat requests возвращали 200 с пустым body.
+
+### Исправление
+
+Убран static `chatEnabled` check. Chat теперь работает если агенты настроены (проверяется динамически через registry). Модель можно добавить в любой момент после старта.
+
+### Docker image обновлён
+
+```bash
+docker pull bytebrew/engine:latest
+# Или конкретная версия:
+docker pull bytebrew/engine:1.0.0
+```
+
+**Все Issues 8, 13, 14, 15 исправлены в текущем образе.**
+
+---
+
 *ByteBrew Engineering Team*
