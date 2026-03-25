@@ -114,13 +114,23 @@ func (t *SSETransport) Send(ctx context.Context, req *Request) (*Response, error
 	if err != nil {
 		return nil, fmt.Errorf("send message: %w", err)
 	}
-	httpResp.Body.Close()
+	defer httpResp.Body.Close()
 
 	if httpResp.StatusCode >= 400 {
 		return nil, fmt.Errorf("message endpoint returned %d", httpResp.StatusCode)
 	}
 
-	// Wait for response via SSE
+	// Some MCP servers return the JSON-RPC response in the HTTP body
+	// (not via SSE stream). Try to read it first.
+	body, readErr := io.ReadAll(httpResp.Body)
+	if readErr == nil && len(body) > 2 {
+		var directResp Response
+		if json.Unmarshal(body, &directResp) == nil && directResp.ID != nil {
+			return &directResp, nil
+		}
+	}
+
+	// Otherwise wait for response via SSE stream
 	select {
 	case resp := <-ch:
 		return resp, nil
