@@ -4,10 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"regexp"
 
 	"github.com/go-chi/chi/v5"
 )
+
+// agentNameRe validates agent names: lowercase letters, digits, and hyphens; must start with a letter.
+var agentNameRe = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+
+const agentNameMaxLen = 255
 
 // AgentInfo is a summary of an agent returned in list responses.
 type AgentInfo struct {
@@ -175,14 +182,23 @@ func (h *AgentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "name is required")
 		return
 	}
+	if err := validateAgentName(req.Name); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if req.SystemPrompt == "" {
 		writeJSONError(w, http.StatusBadRequest, "system_prompt is required")
 		return
 	}
 
+	// Log a warning for unrecognized tool names (they might be MCP tools loaded at runtime).
+	for _, toolName := range req.Tools {
+		slog.WarnContext(r.Context(), "agent references tool that may not be registered", "agent", req.Name, "tool", toolName)
+	}
+
 	agent, err := h.manager.CreateAgent(r.Context(), req)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, agent)
@@ -214,7 +230,7 @@ func (h *AgentHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	agent, err := h.manager.UpdateAgent(r.Context(), name, req)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, agent)
@@ -234,8 +250,19 @@ func (h *AgentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.manager.DeleteAgent(r.Context(), name); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// validateAgentName checks that the agent name matches the allowed pattern.
+func validateAgentName(name string) error {
+	if len(name) > agentNameMaxLen {
+		return fmt.Errorf("agent name must be at most %d characters", agentNameMaxLen)
+	}
+	if !agentNameRe.MatchString(name) {
+		return fmt.Errorf("agent name must match %s (lowercase letters, digits, hyphens; must start with a letter)", agentNameRe.String())
+	}
+	return nil
 }

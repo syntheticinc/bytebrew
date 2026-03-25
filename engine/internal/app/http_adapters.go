@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
+	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/session_processor"
 )
 
@@ -996,6 +998,9 @@ func (a *agentManagerHTTPAdapter) CreateAgent(ctx context.Context, req deliveryh
 func (a *agentManagerHTTPAdapter) UpdateAgent(ctx context.Context, name string, req deliveryhttp.CreateAgentRequest) (*deliveryhttp.AgentDetail, error) {
 	record := a.toAgentRecord(req)
 	if err := a.repo.Update(ctx, name, record); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, pkgerrors.NotFound(fmt.Sprintf("agent not found: %s", name))
+		}
 		return nil, fmt.Errorf("update agent: %w", err)
 	}
 
@@ -1013,6 +1018,9 @@ func (a *agentManagerHTTPAdapter) UpdateAgent(ctx context.Context, name string, 
 
 func (a *agentManagerHTTPAdapter) DeleteAgent(ctx context.Context, name string) error {
 	if err := a.repo.Delete(ctx, name); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return pkgerrors.NotFound(fmt.Sprintf("agent not found: %s", name))
+		}
 		return fmt.Errorf("delete agent: %w", err)
 	}
 
@@ -1145,6 +1153,9 @@ func (m *modelServiceHTTPAdapter) CreateModel(ctx context.Context, req deliveryh
 	}
 
 	if err := m.repo.Create(ctx, provider); err != nil {
+		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "UNIQUE constraint") {
+			return nil, pkgerrors.AlreadyExists(fmt.Sprintf("model with name %q already exists", req.Name))
+		}
 		return nil, fmt.Errorf("create model: %w", err)
 	}
 

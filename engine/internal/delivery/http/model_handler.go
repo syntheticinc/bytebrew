@@ -130,7 +130,7 @@ func (h *ModelHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	model, err := h.service.CreateModel(r.Context(), req)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, model)
@@ -152,7 +152,7 @@ func (h *ModelHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.service.UpdateModel(r.Context(), name, req)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -167,7 +167,7 @@ func (h *ModelHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.service.DeleteModel(r.Context(), name); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
