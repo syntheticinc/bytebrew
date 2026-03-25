@@ -1474,10 +1474,6 @@ type chatServiceHTTPAdapter struct {
 // Chat creates (or resumes) a session, enqueues the message, subscribes to
 // events, and returns an SSEEvent channel that closes when processing stops.
 func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, agentName, message, userID, sessionID string) (<-chan deliveryhttp.SSEEvent, error) {
-	if !a.chatEnabled {
-		return nil, fmt.Errorf("chat not available: no LLM model configured at startup. Add a model via Admin Dashboard and restart the Engine")
-	}
-
 	if a.agents == nil {
 		return nil, fmt.Errorf("no agents configured")
 	}
