@@ -439,8 +439,13 @@ func Run(sc ServerConfig) error {
 		// Audit logger
 		auditLogger := audit.NewLogger(pgDB)
 
+		// Update checker (non-blocking, air-gap safe)
+		updateChecker := infrastructure.NewUpdateChecker(sc.Version)
+		updateChecker.Start()
+
 		// Health (public)
 		healthHandler := deliveryhttp.NewHealthHandler(sc.Version, &agentCounterHTTPAdapter{registry: agentRegistry})
+		healthHandler.SetUpdateChecker(updateChecker)
 		r.Get("/api/v1/health", healthHandler.ServeHTTP)
 
 		// Model registry (public — read-only catalog, no auth needed)

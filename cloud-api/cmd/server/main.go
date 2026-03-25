@@ -203,23 +203,31 @@ func main() {
 	forgotPasswordUC := forgot_password.New(userRepo, userRepo, emailSender, tokenGenerator, cfg.Auth.PasswordResetTTL)
 	resetPasswordUC := reset_password.New(userRepo, userRepo, passwordHasher)
 
+	// Versions handler (reads ENGINE_LATEST_VERSION from env)
+	var versionsHandler *httpdelivery.VersionsHandler
+	if engineVersion := os.Getenv("ENGINE_LATEST_VERSION"); engineVersion != "" {
+		versionsHandler = httpdelivery.NewVersionsHandler(engineVersion)
+		slog.Info("Versions endpoint enabled", "engine_latest_version", engineVersion)
+	}
+
 	// Handlers & Router
 	authHandler := httpdelivery.NewAuthHandler(registerUC, loginUC, refreshAuthUC, googleLoginUC, verifyEmailUC, resendVerificationUC)
 	licenseHandler := httpdelivery.NewLicenseHandler(activateUC, refreshUC)
 	teamHandler := httpdelivery.NewTeamHandler(createTeamUC, inviteMemberUC, acceptInviteUC, removeMemberUC, listMembersUC)
 	accountHandler := httpdelivery.NewAccountHandler(changePasswordUC, deleteAccountUC, forgotPasswordUC, resetPasswordUC)
 	router := httpdelivery.NewRouter(httpdelivery.RouterConfig{
-		AuthHandler:    authHandler,
-		LicenseHandler: licenseHandler,
-		BillingHandler: billingHandler,
-		WebhookHandler: webhookHandler,
-		PricingHandler: pricingHandler,
-		UsageHandler:   usageHandler,
-		ProxyHandler:   proxyHandler,
-		TeamHandler:    teamHandler,
-		AccountHandler: accountHandler,
-		TokenVerifier:  tokenVerifier,
-		CORSOrigins:    cfg.CORS.AllowedOrigins,
+		AuthHandler:     authHandler,
+		LicenseHandler:  licenseHandler,
+		BillingHandler:  billingHandler,
+		WebhookHandler:  webhookHandler,
+		PricingHandler:  pricingHandler,
+		UsageHandler:    usageHandler,
+		ProxyHandler:    proxyHandler,
+		TeamHandler:     teamHandler,
+		AccountHandler:  accountHandler,
+		VersionsHandler: versionsHandler,
+		TokenVerifier:   tokenVerifier,
+		CORSOrigins:     cfg.CORS.AllowedOrigins,
 	})
 
 	// HTTP Server

@@ -60,4 +60,38 @@ describe('HealthPage', () => {
       expect(screen.getByText('Error: connection refused')).toBeInTheDocument();
     });
   });
+
+  it('shows update available banner when update_available is set', async () => {
+    mockApi.health.mockResolvedValue({
+      status: 'ok',
+      version: '1.0.0',
+      uptime: '1h',
+      agents_count: 5,
+      update_available: '1.0.1',
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Update available: v1.0.1')).toBeInTheDocument();
+      expect(screen.getByText('docker pull bytebrew/engine:1.0.1')).toBeInTheDocument();
+    });
+  });
+
+  it('does not show update banner when update_available is absent', async () => {
+    mockApi.health.mockResolvedValue({
+      status: 'ok',
+      version: '1.0.0',
+      uptime: '1h',
+      agents_count: 5,
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('1.0.0')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText(/Update available/)).not.toBeInTheDocument();
+  });
 });

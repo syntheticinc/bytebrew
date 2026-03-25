@@ -24,6 +24,7 @@ type RouterConfig struct {
 	ProxyHandler    *ProxyHandler    // nil if DeepInfra not configured
 	TeamHandler     *TeamHandler     // nil if not configured
 	AccountHandler  *AccountHandler  // nil if not configured
+	VersionsHandler *VersionsHandler // nil if not configured
 	TokenVerifier   middleware.TokenVerifier
 	CORSOrigins     []string
 }
@@ -81,6 +82,11 @@ func NewRouter(cfg RouterConfig) *chi.Mux {
 		// Pricing (public, no auth required)
 		if cfg.PricingHandler != nil {
 			r.Get("/pricing", cfg.PricingHandler.GetPricing)
+		}
+
+		// Versions (public, no auth required)
+		if cfg.VersionsHandler != nil {
+			r.Get("/versions/engine", cfg.VersionsHandler.GetEngineVersion)
 		}
 
 		// Protected routes

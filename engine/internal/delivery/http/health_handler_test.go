@@ -16,6 +16,12 @@ type mockAgentCounter struct {
 
 func (m *mockAgentCounter) Count() int { return m.count }
 
+type mockUpdateChecker struct {
+	version string
+}
+
+func (m *mockUpdateChecker) UpdateAvailable() string { return m.version }
+
 func TestHealthHandler_ServeHTTP(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -43,6 +49,51 @@ func TestHealthHandler_ServeHTTP(t *testing.T) {
 			assert.Equal(t, tt.version, resp.Version)
 			assert.Equal(t, tt.agentsCount, resp.AgentsCount)
 			assert.NotEmpty(t, resp.Uptime)
+			assert.Empty(t, resp.UpdateAvailable)
 		})
 	}
+}
+
+func TestHealthHandler_UpdateAvailable(t *testing.T) {
+	handler := NewHealthHandler("1.0.0", &mockAgentCounter{count: 2})
+	handler.SetUpdateChecker(&mockUpdateChecker{version: "1.0.1"})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp HealthResponse
+	err := json.NewDecoder(rec.Body).Decode(&resp)
+	require.NoError(t, err)
+	assert.Equal(t, "1.0.1", resp.UpdateAvailable)
+}
+
+func TestHealthHandler_NoUpdateAvailable(t *testing.T) {
+	handler := NewHealthHandler("1.0.0", &mockAgentCounter{count: 2})
+	handler.SetUpdateChecker(&mockUpdateChecker{version: ""})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	var resp HealthResponse
+	err := json.NewDecoder(rec.Body).Decode(&resp)
+	require.NoError(t, err)
+	assert.Empty(t, resp.UpdateAvailable)
+}
+
+func TestHealthHandler_NilUpdateChecker(t *testing.T) {
+	handler := NewHealthHandler("1.0.0", &mockAgentCounter{count: 0})
+	// Do not set update checker — should not panic
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	var resp HealthResponse
+	err := json.NewDecoder(rec.Body).Decode(&resp)
+	require.NoError(t, err)
+	assert.Empty(t, resp.UpdateAvailable)
 }

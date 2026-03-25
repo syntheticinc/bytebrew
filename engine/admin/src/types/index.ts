@@ -205,6 +205,7 @@ export interface HealthResponse {
   version: string;
   uptime: string;
   agents_count: number;
+  update_available?: string;
 }
 
 // ============================================================================

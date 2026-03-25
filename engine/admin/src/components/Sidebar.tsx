@@ -1,5 +1,7 @@
+import { useEffect, useRef, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { api } from '../api/client';
 
 interface NavItem {
   to: string;
@@ -22,6 +24,20 @@ const navigation: NavItem[] = [
 
 export default function Sidebar() {
   const { logout } = useAuth();
+  const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+
+  useEffect(() => {
+    const checkUpdate = () => {
+      api.health()
+        .then((h) => setUpdateAvailable(h.update_available ?? null))
+        .catch(() => { /* ignore — health page handles errors */ });
+    };
+
+    checkUpdate();
+    intervalRef.current = setInterval(checkUpdate, 60000);
+    return () => clearInterval(intervalRef.current);
+  }, []);
 
   return (
     <aside className="w-60 bg-brand-dark text-brand-light flex flex-col min-h-screen">
@@ -47,6 +63,12 @@ export default function Sidebar() {
               {item.icon}
             </span>
             {item.label}
+            {item.to === '/health' && updateAvailable && (
+              <span
+                className="ml-auto w-2 h-2 rounded-full bg-amber-400"
+                title={`Update available: v${updateAvailable}`}
+              />
+            )}
           </NavLink>
         ))}
       </nav>

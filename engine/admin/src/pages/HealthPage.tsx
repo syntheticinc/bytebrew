@@ -18,6 +18,20 @@ export default function HealthPage() {
 
   return (
     <div>
+      {health.update_available && (
+        <div className="mb-6 flex items-start gap-3 rounded-card border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+          <span className="text-amber-400 text-lg leading-none mt-0.5">&#x26A0;</span>
+          <div className="text-sm">
+            <p className="text-amber-300 font-medium">
+              Update available: v{health.update_available}
+            </p>
+            <code className="text-amber-400/80 text-xs mt-1 block">
+              docker pull bytebrew/engine:{health.update_available}
+            </code>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-brand-light">Health</h1>
         <div className="flex items-center gap-3">
