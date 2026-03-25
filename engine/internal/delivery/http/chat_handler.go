@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
@@ -82,30 +81,31 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Streaming: SSE — must NOT include Content-Length header.
-	// Set Transfer-Encoding: chunked explicitly to prevent Go from buffering
-	// and adding Content-Length (which causes clients to close SSE connection).
+	// Streaming: SSE.
+	// Go's ResponseWriter handles chunked encoding automatically when we
+	// call Flush() without setting Content-Length. Do NOT set Transfer-Encoding
+	// explicitly (Go docs: "It is an error to set Transfer-Encoding").
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
-	w.Header().Set("Transfer-Encoding", "chunked")
-	w.WriteHeader(http.StatusOK)
-	// Write SSE comment + flush to send headers immediately
-	_, _ = fmt.Fprintf(w, ": ok\n\n")
-	if flusher, ok := w.(http.Flusher); ok {
-		flusher.Flush()
-	}
 
-	sse, sseErr := NewSSEWriter(w)
-	if sseErr != nil {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "streaming not supported"})
 		return
 	}
-	stopHB := sse.StartHeartbeat(15 * time.Second)
-	defer stopHB()
 
+	// Send initial SSE comment to start the stream and prevent middleware
+	// from buffering. This also triggers Go to use chunked encoding.
+	_, _ = fmt.Fprintf(w, ": ok\n\n")
+	flusher.Flush()
+
+	// Block on events — handler stays alive until channel closes (on "done" event).
+	// The heartbeat keeps the connection alive during LLM processing.
 	for event := range events {
-		sse.WriteEvent(event.Type, event.Data)
+		_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event.Type, event.Data)
+		flusher.Flush()
 	}
 }
 
