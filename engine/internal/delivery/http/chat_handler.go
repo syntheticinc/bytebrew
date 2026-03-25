@@ -82,30 +82,23 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Streaming: SSE.
-	// Go's ResponseWriter handles chunked encoding automatically when we
-	// call Flush() without setting Content-Length. Do NOT set Transfer-Encoding
-	// explicitly (Go docs: "It is an error to set Transfer-Encoding").
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "streaming not supported"})
-		return
-	}
+	// Use ResponseController for flushing — works with wrapped ResponseWriters
+	// (chi middleware wraps w, so w.(http.Flusher) may fail).
+	rc := http.NewResponseController(w)
 
-	// Send initial SSE comment to start the stream and prevent middleware
-	// from buffering. This also triggers Go to use chunked encoding.
+	// Send initial SSE comment to start the stream.
 	_, _ = fmt.Fprintf(w, ": ok\n\n")
-	flusher.Flush()
+	_ = rc.Flush()
 
 	// Block on events — handler stays alive until channel closes (on "done" event).
-	// The heartbeat keeps the connection alive during LLM processing.
 	for event := range events {
 		_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event.Type, event.Data)
-		flusher.Flush()
+		_ = rc.Flush()
 	}
 }
 
