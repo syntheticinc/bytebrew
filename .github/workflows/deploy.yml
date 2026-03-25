@@ -75,11 +75,20 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Read version
+        id: version
+        run: echo "VERSION=$(cat VERSION)" >> $GITHUB_OUTPUT
+
       - name: Build and push Engine Docker image
         run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
           cd engine
-          docker build -t bytebrew/engine:latest .
+          docker build \
+            --build-arg VERSION=$VERSION \
+            -t bytebrew/engine:latest \
+            -t bytebrew/engine:$VERSION .
           docker push bytebrew/engine:latest
+          docker push bytebrew/engine:$VERSION
           docker save bytebrew/engine:latest | gzip > ../build/engine.tar.gz
 
       - name: Build MCP Docs Docker image
