@@ -20,6 +20,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/audit"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flow_registry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/mcp"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
@@ -128,13 +129,37 @@ func (a *tokenRepoHTTPAdapter) VerifyToken(ctx context.Context, tokenHash string
 	return a.repo.VerifyToken(ctx, tokenHash)
 }
 
-// configReloaderHTTPAdapter bridges AgentRegistry to the http.ConfigReloader interface.
+// configReloaderHTTPAdapter bridges AgentRegistry and MCP reconnection to the http.ConfigReloader interface.
 type configReloaderHTTPAdapter struct {
-	registry *agent_registry.AgentRegistry
+	registry    *agent_registry.AgentRegistry
+	mcpRegistry *mcp.ClientRegistry
+	db          *gorm.DB
 }
 
 func (a *configReloaderHTTPAdapter) Reload(ctx context.Context) error {
-	return a.registry.Reload(ctx)
+	if err := a.registry.Reload(ctx); err != nil {
+		return err
+	}
+
+	a.reconnectMCPServers(ctx)
+	return nil
+}
+
+func (a *configReloaderHTTPAdapter) reconnectMCPServers(ctx context.Context) {
+	if a.mcpRegistry == nil || a.db == nil {
+		return
+	}
+
+	mcpServerRepo := config_repo.NewGORMMCPServerRepository(a.db)
+	mcpServers, err := mcpServerRepo.List(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "failed to load MCP servers for reload", "error", err)
+		return
+	}
+
+	a.mcpRegistry.CloseAll()
+	connectMCPServers(ctx, mcpServers, a.mcpRegistry)
+	slog.InfoContext(ctx, "MCP servers reconnected after config reload", "count", len(mcpServers))
 }
 
 func (a *configReloaderHTTPAdapter) AgentsCount() int {

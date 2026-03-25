@@ -488,7 +488,7 @@ func Run(sc ServerConfig) error {
 
 			// Config
 			configHandler := deliveryhttp.NewConfigHandler(
-				&configReloaderHTTPAdapter{registry: agentRegistry},
+				&configReloaderHTTPAdapter{registry: agentRegistry, mcpRegistry: mcpRegistry, db: pgDB},
 				&configImportExportHTTPAdapter{db: pgDB},
 			)
 			r.Post("/api/v1/config/reload", configHandler.Reload)
