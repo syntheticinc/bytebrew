@@ -3,7 +3,7 @@
 Полный список тест-кейсов для регрессионного тестирования.
 При добавлении нового функционала — обновлять этот файл.
 
-**Последнее обновление:** 2026-03-24
+**Последнее обновление:** 2026-03-25
 **Модель для тестов:** OpenRouter `qwen/qwen3-coder-next`
 **Принцип:** все команды берутся с публичного сайта bytebrew.ai
 
@@ -3161,7 +3161,373 @@
 
 ---
 
-## Итого: 264 TC
+## TC-CFG: Config Import/Export Edge Cases (11 TC)
+
+### TC-CFG-01: Config export → re-import produces identical config
+**Предусловие:** Engine запущен, есть настроенные agents и models
+**Шаги:**
+1. GET /api/v1/config/export → сохранить YAML
+2. POST /api/v1/config/import с сохранённым YAML
+3. GET /api/v1/config/export → сравнить с оригиналом
+
+**Ожидание:**
+- Re-import завершается 200 OK
+- Повторный export идентичен оригиналу (все поля сохранены)
+
+**Примечание:** Критично для GitOps workflow — config должна быть reproducible
+
+### TC-CFG-02: Config import с пустой секцией agents → 200 OK
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/config/import с YAML где `agents: []`
+
+**Ожидание:**
+- HTTP 200 OK
+- Существующие agents не удалены
+- Новые agents не созданы
+
+**Примечание:** Пустой список не должен вызывать ошибку или side effects
+
+### TC-CFG-03: Config import с agents = null → без crash
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/config/import с YAML где `agents:` (без значения, null)
+
+**Ожидание:**
+- HTTP 200 OK (или 400 с понятной ошибкой)
+- Engine НЕ падает (no panic)
+- Логи без stacktrace
+
+**Примечание:** null vs пустой список — оба варианта должны быть safe
+
+### TC-CFG-04: Config import с пустой секцией models → OK
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/config/import с YAML где `models: []`
+
+**Ожидание:**
+- HTTP 200 OK
+- Существующие models не затронуты
+
+**Примечание:** Аналогично TC-CFG-02, но для models
+
+### TC-CFG-05: Config import с UTF-8 символами в system prompt
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/config/import с YAML где agent имеет `system: "Привет! 你好 مرحبا 🌍"`
+2. GET /api/v1/agents → проверить system prompt
+
+**Ожидание:**
+- Agent создан успешно
+- System prompt содержит все UTF-8 символы без искажений
+- Emoji сохранены корректно
+
+**Примечание:** Проверка что pipeline не ломает Unicode
+
+### TC-CFG-06: Config import с дублирующимся именем агента
+**Предусловие:** Engine запущен, agent "support" уже существует
+**Шаги:**
+1. POST /api/v1/config/import с YAML содержащим agent "support" с другим system prompt
+
+**Ожидание:**
+- Существующий agent обновлён (upsert), НЕ создан дубликат
+- Или: 409 Conflict с понятным сообщением
+- В БД ровно один agent с именем "support"
+
+**Примечание:** Дубликаты имён — источник багов в multi-agent routing
+
+### TC-CFG-07: Config export включает ВСЕ поля models
+**Предусловие:** Engine запущен, model создана с type, model_name, base_url, api_key
+**Шаги:**
+1. GET /api/v1/config/export → проверить YAML
+
+**Ожидание:**
+- YAML содержит для каждой model: type, model_name, base_url
+- has_api_key = true (api_key НЕ экспортируется в открытом виде)
+- Нет потерянных полей
+
+**Примечание:** api_key — секрет, экспортировать только флаг наличия
+
+### TC-CFG-08: Config export включает все поля agents
+**Предусловие:** Engine запущен, agent с confirm_before, tools, mcp_servers
+**Шаги:**
+1. GET /api/v1/config/export → проверить YAML
+
+**Ожидание:**
+- YAML содержит: name, system (или system_file), model, tools, mcp_servers, confirm_before
+- Все массивы (tools, mcp_servers, confirm_before) корректно сериализованы
+- Пустые массивы НЕ опущены (для явности)
+
+**Примечание:** Неполный export → broken re-import
+
+### TC-CFG-09: Config import с malformed YAML → 400
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/config/import с невалидным YAML (broken indentation, missing colon)
+
+**Ожидание:**
+- HTTP 400 Bad Request
+- Тело ответа содержит YAML parse error с указанием строки
+- НЕ HTTP 500 Internal Server Error
+- Engine продолжает работать
+
+**Примечание:** Разница между 400 и 500 — критична для UX
+
+### TC-CFG-10: system_file path разрешается относительно директории конфига
+**Предусловие:** Engine запущен, config.yaml в /app/config/
+**Шаги:**
+1. Config содержит agent с `system_file: "./prompts/agent.txt"`
+2. Файл существует по пути /app/config/prompts/agent.txt
+3. POST /api/v1/config/import
+
+**Ожидание:**
+- System prompt загружен из файла
+- Путь разрешён относительно директории config.yaml, НЕ CWD
+
+**Примечание:** Relative path resolution — частый source of bugs при Docker mount
+
+### TC-CFG-11: Config import через API → agents видны сразу
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/config/import с новым agent "fresh-agent"
+2. GET /api/v1/agents (сразу, без рестарта)
+3. POST /api/v1/agents/fresh-agent/chat → отправить сообщение
+
+**Ожидание:**
+- fresh-agent виден в списке агентов сразу после import
+- Chat с fresh-agent работает без рестарта Engine
+- Не требуется reload/restart
+
+**Примечание:** Hot reload конфигурации — ключевое преимущество API import vs file
+
+---
+
+## TC-TOOL: Tool Calling & MCP Edge Cases (8 TC)
+
+### TC-TOOL-01: MCP tool call timeout → graceful error
+**Предусловие:** MCP server настроен, но намеренно задерживает ответ > 30s
+**Шаги:**
+1. POST /api/v1/agents/{name}/chat с запросом, вызывающим MCP tool
+2. MCP server не отвечает 30+ секунд
+
+**Ожидание:**
+- Timeout error event отправлен клиенту через SSE
+- Agent НЕ зависает — продолжает обработку или завершает с ошибкой
+- Engine не блокирует другие запросы
+
+**Примечание:** Timeout должен быть конфигурируемым (default 30s)
+
+### TC-TOOL-02: Tool call с отсутствующим required параметром
+**Предусловие:** Agent с tool, имеющим required параметры
+**Шаги:**
+1. LLM генерирует tool call без required параметра (или с null)
+
+**Ожидание:**
+- Error event с деталями: какой параметр отсутствует
+- Agent получает ошибку и может retry или сообщить пользователю
+- НЕ panic, НЕ silent fail
+
+**Примечание:** LLM часто забывает required параметры — нужна валидация
+
+### TC-TOOL-03: Tool result > 1MB → handled gracefully
+**Предусловие:** MCP tool возвращает результат размером > 1MB
+**Шаги:**
+1. POST /api/v1/agents/{name}/chat → tool call
+2. MCP server возвращает JSON > 1MB
+
+**Ожидание:**
+- Результат обработан (chunked или truncated с предупреждением)
+- Engine НЕ OOM (out of memory)
+- SSE event доставлен клиенту
+
+**Примечание:** Защита от случайного dump базы данных через MCP tool
+
+### TC-TOOL-04: MCP server возвращает non-JSON → graceful error
+**Предусловие:** MCP server настроен, но возвращает plain text или HTML
+**Шаги:**
+1. POST /api/v1/agents/{name}/chat → tool call к MCP server
+2. MCP server отвечает HTML (например, 502 page от proxy)
+
+**Ожидание:**
+- Error event: "MCP server returned invalid response"
+- Engine НЕ crash (no panic on json.Unmarshal)
+- Agent получает ошибку и может сообщить пользователю
+
+**Примечание:** Часто случается при proxy/nginx перед MCP server
+
+### TC-TOOL-05: MCP tools/list возвращает невалидный формат
+**Предусловие:** MCP server настроен, но tools/list возвращает битый JSON
+**Шаги:**
+1. Engine загружает tools из MCP server при старте или по запросу
+2. MCP server tools/list возвращает невалидный формат
+
+**Ожидание:**
+- MCP server пропущен (не добавлен в tool list)
+- Warning в логах с именем MCP server и причиной
+- Остальные MCP servers загружены корректно
+- Engine продолжает работать
+
+**Примечание:** Один битый MCP server не должен ломать весь agent
+
+### TC-TOOL-06: Circular agent spawn → предотвращение
+**Предусловие:** Agent A может spawn Agent B, Agent B может spawn Agent A
+**Шаги:**
+1. POST /api/v1/agents/agent-a/chat с запросом, вызывающим spawn agent-b
+2. Agent B в свою очередь вызывает spawn agent-a
+
+**Ожидание:**
+- Circular spawn предотвращён (max depth или cycle detection)
+- Error event с сообщением о circular dependency
+- Engine НЕ уходит в бесконечный цикл
+- Ресурсы (goroutines, memory) не утекают
+
+**Примечание:** Max spawn depth рекомендуется 3-5 уровней
+
+### TC-TOOL-07: EE audit log записывает tool calls
+**Предусловие:** EE лицензия активна, audit log включён
+**Шаги:**
+1. POST /api/v1/agents/{name}/chat → agent вызывает tool
+2. GET /api/v1/audit-log → найти запись о tool call
+
+**Ожидание:**
+- Audit log содержит запись с type "tool_call"
+- Запись содержит: tool name, arguments, result (или result summary)
+- Timestamp и request_id присутствуют
+
+**Примечание:** EE feature — требует активную EE лицензию
+
+### TC-TOOL-08: Tool execution error → error SSE event
+**Предусловие:** Agent с tool, tool выбрасывает ошибку при выполнении
+**Шаги:**
+1. POST /api/v1/agents/{name}/chat → LLM вызывает tool
+2. Tool возвращает ошибку (runtime error, connection refused, etc.)
+
+**Ожидание:**
+- SSE event type "error" или "tool_error" отправлен клиенту
+- Event содержит: tool name, error message
+- Agent продолжает работу (может retry или ответить пользователю)
+- НЕ silent fail (клиент ДОЛЖЕН знать об ошибке)
+
+**Примечание:** Клиент должен иметь возможность показать ошибку пользователю
+
+---
+
+## TC-CRASH: Crash Prevention & Validation (9 TC)
+
+### TC-CRASH-01: Создание agent с пустым именем → 400
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/agents с `name: ""`
+
+**Ожидание:**
+- HTTP 400 Bad Request
+- Тело ответа: validation error "name is required"
+- Agent НЕ создан в БД
+
+**Примечание:** Пустое имя — невалидный идентификатор для routing
+
+### TC-CRASH-02: Создание agent со спецсимволами в имени
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/agents с `name: "agent/with<special\"chars"`
+
+**Ожидание:**
+- HTTP 400 Bad Request
+- Validation error: недопустимые символы в имени
+- Agent НЕ создан
+
+**Примечание:** Спецсимволы (/, ", <, >) ломают URL routing и HTML rendering
+
+### TC-CRASH-03: Создание agent с именем > 255 символов
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/agents с name длиной 300+ символов
+
+**Ожидание:**
+- HTTP 400 Bad Request
+- Validation error: имя слишком длинное
+- Agent НЕ создан
+
+**Примечание:** Защита от overflow в БД и URL
+
+### TC-CRASH-04: Создание agent с неизвестным tool → 400
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/agents с `tools: ["nonexistent_tool_xyz"]`
+
+**Ожидание:**
+- HTTP 400 Bad Request
+- Error message: unknown tool "nonexistent_tool_xyz"
+- Agent НЕ создан
+- Engine НЕ crash при попытке resolve tool
+
+**Примечание:** Typo в tool name не должен вызывать panic при chat
+
+### TC-CRASH-05: PUT /api/v1/agents/{nonexistent} → 404
+**Предусловие:** Engine запущен, agent "ghost" НЕ существует
+**Шаги:**
+1. PUT /api/v1/agents/ghost с валидным body
+
+**Ожидание:**
+- HTTP 404 Not Found
+- Error message: agent "ghost" not found
+- НЕ создаёт новый agent (PUT ≠ upsert)
+
+**Примечание:** Различие PUT (update) vs POST (create)
+
+### TC-CRASH-06: DELETE agent дважды → 404 на второй раз
+**Предусловие:** Engine запущен, agent "temp" существует
+**Шаги:**
+1. DELETE /api/v1/agents/temp → 200 OK
+2. DELETE /api/v1/agents/temp → повторный запрос
+
+**Ожидание:**
+- Первый DELETE: 200 OK (или 204 No Content)
+- Второй DELETE: 404 Not Found
+- НЕ 500, НЕ panic
+
+**Примечание:** Идемпотентность vs повторные запросы
+
+### TC-CRASH-07: Chat с model с невалидным API key → error response
+**Предусловие:** Engine запущен, model создана с невалидным api_key
+**Шаги:**
+1. POST /api/v1/agents/{name}/chat (agent привязан к model с bad key)
+
+**Ожидание:**
+- Error SSE event: "authentication failed" или "invalid API key"
+- Engine НЕ panic (no nil pointer, no unhandled error)
+- HTTP connection закрывается gracefully
+
+**Примечание:** Невалидный API key — самая частая ошибка при настройке
+
+### TC-CRASH-08: Создание model с дублирующимся именем → 409
+**Предусловие:** Engine запущен, model "gpt-4" уже существует
+**Шаги:**
+1. POST /api/v1/models с `name: "gpt-4"` (уже существует)
+
+**Ожидание:**
+- HTTP 409 Conflict
+- Error message: model "gpt-4" already exists
+- Существующая model НЕ изменена
+
+**Примечание:** Unique constraint на имя model
+
+### TC-CRASH-09: DELETE model, привязанной к agent → error
+**Предусловие:** Engine запущен, model "main-model" используется agent "support"
+**Шаги:**
+1. DELETE /api/v1/models/main-model
+
+**Ожидание:**
+- HTTP 409 Conflict (или 400 Bad Request)
+- Error message: model is referenced by agent(s): "support"
+- Model НЕ удалена
+- Agent "support" продолжает работать
+
+**Примечание:** Foreign key protection — удаление зависимости ломает агента
+
+---
+
+## Итого: 292 TC
 
 | Категория | Кол-во | Покрытие |
 |-----------|--------|----------|
@@ -3186,7 +3552,10 @@
 | TC-HELM | 7 | Helm chart (template, lint, values, affinity) |
 | TC-METR | 6 | Prometheus metrics (/metrics, counters, histograms) |
 | TC-KILO | 8 | Integration issues (config import, panic, MCP, Docker) |
-| **ВСЕГО** | **264** |
+| TC-CFG | 11 | Config import/export edge cases (idempotency, UTF-8, malformed YAML) |
+| TC-TOOL | 8 | Tool calling & MCP edge cases (timeout, circular spawn, audit) |
+| TC-CRASH | 9 | Crash prevention & validation (empty name, special chars, FK protection) |
+| **ВСЕГО** | **292** |
 
 ### Примечания
 - Multi-agent spawn работает через HTTP REST API и gRPC/WS
@@ -3197,3 +3566,6 @@
 - TC-HELM-* — требуют Helm CLI, можно проверить без K8s кластера (helm template/lint)
 - TC-METR-* — EE feature, требуют EE лицензию
 - TC-KILO-* — integration issues от Kilo IoT, TC-KILO-06/07 требуют Docker
+- TC-CFG-* — config edge cases, TC-CFG-10 требует Docker или custom config dir
+- TC-TOOL-* — TC-TOOL-07 требует EE лицензию (audit log), TC-TOOL-01/03 требуют controllable MCP server
+- TC-CRASH-* — validation и crash prevention, все можно проверить без внешних зависимостей
