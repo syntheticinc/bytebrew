@@ -34,7 +34,7 @@ interface ExampleChatProps {
   suggestions: string[];
 }
 
-const MAX_MESSAGES_PER_HOUR = 15;
+const DEFAULT_MESSAGES_PER_HOUR = 50;
 const STORAGE_KEY_ACCESS = 'bytebrew_access_token';
 const STORAGE_KEY_REFRESH = 'bytebrew_refresh_token';
 
@@ -141,7 +141,8 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [messagesRemaining, setMessagesRemaining] = useState(MAX_MESSAGES_PER_HOUR);
+  const [messagesRemaining, setMessagesRemaining] = useState(DEFAULT_MESSAGES_PER_HOUR);
+  const [messagesLimit, setMessagesLimit] = useState(DEFAULT_MESSAGES_PER_HOUR);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedToolIds, setExpandedToolIds] = useState<Set<string>>(new Set());
@@ -159,6 +160,9 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
       .then(data => {
         if (data?.rate_limit?.remaining != null) {
           setMessagesRemaining(data.rate_limit.remaining);
+        }
+        if (data?.rate_limit?.limit != null) {
+          setMessagesLimit(data.rate_limit.limit);
         }
       })
       .catch(() => { /* ignore */ });
@@ -529,7 +533,7 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
           </button>
         </form>
         <div className="mt-2 text-xs text-brand-shade3 text-center">
-          {messagesRemaining}/{MAX_MESSAGES_PER_HOUR} messages remaining this hour
+          {messagesRemaining}/{messagesLimit} messages remaining this hour
         </div>
       </div>
     </div>
