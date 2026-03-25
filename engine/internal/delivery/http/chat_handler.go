@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -82,13 +83,16 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Streaming: SSE — must NOT include Content-Length header.
-	// Flush immediately after writing headers to prevent Go from adding
-	// Content-Length: 0 (which causes clients to close the connection).
+	// Set Transfer-Encoding: chunked explicitly to prevent Go from buffering
+	// and adding Content-Length (which causes clients to close SSE connection).
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
-	w.Header().Del("Content-Length") // explicitly remove if set by middleware
+	w.Header().Set("Transfer-Encoding", "chunked")
+	w.WriteHeader(http.StatusOK)
+	// Write SSE comment + flush to send headers immediately
+	_, _ = fmt.Fprintf(w, ": ok\n\n")
 	if flusher, ok := w.(http.Flusher); ok {
 		flusher.Flush()
 	}
