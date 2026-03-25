@@ -45,11 +45,15 @@ func NewSSETransport(baseURL string, forwardHeaders ...[]string) *SSETransport {
 	}
 }
 
-func (t *SSETransport) Start(ctx context.Context) error {
-	ctx, t.cancel = context.WithCancel(ctx)
+func (t *SSETransport) Start(_ context.Context) error {
+	// Use background context for SSE connection lifecycle — it must outlive the
+	// caller's context (e.g. connectCtx with 10s timeout). The SSE stream stays
+	// open until Close() is called.
+	sseCtx, cancel := context.WithCancel(context.Background())
+	t.cancel = cancel
 
 	// Connect to SSE endpoint
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.baseURL, nil)
+	req, err := http.NewRequestWithContext(sseCtx, http.MethodGet, t.baseURL, nil)
 	if err != nil {
 		return fmt.Errorf("create SSE request: %w", err)
 	}
@@ -66,7 +70,7 @@ func (t *SSETransport) Start(ctx context.Context) error {
 	}
 
 	// Start reading SSE events in background
-	go t.readSSE(ctx, resp.Body)
+	go t.readSSE(sseCtx, resp.Body)
 
 	// Wait briefly for endpoint event
 	time.Sleep(100 * time.Millisecond)
