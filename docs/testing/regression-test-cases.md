@@ -4859,7 +4859,233 @@
 
 ---
 
-## Итого: 395 TC
+## TC-SSE-STREAM: SSE Streaming Reliability (5 TC)
+
+### TC-SSE-STREAM-01: Response headers — no Content-Length
+**Предусловие:** Engine запущен, агент и модель настроены
+
+**Шаги:**
+1. `curl -sI -X POST http://localhost:8443/api/v1/agents/{name}/chat -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"message":"hi"}'`
+2. Проверить response headers
+
+**Ожидание:**
+- Content-Type: text/event-stream
+- Cache-Control: no-cache
+- НЕТ Content-Length header
+- Transfer-Encoding: chunked
+
+**PASS:** SSE response headers корректны, нет Content-Length
+
+### TC-SSE-STREAM-02: SSE events delivered — message_delta, message, done
+**Предусловие:** Engine запущен, агент настроен с LLM моделью
+
+**Шаги:**
+1. `curl -N -X POST http://localhost:8443/api/v1/agents/{name}/chat -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"message":"Say hello"}'`
+2. Наблюдать за SSE stream
+
+**Ожидание:**
+- Начинается с `: ok` (SSE comment)
+- Приходят event: message_delta с content
+- Приходит event: message с полным ответом
+- Завершается event: done с session_id
+- Ответ содержит осмысленный текст (не пустой)
+
+**PASS:** SSE events (message_delta, message, done) доставляются, content не пустой
+
+### TC-SSE-STREAM-03: Long-running chat — stream не обрывается (30+ секунд)
+**Предусловие:** Engine запущен, агент с MCP tools
+
+**Шаги:**
+1. Отправить сложный запрос требующий tool calls (web_search, knowledge_search)
+2. Наблюдать за SSE stream 30+ секунд
+
+**Ожидание:**
+- Stream не обрывается по timeout
+- tool_call и tool_result events доставляются
+- message_delta events продолжают приходить после tool calls
+- done event в конце
+
+**PASS:** Long-running SSE stream работает без обрыва
+
+### TC-SSE-STREAM-04: Non-streaming mode (stream: false) — JSON response
+**Предусловие:** Engine запущен, агент настроен
+
+**Шаги:**
+1. `curl -s -X POST http://localhost:8443/api/v1/agents/{name}/chat -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"message":"Say hello","stream":false}'`
+
+**Ожидание:**
+- Content-Type: application/json (не text/event-stream)
+- JSON body содержит: agent, message, session_id
+- message содержит ответ LLM
+- tool_calls array если были вызовы инструментов
+
+**PASS:** Non-streaming response возвращает JSON с message и session_id
+
+### TC-SSE-STREAM-05: Client disconnect — graceful cleanup
+**Предусловие:** Engine запущен, агент настроен
+
+**Шаги:**
+1. Начать SSE chat: `curl -N -X POST ... -d '{"message":"Write a long essay"}'`
+2. Прервать curl (Ctrl+C) через 2 секунды
+3. Проверить логи Engine
+
+**Ожидание:**
+- Engine НЕ crash, не panic
+- Логи: "turn cancelled by user" или context cancelled
+- Новый chat request работает после disconnect
+- Нет утечки goroutines (проверить /debug/pprof/goroutine если доступен)
+
+**PASS:** Client disconnect обрабатывается gracefully, нет crash/panic
+
+---
+
+## TC-MCP-CRUD: MCP Server API CRUD (5 TC)
+
+### TC-MCP-CRUD-01: Create MCP server with forward_headers
+**Предусловие:** Engine запущен, admin JWT получен
+
+**Шаги:**
+1. `curl -s -X POST http://localhost:8443/api/v1/mcp-servers -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"name":"test-mcp","type":"sse","url":"http://localhost:9090/sse","forward_headers":["X-Org-Id","X-User-Id"]}'`
+
+**Ожидание:**
+- HTTP 201
+- Response JSON содержит `forward_headers: ["X-Org-Id", "X-User-Id"]`
+- Имя, тип, URL сохранены корректно
+
+**PASS:** MCP server создан с forward_headers в response
+
+### TC-MCP-CRUD-02: Update MCP server forward_headers
+**Предусловие:** MCP server "test-mcp" создан (TC-MCP-CRUD-01)
+
+**Шаги:**
+1. `curl -s -X PUT http://localhost:8443/api/v1/mcp-servers/test-mcp -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"name":"test-mcp","type":"sse","url":"http://localhost:9090/sse","forward_headers":["Authorization","X-Org-Id","X-User-Id"]}'`
+
+**Ожидание:**
+- HTTP 200
+- Response JSON содержит `forward_headers: ["Authorization", "X-Org-Id", "X-User-Id"]`
+- Три header'а вместо двух
+
+**PASS:** MCP server обновлён с новым forward_headers в response
+
+### TC-MCP-CRUD-03: List MCP servers includes forward_headers
+**Предусловие:** MCP server с forward_headers существует
+
+**Шаги:**
+1. `curl -s http://localhost:8443/api/v1/mcp-servers -H "Authorization: Bearer $TOKEN"`
+
+**Ожидание:**
+- HTTP 200
+- Каждый MCP server в массиве содержит поле `forward_headers` (если настроен)
+- Значение соответствует сохранённому
+
+**PASS:** GET /mcp-servers включает forward_headers для каждого сервера
+
+### TC-MCP-CRUD-04: Config export includes forward_headers
+**Предусловие:** MCP server с forward_headers существует
+
+**Шаги:**
+1. `curl -s http://localhost:8443/api/v1/config/export -H "Authorization: Bearer $TOKEN"`
+2. Проверить секцию mcp_servers в YAML
+
+**Ожидание:**
+- YAML содержит `forward_headers:` для MCP сервера
+- Значения — список header names
+
+**PASS:** Config export содержит forward_headers для MCP серверов
+
+### TC-MCP-CRUD-05: Config import with forward_headers
+**Предусловие:** Engine запущен
+
+**Шаги:**
+1. Подготовить YAML:
+```yaml
+mcp_servers:
+  - name: imported-mcp
+    type: sse
+    url: http://localhost:9090/sse
+    forward_headers:
+      - X-Tenant-Id
+      - Authorization
+```
+2. `curl -s -X POST http://localhost:8443/api/v1/config/import -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/x-yaml" --data-binary @mcp.yaml`
+3. Проверить: `GET /api/v1/mcp-servers`
+
+**Ожидание:**
+- Import success
+- MCP server "imported-mcp" создан с forward_headers
+
+**PASS:** Config import персистирует forward_headers
+
+---
+
+## TC-BYOK: Bring Your Own Key (5 TC)
+
+### TC-BYOK-01: Chat with BYOK headers — provider override
+**Предусловие:** Engine запущен, агент настроен, BYOK enabled в Settings
+
+**Шаги:**
+1. `curl -N -X POST http://localhost:8443/api/v1/agents/{name}/chat -H "Authorization: Bearer $TOKEN" -H "X-Model-Provider: openai" -H "X-Model-API-Key: sk-test-..." -H "X-Model-Name: gpt-4o" -H "Content-Type: application/json" -d '{"message":"hi"}'`
+
+**Ожидание:**
+- Request использует предоставленный API key и модель
+- SSE response содержит ответ от указанной модели
+- API key не сохраняется в DB
+
+**PASS:** BYOK override работает, ключ не персистируется
+
+### TC-BYOK-02: BYOK disabled — headers ignored
+**Предусловие:** BYOK disabled в Settings
+
+**Шаги:**
+1. Отправить chat с X-Model-Provider, X-Model-API-Key headers
+
+**Ожидание:**
+- BYOK headers игнорируются
+- Используется default модель агента
+- Нет ошибки
+
+**PASS:** При disabled BYOK headers игнорируются
+
+### TC-BYOK-03: BYOK with invalid API key
+**Предусловие:** BYOK enabled
+
+**Шаги:**
+1. Отправить chat с `X-Model-API-Key: invalid-key-xxx`
+
+**Ожидание:**
+- SSE error event с сообщением об ошибке авторизации от провайдера
+- НЕ 500 Internal Server Error
+- Осмысленное сообщение: "authentication failed" или "invalid API key"
+
+**PASS:** Invalid BYOK key возвращает error event, не crash
+
+### TC-BYOK-04: BYOK missing provider header
+**Предусловие:** BYOK enabled
+
+**Шаги:**
+1. Отправить chat с `X-Model-API-Key` но БЕЗ `X-Model-Provider`
+
+**Ожидание:**
+- Используется default провайдер агента с пользовательским ключом
+- ИЛИ ошибка "X-Model-Provider required when using BYOK"
+
+**PASS:** Missing provider handled gracefully
+
+### TC-BYOK-05: BYOK key not persisted
+**Предусловие:** BYOK chat выполнен
+
+**Шаги:**
+1. GET /api/v1/models → проверить что BYOK ключ не появился
+
+**Ожидание:**
+- Список моделей не содержит BYOK ключ
+- Session audit не содержит ключ в plaintext
+
+**PASS:** BYOK ключ не сохранён нигде
+
+---
+
+## Итого: 410 TC
 
 | Категория | Кол-во | Покрытие |
 |-----------|--------|----------|
@@ -4906,7 +5132,10 @@
 | TC-SEC | 5 | Security (XSS, SQL injection, API key masking, CORS, rate limit bypass) |
 | TC-CONC-EXT | 4 | Concurrency extra (config reload, multi-stream, crash consistency) |
 | TC-EXTRA | 3 | Miscellaneous (empty body, wrong Content-Type, large body) |
-| **ВСЕГО** | **395** |
+| TC-SSE-STREAM | 5 | SSE streaming reliability (headers, events, long-running, non-stream, disconnect) |
+| TC-MCP-CRUD | 5 | MCP server API CRUD (forward_headers persistence, config import/export) |
+| TC-BYOK | 5 | Bring Your Own Key (provider override, disabled, invalid key, not persisted) |
+| **ВСЕГО** | **410** |
 
 ### Примечания
 - Multi-agent spawn работает через HTTP REST API и gRPC/WS
