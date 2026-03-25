@@ -78,7 +78,13 @@ func (p *Processor) StartProcessing(ctx context.Context, sessionID string) {
 		return
 	}
 
-	procCtx, cancel := context.WithCancel(ctx)
+	// Use context.Background() — processing must NOT be tied to the HTTP
+	// request context. The HTTP handler may return (e.g., after SSE flush)
+	// while the LLM is still generating. If we used ctx here, the request
+	// cancellation would kill the LLM turn ("turn cancelled by user").
+	// Values from the original context (RequestContext for MCP headers) are
+	// copied via context.WithoutCancel if available, otherwise Background.
+	procCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	p.active[sessionID] = cancel
 	p.mu.Unlock()
 
