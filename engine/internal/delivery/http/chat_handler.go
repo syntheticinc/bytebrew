@@ -71,7 +71,7 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	ctx := h.buildRequestContext(r)
 	events, err := h.service.Chat(ctx, agentName, req.Message, req.UserID, req.SessionID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeDomainError(w, err)
 		return
 	}
 

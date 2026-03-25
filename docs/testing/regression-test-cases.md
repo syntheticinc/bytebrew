@@ -3527,7 +3527,1339 @@
 
 ---
 
-## Итого: 292 TC
+## TC-AG-EXT: Agent CRUD Edge Cases (4 TC)
+
+### TC-AG-EXT-01: Создание agent с пустым system_prompt
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/agents с `system_prompt: ""`
+
+**Ожидание:**
+- Agent создан успешно (200/201) ИЛИ validation error с подсказкой
+- Если создан — при chat используется default system prompt или пустой prompt
+
+**Примечание:** Пустой system_prompt — валидный кейс (agent без инструкций)
+
+### TC-AG-EXT-02: Создание agent с пустым tools array
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/agents с `tools: []`
+
+**Ожидание:**
+- HTTP 200/201 — agent создан
+- Agent работает в chat без tool calling
+- GET /api/v1/agents/{name} возвращает `tools: []`
+
+**Примечание:** Agent без tools — валидный кейс (чистый LLM без инструментов)
+
+### TC-AG-EXT-03: Смена модели agent через PUT
+**Предусловие:** Engine запущен, agent "test-agent" создан с model "model-a", model "model-b" существует
+**Шаги:**
+1. PUT /api/v1/agents/test-agent с `model: "model-b"`
+2. POST /api/v1/agents/test-agent/chat → отправить сообщение
+
+**Ожидание:**
+- PUT возвращает 200 OK
+- Chat использует model-b (видно в логах или audit)
+- Старая model-a больше не используется этим agent
+
+**Примечание:** Горячая смена модели без перезапуска
+
+### TC-AG-EXT-04: Имя agent максимальной длины (255 символов)
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/agents с name длиной ровно 255 символов (валидных)
+
+**Ожидание:**
+- HTTP 200/201 — agent создан
+- GET /api/v1/agents/{name} возвращает полное имя
+- Agent доступен по URL с полным именем
+
+**Примечание:** Граничное значение — ровно на лимите
+
+---
+
+## TC-MD-EXT: Model CRUD Edge Cases (4 TC)
+
+### TC-MD-EXT-01: Создание model с пустым именем
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/models с `name: ""`
+
+**Ожидание:**
+- HTTP 400 Bad Request
+- Validation error: name is required
+- Model НЕ создана
+
+**Примечание:** Пустое имя невалидно для routing
+
+### TC-MD-EXT-02: Создание model с невалидным base_url
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/models с `base_url: "not-a-url"`
+
+**Ожидание:**
+- HTTP 400 Bad Request
+- Validation error: invalid base_url format
+- Model НЕ создана
+
+**Примечание:** base_url должен быть валидным URL
+
+### TC-MD-EXT-03: DELETE model, используемой в активной сессии
+**Предусловие:** Engine запущен, model используется в активном chat
+**Шаги:**
+1. Начать chat с agent, привязанным к model
+2. Во время streaming DELETE /api/v1/models/{name}
+
+**Ожидание:**
+- DELETE заблокирован (409 Conflict) ИЛИ предупреждение
+- Активная сессия не прерывается crash-ем
+
+**Примечание:** Защита от удаления ресурса во время использования
+
+### TC-MD-EXT-04: Обновление api_key модели
+**Предусловие:** Engine запущен, model "test-model" существует
+**Шаги:**
+1. PUT /api/v1/models/test-model с новым `api_key`
+2. POST /api/v1/agents/{name}/chat → отправить сообщение
+
+**Ожидание:**
+- PUT возвращает 200 OK
+- Новый api_key используется при следующем chat запросе
+- Старый ключ больше не используется
+
+**Примечание:** Ротация ключей без перезапуска Engine
+
+---
+
+## TC-MC-EXT: MCP Server Edge Cases (5 TC)
+
+### TC-MC-EXT-01: MCP server с невалидным URL
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/mcp-servers с `url: "not-a-valid-url"`
+
+**Ожидание:**
+- HTTP 400 Bad Request
+- Validation error: invalid URL format
+- MCP server НЕ создан
+
+**Примечание:** URL должен быть валидным для подключения
+
+### TC-MC-EXT-02: MCP server с недоступным хостом
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/mcp-servers с `url: "http://192.0.2.1:9999"` (unreachable)
+2. Назначить MCP server агенту
+3. Запросить tools/list
+
+**Ожидание:**
+- Создание MCP server → 200/201 (конфиг сохранён)
+- При tools/list → graceful error (timeout/connection refused)
+- Engine НЕ crash, НЕ hang
+
+**Примечание:** Создание != подключение, ошибка при runtime а не при создании
+
+### TC-MC-EXT-03: MCP server с невалидным type
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/mcp-servers с `type: "invalid_type"`
+
+**Ожидание:**
+- HTTP 400 Bad Request
+- Validation error: invalid type (expected "sse", "stdio", etc.)
+- MCP server НЕ создан
+
+**Примечание:** Перечисление допустимых типов
+
+### TC-MC-EXT-04: Назначение несуществующего MCP server агенту
+**Предусловие:** Engine запущен, MCP server "ghost-mcp" НЕ существует
+**Шаги:**
+1. PUT /api/v1/agents/{name} с `mcp_servers: ["ghost-mcp"]`
+
+**Ожидание:**
+- HTTP 404 Not Found ИЛИ validation error
+- Agent НЕ обновлён с невалидной ссылкой
+
+**Примечание:** Целостность ссылок между entities
+
+### TC-MC-EXT-05: MCP connection timeout
+**Предусловие:** Engine запущен, MCP server сконфигурирован с медленным endpoint
+**Шаги:**
+1. Назначить MCP server агенту
+2. Отправить chat message, вызывающий MCP tool
+
+**Ожидание:**
+- При timeout → graceful error в SSE stream
+- Engine НЕ crash, НЕ hang
+- Сообщение об ошибке информативное (timeout, host unreachable)
+
+**Примечание:** Таймауты не должны убивать процесс
+
+---
+
+## TC-AUTH-EXT: Authentication Edge Cases (9 TC)
+
+### TC-AUTH-EXT-01: Tampered JWT signature
+**Предусловие:** Engine запущен, валидный JWT получен
+**Шаги:**
+1. Изменить последний символ JWT signature
+2. Отправить запрос с изменённым JWT в Authorization header
+
+**Ожидание:**
+- HTTP 401 Unauthorized
+- Error message: invalid token signature
+
+**Примечание:** Защита от подделки токенов
+
+### TC-AUTH-EXT-02: Expired JWT token
+**Предусловие:** Engine запущен
+**Шаги:**
+1. Использовать JWT с истёкшим exp claim
+
+**Ожидание:**
+- HTTP 401 Unauthorized
+- Error message: token expired
+
+**Примечание:** TTL enforcement
+
+### TC-AUTH-EXT-03: Missing "Bearer" prefix
+**Предусловие:** Engine запущен
+**Шаги:**
+1. Отправить запрос с `Authorization: <token>` (без "Bearer")
+
+**Ожидание:**
+- HTTP 401 Unauthorized
+- Токен не принят без prefix
+
+**Примечание:** Строгое соответствие RFC 6750
+
+### TC-AUTH-EXT-04: "Bearer" без токена
+**Предусловие:** Engine запущен
+**Шаги:**
+1. Отправить запрос с `Authorization: Bearer ` (пробел, без токена)
+
+**Ожидание:**
+- HTTP 401 Unauthorized
+- Error message: token required
+
+**Примечание:** Edge case пустого токена
+
+### TC-AUTH-EXT-05: Concurrent logins одного пользователя
+**Предусловие:** Engine запущен, пользователь существует
+**Шаги:**
+1. Выполнить POST /api/v1/auth/login параллельно 10 раз с одними credentials
+
+**Ожидание:**
+- Все 10 запросов возвращают 200 OK
+- Каждый возвращает валидный (возможно разный) JWT
+- Нет race condition, нет 500 ошибок
+
+**Примечание:** Параллельный логин — частый сценарий
+
+### TC-AUTH-EXT-06: API key с неправильным scope
+**Предусловие:** Engine запущен, API key создан со scope "read"
+**Шаги:**
+1. Использовать API key для POST (write) операции
+
+**Ожидание:**
+- HTTP 403 Forbidden
+- Error message: insufficient permissions / wrong scope
+
+**Примечание:** Granular access control
+
+### TC-AUTH-EXT-07: Invalid API key
+**Предусловие:** Engine запущен
+**Шаги:**
+1. Отправить запрос с `X-API-Key: invalid-key-12345`
+
+**Ожидание:**
+- HTTP 401 Unauthorized
+- Error message: invalid API key
+
+**Примечание:** Несуществующий ключ
+
+### TC-AUTH-EXT-08: Revoked/deleted API key
+**Предусловие:** Engine запущен, API key создан и затем удалён
+**Шаги:**
+1. Создать API key → запомнить значение
+2. Удалить API key через admin
+3. Использовать удалённый API key в запросе
+
+**Ожидание:**
+- HTTP 401 Unauthorized
+- Error message: API key not found / revoked
+
+**Примечание:** Мгновенная инвалидация после удаления
+
+### TC-AUTH-EXT-09: Разные пользователи с одинаковым паролем
+**Предусловие:** Engine запущен, два пользователя с одинаковым паролем
+**Шаги:**
+1. POST /api/v1/auth/login для user-a
+2. POST /api/v1/auth/login для user-b (тот же пароль)
+
+**Ожидание:**
+- Оба получают уникальные JWT
+- Токены содержат разные user claims
+- Доступ к ресурсам изолирован
+
+**Примечание:** Пароль не влияет на уникальность токена
+
+---
+
+## TC-SESS: Session Edge Cases (7 TC)
+
+### TC-SESS-01: Использование expired session_id
+**Предусловие:** Engine запущен, session_id был активен но истёк (TTL)
+**Шаги:**
+1. POST /api/v1/agents/{name}/chat с session_id из истёкшей сессии
+
+**Ожидание:**
+- Создаётся новая сессия ИЛИ возвращается ошибка "session expired"
+- НЕ crash, НЕ возвращает данные чужой сессии
+
+**Примечание:** Expired session — не ошибка, а стандартный lifecycle
+
+### TC-SESS-02: Invalid UUID format в session_id
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/agents/{name}/chat с `session_id: "not-a-uuid"`
+
+**Ожидание:**
+- HTTP 400 Bad Request ИЛИ создаётся новая сессия (зависит от дизайна)
+- НЕ panic, НЕ SQL error в логах
+
+**Примечание:** Невалидный формат не должен ломать парсинг
+
+### TC-SESS-03: SQL injection в session_id
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/agents/{name}/chat с `session_id: "'; DROP TABLE sessions;--"`
+
+**Ожидание:**
+- HTTP 400 Bad Request
+- SQL injection НЕ выполнен
+- Таблица sessions цела
+
+**Примечание:** Parameterized queries обязательны
+
+### TC-SESS-04: Concurrent запросы с одним session_id
+**Предусловие:** Engine запущен, активная сессия
+**Шаги:**
+1. Отправить 5 параллельных POST /api/v1/agents/{name}/chat с одним session_id
+
+**Ожидание:**
+- Нет race condition
+- Нет дублирования сообщений в истории
+- Все 5 запросов обработаны или часть отклонена (429)
+
+**Примечание:** Concurrent writes в одну сессию
+
+### TC-SESS-05: Chat с deleted session_id
+**Предусловие:** Engine запущен, сессия была создана и затем удалена
+**Шаги:**
+1. Создать сессию → получить session_id
+2. Удалить сессию (если есть API)
+3. POST /api/v1/agents/{name}/chat с удалённым session_id
+
+**Ожидание:**
+- Создаётся новая сессия ИЛИ ошибка "session not found"
+- НЕ crash
+
+**Примечание:** Orphaned session reference
+
+### TC-SESS-06: SSE client disconnect → cleanup
+**Предусловие:** Engine запущен, SSE stream активен
+**Шаги:**
+1. Начать chat → SSE stream открыт
+2. Закрыть клиент (обрыв соединения)
+3. Подождать 30 секунд
+4. Проверить goroutine count / memory
+
+**Ожидание:**
+- Goroutines, связанные с сессией, завершены
+- Нет memory leak
+- Нет zombie SSE connections
+
+**Примечание:** Клиент может отвалиться в любой момент
+
+### TC-SESS-07: Сообщение > 100KB
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/agents/{name}/chat с message длиной > 100KB
+
+**Ожидание:**
+- Сообщение обработано ИЛИ 413 Payload Too Large
+- Engine НЕ crash, НЕ OOM
+- Если обработано — ответ корректный
+
+**Примечание:** Защита от oversize requests
+
+---
+
+## TC-DOCKER: Docker Deployment (7 TC)
+
+### TC-DOCKER-01: Missing DATABASE_URL
+**Предусловие:** Docker image собран
+**Шаги:**
+1. `docker run bytebrew/engine` без DATABASE_URL environment variable
+
+**Ожидание:**
+- Container выходит с ненулевым кодом
+- В логах — понятное сообщение: "DATABASE_URL is required"
+- НЕ panic, НЕ cryptic error
+
+**Примечание:** Helpful error messages при missing config
+
+### TC-DOCKER-02: Невалидный config path
+**Предусловие:** Docker image собран
+**Шаги:**
+1. `docker run -v /nonexistent:/config bytebrew/engine` с указанием несуществующего конфига
+
+**Ожидание:**
+- Container стартует с defaults ИЛИ показывает понятную ошибку
+- НЕ crash
+
+**Примечание:** Fallback при отсутствии конфига
+
+### TC-DOCKER-03: Volume permissions error
+**Предусловие:** Docker image собран
+**Шаги:**
+1. `docker run -v /root-only-dir:/data bytebrew/engine` с read-only volume
+
+**Ожидание:**
+- Понятное сообщение об ошибке доступа
+- Container не зависает
+
+**Примечание:** Permission errors — частая проблема в Docker
+
+### TC-DOCKER-04: Health check < 1s under load
+**Предусловие:** Container запущен, под нагрузкой (100 concurrent requests)
+**Шаги:**
+1. Запустить нагрузку на /api/v1/agents/{name}/chat
+2. Параллельно проверить GET /health (или /readyz)
+
+**Ожидание:**
+- Health check отвечает за < 1 секунду
+- HTTP 200 OK
+
+**Примечание:** Health check не должен блокироваться business logic
+
+### TC-DOCKER-05: SIGTERM → graceful shutdown
+**Предусловие:** Container запущен, активные SSE streams
+**Шаги:**
+1. Начать несколько chat sessions
+2. `docker stop <container>` (SIGTERM)
+
+**Ожидание:**
+- Активные streams завершаются gracefully
+- Container выходит за < 30 секунд
+- Нет data corruption
+
+**Примечание:** Kubernetes/Docker полагаются на SIGTERM для graceful shutdown
+
+### TC-DOCKER-06: Container restart → state preserved
+**Предусловие:** Container запущен с PostgreSQL volume
+**Шаги:**
+1. Создать agents, models через API
+2. `docker restart <container>`
+3. GET /api/v1/agents → проверить данные
+
+**Ожидание:**
+- Все agents, models сохранены
+- Сессии (в БД) доступны
+- Конфигурация не потеряна
+
+**Примечание:** State в PostgreSQL, не в памяти
+
+### TC-DOCKER-07: Read-only config mount
+**Предусловие:** Docker image собран
+**Шаги:**
+1. `docker run -v ./config.yaml:/app/config.yaml:ro bytebrew/engine`
+
+**Ожидание:**
+- Container стартует нормально
+- Config читается, но Engine не пытается писать в config file
+- Все изменения конфигурации через API/DB
+
+**Примечание:** Immutable infrastructure pattern
+
+---
+
+## TC-CONC: Concurrency (2 TC)
+
+### TC-CONC-01: Создание agent с одинаковым именем параллельно
+**Предусловие:** Engine запущен, agent "race-test" НЕ существует
+**Шаги:**
+1. Отправить 10 параллельных POST /api/v1/agents с `name: "race-test"`
+
+**Ожидание:**
+- Ровно один запрос возвращает 201 Created
+- Остальные получают 409 Conflict
+- Нет дублей в БД
+- Нет 500 ошибок
+
+**Примечание:** Unique constraint + concurrent writes
+
+### TC-CONC-02: DELETE model во время активного chat
+**Предусловие:** Engine запущен, model "active-model" используется в chat
+**Шаги:**
+1. Начать chat с agent, привязанным к "active-model"
+2. Во время streaming — DELETE /api/v1/models/active-model
+
+**Ожидание:**
+- DELETE заблокирован (409) ИЛИ текущий stream завершается, следующий запрос ошибка
+- Engine НЕ panic
+- Нет data corruption
+
+**Примечание:** Graceful handling конкурентных операций
+
+---
+
+## TC-PROV-EXT: Provider Edge Cases (11 TC)
+
+### TC-PROV-EXT-01: openai_compatible с невалидным URL
+**Предусловие:** Engine запущен
+**Шаги:**
+1. Создать model с provider "openai_compatible" и `base_url: "not-a-url"`
+2. Попытаться отправить chat message
+
+**Ожидание:**
+- При chat → error в SSE stream (connection failed)
+- Engine НЕ crash
+
+**Примечание:** Валидация URL формата на уровне model creation или runtime
+
+### TC-PROV-EXT-02: openai_compatible без api_key
+**Предусловие:** Engine запущен
+**Шаги:**
+1. Создать model с provider "openai_compatible" без api_key
+2. Отправить chat message
+
+**Ожидание:**
+- Error: authentication failed / API key required
+- Engine НЕ crash
+
+**Примечание:** Некоторые local LLM серверы не требуют key — зависит от провайдера
+
+### TC-PROV-EXT-03: Провайдер возвращает unexpected response fields
+**Предусловие:** Engine запущен, model сконфигурирована
+**Шаги:**
+1. Провайдер возвращает response с дополнительными unknown полями
+
+**Ожидание:**
+- Unknown поля игнорируются
+- Парсинг не ломается
+- Ответ доставлен клиенту
+
+**Примечание:** Forward compatibility с новыми версиями API провайдера
+
+### TC-PROV-EXT-04: OpenRouter — несуществующая модель
+**Предусловие:** Engine запущен, model с provider "openrouter"
+**Шаги:**
+1. Указать model_id: "nonexistent/model-name"
+2. Отправить chat message
+
+**Ожидание:**
+- Error: model not found / invalid model
+- Сообщение содержит имя модели для диагностики
+
+**Примечание:** Опечатка в model_id — частая ошибка
+
+### TC-PROV-EXT-05: Azure — missing deployment
+**Предусловие:** Engine запущен, Azure OpenAI model сконфигурирована
+**Шаги:**
+1. Указать несуществующий deployment_name
+2. Отправить chat message
+
+**Ожидание:**
+- Error: deployment not found
+- Детальное сообщение от Azure API
+
+**Примечание:** Azure требует deployment, а не model name
+
+### TC-PROV-EXT-06: Azure — wrong key format
+**Предусловие:** Engine запущен
+**Шаги:**
+1. Создать Azure model с обычным OpenAI key (неправильный формат)
+2. Отправить chat message
+
+**Ожидание:**
+- HTTP 401 от Azure API
+- Error в SSE stream: authentication failed
+
+**Примечание:** Azure keys отличаются от OpenAI keys по формату
+
+### TC-PROV-EXT-07: Azure — key rotation
+**Предусловие:** Engine запущен, Azure model работает
+**Шаги:**
+1. Обновить api_key через PUT /api/v1/models/{name}
+2. Отправить chat message
+
+**Ожидание:**
+- Новый ключ используется немедленно
+- Chat работает с новым ключом
+
+**Примечание:** Ротация ключей без downtime
+
+### TC-PROV-EXT-08: Gemini — tool support detection
+**Предусловие:** Engine запущен, Gemini model сконфигурирована
+**Шаги:**
+1. Создать agent с tools, привязанный к Gemini model
+2. Отправить chat message, вызывающий tool
+
+**Ожидание:**
+- Tool call корректно форматируется для Gemini API
+- Ответ tool парсится правильно
+- Или ошибка если модель не поддерживает tools
+
+**Примечание:** Gemini имеет свой формат tool calling
+
+### TC-PROV-EXT-09: Gemini — JSON response parsing edge cases
+**Предусловие:** Engine запущен, Gemini model сконфигурирована
+**Шаги:**
+1. Запросить structured output от Gemini
+
+**Ожидание:**
+- JSON response корректно распарсен
+- Нет ошибок при наличии nested objects, arrays, null values
+
+**Примечание:** Gemini JSON format может отличаться от OpenAI
+
+### TC-PROV-EXT-10: Gemini — несуществующая модель
+**Предусловие:** Engine запущен
+**Шаги:**
+1. Создать model с provider "gemini" и model_id: "nonexistent-model"
+2. Отправить chat message
+
+**Ожидание:**
+- Error: model not found
+- Информативное сообщение об ошибке
+
+**Примечание:** Список моделей Gemini ограничен
+
+### TC-PROV-EXT-11: Gemini — rate limit 429
+**Предусловие:** Engine запущен, Gemini model сконфигурирована
+**Шаги:**
+1. Отправить много запросов до получения 429 от Gemini
+
+**Ожидание:**
+- Error в SSE stream: rate limited
+- Engine НЕ crash
+- Retry logic (если есть) с backoff
+
+**Примечание:** Rate limiting на стороне провайдера
+
+---
+
+## TC-KNOW: Knowledge/RAG Edge Cases (7 TC)
+
+### TC-KNOW-01: Agent без knowledge path
+**Предусловие:** Engine запущен, agent без knowledge конфигурации
+**Шаги:**
+1. POST /api/v1/agents/{name}/chat с обычным сообщением
+
+**Ожидание:**
+- Chat работает без RAG
+- Нет ошибок, нет warning в логах
+- Ответ генерируется на основе system_prompt и LLM
+
+**Примечание:** Уже исправлено — skip knowledge если не настроен
+
+### TC-KNOW-02: Agent с несуществующим knowledge path
+**Предусловие:** Engine запущен
+**Шаги:**
+1. Создать/обновить agent с knowledge_path: "/nonexistent/path"
+
+**Ожидание:**
+- Ошибка при конфигурации ИЛИ при первом chat
+- Понятное сообщение: path not found
+
+**Примечание:** Валидация path при создании или lazy при использовании
+
+### TC-KNOW-03: Knowledge path — файл вместо директории
+**Предусловие:** Engine запущен
+**Шаги:**
+1. Указать knowledge_path на конкретный файл (не директорию)
+
+**Ожидание:**
+- Файл обработан как единственный документ ИЛИ ошибка "expected directory"
+- НЕ crash
+
+**Примечание:** Чёткое поведение для файла vs директории
+
+### TC-KNOW-04: Неподдерживаемый формат файла в knowledge
+**Предусловие:** Engine запущен, knowledge directory содержит .exe, .bin файлы
+**Шаги:**
+1. Добавить binary файл в knowledge directory
+2. Запустить индексацию
+
+**Ожидание:**
+- Неподдерживаемые файлы пропущены (skipped)
+- Warning в логах: "skipping unsupported file: X"
+- Поддерживаемые файлы проиндексированы нормально
+
+**Примечание:** Graceful skip, не hard error
+
+### TC-KNOW-05: Пустой search query
+**Предусловие:** Engine запущен, knowledge проиндексирован
+**Шаги:**
+1. Внутренний RAG search с пустым query
+
+**Ожидание:**
+- Пустой результат ИЛИ top-N документов
+- НЕ crash, НЕ SQL error
+
+**Примечание:** Edge case пустого запроса
+
+### TC-KNOW-06: Очень длинный query (10k символов)
+**Предусловие:** Engine запущен, knowledge проиндексирован
+**Шаги:**
+1. Отправить chat message длиной 10000+ символов (вызывает RAG search)
+
+**Ожидание:**
+- Запрос обработан (возможно, truncated для embedding)
+- НЕ crash, НЕ OOM
+- Ответ возвращён
+
+**Примечание:** Embedding models имеют ограничение на длину input
+
+### TC-KNOW-07: Large knowledge file > 100MB
+**Предусловие:** Engine запущен, knowledge directory содержит файл > 100MB
+**Шаги:**
+1. Запустить индексацию с большим файлом
+
+**Ожидание:**
+- Файл обработан (возможно, chunked) ИЛИ пропущен с предупреждением
+- Индексация не зависает
+- Memory usage остаётся в разумных пределах
+
+**Примечание:** Performance при больших файлах
+
+---
+
+## TC-TRIG-EXT: Trigger/Webhook Edge Cases (7 TC)
+
+### TC-TRIG-EXT-01: Webhook retry с backoff timing
+**Предусловие:** Engine запущен, webhook endpoint недоступен
+**Шаги:**
+1. Создать trigger с webhook URL
+2. Trigger fires → endpoint возвращает 500
+
+**Ожидание:**
+- Retry с exponential backoff (1s, 2s, 4s...)
+- Количество retries ограничено (max 3-5)
+- После max retries — событие в логах
+
+**Примечание:** Backoff предотвращает перегрузку endpoint
+
+### TC-TRIG-EXT-02: Custom headers со спецсимволами
+**Предусловие:** Engine запущен
+**Шаги:**
+1. Создать trigger с custom headers содержащими спецсимволы (unicode, кавычки)
+
+**Ожидание:**
+- Headers корректно закодированы в HTTP запросе
+- Webhook endpoint получает правильные значения
+
+**Примечание:** HTTP header encoding
+
+### TC-TRIG-EXT-03: Webhook body > 1MB
+**Предусловие:** Engine запущен, trigger настроен
+**Шаги:**
+1. Trigger fire с payload > 1MB (очень длинный chat result)
+
+**Ожидание:**
+- Payload truncated до лимита ИЛИ отправлен полностью
+- НЕ OOM
+- Webhook endpoint получает данные
+
+**Примечание:** Защита от oversize payloads
+
+### TC-TRIG-EXT-04: Webhook URL с credentials
+**Предусловие:** Engine запущен
+**Шаги:**
+1. Создать trigger с URL вида `http://user:pass@example.com/webhook`
+
+**Ожидание:**
+- Заблокировано (credentials в URL — security risk) ИЛИ credentials stripped из логов
+- Пароль НЕ отображается в audit logs / admin UI
+
+**Примечание:** Credentials в URL — антипаттерн безопасности
+
+### TC-TRIG-EXT-05: Task status update во время webhook delivery
+**Предусловие:** Engine запущен, webhook в процессе отправки
+**Шаги:**
+1. Trigger fires → webhook sending
+2. Параллельно обновить task status
+
+**Ожидание:**
+- Нет race condition
+- Task status обновлён корректно
+- Webhook получает актуальные данные
+
+**Примечание:** Concurrent операции с одним task
+
+### TC-TRIG-EXT-06: Несколько webhooks на одно событие
+**Предусловие:** Engine запущен, два trigger с разными webhook URLs на одно событие
+**Шаги:**
+1. Fire событие, на которое подписаны два trigger
+
+**Ожидание:**
+- Оба webhook вызваны
+- Порядок не гарантирован, но оба доставлены
+- Ошибка в одном не блокирует другой
+
+**Примечание:** Fan-out delivery
+
+### TC-TRIG-EXT-07: Webhook delivery timeout
+**Предусловие:** Engine запущен, webhook endpoint очень медленный
+**Шаги:**
+1. Webhook endpoint отвечает через 60+ секунд
+2. Trigger fires
+
+**Ожидание:**
+- Timeout после configurable period (default 30s)
+- Webhook request aborted
+- Событие залогировано
+- Engine НЕ hang
+
+**Примечание:** Timeout предотвращает resource exhaustion
+
+---
+
+## TC-RLIM-EXT: Rate Limiting Edge Cases (6 TC)
+
+### TC-RLIM-EXT-01: Missing tier header → default_tier
+**Предусловие:** Engine запущен, rate limiting включён
+**Шаги:**
+1. Отправить запрос без tier header (X-Tier или аналогичного)
+
+**Ожидание:**
+- Применяется default_tier rate limit
+- Запрос обработан (если в пределах лимита)
+
+**Примечание:** Missing header — не ошибка, а fallback
+
+### TC-RLIM-EXT-02: Per-IP rate limit → 429
+**Предусловие:** Engine запущен, rate limiting по IP включён
+**Шаги:**
+1. Отправить requests с одного IP до превышения лимита
+
+**Ожидание:**
+- HTTP 429 Too Many Requests
+- Retry-After header присутствует
+- Другие IP не затронуты
+
+**Примечание:** Изоляция rate limits по IP
+
+### TC-RLIM-EXT-03: Sliding window accuracy
+**Предусловие:** Engine запущен, rate limit = 10 req/min (sliding window)
+**Шаги:**
+1. Отправить 10 запросов в первые 30 секунд
+2. Подождать 31 секунду
+3. Отправить ещё 5 запросов
+
+**Ожидание:**
+- Первые 10 — accepted
+- Запрос #11 (через 31 сек) — accepted (часть окна сдвинулась)
+- Не fixed window, а sliding
+
+**Примечание:** Sliding vs fixed window — разное поведение на границах
+
+### TC-RLIM-EXT-04: Concurrent request counting
+**Предусловие:** Engine запущен, rate limit включён
+**Шаги:**
+1. Отправить 100 запросов параллельно
+
+**Ожидание:**
+- Счётчик точный (±1)
+- Нет race condition в counting
+- Не больше limit запросов обработано
+
+**Примечание:** Atomic counting под нагрузкой
+
+### TC-RLIM-EXT-05: Custom header bucketing
+**Предусловие:** Engine запущен, rate limit по custom header (e.g., X-Tenant-ID)
+**Шаги:**
+1. Отправить запросы с X-Tenant-ID: "tenant-a" → до лимита
+2. Отправить запросы с X-Tenant-ID: "tenant-b"
+
+**Ожидание:**
+- tenant-a получает 429
+- tenant-b обрабатывается нормально (свой bucket)
+
+**Примечание:** Изоляция лимитов по tenant
+
+### TC-RLIM-EXT-06: Prometheus metric accuracy
+**Предусловие:** Engine запущен (EE), rate limiting включён
+**Шаги:**
+1. Отправить N запросов (часть accepted, часть rejected)
+2. GET /metrics
+
+**Ожидание:**
+- bytebrew_rate_limit_total{result="accepted"} = правильное число
+- bytebrew_rate_limit_total{result="rejected"} = правильное число
+- Сумма = N
+
+**Примечание:** Метрики для мониторинга rate limiting
+
+---
+
+## TC-COMPAT: Backwards Compatibility (5 TC)
+
+### TC-COMPAT-01: Старый array формат конфигурации
+**Предусловие:** Engine с конфигом в старом формате (agents как массив, не map)
+**Шаги:**
+1. Запустить Engine со старым YAML конфигом
+
+**Ожидание:**
+- Engine стартует без ошибок
+- Agents создаются из старого формата
+- Warning в логах: "deprecated config format, consider migration"
+
+**Примечание:** Обратная совместимость с v1 конфигами
+
+### TC-COMPAT-02: Старый формат JWT токена
+**Предусловие:** Engine запущен, JWT сгенерирован старой версией
+**Шаги:**
+1. Использовать JWT из предыдущей версии Engine
+
+**Ожидание:**
+- JWT принят и валидирован
+- Все claims доступны
+- Новые claims отсутствуют — не ошибка
+
+**Примечание:** JWT backward compatibility при обновлении
+
+### TC-COMPAT-03: Старые SSE events
+**Предусловие:** Engine запущен, клиент ожидает старые SSE event names
+**Шаги:**
+1. Отправить chat message
+2. Наблюдать SSE stream
+
+**Ожидание:**
+- Старые event types (answer, tool_call) присутствуют
+- Новые типы (если добавлены) не ломают парсинг старого клиента
+- Engine НЕ crash
+
+**Примечание:** SSE event backward compatibility
+
+### TC-COMPAT-04: Оба поля system/system_prompt
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/agents с `system: "text"` (старое поле)
+2. POST /api/v1/agents с `system_prompt: "text"` (новое поле)
+
+**Ожидание:**
+- Оба варианта приняты
+- Если оба указаны — system_prompt приоритетнее
+
+**Примечание:** Alias полей для backward compatibility
+
+### TC-COMPAT-05: DB migration → data integrity
+**Предусловие:** БД от предыдущей версии Engine
+**Шаги:**
+1. Запустить новую версию Engine с БД от старой версии
+
+**Ожидание:**
+- Миграции применяются автоматически
+- Существующие данные не потеряны
+- Новые поля заполнены default значениями
+
+**Примечание:** GORM auto-migration + custom migrations
+
+---
+
+## TC-SESS-EXT: Session Extra (3 TC)
+
+### TC-SESS-EXT-01: Сессия с 1000+ сообщениями
+**Предусловие:** Engine запущен, сессия накопила 1000+ messages
+**Шаги:**
+1. Отправить ещё одно сообщение в сессию с 1000+ messages
+
+**Ожидание:**
+- Ответ за разумное время (< 30 секунд)
+- Context window management (truncation/summarization)
+- НЕ OOM
+
+**Примечание:** Performance при большой истории
+
+### TC-SESS-EXT-02: Null bytes в SSE данных
+**Предусловие:** Engine запущен
+**Шаги:**
+1. LLM ответ содержит null bytes (\x00)
+
+**Ожидание:**
+- Null bytes escaped или stripped в SSE stream
+- SSE парсинг на клиенте не ломается
+- Данные доставлены
+
+**Примечание:** SSE spec не допускает null bytes
+
+### TC-SESS-EXT-03: Event flood — множество событий за короткое время
+**Предусловие:** Engine запущен, SSE stream активен
+**Шаги:**
+1. Agent генерирует много tool_call events подряд (10+ за секунду)
+
+**Ожидание:**
+- Все events доставлены клиенту
+- Порядок сохранён
+- SSE buffer не переполняется
+
+**Примечание:** Burst traffic в SSE stream
+
+---
+
+## TC-SET: Settings (5 TC)
+
+### TC-SET-01: Invalid JSON в settings
+**Предусловие:** Engine запущен
+**Шаги:**
+1. PUT /api/v1/settings с невалидным JSON body
+
+**Ожидание:**
+- HTTP 400 Bad Request
+- Error: invalid JSON
+- Settings не изменены
+
+**Примечание:** JSON validation на входе
+
+### TC-SET-02: Settings с circular references
+**Предусловие:** Engine запущен
+**Шаги:**
+1. PUT /api/v1/settings с JSON содержащим circular references (если возможно)
+
+**Ожидание:**
+- HTTP 400 Bad Request ИЛИ JSON парсер отклоняет
+- Engine НЕ hang (infinite loop)
+
+**Примечание:** JSON стандартно не поддерживает circular refs, но edge case
+
+### TC-SET-03: Settings export/import round-trip
+**Предусловие:** Engine запущен, settings заполнены
+**Шаги:**
+1. GET /api/v1/settings → сохранить response
+2. Изменить одно значение
+3. PUT /api/v1/settings с изменённым JSON
+4. GET /api/v1/settings → сравнить
+
+**Ожидание:**
+- Round-trip без потери данных
+- Изменённое значение обновлено
+- Остальные значения не затронуты
+
+**Примечание:** Идемпотентность настроек
+
+### TC-SET-04: Secrets не видны в GET response
+**Предусловие:** Engine запущен, settings содержат секреты (api keys, passwords)
+**Шаги:**
+1. GET /api/v1/settings
+
+**Ожидание:**
+- Секретные поля замаскированы ("****" или отсутствуют)
+- API keys, passwords НЕ возвращаются в открытом виде
+
+**Примечание:** Security: secrets exposure prevention
+
+### TC-SET-05: Per-agent vs global settings precedence
+**Предусловие:** Engine запущен, global setting и per-agent override существуют
+**Шаги:**
+1. Установить global setting X = "global"
+2. Установить per-agent setting X = "agent-specific"
+3. Chat с agent
+
+**Ожидание:**
+- Per-agent setting имеет приоритет
+- Другие agents используют global value
+
+**Примечание:** Settings hierarchy: agent > global > default
+
+---
+
+## TC-PERF: Performance (5 TC)
+
+### TC-PERF-01: List 1000+ agents
+**Предусловие:** Engine запущен, 1000+ agents в БД
+**Шаги:**
+1. GET /api/v1/agents?limit=100
+
+**Ожидание:**
+- Ответ < 2 секунды
+- Pagination работает
+- Нет N+1 query проблемы
+
+**Примечание:** Performance при большом количестве agents
+
+### TC-PERF-02: Chat с 1000+ сообщениями в сессии
+**Предусловие:** Engine запущен, сессия с 1000+ messages
+**Шаги:**
+1. Отправить новое сообщение
+
+**Ожидание:**
+- First token < 5 секунд
+- Context window management (не отправляет все 1000 в LLM)
+- Memory usage стабилен
+
+**Примечание:** Context truncation/summarization обязателен
+
+### TC-PERF-03: Knowledge base с 10k+ файлами
+**Предусловие:** Engine запущен, 10000+ файлов в knowledge directory
+**Шаги:**
+1. Выполнить RAG search
+
+**Ожидание:**
+- Результат < 1 секунда
+- Relevance не деградирует с ростом базы
+- Memory usage в пределах нормы
+
+**Примечание:** Vector search performance
+
+### TC-PERF-04: 100+ models в системе
+**Предусловие:** Engine запущен, 100+ models настроено
+**Шаги:**
+1. GET /api/v1/models
+2. Изменить model через PUT
+
+**Ожидание:**
+- List < 1 секунда
+- Config reload < 1 секунда
+- Нет memory spike при загрузке конфигурации
+
+**Примечание:** Scalability по количеству models
+
+### TC-PERF-05: 100+ concurrent SSE streams
+**Предусловие:** Engine запущен
+**Шаги:**
+1. Открыть 100 параллельных SSE connections (разные chat sessions)
+
+**Ожидание:**
+- Все connections стабильны
+- Нет OOM
+- Goroutine count пропорционален количеству connections
+- Health check отвечает
+
+**Примечание:** SSE scalability — каждый stream = goroutine
+
+---
+
+## TC-OBS: Observability (4 TC)
+
+### TC-OBS-01: Prometheus /metrics под нагрузкой
+**Предусловие:** Engine запущен (EE), /metrics endpoint включён
+**Шаги:**
+1. Создать нагрузку (50+ requests)
+2. GET /metrics
+
+**Ожидание:**
+- Ответ в valid Prometheus text format
+- Метрики обновлены (counters > 0)
+- Endpoint отвечает < 1 секунда
+
+**Примечание:** Metrics endpoint не должен быть тяжёлым
+
+### TC-OBS-02: Audit logs не содержат PII/passwords
+**Предусловие:** Engine запущен, audit logging включён
+**Шаги:**
+1. Создать model с api_key
+2. Логин пользователя с паролем
+3. Проверить audit logs
+
+**Ожидание:**
+- api_key замаскирован в логах
+- Пароль НЕ логируется
+- Email может присутствовать (не считается secret)
+
+**Примечание:** GDPR/security compliance
+
+### TC-OBS-03: Structured JSON logging
+**Предусловие:** Engine запущен с JSON log format
+**Шаги:**
+1. Выполнить несколько операций
+2. Проверить stdout/log file
+
+**Ожидание:**
+- Каждая строка — valid JSON
+- Обязательные поля: timestamp, level, msg
+- slog format с context
+
+**Примечание:** Parseable logs для log aggregation (ELK, Loki)
+
+### TC-OBS-04: Request tracing IDs propagated
+**Предусловие:** Engine запущен
+**Шаги:**
+1. Отправить запрос с X-Request-ID header
+2. Проверить logs и response headers
+
+**Ожидание:**
+- X-Request-ID из request присутствует в логах
+- X-Request-ID возвращается в response headers
+- Если не передан — генерируется автоматически
+
+**Примечание:** Distributed tracing support
+
+---
+
+## TC-SEC: Security (5 TC)
+
+### TC-SEC-01: XSS в имени agent
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/agents с `name: "<script>alert('xss')</script>"`
+
+**Ожидание:**
+- Имя отклонено (400) ИЛИ escaped в response
+- В admin UI — нет XSS execution
+- HTML entities escaped
+
+**Примечание:** XSS prevention
+
+### TC-SEC-02: SQL injection в model name
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/models с `name: "'; DROP TABLE models;--"`
+
+**Ожидание:**
+- SQL injection НЕ выполнен
+- Ошибка валидации ИЛИ имя сохранено как строка
+- Таблица models цела
+
+**Примечание:** GORM parameterized queries защищают
+
+### TC-SEC-03: API key не в error messages
+**Предусловие:** Engine запущен, model с невалидным api_key
+**Шаги:**
+1. Отправить chat message → ошибка auth
+
+**Ожидание:**
+- Error message НЕ содержит api_key
+- api_key замаскирован или опущен
+- Только "authentication failed" без ключа
+
+**Примечание:** Secrets не должны утекать в responses
+
+### TC-SEC-04: CORS headers correct
+**Предусловие:** Engine запущен
+**Шаги:**
+1. OPTIONS /api/v1/agents (preflight)
+2. Проверить CORS headers
+
+**Ожидание:**
+- Access-Control-Allow-Origin: настроенные origins (не *)
+- Access-Control-Allow-Methods: GET, POST, PUT, DELETE
+- Access-Control-Allow-Headers включает Authorization
+
+**Примечание:** CORS misconfiguration — частая проблема
+
+### TC-SEC-05: Rate limiting не обходится сменой IP
+**Предусловие:** Engine запущен, rate limiting по API key (не только IP)
+**Шаги:**
+1. Отправить запросы с одним API key, разных IP → до лимита
+2. Отправить ещё запрос с другого IP, тем же API key
+
+**Ожидание:**
+- Rate limit срабатывает по API key, не по IP
+- Смена IP не сбрасывает счётчик
+
+**Примечание:** Rate limit bucketing по правильному идентификатору
+
+---
+
+## TC-CONC-EXT: Concurrency Extra (4 TC)
+
+### TC-CONC-EXT-01: Config reload во время chat
+**Предусловие:** Engine запущен, chat session активна
+**Шаги:**
+1. Начать chat → SSE stream
+2. Параллельно — обновить конфигурацию (PUT settings / reload)
+
+**Ожидание:**
+- Текущий stream продолжает работать
+- Новые requests используют обновлённый конфиг
+- НЕ crash, НЕ прерывание stream
+
+**Примечание:** Hot reload без downtime
+
+### TC-CONC-EXT-02: Multiple SSE streams на одну сессию
+**Предусловие:** Engine запущен
+**Шаги:**
+1. Открыть два SSE connection с одним session_id
+
+**Ожидание:**
+- Оба получают events ИЛИ второй отклонён
+- Нет дублирования messages
+- Нет data corruption
+
+**Примечание:** Определённое поведение для multi-subscriber
+
+### TC-CONC-EXT-03: DB transaction consistency after crash
+**Предусловие:** Engine запущен
+**Шаги:**
+1. Начать операцию, записывающую в несколько таблиц
+2. Kill Engine в середине операции
+3. Перезапустить Engine
+
+**Ожидание:**
+- Данные в consistent state (транзакция rollback)
+- Нет partial writes
+- Engine стартует нормально
+
+**Примечание:** ACID compliance
+
+### TC-CONC-EXT-04: Rate limit concurrent counting accuracy
+**Предусловие:** Engine запущен, rate limit = 100 req/min
+**Шаги:**
+1. Отправить 200 параллельных запросов
+
+**Ожидание:**
+- Ровно ~100 accepted (±5%)
+- ~100 rejected (429)
+- Atomic counter, нет over-admission
+
+**Примечание:** Точность counting под high concurrency
+
+---
+
+## TC-EXTRA: Miscellaneous (3 TC)
+
+### TC-EXTRA-01: Empty request body на POST endpoints
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/agents с пустым body (Content-Length: 0)
+
+**Ожидание:**
+- HTTP 400 Bad Request
+- Error: request body required
+- НЕ panic
+
+**Примечание:** Защита от пустых запросов
+
+### TC-EXTRA-02: Wrong Content-Type header
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/agents с `Content-Type: text/plain` и JSON body
+
+**Ожидание:**
+- HTTP 415 Unsupported Media Type ИЛИ HTTP 400
+- Error: expected application/json
+
+**Примечание:** Content-Type validation
+
+### TC-EXTRA-03: Very large request body > 10MB
+**Предусловие:** Engine запущен
+**Шаги:**
+1. POST /api/v1/agents с body > 10MB
+
+**Ожидание:**
+- HTTP 413 Payload Too Large ИЛИ connection closed
+- Engine НЕ OOM
+- Request rejected before full read (limit on body size)
+
+**Примечание:** Body size limit для защиты от DoS
+
+---
+
+## Итого: 395 TC
 
 | Категория | Кол-во | Покрытие |
 |-----------|--------|----------|
@@ -3555,7 +4887,26 @@
 | TC-CFG | 11 | Config import/export edge cases (idempotency, UTF-8, malformed YAML) |
 | TC-TOOL | 8 | Tool calling & MCP edge cases (timeout, circular spawn, audit) |
 | TC-CRASH | 9 | Crash prevention & validation (empty name, special chars, FK protection) |
-| **ВСЕГО** | **292** |
+| TC-AG-EXT | 4 | Agent CRUD edge cases (empty prompt, empty tools, model change, max name) |
+| TC-MD-EXT | 4 | Model CRUD edge cases (empty name, invalid URL, delete active, key rotation) |
+| TC-MC-EXT | 5 | MCP server edge cases (invalid URL, unreachable, invalid type, timeout) |
+| TC-AUTH-EXT | 9 | Auth edge cases (tampered JWT, expired, missing Bearer, concurrent, API key) |
+| TC-SESS | 7 | Session edge cases (expired, invalid UUID, SQL injection, concurrent, disconnect) |
+| TC-DOCKER | 7 | Docker deployment (missing env, permissions, health check, graceful shutdown) |
+| TC-CONC | 2 | Concurrency (same-name race, delete during chat) |
+| TC-PROV-EXT | 11 | Provider edge cases (invalid URL, missing key, Azure, Gemini, OpenRouter) |
+| TC-KNOW | 7 | Knowledge/RAG edge cases (no path, nonexistent, unsupported format, large file) |
+| TC-TRIG-EXT | 7 | Trigger/webhook edge cases (retry backoff, headers, timeout, fan-out) |
+| TC-RLIM-EXT | 6 | Rate limiting edge cases (default tier, sliding window, concurrent counting) |
+| TC-COMPAT | 5 | Backwards compatibility (old config, old JWT, old SSE, DB migration) |
+| TC-SESS-EXT | 3 | Session extra (1000+ messages, null bytes, event flood) |
+| TC-SET | 5 | Settings (invalid JSON, circular refs, export/import, secrets, precedence) |
+| TC-PERF | 5 | Performance (1000+ agents, 1000+ messages, 10k+ knowledge, 100+ SSE) |
+| TC-OBS | 4 | Observability (Prometheus, audit PII, structured logs, tracing IDs) |
+| TC-SEC | 5 | Security (XSS, SQL injection, API key masking, CORS, rate limit bypass) |
+| TC-CONC-EXT | 4 | Concurrency extra (config reload, multi-stream, crash consistency) |
+| TC-EXTRA | 3 | Miscellaneous (empty body, wrong Content-Type, large body) |
+| **ВСЕГО** | **395** |
 
 ### Примечания
 - Multi-agent spawn работает через HTTP REST API и gRPC/WS
@@ -3569,3 +4920,14 @@
 - TC-CFG-* — config edge cases, TC-CFG-10 требует Docker или custom config dir
 - TC-TOOL-* — TC-TOOL-07 требует EE лицензию (audit log), TC-TOOL-01/03 требуют controllable MCP server
 - TC-CRASH-* — validation и crash prevention, все можно проверить без внешних зависимостей
+- TC-AG-EXT/MD-EXT/MC-EXT — CRUD edge cases, все можно проверить без внешних зависимостей
+- TC-AUTH-EXT-* — auth edge cases, TC-AUTH-EXT-06 требует scope-based API keys (EE)
+- TC-SESS-* — session edge cases, TC-SESS-06 требует мониторинг goroutines
+- TC-DOCKER-* — требуют Docker, TC-DOCKER-04 требует load testing tool
+- TC-PROV-EXT-* — TC-PROV-EXT-05..07 требуют Azure credentials, TC-PROV-EXT-08..11 требуют Gemini key
+- TC-KNOW-* — TC-KNOW-07 требует файл > 100MB для performance теста
+- TC-RLIM-EXT-* — EE feature, требуют EE лицензию
+- TC-PERF-* — требуют seed data (1000+ agents/messages) и load testing tools
+- TC-OBS-* — EE feature (Prometheus), structured logging — CE
+- TC-SEC-* — security tests, все можно проверить без внешних зависимостей
+- TC-CONC-EXT-03 — требует kill -9 Engine в середине транзакции

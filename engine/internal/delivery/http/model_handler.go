@@ -183,7 +183,7 @@ func (h *ModelHandler) Verify(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.service.VerifyModel(r.Context(), name)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)

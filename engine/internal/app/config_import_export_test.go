@@ -410,6 +410,53 @@ func TestIsEnvPlaceholder(t *testing.T) {
 	assert.False(t, isEnvPlaceholder("${partial"))
 }
 
+func TestImportYAML_DefaultsApplied(t *testing.T) {
+	db := setupTestDB(t)
+	adapter := &configImportExportHTTPAdapter{db: db}
+
+	// Minimal YAML — no lifecycle, tool_execution, max_steps, max_context_size.
+	yamlData := `
+agents:
+  - name: "minimal"
+    system_prompt: "Hello"
+`
+	require.NoError(t, adapter.ImportYAML(context.Background(), []byte(yamlData)))
+
+	var agents []models.AgentModel
+	require.NoError(t, db.Find(&agents).Error)
+	require.Len(t, agents, 1)
+
+	assert.Equal(t, "persistent", agents[0].Lifecycle, "lifecycle should default to persistent")
+	assert.Equal(t, "sequential", agents[0].ToolExecution, "tool_execution should default to sequential")
+	assert.Equal(t, 50, agents[0].MaxSteps, "max_steps should default to 50")
+	assert.Equal(t, 16000, agents[0].MaxContextSize, "max_context_size should default to 16000")
+}
+
+func TestImportYAML_DefaultsNotOverrideExplicit(t *testing.T) {
+	db := setupTestDB(t)
+	adapter := &configImportExportHTTPAdapter{db: db}
+
+	yamlData := `
+agents:
+  - name: "custom"
+    system_prompt: "Custom"
+    lifecycle: "spawn"
+    tool_execution: "parallel"
+    max_steps: 100
+    max_context_size: 32000
+`
+	require.NoError(t, adapter.ImportYAML(context.Background(), []byte(yamlData)))
+
+	var agents []models.AgentModel
+	require.NoError(t, db.Find(&agents).Error)
+	require.Len(t, agents, 1)
+
+	assert.Equal(t, "spawn", agents[0].Lifecycle)
+	assert.Equal(t, "parallel", agents[0].ToolExecution)
+	assert.Equal(t, 100, agents[0].MaxSteps)
+	assert.Equal(t, 32000, agents[0].MaxContextSize)
+}
+
 func findAgentYAML(agents []agentYAML, name string) *agentYAML {
 	for i := range agents {
 		if agents[i].Name == name {

@@ -634,10 +634,26 @@ func (a *configImportExportHTTPAdapter) importMCPServers(tx *gorm.DB, items []mc
 	return nil
 }
 
+func applyAgentImportDefaults(ag *agentYAML) {
+	if ag.Lifecycle == "" {
+		ag.Lifecycle = "persistent"
+	}
+	if ag.ToolExecution == "" {
+		ag.ToolExecution = "sequential"
+	}
+	if ag.MaxSteps == 0 {
+		ag.MaxSteps = 50
+	}
+	if ag.MaxContextSize == 0 {
+		ag.MaxContextSize = 16000
+	}
+}
+
 func (a *configImportExportHTTPAdapter) importAgents(tx *gorm.DB, items []agentYAML) error {
 	// Pass 1: create/update all agent records (without spawn targets that reference other agents).
 	agentIDs := make(map[string]uint, len(items))
 	for _, ag := range items {
+		applyAgentImportDefaults(&ag)
 		var modelID *uint
 		if ag.ModelName != "" {
 			var llm models.LLMProviderModel
@@ -985,6 +1001,9 @@ func (a *agentManagerHTTPAdapter) GetAgent(ctx context.Context, name string) (*d
 func (a *agentManagerHTTPAdapter) CreateAgent(ctx context.Context, req deliveryhttp.CreateAgentRequest) (*deliveryhttp.AgentDetail, error) {
 	record := a.toAgentRecord(req)
 	if err := a.repo.Create(ctx, record); err != nil {
+		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "UNIQUE constraint") {
+			return nil, pkgerrors.AlreadyExists(fmt.Sprintf("agent with name %q already exists", req.Name))
+		}
 		return nil, fmt.Errorf("create agent: %w", err)
 	}
 
@@ -1186,7 +1205,7 @@ func (m *modelServiceHTTPAdapter) UpdateModel(ctx context.Context, name string, 
 		}
 	}
 	if existing == nil {
-		return nil, fmt.Errorf("model not found: %s", name)
+		return nil, pkgerrors.NotFound(fmt.Sprintf("model not found: %s", name))
 	}
 
 	update := &models.LLMProviderModel{
@@ -1252,7 +1271,7 @@ func (m *modelServiceHTTPAdapter) DeleteModel(ctx context.Context, name string) 
 			return nil
 		}
 	}
-	return fmt.Errorf("model not found: %s", name)
+	return pkgerrors.NotFound(fmt.Sprintf("model not found: %s", name))
 }
 
 func (m *modelServiceHTTPAdapter) VerifyModel(ctx context.Context, name string) (*deliveryhttp.ModelVerifyResult, error) {
@@ -1269,7 +1288,7 @@ func (m *modelServiceHTTPAdapter) VerifyModel(ctx context.Context, name string) 
 		}
 	}
 	if dbModel == nil {
-		return nil, fmt.Errorf("model not found: %s", name)
+		return nil, pkgerrors.NotFound(fmt.Sprintf("model not found: %s", name))
 	}
 
 	client, err := llm.CreateClientFromDBModel(*dbModel)
@@ -1439,7 +1458,7 @@ func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, agentName, message, u
 	}
 
 	if _, err := a.agents.Get(agentName); err != nil {
-		return nil, fmt.Errorf("agent not found: %s", agentName)
+		return nil, pkgerrors.NotFound(fmt.Sprintf("agent not found: %s", agentName))
 	}
 
 	// Create a new session if none provided.
