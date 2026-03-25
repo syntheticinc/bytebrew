@@ -336,12 +336,13 @@ type modelYAML struct {
 }
 
 type mcpServerYAML struct {
-	Name    string            `yaml:"name"`
-	Type    string            `yaml:"type"`
-	Command string            `yaml:"command,omitempty"`
-	Args    []string          `yaml:"args,omitempty"`
-	URL     string            `yaml:"url,omitempty"`
-	EnvVars map[string]string `yaml:"env_vars,omitempty"`
+	Name           string            `yaml:"name"`
+	Type           string            `yaml:"type"`
+	Command        string            `yaml:"command,omitempty"`
+	Args           []string          `yaml:"args,omitempty"`
+	URL            string            `yaml:"url,omitempty"`
+	EnvVars        map[string]string `yaml:"env_vars,omitempty"`
+	ForwardHeaders []string          `yaml:"forward_headers,omitempty"`
 }
 
 type triggerYAML struct {
@@ -514,6 +515,12 @@ func (a *configImportExportHTTPAdapter) exportMCPServers(_ context.Context) ([]m
 				my.EnvVars = masked
 			}
 		}
+		if s.ForwardHeaders != "" {
+			var fh []string
+			if err := json.Unmarshal([]byte(s.ForwardHeaders), &fh); err == nil {
+				my.ForwardHeaders = fh
+			}
+		}
 		result = append(result, my)
 	}
 	return result, nil
@@ -628,6 +635,12 @@ func (a *configImportExportHTTPAdapter) importMCPServers(tx *gorm.DB, items []mc
 			}
 		}
 
+		forwardHeadersJSON := ""
+		if len(s.ForwardHeaders) > 0 {
+			data, _ := json.Marshal(s.ForwardHeaders)
+			forwardHeadersJSON = string(data)
+		}
+
 		if err == nil {
 			existing.Type = s.Type
 			existing.Command = s.Command
@@ -638,6 +651,9 @@ func (a *configImportExportHTTPAdapter) importMCPServers(tx *gorm.DB, items []mc
 			if envJSON != "" {
 				existing.EnvVars = envJSON
 			}
+			if forwardHeadersJSON != "" {
+				existing.ForwardHeaders = forwardHeadersJSON
+			}
 			if err := tx.Save(&existing).Error; err != nil {
 				return fmt.Errorf("update mcp server %q: %w", s.Name, err)
 			}
@@ -645,12 +661,13 @@ func (a *configImportExportHTTPAdapter) importMCPServers(tx *gorm.DB, items []mc
 		}
 
 		newServer := models.MCPServerModel{
-			Name:    s.Name,
-			Type:    s.Type,
-			Command: s.Command,
-			Args:    argsJSON,
-			URL:     s.URL,
-			EnvVars: envJSON,
+			Name:           s.Name,
+			Type:           s.Type,
+			Command:        s.Command,
+			Args:           argsJSON,
+			URL:            s.URL,
+			EnvVars:        envJSON,
+			ForwardHeaders: forwardHeadersJSON,
 		}
 		if err := tx.Create(&newServer).Error; err != nil {
 			return fmt.Errorf("create mcp server %q: %w", s.Name, err)

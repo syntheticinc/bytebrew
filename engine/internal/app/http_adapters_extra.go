@@ -44,6 +44,9 @@ func (a *mcpServiceHTTPAdapter) ListMCPServers(ctx context.Context) ([]deliveryh
 		if s.EnvVars != "" {
 			_ = json.Unmarshal([]byte(s.EnvVars), &resp.EnvVars)
 		}
+		if s.ForwardHeaders != "" {
+			_ = json.Unmarshal([]byte(s.ForwardHeaders), &resp.ForwardHeaders)
+		}
 		if s.Runtime != nil {
 			resp.Status = &deliveryhttp.MCPStatusInfo{
 				Status:        s.Runtime.Status,
@@ -74,19 +77,24 @@ func (a *mcpServiceHTTPAdapter) CreateMCPServer(ctx context.Context, req deliver
 		data, _ := json.Marshal(req.EnvVars)
 		model.EnvVars = string(data)
 	}
+	if len(req.ForwardHeaders) > 0 {
+		data, _ := json.Marshal(req.ForwardHeaders)
+		model.ForwardHeaders = string(data)
+	}
 	if err := a.repo.Create(ctx, model); err != nil {
 		return nil, err
 	}
 	return &deliveryhttp.MCPServerResponse{
-		ID:          model.ID,
-		Name:        model.Name,
-		Type:        model.Type,
-		Command:     model.Command,
-		URL:         model.URL,
-		IsWellKnown: model.IsWellKnown,
-		Args:        req.Args,
-		EnvVars:     req.EnvVars,
-		Agents:      []string{},
+		ID:             model.ID,
+		Name:           model.Name,
+		Type:           model.Type,
+		Command:        model.Command,
+		URL:            model.URL,
+		IsWellKnown:    model.IsWellKnown,
+		Args:           req.Args,
+		EnvVars:        req.EnvVars,
+		ForwardHeaders: req.ForwardHeaders,
+		Agents:         []string{},
 	}, nil
 }
 
@@ -120,6 +128,10 @@ func (a *mcpServiceHTTPAdapter) UpdateMCPServer(ctx context.Context, name string
 		data, _ := json.Marshal(req.EnvVars)
 		model.EnvVars = string(data)
 	}
+	if len(req.ForwardHeaders) > 0 {
+		data, _ := json.Marshal(req.ForwardHeaders)
+		model.ForwardHeaders = string(data)
+	}
 	if err := a.repo.Update(ctx, targetID, model); err != nil {
 		return nil, err
 	}
@@ -144,6 +156,9 @@ func (a *mcpServiceHTTPAdapter) UpdateMCPServer(ctx context.Context, name string
 			}
 			if s.EnvVars != "" {
 				_ = json.Unmarshal([]byte(s.EnvVars), &resp.EnvVars)
+			}
+			if s.ForwardHeaders != "" {
+				_ = json.Unmarshal([]byte(s.ForwardHeaders), &resp.ForwardHeaders)
 			}
 			if s.Runtime != nil {
 				resp.Status = &deliveryhttp.MCPStatusInfo{

@@ -11,16 +11,17 @@ import (
 
 // MCPServerResponse is the API representation of an MCP server.
 type MCPServerResponse struct {
-	ID          uint              `json:"id"`
-	Name        string            `json:"name"`
-	Type        string            `json:"type"`
-	Command     string            `json:"command,omitempty"`
-	Args        []string          `json:"args,omitempty"`
-	URL         string            `json:"url,omitempty"`
-	EnvVars     map[string]string `json:"env_vars,omitempty"`
-	IsWellKnown bool             `json:"is_well_known"`
-	Status      *MCPStatusInfo    `json:"status,omitempty"`
-	Agents      []string          `json:"agents"`
+	ID             uint              `json:"id"`
+	Name           string            `json:"name"`
+	Type           string            `json:"type"`
+	Command        string            `json:"command,omitempty"`
+	Args           []string          `json:"args,omitempty"`
+	URL            string            `json:"url,omitempty"`
+	EnvVars        map[string]string `json:"env_vars,omitempty"`
+	ForwardHeaders []string          `json:"forward_headers,omitempty"`
+	IsWellKnown    bool              `json:"is_well_known"`
+	Status         *MCPStatusInfo    `json:"status,omitempty"`
+	Agents         []string          `json:"agents"`
 }
 
 // MCPStatusInfo is the runtime status of an MCP server.
@@ -33,12 +34,13 @@ type MCPStatusInfo struct {
 
 // CreateMCPServerRequest is the body for POST /api/v1/mcp-servers.
 type CreateMCPServerRequest struct {
-	Name    string            `json:"name"`
-	Type    string            `json:"type"`
-	Command string            `json:"command,omitempty"`
-	Args    []string          `json:"args,omitempty"`
-	URL     string            `json:"url,omitempty"`
-	EnvVars map[string]string `json:"env_vars,omitempty"`
+	Name           string            `json:"name"`
+	Type           string            `json:"type"`
+	Command        string            `json:"command,omitempty"`
+	Args           []string          `json:"args,omitempty"`
+	URL            string            `json:"url,omitempty"`
+	EnvVars        map[string]string `json:"env_vars,omitempty"`
+	ForwardHeaders []string          `json:"forward_headers,omitempty"`
 }
 
 // MCPService provides MCP server CRUD operations.
