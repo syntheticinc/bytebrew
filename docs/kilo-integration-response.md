@@ -1,7 +1,7 @@
 # ByteBrew Engine — Ответ на Integration Issues от Kilo IoT
 
 **От:** ByteBrew Engineering Team
-**Дата:** 2026-03-24
+**Дата:** 2026-03-25
 **В ответ на:** Kilo IoT Integration Issues (2026-03-24)
 
 ---
@@ -135,6 +135,37 @@ volumes:
 docker pull bytebrew/engine:latest
 docker compose down && docker compose up -d
 ```
+
+---
+
+## Обновление от 2026-03-25
+
+### Дополнительно исправлено после первого ответа
+
+По результатам полного регрессионного тестирования (395 TC) обнаружены и исправлены дополнительные баги:
+
+| Баг | Описание | Исправление |
+|-----|----------|-------------|
+| Model PUT/DELETE not found | Возвращал 500 вместо 404 | Теперь 404 с понятным сообщением |
+| Duplicate agent name | Возвращал 500 с raw PostgreSQL ошибкой | Теперь 409 Conflict |
+| Chat nonexistent agent | Возвращал 500 вместо 404 | Теперь 404 "agent not found" |
+| Config import defaults | Обнулял lifecycle/max_steps при минимальном YAML | Применяет дефолты (persistent, 50, 16000) |
+| Agent name validation | Принимал спецсимволы (/, <, >) | Теперь regex ^[a-z][a-z0-9-]*$ |
+| Duplicate model name | Возвращал 500 | Теперь 409 Conflict |
+
+### Полное покрытие тестами
+
+- **395 regression test cases** (264 original + 131 new)
+- Категории: TC-CFG (config), TC-TOOL (MCP/tools), TC-CRASH (crash prevention), TC-AG-EXT, TC-MD-EXT, TC-MC-EXT (CRUD edge cases), TC-AUTH-EXT (authentication), TC-SESS (sessions), TC-DOCKER (deployment), TC-SEC (security), и другие
+- Все тесты пройдены, Engine стабилен
+
+### Обновлённый Docker image
+
+```bash
+docker pull bytebrew/engine:latest
+```
+
+Все исправления включены в последнюю версию. Рекомендуем перетянуть образ и перезапустить.
 
 ---
 
