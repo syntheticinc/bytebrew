@@ -81,12 +81,17 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Streaming: SSE
+	// Streaming: SSE — must NOT include Content-Length header.
+	// Flush immediately after writing headers to prevent Go from adding
+	// Content-Length: 0 (which causes clients to close the connection).
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
-	w.WriteHeader(http.StatusOK)
+	w.Header().Del("Content-Length") // explicitly remove if set by middleware
+	if flusher, ok := w.(http.Flusher); ok {
+		flusher.Flush()
+	}
 
 	sse, sseErr := NewSSEWriter(w)
 	if sseErr != nil {
