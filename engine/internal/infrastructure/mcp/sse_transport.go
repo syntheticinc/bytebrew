@@ -20,8 +20,9 @@ import (
 // Per MCP spec: GET /sse for server→client events, POST /message for client→server requests.
 type SSETransport struct {
 	baseURL        string
-	client         *http.Client
-	messageURL     string // discovered from SSE endpoint event
+	sseClient      *http.Client // For SSE GET — no timeout (long-lived stream)
+	postClient     *http.Client // For POST /message — with timeout
+	messageURL     string       // discovered from SSE endpoint event
 	forwardHeaders []string
 
 	mu       sync.Mutex
@@ -39,7 +40,8 @@ func NewSSETransport(baseURL string, forwardHeaders ...[]string) *SSETransport {
 	}
 	return &SSETransport{
 		baseURL:        baseURL,
-		client:         &http.Client{Timeout: 30 * time.Second},
+		sseClient:      &http.Client{},                            // No timeout — SSE stream is persistent
+		postClient:     &http.Client{Timeout: 30 * time.Second},   // Timeout for POST requests
 		pending:        make(map[interface{}]chan *Response),
 		forwardHeaders: fh,
 	}
@@ -59,7 +61,7 @@ func (t *SSETransport) Start(_ context.Context) error {
 	}
 	req.Header.Set("Accept", "text/event-stream")
 
-	resp, err := t.client.Do(req)
+	resp, err := t.sseClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("connect to SSE: %w", err)
 	}
@@ -114,7 +116,7 @@ func (t *SSETransport) Send(ctx context.Context, req *Request) (*Response, error
 	httpReq.Header.Set("Content-Type", "application/json")
 	t.applyForwardHeaders(ctx, httpReq)
 
-	httpResp, err := t.client.Do(httpReq)
+	httpResp, err := t.postClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("send message: %w", err)
 	}
@@ -163,7 +165,7 @@ func (t *SSETransport) Notify(ctx context.Context, req *Request) {
 	httpReq.Header.Set("Content-Type", "application/json")
 	t.applyForwardHeaders(ctx, httpReq)
 
-	resp, err := t.client.Do(httpReq)
+	resp, err := t.postClient.Do(httpReq)
 	if err != nil {
 		return
 	}
@@ -266,8 +268,12 @@ func (t *SSETransport) handleSSEData(eventType, data string) {
 			return
 		}
 
+		// Normalize response ID: JSON unmarshals numbers as float64,
+		// but pending map keys are int64 from nextRequestID().
+		normalizedID := normalizeID(resp.ID)
+
 		t.mu.Lock()
-		if ch, ok := t.pending[resp.ID]; ok {
+		if ch, ok := t.pending[normalizedID]; ok {
 			ch <- &resp
 		}
 		t.mu.Unlock()
@@ -275,6 +281,15 @@ func (t *SSETransport) handleSSEData(eventType, data string) {
 	default:
 		slog.Debug("SSE transport: unknown event", "type", eventType, "data", data[:min(len(data), 100)])
 	}
+}
+
+// normalizeID converts JSON-unmarshalled float64 IDs back to int64 for map lookup.
+// JSON numbers unmarshal as float64 in Go, but pending map keys are int64.
+func normalizeID(id interface{}) interface{} {
+	if f, ok := id.(float64); ok {
+		return int64(f)
+	}
+	return id
 }
 
 // applyForwardHeaders copies configured headers from RequestContext to the HTTP request.
