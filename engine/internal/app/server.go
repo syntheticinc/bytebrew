@@ -374,7 +374,8 @@ func Run(sc ServerConfig) error {
 
 	// Initialize MCP client connections from database
 	mcpRegistry := mcp.NewClientRegistry()
-	var mcpForwardHeaders []string // collected from all MCP servers for chat handler context extraction
+	var forwardHeadersStore atomic.Value // shared with configReloaderHTTPAdapter for dynamic updates
+	forwardHeadersStore.Store([]string(nil))
 	if pgDB != nil {
 		mcpServerRepo := config_repo.NewGORMMCPServerRepository(pgDB)
 		mcpServers, mcpErr := mcpServerRepo.List(ctx)
@@ -382,20 +383,7 @@ func Run(sc ServerConfig) error {
 			slog.Warn("failed to load MCP servers from database", "error", mcpErr)
 		} else {
 			connectMCPServers(ctx, mcpServers, mcpRegistry)
-			// Collect unique forward headers from all MCP servers
-			seen := make(map[string]bool)
-			for _, srv := range mcpServers {
-				var fh []string
-				if srv.ForwardHeaders != "" {
-					_ = json.Unmarshal([]byte(srv.ForwardHeaders), &fh)
-				}
-				for _, h := range fh {
-					if !seen[h] {
-						seen[h] = true
-						mcpForwardHeaders = append(mcpForwardHeaders, h)
-					}
-				}
-			}
+			forwardHeadersStore.Store(collectForwardHeaders(mcpServers))
 		}
 	}
 
@@ -493,7 +481,7 @@ func Run(sc ServerConfig) error {
 
 			// Config
 			configHandler := deliveryhttp.NewConfigHandler(
-				&configReloaderHTTPAdapter{registry: agentRegistry, mcpRegistry: mcpRegistry, db: pgDB},
+				&configReloaderHTTPAdapter{registry: agentRegistry, mcpRegistry: mcpRegistry, db: pgDB, forwardHeadersStore: &forwardHeadersStore},
 				&configImportExportHTTPAdapter{db: pgDB},
 			)
 			r.Post("/api/v1/config/reload", configHandler.Reload)
@@ -766,7 +754,9 @@ func Run(sc ServerConfig) error {
 			agents:      agentRegistry,
 			chatEnabled: components.AgentService != nil || components.ModelCache != nil,
 		}
-		chatHandler := deliveryhttp.NewChatHandler(chatService, mcpForwardHeaders)
+		chatHandler := deliveryhttp.NewChatHandler(chatService, func() []string {
+			return forwardHeadersStore.Load().([]string)
+		})
 		respondHandler := deliveryhttp.NewRespondHandler(sessionRegistry)
 
 		httpRouter := httpServer.Router()

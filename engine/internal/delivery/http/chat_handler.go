@@ -19,14 +19,15 @@ type ChatService interface {
 
 // ChatHandler serves POST /api/v1/agents/{name}/chat with SSE streaming.
 type ChatHandler struct {
-	service        ChatService
-	forwardHeaders []string // HTTP headers to capture into RequestContext
+	service          ChatService
+	forwardHeadersFn func() []string // dynamic — returns current forward headers
 }
 
 // NewChatHandler creates a new ChatHandler.
-// forwardHeaders is the union of all forward_headers across MCP server configs.
-func NewChatHandler(service ChatService, forwardHeaders []string) *ChatHandler {
-	return &ChatHandler{service: service, forwardHeaders: forwardHeaders}
+// forwardHeadersFn returns the current union of all forward_headers across MCP server configs.
+// It is called on every request so that config reloads take effect immediately.
+func NewChatHandler(service ChatService, forwardHeadersFn func() []string) *ChatHandler {
+	return &ChatHandler{service: service, forwardHeadersFn: forwardHeadersFn}
 }
 
 type chatRequest struct {
@@ -160,12 +161,13 @@ func (h *ChatHandler) handleNonStreaming(w http.ResponseWriter, agentName string
 // and stores them in a domain.RequestContext within the request's Go context.
 func (h *ChatHandler) buildRequestContext(r *http.Request) context.Context {
 	ctx := r.Context()
-	if len(h.forwardHeaders) == 0 {
+	forwardHeaders := h.forwardHeadersFn()
+	if len(forwardHeaders) == 0 {
 		return ctx
 	}
 
 	headers := make(map[string]string)
-	for _, name := range h.forwardHeaders {
+	for _, name := range forwardHeaders {
 		if val := r.Header.Get(name); val != "" {
 			headers[name] = val
 		}

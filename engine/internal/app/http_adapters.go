@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -131,9 +132,10 @@ func (a *tokenRepoHTTPAdapter) VerifyToken(ctx context.Context, tokenHash string
 
 // configReloaderHTTPAdapter bridges AgentRegistry and MCP reconnection to the http.ConfigReloader interface.
 type configReloaderHTTPAdapter struct {
-	registry    *agent_registry.AgentRegistry
-	mcpRegistry *mcp.ClientRegistry
-	db          *gorm.DB
+	registry            *agent_registry.AgentRegistry
+	mcpRegistry         *mcp.ClientRegistry
+	db                  *gorm.DB
+	forwardHeadersStore *atomic.Value // shared with ChatHandler for dynamic forward header updates
 }
 
 func (a *configReloaderHTTPAdapter) Reload(ctx context.Context) error {
@@ -159,11 +161,41 @@ func (a *configReloaderHTTPAdapter) reconnectMCPServers(ctx context.Context) {
 
 	a.mcpRegistry.CloseAll()
 	connectMCPServers(ctx, mcpServers, a.mcpRegistry)
+
+	// Update forward headers so ChatHandler picks up changes immediately
+	if a.forwardHeadersStore != nil {
+		a.forwardHeadersStore.Store(collectForwardHeaders(mcpServers))
+		slog.InfoContext(ctx, "forward headers updated after config reload")
+	}
+
 	slog.InfoContext(ctx, "MCP servers reconnected after config reload", "count", len(mcpServers))
 }
 
 func (a *configReloaderHTTPAdapter) AgentsCount() int {
 	return a.registry.Count()
+}
+
+// collectForwardHeaders returns the deduplicated union of forward_headers
+// configured across all MCP servers.
+func collectForwardHeaders(mcpServers []models.MCPServerModel) []string {
+	seen := make(map[string]bool)
+	var headers []string
+	for _, srv := range mcpServers {
+		if srv.ForwardHeaders == "" {
+			continue
+		}
+		var fh []string
+		if err := json.Unmarshal([]byte(srv.ForwardHeaders), &fh); err != nil {
+			continue
+		}
+		for _, h := range fh {
+			if !seen[h] {
+				seen[h] = true
+				headers = append(headers, h)
+			}
+		}
+	}
+	return headers
 }
 
 // configImportExportHTTPAdapter bridges GORM DB to the http.ConfigImportExporter interface.
