@@ -126,7 +126,12 @@ func (h *ChatHandler) handleNonStreaming(w http.ResponseWriter, agentName string
 		case "message", "message_delta":
 			if content, ok := data["content"].(string); ok {
 				if event.Type == "message" {
-					message = content // replace with final
+					// Only replace if non-empty — the engine sends a trailing
+					// "completion signal" ANSWER event with empty content after
+					// streaming finishes; ignoring it preserves the real answer.
+					if content != "" {
+						message = content
+					}
 				} else {
 					message += content // accumulate deltas
 				}
