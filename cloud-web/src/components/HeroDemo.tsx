@@ -91,7 +91,7 @@ const SCENARIO: DemoStep[] = [
 ];
 
 const TYPEWRITER_TYPES = new Set<DemoStep['type']>(['input_typing', 'text', 'response']);
-const USER_CHAR_MS = 28;
+const USER_CHAR_MS = 55;
 const AGENT_CHAR_MS = 12;
 
 /* ------------------------------------------------------------------ */
@@ -377,9 +377,12 @@ export function HeroDemo() {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' });
   }, [visibleSteps, typedChars]);
 
-  const userMessageText = useMemo(() => {
-    const s = SCENARIO.find((s) => s.type === 'input_typing');
-    return s?.content ?? '';
+  /* ---- helper: find preceding input_typing text for a given input_send index ---- */
+  const getUserTextForSend = useCallback((sendIndex: number) => {
+    for (let j = sendIndex - 1; j >= 0; j--) {
+      if (SCENARIO[j].type === 'input_typing') return SCENARIO[j].content ?? '';
+    }
+    return '';
   }, []);
 
   const renderedSteps = useMemo(() => {
@@ -392,7 +395,7 @@ export function HeroDemo() {
 
       switch (step.type) {
         case 'input_typing': break;
-        case 'input_send': elements.push(<UserBubble key={key} text={userMessageText} />); break;
+        case 'input_send': elements.push(<UserBubble key={key} text={getUserTextForSend(i)} />); break;
         case 'thinking': break;
         case 'tool_call': {
           // Check if next completed step is the result — if so, skip (result renders the done block)
@@ -433,7 +436,7 @@ export function HeroDemo() {
     }
 
     return elements;
-  }, [visibleSteps, typingIndex, typedChars, selectedButton, userMessageText]);
+  }, [visibleSteps, typingIndex, typedChars, selectedButton, getUserTextForSend]);
 
   const inputDisplay = useMemo(() => {
     if (typingIndex >= 0 && typingIndex < SCENARIO.length && SCENARIO[typingIndex].type === 'input_typing') {
