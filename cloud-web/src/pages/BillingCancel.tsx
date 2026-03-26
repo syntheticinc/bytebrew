@@ -11,13 +11,13 @@ export function BillingCancelPage() {
       <div className="mt-8 flex gap-4 justify-center">
         <Link
           to="/billing"
-          className="rounded-[10px] bg-brand-accent px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
+          className="rounded-[2px] bg-brand-accent px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
         >
           Back to Billing
         </Link>
         <Link
           to="/"
-          className="rounded-[10px] border border-brand-shade3/20 px-6 py-2.5 text-sm font-medium text-brand-shade2 hover:border-brand-shade3/40 hover:text-brand-light transition-colors"
+          className="rounded-[2px] border border-brand-shade3/20 px-6 py-2.5 text-sm font-medium text-brand-shade2 hover:border-brand-shade3/40 hover:text-brand-light transition-colors"
         >
           Home
         </Link>

@@ -25,7 +25,7 @@ function BillingContent() {
 function CommunityBilling() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-20 text-center">
-      <div className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-10">
+      <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-10">
         <h1 className="text-2xl font-bold text-brand-light">ByteBrew Engine</h1>
         <p className="mt-2 text-lg text-emerald-400 font-medium">
           Community Edition — Free Forever
@@ -44,7 +44,7 @@ function CommunityBilling() {
         <div className="mt-8 flex flex-col items-center gap-3">
           <a
             href="mailto:enterprise@bytebrew.ai?subject=Enterprise%20Edition%20Waitlist"
-            className="inline-block rounded-[10px] bg-brand-accent px-6 py-2 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
+            className="inline-block rounded-[2px] bg-brand-accent px-6 py-2 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
           >
             Join Waitlist &rarr;
           </a>
@@ -94,11 +94,11 @@ function EnterpriseBilling() {
   if (usageQuery.isError) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-20 text-center">
-        <div className="rounded-[12px] border border-red-500/20 bg-red-500/5 p-6">
+        <div className="rounded-[2px] border border-red-500/20 bg-red-500/5 p-6">
           <p className="text-sm text-red-400">Failed to load billing information. Please try again later.</p>
           <button
             onClick={() => usageQuery.refetch()}
-            className="mt-4 rounded-[10px] border border-brand-shade3/20 px-4 py-2 text-sm font-medium text-brand-shade2 hover:border-brand-shade3/40 hover:text-brand-light transition-colors"
+            className="mt-4 rounded-[2px] border border-brand-shade3/20 px-4 py-2 text-sm font-medium text-brand-shade2 hover:border-brand-shade3/40 hover:text-brand-light transition-colors"
           >
             Retry
           </button>
@@ -121,7 +121,7 @@ function FreeTierBilling() {
     <div className="max-w-2xl mx-auto px-4 py-20">
       <h1 className="text-2xl font-bold text-brand-light">Billing</h1>
 
-      <div className="mt-8 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-8 text-center">
+      <div className="mt-8 rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-8 text-center">
         <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-400/10 mb-4">
           <svg className="h-6 w-6 text-emerald-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -139,7 +139,7 @@ function FreeTierBilling() {
         <div className="mt-8">
           <Link
             to="/pricing"
-            className="inline-block rounded-[10px] bg-brand-accent px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
+            className="inline-block rounded-[2px] bg-brand-accent px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
           >
             View pricing plans &rarr;
           </Link>
@@ -173,13 +173,13 @@ function SubscriptionBilling({ usage, error, loading, onManage }: SubscriptionBi
       <h1 className="text-2xl font-bold text-brand-light">Billing</h1>
 
       {error && (
-        <div className="mt-4 rounded-[10px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
+        <div className="mt-4 rounded-[2px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
           {error}
         </div>
       )}
 
       {/* Current plan card */}
-      <div className="mt-8 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-6">
+      <div className="mt-8 rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-6">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-brand-shade3">Current Plan</p>
@@ -206,7 +206,7 @@ function SubscriptionBilling({ usage, error, loading, onManage }: SubscriptionBi
           <button
             onClick={onManage}
             disabled={loading}
-            className="rounded-[10px] bg-brand-accent px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors disabled:opacity-50"
+            className="rounded-[2px] bg-brand-accent px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors disabled:opacity-50"
           >
             {loading ? 'Redirecting...' : 'Manage Subscription'}
           </button>
@@ -218,7 +218,7 @@ function SubscriptionBilling({ usage, error, loading, onManage }: SubscriptionBi
 
       {/* Usage stats */}
       {usage.proxy_steps_limit > 0 && (
-        <div className="mt-6 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-6">
+        <div className="mt-6 rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-6">
           <h3 className="text-sm font-medium text-brand-shade2">Proxy Steps Usage</h3>
 
           <div className="mt-4">
@@ -248,7 +248,7 @@ function SubscriptionBilling({ usage, error, loading, onManage }: SubscriptionBi
       )}
 
       {/* BYOK status */}
-      <div className="mt-6 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-6">
+      <div className="mt-6 rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-6">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-sm font-medium text-brand-shade2">Bring Your Own Keys (BYOK)</h3>

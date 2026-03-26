@@ -188,7 +188,7 @@ export function EnginePricingTable({ onSelectPlan }: EnginePricingTableProps = {
       {/* Plan cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto items-stretch">
         {/* Community Edition */}
-        <div className="rounded-[12px] border border-brand-accent bg-brand-dark-alt ring-1 ring-brand-accent/50 p-5 flex flex-col">
+        <div className="rounded-[2px] border border-brand-accent bg-brand-dark-alt ring-1 ring-brand-accent/50 p-5 flex flex-col">
           <Badge text="Free Forever" color="accent" />
           <h3 className="mt-3 text-lg font-semibold text-brand-light">Community Edition</h3>
           <p className="mt-1 text-sm text-brand-shade2">
@@ -204,7 +204,7 @@ export function EnginePricingTable({ onSelectPlan }: EnginePricingTableProps = {
           <div className="mt-auto pt-6">
             <Link
               to="/download"
-              className="w-full rounded-[10px] bg-brand-accent py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors text-center block"
+              className="w-full rounded-[2px] bg-brand-accent py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors text-center block"
             >
               Download
             </Link>
@@ -227,7 +227,7 @@ export function EnginePricingTable({ onSelectPlan }: EnginePricingTableProps = {
         )}
 
         {/* Custom */}
-        <div className="rounded-[12px] border border-brand-shade3/20 bg-brand-dark-alt p-5 flex flex-col">
+        <div className="rounded-[2px] border border-brand-shade3/20 bg-brand-dark-alt p-5 flex flex-col">
           <BadgePlaceholder />
           <h3 className="mt-3 text-lg font-semibold text-brand-light">Custom</h3>
           <p className="mt-1 text-sm text-brand-shade2">
@@ -243,7 +243,7 @@ export function EnginePricingTable({ onSelectPlan }: EnginePricingTableProps = {
           <div className="mt-auto pt-6">
             <a
               href="mailto:info@bytebrew.ai"
-              className="w-full rounded-[10px] bg-brand-shade3/20 py-2.5 text-sm font-medium text-brand-light hover:bg-brand-shade3/30 transition-colors text-center block"
+              className="w-full rounded-[2px] bg-brand-shade3/20 py-2.5 text-sm font-medium text-brand-light hover:bg-brand-shade3/30 transition-colors text-center block"
             >
               Talk to Sales
             </a>
@@ -259,7 +259,7 @@ export function EnginePricingTable({ onSelectPlan }: EnginePricingTableProps = {
 
 function EECardPreview() {
   return (
-    <div className="rounded-[12px] border border-brand-shade3/20 bg-brand-dark-alt p-5 flex flex-col">
+    <div className="rounded-[2px] border border-brand-shade3/20 bg-brand-dark-alt p-5 flex flex-col">
       <Badge text="Coming Soon" color="gray" />
       <h3 className="mt-3 text-lg font-semibold text-brand-light">Enterprise Edition</h3>
       <p className="mt-1 text-sm text-brand-shade2">
@@ -271,7 +271,7 @@ function EECardPreview() {
       <div className="mt-auto pt-6">
         <a
           href="mailto:info@bytebrew.ai"
-          className="w-full rounded-[10px] bg-brand-shade3/20 py-2.5 text-sm font-medium text-brand-light hover:bg-brand-shade3/30 transition-colors text-center block"
+          className="w-full rounded-[2px] bg-brand-shade3/20 py-2.5 text-sm font-medium text-brand-light hover:bg-brand-shade3/30 transition-colors text-center block"
         >
           Join Waitlist
         </a>
@@ -310,7 +310,7 @@ function EECardPriced({ period, onSelectPlan, pricing, isLoading }: EECardPriced
   };
 
   return (
-    <div className="rounded-[12px] border border-brand-accent bg-brand-dark-alt ring-1 ring-brand-accent/50 p-5 flex flex-col">
+    <div className="rounded-[2px] border border-brand-accent bg-brand-dark-alt ring-1 ring-brand-accent/50 p-5 flex flex-col">
       <Badge text="Most Popular" color="accent" />
       <h3 className="mt-3 text-lg font-semibold text-brand-light">Enterprise Edition</h3>
       <p className="mt-1 text-sm text-brand-shade2">
@@ -333,14 +333,14 @@ function EECardPriced({ period, onSelectPlan, pricing, isLoading }: EECardPriced
         {onSelectPlan ? (
           <button
             onClick={handleClick}
-            className="w-full rounded-[10px] bg-brand-accent py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors text-center block"
+            className="w-full rounded-[2px] bg-brand-accent py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors text-center block"
           >
             Subscribe
           </button>
         ) : (
           <Link
             to="/register"
-            className="w-full rounded-[10px] bg-brand-accent py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors text-center block"
+            className="w-full rounded-[2px] bg-brand-accent py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors text-center block"
           >
             Start Free Trial
           </Link>

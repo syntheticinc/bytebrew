@@ -132,7 +132,7 @@ export function PricingTable({ onSelectPlan, currentTier }: PricingTableProps) {
           return (
             <div
               key={plan.id}
-              className={`rounded-[12px] border p-5 flex flex-col ${
+              className={`rounded-[2px] border p-5 flex flex-col ${
                 plan.highlighted
                   ? 'border-brand-accent bg-brand-dark-alt ring-1 ring-brand-accent/50'
                   : 'border-brand-shade3/20 bg-brand-dark-alt'
@@ -177,7 +177,7 @@ export function PricingTable({ onSelectPlan, currentTier }: PricingTableProps) {
               <button
                 onClick={() => onSelectPlan(plan.id === 'trial' ? 'personal' : plan.id, period)}
                 disabled={isCurrent}
-                className={`mt-6 w-full rounded-[10px] py-2.5 text-sm font-medium transition-colors ${
+                className={`mt-6 w-full rounded-[2px] py-2.5 text-sm font-medium transition-colors ${
                   isCurrent
                     ? 'bg-brand-shade3/20 text-brand-shade3 cursor-not-allowed'
                     : plan.highlighted

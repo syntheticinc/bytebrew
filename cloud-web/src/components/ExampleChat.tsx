@@ -110,7 +110,7 @@ function AskUserBlock({ segment, onAnswer }: {
                 <button
                   key={opt.label}
                   onClick={() => onAnswer(segment.callId, opt.label)}
-                  className="rounded-md border border-blue-400/30 px-2.5 py-1 text-xs text-blue-300 hover:bg-blue-400/10 hover:border-blue-400/50 transition-colors"
+                  className="rounded-[2px] border border-blue-400/30 px-2.5 py-1 text-xs text-blue-300 hover:bg-blue-400/10 hover:border-blue-400/50 transition-colors"
                 >
                   {opt.label}
                 </button>
@@ -440,7 +440,7 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
   const showSuggestions = messages.length === 0 && !isStreaming;
 
   return (
-    <div className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark flex flex-col overflow-hidden" style={{ height: '480px' }}>
+    <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark flex flex-col overflow-hidden" style={{ height: '480px' }}>
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {showSuggestions && (
@@ -451,7 +451,7 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
                 <button
                   key={suggestion}
                   onClick={() => handleSend(suggestion)}
-                  className="rounded-[10px] border border-brand-shade3/20 px-3 py-2 text-xs text-brand-shade2 hover:text-brand-light hover:border-brand-accent/40 hover:bg-brand-accent/5 transition-colors text-left"
+                  className="rounded-[2px] border border-brand-shade3/20 px-3 py-2 text-xs text-brand-shade2 hover:text-brand-light hover:border-brand-accent/40 hover:bg-brand-accent/5 transition-colors text-left"
                 >
                   {suggestion}
                 </button>
@@ -466,7 +466,7 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
             className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[80%] rounded-[10px] px-4 py-2.5 text-sm leading-relaxed ${
+              className={`max-w-[80%] rounded-[2px] px-4 py-2.5 text-sm leading-relaxed ${
                 msg.role === 'user'
                   ? 'bg-brand-accent text-white whitespace-pre-wrap'
                   : 'bg-brand-dark-alt text-brand-light border border-brand-shade3/15'
@@ -518,12 +518,12 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
             onChange={(e) => setInput(e.target.value)}
             placeholder={messagesRemaining <= 0 ? 'Rate limit reached' : 'Type a message...'}
             disabled={isStreaming || messagesRemaining <= 0}
-            className="flex-1 rounded-[10px] border border-brand-shade3/20 bg-brand-dark-alt px-4 py-2 text-sm text-brand-light placeholder:text-brand-shade3 focus:outline-none focus:border-brand-accent/50 disabled:opacity-50 transition-colors"
+            className="flex-1 rounded-[2px] border border-brand-shade3/20 bg-brand-dark-alt px-4 py-2 text-sm text-brand-light placeholder:text-brand-shade3 focus:outline-none focus:border-brand-accent/50 disabled:opacity-50 transition-colors"
           />
           <button
             type="submit"
             disabled={!input.trim() || isStreaming || messagesRemaining <= 0}
-            className="rounded-[10px] bg-brand-accent px-4 py-2 text-sm font-medium text-white hover:bg-brand-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="rounded-[2px] bg-brand-accent px-4 py-2 text-sm font-medium text-white hover:bg-brand-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             Send
           </button>

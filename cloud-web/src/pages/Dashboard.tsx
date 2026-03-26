@@ -56,7 +56,7 @@ function DashboardContent() {
       <h1 className="text-2xl font-bold text-brand-light">Dashboard</h1>
 
       {checkoutFailed && (
-        <div className="mt-4 rounded-[10px] bg-yellow-500/10 border border-yellow-500/20 p-3 text-sm text-yellow-400">
+        <div className="mt-4 rounded-[2px] bg-yellow-500/10 border border-yellow-500/20 p-3 text-sm text-yellow-400">
           Checkout could not be completed. You can try again from the{' '}
           <Link to="/billing" className="underline hover:text-yellow-300">
             billing page
@@ -70,20 +70,20 @@ function DashboardContent() {
       )}
 
       {usageQuery.error && !is403 && (
-        <div className="mt-4 rounded-[10px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
+        <div className="mt-4 rounded-[2px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
           Failed to load usage data
         </div>
       )}
 
       {is403 && (
-        <div className="mt-6 rounded-[10px] bg-emerald-500/10 border border-emerald-500/20 p-3 text-sm text-emerald-400">
+        <div className="mt-6 rounded-[2px] bg-emerald-500/10 border border-emerald-500/20 p-3 text-sm text-emerald-400">
           You're using ByteBrew Engine Community Edition — free forever.
         </div>
       )}
 
       <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Card 1: Account Status */}
-        <div className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
+        <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
           <h2 className="text-sm font-medium text-brand-shade2">Account</h2>
           <p className="mt-3 text-lg font-semibold text-brand-light truncate">
             {email ?? 'Unknown'}
@@ -95,14 +95,14 @@ function DashboardContent() {
 
         {/* Card 2: License (only when subscription exists) */}
         {hasSubscription && (
-          <div className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
+          <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
             <h2 className="text-sm font-medium text-brand-shade2">License</h2>
             <p className="mt-2 text-sm text-brand-shade2">
               Download your license file for offline activation.
             </p>
             <button
               onClick={handleDownloadLicense}
-              className="mt-4 rounded-[10px] border border-brand-shade3/20 px-4 py-2 text-sm font-medium text-brand-shade2 hover:border-brand-shade3/40 hover:text-brand-light transition-colors"
+              className="mt-4 rounded-[2px] border border-brand-shade3/20 px-4 py-2 text-sm font-medium text-brand-shade2 hover:border-brand-shade3/40 hover:text-brand-light transition-colors"
             >
               Download license.jwt
             </button>
@@ -116,7 +116,7 @@ function DashboardContent() {
         )}
 
         {/* Card 3: Quick Start */}
-        <div className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
+        <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
           <h2 className="text-sm font-medium text-brand-shade2">Quick Start</h2>
           <ul className="mt-4 space-y-3">
             <li>

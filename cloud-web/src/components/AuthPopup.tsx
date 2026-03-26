@@ -13,10 +13,10 @@ interface AuthPopupProps {
 }
 
 const inputClass =
-  'w-full rounded-[10px] border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent';
+  'w-full rounded-[2px] border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent';
 const labelClass = 'block text-sm font-medium text-brand-shade2 mb-1';
 const submitBtnClass =
-  'w-full rounded-[10px] bg-brand-accent py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+  'w-full rounded-[2px] bg-brand-accent py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
 const linkBtnClass = 'text-brand-accent hover:text-brand-accent-hover transition-colors';
 
 export function AuthPopup({ isOpen, onClose, onSuccess, title }: AuthPopupProps) {
@@ -176,7 +176,7 @@ export function AuthPopup({ isOpen, onClose, onSuccess, title }: AuthPopupProps)
       />
 
       {/* Modal */}
-      <div className="relative z-10 w-full max-w-sm mx-4 rounded-[12px] border border-brand-shade3/20 bg-brand-dark-alt shadow-2xl animate-in zoom-in-95 fade-in duration-200">
+      <div className="relative z-10 w-full max-w-sm mx-4 rounded-[2px] border border-brand-shade3/20 bg-brand-dark-alt shadow-2xl animate-in zoom-in-95 fade-in duration-200">
         {/* Close button */}
         <button
           onClick={onClose}
@@ -279,7 +279,7 @@ function ErrorBanner({ message }: { message: string }) {
   }
 
   return (
-    <div className="rounded-[10px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
+    <div className="rounded-[2px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
       {message}
     </div>
   );
@@ -488,7 +488,7 @@ function ForgotView({
   if (sent) {
     return (
       <div className="space-y-4">
-        <div className="rounded-[10px] bg-emerald-500/10 border border-emerald-500/20 p-4 text-sm text-emerald-400">
+        <div className="rounded-[2px] bg-emerald-500/10 border border-emerald-500/20 p-4 text-sm text-emerald-400">
           If an account exists with this email, you'll receive a reset link.
         </div>
         <p className="text-center text-sm text-brand-shade2">

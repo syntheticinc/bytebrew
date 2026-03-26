@@ -63,7 +63,7 @@ function UpgradePrompt() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
       <h1 className="text-2xl font-bold text-brand-light">Team</h1>
-      <div className="mt-8 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5 text-center">
+      <div className="mt-8 rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5 text-center">
         <h2 className="text-lg font-semibold text-brand-light">
           Upgrade to Teams
         </h2>
@@ -73,7 +73,7 @@ function UpgradePrompt() {
         </p>
         <Link
           to="/billing"
-          className="mt-4 inline-block rounded-[10px] bg-brand-accent px-6 py-2 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
+          className="mt-4 inline-block rounded-[2px] bg-brand-accent px-6 py-2 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
         >
           View Plans
         </Link>
@@ -114,7 +114,7 @@ function TeamManager() {
     return (
       <div className="max-w-4xl mx-auto px-4 py-10">
         <h1 className="text-2xl font-bold text-brand-light">Team</h1>
-        <div className="mt-4 rounded-[10px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
+        <div className="mt-4 rounded-[2px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
           Failed to load team data
         </div>
       </div>
@@ -159,7 +159,7 @@ function CreateTeamView() {
     <div className="max-w-4xl mx-auto px-4 py-10">
       <h1 className="text-2xl font-bold text-brand-light">Team</h1>
 
-      <div className="mt-8 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
+      <div className="mt-8 rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
         <h2 className="text-base font-semibold text-brand-light">
           Create Your Team
         </h2>
@@ -168,7 +168,7 @@ function CreateTeamView() {
         </p>
 
         {error && (
-          <div className="mt-4 rounded-[10px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
+          <div className="mt-4 rounded-[2px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
             {error}
           </div>
         )}
@@ -179,12 +179,12 @@ function CreateTeamView() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Team name"
-            className="flex-1 rounded-[10px] border border-brand-shade3/30 bg-brand-dark px-4 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none"
+            className="flex-1 rounded-[2px] border border-brand-shade3/30 bg-brand-dark px-4 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none"
           />
           <button
             type="submit"
             disabled={mutation.isPending || !name.trim()}
-            className="rounded-[10px] bg-brand-accent px-6 py-2 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors disabled:opacity-50"
+            className="rounded-[2px] bg-brand-accent px-6 py-2 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors disabled:opacity-50"
           >
             {mutation.isPending ? 'Creating...' : 'Create Team'}
           </button>
@@ -212,14 +212,14 @@ function TeamView({
       </div>
 
       {/* Members */}
-      <div className="mt-8 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
+      <div className="mt-8 rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
         <h2 className="text-base font-semibold text-brand-light">Members</h2>
         <MembersTable members={team.members} />
       </div>
 
       {/* Pending Invites */}
       {pendingInvites.length > 0 && (
-        <div className="mt-6 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
+        <div className="mt-6 rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
           <h2 className="text-base font-semibold text-brand-light">
             Pending Invites
           </h2>
@@ -228,7 +228,7 @@ function TeamView({
       )}
 
       {/* Invite Form */}
-      <div className="mt-6 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
+      <div className="mt-6 rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
         <h2 className="text-base font-semibold text-brand-light">Invite Member</h2>
         <InviteForm />
       </div>
@@ -260,7 +260,7 @@ function MembersTable({ members }: { members: TeamMember[] }) {
   return (
     <div className="mt-4">
       {error && (
-        <div className="mb-4 rounded-[10px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
+        <div className="mb-4 rounded-[2px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
           {error}
         </div>
       )}
@@ -341,7 +341,7 @@ function PendingInvitesList({ invites }: { invites: TeamInvite[] }) {
       {invites.map((invite) => (
         <div
           key={invite.id}
-          className="flex items-center justify-between rounded-[10px] bg-brand-dark border border-brand-shade3/20 p-3"
+          className="flex items-center justify-between rounded-[2px] bg-brand-dark border border-brand-shade3/20 p-3"
         >
           <div>
             <p className="text-sm text-brand-shade1">{invite.email}</p>
@@ -395,13 +395,13 @@ function InviteForm() {
   return (
     <div className="mt-4">
       {error && (
-        <div className="mb-3 rounded-[10px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
+        <div className="mb-3 rounded-[2px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="mb-3 rounded-[10px] bg-emerald-500/10 border border-emerald-500/20 p-3 text-sm text-emerald-400">
+        <div className="mb-3 rounded-[2px] bg-emerald-500/10 border border-emerald-500/20 p-3 text-sm text-emerald-400">
           {success}
         </div>
       )}
@@ -412,12 +412,12 @@ function InviteForm() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="colleague@example.com"
-          className="flex-1 rounded-[10px] border border-brand-shade3/30 bg-brand-dark px-4 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none"
+          className="flex-1 rounded-[2px] border border-brand-shade3/30 bg-brand-dark px-4 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none"
         />
         <button
           type="submit"
           disabled={mutation.isPending || !email.trim()}
-          className="rounded-[10px] bg-brand-accent px-6 py-2 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors disabled:opacity-50"
+          className="rounded-[2px] bg-brand-accent px-6 py-2 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors disabled:opacity-50"
         >
           {mutation.isPending ? 'Sending...' : 'Send Invite'}
         </button>

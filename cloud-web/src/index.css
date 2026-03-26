@@ -10,8 +10,8 @@
   --color-brand-shade2: #CBC9BC;
   --color-brand-shade3: #87867F;
   --font-mono: "IBM Plex Mono", monospace;
-  --radius-card: 12px;
-  --radius-btn: 10px;
+  --radius-card: 2px;
+  --radius-btn: 2px;
 }
 
 body {

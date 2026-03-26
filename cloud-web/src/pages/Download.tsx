@@ -68,7 +68,7 @@ export function DownloadPage() {
           </div>
 
           {/* Info box */}
-          <div className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5 text-sm text-brand-shade2">
+          <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5 text-sm text-brand-shade2">
             <p className="font-medium text-brand-light mb-1">What&apos;s included</p>
             <p>ByteBrew Engine + PostgreSQL 16. Ready in 30 seconds.</p>
           </div>
@@ -102,7 +102,7 @@ export function DownloadPage() {
       {activeTab === 'binary' && (
         <div className="mt-8 space-y-8">
           {/* Prerequisites */}
-          <div className="rounded-[12px] border border-yellow-500/20 bg-yellow-500/5 p-5 text-sm text-brand-shade2">
+          <div className="rounded-[2px] border border-yellow-500/20 bg-yellow-500/5 p-5 text-sm text-brand-shade2">
             <p className="font-medium text-yellow-400 mb-1">Prerequisites</p>
             <p>Requires PostgreSQL 14+ (existing instance).</p>
           </div>
@@ -125,7 +125,7 @@ export function DownloadPage() {
           {/* After install */}
           <div>
             <h3 className="text-sm font-medium text-brand-light mb-3">After install</h3>
-            <div className="bg-brand-dark border border-brand-shade3/15 rounded-[12px] p-5 font-mono text-sm text-brand-shade2 space-y-1 overflow-x-auto">
+            <div className="bg-brand-dark border border-brand-shade3/15 rounded-[2px] p-5 font-mono text-sm text-brand-shade2 space-y-1 overflow-x-auto">
               <p>
                 <span className="text-brand-shade3">1.</span>{' '}
                 <span className="text-brand-shade2">Set database:</span>{' '}
@@ -221,7 +221,7 @@ export function DownloadPage() {
       {SHOW_EE_PRICING && (
         <div className="mt-16 pt-8 border-t border-brand-shade3/15">
           <h2 className="text-lg font-semibold text-brand-light mb-4">Upgrade to Enterprise Edition</h2>
-          <div className="bg-brand-dark border border-brand-shade3/15 rounded-[12px] p-5 font-mono text-sm text-brand-shade2 space-y-1 overflow-x-auto">
+          <div className="bg-brand-dark border border-brand-shade3/15 rounded-[2px] p-5 font-mono text-sm text-brand-shade2 space-y-1 overflow-x-auto">
             <p>
               <span className="text-brand-shade3">1.</span>{' '}
               Subscribe at{' '}

@@ -22,7 +22,7 @@ export function ExamplesPage() {
               key={example.slug}
               to="/examples/$slug"
               params={{ slug: example.slug }}
-              className="group rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-6 flex flex-col gap-4 hover:border-brand-accent/30 transition-colors"
+              className="group rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-6 flex flex-col gap-4 hover:border-brand-accent/30 transition-colors"
             >
               {/* Icon + title */}
               <div className="flex items-center gap-3">

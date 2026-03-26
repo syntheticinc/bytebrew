@@ -72,7 +72,7 @@ function ResetPasswordForm({ token }: { token: string }) {
       <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4">
         <div className="w-full max-w-sm text-center">
           <h1 className="text-2xl font-bold text-brand-light">Password Reset</h1>
-          <div className="mt-6 rounded-[10px] bg-emerald-500/10 border border-emerald-500/20 p-4 text-sm text-emerald-400">
+          <div className="mt-6 rounded-[2px] bg-emerald-500/10 border border-emerald-500/20 p-4 text-sm text-emerald-400">
             Password reset successfully
           </div>
           <p className="mt-6 text-sm text-brand-shade2">
@@ -95,7 +95,7 @@ function ResetPasswordForm({ token }: { token: string }) {
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">
           {error && (
-            <div className="rounded-[10px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
+            <div className="rounded-[2px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
               {error}
             </div>
           )}
@@ -110,7 +110,7 @@ function ResetPasswordForm({ token }: { token: string }) {
               required
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full rounded-[10px] border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
+              className="w-full rounded-[2px] border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
               placeholder="At least 8 characters"
             />
           </div>
@@ -125,7 +125,7 @@ function ResetPasswordForm({ token }: { token: string }) {
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full rounded-[10px] border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
+              className="w-full rounded-[2px] border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
               placeholder="Repeat your password"
             />
           </div>
@@ -133,7 +133,7 @@ function ResetPasswordForm({ token }: { token: string }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-[10px] bg-brand-accent py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full rounded-[2px] bg-brand-accent py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Resetting...' : 'Reset Password'}
           </button>

@@ -271,7 +271,7 @@ models:
           <img
             src="/screenshots/admin-agents.png"
             alt="Admin Dashboard — Agents list with Create Agent button"
-            className="mt-3 w-full max-w-4xl rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5"
+            className="mt-3 w-full max-w-4xl rounded-[2px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5"
             loading="lazy"
           />
         </Callout>
@@ -321,7 +321,7 @@ data: {"session_id":"a1b2c3d4","tokens":42}`}</CodeBlock>
         <img
           src="/screenshots/admin-health.png"
           alt="Admin Dashboard — Health page showing engine status and connected agents"
-          className="mt-3 w-full max-w-4xl rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5"
+          className="mt-3 w-full max-w-4xl rounded-[2px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5"
           loading="lazy"
         />
       </QuickStartStep>
@@ -3061,7 +3061,7 @@ function Callout({ type = 'info', title, children }: { type?: 'info' | 'warning'
   };
   const icons = { info: '\u2139\uFE0F', warning: '\u26A0\uFE0F', tip: '\uD83D\uDCA1' };
   return (
-    <div className={`my-4 rounded-[10px] border px-4 py-3 text-sm ${styles[type]}`}>
+    <div className={`my-4 rounded-[2px] border px-4 py-3 text-sm ${styles[type]}`}>
       {title && <div className="font-semibold mb-1">{icons[type]} {title}</div>}
       <div className="text-brand-shade2">{children}</div>
     </div>
@@ -3122,13 +3122,13 @@ function CodeBlock({ children }: { children: string }) {
   };
 
   return (
-    <div className="relative rounded-[10px] border border-brand-shade3/10 bg-brand-dark p-4 overflow-x-auto">
+    <div className="relative rounded-[2px] border border-brand-shade3/10 bg-brand-dark p-4 overflow-x-auto">
       <pre className="font-mono text-sm text-brand-shade2 leading-relaxed whitespace-pre">
         {children}
       </pre>
       <button
         onClick={handleCopy}
-        className="absolute top-3 right-3 rounded-md border border-brand-shade3/20 px-2.5 py-1 text-xs text-brand-shade3 hover:text-brand-light hover:border-brand-shade3/40 transition-colors"
+        className="absolute top-3 right-3 rounded-[2px] border border-brand-shade3/20 px-2.5 py-1 text-xs text-brand-shade3 hover:text-brand-light hover:border-brand-shade3/40 transition-colors"
       >
         {copied ? 'Copied!' : 'Copy'}
       </button>

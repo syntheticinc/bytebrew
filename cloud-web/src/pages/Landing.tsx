@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from '@tanstack/react-router';
 import { TerminalBlock } from '../components/TerminalBlock';
 import { EnginePricingTable } from '../components/EnginePricingTable';
+import { HeroDemo } from '../components/HeroDemo';
 
 export function LandingPage() {
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
@@ -39,7 +40,7 @@ export function LandingPage() {
           <img
             src={lightboxSrc}
             alt=""
-            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-[2px] shadow-2xl"
           />
         </div>
       )}
@@ -75,60 +76,35 @@ function CheckIcon({ className = 'h-5 w-5 text-emerald-400' }: { className?: str
 
 function HeroSection() {
   return (
-    <section className="py-24 px-4 text-center bg-brand-dark">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-5xl sm:text-6xl font-bold tracking-tight text-brand-light leading-tight">
-          Add an AI agent to{' '}
-          <span className="text-brand-accent">your product</span>
-        </h1>
-        <p className="mt-6 text-xl text-brand-shade2 leading-relaxed max-w-2xl mx-auto">
-          Ship autonomous AI agents in minutes, not months.
-          <br />
-          One Docker command. Any LLM. No vendor lock-in.
-        </p>
-        <div className="mt-10 flex items-center justify-center gap-4 flex-wrap">
-          <Link
-            to="/download"
-            className="rounded-[10px] bg-brand-accent px-7 py-3.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
-          >
-            Get Started Free &rarr;
-          </Link>
-          <Link
-            to="/pricing"
-            className="rounded-[10px] border border-brand-shade3/20 px-7 py-3.5 text-sm font-medium text-brand-shade2 hover:border-brand-shade3/40 hover:text-brand-light transition-colors"
-          >
-            View Pricing &rarr;
-          </Link>
-        </div>
-
-        {/* Terminal preview: YAML config + docker compose */}
-        <div className="mt-16 max-w-2xl mx-auto text-left">
-          <div className="relative rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5 overflow-x-auto">
-            <div className="flex gap-1.5 mb-4">
-              <span className="w-3 h-3 rounded-full bg-red-500/80" />
-              <span className="w-3 h-3 rounded-full bg-yellow-500/80" />
-              <span className="w-3 h-3 rounded-full bg-green-500/80" />
-            </div>
-            <pre className="font-mono text-sm text-brand-shade2 leading-relaxed">
-              <span className="text-brand-shade3"># agents.yaml</span>{'\n'}
-              <span className="text-brand-accent">agents</span>:{'\n'}
-              {'  '}<span className="text-brand-accent">sales-agent</span>:{'\n'}
-              {'    '}<span className="text-brand-shade3">model</span>: <span className="text-emerald-400">glm-5</span>{'\n'}
-              {'    '}<span className="text-brand-shade3">system</span>: <span className="text-emerald-400">"You are a sales consultant..."</span>{'\n'}
-              {'    '}<span className="text-brand-shade3">tools</span>:{'\n'}
-              {'      '}- <span className="text-emerald-400">product_search</span>{'\n'}
-              {'      '}- <span className="text-emerald-400">check_inventory</span>{'\n'}
-              {'      '}- <span className="text-emerald-400">create_order</span>{'\n'}
-              {'    '}<span className="text-brand-shade3">mcp_servers</span>:{'\n'}
-              {'      '}- <span className="text-emerald-400">crm-api</span>{'\n'}
-              {'\n'}
-              <span className="text-brand-shade3">$ docker compose up -d</span>{'\n'}
-              <span className="text-emerald-400">Creating bytebrew-engine  ... done</span>{'\n'}
-              <span className="text-emerald-400">Creating bytebrew-postgres ... done</span>{'\n'}
-              <span className="text-brand-shade3"># Agent running on http://localhost:8443</span>
-            </pre>
+    <section className="py-20 px-4 bg-brand-dark">
+      <div className="max-w-5xl mx-auto">
+        <div className="text-center mb-12">
+          <h1 className="text-5xl sm:text-6xl font-bold tracking-tight text-brand-light leading-tight">
+            Add an AI agent to{' '}
+            <span className="text-brand-accent">your product</span>
+          </h1>
+          <p className="mt-6 text-lg text-brand-shade2 leading-relaxed max-w-2xl mx-auto">
+            Multi-step reasoning. Tool calling. Sub-agents. Any LLM.
+            <br />
+            One Docker command. No vendor lock-in.
+          </p>
+          <div className="mt-8 flex items-center justify-center gap-4 flex-wrap">
+            <Link
+              to="/download"
+              className="rounded-[2px] bg-brand-accent px-7 py-3.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
+            >
+              Get Started Free &rarr;
+            </Link>
+            <Link
+              to="/pricing"
+              className="rounded-[2px] border border-brand-shade3/20 px-7 py-3.5 text-sm font-medium text-brand-shade2 hover:border-brand-shade3/40 hover:text-brand-light transition-colors"
+            >
+              View Pricing &rarr;
+            </Link>
           </div>
         </div>
+
+        <HeroDemo />
       </div>
     </section>
   );
@@ -185,9 +161,9 @@ function ProblemSection() {
           {PROBLEMS.map((p) => (
             <div
               key={p.title}
-              className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark p-6"
+              className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark p-6"
             >
-              <div className="w-12 h-12 rounded-[10px] bg-brand-accent/10 flex items-center justify-center mb-4">
+              <div className="w-12 h-12 rounded-[2px] bg-brand-accent/10 flex items-center justify-center mb-4">
                 {p.icon}
               </div>
               <h3 className="text-lg font-semibold text-brand-light">{p.title}</h3>
@@ -219,7 +195,7 @@ function SolutionSection() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
           {/* YAML config on the left */}
-          <div className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5 overflow-x-auto">
+          <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5 overflow-x-auto">
             <div className="flex gap-1.5 mb-4">
               <span className="w-3 h-3 rounded-full bg-red-500/80" />
               <span className="w-3 h-3 rounded-full bg-yellow-500/80" />
@@ -323,7 +299,7 @@ function HowItWorksSection({ onImageClick }: { onImageClick: (src: string) => vo
             </div>
             <div className="space-y-4">
               {/* Option A: Admin Dashboard */}
-              <div className="rounded-[12px] border border-brand-accent/30 bg-brand-accent/5 p-4">
+              <div className="rounded-[2px] border border-brand-accent/30 bg-brand-accent/5 p-4">
                 <p className="text-xs font-semibold text-brand-accent uppercase tracking-wider mb-2">Option A: Admin Dashboard</p>
                 <p className="text-sm text-brand-shade3 leading-relaxed mb-3">
                   Open the Admin Dashboard and create your agent visually. Set the model, system prompt, tools, and spawn rules — no YAML needed.
@@ -341,7 +317,7 @@ function HowItWorksSection({ onImageClick }: { onImageClick: (src: string) => vo
               </div>
 
               {/* Option B: YAML */}
-              <div className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark p-4">
+              <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark p-4">
                 <p className="text-xs font-semibold text-brand-shade3 uppercase tracking-wider mb-2">Option B: YAML (GitOps)</p>
                 <pre className="font-mono text-sm text-brand-shade2 leading-relaxed overflow-x-auto">
                   <span className="text-brand-shade3"># agents.yaml</span>{'\n'}
@@ -365,7 +341,7 @@ function HowItWorksSection({ onImageClick }: { onImageClick: (src: string) => vo
                 One command. Engine + PostgreSQL, ready in 30 seconds. Self-hosted on your infrastructure, your data never leaves your network.
               </p>
             </div>
-            <div className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark p-4 overflow-x-auto">
+            <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark p-4 overflow-x-auto">
               <pre className="font-mono text-sm text-brand-shade2 leading-relaxed">
                 <span className="text-brand-shade3">$</span> <span className="text-brand-light">docker compose up -d</span>{'\n'}
                 <span className="text-emerald-400">Creating bytebrew-postgres ... done</span>{'\n'}
@@ -386,7 +362,7 @@ function HowItWorksSection({ onImageClick }: { onImageClick: (src: string) => vo
                 REST API + SSE streaming. Send a message, get a real-time agent response. OpenAI-compatible format your team already knows.
               </p>
             </div>
-            <div className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark p-4 overflow-x-auto">
+            <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark p-4 overflow-x-auto">
               <pre className="font-mono text-sm text-brand-shade2 leading-relaxed">
                 <span className="text-brand-shade3">$</span> <span className="text-brand-light">curl -N localhost:8443/api/v1/agents/my-agent/chat \</span>{'\n'}
                 {'  '}<span className="text-brand-light">-d '{'"'}message":"Hello"{'"'}'</span>{'\n'}
@@ -461,7 +437,7 @@ function CapabilitiesSection() {
           {CAPABILITIES.map((c) => (
             <div
               key={c.title}
-              className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5"
+              className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5"
             >
               <h3 className="text-base font-semibold text-brand-light">{c.title}</h3>
               <p className="mt-2 text-sm text-brand-shade3 leading-relaxed">
@@ -549,7 +525,7 @@ function ProductShowcaseSection({ onImageClick }: { onImageClick: (src: string) 
             <p className="text-sm text-brand-shade3 leading-relaxed mb-4">
               Ready-to-use chat interface with multi-agent sidebar, tool calls, and rich markdown. Open source — fork and customize.
             </p>
-            <div className="rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5">
+            <div className="rounded-[2px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5">
               <img src="/screenshots/admin-agents.png" alt="ByteBrew Web Client — AI sales agent recommending laptops with web search tool calls and structured markdown response" className="w-full cursor-pointer hover:opacity-80 transition-opacity" onClick={() => onImageClick('/screenshots/admin-agents.png')} />
             </div>
           </div>
@@ -560,7 +536,7 @@ function ProductShowcaseSection({ onImageClick }: { onImageClick: (src: string) 
             <p className="text-sm text-brand-shade3 leading-relaxed mb-4">
               Configure agents, models, MCP servers, triggers, and API keys through a visual interface. No YAML required.
             </p>
-            <div className="rounded-[12px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5">
+            <div className="rounded-[2px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5">
               <img src="/screenshots/admin-agent-detail.png" alt="Admin Dashboard — Agent detail panel with model, system prompt, tools, and spawn rules configuration" className="w-full cursor-pointer hover:opacity-80 transition-opacity" onClick={() => onImageClick('/screenshots/admin-agent-detail.png')} />
             </div>
           </div>
@@ -568,19 +544,19 @@ function ProductShowcaseSection({ onImageClick }: { onImageClick: (src: string) 
 
         {/* Feature highlights grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark p-5">
+          <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark p-5">
             <h3 className="text-sm font-semibold text-brand-light mb-2">Multi-Agent Sidebar</h3>
             <p className="text-xs text-brand-shade3 leading-relaxed">
               Switch between agents instantly. Each agent has its own session history, tools, and context. See tool calls and results inline.
             </p>
           </div>
-          <div className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark p-5">
+          <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark p-5">
             <h3 className="text-sm font-semibold text-brand-light mb-2">Rich Responses</h3>
             <p className="text-xs text-brand-shade3 leading-relaxed">
               Full markdown rendering — bold, code blocks, tables, lists, links. Tool call results expandable inline. Real-time SSE streaming.
             </p>
           </div>
-          <div className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark p-5">
+          <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark p-5">
             <h3 className="text-sm font-semibold text-brand-light mb-2">Visual Agent Editor</h3>
             <p className="text-xs text-brand-shade3 leading-relaxed">
               Create and configure agents through the Admin Dashboard. Set models, prompts, tools, security zones, and spawn rules — all without touching YAML.
@@ -606,9 +582,9 @@ function UseCasesSection() {
           {USE_CASES.map((uc) => (
             <div
               key={uc.title}
-              className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark p-6"
+              className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark p-6"
             >
-              <div className="w-12 h-12 rounded-[10px] bg-brand-accent/10 flex items-center justify-center mb-4">
+              <div className="w-12 h-12 rounded-[2px] bg-brand-accent/10 flex items-center justify-center mb-4">
                 {uc.icon}
               </div>
               <h3 className="text-lg font-semibold text-brand-light">{uc.title}</h3>
@@ -649,7 +625,7 @@ function ComparisonSection() {
           How ByteBrew Engine compares to traditional approaches.
         </p>
 
-        <div className="overflow-x-auto rounded-[12px] border border-brand-shade3/15">
+        <div className="overflow-x-auto rounded-[2px] border border-brand-shade3/15">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-brand-shade3/15 bg-brand-dark-alt">
@@ -736,7 +712,7 @@ function MCPDocsSection() {
 
         {/* Code block */}
         {activeTab === 'other' ? (
-          <div className="rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-6 text-center">
+          <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-6 text-center">
             <p className="text-sm text-brand-shade3 mb-3">SSE Endpoint</p>
             <div className="flex items-center justify-center gap-3">
               <code className="text-lg font-mono text-brand-accent">https://mcp.bytebrew.ai/sse</code>
@@ -822,7 +798,7 @@ function PricingSection() {
 function FreeForeverBanner() {
   return (
     <section className="py-16 px-4 border-t border-brand-shade3/15 bg-brand-dark-alt">
-      <div className="max-w-3xl mx-auto rounded-[12px] border border-brand-accent/30 bg-brand-accent/5 p-10 text-center">
+      <div className="max-w-3xl mx-auto rounded-[2px] border border-brand-accent/30 bg-brand-accent/5 p-10 text-center">
         <h2 className="text-2xl font-bold text-brand-light">
           ByteBrew Community Edition is free forever.
         </h2>
@@ -855,7 +831,7 @@ function FinalCTASection() {
         </p>
         <Link
           to="/download"
-          className="mt-8 inline-block rounded-[10px] bg-brand-accent px-8 py-3.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
+          className="mt-8 inline-block rounded-[2px] bg-brand-accent px-8 py-3.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
         >
           Get Started Free
         </Link>

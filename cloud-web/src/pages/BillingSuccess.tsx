@@ -9,7 +9,7 @@ export function BillingSuccessPage() {
         Your subscription is now active. You can start using ByteBrew Engine right away.
       </p>
 
-      <div className="mt-8 rounded-[12px] border border-brand-shade3/15 bg-brand-dark-alt p-5 text-left">
+      <div className="mt-8 rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5 text-left">
         <h2 className="text-sm font-medium text-brand-shade2 mb-3">Next steps</h2>
         <ol className="space-y-3 text-sm text-brand-shade2">
           <li>
@@ -34,13 +34,13 @@ export function BillingSuccessPage() {
       <div className="mt-8 flex gap-4 justify-center">
         <Link
           to="/dashboard"
-          className="rounded-[10px] bg-brand-accent px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
+          className="rounded-[2px] bg-brand-accent px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
         >
           Go to Dashboard
         </Link>
         <Link
           to="/billing"
-          className="rounded-[10px] border border-brand-shade3/20 px-6 py-2.5 text-sm font-medium text-brand-shade2 hover:border-brand-shade3/40 hover:text-brand-light transition-colors"
+          className="rounded-[2px] border border-brand-shade3/20 px-6 py-2.5 text-sm font-medium text-brand-shade2 hover:border-brand-shade3/40 hover:text-brand-light transition-colors"
         >
           View Billing
         </Link>
