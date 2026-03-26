@@ -10,8 +10,8 @@ services:
       - "${ENGINE_PORT:-8443}:8443"
     environment:
       - DATABASE_URL=postgresql://bytebrew:${POSTGRES_PASSWORD:-bytebrew}@db:5432/bytebrew?sslmode=disable
-      - BYTEBREW_ADMIN_USER=${ADMIN_USER:-admin}
-      - BYTEBREW_ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
       - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-}
@@ -36,7 +36,7 @@ services:
       start_period: 15s
 
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: bytebrew
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bytebrew}
