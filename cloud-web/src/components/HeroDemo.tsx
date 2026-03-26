@@ -224,7 +224,7 @@ function StatusDot({ done }: { done?: boolean }) {
 function ToolCallBlock({ tool, content, done }: { tool: string; content: string; done?: boolean }) {
   return (
     <div
-      className="rounded-[2px] border-l-2 px-3 py-1.5 text-xs font-mono flex items-start gap-0"
+      className="rounded-[2px] border-l-2 px-3 py-1.5 text-xs font-mono flex items-center gap-0"
       style={{ borderColor: done ? BORDER_DONE : BORDER_TOOL, backgroundColor: SURFACE }}
     >
       <span className="flex items-center" style={{ color: MUTED }}>
