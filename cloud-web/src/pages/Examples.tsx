@@ -6,10 +6,10 @@ export function ExamplesPage() {
     <div>
       {/* Header */}
       <section className="py-16 px-4 text-center">
-        <h1 className="text-4xl font-bold tracking-tight text-brand-light">
+        <h1 className="text-4xl font-bold tracking-tight text-text-primary">
           Examples
         </h1>
-        <p className="mt-4 text-brand-shade2 max-w-xl mx-auto">
+        <p className="mt-4 text-text-secondary max-w-xl mx-auto">
           See ByteBrew Engine in action. Each demo is a fully working agent you can try live and run yourself.
         </p>
       </section>
@@ -22,7 +22,7 @@ export function ExamplesPage() {
               key={example.slug}
               to="/examples/$slug"
               params={{ slug: example.slug }}
-              className="group rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-6 flex flex-col gap-4 hover:border-brand-accent/30 transition-colors"
+              className="group rounded-[2px] border border-border bg-surface-alt p-6 flex flex-col gap-4 hover:border-brand-accent/30 transition-colors"
             >
               {/* Icon + title */}
               <div className="flex items-center gap-3">
@@ -30,10 +30,10 @@ export function ExamplesPage() {
                   {example.icon}
                 </span>
                 <div>
-                  <h2 className="text-lg font-bold text-brand-light group-hover:text-brand-accent transition-colors">
+                  <h2 className="text-lg font-bold text-text-primary group-hover:text-brand-accent transition-colors">
                     {example.title}
                   </h2>
-                  <p className="text-sm text-brand-shade2 mt-0.5">{example.subtitle}</p>
+                  <p className="text-sm text-text-secondary mt-0.5">{example.subtitle}</p>
                 </div>
               </div>
 
@@ -42,7 +42,7 @@ export function ExamplesPage() {
                 {example.features.map((feature) => (
                   <span
                     key={feature}
-                    className="rounded-full border border-brand-shade3/20 px-2.5 py-0.5 text-[11px] text-brand-shade2"
+                    className="rounded-full border border-border px-2.5 py-0.5 text-[11px] text-text-secondary"
                   >
                     {feature}
                   </span>

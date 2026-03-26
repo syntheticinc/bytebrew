@@ -25,18 +25,18 @@ function BillingContent() {
 function CommunityBilling() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-20 text-center">
-      <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-10">
-        <h1 className="text-2xl font-bold text-brand-light">ByteBrew Engine</h1>
+      <div className="rounded-[2px] border border-border bg-surface-alt p-10">
+        <h1 className="text-2xl font-bold text-text-primary">ByteBrew Engine</h1>
         <p className="mt-2 text-lg text-emerald-400 font-medium">
           Community Edition — Free Forever
         </p>
 
-        <p className="mt-6 text-sm text-brand-shade2 leading-relaxed">
+        <p className="mt-6 text-sm text-text-secondary leading-relaxed">
           ByteBrew Engine Community Edition includes the full AI agent runtime
           with no limits on agents, sessions, tools, or time.
         </p>
 
-        <p className="mt-4 text-sm text-brand-shade2 leading-relaxed">
+        <p className="mt-4 text-sm text-text-secondary leading-relaxed">
           Enterprise Edition with AI Observability, Cost Analytics, and
           Compliance Tools is coming soon.
         </p>
@@ -50,7 +50,7 @@ function CommunityBilling() {
           </a>
           <Link
             to="/dashboard"
-            className="text-sm text-brand-shade2 hover:text-brand-shade1 transition-colors"
+            className="text-sm text-text-secondary hover:text-text-secondary transition-colors"
           >
             &larr; Back to Dashboard
           </Link>
@@ -86,7 +86,7 @@ function EnterpriseBilling() {
   if (usageQuery.isLoading) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-20 text-center">
-        <p className="text-brand-shade2">Loading billing information...</p>
+        <p className="text-text-secondary">Loading billing information...</p>
       </div>
     );
   }
@@ -98,7 +98,7 @@ function EnterpriseBilling() {
           <p className="text-sm text-red-400">Failed to load billing information. Please try again later.</p>
           <button
             onClick={() => usageQuery.refetch()}
-            className="mt-4 rounded-[2px] border border-brand-shade3/20 px-4 py-2 text-sm font-medium text-brand-shade2 hover:border-brand-shade3/40 hover:text-brand-light transition-colors"
+            className="mt-4 rounded-[2px] border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:border-border-hover hover:text-text-primary transition-colors"
           >
             Retry
           </button>
@@ -119,19 +119,19 @@ function EnterpriseBilling() {
 function FreeTierBilling() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-20">
-      <h1 className="text-2xl font-bold text-brand-light">Billing</h1>
+      <h1 className="text-2xl font-bold text-text-primary">Billing</h1>
 
-      <div className="mt-8 rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-8 text-center">
+      <div className="mt-8 rounded-[2px] border border-border bg-surface-alt p-8 text-center">
         <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-400/10 mb-4">
           <svg className="h-6 w-6 text-emerald-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
 
-        <h2 className="text-lg font-semibold text-brand-light">
+        <h2 className="text-lg font-semibold text-text-primary">
           You're on the Free Trial
         </h2>
-        <p className="mt-2 text-sm text-brand-shade2 leading-relaxed">
+        <p className="mt-2 text-sm text-text-secondary leading-relaxed">
           You have access to ByteBrew Engine with a trial license.
           Upgrade to Enterprise Edition for full observability and compliance features.
         </p>
@@ -170,7 +170,7 @@ function SubscriptionBilling({ usage, error, loading, onManage }: SubscriptionBi
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-20">
-      <h1 className="text-2xl font-bold text-brand-light">Billing</h1>
+      <h1 className="text-2xl font-bold text-text-primary">Billing</h1>
 
       {error && (
         <div className="mt-4 rounded-[2px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
@@ -179,11 +179,11 @@ function SubscriptionBilling({ usage, error, loading, onManage }: SubscriptionBi
       )}
 
       {/* Current plan card */}
-      <div className="mt-8 rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-6">
+      <div className="mt-8 rounded-[2px] border border-border bg-surface-alt p-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-brand-shade3">Current Plan</p>
-            <h2 className="mt-1 text-xl font-semibold text-brand-light capitalize">
+            <p className="text-sm text-text-tertiary">Current Plan</p>
+            <h2 className="mt-1 text-xl font-semibold text-text-primary capitalize">
               {usage.tier}
             </h2>
           </div>
@@ -193,7 +193,7 @@ function SubscriptionBilling({ usage, error, loading, onManage }: SubscriptionBi
         </div>
 
         {usage.current_period_end && (
-          <p className="mt-3 text-sm text-brand-shade2">
+          <p className="mt-3 text-sm text-text-secondary">
             Next billing date: {new Date(usage.current_period_end).toLocaleDateString('en-US', {
               year: 'numeric',
               month: 'long',
@@ -210,7 +210,7 @@ function SubscriptionBilling({ usage, error, loading, onManage }: SubscriptionBi
           >
             {loading ? 'Redirecting...' : 'Manage Subscription'}
           </button>
-          <p className="mt-2 text-xs text-brand-shade3">
+          <p className="mt-2 text-xs text-text-tertiary">
             Update payment method, change plan, or cancel via Stripe.
           </p>
         </div>
@@ -218,20 +218,20 @@ function SubscriptionBilling({ usage, error, loading, onManage }: SubscriptionBi
 
       {/* Usage stats */}
       {usage.proxy_steps_limit > 0 && (
-        <div className="mt-6 rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-6">
-          <h3 className="text-sm font-medium text-brand-shade2">Proxy Steps Usage</h3>
+        <div className="mt-6 rounded-[2px] border border-border bg-surface-alt p-6">
+          <h3 className="text-sm font-medium text-text-secondary">Proxy Steps Usage</h3>
 
           <div className="mt-4">
             <div className="flex items-baseline justify-between">
-              <span className="text-2xl font-bold text-brand-light">
+              <span className="text-2xl font-bold text-text-primary">
                 {usage.proxy_steps_used.toLocaleString()}
               </span>
-              <span className="text-sm text-brand-shade3">
+              <span className="text-sm text-text-tertiary">
                 of {usage.proxy_steps_limit.toLocaleString()}
               </span>
             </div>
 
-            <div className="mt-3 h-2 rounded-full bg-brand-shade3/15 overflow-hidden">
+            <div className="mt-3 h-2 rounded-full bg-border overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all ${
                   usagePercent >= 90 ? 'bg-red-400' : usagePercent >= 70 ? 'bg-yellow-400' : 'bg-emerald-400'
@@ -240,7 +240,7 @@ function SubscriptionBilling({ usage, error, loading, onManage }: SubscriptionBi
               />
             </div>
 
-            <p className="mt-2 text-xs text-brand-shade3">
+            <p className="mt-2 text-xs text-text-tertiary">
               {usage.proxy_steps_remaining.toLocaleString()} steps remaining ({usagePercent}% used)
             </p>
           </div>
@@ -248,18 +248,18 @@ function SubscriptionBilling({ usage, error, loading, onManage }: SubscriptionBi
       )}
 
       {/* BYOK status */}
-      <div className="mt-6 rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-6">
+      <div className="mt-6 rounded-[2px] border border-border bg-surface-alt p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-medium text-brand-shade2">Bring Your Own Keys (BYOK)</h3>
-            <p className="mt-1 text-xs text-brand-shade3">
+            <h3 className="text-sm font-medium text-text-secondary">Bring Your Own Keys (BYOK)</h3>
+            <p className="mt-1 text-xs text-text-tertiary">
               Use your own LLM API keys for unlimited usage.
             </p>
           </div>
           <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${
             usage.byok_enabled
               ? 'bg-emerald-400/10 text-emerald-400 ring-emerald-400/20'
-              : 'bg-brand-shade3/10 text-brand-shade3 ring-brand-shade3/20'
+              : 'bg-border text-text-tertiary ring-border'
           }`}>
             {usage.byok_enabled ? 'Enabled' : 'Disabled'}
           </span>

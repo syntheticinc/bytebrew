@@ -13,11 +13,11 @@ export function ResetPasswordPage() {
     return (
       <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4">
         <div className="w-full max-w-sm text-center">
-          <h1 className="text-2xl font-bold text-brand-light">Invalid Reset Link</h1>
-          <p className="mt-2 text-sm text-brand-shade2">
+          <h1 className="text-2xl font-bold text-text-primary">Invalid Reset Link</h1>
+          <p className="mt-2 text-sm text-text-secondary">
             This password reset link is invalid or has expired.
           </p>
-          <p className="mt-6 text-sm text-brand-shade2">
+          <p className="mt-6 text-sm text-text-secondary">
             <Link to="/forgot-password" className="text-brand-accent hover:text-brand-accent-hover">
               Request a new reset link
             </Link>
@@ -71,11 +71,11 @@ function ResetPasswordForm({ token }: { token: string }) {
     return (
       <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4">
         <div className="w-full max-w-sm text-center">
-          <h1 className="text-2xl font-bold text-brand-light">Password Reset</h1>
+          <h1 className="text-2xl font-bold text-text-primary">Password Reset</h1>
           <div className="mt-6 rounded-[2px] bg-emerald-500/10 border border-emerald-500/20 p-4 text-sm text-emerald-400">
             Password reset successfully
           </div>
-          <p className="mt-6 text-sm text-brand-shade2">
+          <p className="mt-6 text-sm text-text-secondary">
             <Link to="/login" className="text-brand-accent hover:text-brand-accent-hover">
               Back to Login
             </Link>
@@ -88,8 +88,8 @@ function ResetPasswordForm({ token }: { token: string }) {
   return (
     <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-brand-light text-center">Set New Password</h1>
-        <p className="mt-2 text-sm text-brand-shade2 text-center">
+        <h1 className="text-2xl font-bold text-text-primary text-center">Set New Password</h1>
+        <p className="mt-2 text-sm text-text-secondary text-center">
           Enter your new password below.
         </p>
 
@@ -101,7 +101,7 @@ function ResetPasswordForm({ token }: { token: string }) {
           )}
 
           <div>
-            <label htmlFor="newPassword" className="block text-sm font-medium text-brand-shade2 mb-1">
+            <label htmlFor="newPassword" className="block text-sm font-medium text-text-secondary mb-1">
               New Password
             </label>
             <input
@@ -110,13 +110,13 @@ function ResetPasswordForm({ token }: { token: string }) {
               required
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full rounded-[2px] border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
+              className="w-full rounded-[2px] border border-border-hover bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
               placeholder="At least 8 characters"
             />
           </div>
 
           <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-brand-shade2 mb-1">
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-text-secondary mb-1">
               Confirm Password
             </label>
             <input
@@ -125,7 +125,7 @@ function ResetPasswordForm({ token }: { token: string }) {
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full rounded-[2px] border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
+              className="w-full rounded-[2px] border border-border-hover bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
               placeholder="Repeat your password"
             />
           </div>
@@ -139,7 +139,7 @@ function ResetPasswordForm({ token }: { token: string }) {
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-brand-shade2">
+        <p className="mt-6 text-center text-sm text-text-secondary">
           <Link to="/login" className="text-brand-accent hover:text-brand-accent-hover">
             Back to Login
           </Link>

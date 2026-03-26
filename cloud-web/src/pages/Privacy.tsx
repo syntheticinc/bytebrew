@@ -1,12 +1,12 @@
 export function PrivacyPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-brand-light">Privacy Policy</h1>
-      <p className="mt-2 text-sm text-brand-shade2">Last modified: March 2026</p>
+      <h1 className="text-2xl font-bold text-text-primary">Privacy Policy</h1>
+      <p className="mt-2 text-sm text-text-secondary">Last modified: March 2026</p>
 
-      <div className="mt-8 space-y-8 text-sm text-brand-shade2 leading-relaxed">
+      <div className="mt-8 space-y-8 text-sm text-text-secondary leading-relaxed">
         <div>
-          <h2 className="text-lg font-semibold text-brand-light">1. Introduction</h2>
+          <h2 className="text-lg font-semibold text-text-primary">1. Introduction</h2>
           <p className="mt-2">
             ByteBrew (&quot;we&quot;, &quot;us&quot;, &quot;our&quot;) operates bytebrew.ai. This
             policy explains how we collect, use, and protect your personal information.
@@ -14,8 +14,8 @@ export function PrivacyPage() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold text-brand-light">2. Information We Collect</h2>
-          <ul className="mt-2 list-disc list-inside space-y-1 text-brand-shade3">
+          <h2 className="text-lg font-semibold text-text-primary">2. Information We Collect</h2>
+          <ul className="mt-2 list-disc list-inside space-y-1 text-text-tertiary">
             <li>Account data: email address, hashed password</li>
             <li>Payment data: processed by Stripe (we don&apos;t store card numbers)</li>
             <li>Usage metadata: login timestamps, feature usage counts</li>
@@ -24,8 +24,8 @@ export function PrivacyPage() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold text-brand-light">3. How We Use Your Data</h2>
-          <ul className="mt-2 list-disc list-inside space-y-1 text-brand-shade3">
+          <h2 className="text-lg font-semibold text-text-primary">3. How We Use Your Data</h2>
+          <ul className="mt-2 list-disc list-inside space-y-1 text-text-tertiary">
             <li>Provide and maintain our services</li>
             <li>Process payments and manage subscriptions</li>
             <li>Send transactional emails (password reset, billing)</li>
@@ -35,20 +35,20 @@ export function PrivacyPage() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold text-brand-light">4. Data Sharing</h2>
+          <h2 className="text-lg font-semibold text-text-primary">4. Data Sharing</h2>
           <p className="mt-2">We share data only with:</p>
-          <ul className="mt-2 list-disc list-inside space-y-1 text-brand-shade3">
+          <ul className="mt-2 list-disc list-inside space-y-1 text-text-tertiary">
             <li>Stripe (payment processing)</li>
             <li>Resend (transactional email delivery)</li>
           </ul>
-          <p className="mt-2 font-medium text-brand-light">
+          <p className="mt-2 font-medium text-text-primary">
             We never sell your data to third parties.
           </p>
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold text-brand-light">5. Data Retention</h2>
-          <ul className="mt-2 list-disc list-inside space-y-1 text-brand-shade3">
+          <h2 className="text-lg font-semibold text-text-primary">5. Data Retention</h2>
+          <ul className="mt-2 list-disc list-inside space-y-1 text-text-tertiary">
             <li>Active accounts: data stored while account exists</li>
             <li>Deleted accounts: personal data purged within 30 days</li>
             <li>Billing records: retained as required by law</li>
@@ -57,9 +57,9 @@ export function PrivacyPage() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold text-brand-light">6. Your Rights</h2>
+          <h2 className="text-lg font-semibold text-text-primary">6. Your Rights</h2>
           <p className="mt-2">You have the right to:</p>
-          <ul className="mt-2 list-disc list-inside space-y-1 text-brand-shade3">
+          <ul className="mt-2 list-disc list-inside space-y-1 text-text-tertiary">
             <li>Access your personal data</li>
             <li>Request deletion of your account and data</li>
             <li>Export your data</li>
@@ -78,8 +78,8 @@ export function PrivacyPage() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold text-brand-light">7. Cookies & Local Storage</h2>
-          <ul className="mt-2 list-disc list-inside space-y-1 text-brand-shade3">
+          <h2 className="text-lg font-semibold text-text-primary">7. Cookies & Local Storage</h2>
+          <ul className="mt-2 list-disc list-inside space-y-1 text-text-tertiary">
             <li>We use localStorage for authentication tokens</li>
             <li>No third-party tracking cookies</li>
             <li>No advertising cookies</li>
@@ -88,8 +88,8 @@ export function PrivacyPage() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold text-brand-light">8. Security</h2>
-          <ul className="mt-2 list-disc list-inside space-y-1 text-brand-shade3">
+          <h2 className="text-lg font-semibold text-text-primary">8. Security</h2>
+          <ul className="mt-2 list-disc list-inside space-y-1 text-text-tertiary">
             <li>All data transmitted over HTTPS/TLS</li>
             <li>Passwords hashed with bcrypt</li>
             <li>API tokens hashed with SHA-256</li>
@@ -98,7 +98,7 @@ export function PrivacyPage() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold text-brand-light">9. Changes to This Policy</h2>
+          <h2 className="text-lg font-semibold text-text-primary">9. Changes to This Policy</h2>
           <p className="mt-2">
             We may update this policy from time to time. Changes will be posted on this page with
             an updated &quot;Last modified&quot; date. Continued use after changes constitutes
@@ -107,7 +107,7 @@ export function PrivacyPage() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold text-brand-light">10. Contact</h2>
+          <h2 className="text-lg font-semibold text-text-primary">10. Contact</h2>
           <p className="mt-2">
             For privacy-related questions:{' '}
             <a

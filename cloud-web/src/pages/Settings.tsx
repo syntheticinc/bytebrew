@@ -21,15 +21,15 @@ function SettingsContent() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-brand-light">Settings</h1>
+      <h1 className="text-2xl font-bold text-text-primary">Settings</h1>
 
       <div className="mt-8 space-y-6">
         {/* Profile */}
-        <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
-          <h2 className="text-base font-semibold text-brand-light">Profile</h2>
+        <div className="rounded-[2px] border border-border bg-surface-alt p-5">
+          <h2 className="text-base font-semibold text-text-primary">Profile</h2>
           <div className="mt-4">
-            <label className="block text-sm font-medium text-brand-shade2">Email</label>
-            <p className="mt-1 text-sm text-brand-shade1">{email}</p>
+            <label className="block text-sm font-medium text-text-secondary">Email</label>
+            <p className="mt-1 text-sm text-text-secondary">{email}</p>
           </div>
         </div>
 
@@ -86,8 +86,8 @@ function ChangePasswordSection() {
   };
 
   return (
-    <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
-      <h2 className="text-base font-semibold text-brand-light">Change Password</h2>
+    <div className="rounded-[2px] border border-border bg-surface-alt p-5">
+      <h2 className="text-base font-semibold text-text-primary">Change Password</h2>
 
       <form onSubmit={handleSubmit} className="mt-4 space-y-4">
         {error && (
@@ -103,7 +103,7 @@ function ChangePasswordSection() {
         )}
 
         <div>
-          <label htmlFor="currentPassword" className="block text-sm font-medium text-brand-shade2 mb-1">
+          <label htmlFor="currentPassword" className="block text-sm font-medium text-text-secondary mb-1">
             Current Password
           </label>
           <input
@@ -112,13 +112,13 @@ function ChangePasswordSection() {
             required
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
-            className="w-full rounded-[2px] border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
+            className="w-full rounded-[2px] border border-border-hover bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
             placeholder="Enter your current password"
           />
         </div>
 
         <div>
-          <label htmlFor="newPassword" className="block text-sm font-medium text-brand-shade2 mb-1">
+          <label htmlFor="newPassword" className="block text-sm font-medium text-text-secondary mb-1">
             New Password
           </label>
           <input
@@ -127,13 +127,13 @@ function ChangePasswordSection() {
             required
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            className="w-full rounded-[2px] border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
+            className="w-full rounded-[2px] border border-border-hover bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
             placeholder="At least 8 characters"
           />
         </div>
 
         <div>
-          <label htmlFor="confirmNewPassword" className="block text-sm font-medium text-brand-shade2 mb-1">
+          <label htmlFor="confirmNewPassword" className="block text-sm font-medium text-text-secondary mb-1">
             Confirm New Password
           </label>
           <input
@@ -142,7 +142,7 @@ function ChangePasswordSection() {
             required
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            className="w-full rounded-[2px] border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
+            className="w-full rounded-[2px] border border-border-hover bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
             placeholder="Repeat your new password"
           />
         </div>
@@ -199,8 +199,8 @@ function DangerZoneSection({ onDeleted }: { onDeleted: () => void }) {
 
   return (
     <div className="rounded-[2px] border border-red-500/20 bg-red-500/5 p-5">
-      <h2 className="text-base font-semibold text-brand-light">Danger Zone</h2>
-      <p className="mt-2 text-sm text-brand-shade2">
+      <h2 className="text-base font-semibold text-text-primary">Danger Zone</h2>
+      <p className="mt-2 text-sm text-text-secondary">
         Permanently delete your account and all associated data. This action cannot be undone.
       </p>
 
@@ -232,7 +232,7 @@ function DangerZoneSection({ onDeleted }: { onDeleted: () => void }) {
           )}
 
           <div>
-            <label htmlFor="deletePassword" className="block text-sm font-medium text-brand-shade2 mb-1">
+            <label htmlFor="deletePassword" className="block text-sm font-medium text-text-secondary mb-1">
               Enter your password to confirm
             </label>
             <input
@@ -241,7 +241,7 @@ function DangerZoneSection({ onDeleted }: { onDeleted: () => void }) {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-[2px] border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
+              className="w-full rounded-[2px] border border-border-hover bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
               placeholder="Enter your password"
             />
           </div>
@@ -250,7 +250,7 @@ function DangerZoneSection({ onDeleted }: { onDeleted: () => void }) {
             <button
               type="button"
               onClick={handleCancel}
-              className="rounded-[2px] border border-brand-shade3/20 px-4 py-2.5 text-sm font-medium text-brand-shade2 hover:bg-brand-dark-alt transition-colors"
+              className="rounded-[2px] border border-border px-4 py-2.5 text-sm font-medium text-text-secondary hover:bg-surface-alt transition-colors"
             >
               Cancel
             </button>

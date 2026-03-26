@@ -19,8 +19,8 @@ export function TeamPage() {
   if (!SHOW_CODE_SITE) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-20 text-center">
-        <h1 className="text-2xl font-bold text-brand-light">Feature Not Available</h1>
-        <p className="mt-4 text-brand-shade2">
+        <h1 className="text-2xl font-bold text-text-primary">Feature Not Available</h1>
+        <p className="mt-4 text-text-secondary">
           Team management is not available in the current version.
         </p>
         <Link to="/dashboard" className="mt-6 inline-block text-brand-accent hover:text-brand-accent-hover">
@@ -46,8 +46,8 @@ function TeamContent() {
   if (usageQuery.isLoading) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-10">
-        <h1 className="text-2xl font-bold text-brand-light">Team</h1>
-        <div className="mt-8 text-brand-shade2">Loading...</div>
+        <h1 className="text-2xl font-bold text-text-primary">Team</h1>
+        <div className="mt-8 text-text-secondary">Loading...</div>
       </div>
     );
   }
@@ -62,12 +62,12 @@ function TeamContent() {
 function UpgradePrompt() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-brand-light">Team</h1>
-      <div className="mt-8 rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5 text-center">
-        <h2 className="text-lg font-semibold text-brand-light">
+      <h1 className="text-2xl font-bold text-text-primary">Team</h1>
+      <div className="mt-8 rounded-[2px] border border-border bg-surface-alt p-5 text-center">
+        <h2 className="text-lg font-semibold text-text-primary">
           Upgrade to Teams
         </h2>
-        <p className="mt-2 text-sm text-brand-shade2">
+        <p className="mt-2 text-sm text-text-secondary">
           Team management is available on the Teams plan. Upgrade to invite
           members and manage seats.
         </p>
@@ -97,8 +97,8 @@ function TeamManager() {
   if (teamQuery.isLoading) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-10">
-        <h1 className="text-2xl font-bold text-brand-light">Team</h1>
-        <div className="mt-8 text-brand-shade2">Loading team...</div>
+        <h1 className="text-2xl font-bold text-text-primary">Team</h1>
+        <div className="mt-8 text-text-secondary">Loading team...</div>
       </div>
     );
   }
@@ -113,7 +113,7 @@ function TeamManager() {
   if (teamQuery.error) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-10">
-        <h1 className="text-2xl font-bold text-brand-light">Team</h1>
+        <h1 className="text-2xl font-bold text-text-primary">Team</h1>
         <div className="mt-4 rounded-[2px] bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
           Failed to load team data
         </div>
@@ -157,13 +157,13 @@ function CreateTeamView() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-brand-light">Team</h1>
+      <h1 className="text-2xl font-bold text-text-primary">Team</h1>
 
-      <div className="mt-8 rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
-        <h2 className="text-base font-semibold text-brand-light">
+      <div className="mt-8 rounded-[2px] border border-border bg-surface-alt p-5">
+        <h2 className="text-base font-semibold text-text-primary">
           Create Your Team
         </h2>
-        <p className="mt-2 text-sm text-brand-shade2">
+        <p className="mt-2 text-sm text-text-secondary">
           Set up your team to invite members and manage seats.
         </p>
 
@@ -179,7 +179,7 @@ function CreateTeamView() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Team name"
-            className="flex-1 rounded-[2px] border border-brand-shade3/30 bg-brand-dark px-4 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none"
+            className="flex-1 rounded-[2px] border border-border-hover bg-surface px-4 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-brand-accent focus:outline-none"
           />
           <button
             type="submit"
@@ -205,22 +205,22 @@ function TeamView({
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-brand-light">{team.team_name}</h1>
-        <span className="text-sm text-brand-shade2">
+        <h1 className="text-2xl font-bold text-text-primary">{team.team_name}</h1>
+        <span className="text-sm text-text-secondary">
           {usedSeats} active {usedSeats === 1 ? 'seat' : 'seats'} · $30/seat/month
         </span>
       </div>
 
       {/* Members */}
-      <div className="mt-8 rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
-        <h2 className="text-base font-semibold text-brand-light">Members</h2>
+      <div className="mt-8 rounded-[2px] border border-border bg-surface-alt p-5">
+        <h2 className="text-base font-semibold text-text-primary">Members</h2>
         <MembersTable members={team.members} />
       </div>
 
       {/* Pending Invites */}
       {pendingInvites.length > 0 && (
-        <div className="mt-6 rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
-          <h2 className="text-base font-semibold text-brand-light">
+        <div className="mt-6 rounded-[2px] border border-border bg-surface-alt p-5">
+          <h2 className="text-base font-semibold text-text-primary">
             Pending Invites
           </h2>
           <PendingInvitesList invites={pendingInvites} />
@@ -228,8 +228,8 @@ function TeamView({
       )}
 
       {/* Invite Form */}
-      <div className="mt-6 rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
-        <h2 className="text-base font-semibold text-brand-light">Invite Member</h2>
+      <div className="mt-6 rounded-[2px] border border-border bg-surface-alt p-5">
+        <h2 className="text-base font-semibold text-text-primary">Invite Member</h2>
         <InviteForm />
       </div>
     </div>
@@ -268,12 +268,12 @@ function MembersTable({ members }: { members: TeamMember[] }) {
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-brand-shade3/15">
-              <th className="pb-3 font-medium text-brand-shade2">Email</th>
-              <th className="pb-3 font-medium text-brand-shade2">Role</th>
-              <th className="pb-3 font-medium text-brand-shade2">Joined</th>
+            <tr className="border-b border-border">
+              <th className="pb-3 font-medium text-text-secondary">Email</th>
+              <th className="pb-3 font-medium text-text-secondary">Role</th>
+              <th className="pb-3 font-medium text-text-secondary">Joined</th>
               {isAdmin && (
-                <th className="pb-3 font-medium text-brand-shade2 text-right">
+                <th className="pb-3 font-medium text-text-secondary text-right">
                   Actions
                 </th>
               )}
@@ -288,12 +288,12 @@ function MembersTable({ members }: { members: TeamMember[] }) {
               return (
                 <tr
                   key={member.id}
-                  className="border-b border-brand-shade3/10 last:border-0"
+                  className="border-b border-border last:border-0"
                 >
-                  <td className="py-3 text-brand-shade1">
+                  <td className="py-3 text-text-secondary">
                     {member.email}
                     {isSelf && (
-                      <span className="ml-2 text-xs text-brand-shade3">
+                      <span className="ml-2 text-xs text-text-tertiary">
                         (you)
                       </span>
                     )}
@@ -303,13 +303,13 @@ function MembersTable({ members }: { members: TeamMember[] }) {
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                         member.role === 'admin'
                           ? 'bg-purple-600/20 text-purple-400'
-                          : 'bg-brand-shade3/15 text-brand-shade2'
+                          : 'bg-border text-text-secondary'
                       }`}
                     >
                       {member.role}
                     </span>
                   </td>
-                  <td className="py-3 text-brand-shade2">
+                  <td className="py-3 text-text-secondary">
                     {new Date(member.joined_at).toLocaleDateString()}
                   </td>
                   {isAdmin && (
@@ -341,11 +341,11 @@ function PendingInvitesList({ invites }: { invites: TeamInvite[] }) {
       {invites.map((invite) => (
         <div
           key={invite.id}
-          className="flex items-center justify-between rounded-[2px] bg-brand-dark border border-brand-shade3/20 p-3"
+          className="flex items-center justify-between rounded-[2px] bg-surface border border-border p-3"
         >
           <div>
-            <p className="text-sm text-brand-shade1">{invite.email}</p>
-            <p className="text-xs text-brand-shade3">
+            <p className="text-sm text-text-secondary">{invite.email}</p>
+            <p className="text-xs text-text-tertiary">
               Expires{' '}
               {new Date(invite.expires_at).toLocaleDateString()}
             </p>
@@ -412,7 +412,7 @@ function InviteForm() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="colleague@example.com"
-          className="flex-1 rounded-[2px] border border-brand-shade3/30 bg-brand-dark px-4 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none"
+          className="flex-1 rounded-[2px] border border-border-hover bg-surface px-4 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-brand-accent focus:outline-none"
         />
         <button
           type="submit"
@@ -422,7 +422,7 @@ function InviteForm() {
           {mutation.isPending ? 'Sending...' : 'Send Invite'}
         </button>
       </form>
-      <p className="mt-2 text-xs text-brand-shade3">
+      <p className="mt-2 text-xs text-text-tertiary">
         Adding a member will add $30/month to your bill (prorated)
       </p>
     </div>

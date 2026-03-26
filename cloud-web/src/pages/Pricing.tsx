@@ -54,8 +54,8 @@ export function PricingPage() {
     <div>
       {/* Header */}
       <section className="py-16 px-4 text-center">
-        <h1 className="text-4xl font-bold tracking-tight text-brand-light">Pricing</h1>
-        <p className="mt-4 text-brand-shade2">
+        <h1 className="text-4xl font-bold tracking-tight text-text-primary">Pricing</h1>
+        <p className="mt-4 text-text-secondary">
           Start free. Scale when you need observability and compliance.
         </p>
       </section>
@@ -66,9 +66,9 @@ export function PricingPage() {
       </section>
 
       {/* FAQ */}
-      <section className="py-16 px-4 border-t border-brand-shade3/15">
+      <section className="py-16 px-4 border-t border-border">
         <div className="max-w-3xl mx-auto">
-          <h2 className="text-2xl font-bold text-center text-brand-light mb-10">
+          <h2 className="text-2xl font-bold text-center text-text-primary mb-10">
             Frequently Asked Questions
           </h2>
           <div className="space-y-4">
@@ -86,14 +86,14 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt">
+    <div className="rounded-[2px] border border-border bg-surface-alt">
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-6 py-4 text-left"
       >
-        <span className="text-sm font-medium text-brand-light">{question}</span>
+        <span className="text-sm font-medium text-text-primary">{question}</span>
         <svg
-          className={`h-5 w-5 text-brand-shade2 shrink-0 transition-transform ${
+          className={`h-5 w-5 text-text-secondary shrink-0 transition-transform ${
             open ? 'rotate-180' : ''
           }`}
           fill="none"
@@ -106,7 +106,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
       </button>
       {open && (
         <div className="px-6 pb-4">
-          <p className="text-sm text-brand-shade2 leading-relaxed">{answer}</p>
+          <p className="text-sm text-text-secondary leading-relaxed">{answer}</p>
         </div>
       )}
     </div>

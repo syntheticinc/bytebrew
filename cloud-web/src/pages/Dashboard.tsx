@@ -53,7 +53,7 @@ function DashboardContent() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-brand-light">Dashboard</h1>
+      <h1 className="text-2xl font-bold text-text-primary">Dashboard</h1>
 
       {checkoutFailed && (
         <div className="mt-4 rounded-[2px] bg-yellow-500/10 border border-yellow-500/20 p-3 text-sm text-yellow-400">
@@ -66,7 +66,7 @@ function DashboardContent() {
       )}
 
       {usageQuery.isLoading && (
-        <div className="mt-8 text-brand-shade2">Loading...</div>
+        <div className="mt-8 text-text-secondary">Loading...</div>
       )}
 
       {usageQuery.error && !is403 && (
@@ -83,9 +83,9 @@ function DashboardContent() {
 
       <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Card 1: Account Status */}
-        <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
-          <h2 className="text-sm font-medium text-brand-shade2">Account</h2>
-          <p className="mt-3 text-lg font-semibold text-brand-light truncate">
+        <div className="rounded-[2px] border border-border bg-surface-alt p-5">
+          <h2 className="text-sm font-medium text-text-secondary">Account</h2>
+          <p className="mt-3 text-lg font-semibold text-text-primary truncate">
             {email ?? 'Unknown'}
           </p>
           <div className="mt-3">
@@ -95,37 +95,37 @@ function DashboardContent() {
 
         {/* Card 2: License (only when subscription exists) */}
         {hasSubscription && (
-          <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
-            <h2 className="text-sm font-medium text-brand-shade2">License</h2>
-            <p className="mt-2 text-sm text-brand-shade2">
+          <div className="rounded-[2px] border border-border bg-surface-alt p-5">
+            <h2 className="text-sm font-medium text-text-secondary">License</h2>
+            <p className="mt-2 text-sm text-text-secondary">
               Download your license file for offline activation.
             </p>
             <button
               onClick={handleDownloadLicense}
-              className="mt-4 rounded-[2px] border border-brand-shade3/20 px-4 py-2 text-sm font-medium text-brand-shade2 hover:border-brand-shade3/40 hover:text-brand-light transition-colors"
+              className="mt-4 rounded-[2px] border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:border-border-hover hover:text-text-primary transition-colors"
             >
               Download license.jwt
             </button>
             {downloadError && (
               <p className="mt-2 text-xs text-red-400">{downloadError}</p>
             )}
-            <p className="mt-2 text-xs text-brand-shade3">
+            <p className="mt-2 text-xs text-text-tertiary">
               Place in ~/.bytebrew/license.jwt
             </p>
           </div>
         )}
 
         {/* Card 3: Quick Start */}
-        <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5">
-          <h2 className="text-sm font-medium text-brand-shade2">Quick Start</h2>
+        <div className="rounded-[2px] border border-border bg-surface-alt p-5">
+          <h2 className="text-sm font-medium text-text-secondary">Quick Start</h2>
           <ul className="mt-4 space-y-3">
             <li>
               <Link
                 to="/download"
-                className="flex items-center justify-between text-sm text-brand-shade2 hover:text-brand-light transition-colors"
+                className="flex items-center justify-between text-sm text-text-secondary hover:text-text-primary transition-colors"
               >
                 <span>Installation Guide</span>
-                <span className="text-brand-shade3">&rarr;</span>
+                <span className="text-text-tertiary">&rarr;</span>
               </Link>
             </li>
             <li>
@@ -133,10 +133,10 @@ function DashboardContent() {
                 href="https://bytebrew.ai/docs/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-between text-sm text-brand-shade2 hover:text-brand-light transition-colors"
+                className="flex items-center justify-between text-sm text-text-secondary hover:text-text-primary transition-colors"
               >
                 <span>Documentation</span>
-                <span className="text-brand-shade3">&rarr;</span>
+                <span className="text-text-tertiary">&rarr;</span>
               </a>
             </li>
             <li>
@@ -144,10 +144,10 @@ function DashboardContent() {
                 href="https://github.com/syntheticinc/bytebrew-examples"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-between text-sm text-brand-shade2 hover:text-brand-light transition-colors"
+                className="flex items-center justify-between text-sm text-text-secondary hover:text-text-primary transition-colors"
               >
                 <span>GitHub</span>
-                <span className="text-brand-shade3">&rarr;</span>
+                <span className="text-text-tertiary">&rarr;</span>
               </a>
             </li>
           </ul>

@@ -81,10 +81,10 @@ export function RegisterPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
             </svg>
           </div>
-          <h1 className="mt-4 text-2xl font-bold text-brand-light">Check your email</h1>
-          <p className="mt-2 text-sm text-brand-shade2">
+          <h1 className="mt-4 text-2xl font-bold text-text-primary">Check your email</h1>
+          <p className="mt-2 text-sm text-text-secondary">
             We sent a verification link to{' '}
-            <span className="font-medium text-brand-light">{email}</span>.
+            <span className="font-medium text-text-primary">{email}</span>.
             <br />
             Click the link to activate your account.
           </p>
@@ -98,11 +98,11 @@ export function RegisterPage() {
               {resendLoading ? 'Sending...' : 'Resend verification email'}
             </button>
             {resendMessage && (
-              <p className="mt-2 text-xs text-brand-shade2">{resendMessage}</p>
+              <p className="mt-2 text-xs text-text-secondary">{resendMessage}</p>
             )}
           </div>
 
-          <p className="mt-6 text-center text-sm text-brand-shade2">
+          <p className="mt-6 text-center text-sm text-text-secondary">
             <Link to="/login" className="text-brand-accent hover:text-brand-accent-hover">
               Back to Login
             </Link>
@@ -115,8 +115,8 @@ export function RegisterPage() {
   return (
     <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-brand-light text-center">Sign Up</h1>
-        <p className="mt-2 text-sm text-brand-shade2 text-center">
+        <h1 className="text-2xl font-bold text-text-primary text-center">Sign Up</h1>
+        <p className="mt-2 text-sm text-text-secondary text-center">
           Create your account to get started.
         </p>
 
@@ -129,9 +129,9 @@ export function RegisterPage() {
         </div>
 
         <div className="mt-4 flex items-center gap-3">
-          <div className="h-px flex-1 bg-brand-shade3/30" />
-          <span className="text-xs text-brand-shade3">or</span>
-          <div className="h-px flex-1 bg-brand-shade3/30" />
+          <div className="h-px flex-1 bg-border-hover" />
+          <span className="text-xs text-text-tertiary">or</span>
+          <div className="h-px flex-1 bg-border-hover" />
         </div>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
@@ -142,7 +142,7 @@ export function RegisterPage() {
           )}
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-brand-shade2 mb-1">
+            <label htmlFor="email" className="block text-sm font-medium text-text-secondary mb-1">
               Email
             </label>
             <input
@@ -151,13 +151,13 @@ export function RegisterPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-[2px] border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
+              className="w-full rounded-[2px] border border-border-hover bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
               placeholder="you@example.com"
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-brand-shade2 mb-1">
+            <label htmlFor="password" className="block text-sm font-medium text-text-secondary mb-1">
               Password
             </label>
             <input
@@ -166,7 +166,7 @@ export function RegisterPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-[2px] border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
+              className="w-full rounded-[2px] border border-border-hover bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
               placeholder="At least 8 characters"
             />
           </div>
@@ -174,7 +174,7 @@ export function RegisterPage() {
           <div>
             <label
               htmlFor="confirmPassword"
-              className="block text-sm font-medium text-brand-shade2 mb-1"
+              className="block text-sm font-medium text-text-secondary mb-1"
             >
               Confirm Password
             </label>
@@ -184,7 +184,7 @@ export function RegisterPage() {
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full rounded-[2px] border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
+              className="w-full rounded-[2px] border border-border-hover bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
               placeholder="Repeat your password"
             />
           </div>
@@ -198,7 +198,7 @@ export function RegisterPage() {
           </button>
         </form>
 
-        <p className="mt-4 text-center text-xs text-brand-shade3">
+        <p className="mt-4 text-center text-xs text-text-tertiary">
           By creating an account, you agree to our{' '}
           <Link to="/terms" className="text-brand-accent hover:text-brand-accent-hover">
             Terms of Service
@@ -206,7 +206,7 @@ export function RegisterPage() {
           .
         </p>
 
-        <p className="mt-6 text-center text-sm text-brand-shade2">
+        <p className="mt-6 text-center text-sm text-text-secondary">
           Already have an account?{' '}
           <Link to="/login" className="text-brand-accent hover:text-brand-accent-hover">
             Sign in

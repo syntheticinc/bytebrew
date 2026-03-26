@@ -35,7 +35,12 @@
 }
 
 body {
-  @apply bg-brand-dark text-brand-light antialiased;
+  @apply bg-surface text-text-primary antialiased;
+}
+
+/* Logo: invert for light mode */
+.light .logo-adaptive {
+  filter: brightness(0);
 }
 
 /* Focus-visible ring for interactive elements */
