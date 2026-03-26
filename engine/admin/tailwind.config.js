@@ -25,8 +25,8 @@ export default {
         mono: ['"IBM Plex Mono"', 'monospace'],
       },
       borderRadius: {
-        card: '12px',
-        btn: '10px',
+        card: '6px',
+        btn: '4px',
       },
       keyframes: {
         'slide-in-right': {

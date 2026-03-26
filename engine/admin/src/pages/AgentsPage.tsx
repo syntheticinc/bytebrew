@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
 import DataTable from '../components/DataTable';
+import { emptyIcons } from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
 import DetailPanel, { DetailRow, DetailSection } from '../components/DetailPanel';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -94,7 +95,7 @@ export default function AgentsPage() {
           onRowClick={handleRowClick}
           activeKey={selected?.name}
           emptyMessage="No agents configured"
-          emptyIcon="&#x1F916;"
+          emptyIcon={emptyIcons.agents}
           emptyAction={{ label: 'Create Agent', onClick: () => navigate('/agents/new') }}
         />
       </div>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
 import DataTable from '../components/DataTable';
+import { emptyIcons } from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
 import DetailPanel, { DetailRow, DetailSection } from '../components/DetailPanel';
 import type { TaskResponse, TaskDetailResponse } from '../types';
@@ -144,7 +145,7 @@ export default function TasksPage() {
             onRowClick={handleRowClick}
             activeKey={selectedTask?.id}
             emptyMessage="No tasks found."
-            emptyIcon="&#x1F4CB;"
+            emptyIcon={emptyIcons.tasks}
           />
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-brand-shade1">

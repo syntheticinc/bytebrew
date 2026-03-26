@@ -150,9 +150,9 @@ export default function Sidebar() {
   return (
     <aside className="w-56 bg-brand-dark flex flex-col min-h-screen border-r border-brand-shade3/10">
       {/* Logo */}
-      <div className="px-5 py-5">
-        <img src={import.meta.env.BASE_URL + 'logo-dark.svg'} alt="ByteBrew" className="h-6" />
-        <span className="text-[10px] text-brand-shade3 mt-1 block tracking-widest uppercase">Admin</span>
+      <div className="px-5 py-6 border-b border-brand-shade3/10">
+        <img src={import.meta.env.BASE_URL + 'logo-dark.svg'} alt="ByteBrew" className="h-8" />
+        <span className="text-[10px] text-brand-shade3 mt-2 block tracking-[0.2em] uppercase font-medium">Admin Dashboard</span>
       </div>
 
       {/* Nav sections */}

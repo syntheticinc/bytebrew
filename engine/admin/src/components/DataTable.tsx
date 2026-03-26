@@ -14,7 +14,7 @@ interface DataTableProps<T> {
   onRowClick?: (row: T) => void;
   activeKey?: string | number | null;
   emptyMessage?: string;
-  emptyIcon?: string;
+  emptyIcon?: React.ReactNode;
   emptyAction?: { label: string; onClick: () => void };
 }
 

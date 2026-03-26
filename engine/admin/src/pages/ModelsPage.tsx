@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
 import { useModelRegistry } from '../hooks/useModelRegistry';
 import DataTable from '../components/DataTable';
+import { emptyIcons } from '../components/EmptyState';
 import DetailPanel, { DetailRow, DetailSection } from '../components/DetailPanel';
 import FormModal from '../components/FormModal';
 import FormField from '../components/FormField';
@@ -212,7 +213,7 @@ export default function ModelsPage() {
           onRowClick={setSelected}
           activeKey={selected?.id}
           emptyMessage="No models configured"
-          emptyIcon="&#x1F9E0;"
+          emptyIcon={emptyIcons.models}
           emptyAction={{ label: 'Add Model', onClick: openCreate }}
         />
       </div>

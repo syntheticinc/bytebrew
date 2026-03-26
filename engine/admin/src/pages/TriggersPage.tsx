@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
 import DataTable from '../components/DataTable';
+import { emptyIcons } from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
 import DetailPanel, { DetailRow, DetailSection } from '../components/DetailPanel';
 import FormModal from '../components/FormModal';
@@ -170,7 +171,7 @@ export default function TriggersPage() {
           onRowClick={setSelected}
           activeKey={selected?.id}
           emptyMessage="No triggers configured"
-          emptyIcon="&#x23F0;"
+          emptyIcon={emptyIcons.triggers}
           emptyAction={{ label: 'Add Trigger', onClick: openCreate }}
         />
       </div>
