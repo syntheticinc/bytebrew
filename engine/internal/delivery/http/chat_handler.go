@@ -88,6 +88,10 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
+	// Commit headers BEFORE writing body — prevents Go from buffering
+	// the entire response and setting Content-Length (which breaks SSE).
+	w.WriteHeader(http.StatusOK)
+
 	// Use ResponseController for flushing — works with wrapped ResponseWriters
 	// (chi middleware wraps w, so w.(http.Flusher) may fail).
 	rc := http.NewResponseController(w)
