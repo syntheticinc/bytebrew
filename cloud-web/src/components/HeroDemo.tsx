@@ -484,7 +484,7 @@ export function HeroDemo() {
             <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
           </div>
           <span className="text-xs font-mono" style={{ color: MUTED }}>
-            ByteBrew Agent <span style={{ color: 'rgba(135,134,127,0.5)' }}>&middot; analytics &middot; claude-sonnet-4</span>
+            ByteBrew Agent <span style={{ color: 'rgba(135,134,127,0.5)' }}>&middot; analytics &middot; glm-5</span>
           </span>
         </div>
 
