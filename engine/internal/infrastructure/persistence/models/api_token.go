@@ -17,11 +17,18 @@ func (APITokenModel) TableName() string { return "api_tokens" }
 
 // Scope bitmask constants.
 const (
-	ScopeChat       = 1
-	ScopeTasks      = 2
-	ScopeAgentsRead = 4
-	ScopeConfig     = 8
-	ScopeAdmin      = 16
+	ScopeChat          = 1
+	ScopeTasks         = 2
+	ScopeAgentsRead    = 4
+	ScopeConfig        = 8
+	ScopeAdmin         = 16
+	ScopeAgentsWrite   = 32
+	ScopeModelsRead    = 64
+	ScopeModelsWrite   = 128
+	ScopeMCPRead       = 256
+	ScopeMCPWrite      = 512
+	ScopeTriggersRead  = 1024
+	ScopeTriggersWrite = 2048
 )
 
 // HasScope checks whether the token has the given scope bit set.

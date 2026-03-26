@@ -9,7 +9,7 @@ type TriggerModel struct {
 	Title             string     `gorm:"type:varchar(255);not null"`
 	AgentID           uint       `gorm:"not null;index"`
 	Schedule          string     `gorm:"type:varchar(100)"`
-	WebhookPath       string     `gorm:"type:varchar(500);uniqueIndex"`
+	WebhookPath       string     `gorm:"type:varchar(500)"`
 	Description       string     `gorm:"type:text"`
 	Enabled           bool       `gorm:"not null;default:true"`
 	OnCompleteURL     string     `gorm:"column:on_complete_url;type:varchar(2000)"`

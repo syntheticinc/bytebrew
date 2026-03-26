@@ -204,10 +204,27 @@ func TestRequireScope_Allowed(t *testing.T) {
 		expectAllow bool
 	}{
 		{"admin has all", ScopeAdmin, ScopeChat, true},
+		{"admin bypasses agents_write", ScopeAdmin, ScopeAgentsWrite, true},
+		{"admin bypasses models_write", ScopeAdmin, ScopeModelsWrite, true},
+		{"admin bypasses mcp_write", ScopeAdmin, ScopeMCPWrite, true},
 		{"exact scope", ScopeChat, ScopeChat, true},
 		{"multiple scopes", ScopeChat | ScopeTasks, ScopeTasks, true},
 		{"missing scope", ScopeChat, ScopeTasks, false},
 		{"no scopes", 0, ScopeChat, false},
+		{"agents_read allows agents_read", ScopeAgentsRead, ScopeAgentsRead, true},
+		{"agents_read denies agents_write", ScopeAgentsRead, ScopeAgentsWrite, false},
+		{"agents_write allows agents_write", ScopeAgentsWrite, ScopeAgentsWrite, true},
+		{"models_read allows models_read", ScopeModelsRead, ScopeModelsRead, true},
+		{"models_read denies models_write", ScopeModelsRead, ScopeModelsWrite, false},
+		{"models_write allows models_write", ScopeModelsWrite, ScopeModelsWrite, true},
+		{"mcp_read allows mcp_read", ScopeMCPRead, ScopeMCPRead, true},
+		{"mcp_read denies mcp_write", ScopeMCPRead, ScopeMCPWrite, false},
+		{"mcp_write allows mcp_write", ScopeMCPWrite, ScopeMCPWrite, true},
+		{"triggers_read allows triggers_read", ScopeTriggersRead, ScopeTriggersRead, true},
+		{"triggers_read denies triggers_write", ScopeTriggersRead, ScopeTriggersWrite, false},
+		{"triggers_write allows triggers_write", ScopeTriggersWrite, ScopeTriggersWrite, true},
+		{"combined read scopes", ScopeAgentsRead | ScopeModelsRead | ScopeMCPRead, ScopeModelsRead, true},
+		{"combined read denies write", ScopeAgentsRead | ScopeModelsRead, ScopeAgentsWrite, false},
 	}
 
 	for _, tt := range tests {

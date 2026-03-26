@@ -1,6 +1,10 @@
 package models
 
-import "gorm.io/gorm"
+import (
+	"fmt"
+
+	"gorm.io/gorm"
+)
 
 // AutoMigrate registers all engine tables and runs GORM auto-migration.
 func AutoMigrate(db *gorm.DB) error {
@@ -8,7 +12,7 @@ func AutoMigrate(db *gorm.DB) error {
 	// Silently ignored if extension is not available (non-pgvector PostgreSQL).
 	db.Exec("CREATE EXTENSION IF NOT EXISTS vector")
 
-	return db.AutoMigrate(
+	if err := db.AutoMigrate(
 		// Config tables (11)
 		&AgentModel{},
 		&AgentToolModel{},
@@ -43,5 +47,18 @@ func AutoMigrate(db *gorm.DB) error {
 		// Knowledge / RAG tables (2)
 		&KnowledgeDocument{},
 		&KnowledgeChunk{},
-	)
+	); err != nil {
+		return err
+	}
+
+	// Partial unique index: enforce uniqueness on webhook_path only when non-empty.
+	// This allows multiple cron triggers with empty webhook_path without conflicts.
+	// DROP the old full unique index first (ignore error if it doesn't exist).
+	db.Exec("DROP INDEX IF EXISTS idx_triggers_webhook_path")
+	if err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_triggers_webhook_path_nonempty
+		ON triggers (webhook_path) WHERE webhook_path != ''`).Error; err != nil {
+		return fmt.Errorf("create partial unique index on webhook_path: %w", err)
+	}
+
+	return nil
 }

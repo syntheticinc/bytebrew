@@ -62,14 +62,21 @@ response = requests.get(
 
 | Scope | Description |
 |-------|-------------|
-| `chat` | Send messages to agents (POST /agents/\{name\}/chat) |
+| `chat` | Send messages to agents (POST /agents/\{name\}/chat) and respond to user input |
 | `tasks` | Create, list, cancel tasks and provide input |
 | `agents:read` | List and inspect agent configurations |
+| `agents:write` | Create, update, and delete agents |
+| `models:read` | List and inspect model configurations |
+| `models:write` | Create, update, delete, and verify models |
+| `mcp:read` | List MCP server configurations |
+| `mcp:write` | Create, update, and delete MCP servers |
+| `triggers:read` | List trigger configurations |
+| `triggers:write` | Create, update, and delete triggers |
 | `config` | Reload, export, and import configuration |
-| `admin` | Full access to all endpoints including API key management |
+| `admin` | Full access to all endpoints including API key management, settings, tokens, sessions, and audit |
 
 :::tip[Least privilege]
-Create separate tokens for different integrations. A chatbot frontend only needs `chat` scope. A CI/CD pipeline might need `config` for hot-reload. Use `admin` scope only for the Admin Dashboard and management scripts.
+Create separate tokens for different integrations. A chatbot frontend only needs `chat` scope. A CI/CD pipeline might need `config` for hot-reload. A monitoring dashboard might use `agents:read` + `models:read`. Use `admin` scope only for the Admin Dashboard and management scripts.
 :::
 
 ### Error responses

@@ -23,11 +23,18 @@ const (
 
 // Scope bitmask constants matching ERD api_tokens.scopes_mask.
 const (
-	ScopeChat       = 1
-	ScopeTasks      = 2
-	ScopeAgentsRead = 4
-	ScopeConfig     = 8
-	ScopeAdmin      = 16
+	ScopeChat          = 1
+	ScopeTasks         = 2
+	ScopeAgentsRead    = 4
+	ScopeConfig        = 8
+	ScopeAdmin         = 16
+	ScopeAgentsWrite   = 32
+	ScopeModelsRead    = 64
+	ScopeModelsWrite   = 128
+	ScopeMCPRead       = 256
+	ScopeMCPWrite      = 512
+	ScopeTriggersRead  = 1024
+	ScopeTriggersWrite = 2048
 )
 
 // APITokenVerifier looks up API tokens by their SHA-256 hash.

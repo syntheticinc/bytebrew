@@ -155,27 +155,27 @@ agents:
 2. Engine detects the tool is in `confirm_before`.
 3. Engine sends a `confirmation` SSE event with the tool name, input, and a `confirmation_id`.
 4. Client displays the pending action to the user.
-5. User approves or rejects via `POST /api/v1/confirmations/{confirmation_id}`.
+5. User approves or rejects via `POST /api/v1/sessions/{session_id}/respond`.
 6. If approved, the tool executes and the stream continues.
 7. If rejected, the agent receives the rejection reason and adapts.
 
 ```
-event: confirmation
-data: {"tool":"create_order","input":{"customer_id":"cust_123","items":"ProBook x1"},"confirmation_id":"conf_abc"}
+event: needs_input
+data: {"type":"confirmation","call_id":"call_abc","tool":"create_order","input":{"customer_id":"cust_123","items":"ProBook x1"}}
 ```
 
 ```bash
 # Approve
-curl -X POST http://localhost:8443/api/v1/confirmations/conf_abc \
+curl -X POST http://localhost:8443/api/v1/sessions/sess_123/respond \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
-  -d '{"action": "approve"}'
+  -d '{"call_id": "call_abc", "answers": ["approve"]}'
 
 # Reject
-curl -X POST http://localhost:8443/api/v1/confirmations/conf_abc \
+curl -X POST http://localhost:8443/api/v1/sessions/sess_123/respond \
   -H "Authorization: Bearer bb_your_token" \
   -H "Content-Type: application/json" \
-  -d '{"action": "reject", "reason": "Customer changed their mind"}'
+  -d '{"call_id": "call_abc", "answers": ["reject: Customer changed their mind"]}'
 ```
 
 ## Environment Variables
@@ -505,6 +505,44 @@ mcp_servers:
 
 :::tip[Forward headers for multi-tenant MCP]
 When your MCP server needs to know which organization or user is making the request, use `forward_headers`. The engine extracts these headers from the incoming chat request and includes them in every HTTP request to the MCP server. This way, the MCP server can apply tenant-specific logic without requiring separate server instances per tenant.
+:::
+
+### Forwarding user authentication tokens
+
+A common pattern: your backend authenticates users with JWT tokens, but the `Authorization` header in the ByteBrew chat request carries the ByteBrew API key (`Bearer bb_...`). To pass the user's JWT to your MCP server, use a separate header.
+
+```
+Frontend → Your backend (Authorization: <user JWT>)
+  → ByteBrew (Authorization: Bearer bb_..., X-Forwarded-Authorization: <user JWT>)
+    → MCP server (X-Forwarded-Authorization: <user JWT>)
+```
+
+```yaml
+mcp_servers:
+  my-platform:
+    type: sse
+    url: "http://mcp-server:8087/sse"
+    forward_headers:
+      - "X-Forwarded-Authorization"   # User JWT
+      - "X-Org-Id"                     # Tenant context
+      - "X-User-Id"                    # User context
+```
+
+Your backend must include these headers when calling the ByteBrew chat API:
+
+```bash
+curl -X POST http://bytebrew:8443/api/v1/agents/assistant/chat \
+  -H "Authorization: Bearer bb_your_api_key" \
+  -H "X-Forwarded-Authorization: eyJhbGciOiJSUzI1NiIs..." \
+  -H "X-Org-Id: org-123" \
+  -H "X-User-Id: user-456" \
+  -d '{"message": "List my devices", "stream": true}'
+```
+
+ByteBrew extracts only the headers listed in `forward_headers` and includes them in every MCP tool call request. The `Authorization` header is always consumed by ByteBrew for its own authentication and is never forwarded.
+
+:::note[Header naming]
+You can use any header name your platform prefers: `X-Auth-Key`, `X-Forwarded-Authorization`, `X-User-Token`, etc. Just list it in `forward_headers` and include it in the chat request.
 :::
 
 :::note[Tool discovery]

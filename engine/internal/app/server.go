@@ -455,38 +455,60 @@ func Run(sc ServerConfig) error {
 			r.Use(authMW.Authenticate)
 			r.Use(deliveryhttp.AuditMiddleware(&auditHTTPAdapter{logger: auditLogger}))
 
-			// Agents (full CRUD)
+			// Agents
 			agentRepo := config_repo.NewGORMAgentRepository(pgDB)
 			agentManager := &agentManagerHTTPAdapter{repo: agentRepo, registry: agentRegistry, db: pgDB}
 			agentHandler := deliveryhttp.NewAgentHandlerWithManager(agentManager)
-			r.Get("/api/v1/agents", agentHandler.List)
-			r.Get("/api/v1/agents/{name}", agentHandler.Get)
-			r.Post("/api/v1/agents", agentHandler.Create)
-			r.Put("/api/v1/agents/{name}", agentHandler.Update)
-			r.Delete("/api/v1/agents/{name}", agentHandler.Delete)
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
+				r.Get("/api/v1/agents", agentHandler.List)
+				r.Get("/api/v1/agents/{name}", agentHandler.Get)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsWrite))
+				r.Post("/api/v1/agents", agentHandler.Create)
+				r.Put("/api/v1/agents/{name}", agentHandler.Update)
+				r.Delete("/api/v1/agents/{name}", agentHandler.Delete)
+			})
 
-			// Models (full CRUD)
+			// Models
 			llmProviderRepo := config_repo.NewGORMLLMProviderRepository(pgDB)
 			modelService := &modelServiceHTTPAdapter{repo: llmProviderRepo, modelCache: components.ModelCache}
 			modelHandler := deliveryhttp.NewModelHandler(modelService)
-			r.Mount("/api/v1/models", modelHandler.Routes())
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeModelsRead))
+				r.Get("/api/v1/models", modelHandler.List)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeModelsWrite))
+				r.Post("/api/v1/models", modelHandler.Create)
+				r.Put("/api/v1/models/{name}", modelHandler.Update)
+				r.Delete("/api/v1/models/{name}", modelHandler.Delete)
+				r.Post("/api/v1/models/{name}/verify", modelHandler.Verify)
+			})
 
 			// Tasks
 			taskHandler := deliveryhttp.NewTaskHandler(&taskServiceHTTPAdapter{repo: taskRepo})
-			r.Post("/api/v1/tasks", taskHandler.Create)
-			r.Get("/api/v1/tasks", taskHandler.List)
-			r.Get("/api/v1/tasks/{id}", taskHandler.Get)
-			r.Delete("/api/v1/tasks/{id}", taskHandler.Cancel)
-			r.Post("/api/v1/tasks/{id}/input", taskHandler.ProvideInput)
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeTasks))
+				r.Post("/api/v1/tasks", taskHandler.Create)
+				r.Get("/api/v1/tasks", taskHandler.List)
+				r.Get("/api/v1/tasks/{id}", taskHandler.Get)
+				r.Delete("/api/v1/tasks/{id}", taskHandler.Cancel)
+				r.Post("/api/v1/tasks/{id}/input", taskHandler.ProvideInput)
+			})
 
 			// Config
 			configHandler := deliveryhttp.NewConfigHandler(
 				&configReloaderHTTPAdapter{registry: agentRegistry, mcpRegistry: mcpRegistry, db: pgDB, forwardHeadersStore: &forwardHeadersStore},
 				&configImportExportHTTPAdapter{db: pgDB},
 			)
-			r.Post("/api/v1/config/reload", configHandler.Reload)
-			r.Post("/api/v1/config/import", configHandler.Import)
-			r.Get("/api/v1/config/export", configHandler.Export)
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeConfig))
+				r.Post("/api/v1/config/reload", configHandler.Reload)
+				r.Post("/api/v1/config/import", configHandler.Import)
+				r.Get("/api/v1/config/export", configHandler.Export)
+			})
 
 			// Knowledge
 			if knowledgeRepo != nil {
@@ -501,46 +523,86 @@ func Run(sc ServerConfig) error {
 					&knowledgeStatsHTTPAdapter{repo: knowledgeRepo},
 					reindexer,
 				)
-				r.Get("/api/v1/agents/{name}/knowledge/status", knowledgeHandler.Status)
-				r.Post("/api/v1/agents/{name}/knowledge/reindex", knowledgeHandler.Reindex)
+				r.Group(func(r chi.Router) {
+					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
+					r.Get("/api/v1/agents/{name}/knowledge/status", knowledgeHandler.Status)
+				})
+				r.Group(func(r chi.Router) {
+					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsWrite))
+					r.Post("/api/v1/agents/{name}/knowledge/reindex", knowledgeHandler.Reindex)
+				})
 			}
 
-			// Audit logs
+			// Audit logs (admin-only — no dedicated scope, RequireAdminSession used)
 			auditRepo := config_repo.NewGORMAuditRepository(pgDB)
 			auditHandler := deliveryhttp.NewAuditHandler(&auditServiceHTTPAdapter{repo: auditRepo})
-			r.Get("/api/v1/audit", auditHandler.List)
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireAdminSession)
+				r.Get("/api/v1/audit", auditHandler.List)
+			})
 
-			// API Tokens
+			// API Tokens (admin-only)
 			tokenHandler := deliveryhttp.NewTokenHandler(&tokenRepoHTTPAdapter{repo: apiTokenRepo})
-			r.Post("/api/v1/auth/tokens", tokenHandler.CreateToken)
-			r.Get("/api/v1/auth/tokens", tokenHandler.ListTokens)
-			r.Delete("/api/v1/auth/tokens/{id}", tokenHandler.DeleteToken)
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireAdminSession)
+				r.Post("/api/v1/auth/tokens", tokenHandler.CreateToken)
+				r.Get("/api/v1/auth/tokens", tokenHandler.ListTokens)
+				r.Delete("/api/v1/auth/tokens/{id}", tokenHandler.DeleteToken)
+			})
 
 			// MCP Servers
 			mcpServerRepo := config_repo.NewGORMMCPServerRepository(pgDB)
 			mcpHandler := deliveryhttp.NewMCPHandler(&mcpServiceHTTPAdapter{repo: mcpServerRepo})
-			r.Mount("/api/v1/mcp-servers", mcpHandler.Routes())
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeMCPRead))
+				r.Get("/api/v1/mcp-servers", mcpHandler.List)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeMCPWrite))
+				r.Post("/api/v1/mcp-servers", mcpHandler.Create)
+				r.Put("/api/v1/mcp-servers/{name}", mcpHandler.Update)
+				r.Delete("/api/v1/mcp-servers/{name}", mcpHandler.Delete)
+			})
 
 			// Triggers
 			triggerRepo := config_repo.NewGORMTriggerRepository(pgDB)
 			triggerHandler := deliveryhttp.NewTriggerHandler(&triggerServiceHTTPAdapter{repo: triggerRepo})
-			r.Mount("/api/v1/triggers", triggerHandler.Routes())
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeTriggersRead))
+				r.Get("/api/v1/triggers", triggerHandler.List)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeTriggersWrite))
+				r.Post("/api/v1/triggers", triggerHandler.Create)
+				r.Put("/api/v1/triggers/{id}", triggerHandler.Update)
+				r.Delete("/api/v1/triggers/{id}", triggerHandler.Delete)
+			})
 
-			// Settings
+			// Settings (admin-only)
 			settingRepo := config_repo.NewGORMSettingRepository(pgDB)
 			settingHandler := deliveryhttp.NewSettingHandler(&settingServiceHTTPAdapter{repo: settingRepo})
-			r.Mount("/api/v1/settings", settingHandler.Routes())
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireAdminSession)
+				r.Get("/api/v1/settings", settingHandler.List)
+				r.Put("/api/v1/settings/{key}", settingHandler.Update)
+			})
 
-			// Sessions
+			// Sessions (admin-only)
 			sessionRepo := config_repo.NewGORMSessionRepository(pgDB)
 			messageRepo := config_repo.NewGORMMessageRepository(pgDB)
 			sessionHandler := deliveryhttp.NewSessionHandler(&sessionServiceHTTPAdapter{repo: sessionRepo, messageRepo: messageRepo})
 			sessionHandler.SetMessageService(&messageServiceHTTPAdapter{repo: messageRepo})
-			r.Mount("/api/v1/sessions", sessionHandler.Routes())
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireAdminSession)
+				r.Mount("/api/v1/sessions", sessionHandler.Routes())
+			})
 
-			// Tool metadata (security zones for admin UI)
+			// Tool metadata (admin-only)
 			toolMetaHandler := deliveryhttp.NewToolMetadataHandler(&toolMetadataHTTPAdapter{})
-			r.Get("/api/v1/tools/metadata", toolMetaHandler.List)
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireAdminSession)
+				r.Get("/api/v1/tools/metadata", toolMetaHandler.List)
+			})
 		})
 
 		// EE-only routes (require auth + valid Enterprise license).
@@ -767,8 +829,13 @@ func Run(sc ServerConfig) error {
 			if configurableRL != nil {
 				r.Use(configurableRL.Middleware)
 			}
-			r.Post("/api/v1/agents/{name}/chat", chatHandler.Chat)
-			r.Post("/api/v1/sessions/{id}/respond", respondHandler.Respond)
+			r.Group(func(r chi.Router) {
+				if httpAuthMW != nil {
+					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeChat))
+				}
+				r.Post("/api/v1/agents/{name}/chat", chatHandler.Chat)
+				r.Post("/api/v1/sessions/{id}/respond", respondHandler.Respond)
+			})
 		})
 
 		go func() {
