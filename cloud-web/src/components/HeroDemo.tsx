@@ -40,45 +40,45 @@ interface DemoStep {
 /* ------------------------------------------------------------------ */
 
 const SCENARIO: DemoStep[] = [
-  { type: 'input_typing', content: 'Review our Q1 metrics and flag anything unusual', delay: 800 },
-  { type: 'input_send', delay: 1200 },
-  { type: 'thinking', content: 'Loading Q1 data and running anomaly detection...', delay: 2500 },
-  { type: 'tool_call', tool: 'fetch_quarterly_metrics', content: 'period: "Q1-2026", segments: ["revenue", "users", "churn", "NPS"]', delay: 1500 },
-  { type: 'tool_result', tool: 'fetch_quarterly_metrics', content: 'Q1 2026 data loaded — 4 metric categories, 3 months', delay: 1800 },
-  { type: 'tool_call', tool: 'run_anomaly_detection', content: 'dataset: "Q1-2026", sensitivity: "high"', delay: 1500 },
-  { type: 'tool_result', tool: 'run_anomaly_detection', content: '3 anomalies detected across revenue and NPS metrics', delay: 1800 },
-  { type: 'text', content: 'Found something interesting in your data. Let me dig deeper...', delay: 1500 },
-  { type: 'spawn', content: 'Spawning analytics-agent: "Deep investigation on detected anomalies"', delay: 2000 },
-  { type: 'sub_tool', tool: 'correlate_events', content: 'anomalies: 3, cross_reference: "product_changes, pricing_updates"', delay: 1500 },
-  { type: 'sub_result', content: 'Strong correlation found — NPS drop tied to February pricing change', delay: 1800 },
-  { type: 'spawn_done', content: 'analytics-agent completed — correlation analysis received', delay: 1200 },
-  { type: 'tool_call', tool: 'generate_insight_report', content: '"Q1 Anomaly Report — Enterprise NPS risk"', delay: 1500 },
-  { type: 'tool_result', tool: 'generate_insight_report', content: 'Report generated with 3 findings and recommendations', delay: 1800 },
+  // User types in input bar
+  { type: 'input_typing', content: 'Review Q1 and flag anything unusual', delay: 600 },
+  { type: 'input_send', delay: 800 },
+  // Brewing spinner shows while agent "thinks"
+  { type: 'thinking', delay: 2800 },
+  // Agent starts working
+  { type: 'tool_call', tool: 'fetch_metrics', content: 'Q1-2026, segments: revenue, NPS, churn', delay: 1200 },
+  { type: 'tool_result', tool: 'fetch_metrics', content: '4 categories loaded, 3 months', delay: 2200 },
+  { type: 'tool_call', tool: 'anomaly_detection', content: 'sensitivity: high', delay: 1400 },
+  { type: 'tool_result', tool: 'anomaly_detection', content: '3 anomalies detected', delay: 1600 },
+  // Pause — agent "notices" something
+  { type: 'thinking', delay: 2000 },
+  { type: 'text', content: 'Hmm, there could be a risk here. Let me check something...', delay: 1800 },
+  // Spawn sub-agent
+  { type: 'spawn', content: 'analytics-agent: "Correlate NPS drop with product changes"', delay: 2200 },
+  { type: 'sub_tool', tool: 'correlate_events', content: 'NPS anomaly + pricing_updates', delay: 1600 },
+  { type: 'sub_result', content: 'Strong correlation: NPS drop → Feb pricing change', delay: 1400 },
+  { type: 'spawn_done', content: 'analytics-agent completed', delay: 1000 },
+  // The insight — concise and impactful
   {
     type: 'response',
     content:
-      '**Q1 Anomaly Report**\n\n' +
-      'Revenue is up 18%, but there\'s a hidden risk:\n\n' +
-      '**Finding:** NPS dropped 12 points in the Enterprise segment — specifically among accounts onboarded after your February pricing change. These accounts show 3x higher support ticket volume.\n\n' +
-      '**Root cause:** The new pricing tier removed dedicated onboarding calls. Enterprise buyers felt abandoned during setup.\n\n' +
-      '**Impact if unaddressed:** Based on historical patterns, this NPS trend predicts ~$420K in churn over the next 2 quarters.\n\n' +
-      '**Recommendation:**\n' +
-      '1. Reinstate onboarding calls for Enterprise tier (est. cost: $15K/quarter)\n' +
-      '2. Launch a "white-glove rescue" campaign for the 23 affected accounts\n' +
-      '3. Monitor NPS weekly with automated alerts\n\n' +
-      'The ROI on fixing this is 28:1. Want me to draft the rescue campaign?',
-    delay: 3500,
+      '**Hidden risk found.**\n\n' +
+      'Revenue is up 18%, but NPS dropped 12 points in Enterprise — specifically accounts onboarded after the February pricing change.\n\n' +
+      '**Root cause:** removed dedicated onboarding calls. Enterprise buyers feel abandoned.\n\n' +
+      '**Predicted impact:** ~$420K churn over 2 quarters.\n' +
+      '**Fix cost:** $15K/quarter. **ROI: 28:1.**',
+    delay: 3000,
   },
   {
     type: 'ask_buttons',
-    content: 'What would you like to do next?',
-    options: ['Draft campaign', 'Alert leadership', 'Deep dive on affected accounts'],
-    delay: 3000,
+    content: 'How to proceed?',
+    options: ['Draft rescue campaign', 'Alert leadership', 'Deep dive'],
+    delay: 2500,
   },
-  { type: 'button_click', content: 'Draft campaign', delay: 1500 },
-  { type: 'tool_call', tool: 'draft_campaign', content: 'type: "rescue", accounts: 23, template: "white-glove"', delay: 1500 },
-  { type: 'tool_result', tool: 'draft_campaign', content: 'Campaign drafted — 23 personalized emails generated', delay: 1800 },
-  { type: 'text', content: 'Campaign ready — 23 personalized emails queued. Review before sending?', delay: 4000 },
+  { type: 'button_click', content: 'Draft rescue campaign', delay: 1200 },
+  { type: 'tool_call', tool: 'draft_campaign', content: '23 affected accounts, template: white-glove', delay: 1400 },
+  { type: 'tool_result', tool: 'draft_campaign', content: '23 personalized emails ready', delay: 2000 },
+  { type: 'text', content: 'Campaign queued. Review before sending?', delay: 4000 },
 ];
 
 const TYPEWRITER_TYPES = new Set<DemoStep['type']>(['input_typing', 'text', 'response']);
@@ -385,7 +385,7 @@ export function HeroDemo() {
           elements.push(<UserBubble key={key} text={userMessageText} />);
           break;
         case 'thinking':
-          elements.push(<BrewingSpinner key={key} />);
+          // Completed thinking — don't render (spinner disappears)
           break;
         case 'tool_call':
           elements.push(
