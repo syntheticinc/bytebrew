@@ -8,6 +8,7 @@ export default {
           accent: '#D7513E',
           'accent-hover': '#C04635',
           dark: '#111111',
+          'dark-surface': '#181818',
           'dark-alt': '#1F1F1F',
           light: '#F7F8F1',
           shade1: '#DFD8D0',
@@ -36,10 +37,20 @@ export default {
           from: { opacity: '0', transform: 'scale(0.95)' },
           to: { opacity: '1', transform: 'scale(1)' },
         },
+        'fade-in': {
+          from: { opacity: '0' },
+          to: { opacity: '1' },
+        },
+        'pulse-dot': {
+          '0%, 100%': { transform: 'scale(1)' },
+          '50%': { transform: 'scale(1.3)' },
+        },
       },
       animation: {
         'slide-in-right': 'slide-in-right 0.2s ease-out',
         'modal-in': 'modal-in 0.15s ease-out',
+        'fade-in': 'fade-in 0.3s ease-out',
+        'pulse-dot': 'pulse-dot 2s ease-in-out infinite',
       },
     },
   },

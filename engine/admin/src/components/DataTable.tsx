@@ -47,7 +47,7 @@ export default function DataTable<T extends Record<string, any>>({
             {columns.map((col) => (
               <th
                 key={col.key}
-                className={`px-4 py-3 text-left text-xs font-semibold text-brand-shade3 uppercase tracking-wider ${col.className ?? ''}`}
+                className={`px-4 py-3 text-left text-[11px] font-semibold text-brand-shade3 uppercase tracking-[0.1em] ${col.className ?? ''}`}
               >
                 {col.header}
               </th>
@@ -64,12 +64,12 @@ export default function DataTable<T extends Record<string, any>>({
                 key={rowKey}
                 onClick={() => onRowClick?.(row)}
                 className={[
-                  'transition-colors',
+                  'transition-all duration-150',
                   onRowClick ? 'cursor-pointer' : '',
                   isActive
-                    ? 'bg-brand-accent/10 border-l-2 border-l-brand-accent'
-                    : 'border-l-2 border-l-transparent',
-                  !isActive && onRowClick ? 'hover:bg-brand-dark' : '',
+                    ? 'bg-brand-accent/8'
+                    : '',
+                  !isActive && onRowClick ? 'hover:bg-[#1a1a1a]' : '',
                 ]
                   .filter(Boolean)
                   .join(' ')}

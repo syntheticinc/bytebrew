@@ -429,7 +429,7 @@ func Run(sc ServerConfig) error {
 
 		// Update checker (non-blocking, air-gap safe)
 		updateChecker := infrastructure.NewUpdateChecker(sc.Version)
-		updateChecker.Start()
+		updateChecker.Start(ctx)
 
 		// Health (public)
 		healthHandler := deliveryhttp.NewHealthHandler(sc.Version, &agentCounterHTTPAdapter{registry: agentRegistry})

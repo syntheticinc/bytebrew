@@ -1,6 +1,7 @@
 package infrastructure
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -156,11 +157,13 @@ func TestUpdateChecker_EmptyLatest(t *testing.T) {
 
 func TestUpdateChecker_StartNonBlocking(t *testing.T) {
 	uc := NewUpdateChecker("1.0.0")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Start should return immediately (goroutine)
 	done := make(chan struct{})
 	go func() {
-		uc.Start()
+		uc.Start(ctx)
 		close(done)
 	}()
 

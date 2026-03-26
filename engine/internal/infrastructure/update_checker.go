@@ -1,6 +1,7 @@
 package infrastructure
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -12,7 +13,8 @@ import (
 )
 
 // UpdateChecker periodically checks api.bytebrew.ai for newer Engine versions.
-// It runs a single non-blocking HTTP request at startup and stores the result.
+// It checks immediately on start, then every 24 hours. Errors are silently
+// ignored (air-gap safe — no internet = no problem).
 type UpdateChecker struct {
 	currentVersion string
 	latestVersion  string
@@ -28,11 +30,24 @@ func NewUpdateChecker(currentVersion string) *UpdateChecker {
 
 const defaultVersionsURL = "https://api.bytebrew.ai/api/v1/versions/engine"
 
-// Start launches a background goroutine that fetches the latest version from
-// the Cloud API. The call uses a 5-second timeout and silently ignores errors
-// (air-gap safe).
-func (uc *UpdateChecker) Start() {
-	go uc.checkFromURL(defaultVersionsURL)
+// Start launches a background goroutine that checks for updates immediately
+// and then every 24 hours. The goroutine stops when ctx is cancelled.
+func (uc *UpdateChecker) Start(ctx context.Context) {
+	go func() {
+		uc.checkFromURL(defaultVersionsURL)
+
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				uc.checkFromURL(defaultVersionsURL)
+			}
+		}
+	}()
 }
 
 // LatestVersion returns the latest known version, or empty if not checked yet.
