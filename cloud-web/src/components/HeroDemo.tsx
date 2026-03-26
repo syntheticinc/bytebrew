@@ -128,15 +128,6 @@ function BrewingSpinner() {
 /*  Inline SVG icons (monochrome, no emoji)                            */
 /* ------------------------------------------------------------------ */
 
-function GearIcon({ className = '' }: { className?: string }) {
-  return (
-    <svg className={`inline-block w-3 h-3 mr-1 ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </svg>
-  );
-}
-
 function CheckIcon({ className = '' }: { className?: string }) {
   return (
     <svg className={`inline-block w-3 h-3 mr-1 ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -208,19 +199,30 @@ function UserBubble({ text }: { text: string }) {
   );
 }
 
+function StatusDot({ done }: { done?: boolean }) {
+  return (
+    <span
+      className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 shrink-0"
+      style={{
+        backgroundColor: done ? '#4ade80' : '#87867F',
+        boxShadow: done ? '0 0 4px rgba(74,222,128,0.4)' : 'none',
+      }}
+    />
+  );
+}
+
 function ToolCallBlock({ tool, content, done }: { tool: string; content: string; done?: boolean }) {
   return (
     <div
-      className="rounded-[2px] border-l-2 px-3 py-1.5 text-xs font-mono"
+      className="rounded-[2px] border-l-2 px-3 py-1.5 text-xs font-mono flex items-start gap-0"
       style={{ borderColor: done ? BORDER_DONE : BORDER_TOOL, backgroundColor: SURFACE }}
     >
-      <span style={{ color: MUTED }}>
-        {done ? <CheckIcon className="text-brand-shade2" /> : <GearIcon className="text-brand-shade3" />}
+      <span className="flex items-center" style={{ color: MUTED }}>
+        <StatusDot done={done} />
         {tool}
       </span>
       {!done && <span style={{ color: 'rgba(135,134,127,0.5)' }}> ({content})</span>}
       {done && <span className="ml-1" style={{ color: '#CBC9BC' }}>{content}</span>}
-      {!done && <span className="ml-2 animate-pulse text-[10px]" style={{ color: 'rgba(135,134,127,0.4)' }}>running</span>}
     </div>
   );
 }
