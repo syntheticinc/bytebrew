@@ -309,50 +309,103 @@ const CONFIG_YAML = `agents:
   analytics:
     model: glm-5
     system_prompt: |
-      You are a business analyst.
-      Investigate anomalies before reporting.
+      You are a senior business analyst.
+      When asked about metrics, always check for
+      anomalies before reporting. If you find
+      something unusual, investigate the root cause
+      by spawning a research agent.
     tools:
-      - get_churn_data
-      - get_onboarding_nps
+      - get_churn_data:
+          description: "Query churn data by segment"
+      - get_onboarding_nps:
+          description: "NPS scores by onboarding cohort"
     can_spawn: [research-agent]
 
   research-agent:
     model: glm-5
-    tools: [diff_pricing, check_tickets]`;
+    system_prompt: |
+      You investigate anomalies found by the
+      analytics agent. Cross-reference metrics
+      with product and pricing changes.
+    tools:
+      - diff_pricing:
+          description: "Compare pricing tiers"
+      - check_tickets:
+          description: "Support ticket volume"`;
+
+const YAML_KEY = '#D7513E';       // accent — keys stand out
+const YAML_STRING = '#8BC78B';    // green — string values
+const YAML_BRACKET = '#CBC9BC';   // light — brackets
+const YAML_DASH = '#87867F';      // muted — list dashes
+const YAML_COLON = 'rgba(135,134,127,0.5)';
+const YAML_COMMENT = 'rgba(135,134,127,0.4)';
 
 function ConfigView() {
   return (
     <pre className="px-4 py-3 text-xs font-mono leading-relaxed overflow-auto h-[400px] sm:h-[450px]" style={{ color: '#CBC9BC' }}>
       {CONFIG_YAML.split('\n').map((line, i) => {
-        // Key: value coloring
+        // Empty line
+        if (line.trim() === '') return <div key={i}>&nbsp;</div>;
+
+        // Key: value
         const keyMatch = line.match(/^(\s*)([\w_]+)(:)(.*)/);
         if (keyMatch) {
           const [, indent, key, colon, rest] = keyMatch;
-          const isSection = rest.trim() === '' || rest.trim() === '|';
+          const trimmed = rest.trim();
+          const isSection = trimmed === '' || trimmed === '|';
+
+          // Detect string value (quoted or unquoted after colon)
+          let valueColor = YAML_BRACKET;
+          if (trimmed.startsWith('"') || trimmed.startsWith("'")) valueColor = YAML_STRING;
+          else if (trimmed.startsWith('[')) valueColor = YAML_BRACKET;
+          else if (trimmed && !isSection) valueColor = YAML_STRING;
+
           return (
             <div key={i}>
               {indent}
-              <span style={{ color: isSection ? '#DFD8D0' : MUTED }}>{key}</span>
-              <span style={{ color: 'rgba(135,134,127,0.4)' }}>{colon}</span>
-              {rest && <span style={{ color: rest.trim().startsWith('[') ? 'rgba(135,134,127,0.6)' : '#87867F' }}>{rest}</span>}
+              <span style={{ color: YAML_KEY }}>{key}</span>
+              <span style={{ color: YAML_COLON }}>{colon}</span>
+              {rest && <span style={{ color: isSection ? YAML_COLON : valueColor }}>{rest}</span>}
             </div>
           );
         }
-        // List items
+
+        // List items (- value)
         const listMatch = line.match(/^(\s*)(- )(.*)/);
         if (listMatch) {
           const [, indent, dash, value] = listMatch;
+          // Check if it's a key: value inside list item
+          const subKeyMatch = value.match(/^([\w_]+)(:)(.*)/);
+          if (subKeyMatch) {
+            const [, sk, sc, sv] = subKeyMatch;
+            return (
+              <div key={i}>
+                {indent}<span style={{ color: YAML_DASH }}>{dash}</span>
+                <span style={{ color: YAML_KEY }}>{sk}</span>
+                <span style={{ color: YAML_COLON }}>{sc}</span>
+                <span style={{ color: YAML_STRING }}>{sv}</span>
+              </div>
+            );
+          }
           return (
             <div key={i}>
-              {indent}<span style={{ color: 'rgba(135,134,127,0.4)' }}>{dash}</span><span style={{ color: MUTED }}>{value}</span>
+              {indent}<span style={{ color: YAML_DASH }}>{dash}</span>
+              <span style={{ color: YAML_STRING }}>{value}</span>
             </div>
           );
         }
-        // Comment or plain text
-        if (line.trim().startsWith('#')) {
-          return <div key={i} style={{ color: 'rgba(135,134,127,0.3)' }}>{line}</div>;
+
+        // Indented text (multiline string content)
+        if (line.match(/^\s{6,}/)) {
+          return <div key={i} style={{ color: YAML_STRING }}>{line}</div>;
         }
-        return <div key={i} style={{ color: MUTED }}>{line}</div>;
+
+        // Comment
+        if (line.trim().startsWith('#')) {
+          return <div key={i} style={{ color: YAML_COMMENT }}>{line}</div>;
+        }
+
+        return <div key={i} style={{ color: '#87867F' }}>{line}</div>;
       })}
     </pre>
   );
@@ -364,6 +417,7 @@ function ConfigView() {
 
 export function HeroDemo() {
   const [activeTab, setActiveTab] = useState<'config' | 'chat'>('config');
+  const [userClickedConfig, setUserClickedConfig] = useState(false);
   const [visibleSteps, setVisibleSteps] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [typingIndex, setTypingIndex] = useState(-1);
@@ -372,15 +426,22 @@ export function HeroDemo() {
   const [selectedButton, setSelectedButton] = useState<string | undefined>();
   const [inputText, setInputText] = useState('');
 
-  // Auto-switch from Config to Chat after 4s
+  // Auto-switch from Config to Chat after 4s (only if user didn't manually click Config)
   useEffect(() => {
-    if (activeTab !== 'config') return;
+    if (activeTab !== 'config' || userClickedConfig) return;
     const t = setTimeout(() => setActiveTab('chat'), 4000);
     return () => clearTimeout(t);
-  }, [activeTab]);
+  }, [activeTab, userClickedConfig]);
+
+  // When user leaves the area, reset manual override
+  const handleMouseLeave = useCallback(() => {
+    setIsPaused(false);
+    setUserClickedConfig(false);
+  }, []);
 
   const resetDemo = useCallback(() => {
     setActiveTab('config');
+    setUserClickedConfig(false);
     setVisibleSteps(0);
     setTypingIndex(-1);
     setTypedChars(0);
@@ -543,7 +604,7 @@ export function HeroDemo() {
     <div
       className="relative mx-auto w-full max-w-[720px]"
       onMouseEnter={() => setIsPaused(true)}
-      onMouseLeave={() => setIsPaused(false)}
+      onMouseLeave={handleMouseLeave}
     >
       <div className="rounded-[2px] border overflow-hidden" style={{ borderColor: 'rgba(135,134,127,0.12)', backgroundColor: '#1A1A1A' }}>
         {/* Header with tabs */}
@@ -559,28 +620,30 @@ export function HeroDemo() {
             </span>
           </div>
           <div className="flex gap-0 text-[11px] font-mono">
-            <button
-              className="px-3 py-1 rounded-[2px] transition-colors"
-              style={{
-                color: activeTab === 'config' ? '#DFD8D0' : 'rgba(135,134,127,0.5)',
-                backgroundColor: activeTab === 'config' ? 'rgba(135,134,127,0.1)' : 'transparent',
-              }}
-              onClick={() => setActiveTab('config')}
-              tabIndex={-1}
-            >
-              Config
-            </button>
-            <button
-              className="px-3 py-1 rounded-[2px] transition-colors"
-              style={{
-                color: activeTab === 'chat' ? '#DFD8D0' : 'rgba(135,134,127,0.5)',
-                backgroundColor: activeTab === 'chat' ? 'rgba(135,134,127,0.1)' : 'transparent',
-              }}
-              onClick={() => setActiveTab('chat')}
-              tabIndex={-1}
-            >
-              Chat
-            </button>
+            {(['config', 'chat'] as const).map((tab) => {
+              const isActive = activeTab === tab;
+              const label = tab === 'config' ? 'agents.yaml' : 'Chat';
+              return (
+                <button
+                  key={tab}
+                  className="px-3 py-1.5 transition-colors cursor-pointer border-b-2"
+                  style={{
+                    color: isActive ? '#DFD8D0' : 'rgba(135,134,127,0.5)',
+                    borderBottomColor: isActive ? '#D7513E' : 'transparent',
+                    backgroundColor: 'transparent',
+                  }}
+                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.color = '#CBC9BC'; }}
+                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.color = 'rgba(135,134,127,0.5)'; }}
+                  onClick={() => {
+                    setActiveTab(tab);
+                    if (tab === 'config') setUserClickedConfig(true);
+                  }}
+                  tabIndex={-1}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
