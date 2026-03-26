@@ -51,8 +51,8 @@ const SCENARIO: DemoStep[] = [
   { type: 'sub_tool', tool: 'diff_pricing', content: 'enterprise tier, Feb vs Jan', delay: 1200 },
   { type: 'sub_result', content: 'Removed: onboarding calls, CSM assignment', delay: 1800 },
   { type: 'thinking', delay: 1200 },
-  { type: 'sub_tool', tool: 'check_support_tickets', content: 'cohort: post-Feb enterprise', delay: 1000 },
-  { type: 'sub_result', content: 'Avg 8.3 tickets/account vs 2.1 baseline', delay: 1400 },
+  { type: 'sub_tool', tool: 'check_tickets', content: 'post-Feb cohort', delay: 1000 },
+  { type: 'sub_result', content: '8.3 tickets/acct vs 2.1 avg', delay: 1400 },
   { type: 'spawn_done', content: 'research-agent: 2 findings, high confidence', delay: 1000 },
 
   // Composing the answer
@@ -224,7 +224,7 @@ function StatusDot({ done }: { done?: boolean }) {
 function ToolCallBlock({ tool, args, result, done }: { tool: string; args?: string; result?: string; done?: boolean }) {
   return (
     <div
-      className="rounded-[2px] border-l-2 px-3 py-1.5 text-xs font-mono flex items-center gap-0"
+      className="rounded-[2px] border-l-2 px-3 py-1.5 text-xs font-mono flex items-center gap-0 overflow-hidden"
       style={{ borderColor: done ? BORDER_DONE : BORDER_TOOL, backgroundColor: SURFACE }}
     >
       <span className="flex items-center" style={{ color: MUTED }}>
