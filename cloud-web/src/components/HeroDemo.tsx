@@ -45,14 +45,18 @@ const SCENARIO: DemoStep[] = [
   { type: 'thinking', delay: 2400 },
   { type: 'text', content: 'Hmm. All 14 accounts joined after the Feb pricing change. Let me check what changed...', delay: 1200 },
 
-  // Spawns sub-agent
-  { type: 'spawn', content: 'research-agent: diff pricing tiers Feb vs Jan', delay: 1600 },
-  { type: 'sub_tool', tool: 'diff_pricing', content: 'enterprise tier, Feb vs Jan', delay: 700 },
-  { type: 'sub_result', content: 'Removed: onboarding calls, CSM assignment', delay: 1000 },
-  { type: 'spawn_done', content: 'research-agent done', delay: 800 },
+  // Spawns sub-agent — with realistic timing
+  { type: 'spawn', content: 'research-agent: diff pricing tiers Feb vs Jan', delay: 1800 },
+  { type: 'thinking', delay: 1600 },
+  { type: 'sub_tool', tool: 'diff_pricing', content: 'enterprise tier, Feb vs Jan', delay: 1200 },
+  { type: 'sub_result', content: 'Removed: onboarding calls, CSM assignment', delay: 1800 },
+  { type: 'thinking', delay: 1200 },
+  { type: 'sub_tool', tool: 'check_support_tickets', content: 'cohort: post-Feb enterprise', delay: 1000 },
+  { type: 'sub_result', content: 'Avg 8.3 tickets/account vs 2.1 baseline', delay: 1400 },
+  { type: 'spawn_done', content: 'research-agent: 2 findings, high confidence', delay: 1000 },
 
-  // Short, sharp answer — same visual weight as tool blocks
-  { type: 'thinking', delay: 1400 },
+  // Composing the answer
+  { type: 'thinking', delay: 1800 },
   {
     type: 'response',
     content:
@@ -68,19 +72,22 @@ const SCENARIO: DemoStep[] = [
     options: ['Draft rescue plan', 'Alert CS team', 'Deep dive'],
     delay: 2000,
   },
-  { type: 'button_click', content: 'Alert CS team', delay: 1200 },
+  { type: 'button_click', content: 'Alert CS team', delay: 1000 },
+
+  // Action after button click
+  { type: 'tool_call', tool: 'notify_cs_team', content: '#cs-enterprise, priority: high', delay: 400 },
+  { type: 'tool_result', tool: 'notify_cs_team', content: 'Sent to 4 CSMs', delay: 1200 },
+  { type: 'text', content: 'CS team alerted. Anything else?', delay: 1800 },
 
   // === Turn 2: User follows up ===
-  { type: 'input_typing', content: 'Also draft a rescue plan for the 14 accounts', delay: 500 },
+  { type: 'input_typing', content: 'Draft a rescue plan for those 14 accounts', delay: 500 },
   { type: 'input_send', delay: 600 },
   { type: 'thinking', delay: 1800 },
 
-  { type: 'tool_call', tool: 'notify_cs_team', content: 'channel: #cs-enterprise, priority: high', delay: 400 },
-  { type: 'tool_result', tool: 'notify_cs_team', content: 'Notification sent to 4 CSMs', delay: 1200 },
-  { type: 'tool_call', tool: 'draft_rescue_plan', content: '14 accounts, template: white-glove', delay: 500 },
-  { type: 'tool_result', tool: 'draft_rescue_plan', content: '14 personalized outreach emails ready', delay: 1600 },
+  { type: 'tool_call', tool: 'draft_rescue_plan', content: '14 accounts, white-glove', delay: 500 },
+  { type: 'tool_result', tool: 'draft_rescue_plan', content: '14 personalized emails ready', delay: 1600 },
 
-  { type: 'text', content: 'CS team notified. Rescue plan ready for review.', delay: 4000 },
+  { type: 'text', content: 'Rescue plan drafted. Ready for your review.', delay: 4000 },
 ];
 
 const TYPEWRITER_TYPES = new Set<DemoStep['type']>(['input_typing', 'text', 'response']);
@@ -188,6 +195,9 @@ const MUTED = '#87867F';
 const SURFACE = 'rgba(30,30,30,0.6)';
 const BORDER_TOOL = 'rgba(135,134,127,0.25)';
 const BORDER_DONE = 'rgba(135,134,127,0.15)';
+const SPAWN_BORDER = 'rgba(147,197,253,0.3)';
+const SPAWN_BG = 'rgba(30,40,60,0.5)';
+const SPAWN_TEXT = '#93c5fd';
 
 function UserBubble({ text }: { text: string }) {
   return (
@@ -231,9 +241,9 @@ function SpawnBlock({ content }: { content: string }) {
   return (
     <div
       className="rounded-[2px] border-l-2 px-3 py-1.5 text-xs"
-      style={{ borderColor: BORDER_TOOL, backgroundColor: SURFACE, color: '#CBC9BC' }}
+      style={{ borderColor: SPAWN_BORDER, backgroundColor: SPAWN_BG, color: SPAWN_TEXT }}
     >
-      <BranchIcon className="text-brand-shade3" />
+      <BranchIcon className="text-blue-300/60" />
       {content}
     </div>
   );
@@ -243,9 +253,9 @@ function SpawnDoneBlock({ content }: { content: string }) {
   return (
     <div
       className="rounded-[2px] border-l-2 px-3 py-1.5 text-xs"
-      style={{ borderColor: BORDER_DONE, backgroundColor: SURFACE, color: MUTED }}
+      style={{ borderColor: SPAWN_BORDER, backgroundColor: SPAWN_BG, color: 'rgba(147,197,253,0.6)' }}
     >
-      <CheckIcon className="text-brand-shade3" />
+      <CheckIcon className="text-blue-300/50" />
       {content}
     </div>
   );
@@ -383,13 +393,24 @@ export function HeroDemo() {
       switch (step.type) {
         case 'input_typing': break;
         case 'input_send': elements.push(<UserBubble key={key} text={userMessageText} />); break;
-        case 'thinking': break; // spinner disappears after
-        case 'tool_call': elements.push(<ToolCallBlock key={key} tool={step.tool ?? ''} content={text} />); break;
+        case 'thinking': break;
+        case 'tool_call': {
+          // Check if next completed step is the result — if so, skip (result renders the done block)
+          const nextStep = i + 1 < visibleSteps ? SCENARIO[i + 1] : null;
+          if (nextStep?.type === 'tool_result') break; // result will render the done version
+          elements.push(<ToolCallBlock key={key} tool={step.tool ?? ''} content={text} />);
+          break;
+        }
         case 'tool_result': elements.push(<ToolCallBlock key={key} tool={step.tool ?? ''} content={text} done />); break;
         case 'text': elements.push(<AgentText key={key} text={text} />); break;
         case 'spawn': elements.push(<SpawnBlock key={key} content={text} />); break;
-        case 'sub_tool': elements.push(<div key={key} className="ml-4"><ToolCallBlock tool={step.tool ?? ''} content={text} /></div>); break;
-        case 'sub_result': elements.push(<div key={key} className="ml-4"><ToolCallBlock tool="" content={text} done /></div>); break;
+        case 'sub_tool': {
+          const nextStep = i + 1 < visibleSteps ? SCENARIO[i + 1] : null;
+          if (nextStep?.type === 'sub_result') break;
+          elements.push(<div key={key} className="ml-4"><ToolCallBlock tool={step.tool ?? ''} content={text} /></div>);
+          break;
+        }
+        case 'sub_result': elements.push(<div key={key} className="ml-4"><ToolCallBlock tool={step.tool ?? ''} content={text} done /></div>); break;
         case 'spawn_done': elements.push(<SpawnDoneBlock key={key} content={text} />); break;
         case 'response': elements.push(<AgentText key={key} text={text} isResponse />); break;
         case 'ask_buttons': elements.push(<AskButtons key={key} content={text} options={step.options ?? []} selected={selectedButton} />); break;
@@ -438,7 +459,7 @@ export function HeroDemo() {
             <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
           </div>
           <span className="text-xs font-mono" style={{ color: MUTED }}>
-            ByteBrew Agent <span style={{ color: 'rgba(135,134,127,0.5)' }}>&middot; analytics &middot; gpt-4o</span>
+            ByteBrew Agent <span style={{ color: 'rgba(135,134,127,0.5)' }}>&middot; analytics &middot; claude-sonnet-4</span>
           </span>
         </div>
 
