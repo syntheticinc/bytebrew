@@ -104,18 +104,7 @@ function HeroSection() {
           </div>
         </div>
 
-        {/* Demo context */}
-        <div className="text-center mb-4">
-          <p className="text-xs font-mono tracking-wide uppercase" style={{ color: '#87867F' }}>
-            Example: an analytics agent built with ByteBrew in 10 minutes
-          </p>
-        </div>
-
         <HeroDemo />
-
-        <p className="text-center mt-4 text-xs" style={{ color: '#87867F' }}>
-          Your agent. Your data. Your infrastructure. &mdash; just add a YAML config and <code className="font-mono" style={{ color: '#CBC9BC' }}>docker compose up</code>
-        </p>
       </div>
     </section>
   );

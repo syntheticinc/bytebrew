@@ -301,7 +301,69 @@ function AskButtons({ content, options, selected }: { content: string; options: 
 /*  Main Component                                                     */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  Config YAML (shown in Config tab)                                  */
+/* ------------------------------------------------------------------ */
+
+const CONFIG_YAML = `agents:
+  analytics:
+    model: glm-5
+    system_prompt: |
+      You are a business analyst.
+      Investigate anomalies before reporting.
+    tools:
+      - get_churn_data
+      - get_onboarding_nps
+    can_spawn: [research-agent]
+
+  research-agent:
+    model: glm-5
+    tools: [diff_pricing, check_tickets]`;
+
+function ConfigView() {
+  return (
+    <pre className="px-4 py-3 text-xs font-mono leading-relaxed overflow-auto h-[400px] sm:h-[450px]" style={{ color: '#CBC9BC' }}>
+      {CONFIG_YAML.split('\n').map((line, i) => {
+        // Key: value coloring
+        const keyMatch = line.match(/^(\s*)([\w_]+)(:)(.*)/);
+        if (keyMatch) {
+          const [, indent, key, colon, rest] = keyMatch;
+          const isSection = rest.trim() === '' || rest.trim() === '|';
+          return (
+            <div key={i}>
+              {indent}
+              <span style={{ color: isSection ? '#DFD8D0' : MUTED }}>{key}</span>
+              <span style={{ color: 'rgba(135,134,127,0.4)' }}>{colon}</span>
+              {rest && <span style={{ color: rest.trim().startsWith('[') ? 'rgba(135,134,127,0.6)' : '#87867F' }}>{rest}</span>}
+            </div>
+          );
+        }
+        // List items
+        const listMatch = line.match(/^(\s*)(- )(.*)/);
+        if (listMatch) {
+          const [, indent, dash, value] = listMatch;
+          return (
+            <div key={i}>
+              {indent}<span style={{ color: 'rgba(135,134,127,0.4)' }}>{dash}</span><span style={{ color: MUTED }}>{value}</span>
+            </div>
+          );
+        }
+        // Comment or plain text
+        if (line.trim().startsWith('#')) {
+          return <div key={i} style={{ color: 'rgba(135,134,127,0.3)' }}>{line}</div>;
+        }
+        return <div key={i} style={{ color: MUTED }}>{line}</div>;
+      })}
+    </pre>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Main Component                                                     */
+/* ------------------------------------------------------------------ */
+
 export function HeroDemo() {
+  const [activeTab, setActiveTab] = useState<'config' | 'chat'>('config');
   const [visibleSteps, setVisibleSteps] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [typingIndex, setTypingIndex] = useState(-1);
@@ -310,7 +372,15 @@ export function HeroDemo() {
   const [selectedButton, setSelectedButton] = useState<string | undefined>();
   const [inputText, setInputText] = useState('');
 
+  // Auto-switch from Config to Chat after 4s
+  useEffect(() => {
+    if (activeTab !== 'config') return;
+    const t = setTimeout(() => setActiveTab('chat'), 4000);
+    return () => clearTimeout(t);
+  }, [activeTab]);
+
   const resetDemo = useCallback(() => {
+    setActiveTab('config');
     setVisibleSteps(0);
     setTypingIndex(-1);
     setTypedChars(0);
@@ -476,39 +546,71 @@ export function HeroDemo() {
       onMouseLeave={() => setIsPaused(false)}
     >
       <div className="rounded-[2px] border overflow-hidden" style={{ borderColor: 'rgba(135,134,127,0.12)', backgroundColor: '#1A1A1A' }}>
-        {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-2.5 border-b" style={{ borderColor: 'rgba(135,134,127,0.08)' }}>
-          <div className="flex gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
-            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
-            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
+        {/* Header with tabs */}
+        <div className="flex items-center justify-between px-4 py-2.5 border-b" style={{ borderColor: 'rgba(135,134,127,0.08)' }}>
+          <div className="flex items-center gap-3">
+            <div className="flex gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
+            </div>
+            <span className="text-xs font-mono" style={{ color: MUTED }}>
+              ByteBrew Agent <span style={{ color: 'rgba(135,134,127,0.5)' }}>&middot; analytics &middot; glm-5</span>
+            </span>
           </div>
-          <span className="text-xs font-mono" style={{ color: MUTED }}>
-            ByteBrew Agent <span style={{ color: 'rgba(135,134,127,0.5)' }}>&middot; analytics &middot; glm-5</span>
-          </span>
+          <div className="flex gap-0 text-[11px] font-mono">
+            <button
+              className="px-3 py-1 rounded-[2px] transition-colors"
+              style={{
+                color: activeTab === 'config' ? '#DFD8D0' : 'rgba(135,134,127,0.5)',
+                backgroundColor: activeTab === 'config' ? 'rgba(135,134,127,0.1)' : 'transparent',
+              }}
+              onClick={() => setActiveTab('config')}
+              tabIndex={-1}
+            >
+              Config
+            </button>
+            <button
+              className="px-3 py-1 rounded-[2px] transition-colors"
+              style={{
+                color: activeTab === 'chat' ? '#DFD8D0' : 'rgba(135,134,127,0.5)',
+                backgroundColor: activeTab === 'chat' ? 'rgba(135,134,127,0.1)' : 'transparent',
+              }}
+              onClick={() => setActiveTab('chat')}
+              tabIndex={-1}
+            >
+              Chat
+            </button>
+          </div>
         </div>
 
-        {/* Chat */}
-        <div ref={chatRef} className="px-4 py-3 space-y-3 overflow-y-auto h-[400px] sm:h-[450px]" style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}>
-          {renderedSteps}
-        </div>
+        {/* Content — Config or Chat */}
+        {activeTab === 'config' ? (
+          <ConfigView />
+        ) : (
+          <>
+            <div ref={chatRef} className="px-4 py-3 space-y-3 overflow-y-auto h-[400px] sm:h-[450px]" style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}>
+              {renderedSteps}
+            </div>
 
-        {/* Input bar */}
-        <div className="flex items-center gap-2 px-4 py-2.5 border-t" style={{ borderColor: 'rgba(135,134,127,0.08)' }}>
-          <div
-            className="flex-1 rounded-[2px] border px-3 py-1.5 text-xs font-mono"
-            style={{
-              borderColor: isInputActive ? 'rgba(215,81,62,0.3)' : 'rgba(135,134,127,0.12)',
-              color: isInputActive ? '#DFD8D0' : '#87867F',
-              backgroundColor: 'rgba(17,17,17,0.4)',
-            }}
-          >
-            {isInputActive ? inputDisplay : 'Type a message...'}
-          </div>
-          <button className="rounded-[2px] px-3 py-1.5 text-xs text-white shrink-0" style={{ backgroundColor: '#D7513E' }} tabIndex={-1}>
-            Send
-          </button>
-        </div>
+            {/* Input bar */}
+            <div className="flex items-center gap-2 px-4 py-2.5 border-t" style={{ borderColor: 'rgba(135,134,127,0.08)' }}>
+              <div
+                className="flex-1 rounded-[2px] border px-3 py-1.5 text-xs font-mono"
+                style={{
+                  borderColor: isInputActive ? 'rgba(215,81,62,0.3)' : 'rgba(135,134,127,0.12)',
+                  color: isInputActive ? '#DFD8D0' : '#87867F',
+                  backgroundColor: 'rgba(17,17,17,0.4)',
+                }}
+              >
+                {isInputActive ? inputDisplay : 'Type a message...'}
+              </div>
+              <button className="rounded-[2px] px-3 py-1.5 text-xs text-white shrink-0" style={{ backgroundColor: '#D7513E' }} tabIndex={-1}>
+                Send
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {isPaused && (
