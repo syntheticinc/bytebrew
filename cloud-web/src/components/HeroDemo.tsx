@@ -342,7 +342,7 @@ const YAML_COMMENT = 'rgba(135,134,127,0.4)';
 
 function ConfigView() {
   return (
-    <pre className="px-4 py-3 text-xs font-mono leading-relaxed overflow-auto h-[400px] sm:h-[450px]" style={{ color: '#CBC9BC' }}>
+    <pre className="px-4 py-3 text-xs font-mono leading-relaxed overflow-auto h-[400px] sm:h-[450px]" style={{ color: '#CBC9BC', scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}>
       {CONFIG_YAML.split('\n').map((line, i) => {
         // Empty line
         if (line.trim() === '') return <div key={i}>&nbsp;</div>;
