@@ -4,13 +4,6 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-interface DemoField {
-  label: string;
-  value: string;
-  type?: 'text' | 'radio';
-  options?: string[];
-}
-
 interface DemoStep {
   type:
     | 'input_typing'
@@ -25,65 +18,143 @@ interface DemoStep {
     | 'spawn_done'
     | 'response'
     | 'ask_buttons'
-    | 'button_click'
-    | 'ask_form'
-    | 'form_submit';
+    | 'button_click';
   content?: string;
   tool?: string;
   options?: string[];
-  fields?: DemoField[];
   delay: number;
 }
 
 /* ------------------------------------------------------------------ */
-/*  Scenario — deep anomaly insight                                    */
+/*  Scenario                                                           */
 /* ------------------------------------------------------------------ */
 
 const SCENARIO: DemoStep[] = [
-  // User types in input bar
-  { type: 'input_typing', content: 'Review Q1 and flag anything unusual', delay: 600 },
-  { type: 'input_send', delay: 800 },
-  // Brewing spinner shows while agent "thinks"
-  { type: 'thinking', delay: 2800 },
-  // Agent starts working
-  { type: 'tool_call', tool: 'fetch_metrics', content: 'Q1-2026, segments: revenue, NPS, churn', delay: 1200 },
-  { type: 'tool_result', tool: 'fetch_metrics', content: '4 categories loaded, 3 months', delay: 2200 },
-  { type: 'tool_call', tool: 'anomaly_detection', content: 'sensitivity: high', delay: 1400 },
-  { type: 'tool_result', tool: 'anomaly_detection', content: '3 anomalies detected', delay: 1600 },
-  // Pause — agent "notices" something
-  { type: 'thinking', delay: 2000 },
-  { type: 'text', content: 'Hmm, there could be a risk here. Let me check something...', delay: 1800 },
-  // Spawn sub-agent
-  { type: 'spawn', content: 'analytics-agent: "Correlate NPS drop with product changes"', delay: 2200 },
-  { type: 'sub_tool', tool: 'correlate_events', content: 'NPS anomaly + pricing_updates', delay: 1600 },
-  { type: 'sub_result', content: 'Strong correlation: NPS drop → Feb pricing change', delay: 1400 },
-  { type: 'spawn_done', content: 'analytics-agent completed', delay: 1000 },
-  // The insight — concise and impactful
+  // === Turn 1: User asks a specific question ===
+  { type: 'input_typing', content: 'Why did enterprise churn spike in March?', delay: 500 },
+  { type: 'input_send', delay: 700 },
+  { type: 'thinking', delay: 2200 },
+
+  // Quick data pulls
+  { type: 'tool_call', tool: 'get_churn_data', content: 'enterprise, Q1', delay: 500 },
+  { type: 'tool_result', tool: 'get_churn_data', content: '14 accounts churned, +340% vs Q4', delay: 1400 },
+  { type: 'tool_call', tool: 'get_onboarding_nps', content: 'cohort: post-Feb', delay: 400 },
+  { type: 'tool_result', tool: 'get_onboarding_nps', content: 'NPS 31 (was 72), tickets 3x avg', delay: 1200 },
+
+  // Agent pauses — notices a pattern
+  { type: 'thinking', delay: 2400 },
+  { type: 'text', content: 'Hmm. All 14 accounts joined after the Feb pricing change. Let me check what changed...', delay: 1200 },
+
+  // Spawns sub-agent
+  { type: 'spawn', content: 'research-agent: diff pricing tiers Feb vs Jan', delay: 1600 },
+  { type: 'sub_tool', tool: 'diff_pricing', content: 'enterprise tier, Feb vs Jan', delay: 700 },
+  { type: 'sub_result', content: 'Removed: onboarding calls, CSM assignment', delay: 1000 },
+  { type: 'spawn_done', content: 'research-agent done', delay: 800 },
+
+  // Short, sharp answer — same visual weight as tool blocks
+  { type: 'thinking', delay: 1400 },
   {
     type: 'response',
     content:
-      '**Hidden risk found.**\n\n' +
-      'Revenue is up 18%, but NPS dropped 12 points in Enterprise — specifically accounts onboarded after the February pricing change.\n\n' +
-      '**Root cause:** removed dedicated onboarding calls. Enterprise buyers feel abandoned.\n\n' +
-      '**Predicted impact:** ~$420K churn over 2 quarters.\n' +
-      '**Fix cost:** $15K/quarter. **ROI: 28:1.**',
-    delay: 3000,
+      '**Root cause:** Feb pricing removed onboarding calls. Enterprise buyers felt abandoned.\n\n' +
+      '**Impact:** ~$420K churn risk. **Fix:** $15K/q. ROI 28:1.',
+    delay: 2000,
   },
+
+  // Options — user picks second
   {
     type: 'ask_buttons',
-    content: 'How to proceed?',
-    options: ['Draft rescue campaign', 'Alert leadership', 'Deep dive'],
-    delay: 2500,
+    content: 'Next step?',
+    options: ['Draft rescue plan', 'Alert CS team', 'Deep dive'],
+    delay: 2000,
   },
-  { type: 'button_click', content: 'Draft rescue campaign', delay: 1200 },
-  { type: 'tool_call', tool: 'draft_campaign', content: '23 affected accounts, template: white-glove', delay: 1400 },
-  { type: 'tool_result', tool: 'draft_campaign', content: '23 personalized emails ready', delay: 2000 },
-  { type: 'text', content: 'Campaign queued. Review before sending?', delay: 4000 },
+  { type: 'button_click', content: 'Alert CS team', delay: 1200 },
+
+  // === Turn 2: User follows up ===
+  { type: 'input_typing', content: 'Also draft a rescue plan for the 14 accounts', delay: 500 },
+  { type: 'input_send', delay: 600 },
+  { type: 'thinking', delay: 1800 },
+
+  { type: 'tool_call', tool: 'notify_cs_team', content: 'channel: #cs-enterprise, priority: high', delay: 400 },
+  { type: 'tool_result', tool: 'notify_cs_team', content: 'Notification sent to 4 CSMs', delay: 1200 },
+  { type: 'tool_call', tool: 'draft_rescue_plan', content: '14 accounts, template: white-glove', delay: 500 },
+  { type: 'tool_result', tool: 'draft_rescue_plan', content: '14 personalized outreach emails ready', delay: 1600 },
+
+  { type: 'text', content: 'CS team notified. Rescue plan ready for review.', delay: 4000 },
 ];
 
 const TYPEWRITER_TYPES = new Set<DemoStep['type']>(['input_typing', 'text', 'response']);
-const USER_CHAR_MS = 30;
-const AGENT_CHAR_MS = 14;
+const USER_CHAR_MS = 28;
+const AGENT_CHAR_MS = 12;
+
+/* ------------------------------------------------------------------ */
+/*  Coffee spinner — rotating messages                                 */
+/* ------------------------------------------------------------------ */
+
+const BREW_PHRASES = [
+  'Grinding beans...',
+  'Brewing...',
+  'Pulling a shot...',
+  'Steaming...',
+  'Almost ready...',
+];
+
+let brewCounter = 0;
+
+function BrewingSpinner() {
+  const phrase = BREW_PHRASES[brewCounter++ % BREW_PHRASES.length];
+  return (
+    <div className="flex items-center gap-2 py-2">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4" style={{ color: '#87867F' }}>
+        <path d="M17 8h1a4 4 0 010 8h-1" strokeLinecap="round" />
+        <path d="M3 8h14v9a4 4 0 01-4 4H7a4 4 0 01-4-4V8z" />
+        <path d="M7 2v3" strokeLinecap="round" style={{ animation: 'heroSteam 1.2s ease-in-out infinite' }} />
+        <path d="M10 1v3" strokeLinecap="round" style={{ animation: 'heroSteam 1.2s ease-in-out infinite 0.3s' }} />
+        <path d="M13 2v3" strokeLinecap="round" style={{ animation: 'heroSteam 1.2s ease-in-out infinite 0.6s' }} />
+      </svg>
+      <span className="text-xs font-mono animate-pulse" style={{ color: '#87867F' }}>{phrase}</span>
+      <style>{`
+        @keyframes heroSteam {
+          0% { opacity: 0.3; transform: translateY(0); }
+          50% { opacity: 1; transform: translateY(-3px); }
+          100% { opacity: 0.3; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Inline SVG icons (monochrome, no emoji)                            */
+/* ------------------------------------------------------------------ */
+
+function GearIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg className={`inline-block w-3 h-3 mr-1 ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function CheckIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg className={`inline-block w-3 h-3 mr-1 ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function BranchIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg className={`inline-block w-3 h-3 mr-1 ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="18" cy="18" r="3" />
+      <circle cx="6" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M6 9v3a3 3 0 0 0 3 3h6" />
+    </svg>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /*  Tiny markdown renderer                                             */
@@ -95,72 +166,42 @@ function renderMarkdown(raw: string): React.ReactNode[] {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-
-    if (line === '') {
-      nodes.push(<br key={`br-${i}`} />);
-      continue;
-    }
+    if (line === '') { nodes.push(<br key={`br-${i}`} />); continue; }
 
     const listMatch = line.match(/^(\d+)\.\s+(.+)$/);
     if (listMatch) {
       nodes.push(
         <div key={`li-${i}`} className="pl-3">
-          <span className="text-brand-shade2 mr-1">{listMatch[1]}.</span>
+          <span className="mr-1" style={{ color: '#87867F' }}>{listMatch[1]}.</span>
           {inlineBold(listMatch[2])}
         </div>,
       );
       continue;
     }
-
     nodes.push(<div key={`ln-${i}`}>{inlineBold(line)}</div>);
   }
-
   return nodes;
 }
 
 function inlineBold(text: string): React.ReactNode {
   const parts = text.split(/\*\*(.+?)\*\*/g);
   if (parts.length === 1) return text;
-  return parts.map((p, i) => (i % 2 === 1 ? <strong key={i}>{p}</strong> : p));
+  return parts.map((p, i) => (i % 2 === 1 ? <strong key={i} className="text-brand-light">{p}</strong> : p));
 }
 
 /* ------------------------------------------------------------------ */
-/*  Brewing spinner                                                    */
+/*  Step renderers — monochrome, minimal                               */
 /* ------------------------------------------------------------------ */
 
-function BrewingSpinner() {
-  return (
-    <div className="flex items-center gap-2 py-2">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4 text-brand-shade3">
-        <path d="M17 8h1a4 4 0 010 8h-1" strokeLinecap="round" />
-        <path d="M3 8h14v9a4 4 0 01-4 4H7a4 4 0 01-4-4V8z" />
-        <path d="M7 2v3" strokeLinecap="round" style={{ animation: 'steam 1.2s ease-in-out infinite' }} />
-        <path d="M10 1v3" strokeLinecap="round" style={{ animation: 'steam 1.2s ease-in-out infinite 0.3s' }} />
-        <path d="M13 2v3" strokeLinecap="round" style={{ animation: 'steam 1.2s ease-in-out infinite 0.6s' }} />
-      </svg>
-      <span className="text-xs font-mono text-brand-shade3 animate-pulse">Brewing...</span>
-      <style>{`
-        @keyframes steam {
-          0% { opacity: 0.3; transform: translateY(0); }
-          50% { opacity: 1; transform: translateY(-3px); }
-          100% { opacity: 0.3; transform: translateY(0); }
-        }
-      `}</style>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Step renderers                                                     */
-/* ------------------------------------------------------------------ */
+const MUTED = '#87867F';
+const SURFACE = 'rgba(30,30,30,0.6)';
+const BORDER_TOOL = 'rgba(135,134,127,0.25)';
+const BORDER_DONE = 'rgba(135,134,127,0.15)';
 
 function UserBubble({ text }: { text: string }) {
   return (
     <div className="flex justify-end">
-      <div
-        className="max-w-[80%] rounded-[2px] px-3 py-2 text-sm text-white"
-        style={{ backgroundColor: '#D7513E' }}
-      >
+      <div className="max-w-[80%] rounded-[2px] px-3 py-2 text-sm text-white" style={{ backgroundColor: '#D7513E' }}>
         {text}
       </div>
     </div>
@@ -170,21 +211,16 @@ function UserBubble({ text }: { text: string }) {
 function ToolCallBlock({ tool, content, done }: { tool: string; content: string; done?: boolean }) {
   return (
     <div
-      className="rounded-[2px] border-l-2 px-3 py-2 text-xs font-mono"
-      style={{
-        borderColor: done ? 'rgba(34,197,94,0.5)' : 'rgba(249,115,22,0.5)',
-        backgroundColor: 'rgba(30,41,59,0.5)',
-      }}
+      className="rounded-[2px] border-l-2 px-3 py-1.5 text-xs font-mono"
+      style={{ borderColor: done ? BORDER_DONE : BORDER_TOOL, backgroundColor: SURFACE }}
     >
-      <span className="text-brand-shade2">
-        {done ? '\u2705 ' : '\u2699\uFE0F '}
+      <span style={{ color: MUTED }}>
+        {done ? <CheckIcon className="text-brand-shade2" /> : <GearIcon className="text-brand-shade3" />}
         {tool}
       </span>
-      {!done && <span className="text-orange-400/70">({content})</span>}
-      {done && <span className="text-green-400/80 ml-1">{content}</span>}
-      {!done && (
-        <span className="ml-2 text-orange-300/50 animate-pulse text-[10px]">Running...</span>
-      )}
+      {!done && <span style={{ color: 'rgba(135,134,127,0.5)' }}> ({content})</span>}
+      {done && <span className="ml-1" style={{ color: '#CBC9BC' }}>{content}</span>}
+      {!done && <span className="ml-2 animate-pulse text-[10px]" style={{ color: 'rgba(135,134,127,0.4)' }}>running</span>}
     </div>
   );
 }
@@ -192,14 +228,11 @@ function ToolCallBlock({ tool, content, done }: { tool: string; content: string;
 function SpawnBlock({ content }: { content: string }) {
   return (
     <div
-      className="rounded-[2px] border-l-2 px-3 py-2 text-xs"
-      style={{
-        borderColor: 'rgba(59,130,246,0.5)',
-        backgroundColor: 'rgba(30,41,59,0.4)',
-        color: '#93c5fd',
-      }}
+      className="rounded-[2px] border-l-2 px-3 py-1.5 text-xs"
+      style={{ borderColor: BORDER_TOOL, backgroundColor: SURFACE, color: '#CBC9BC' }}
     >
-      {'\uD83D\uDD00'} {content}
+      <BranchIcon className="text-brand-shade3" />
+      {content}
     </div>
   );
 }
@@ -207,38 +240,27 @@ function SpawnBlock({ content }: { content: string }) {
 function SpawnDoneBlock({ content }: { content: string }) {
   return (
     <div
-      className="rounded-[2px] border-l-2 px-3 py-2 text-xs"
-      style={{
-        borderColor: 'rgba(59,130,246,0.5)',
-        backgroundColor: 'rgba(30,41,59,0.3)',
-        color: '#93c5fd',
-      }}
+      className="rounded-[2px] border-l-2 px-3 py-1.5 text-xs"
+      style={{ borderColor: BORDER_DONE, backgroundColor: SURFACE, color: MUTED }}
     >
-      {'\u2713'} {content}
+      <CheckIcon className="text-brand-shade3" />
+      {content}
     </div>
   );
 }
 
 function AgentText({ text, isResponse }: { text: string; isResponse?: boolean }) {
   return (
-    <div className="text-sm text-brand-light/90">
+    <div className="text-sm" style={{ color: '#DFD8D0' }}>
       {isResponse ? renderMarkdown(text) : text}
     </div>
   );
 }
 
-function AskButtons({
-  content,
-  options,
-  selected,
-}: {
-  content: string;
-  options: string[];
-  selected?: string;
-}) {
+function AskButtons({ content, options, selected }: { content: string; options: string[]; selected?: string }) {
   return (
     <div className="space-y-2">
-      <div className="text-sm text-brand-light/90">{content}</div>
+      <div className="text-sm" style={{ color: '#DFD8D0' }}>{content}</div>
       <div className="flex flex-wrap gap-2">
         {options.map((opt) => {
           const isSelected = selected === opt;
@@ -248,9 +270,9 @@ function AskButtons({
               key={opt}
               className="rounded-[2px] border px-3 py-1 text-xs transition-all duration-300"
               style={{
-                borderColor: isSelected ? '#D7513E' : 'rgba(135,134,127,0.3)',
+                borderColor: isSelected ? '#D7513E' : 'rgba(135,134,127,0.25)',
                 backgroundColor: isSelected ? '#D7513E' : 'transparent',
-                color: isSelected ? '#fff' : isFaded ? 'rgba(135,134,127,0.4)' : '#CBC9BC',
+                color: isSelected ? '#fff' : isFaded ? 'rgba(135,134,127,0.3)' : '#CBC9BC',
                 opacity: isFaded ? 0.4 : 1,
               }}
             >
@@ -276,16 +298,15 @@ export function HeroDemo() {
   const [selectedButton, setSelectedButton] = useState<string | undefined>();
   const [inputText, setInputText] = useState('');
 
-  /* ---- reset helper ---- */
   const resetDemo = useCallback(() => {
     setVisibleSteps(0);
     setTypingIndex(-1);
     setTypedChars(0);
     setSelectedButton(undefined);
     setInputText('');
+    brewCounter = 0;
   }, []);
 
-  /* ---- advance logic ---- */
   useEffect(() => {
     if (isPaused) return;
 
@@ -296,7 +317,6 @@ export function HeroDemo() {
 
     const step = SCENARIO[visibleSteps];
 
-    // input_typing — typewriter into input bar
     if (step.type === 'input_typing' && step.content) {
       if (typingIndex !== visibleSteps) {
         setTypingIndex(visibleSteps);
@@ -311,158 +331,88 @@ export function HeroDemo() {
         }, USER_CHAR_MS);
         return () => clearTimeout(t);
       }
-      // Done typing — wait before "sending"
-      const t = setTimeout(() => {
-        setVisibleSteps((v) => v + 1);
-        setTypingIndex(-1);
-      }, step.delay);
+      const t = setTimeout(() => { setVisibleSteps((v) => v + 1); setTypingIndex(-1); }, step.delay);
       return () => clearTimeout(t);
     }
 
-    // input_send — move text from input bar to chat body
     if (step.type === 'input_send') {
       setInputText('');
       const t = setTimeout(() => setVisibleSteps((v) => v + 1), step.delay);
       return () => clearTimeout(t);
     }
 
-    // Typewriter for agent text/response
     if (TYPEWRITER_TYPES.has(step.type) && step.content && step.type !== 'input_typing') {
-      if (typingIndex !== visibleSteps) {
-        setTypingIndex(visibleSteps);
-        setTypedChars(0);
-        return;
-      }
+      if (typingIndex !== visibleSteps) { setTypingIndex(visibleSteps); setTypedChars(0); return; }
       if (typedChars < step.content.length) {
         const t = setTimeout(() => setTypedChars((c) => c + 1), AGENT_CHAR_MS);
         return () => clearTimeout(t);
       }
-      const t = setTimeout(() => {
-        setVisibleSteps((v) => v + 1);
-        setTypingIndex(-1);
-      }, step.delay);
+      const t = setTimeout(() => { setVisibleSteps((v) => v + 1); setTypingIndex(-1); }, step.delay);
       return () => clearTimeout(t);
     }
 
-    // Handle button_click
     if (step.type === 'button_click') {
       setSelectedButton(step.content);
       const t = setTimeout(() => setVisibleSteps((v) => v + 1), step.delay);
       return () => clearTimeout(t);
     }
 
-    // Default: wait delay then advance
     const t = setTimeout(() => setVisibleSteps((v) => v + 1), step.delay);
     return () => clearTimeout(t);
   }, [visibleSteps, isPaused, typingIndex, typedChars, resetDemo]);
 
-  /* ---- auto-scroll ---- */
   useEffect(() => {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' });
   }, [visibleSteps, typedChars]);
 
-  /* ---- find user message text for chat body ---- */
   const userMessageText = useMemo(() => {
-    const typingStep = SCENARIO.find((s) => s.type === 'input_typing');
-    return typingStep?.content ?? '';
+    const s = SCENARIO.find((s) => s.type === 'input_typing');
+    return s?.content ?? '';
   }, []);
 
-  /* ---- render steps ---- */
   const renderedSteps = useMemo(() => {
     const elements: React.ReactNode[] = [];
 
     for (let i = 0; i < visibleSteps; i++) {
       const step = SCENARIO[i];
       const key = `step-${i}`;
-      const displayText = step.content ?? '';
+      const text = step.content ?? '';
 
       switch (step.type) {
-        case 'input_typing':
-          // Don't render in chat body — was in input bar
-          break;
-        case 'input_send':
-          // Show user message in chat body now
-          elements.push(<UserBubble key={key} text={userMessageText} />);
-          break;
-        case 'thinking':
-          // Completed thinking — don't render (spinner disappears)
-          break;
-        case 'tool_call':
-          elements.push(
-            <ToolCallBlock key={key} tool={step.tool ?? ''} content={displayText} done={false} />,
-          );
-          break;
-        case 'tool_result':
-          elements.push(
-            <ToolCallBlock key={key} tool={step.tool ?? ''} content={displayText} done />,
-          );
-          break;
-        case 'text':
-          elements.push(<AgentText key={key} text={displayText} />);
-          break;
-        case 'spawn':
-          elements.push(<SpawnBlock key={key} content={displayText} />);
-          break;
-        case 'sub_tool':
-          elements.push(
-            <div key={key} className="ml-4">
-              <ToolCallBlock tool={step.tool ?? ''} content={displayText} done={false} />
-            </div>,
-          );
-          break;
-        case 'sub_result':
-          elements.push(
-            <div key={key} className="ml-4">
-              <ToolCallBlock tool="" content={displayText} done />
-            </div>,
-          );
-          break;
-        case 'spawn_done':
-          elements.push(<SpawnDoneBlock key={key} content={displayText} />);
-          break;
-        case 'response':
-          elements.push(<AgentText key={key} text={displayText} isResponse />);
-          break;
-        case 'ask_buttons':
-          elements.push(
-            <AskButtons
-              key={key}
-              content={displayText}
-              options={step.options ?? []}
-              selected={selectedButton}
-            />,
-          );
-          break;
-        case 'button_click':
-          break;
+        case 'input_typing': break;
+        case 'input_send': elements.push(<UserBubble key={key} text={userMessageText} />); break;
+        case 'thinking': break; // spinner disappears after
+        case 'tool_call': elements.push(<ToolCallBlock key={key} tool={step.tool ?? ''} content={text} />); break;
+        case 'tool_result': elements.push(<ToolCallBlock key={key} tool={step.tool ?? ''} content={text} done />); break;
+        case 'text': elements.push(<AgentText key={key} text={text} />); break;
+        case 'spawn': elements.push(<SpawnBlock key={key} content={text} />); break;
+        case 'sub_tool': elements.push(<div key={key} className="ml-4"><ToolCallBlock tool={step.tool ?? ''} content={text} /></div>); break;
+        case 'sub_result': elements.push(<div key={key} className="ml-4"><ToolCallBlock tool="" content={text} done /></div>); break;
+        case 'spawn_done': elements.push(<SpawnDoneBlock key={key} content={text} />); break;
+        case 'response': elements.push(<AgentText key={key} text={text} isResponse />); break;
+        case 'ask_buttons': elements.push(<AskButtons key={key} content={text} options={step.options ?? []} selected={selectedButton} />); break;
+        case 'button_click': break;
       }
     }
 
-    // Currently-typing step (agent text/response only — input_typing goes to input bar)
+    // Currently typing (agent only)
     if (typingIndex >= 0 && typingIndex === visibleSteps && typingIndex < SCENARIO.length) {
       const step = SCENARIO[typingIndex];
       if (step.type !== 'input_typing') {
         const partial = (step.content ?? '').slice(0, typedChars);
-        const key = `typing-${typingIndex}`;
-        if (step.type === 'response') {
-          elements.push(<AgentText key={key} text={partial + '\u258C'} isResponse />);
-        } else {
-          elements.push(<AgentText key={key} text={partial + '\u258C'} />);
-        }
+        elements.push(<AgentText key={`typing-${typingIndex}`} text={partial + '\u258C'} isResponse={step.type === 'response'} />);
       }
     }
 
-    // Show brewing spinner for thinking step while it's active
+    // Active thinking spinner
     if (visibleSteps < SCENARIO.length && SCENARIO[visibleSteps].type === 'thinking' && typingIndex < 0) {
-      elements.push(<BrewingSpinner key="thinking-active" />);
+      elements.push(<BrewingSpinner key={`brew-${visibleSteps}`} />);
     }
 
     return elements;
   }, [visibleSteps, typingIndex, typedChars, selectedButton, userMessageText]);
 
-  /* ---- input bar display ---- */
   const inputDisplay = useMemo(() => {
-    // During input_typing — show typed text with cursor
     if (typingIndex >= 0 && typingIndex < SCENARIO.length && SCENARIO[typingIndex].type === 'input_typing') {
       return inputText + '\u258C';
     }
@@ -477,66 +427,44 @@ export function HeroDemo() {
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
-      <div
-        className="rounded-[2px] border overflow-hidden"
-        style={{
-          borderColor: 'rgba(135,134,127,0.15)',
-          backgroundColor: '#1F1F1F',
-        }}
-      >
+      <div className="rounded-[2px] border overflow-hidden" style={{ borderColor: 'rgba(135,134,127,0.12)', backgroundColor: '#1A1A1A' }}>
         {/* Header */}
-        <div
-          className="flex items-center gap-3 px-4 py-2.5 border-b"
-          style={{ borderColor: 'rgba(135,134,127,0.1)' }}
-        >
+        <div className="flex items-center gap-3 px-4 py-2.5 border-b" style={{ borderColor: 'rgba(135,134,127,0.08)' }}>
           <div className="flex gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
-            <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/80" />
-            <span className="w-2.5 h-2.5 rounded-full bg-green-500/80" />
+            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
+            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
+            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
           </div>
-          <span className="text-xs text-brand-shade2 font-mono">
-            ByteBrew Agent{' '}
-            <span className="text-brand-shade3">&middot; analytics-assistant &middot; gpt-4o</span>
+          <span className="text-xs font-mono" style={{ color: MUTED }}>
+            ByteBrew Agent <span style={{ color: 'rgba(135,134,127,0.5)' }}>&middot; analytics &middot; gpt-4o</span>
           </span>
         </div>
 
-        {/* Chat area */}
-        <div
-          ref={chatRef}
-          className="px-4 py-3 space-y-3 overflow-y-auto h-[400px] sm:h-[450px]"
-          style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}
-        >
+        {/* Chat */}
+        <div ref={chatRef} className="px-4 py-3 space-y-3 overflow-y-auto h-[400px] sm:h-[450px]" style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}>
           {renderedSteps}
         </div>
 
-        {/* Footer — input bar */}
-        <div
-          className="flex items-center gap-2 px-4 py-2.5 border-t"
-          style={{ borderColor: 'rgba(135,134,127,0.1)' }}
-        >
+        {/* Input bar */}
+        <div className="flex items-center gap-2 px-4 py-2.5 border-t" style={{ borderColor: 'rgba(135,134,127,0.08)' }}>
           <div
             className="flex-1 rounded-[2px] border px-3 py-1.5 text-xs font-mono"
             style={{
-              borderColor: isInputActive ? 'rgba(215,81,62,0.4)' : 'rgba(135,134,127,0.15)',
-              color: isInputActive ? '#F7F8F1' : '#87867F',
+              borderColor: isInputActive ? 'rgba(215,81,62,0.3)' : 'rgba(135,134,127,0.12)',
+              color: isInputActive ? '#DFD8D0' : '#87867F',
               backgroundColor: 'rgba(17,17,17,0.4)',
             }}
           >
             {isInputActive ? inputDisplay : 'Type a message...'}
           </div>
-          <button
-            className="rounded-[2px] px-3 py-1.5 text-xs text-white shrink-0"
-            style={{ backgroundColor: '#D7513E' }}
-            tabIndex={-1}
-          >
+          <button className="rounded-[2px] px-3 py-1.5 text-xs text-white shrink-0" style={{ backgroundColor: '#D7513E' }} tabIndex={-1}>
             Send
           </button>
         </div>
       </div>
 
-      {/* Pause indicator */}
       {isPaused && (
-        <div className="absolute top-12 right-3 rounded-[2px] bg-black/60 px-2 py-0.5 text-[10px] text-brand-shade3">
+        <div className="absolute top-12 right-3 rounded-[2px] bg-black/60 px-2 py-0.5 text-[10px]" style={{ color: MUTED }}>
           Paused
         </div>
       )}
