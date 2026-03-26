@@ -5,16 +5,28 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"golang.org/x/crypto/curve25519"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
-func TestServerIdentityStore_GetOrCreateIdentity(t *testing.T) {
-	db, err := NewWorkDB(t.TempDir() + "/test.db")
+func setupTestGormDB(t *testing.T, dsn string) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
+	require.NoError(t, db.AutoMigrate(&models.RuntimeConfigKV{}))
+	return db
+}
 
-	store, err := NewServerIdentityStore(db)
-	require.NoError(t, err)
+func TestServerIdentityStore_GetOrCreateIdentity(t *testing.T) {
+	db := setupTestGormDB(t, ":memory:")
+	t.Cleanup(func() {
+		sqlDB, _ := db.DB()
+		sqlDB.Close()
+	})
+
+	store := NewServerIdentityStore(db)
 
 	// First call creates a new identity
 	identity, err := store.GetOrCreateIdentity()
@@ -36,20 +48,20 @@ func TestServerIdentityStore_PersistsAcrossInstances(t *testing.T) {
 	dbPath := t.TempDir() + "/test.db"
 
 	// Create identity with first instance
-	db1, err := NewWorkDB(dbPath)
-	require.NoError(t, err)
-	store1, err := NewServerIdentityStore(db1)
-	require.NoError(t, err)
+	db1 := setupTestGormDB(t, dbPath)
+	store1 := NewServerIdentityStore(db1)
 	identity1, err := store1.GetOrCreateIdentity()
 	require.NoError(t, err)
-	db1.Close()
+	sqlDB1, _ := db1.DB()
+	sqlDB1.Close()
 
 	// Load with second instance
-	db2, err := NewWorkDB(dbPath)
-	require.NoError(t, err)
-	t.Cleanup(func() { db2.Close() })
-	store2, err := NewServerIdentityStore(db2)
-	require.NoError(t, err)
+	db2 := setupTestGormDB(t, dbPath)
+	t.Cleanup(func() {
+		sqlDB2, _ := db2.DB()
+		sqlDB2.Close()
+	})
+	store2 := NewServerIdentityStore(db2)
 	identity2, err := store2.GetOrCreateIdentity()
 	require.NoError(t, err)
 
@@ -63,21 +75,21 @@ func TestServerIdentityStore_StableServerID(t *testing.T) {
 	dbPath := t.TempDir() + "/tc-p01.db"
 
 	// Phase 1: create identity
-	db1, err := NewWorkDB(dbPath)
-	require.NoError(t, err)
-	store1, err := NewServerIdentityStore(db1)
-	require.NoError(t, err)
+	db1 := setupTestGormDB(t, dbPath)
+	store1 := NewServerIdentityStore(db1)
 	identity1, err := store1.GetOrCreateIdentity()
 	require.NoError(t, err)
 	require.NotEmpty(t, identity1.ID)
-	db1.Close()
+	sqlDB1, _ := db1.DB()
+	sqlDB1.Close()
 
 	// Phase 2: reopen and verify same server_id
-	db2, err := NewWorkDB(dbPath)
-	require.NoError(t, err)
-	t.Cleanup(func() { db2.Close() })
-	store2, err := NewServerIdentityStore(db2)
-	require.NoError(t, err)
+	db2 := setupTestGormDB(t, dbPath)
+	t.Cleanup(func() {
+		sqlDB2, _ := db2.DB()
+		sqlDB2.Close()
+	})
+	store2 := NewServerIdentityStore(db2)
 	identity2, err := store2.GetOrCreateIdentity()
 	require.NoError(t, err)
 
@@ -89,20 +101,20 @@ func TestServerIdentityStore_StableKeypair(t *testing.T) {
 	dbPath := t.TempDir() + "/tc-p02.db"
 
 	// Phase 1: create identity
-	db1, err := NewWorkDB(dbPath)
-	require.NoError(t, err)
-	store1, err := NewServerIdentityStore(db1)
-	require.NoError(t, err)
+	db1 := setupTestGormDB(t, dbPath)
+	store1 := NewServerIdentityStore(db1)
 	identity1, err := store1.GetOrCreateIdentity()
 	require.NoError(t, err)
-	db1.Close()
+	sqlDB1, _ := db1.DB()
+	sqlDB1.Close()
 
 	// Phase 2: reopen and verify same keypair
-	db2, err := NewWorkDB(dbPath)
-	require.NoError(t, err)
-	t.Cleanup(func() { db2.Close() })
-	store2, err := NewServerIdentityStore(db2)
-	require.NoError(t, err)
+	db2 := setupTestGormDB(t, dbPath)
+	t.Cleanup(func() {
+		sqlDB2, _ := db2.DB()
+		sqlDB2.Close()
+	})
+	store2 := NewServerIdentityStore(db2)
 	identity2, err := store2.GetOrCreateIdentity()
 	require.NoError(t, err)
 
@@ -116,12 +128,13 @@ func TestServerIdentityStore_StableKeypair(t *testing.T) {
 }
 
 func TestServerIdentityStore_ValidKeyPair(t *testing.T) {
-	db, err := NewWorkDB(t.TempDir() + "/test.db")
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
+	db := setupTestGormDB(t, ":memory:")
+	t.Cleanup(func() {
+		sqlDB, _ := db.DB()
+		sqlDB.Close()
+	})
 
-	store, err := NewServerIdentityStore(db)
-	require.NoError(t, err)
+	store := NewServerIdentityStore(db)
 
 	identity, err := store.GetOrCreateIdentity()
 	require.NoError(t, err)

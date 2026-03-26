@@ -125,7 +125,7 @@ func TestLoadBootstrap_EmptyPath(t *testing.T) {
 func TestLoadBootstrap_NonexistentFile(t *testing.T) {
 	_, err := LoadBootstrap("/nonexistent/config.yaml")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "read config")
+	assert.Contains(t, err.Error(), "no config file found")
 }
 
 func TestLoadBootstrap_RelativeDataDir(t *testing.T) {

@@ -2,50 +2,37 @@ package integration
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/orchestrator"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/work"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
-// setupWorkManager creates a work.Manager with real SQLite storage for integration tests
+// setupWorkManager creates a work.Manager with GORM SQLite in-memory storage for integration tests
 func setupWorkManager(t *testing.T) (*work.Manager, func()) {
 	t.Helper()
 
-	tmpDir, err := os.MkdirTemp("", "integration_test")
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
-		t.Fatalf("create temp dir: %v", err)
+		t.Fatalf("open test db: %v", err)
 	}
 
-	dbPath := filepath.Join(tmpDir, "integration.db")
-	db, err := persistence.NewWorkDB(dbPath)
-	if err != nil {
-		os.RemoveAll(tmpDir)
-		t.Fatalf("open work db: %v", err)
+	if err := db.AutoMigrate(&models.RuntimeTaskModel{}, &models.RuntimeSubtaskModel{}); err != nil {
+		t.Fatalf("migrate: %v", err)
 	}
 
-	taskStorage, err := persistence.NewSQLiteTaskStorage(db)
-	if err != nil {
-		db.Close()
-		os.RemoveAll(tmpDir)
-		t.Fatalf("create task storage: %v", err)
-	}
-
-	subtaskStorage, err := persistence.NewSQLiteSubtaskStorage(db)
-	if err != nil {
-		db.Close()
-		os.RemoveAll(tmpDir)
-		t.Fatalf("create subtask storage: %v", err)
-	}
-
+	taskStorage := persistence.NewTaskStorage(db)
+	subtaskStorage := persistence.NewSubtaskStorage(db)
 	manager := work.New(taskStorage, subtaskStorage)
+
 	cleanup := func() {
-		db.Close()
-		os.RemoveAll(tmpDir)
+		sqlDB, _ := db.DB()
+		sqlDB.Close()
 	}
 
 	return manager, cleanup
