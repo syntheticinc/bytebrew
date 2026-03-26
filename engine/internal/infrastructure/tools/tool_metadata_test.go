@@ -62,5 +62,5 @@ func TestGetAllToolMetadata(t *testing.T) {
 func TestExecuteCommand_HasStrictestWarning(t *testing.T) {
 	meta := GetToolMetadata("execute_command")
 	assert.Contains(t, meta.RiskWarning, "CRITICAL")
-	assert.Contains(t, meta.RiskWarning, "ARBITRARY")
+	assert.Contains(t, meta.RiskWarning, "SECURITY")
 }

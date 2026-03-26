@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	_ "github.com/glebarez/go-sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

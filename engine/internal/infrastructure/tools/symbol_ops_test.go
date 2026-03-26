@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	_ "github.com/glebarez/go-sqlite" // SQLite driver for indexing.ChunkStore
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/indexing"

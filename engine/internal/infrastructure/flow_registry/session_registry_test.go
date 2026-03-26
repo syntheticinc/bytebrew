@@ -11,6 +11,7 @@ import (
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/eventstore"
 	"gorm.io/gorm"
 )
@@ -20,6 +21,7 @@ func newTestEventStore(t *testing.T) *eventstore.Store {
 	t.Helper()
 	gormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
+	require.NoError(t, gormDB.AutoMigrate(&models.RuntimeSessionEventModel{}))
 	store, err := eventstore.New(gormDB)
 	require.NoError(t, err)
 	return store

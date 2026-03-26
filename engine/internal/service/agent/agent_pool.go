@@ -701,8 +701,7 @@ func (p *AgentPool) WaitForAllSessionAgents(ctx context.Context, sessionID strin
 		close(allDone)
 	}()
 
-	// 5. select: allDone | interrupt | session context cancel
-	// NOTE: we use sessionCtx (not ctx) — this decouples from supervisor's turn context.
+	// 5. select: allDone | interrupt | caller context cancel | session context cancel
 	select {
 	case <-allDone:
 		return WaitResult{
@@ -720,6 +719,9 @@ func (p *AgentPool) WaitForAllSessionAgents(ctx context.Context, sessionID strin
 			StillRunning:         p.getRunningAgentIDs(sessionID),
 			Results:              p.buildResults(sessionID), // partial: already completed
 		}, nil
+
+	case <-ctx.Done():
+		return WaitResult{}, ctx.Err()
 
 	case <-sessionCtx.Done():
 		return WaitResult{}, sessionCtx.Err()

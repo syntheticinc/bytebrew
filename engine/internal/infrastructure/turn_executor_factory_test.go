@@ -429,6 +429,8 @@ func TestEngineTurnExecutorFactory_CreateForSession_WithContextReminders(t *test
 		nil, // webSearchTool
 		nil, // webFetchTool
 		contextRemindersGetter,
+		nil, // modelCache
+		nil, // agentModelResolver
 	)
 
 	// Execute
@@ -466,6 +468,8 @@ func TestEngineTurnExecutorFactory_CreateForSession_NilContextRemindersGetter(t 
 		agentConfig,
 		nil, nil, nil, nil, nil,
 		nil, // contextRemindersGetter = nil
+		nil, // modelCache
+		nil, // agentModelResolver
 	)
 
 	// Execute — should not panic

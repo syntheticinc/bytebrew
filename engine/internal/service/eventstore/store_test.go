@@ -1,7 +1,6 @@
 package eventstore
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -9,30 +8,40 @@ import (
 	"sync"
 	"testing"
 
-	_ "github.com/glebarez/go-sqlite"
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 )
 
-func newTestDB(t *testing.T) *sql.DB {
+func newTestGormDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:?_pragma=journal_mode(WAL)")
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
+	require.NoError(t, db.AutoMigrate(&models.RuntimeSessionEventModel{}))
+	return db
+}
+
+func newTestGormFileDB(t *testing.T, dbPath string) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&models.RuntimeSessionEventModel{}))
 	return db
 }
 
 func TestStore_New(t *testing.T) {
-	db := newTestDB(t)
+	db := newTestGormDB(t)
 	store, err := New(db)
 	require.NoError(t, err)
 	require.NotNil(t, store)
 }
 
 func TestStore_AppendAndGetAll(t *testing.T) {
-	db := newTestDB(t)
+	db := newTestGormDB(t)
 	store, err := New(db)
 	require.NoError(t, err)
 
@@ -64,7 +73,7 @@ func TestStore_AppendAndGetAll(t *testing.T) {
 }
 
 func TestStore_GetAfter(t *testing.T) {
-	db := newTestDB(t)
+	db := newTestGormDB(t)
 	store, err := New(db)
 	require.NoError(t, err)
 
@@ -96,7 +105,7 @@ func TestStore_GetAfter(t *testing.T) {
 }
 
 func TestStore_GetAfterUnknownID(t *testing.T) {
-	db := newTestDB(t)
+	db := newTestGormDB(t)
 	store, err := New(db)
 	require.NoError(t, err)
 
@@ -112,7 +121,7 @@ func TestStore_GetAfterUnknownID(t *testing.T) {
 }
 
 func TestStore_GetAllEmptySession(t *testing.T) {
-	db := newTestDB(t)
+	db := newTestGormDB(t)
 	store, err := New(db)
 	require.NoError(t, err)
 
@@ -122,7 +131,7 @@ func TestStore_GetAllEmptySession(t *testing.T) {
 }
 
 func TestStore_SessionIsolation(t *testing.T) {
-	db := newTestDB(t)
+	db := newTestGormDB(t)
 	store, err := New(db)
 	require.NoError(t, err)
 
@@ -141,7 +150,7 @@ func TestStore_SessionIsolation(t *testing.T) {
 }
 
 func TestStore_CleanupSession(t *testing.T) {
-	db := newTestDB(t)
+	db := newTestGormDB(t)
 	store, err := New(db)
 	require.NoError(t, err)
 
@@ -164,7 +173,7 @@ func TestStore_CleanupSession(t *testing.T) {
 }
 
 func TestStore_MonotonicIDs(t *testing.T) {
-	db := newTestDB(t)
+	db := newTestGormDB(t)
 	store, err := New(db)
 	require.NoError(t, err)
 
@@ -182,13 +191,17 @@ func TestStore_MonotonicIDs(t *testing.T) {
 // TC-ES-07: Concurrent Append + GetAfter — 10 goroutines append simultaneously,
 // all events persisted with monotonically increasing IDs.
 func TestStore_ConcurrentAppend(t *testing.T) {
-	// Use file-based DB for concurrent access (in-memory with cache=shared
-	// can lose schema across connections opened by database/sql pool).
+	// Use file-based DB for concurrent access (in-memory can have issues with pool).
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "concurrent.db")
-	db, err := sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
+	db := newTestGormFileDB(t, dbPath)
+	// Close DB before TempDir cleanup to avoid Windows file lock errors.
+	t.Cleanup(func() {
+		sqlDB, _ := db.DB()
+		if sqlDB != nil {
+			sqlDB.Close()
+		}
+	})
 
 	store, err := New(db)
 	require.NoError(t, err)
@@ -236,9 +249,7 @@ func TestStore_PersistenceAcrossReopen(t *testing.T) {
 	dbPath := filepath.Join(tmpDir, "test_events.db")
 
 	// Phase 1: Create store, append 3 events, close
-	db1, err := sql.Open("sqlite", dbPath)
-	require.NoError(t, err)
-
+	db1 := newTestGormFileDB(t, dbPath)
 	store1, err := New(db1)
 	require.NoError(t, err)
 
@@ -252,12 +263,16 @@ func TestStore_PersistenceAcrossReopen(t *testing.T) {
 		originalIDs[i] = id
 	}
 
-	require.NoError(t, db1.Close())
+	sqlDB1, err := db1.DB()
+	require.NoError(t, err)
+	require.NoError(t, sqlDB1.Close())
 
 	// Phase 2: Reopen and verify
-	db2, err := sql.Open("sqlite", dbPath)
+	db2, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	require.NoError(t, err)
-	defer db2.Close()
+	sqlDB2, err := db2.DB()
+	require.NoError(t, err)
+	defer sqlDB2.Close()
 
 	store2, err := New(db2)
 	require.NoError(t, err)
@@ -274,7 +289,7 @@ func TestStore_PersistenceAcrossReopen(t *testing.T) {
 
 // TC-ES-11: Proto and JSON both correctly stored — verify dual representation.
 func TestStore_ProtoAndJSONConsistency(t *testing.T) {
-	db := newTestDB(t)
+	db := newTestGormDB(t)
 	store, err := New(db)
 	require.NoError(t, err)
 
@@ -318,7 +333,7 @@ func TestStore_ProtoAndJSONConsistency(t *testing.T) {
 
 // TC-ES-12: Different sessions don't interfere — extended isolation test with GetAfter.
 func TestStore_SessionIsolationWithGetAfter(t *testing.T) {
-	db := newTestDB(t)
+	db := newTestGormDB(t)
 	store, err := New(db)
 	require.NoError(t, err)
 
@@ -370,4 +385,3 @@ func TestStore_SessionIsolationWithGetAfter(t *testing.T) {
 		assert.Contains(t, evt.Proto.GetContent(), "B", "session-B events should have 'B' in content")
 	}
 }
-
