@@ -12,8 +12,34 @@
   --font-mono: "IBM Plex Mono", monospace;
   --radius-card: 2px;
   --radius-btn: 2px;
+
+  /* Semantic tokens (default = dark) */
+  --color-surface: #111111;
+  --color-surface-alt: #1F1F1F;
+  --color-text-primary: #F7F8F1;
+  --color-text-secondary: #DFD8D0;
+  --color-text-tertiary: #87867F;
+  --color-border: rgba(135,134,127,0.15);
+  --color-border-hover: rgba(135,134,127,0.30);
+}
+
+/* Light theme overrides */
+.light {
+  --color-surface: #FAFAF7;
+  --color-surface-alt: #FFFFFF;
+  --color-text-primary: #1F1F1F;
+  --color-text-secondary: #555550;
+  --color-text-tertiary: #87867F;
+  --color-border: rgba(135,134,127,0.20);
+  --color-border-hover: rgba(135,134,127,0.40);
 }
 
 body {
   @apply bg-brand-dark text-brand-light antialiased;
+}
+
+/* Focus-visible ring for interactive elements */
+a:focus-visible,
+button:focus-visible {
+  @apply outline-2 outline-offset-2 outline-brand-accent rounded-sm;
 }

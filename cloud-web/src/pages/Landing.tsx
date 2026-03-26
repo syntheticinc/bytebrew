@@ -149,9 +149,9 @@ const PROBLEMS = [
 
 function ProblemSection() {
   return (
-    <section className="py-20 px-4 border-t border-brand-shade3/15 bg-brand-dark-alt">
+    <section className="py-24 px-4 border-t border-brand-shade3/15 bg-brand-dark-alt">
       <div className="max-w-5xl mx-auto">
-        <h2 className="text-3xl font-bold text-center text-brand-light mb-4">
+        <h2 className="text-3xl font-bold tracking-tight text-center text-brand-light mb-4">
           Building AI agents is hard. It shouldn&apos;t be.
         </h2>
         <p className="text-center text-brand-shade3 mb-14 max-w-2xl mx-auto">
@@ -161,7 +161,7 @@ function ProblemSection() {
           {PROBLEMS.map((p) => (
             <div
               key={p.title}
-              className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark p-6"
+              className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark p-6 transition-all duration-200 hover:border-brand-shade3/30 hover:-translate-y-0.5"
             >
               <div className="w-12 h-12 rounded-[2px] bg-brand-accent/10 flex items-center justify-center mb-4">
                 {p.icon}
@@ -184,9 +184,9 @@ function ProblemSection() {
 
 function SolutionSection() {
   return (
-    <section className="py-20 px-4 border-t border-brand-shade3/15 bg-brand-dark">
+    <section className="py-24 px-4 border-t border-brand-shade3/15 bg-brand-dark">
       <div className="max-w-6xl mx-auto">
-        <h2 className="text-3xl font-bold text-center text-brand-light mb-4">
+        <h2 className="text-3xl font-bold tracking-tight text-center text-brand-light mb-4">
           ByteBrew Engine: AI agent infrastructure that just works
         </h2>
         <p className="text-center text-brand-shade3 mb-14 max-w-2xl mx-auto">
@@ -278,9 +278,9 @@ function ExplainerItem({ title, description }: { title: string; description: str
 
 function HowItWorksSection({ onImageClick }: { onImageClick: (src: string) => void }) {
   return (
-    <section className="py-20 px-4 border-t border-brand-shade3/15 bg-brand-dark-alt">
+    <section className="py-24 px-4 border-t border-brand-shade3/15 bg-brand-dark-alt">
       <div className="max-w-5xl mx-auto">
-        <h2 className="text-3xl font-bold text-center text-brand-light mb-4">
+        <h2 className="text-3xl font-bold tracking-tight text-center text-brand-light mb-4">
           Three steps to your first agent
         </h2>
         <p className="text-center text-brand-shade3 mb-14">
@@ -425,9 +425,9 @@ const CAPABILITIES = [
 
 function CapabilitiesSection() {
   return (
-    <section className="py-20 px-4 border-t border-brand-shade3/15 bg-brand-dark">
+    <section className="py-24 px-4 border-t border-brand-shade3/15 bg-brand-dark">
       <div className="max-w-6xl mx-auto">
-        <h2 className="text-3xl font-bold text-center text-brand-light mb-4">
+        <h2 className="text-3xl font-bold tracking-tight text-center text-brand-light mb-4">
           Everything you need to ship AI agents
         </h2>
         <p className="text-center text-brand-shade3 mb-14 max-w-2xl mx-auto">
@@ -437,7 +437,7 @@ function CapabilitiesSection() {
           {CAPABILITIES.map((c) => (
             <div
               key={c.title}
-              className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5"
+              className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark-alt p-5 transition-all duration-200 hover:border-brand-shade3/30 hover:-translate-y-0.5"
             >
               <h3 className="text-base font-semibold text-brand-light">{c.title}</h3>
               <p className="mt-2 text-sm text-brand-shade3 leading-relaxed">
@@ -508,9 +508,9 @@ const USE_CASES = [
 
 function ProductShowcaseSection({ onImageClick }: { onImageClick: (src: string) => void }) {
   return (
-    <section className="py-20 px-4 border-t border-brand-shade3/15 bg-brand-dark-alt">
+    <section className="py-24 px-4 border-t border-brand-shade3/15 bg-brand-dark-alt">
       <div className="max-w-6xl mx-auto">
-        <h2 className="text-3xl font-bold text-center text-brand-light mb-4">
+        <h2 className="text-3xl font-bold tracking-tight text-center text-brand-light mb-4">
           See it in action
         </h2>
         <p className="text-center text-brand-shade3 mb-14 max-w-2xl mx-auto">
@@ -544,19 +544,19 @@ function ProductShowcaseSection({ onImageClick }: { onImageClick: (src: string) 
 
         {/* Feature highlights grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark p-5">
+          <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark p-5 transition-all duration-200 hover:border-brand-shade3/30 hover:-translate-y-0.5">
             <h3 className="text-sm font-semibold text-brand-light mb-2">Multi-Agent Sidebar</h3>
             <p className="text-xs text-brand-shade3 leading-relaxed">
               Switch between agents instantly. Each agent has its own session history, tools, and context. See tool calls and results inline.
             </p>
           </div>
-          <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark p-5">
+          <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark p-5 transition-all duration-200 hover:border-brand-shade3/30 hover:-translate-y-0.5">
             <h3 className="text-sm font-semibold text-brand-light mb-2">Rich Responses</h3>
             <p className="text-xs text-brand-shade3 leading-relaxed">
               Full markdown rendering — bold, code blocks, tables, lists, links. Tool call results expandable inline. Real-time SSE streaming.
             </p>
           </div>
-          <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark p-5">
+          <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark p-5 transition-all duration-200 hover:border-brand-shade3/30 hover:-translate-y-0.5">
             <h3 className="text-sm font-semibold text-brand-light mb-2">Visual Agent Editor</h3>
             <p className="text-xs text-brand-shade3 leading-relaxed">
               Create and configure agents through the Admin Dashboard. Set models, prompts, tools, security zones, and spawn rules — all without touching YAML.
@@ -570,9 +570,9 @@ function ProductShowcaseSection({ onImageClick }: { onImageClick: (src: string) 
 
 function UseCasesSection() {
   return (
-    <section className="py-20 px-4 border-t border-brand-shade3/15 bg-brand-dark-alt">
+    <section className="py-24 px-4 border-t border-brand-shade3/15 bg-brand-dark-alt">
       <div className="max-w-6xl mx-auto">
-        <h2 className="text-3xl font-bold text-center text-brand-light mb-4">
+        <h2 className="text-3xl font-bold tracking-tight text-center text-brand-light mb-4">
           Any product. Any industry. One Engine.
         </h2>
         <p className="text-center text-brand-shade3 mb-14 max-w-2xl mx-auto">
@@ -582,7 +582,7 @@ function UseCasesSection() {
           {USE_CASES.map((uc) => (
             <div
               key={uc.title}
-              className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark p-6"
+              className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark p-6 transition-all duration-200 hover:border-brand-shade3/30 hover:-translate-y-0.5"
             >
               <div className="w-12 h-12 rounded-[2px] bg-brand-accent/10 flex items-center justify-center mb-4">
                 {uc.icon}
@@ -616,9 +616,9 @@ const APPROACH_COMPARISON = [
 
 function ComparisonSection() {
   return (
-    <section className="py-20 px-4 border-t border-brand-shade3/15 bg-brand-dark">
+    <section className="py-24 px-4 border-t border-brand-shade3/15 bg-brand-dark">
       <div className="max-w-5xl mx-auto">
-        <h2 className="text-3xl font-bold text-center text-brand-light mb-4">
+        <h2 className="text-3xl font-bold tracking-tight text-center text-brand-light mb-4">
           Why ByteBrew?
         </h2>
         <p className="text-center text-brand-shade3 mb-14">
@@ -631,7 +631,7 @@ function ComparisonSection() {
               <tr className="border-b border-brand-shade3/15 bg-brand-dark-alt">
                 <th className="text-left py-3 px-4 font-medium text-brand-shade3">Traditional Approach</th>
                 <th className="text-left py-3 px-4 font-medium text-brand-shade3">The Problem</th>
-                <th className="text-left py-3 px-4 font-semibold text-brand-accent">ByteBrew Engine</th>
+                <th className="text-left py-3 px-4 font-semibold text-brand-accent bg-brand-accent/5">ByteBrew Engine</th>
               </tr>
             </thead>
             <tbody>
@@ -642,7 +642,7 @@ function ComparisonSection() {
                 >
                   <td className="py-3 px-4 text-brand-shade2">{row.approach}</td>
                   <td className="py-3 px-4 text-brand-shade3">{row.problem}</td>
-                  <td className="py-3 px-4 text-brand-light">{row.bytebrew}</td>
+                  <td className="py-3 px-4 text-brand-light bg-brand-accent/5">{row.bytebrew}</td>
                 </tr>
               ))}
             </tbody>
@@ -683,9 +683,9 @@ function MCPDocsSection() {
   const tab = MCP_CODE[activeTab];
 
   return (
-    <section className="py-20 px-4 border-t border-brand-shade3/15 bg-brand-dark">
+    <section className="py-24 px-4 border-t border-brand-shade3/15 bg-brand-dark">
       <div className="max-w-3xl mx-auto">
-        <h2 className="text-3xl font-bold text-center text-brand-light mb-2">
+        <h2 className="text-3xl font-bold tracking-tight text-center text-brand-light mb-2">
           AI-Native Documentation
         </h2>
         <p className="text-center text-brand-shade3 mb-10 max-w-2xl mx-auto">
@@ -744,9 +744,9 @@ function MCPDocsSection() {
 
 function InstallSection() {
   return (
-    <section className="py-20 px-4 border-t border-brand-shade3/15 bg-brand-dark-alt">
+    <section className="py-24 px-4 border-t border-brand-shade3/15 bg-brand-dark-alt">
       <div className="max-w-3xl mx-auto">
-        <h2 className="text-3xl font-bold text-center text-brand-light mb-2">
+        <h2 className="text-3xl font-bold tracking-tight text-center text-brand-light mb-2">
           Get Started in 30 Seconds
         </h2>
         <p className="text-center text-brand-shade3 mb-10">
@@ -777,9 +777,9 @@ function InstallSection() {
 
 function PricingSection() {
   return (
-    <section id="pricing" className="py-20 px-4 border-t border-brand-shade3/15 bg-brand-dark">
+    <section id="pricing" className="py-24 px-4 border-t border-brand-shade3/15 bg-brand-dark">
       <div className="max-w-5xl mx-auto">
-        <h2 className="text-3xl font-bold text-center text-brand-light mb-4">
+        <h2 className="text-3xl font-bold tracking-tight text-center text-brand-light mb-4">
           Simple, Transparent Pricing
         </h2>
         <p className="text-center text-brand-shade3 mb-14">
@@ -797,9 +797,9 @@ function PricingSection() {
 
 function FreeForeverBanner() {
   return (
-    <section className="py-16 px-4 border-t border-brand-shade3/15 bg-brand-dark-alt">
+    <section className="py-24 px-4 border-t border-brand-shade3/15 bg-brand-dark-alt">
       <div className="max-w-3xl mx-auto rounded-[2px] border border-brand-accent/30 bg-brand-accent/5 p-10 text-center">
-        <h2 className="text-2xl font-bold text-brand-light">
+        <h2 className="text-2xl font-bold tracking-tight text-brand-light">
           ByteBrew Community Edition is free forever.
         </h2>
         <p className="mt-4 text-brand-shade2 leading-relaxed">
@@ -821,7 +821,7 @@ function FreeForeverBanner() {
 
 function FinalCTASection() {
   return (
-    <section className="py-20 px-4 border-t border-brand-shade3/15 bg-brand-dark">
+    <section className="py-24 px-4 border-t border-brand-shade3/15 bg-brand-dark">
       <div className="max-w-2xl mx-auto text-center">
         <h2 className="text-3xl font-bold text-brand-light">
           Start building with ByteBrew Engine
