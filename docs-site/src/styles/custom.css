@@ -8,6 +8,13 @@
   --sl-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 }
 
+/* Border radius — sharp corners (cloud-web alignment) */
+.card, .starlight-aside, .expressive-code .frame,
+.sl-markdown-content pre, .sl-markdown-content code,
+.sl-markdown-content table {
+  border-radius: 2px !important;
+}
+
 /* Callout headings + icons — brand accent override */
 .starlight-aside .starlight-aside__title {
   color: #D7513E !important;
@@ -20,18 +27,24 @@
 :root[data-theme='dark'] {
   --sl-color-accent-low: #2a1511;
   --sl-color-accent: #D7513E;
-  --sl-color-accent-high: #DFD8D0;
-  /* Brand-aligned backgrounds — slightly lighter than #111111 for readability */
-  --sl-color-bg: #181a1f;
-  --sl-color-bg-nav: #141414;
-  --sl-color-bg-sidebar: #141414;
+  --sl-color-accent-high: #E8624F;
+  --sl-color-bg: #111111;
+  --sl-color-bg-nav: #111111;
+  --sl-color-bg-sidebar: #111111;
   --sl-color-black: #111111;
+  --sl-color-hairline: rgba(135, 134, 127, 0.15);
+  --sl-color-text: #F7F8F1;
+  --sl-color-text-secondary: #DFD8D0;
 }
 
 :root[data-theme='light'] {
   --sl-color-accent-low: #f5ebe9;
-  --sl-color-accent: #C04635;
-  --sl-color-accent-high: #7a2a1f;
+  --sl-color-accent: #D7513E;
+  --sl-color-accent-high: #C04635;
+  --sl-color-bg: #FAFAF7;
+  --sl-color-bg-nav: #FAFAF7;
+  --sl-color-bg-sidebar: #FAFAF7;
+  --sl-color-hairline: rgba(135, 134, 127, 0.20);
 }
 
 /* Light theme — ensure all text is dark and readable */
@@ -159,7 +172,7 @@
   color: #CBC9BC;
   border: 1px solid rgba(135, 134, 127, 0.2);
   padding: 0.15em 0.35em;
-  border-radius: 4px;
+  border-radius: 2px;
   font-size: 0.88em;
 }
 
