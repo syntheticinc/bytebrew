@@ -221,7 +221,7 @@ function StatusDot({ done }: { done?: boolean }) {
   );
 }
 
-function ToolCallBlock({ tool, content, done }: { tool: string; content: string; done?: boolean }) {
+function ToolCallBlock({ tool, args, result, done }: { tool: string; args?: string; result?: string; done?: boolean }) {
   return (
     <div
       className="rounded-[2px] border-l-2 px-3 py-1.5 text-xs font-mono flex items-center gap-0"
@@ -231,8 +231,8 @@ function ToolCallBlock({ tool, content, done }: { tool: string; content: string;
         <StatusDot done={done} />
         {tool}
       </span>
-      {!done && <span style={{ color: 'rgba(135,134,127,0.5)' }}> ({content})</span>}
-      {done && <span className="ml-1" style={{ color: '#CBC9BC' }}>{content}</span>}
+      {args && <span style={{ color: 'rgba(135,134,127,0.4)' }}> ({args})</span>}
+      {done && result && <span className="ml-1" style={{ color: 'rgba(135,134,127,0.6)' }}> — {result}</span>}
     </div>
   );
 }
@@ -398,22 +398,44 @@ export function HeroDemo() {
         case 'input_send': elements.push(<UserBubble key={key} text={getUserTextForSend(i)} />); break;
         case 'thinking': break;
         case 'tool_call': {
-          // Check if next completed step is the result — if so, skip (result renders the done block)
           const nextStep = i + 1 < visibleSteps ? SCENARIO[i + 1] : null;
-          if (nextStep?.type === 'tool_result') break; // result will render the done version
-          elements.push(<ToolCallBlock key={key} tool={step.tool ?? ''} content={text} />);
+          if (nextStep?.type === 'tool_result') break; // result renders the done block
+          elements.push(<ToolCallBlock key={key} tool={step.tool ?? ''} args={text} />);
           break;
         }
-        case 'tool_result': elements.push(<ToolCallBlock key={key} tool={step.tool ?? ''} content={text} done />); break;
+        case 'tool_result': {
+          // Find preceding tool_call to get tool name and args
+          let callArgs = '';
+          for (let j = i - 1; j >= 0; j--) {
+            if (SCENARIO[j].type === 'tool_call' || SCENARIO[j].type === 'sub_tool') {
+              callArgs = SCENARIO[j].content ?? '';
+              break;
+            }
+          }
+          elements.push(<ToolCallBlock key={key} tool={step.tool ?? ''} args={callArgs} result={text} done />);
+          break;
+        }
         case 'text': elements.push(<AgentText key={key} text={text} />); break;
         case 'spawn': elements.push(<SpawnBlock key={key} content={text} />); break;
         case 'sub_tool': {
           const nextStep = i + 1 < visibleSteps ? SCENARIO[i + 1] : null;
           if (nextStep?.type === 'sub_result') break;
-          elements.push(<div key={key} className="ml-4"><ToolCallBlock tool={step.tool ?? ''} content={text} /></div>);
+          elements.push(<div key={key} className="ml-4"><ToolCallBlock tool={step.tool ?? ''} args={text} /></div>);
           break;
         }
-        case 'sub_result': elements.push(<div key={key} className="ml-4"><ToolCallBlock tool={step.tool ?? ''} content={text} done /></div>); break;
+        case 'sub_result': {
+          let callArgs = '';
+          let toolName = step.tool ?? '';
+          for (let j = i - 1; j >= 0; j--) {
+            if (SCENARIO[j].type === 'sub_tool') {
+              callArgs = SCENARIO[j].content ?? '';
+              toolName = SCENARIO[j].tool ?? toolName;
+              break;
+            }
+          }
+          elements.push(<div key={key} className="ml-4"><ToolCallBlock tool={toolName} args={callArgs} result={text} done /></div>);
+          break;
+        }
         case 'spawn_done': elements.push(<SpawnDoneBlock key={key} content={text} />); break;
         case 'response': elements.push(<AgentText key={key} text={text} isResponse />); break;
         case 'ask_buttons': elements.push(<AskButtons key={key} content={text} options={step.options ?? []} selected={selectedButton} />); break;
