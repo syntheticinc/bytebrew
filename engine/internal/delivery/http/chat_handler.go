@@ -102,10 +102,13 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	// http.NewResponseController can unwrap it.
 	rc := http.NewResponseController(w)
 
-	// CRITICAL: Write initial comment and flush BEFORE any events.
-	// This commits headers as chunked and sends the first chunk.
-	_, _ = io.WriteString(w, ": ok\n\n")
+	// CRITICAL: WriteHeader MUST be called before any Write.
+	// This commits the response headers immediately and prevents
+	// Go from buffering the entire body to compute Content-Length.
+	w.WriteHeader(http.StatusOK)
 
+	// Write initial SSE comment and flush to send headers to client.
+	_, _ = io.WriteString(w, ": ok\n\n")
 	_ = rc.Flush()
 
 	for event := range events {
