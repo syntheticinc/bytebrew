@@ -90,9 +90,11 @@ const SCENARIO: DemoStep[] = [
   { type: 'text', content: 'Rescue plan drafted. Ready for your review.', delay: 4000 },
 ];
 
+const SPAWN_STEP_TYPES = new Set<DemoStep['type']>(['spawn', 'sub_tool', 'sub_result', 'spawn_done']);
 const TYPEWRITER_TYPES = new Set<DemoStep['type']>(['input_typing', 'text', 'response']);
 const USER_CHAR_MS = 55;
 const AGENT_CHAR_MS = 12;
+const IS_MOBILE = typeof window !== 'undefined' && window.innerWidth < 768;
 
 /* ------------------------------------------------------------------ */
 /*  Coffee spinner — rotating messages                                 */
@@ -426,6 +428,12 @@ export function HeroDemo() {
   const [selectedButton, setSelectedButton] = useState<string | undefined>();
   const [inputText, setInputText] = useState('');
 
+  // On mobile (<768px), skip sub-agent spawn steps to keep the demo compact
+  const scenario = useMemo(
+    () => (IS_MOBILE ? SCENARIO.filter((s) => !SPAWN_STEP_TYPES.has(s.type)) : SCENARIO),
+    [],
+  );
+
   // Auto-switch from Config to Chat after 4s (only if user didn't manually click Config)
   useEffect(() => {
     if (activeTab !== 'config' || userClickedConfig) return;
@@ -453,12 +461,12 @@ export function HeroDemo() {
   useEffect(() => {
     if (isPaused) return;
 
-    if (visibleSteps >= SCENARIO.length) {
+    if (visibleSteps >= scenario.length) {
       const t = setTimeout(resetDemo, 3000);
       return () => clearTimeout(t);
     }
 
-    const step = SCENARIO[visibleSteps];
+    const step = scenario[visibleSteps];
 
     if (step.type === 'input_typing' && step.content) {
       if (typingIndex !== visibleSteps) {
@@ -502,7 +510,7 @@ export function HeroDemo() {
 
     const t = setTimeout(() => setVisibleSteps((v) => v + 1), step.delay);
     return () => clearTimeout(t);
-  }, [visibleSteps, isPaused, typingIndex, typedChars, resetDemo]);
+  }, [visibleSteps, isPaused, typingIndex, typedChars, resetDemo, scenario]);
 
   useEffect(() => {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' });
@@ -511,16 +519,16 @@ export function HeroDemo() {
   /* ---- helper: find preceding input_typing text for a given input_send index ---- */
   const getUserTextForSend = useCallback((sendIndex: number) => {
     for (let j = sendIndex - 1; j >= 0; j--) {
-      if (SCENARIO[j].type === 'input_typing') return SCENARIO[j].content ?? '';
+      if (scenario[j].type === 'input_typing') return scenario[j].content ?? '';
     }
     return '';
-  }, []);
+  }, [scenario]);
 
   const renderedSteps = useMemo(() => {
     const elements: React.ReactNode[] = [];
 
     for (let i = 0; i < visibleSteps; i++) {
-      const step = SCENARIO[i];
+      const step = scenario[i];
       const key = `step-${i}`;
       const text = step.content ?? '';
 
@@ -529,7 +537,7 @@ export function HeroDemo() {
         case 'input_send': elements.push(<UserBubble key={key} text={getUserTextForSend(i)} />); break;
         case 'thinking': break;
         case 'tool_call': {
-          const nextStep = i + 1 < visibleSteps ? SCENARIO[i + 1] : null;
+          const nextStep = i + 1 < visibleSteps ? scenario[i + 1] : null;
           if (nextStep?.type === 'tool_result') break; // result renders the done block
           elements.push(<ToolCallBlock key={key} tool={step.tool ?? ''} args={text} />);
           break;
@@ -538,8 +546,8 @@ export function HeroDemo() {
           // Find preceding tool_call to get tool name and args
           let callArgs = '';
           for (let j = i - 1; j >= 0; j--) {
-            if (SCENARIO[j].type === 'tool_call' || SCENARIO[j].type === 'sub_tool') {
-              callArgs = SCENARIO[j].content ?? '';
+            if (scenario[j].type === 'tool_call' || scenario[j].type === 'sub_tool') {
+              callArgs = scenario[j].content ?? '';
               break;
             }
           }
@@ -549,7 +557,7 @@ export function HeroDemo() {
         case 'text': elements.push(<AgentText key={key} text={text} />); break;
         case 'spawn': elements.push(<SpawnBlock key={key} content={text} />); break;
         case 'sub_tool': {
-          const nextStep = i + 1 < visibleSteps ? SCENARIO[i + 1] : null;
+          const nextStep = i + 1 < visibleSteps ? scenario[i + 1] : null;
           if (nextStep?.type === 'sub_result') break;
           elements.push(<div key={key} className="ml-4"><ToolCallBlock tool={step.tool ?? ''} args={text} /></div>);
           break;
@@ -558,9 +566,9 @@ export function HeroDemo() {
           let callArgs = '';
           let toolName = step.tool ?? '';
           for (let j = i - 1; j >= 0; j--) {
-            if (SCENARIO[j].type === 'sub_tool') {
-              callArgs = SCENARIO[j].content ?? '';
-              toolName = SCENARIO[j].tool ?? toolName;
+            if (scenario[j].type === 'sub_tool') {
+              callArgs = scenario[j].content ?? '';
+              toolName = scenario[j].tool ?? toolName;
               break;
             }
           }
@@ -575,8 +583,8 @@ export function HeroDemo() {
     }
 
     // Currently typing (agent only)
-    if (typingIndex >= 0 && typingIndex === visibleSteps && typingIndex < SCENARIO.length) {
-      const step = SCENARIO[typingIndex];
+    if (typingIndex >= 0 && typingIndex === visibleSteps && typingIndex < scenario.length) {
+      const step = scenario[typingIndex];
       if (step.type !== 'input_typing') {
         const partial = (step.content ?? '').slice(0, typedChars);
         elements.push(<AgentText key={`typing-${typingIndex}`} text={partial + '\u258C'} isResponse={step.type === 'response'} />);
@@ -584,15 +592,15 @@ export function HeroDemo() {
     }
 
     // Active thinking spinner
-    if (visibleSteps < SCENARIO.length && SCENARIO[visibleSteps].type === 'thinking' && typingIndex < 0) {
+    if (visibleSteps < scenario.length && scenario[visibleSteps].type === 'thinking' && typingIndex < 0) {
       elements.push(<BrewingSpinner key={`brew-${visibleSteps}`} />);
     }
 
     return elements;
-  }, [visibleSteps, typingIndex, typedChars, selectedButton, getUserTextForSend]);
+  }, [visibleSteps, typingIndex, typedChars, selectedButton, getUserTextForSend, scenario]);
 
   const inputDisplay = useMemo(() => {
-    if (typingIndex >= 0 && typingIndex < SCENARIO.length && SCENARIO[typingIndex].type === 'input_typing') {
+    if (typingIndex >= 0 && typingIndex < scenario.length && scenario[typingIndex].type === 'input_typing') {
       return inputText + '\u258C';
     }
     return '';
