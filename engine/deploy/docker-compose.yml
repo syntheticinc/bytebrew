@@ -20,10 +20,13 @@ services:
       - BRIDGE_ENABLED=${BRIDGE_ENABLED:-false}
       - BRIDGE_URL=${BRIDGE_URL:-}
       - BRIDGE_AUTH_TOKEN=${BRIDGE_AUTH_TOKEN:-}
+      - BYTEBREW_LICENSE_PUBLIC_KEY_HEX=${BYTEBREW_LICENSE_PUBLIC_KEY_HEX:-}
+      - BYTEBREW_LICENSE_PATH=${BYTEBREW_LICENSE_PATH:-}
     volumes:
       - engine-data:/var/lib/bytebrew
       - engine-logs:/var/log/bytebrew
       - ./config.yaml:/etc/bytebrew/bytebrew.yaml:ro
+      - ${BYTEBREW_LICENSE_FILE:-/dev/null}:/root/.bytebrew/license.jwt:ro
     depends_on:
       db:
         condition: service_healthy

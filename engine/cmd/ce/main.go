@@ -97,13 +97,20 @@ func initLicenseWatcher(configPath, licenseOverride string) *license.LicenseWatc
 	return license.NewLicenseWatcher(validator, licensePath, 5*time.Minute)
 }
 
-// loadLicenseConfig attempts to load the license section from the config file.
+// loadLicenseConfig attempts to load the license section from the config file,
+// falling back to environment variables for Docker/env-based deployments.
 func loadLicenseConfig(configPath string) config.LicenseConfig {
 	cfg, err := config.Load(configPath)
-	if err != nil {
-		return config.LicenseConfig{}
+	if err == nil {
+		return cfg.License
 	}
-	return cfg.License
+
+	// Fallback: read from environment variables (Docker / bootstrap mode)
+	lc := config.LicenseConfig{
+		PublicKeyHex: os.Getenv("BYTEBREW_LICENSE_PUBLIC_KEY_HEX"),
+		LicensePath:  os.Getenv("BYTEBREW_LICENSE_PATH"),
+	}
+	return lc
 }
 
 // resolveLicensePath returns the license file path, preferring the explicit

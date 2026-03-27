@@ -533,13 +533,7 @@ func Run(sc ServerConfig) error {
 				})
 			}
 
-			// Audit logs (admin-only — no dedicated scope, RequireAdminSession used)
-			auditRepo := config_repo.NewGORMAuditRepository(pgDB)
-			auditHandler := deliveryhttp.NewAuditHandler(&auditServiceHTTPAdapter{repo: auditRepo})
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireAdminSession)
-				r.Get("/api/v1/audit", auditHandler.List)
-			})
+			// Audit logs — always recorded by middleware, READ API moved to EE block below.
 
 			// API Tokens (admin-only)
 			tokenHandler := deliveryhttp.NewTokenHandler(&tokenRepoHTTPAdapter{repo: apiTokenRepo})
@@ -624,6 +618,11 @@ func Run(sc ServerConfig) error {
 			r.Group(func(r chi.Router) {
 				r.Use(authMW.Authenticate)
 				r.Use(eeMW.RequireEE)
+
+				// Audit log READ API (EE) — data always recorded by middleware
+				auditRepo := config_repo.NewGORMAuditRepository(pgDB)
+				auditHandler := deliveryhttp.NewAuditHandler(&auditServiceHTTPAdapter{repo: auditRepo})
+				r.Get("/api/v1/audit", auditHandler.List)
 
 				// Tool call audit log (EE)
 				toolCallRepo := config_repo.NewToolCallEventRepository(pgDB)
