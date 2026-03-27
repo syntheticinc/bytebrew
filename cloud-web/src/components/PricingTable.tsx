@@ -99,14 +99,14 @@ export function PricingTable({ onSelectPlan, currentTier }: PricingTableProps) {
       {/* Period toggle */}
       <div className="flex items-center justify-center gap-3 mb-10">
         <span
-          className={`text-sm ${period === 'monthly' ? 'text-brand-light font-medium' : 'text-brand-shade2'}`}
+          className={`text-sm ${period === 'monthly' ? 'text-text-primary font-medium' : 'text-text-secondary'}`}
         >
           Monthly
         </span>
         <button
           onClick={() => setPeriod(period === 'monthly' ? 'annual' : 'monthly')}
           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-            period === 'annual' ? 'bg-brand-accent' : 'bg-brand-shade3'
+            period === 'annual' ? 'bg-brand-accent' : 'bg-text-tertiary'
           }`}
         >
           <span
@@ -116,7 +116,7 @@ export function PricingTable({ onSelectPlan, currentTier }: PricingTableProps) {
           />
         </button>
         <span
-          className={`text-sm ${period === 'annual' ? 'text-brand-light font-medium' : 'text-brand-shade2'}`}
+          className={`text-sm ${period === 'annual' ? 'text-text-primary font-medium' : 'text-text-secondary'}`}
         >
           Annual
           <span className="ml-1 text-emerald-400 text-xs font-medium">Save ~17%</span>
@@ -134,19 +134,19 @@ export function PricingTable({ onSelectPlan, currentTier }: PricingTableProps) {
               key={plan.id}
               className={`rounded-[2px] border p-5 flex flex-col ${
                 plan.highlighted
-                  ? 'border-brand-accent bg-brand-dark-alt ring-1 ring-brand-accent/50'
-                  : 'border-brand-shade3/20 bg-brand-dark-alt'
+                  ? 'border-brand-accent bg-surface-alt ring-1 ring-brand-accent/50'
+                  : 'border-border bg-surface-alt'
               }`}
             >
-              <h3 className="text-lg font-semibold text-brand-light">{plan.name}</h3>
-              <p className="mt-1 text-sm text-brand-shade2">{plan.description}</p>
+              <h3 className="text-lg font-semibold text-text-primary">{plan.name}</h3>
+              <p className="mt-1 text-sm text-text-secondary">{plan.description}</p>
 
               <div className="mt-4">
                 <span
                   className={`text-3xl font-bold ${
                     pricingQuery.isLoading && plan.id !== 'trial'
-                      ? 'text-brand-shade3 animate-pulse'
-                      : 'text-brand-light'
+                      ? 'text-text-tertiary animate-pulse'
+                      : 'text-text-primary'
                   }`}
                 >
                   {priceLabel}
@@ -155,7 +155,7 @@ export function PricingTable({ onSelectPlan, currentTier }: PricingTableProps) {
 
               <ul className="mt-6 space-y-2 flex-1">
                 {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2 text-sm text-brand-shade2">
+                  <li key={feature} className="flex items-start gap-2 text-sm text-text-secondary">
                     <svg
                       className="h-4 w-4 mt-0.5 text-emerald-400 shrink-0"
                       fill="none"
@@ -179,10 +179,10 @@ export function PricingTable({ onSelectPlan, currentTier }: PricingTableProps) {
                 disabled={isCurrent}
                 className={`mt-6 w-full rounded-[2px] py-2.5 text-sm font-medium transition-colors ${
                   isCurrent
-                    ? 'bg-brand-shade3/20 text-brand-shade3 cursor-not-allowed'
+                    ? 'bg-border text-text-tertiary cursor-not-allowed'
                     : plan.highlighted
                       ? 'bg-brand-accent text-white hover:bg-brand-accent-hover'
-                      : 'bg-brand-shade3/20 text-brand-light hover:bg-brand-shade3/30'
+                      : 'bg-border text-text-primary hover:bg-border-hover'
                 }`}
               >
                 {isCurrent ? 'Current Plan' : plan.id === 'trial' ? 'Start Trial' : 'Upgrade'}

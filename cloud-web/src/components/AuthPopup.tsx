@@ -13,8 +13,8 @@ interface AuthPopupProps {
 }
 
 const inputClass =
-  'w-full rounded-[2px] border border-brand-shade3/30 bg-brand-dark px-3 py-2 text-sm text-brand-light placeholder-brand-shade3 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent';
-const labelClass = 'block text-sm font-medium text-brand-shade2 mb-1';
+  'w-full rounded-[2px] border border-border-hover bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent';
+const labelClass = 'block text-sm font-medium text-text-secondary mb-1';
 const submitBtnClass =
   'w-full rounded-[2px] bg-brand-accent py-2.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
 const linkBtnClass = 'text-brand-accent hover:text-brand-accent-hover transition-colors';
@@ -176,11 +176,11 @@ export function AuthPopup({ isOpen, onClose, onSuccess, title }: AuthPopupProps)
       />
 
       {/* Modal */}
-      <div className="relative z-10 w-full max-w-sm mx-4 rounded-[2px] border border-brand-shade3/20 bg-brand-dark-alt shadow-2xl animate-in zoom-in-95 fade-in duration-200">
+      <div className="relative z-10 w-full max-w-sm mx-4 rounded-[2px] border border-border bg-surface-alt shadow-2xl animate-in zoom-in-95 fade-in duration-200">
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute right-3 top-3 text-brand-shade3 hover:text-brand-light transition-colors"
+          className="absolute right-3 top-3 text-text-tertiary hover:text-text-primary transition-colors"
           aria-label="Close"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -190,10 +190,10 @@ export function AuthPopup({ isOpen, onClose, onSuccess, title }: AuthPopupProps)
 
         <div className="p-6">
           {/* Header */}
-          <h2 className="text-xl font-bold text-brand-light text-center">
+          <h2 className="text-xl font-bold text-text-primary text-center">
             {title ?? getDefaultTitle(view)}
           </h2>
-          <p className="mt-1 text-sm text-brand-shade2 text-center">
+          <p className="mt-1 text-sm text-text-secondary text-center">
             {getSubtitle(view)}
           </p>
 
@@ -289,10 +289,10 @@ function OrDivider() {
   return (
     <div className="relative my-5">
       <div className="absolute inset-0 flex items-center">
-        <div className="w-full border-t border-brand-shade3/20" />
+        <div className="w-full border-t border-border" />
       </div>
       <div className="relative flex justify-center text-xs">
-        <span className="bg-brand-dark-alt px-3 text-brand-shade3">or</span>
+        <span className="bg-surface-alt px-3 text-text-tertiary">or</span>
       </div>
     </div>
   );
@@ -368,7 +368,7 @@ function LoginView({
         </button>
       </form>
 
-      <p className="text-center text-sm text-brand-shade2">
+      <p className="text-center text-sm text-text-secondary">
         Don't have an account?{' '}
         <button type="button" onClick={onSwitchToRegister} className={linkBtnClass}>
           Sign Up
@@ -456,7 +456,7 @@ function RegisterView({
         </button>
       </form>
 
-      <p className="text-center text-sm text-brand-shade2">
+      <p className="text-center text-sm text-text-secondary">
         Already have an account?{' '}
         <button type="button" onClick={onSwitchToLogin} className={linkBtnClass}>
           Sign in
@@ -491,7 +491,7 @@ function ForgotView({
         <div className="rounded-[2px] bg-emerald-500/10 border border-emerald-500/20 p-4 text-sm text-emerald-400">
           If an account exists with this email, you'll receive a reset link.
         </div>
-        <p className="text-center text-sm text-brand-shade2">
+        <p className="text-center text-sm text-text-secondary">
           <button type="button" onClick={onSwitchToLogin} className={linkBtnClass}>
             Back to Sign In
           </button>
@@ -522,7 +522,7 @@ function ForgotView({
         </button>
       </form>
 
-      <p className="text-center text-sm text-brand-shade2">
+      <p className="text-center text-sm text-text-secondary">
         <button type="button" onClick={onSwitchToLogin} className={linkBtnClass}>
           Back to Sign In
         </button>

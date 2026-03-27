@@ -91,7 +91,7 @@ export function DocsPage() {
   const ContentComponent = CONTENT_MAP[activeSection] ?? QuickStartContent;
 
   return (
-    <div className="min-h-[calc(100vh-56px)] bg-brand-dark">
+    <div className="min-h-[calc(100vh-56px)] bg-surface">
       {/* Mobile overlay backdrop */}
       {sidebarOpen && (
         <div
@@ -117,7 +117,7 @@ export function DocsPage() {
           <div className="max-w-3xl px-6 sm:px-8 py-8 mx-auto">
           {/* Mobile menu button */}
           <button
-            className="md:hidden mb-6 flex items-center gap-2 rounded-[8px] border border-brand-shade3/20 px-3 py-2 text-sm text-brand-shade2 hover:text-brand-light hover:border-brand-shade3/40 transition-colors"
+            className="md:hidden mb-6 flex items-center gap-2 rounded-[8px] border border-border px-3 py-2 text-sm text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors"
             onClick={() => setSidebarOpen(!sidebarOpen)}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
@@ -152,7 +152,7 @@ function DocsSidebar({
       className={`
         fixed z-40 top-0 left-0 h-full w-60
         md:sticky md:top-0 md:z-0 md:h-[calc(100vh-56px)]
-        bg-brand-dark border-r border-brand-shade3/15
+        bg-surface border-r border-border
         overflow-y-auto overscroll-contain
         transition-transform duration-200 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
@@ -162,7 +162,7 @@ function DocsSidebar({
       <div className="px-4 pt-6 pb-8">
         {/* Mobile close button */}
         <button
-          className="md:hidden mb-4 text-brand-shade3 hover:text-brand-light transition-colors"
+          className="md:hidden mb-4 text-text-tertiary hover:text-text-primary transition-colors"
           onClick={() => onSelect(activeSection)}
         >
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
@@ -172,7 +172,7 @@ function DocsSidebar({
 
         {NAV_SECTIONS.map((section) => (
           <div key={section.title} className="mb-5">
-            <h3 className="text-[10px] font-bold uppercase tracking-wider text-brand-shade3 mb-2 px-2">
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary mb-2 px-2">
               {section.title}
             </h3>
             <ul className="space-y-0.5">
@@ -186,7 +186,7 @@ function DocsSidebar({
                         w-full text-left px-2 py-1.5 text-sm rounded-[8px] transition-colors
                         ${isActive
                           ? 'text-brand-accent bg-brand-accent/10 font-medium'
-                          : 'text-brand-shade3 hover:text-brand-light'
+                          : 'text-text-tertiary hover:text-text-primary'
                         }
                       `}
                     >
@@ -215,7 +215,7 @@ function QuickStartContent() {
   return (
     <div>
       <PageTitle>Quick Start</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         Get ByteBrew Engine running with Docker in under 5 minutes. By the end of this guide,
         you will have a working AI agent that responds to messages over a REST API.
       </p>
@@ -226,13 +226,13 @@ function QuickStartContent() {
       </Callout>
 
       <QuickStartStep n={1} title="Start the Engine">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Download the Docker Compose file and start the engine. This spins up two containers:
           the ByteBrew Engine and a PostgreSQL database.
         </p>
         <CodeBlock>{`curl -fsSL https://bytebrew.ai/releases/docker-compose.yml -o docker-compose.yml
 docker compose up -d`}</CodeBlock>
-        <p className="text-sm text-brand-shade3 mt-3">
+        <p className="text-sm text-text-tertiary mt-3">
           The engine starts on port <Ic>8080</Ic> (API) and <Ic>8443</Ic> (Admin Dashboard).
           Verify it is running:
         </p>
@@ -241,7 +241,7 @@ docker compose up -d`}</CodeBlock>
       </QuickStartStep>
 
       <QuickStartStep n={2} title="Create your first agent">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Create an <Ic>agents.yaml</Ic> file in the same directory as your <Ic>docker-compose.yml</Ic>.
           This file defines your agents, models, and tools:
         </p>
@@ -265,20 +265,20 @@ models:
 
         <Callout type="tip" title="Prefer a visual editor?">
           Skip the YAML file and use the Admin Dashboard instead.
-          Open <Ic>http://localhost:8443/admin</Ic>, log in, and click <strong className="text-brand-shade2">Create Agent</strong>.
+          Open <Ic>http://localhost:8443/admin</Ic>, log in, and click <strong className="text-text-secondary">Create Agent</strong>.
           The dashboard lets you configure everything visually — model, system prompt,
           tools, security zones, spawn rules, and more.
           <img
             src="/screenshots/admin-agents.png"
             alt="Admin Dashboard — Agents list with Create Agent button"
-            className="mt-3 w-full max-w-4xl rounded-[2px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5"
+            className="mt-3 w-full max-w-4xl rounded-[2px] border border-border overflow-hidden shadow-2xl shadow-brand-accent/5"
             loading="lazy"
           />
         </Callout>
       </QuickStartStep>
 
       <QuickStartStep n={3} title="Send your first message">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Use the REST API to talk to your agent. The response streams back as Server-Sent Events (SSE),
           so you see tokens as they are generated:
         </p>
@@ -288,7 +288,7 @@ models:
       </QuickStartStep>
 
       <QuickStartStep n={4} title="See the response">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           The engine returns a stream of SSE events. Each event has a <Ic>type</Ic> field that tells you
           what kind of data it contains:
         </p>
@@ -303,7 +303,7 @@ data: {"text":"documentation search, and more."}
 
 event: done
 data: {"session_id":"a1b2c3d4","tokens":42}`}</CodeBlock>
-        <p className="text-sm text-brand-shade3 mt-3">
+        <p className="text-sm text-text-tertiary mt-3">
           The <Ic>session_id</Ic> in the <Ic>done</Ic> event lets you continue the conversation.
           Pass it in subsequent requests to maintain context:
         </p>
@@ -313,7 +313,7 @@ data: {"session_id":"a1b2c3d4","tokens":42}`}</CodeBlock>
       </QuickStartStep>
 
       <QuickStartStep n={5} title="Open the Admin Dashboard">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Navigate to <Ic>http://localhost:8443/admin</Ic> in your browser to manage agents,
           models, tools, and triggers through a visual interface. Default credentials
           are configured via <Ic>ADMIN_USER</Ic> and <Ic>ADMIN_PASSWORD</Ic> environment variables.
@@ -321,7 +321,7 @@ data: {"session_id":"a1b2c3d4","tokens":42}`}</CodeBlock>
         <img
           src="/screenshots/admin-health.png"
           alt="Admin Dashboard — Health page showing engine status and connected agents"
-          className="mt-3 w-full max-w-4xl rounded-[2px] border border-brand-shade3/15 overflow-hidden shadow-2xl shadow-brand-accent/5"
+          className="mt-3 w-full max-w-4xl rounded-[2px] border border-border overflow-hidden shadow-2xl shadow-brand-accent/5"
           loading="lazy"
         />
       </QuickStartStep>
@@ -345,7 +345,7 @@ function ConfigurationContent() {
   return (
     <div>
       <PageTitle>Configuration Reference</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         ByteBrew Engine is configured through YAML files or the Admin Dashboard. Both methods
         write to the same PostgreSQL database -- YAML is just a convenient bootstrap format.
         This reference covers every configuration option in detail.
@@ -361,7 +361,7 @@ function ConfigurationContent() {
 
       {/* ---- Agent Configuration ---- */}
       <SubSection title="Agent Configuration">
-        <p className="text-sm text-brand-shade3 mb-4">
+        <p className="text-sm text-text-tertiary mb-4">
           Agents are the core building blocks of ByteBrew. Each agent is an LLM-powered entity
           with its own identity, behavior, tools, and memory. You define agents under
           the <Ic>agents:</Ic> key, where each key is the agent&apos;s unique name.
@@ -409,19 +409,19 @@ function ConfigurationContent() {
 
       {/* ---- System Prompts: Best Practices ---- */}
       <SubSection title="System Prompts: Best Practices">
-        <p className="text-sm text-brand-shade3 mb-4">
+        <p className="text-sm text-text-tertiary mb-4">
           The system prompt is the most important configuration for an agent. It defines personality,
           capabilities, constraints, and output format. A well-written prompt dramatically improves
           agent reliability.
         </p>
 
-        <h4 className="text-sm font-semibold text-brand-light mt-4 mb-2">Structure of an effective prompt</h4>
+        <h4 className="text-sm font-semibold text-text-primary mt-4 mb-2">Structure of an effective prompt</h4>
         <BulletList items={[
-          <><strong className="text-brand-shade2">Role definition</strong> -- who the agent is and what organization it belongs to.</>,
-          <><strong className="text-brand-shade2">Capabilities</strong> -- what tools are available and when to use each one.</>,
-          <><strong className="text-brand-shade2">Constraints</strong> -- what the agent must never do (guardrails).</>,
-          <><strong className="text-brand-shade2">Output format</strong> -- how to structure responses (markdown, JSON, bullet points).</>,
-          <><strong className="text-brand-shade2">Escalation rules</strong> -- when to ask the user vs. act autonomously.</>,
+          <><strong className="text-text-secondary">Role definition</strong> -- who the agent is and what organization it belongs to.</>,
+          <><strong className="text-text-secondary">Capabilities</strong> -- what tools are available and when to use each one.</>,
+          <><strong className="text-text-secondary">Constraints</strong> -- what the agent must never do (guardrails).</>,
+          <><strong className="text-text-secondary">Output format</strong> -- how to structure responses (markdown, JSON, bullet points).</>,
+          <><strong className="text-text-secondary">Escalation rules</strong> -- when to ask the user vs. act autonomously.</>,
         ]} />
 
         <CodeBlock>{`# Good: specific role, clear boundaries, actionable instructions
@@ -450,7 +450,7 @@ system: |
           LLMs are eager to please and will attempt tasks outside their scope unless explicitly told not to.
         </Callout>
 
-        <p className="text-sm text-brand-shade3 mt-4 mb-3">
+        <p className="text-sm text-text-tertiary mt-4 mb-3">
           For long prompts, use <Ic>system_file</Ic> to load from an external file.
           This keeps your YAML clean and lets you version-control prompts separately:
         </p>
@@ -462,7 +462,7 @@ system: |
 
       {/* ---- Security Zones Explained ---- */}
       <SubSection title="Security Zones Explained">
-        <p className="text-sm text-brand-shade3 mb-4">
+        <p className="text-sm text-text-tertiary mb-4">
           Every tool in ByteBrew is assigned a security zone that indicates its risk level.
           This helps operators understand what an agent can do and enforce appropriate safeguards.
         </p>
@@ -493,13 +493,13 @@ system: |
 
       {/* ---- Environment Variables ---- */}
       <SubSection title="Environment Variables">
-        <p className="text-sm text-brand-shade3 mb-4">
+        <p className="text-sm text-text-tertiary mb-4">
           ByteBrew supports <Ic>{'${VAR_NAME}'}</Ic> syntax for referencing environment variables
           anywhere in your YAML configuration. Variables are expanded at engine startup, so the
           YAML file never contains actual secrets.
         </p>
 
-        <h4 className="text-sm font-semibold text-brand-light mt-4 mb-2">How it works</h4>
+        <h4 className="text-sm font-semibold text-text-primary mt-4 mb-2">How it works</h4>
         <BulletList items={[
           <>The engine reads the YAML file and replaces every <Ic>{'${VAR_NAME}'}</Ic> with the value of that environment variable.</>,
           <>If a referenced variable is not set, the engine logs a warning and leaves the placeholder empty.</>,
@@ -537,7 +537,7 @@ triggers:
 
       {/* ---- Model Configuration ---- */}
       <SubSection title="Model Configuration">
-        <p className="text-sm text-brand-shade3 mb-4">
+        <p className="text-sm text-text-tertiary mb-4">
           Models define the LLM backends your agents use. ByteBrew supports any OpenAI-compatible API,
           Anthropic, and local models via Ollama. You can configure multiple models and assign
           different ones to different agents.
@@ -550,8 +550,8 @@ triggers:
           { name: 'api_key', required: false, default: '--', desc: 'API key for the provider. Use ${VAR} syntax. Not required for Ollama.' },
         ]} />
 
-        <h4 className="text-sm font-semibold text-brand-light mt-6 mb-2">Ollama (local models)</h4>
-        <p className="text-sm text-brand-shade3 mb-3">
+        <h4 className="text-sm font-semibold text-text-primary mt-6 mb-2">Ollama (local models)</h4>
+        <p className="text-sm text-text-tertiary mb-3">
           Run models locally with zero API costs. Install Ollama, pull a model, and point ByteBrew at it:
         </p>
         <CodeBlock>{`# 1. Install Ollama (https://ollama.com)
@@ -580,8 +580,8 @@ models:
           24 GB VRAM (RTX 4090 or A100). Smaller models like llama3.2 (3B) run on 4 GB VRAM or even CPU.
         </Callout>
 
-        <h4 className="text-sm font-semibold text-brand-light mt-6 mb-2">OpenAI-compatible providers</h4>
-        <p className="text-sm text-brand-shade3 mb-3">
+        <h4 className="text-sm font-semibold text-text-primary mt-6 mb-2">OpenAI-compatible providers</h4>
+        <p className="text-sm text-text-tertiary mb-3">
           Any API that follows the OpenAI chat completions format works out of the box.
           Just change the <Ic>base_url</Ic>:
         </p>
@@ -617,8 +617,8 @@ models:
     base_url: "http://gpu-server:8000/v1"
     api_key: "not-needed"`}</CodeBlock>
 
-        <h4 className="text-sm font-semibold text-brand-light mt-6 mb-2">Anthropic</h4>
-        <p className="text-sm text-brand-shade3 mb-3">
+        <h4 className="text-sm font-semibold text-text-primary mt-6 mb-2">Anthropic</h4>
+        <p className="text-sm text-text-tertiary mb-3">
           Native Anthropic API support with automatic message formatting:
         </p>
         <CodeBlock>{`models:
@@ -630,7 +630,7 @@ models:
 
       {/* ---- Tool Configuration ---- */}
       <SubSection title="Tool Configuration (Declarative YAML)">
-        <p className="text-sm text-brand-shade3 mb-4">
+        <p className="text-sm text-text-tertiary mb-4">
           Declarative HTTP tools let you connect agents to any REST API without writing code.
           You define the endpoint, parameters, and authentication in YAML -- the engine handles
           the HTTP request and passes the result back to the LLM.
@@ -706,10 +706,10 @@ models:
 
       {/* ---- MCP Server Configuration ---- */}
       <SubSection title="MCP Server Configuration">
-        <p className="text-sm text-brand-shade3 mb-4">
+        <p className="text-sm text-text-tertiary mb-4">
           Model Context Protocol (MCP) servers extend agent capabilities with external tools.
-          ByteBrew supports two transport types: <strong className="text-brand-shade2">stdio</strong> (the
-          engine spawns a local process) and <strong className="text-brand-shade2">HTTP/SSE</strong> (the
+          ByteBrew supports two transport types: <strong className="text-text-secondary">stdio</strong> (the
+          engine spawns a local process) and <strong className="text-text-secondary">HTTP/SSE</strong> (the
           engine connects to a remote server).
         </p>
 
@@ -755,13 +755,13 @@ models:
 
       {/* ---- Trigger Configuration ---- */}
       <SubSection title="Trigger Configuration">
-        <p className="text-sm text-brand-shade3 mb-4">
+        <p className="text-sm text-text-tertiary mb-4">
           Triggers let agents run autonomously without user interaction. Cron triggers
           execute on a schedule; webhook triggers fire when an external service sends an HTTP request.
           Both types create background tasks that the agent processes independently.
         </p>
 
-        <h4 className="text-sm font-semibold text-brand-light mt-4 mb-2">Cron expression reference</h4>
+        <h4 className="text-sm font-semibold text-text-primary mt-4 mb-2">Cron expression reference</h4>
         <ParamTable params={[
           { name: '* * * * *', required: false, default: '--', desc: 'Every minute' },
           { name: '*/5 * * * *', required: false, default: '--', desc: 'Every 5 minutes' },
@@ -794,8 +794,8 @@ models:
     path: /webhooks/internal
     agent: ops-bot`}</CodeBlock>
 
-        <h4 className="text-sm font-semibold text-brand-light mt-6 mb-2">Webhook security</h4>
-        <p className="text-sm text-brand-shade3 mb-3">
+        <h4 className="text-sm font-semibold text-text-primary mt-6 mb-2">Webhook security</h4>
+        <p className="text-sm text-text-tertiary mb-3">
           When a <Ic>secret</Ic> is configured, the engine verifies incoming requests using
           HMAC-SHA256 signature verification. The external service must include the signature
           in the <Ic>X-Webhook-Secret</Ic> header:
@@ -831,27 +831,27 @@ function ApiReferenceContent() {
   return (
     <div>
       <PageTitle>API Reference</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         Complete REST API reference for the ByteBrew Engine. All endpoints
         return JSON (except SSE streams) and accept JSON request bodies.
       </p>
 
       {/* ---- Authentication ---- */}
       <SubSection title="Authentication">
-        <p className="text-sm text-brand-shade3 mb-4">
+        <p className="text-sm text-text-tertiary mb-4">
           All API requests must include a valid API token in the <Ic>Authorization</Ic> header.
           Tokens are created through the Admin Dashboard and are scoped to specific capabilities.
         </p>
 
-        <h4 className="text-sm font-semibold text-brand-light mt-4 mb-2">Creating an API token</h4>
+        <h4 className="text-sm font-semibold text-text-primary mt-4 mb-2">Creating an API token</h4>
         <BulletList items={[
-          <>Navigate to <strong className="text-brand-shade2">Admin Dashboard</strong> &rarr; <strong className="text-brand-shade2">API Keys</strong></>,
+          <>Navigate to <strong className="text-text-secondary">Admin Dashboard</strong> &rarr; <strong className="text-text-secondary">API Keys</strong></>,
           <>Click &quot;Create API Key&quot; and select the scopes you need</>,
           <>Copy the token immediately -- it is shown only once and cannot be recovered</>,
           <>Tokens are prefixed with <Ic>bb_</Ic> for easy identification in logs and config</>,
         ]} />
 
-        <h4 className="text-sm font-semibold text-brand-light mt-4 mb-2">Using the token</h4>
+        <h4 className="text-sm font-semibold text-text-primary mt-4 mb-2">Using the token</h4>
         <CodeBlock>{`# curl
 curl http://localhost:8080/api/v1/agents \\
   -H "Authorization: Bearer bb_your_api_token"
@@ -868,7 +868,7 @@ response = requests.get(
     headers={'Authorization': 'Bearer bb_your_api_token'},
 )`}</CodeBlock>
 
-        <h4 className="text-sm font-semibold text-brand-light mt-4 mb-2">Token scopes</h4>
+        <h4 className="text-sm font-semibold text-text-primary mt-4 mb-2">Token scopes</h4>
         <ParamTable params={[
           { name: 'chat', required: false, default: '--', desc: 'Send messages to agents (POST /agents/{name}/chat)' },
           { name: 'tasks', required: false, default: '--', desc: 'Create, list, cancel tasks and provide input' },
@@ -883,7 +883,7 @@ response = requests.get(
           Use <Ic>admin</Ic> scope only for the Admin Dashboard and management scripts.
         </Callout>
 
-        <h4 className="text-sm font-semibold text-brand-light mt-4 mb-2">Error responses</h4>
+        <h4 className="text-sm font-semibold text-text-primary mt-4 mb-2">Error responses</h4>
         <CodeBlock>{`# 401 Unauthorized — missing or invalid token
 {"error": "unauthorized", "message": "Invalid or expired API token"}
 
@@ -893,38 +893,38 @@ response = requests.get(
 
       <div className="mb-6 space-y-2">
         <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium text-brand-shade2">Base URL:</span>
+          <span className="text-sm font-medium text-text-secondary">Base URL:</span>
           <Ic>http://localhost:8080/api/v1</Ic>
         </div>
         <div className="flex items-baseline gap-2 flex-wrap">
-          <span className="text-sm font-medium text-brand-shade2">Content-Type:</span>
+          <span className="text-sm font-medium text-text-secondary">Content-Type:</span>
           <Ic>application/json</Ic>
         </div>
       </div>
 
       {/* ---- Chat ---- */}
       <SubSection title="Chat (SSE Streaming)">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Send a message to an agent and receive a stream of Server-Sent Events. This is the
           primary endpoint for building conversational interfaces.
         </p>
 
         <CodeBlock>{`POST /api/v1/agents/{name}/chat`}</CodeBlock>
 
-        <h4 className="text-sm font-semibold text-brand-light mt-4 mb-2">Request body</h4>
+        <h4 className="text-sm font-semibold text-text-primary mt-4 mb-2">Request body</h4>
         <ParamTable params={[
           { name: 'message', required: true, default: '--', desc: 'The user message to send to the agent.' },
           { name: 'session_id', required: false, default: 'auto-generated', desc: 'Session ID for continuing a conversation. Omit to start a new session.' },
         ]} />
 
-        <h4 className="text-sm font-semibold text-brand-light mt-4 mb-2">Full example</h4>
+        <h4 className="text-sm font-semibold text-text-primary mt-4 mb-2">Full example</h4>
         <CodeBlock>{`# Start a new conversation
 curl -N http://localhost:8080/api/v1/agents/sales-agent/chat \\
   -H "Authorization: Bearer bb_your_token" \\
   -H "Content-Type: application/json" \\
   -d '{"message": "What laptops do you have under $1000?"}'`}</CodeBlock>
 
-        <h4 className="text-sm font-semibold text-brand-light mt-4 mb-2">SSE event types</h4>
+        <h4 className="text-sm font-semibold text-text-primary mt-4 mb-2">SSE event types</h4>
         <ParamTable params={[
           { name: 'content', required: false, default: '--', desc: 'Text chunk from the agent. Concatenate all content events for the full response.' },
           { name: 'tool_call', required: false, default: '--', desc: 'Agent is calling a tool. Contains tool name and input parameters.' },
@@ -933,7 +933,7 @@ curl -N http://localhost:8080/api/v1/agents/sales-agent/chat \\
           { name: 'done', required: false, default: '--', desc: 'Stream is complete. Contains session_id and token count.' },
         ]} />
 
-        <h4 className="text-sm font-semibold text-brand-light mt-4 mb-2">Example response stream</h4>
+        <h4 className="text-sm font-semibold text-text-primary mt-4 mb-2">Example response stream</h4>
         <CodeBlock>{`event: content
 data: {"text":"I found several laptops under $1000. "}
 
@@ -949,7 +949,7 @@ data: {"text":"Here are the top options:\\n\\n1. **ProBook 450** — $849..."}
 event: done
 data: {"session_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","tokens":234}`}</CodeBlock>
 
-        <h4 className="text-sm font-semibold text-brand-light mt-4 mb-2">Continue the conversation</h4>
+        <h4 className="text-sm font-semibold text-text-primary mt-4 mb-2">Continue the conversation</h4>
         <CodeBlock>{`curl -N http://localhost:8080/api/v1/agents/sales-agent/chat \\
   -H "Authorization: Bearer bb_your_token" \\
   -H "Content-Type: application/json" \\
@@ -958,7 +958,7 @@ data: {"session_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","tokens":234}`}</Code
 
       {/* ---- Agents ---- */}
       <SubSection title="Agents">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           List and inspect configured agents. Requires <Ic>agents:read</Ic> or <Ic>admin</Ic> scope.
         </p>
         <CodeBlock>{`# List all agents
@@ -997,7 +997,7 @@ curl http://localhost:8080/api/v1/agents/sales-agent \\
 
       {/* ---- Sessions ---- */}
       <SubSection title="Sessions">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Manage conversation sessions. Sessions store the full message history between a user
           and an agent. Requires <Ic>chat</Ic> or <Ic>admin</Ic> scope.
         </p>
@@ -1028,7 +1028,7 @@ curl -X DELETE http://localhost:8080/api/v1/sessions/a1b2c3d4 \\
 
       {/* ---- Tasks ---- */}
       <SubSection title="Tasks">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Create and manage agent tasks. Tasks are units of work that agents process
           asynchronously -- they can be created by users, triggers, or other agents. Requires <Ic>tasks</Ic> or <Ic>admin</Ic> scope.
         </p>
@@ -1069,7 +1069,7 @@ curl -X POST http://localhost:8080/api/v1/tasks/task_abc123/input \\
   -H "Content-Type: application/json" \\
   -d '{"input": "Focus on enterprise segment and include competitor analysis"}'`}</CodeBlock>
 
-        <h4 className="text-sm font-semibold text-brand-light mt-4 mb-2">Task statuses</h4>
+        <h4 className="text-sm font-semibold text-text-primary mt-4 mb-2">Task statuses</h4>
         <ParamTable params={[
           { name: 'pending', required: false, default: '--', desc: 'Task created, waiting to be picked up by the agent.' },
           { name: 'in_progress', required: false, default: '--', desc: 'Agent is actively working on the task.' },
@@ -1083,7 +1083,7 @@ curl -X POST http://localhost:8080/api/v1/tasks/task_abc123/input \\
 
       {/* ---- Config ---- */}
       <SubSection title="Config">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Manage engine configuration at runtime. Hot-reload applies changes without restarting
           the engine. Export/import enable GitOps workflows. Requires <Ic>config</Ic> or <Ic>admin</Ic> scope.
         </p>
@@ -1111,7 +1111,7 @@ curl -X POST http://localhost:8080/api/v1/config/import \\
 
       {/* ---- Health ---- */}
       <SubSection title="Health">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Check engine status. No authentication required -- useful for load balancer health checks.
         </p>
         <CodeBlock>{`curl http://localhost:8080/api/v1/health
@@ -1127,7 +1127,7 @@ curl -X POST http://localhost:8080/api/v1/config/import \\
 
       {/* ---- BYOK ---- */}
       <SubSection title="BYOK Headers (per-request model override)">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Bring Your Own Key lets API consumers override the model for a single request.
           This must be enabled in Settings for each provider. Useful for multi-tenant
           deployments where each customer provides their own API key.
@@ -1165,7 +1165,7 @@ function AdminLoginContent() {
   return (
     <div>
       <PageTitle>Admin Dashboard: Login</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         The Admin Dashboard is a web-based interface for managing all aspects of your ByteBrew Engine.
         It is protected by username/password authentication, and access credentials are configured
         through environment variables.
@@ -1188,10 +1188,10 @@ ADMIN_PASSWORD=your-secure-password
 
       <SubSection title="Security recommendations">
         <BulletList items={[
-          <><strong className="text-brand-shade2">Change default credentials</strong> -- never use &quot;admin/admin&quot; in production.</>,
-          <><strong className="text-brand-shade2">Use HTTPS</strong> -- put a reverse proxy (Caddy, nginx) in front of the engine with TLS.</>,
-          <><strong className="text-brand-shade2">Network isolation</strong> -- restrict dashboard access to internal networks or VPN.</>,
-          <><strong className="text-brand-shade2">Token expiration</strong> -- tokens expire after 24 hours. Re-login is required after expiration.</>,
+          <><strong className="text-text-secondary">Change default credentials</strong> -- never use &quot;admin/admin&quot; in production.</>,
+          <><strong className="text-text-secondary">Use HTTPS</strong> -- put a reverse proxy (Caddy, nginx) in front of the engine with TLS.</>,
+          <><strong className="text-text-secondary">Network isolation</strong> -- restrict dashboard access to internal networks or VPN.</>,
+          <><strong className="text-text-secondary">Token expiration</strong> -- tokens expire after 24 hours. Re-login is required after expiration.</>,
         ]} />
 
         <Callout type="warning" title="No multi-user support yet">
@@ -1203,9 +1203,9 @@ ADMIN_PASSWORD=your-secure-password
 
       <SubSection title="Troubleshooting">
         <BulletList items={[
-          <><strong className="text-brand-shade2">Login fails with correct credentials</strong> -- verify <Ic>ADMIN_USER</Ic> and <Ic>ADMIN_PASSWORD</Ic> are set and the engine was restarted after changing them.</>,
-          <><strong className="text-brand-shade2">Dashboard returns 401 after a while</strong> -- your JWT token expired. Reload the page to trigger a re-login.</>,
-          <><strong className="text-brand-shade2">Dashboard not loading</strong> -- check that port 8443 is exposed in Docker and not blocked by a firewall.</>,
+          <><strong className="text-text-secondary">Login fails with correct credentials</strong> -- verify <Ic>ADMIN_USER</Ic> and <Ic>ADMIN_PASSWORD</Ic> are set and the engine was restarted after changing them.</>,
+          <><strong className="text-text-secondary">Dashboard returns 401 after a while</strong> -- your JWT token expired. Reload the page to trigger a re-login.</>,
+          <><strong className="text-text-secondary">Dashboard not loading</strong> -- check that port 8443 is exposed in Docker and not blocked by a firewall.</>,
         ]} />
       </SubSection>
 
@@ -1223,30 +1223,30 @@ function AdminAgentsContent() {
   return (
     <div>
       <PageTitle>Admin Dashboard: Agents</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         The Agents page is your central hub for creating, configuring, and managing AI agents.
         Each agent is a self-contained entity with its own model, personality (system prompt),
         tools, and memory scope.
       </p>
 
       <SubSection title="Agent list view">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           The main view shows a table of all configured agents with key information at a glance:
         </p>
         <BulletList items={[
-          <><strong className="text-brand-shade2">Name</strong> -- unique identifier (lowercase, alphanumeric, hyphens only).</>,
-          <><strong className="text-brand-shade2">Kit</strong> -- preset tool bundle (<Ic>none</Ic> or <Ic>developer</Ic>).</>,
-          <><strong className="text-brand-shade2">Tools count</strong> -- total number of tools available to the agent.</>,
-          <><strong className="text-brand-shade2">Knowledge</strong> -- whether a knowledge base is configured (RAG).</>,
+          <><strong className="text-text-secondary">Name</strong> -- unique identifier (lowercase, alphanumeric, hyphens only).</>,
+          <><strong className="text-text-secondary">Kit</strong> -- preset tool bundle (<Ic>none</Ic> or <Ic>developer</Ic>).</>,
+          <><strong className="text-text-secondary">Tools count</strong> -- total number of tools available to the agent.</>,
+          <><strong className="text-text-secondary">Knowledge</strong> -- whether a knowledge base is configured (RAG).</>,
         ]} />
-        <p className="text-sm text-brand-shade3 mt-3">
+        <p className="text-sm text-text-tertiary mt-3">
           Click any agent row to open a side panel with the full configuration. From there
           you can edit settings, view tools by security zone, or delete the agent.
         </p>
       </SubSection>
 
       <SubSection title="Creating an agent">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Click &quot;Create Agent&quot; to open the agent form. Here is a walkthrough of each field:
         </p>
 
@@ -1273,7 +1273,7 @@ function AdminAgentsContent() {
       </SubSection>
 
       <SubSection title="YAML equivalent">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Everything configured through the form can also be expressed in YAML:
         </p>
         <CodeBlock>{`agents:
@@ -1314,7 +1314,7 @@ function AdminModelsContent() {
   return (
     <div>
       <PageTitle>Admin Dashboard: Models</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         The Models page lets you configure LLM providers and endpoints. Each model entry
         defines how the engine connects to an LLM backend -- you can have multiple models
         from different providers and assign each agent its own model.
@@ -1329,15 +1329,15 @@ function AdminModelsContent() {
       </SubSection>
 
       <SubSection title="Adding a model">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Click &quot;Add Model&quot; and fill in the fields:
         </p>
         <BulletList items={[
-          <><strong className="text-brand-shade2">Display name</strong> -- a human-readable name used in the agent configuration dropdown.</>,
-          <><strong className="text-brand-shade2">Provider</strong> -- select from the supported providers above.</>,
-          <><strong className="text-brand-shade2">Model name</strong> -- the model identifier as expected by the provider API (e.g., <Ic>llama3.2</Ic>, <Ic>claude-sonnet-4-20250514</Ic>).</>,
-          <><strong className="text-brand-shade2">Base URL</strong> -- custom endpoint URL. Required for Ollama and third-party providers. Leave empty for default OpenAI/Anthropic endpoints.</>,
-          <><strong className="text-brand-shade2">API Key</strong> -- provider API key. Not needed for Ollama. Use the <Ic>{'${VAR}'}</Ic> syntax when configuring via YAML.</>,
+          <><strong className="text-text-secondary">Display name</strong> -- a human-readable name used in the agent configuration dropdown.</>,
+          <><strong className="text-text-secondary">Provider</strong> -- select from the supported providers above.</>,
+          <><strong className="text-text-secondary">Model name</strong> -- the model identifier as expected by the provider API (e.g., <Ic>llama3.2</Ic>, <Ic>claude-sonnet-4-20250514</Ic>).</>,
+          <><strong className="text-text-secondary">Base URL</strong> -- custom endpoint URL. Required for Ollama and third-party providers. Leave empty for default OpenAI/Anthropic endpoints.</>,
+          <><strong className="text-text-secondary">API Key</strong> -- provider API key. Not needed for Ollama. Use the <Ic>{'${VAR}'}</Ic> syntax when configuring via YAML.</>,
         ]} />
 
         <Callout type="info" title="Model validation">
@@ -1384,7 +1384,7 @@ function AdminMcpContent() {
   return (
     <div>
       <PageTitle>Admin Dashboard: MCP Servers</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         Model Context Protocol (MCP) is an open standard for connecting AI agents to external
         tools and data sources. The MCP Servers page lets you add, configure, and monitor
         MCP server connections.
@@ -1399,7 +1399,7 @@ function AdminMcpContent() {
       </SubSection>
 
       <SubSection title="Adding from catalog">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           The catalog contains pre-configured, well-known MCP servers. Adding one is a one-click operation:
         </p>
         <BulletList items={[
@@ -1412,15 +1412,15 @@ function AdminMcpContent() {
       </SubSection>
 
       <SubSection title="Adding a custom server">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           For servers not in the catalog, click &quot;Add Custom&quot; and fill in the form:
         </p>
         <BulletList items={[
-          <><strong className="text-brand-shade2">Name</strong> -- unique identifier for referencing from agent configs.</>,
-          <><strong className="text-brand-shade2">Type</strong> -- stdio, http, or sse.</>,
-          <><strong className="text-brand-shade2">Command / URL</strong> -- for stdio: the command to run. For http/sse: the server URL.</>,
-          <><strong className="text-brand-shade2">Args</strong> -- command-line arguments (stdio only).</>,
-          <><strong className="text-brand-shade2">Environment variables</strong> -- key-value pairs passed to the process (stdio only).</>,
+          <><strong className="text-text-secondary">Name</strong> -- unique identifier for referencing from agent configs.</>,
+          <><strong className="text-text-secondary">Type</strong> -- stdio, http, or sse.</>,
+          <><strong className="text-text-secondary">Command / URL</strong> -- for stdio: the command to run. For http/sse: the server URL.</>,
+          <><strong className="text-text-secondary">Args</strong> -- command-line arguments (stdio only).</>,
+          <><strong className="text-text-secondary">Environment variables</strong> -- key-value pairs passed to the process (stdio only).</>,
         ]} />
 
         <CodeBlock>{`# Stdio: Engine spawns the process
@@ -1450,13 +1450,13 @@ mcp_servers:
       </SubSection>
 
       <SubSection title="Monitoring and troubleshooting">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Each MCP server shows a status indicator and the count of discovered tools:
         </p>
         <BulletList items={[
-          <><strong className="text-brand-shade2">Connected (green)</strong> -- the server is running and tools are discovered.</>,
-          <><strong className="text-brand-shade2">Disconnected (red)</strong> -- the server process crashed or the HTTP endpoint is unreachable.</>,
-          <><strong className="text-brand-shade2">Tools count</strong> -- number of tools the server exposes. Click to see the full list with descriptions.</>,
+          <><strong className="text-text-secondary">Connected (green)</strong> -- the server is running and tools are discovered.</>,
+          <><strong className="text-text-secondary">Disconnected (red)</strong> -- the server process crashed or the HTTP endpoint is unreachable.</>,
+          <><strong className="text-text-secondary">Tools count</strong> -- number of tools the server exposes. Click to see the full list with descriptions.</>,
         ]} />
 
         <Callout type="tip" title="Debugging connection issues">
@@ -1481,33 +1481,33 @@ function AdminTasksContent() {
   return (
     <div>
       <PageTitle>Admin Dashboard: Tasks</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         Tasks are units of work that agents process asynchronously. They can be created manually
         through the dashboard, programmatically via the API, or automatically by triggers (cron/webhook).
         The Tasks page gives you visibility into everything your agents are working on.
       </p>
 
       <SubSection title="Task list and filtering">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           The main view shows a paginated table of all tasks with powerful filters:
         </p>
         <BulletList items={[
-          <><strong className="text-brand-shade2">Status filter</strong> -- <Ic>pending</Ic>, <Ic>in_progress</Ic>, <Ic>completed</Ic>, <Ic>failed</Ic>, <Ic>cancelled</Ic>, <Ic>needs_input</Ic>, <Ic>escalated</Ic>.</>,
-          <><strong className="text-brand-shade2">Source filter</strong> -- <Ic>agent</Ic> (spawned by another agent), <Ic>cron</Ic>, <Ic>webhook</Ic>, <Ic>api</Ic>, <Ic>dashboard</Ic>.</>,
-          <><strong className="text-brand-shade2">Agent filter</strong> -- filter by which agent is assigned to the task.</>,
+          <><strong className="text-text-secondary">Status filter</strong> -- <Ic>pending</Ic>, <Ic>in_progress</Ic>, <Ic>completed</Ic>, <Ic>failed</Ic>, <Ic>cancelled</Ic>, <Ic>needs_input</Ic>, <Ic>escalated</Ic>.</>,
+          <><strong className="text-text-secondary">Source filter</strong> -- <Ic>agent</Ic> (spawned by another agent), <Ic>cron</Ic>, <Ic>webhook</Ic>, <Ic>api</Ic>, <Ic>dashboard</Ic>.</>,
+          <><strong className="text-text-secondary">Agent filter</strong> -- filter by which agent is assigned to the task.</>,
         ]} />
       </SubSection>
 
       <SubSection title="Creating a task">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Click &quot;Create Task&quot; and fill in the form:
         </p>
         <BulletList items={[
-          <><strong className="text-brand-shade2">Agent</strong> -- select which agent should handle the task.</>,
-          <><strong className="text-brand-shade2">Title</strong> -- short description of the task (shown in the list).</>,
-          <><strong className="text-brand-shade2">Description</strong> -- detailed instructions for the agent (this becomes the message).</>,
+          <><strong className="text-text-secondary">Agent</strong> -- select which agent should handle the task.</>,
+          <><strong className="text-text-secondary">Title</strong> -- short description of the task (shown in the list).</>,
+          <><strong className="text-text-secondary">Description</strong> -- detailed instructions for the agent (this becomes the message).</>,
         ]} />
-        <p className="text-sm text-brand-shade3 mt-3">
+        <p className="text-sm text-text-tertiary mt-3">
           The agent starts working on the task immediately. You can track progress in the task
           detail view, which shows the agent&apos;s messages, tool calls, and results.
         </p>
@@ -1515,9 +1515,9 @@ function AdminTasksContent() {
 
       <SubSection title="Task actions">
         <BulletList items={[
-          <><strong className="text-brand-shade2">Cancel</strong> -- available for tasks in <Ic>pending</Ic> or <Ic>in_progress</Ic> status. The agent stops working immediately.</>,
-          <><strong className="text-brand-shade2">Provide input</strong> -- for tasks in <Ic>needs_input</Ic> status. The agent paused to ask a question or request confirmation. Type your response and the agent continues.</>,
-          <><strong className="text-brand-shade2">View details</strong> -- click any task to see the full conversation, tool calls, and results.</>,
+          <><strong className="text-text-secondary">Cancel</strong> -- available for tasks in <Ic>pending</Ic> or <Ic>in_progress</Ic> status. The agent stops working immediately.</>,
+          <><strong className="text-text-secondary">Provide input</strong> -- for tasks in <Ic>needs_input</Ic> status. The agent paused to ask a question or request confirmation. Type your response and the agent continues.</>,
+          <><strong className="text-text-secondary">View details</strong> -- click any task to see the full conversation, tool calls, and results.</>,
         ]} />
       </SubSection>
 
@@ -1557,19 +1557,19 @@ function AdminTriggersContent() {
   return (
     <div>
       <PageTitle>Admin Dashboard: Triggers</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         Triggers enable agents to run autonomously without user interaction. Use cron triggers
         for scheduled tasks (daily reports, periodic checks) and webhook triggers for event-driven
         workflows (order created, payment received, deployment completed).
       </p>
 
       <SubSection title="Cron triggers">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Schedule agents to run at specific times using standard cron syntax.
           Each cron trigger creates a background task at the scheduled time.
         </p>
 
-        <h4 className="text-sm font-semibold text-brand-light mt-4 mb-2">Common cron patterns</h4>
+        <h4 className="text-sm font-semibold text-text-primary mt-4 mb-2">Common cron patterns</h4>
         <ParamTable params={[
           { name: '*/5 * * * *', required: false, default: '--', desc: 'Every 5 minutes' },
           { name: '0 */2 * * *', required: false, default: '--', desc: 'Every 2 hours' },
@@ -1588,7 +1588,7 @@ function AdminTriggersContent() {
       </SubSection>
 
       <SubSection title="Webhook triggers">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Expose HTTP endpoints that external services can call to trigger agents.
           The incoming request body is forwarded to the agent as the message.
         </p>
@@ -1616,10 +1616,10 @@ curl -X POST http://localhost:8080/api/v1/webhooks/orders \\
 
       <SubSection title="Managing triggers">
         <BulletList items={[
-          <><strong className="text-brand-shade2">Enable/disable</strong> -- toggle triggers on and off without deleting them. Disabled triggers are retained in configuration but do not fire.</>,
-          <><strong className="text-brand-shade2">Edit</strong> -- change the schedule, agent, message, or secret at any time.</>,
-          <><strong className="text-brand-shade2">Delete</strong> -- permanently remove a trigger. Existing tasks created by the trigger are not affected.</>,
-          <><strong className="text-brand-shade2">History</strong> -- view recent trigger executions in the Audit Log, including task IDs and outcomes.</>,
+          <><strong className="text-text-secondary">Enable/disable</strong> -- toggle triggers on and off without deleting them. Disabled triggers are retained in configuration but do not fire.</>,
+          <><strong className="text-text-secondary">Edit</strong> -- change the schedule, agent, message, or secret at any time.</>,
+          <><strong className="text-text-secondary">Delete</strong> -- permanently remove a trigger. Existing tasks created by the trigger are not affected.</>,
+          <><strong className="text-text-secondary">History</strong> -- view recent trigger executions in the Audit Log, including task IDs and outcomes.</>,
         ]} />
       </SubSection>
 
@@ -1637,7 +1637,7 @@ function AdminApiKeysContent() {
   return (
     <div>
       <PageTitle>Admin Dashboard: API Keys</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         API keys authenticate programmatic access to the ByteBrew Engine. Each key can be
         scoped to specific capabilities, allowing you to follow the principle of least privilege.
         Keys are created through the dashboard and can be revoked at any time.
@@ -1682,7 +1682,7 @@ curl -X POST http://localhost:8080/api/v1/config/reload \\
       </SubSection>
 
       <SubSection title="Revoking a key">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Click the &quot;Revoke&quot; button next to any key in the list. Revocation is immediate --
           any request using that key will receive a <Ic>401 Unauthorized</Ic> response.
           Revocation is logged in the Audit Log.
@@ -1703,13 +1703,13 @@ function AdminSettingsContent() {
   return (
     <div>
       <PageTitle>Admin Dashboard: Settings</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         The Settings page controls engine-wide preferences that affect all agents and API requests.
         Currently, it covers BYOK (Bring Your Own Key) configuration and logging levels.
       </p>
 
       <SubSection title="BYOK (Bring Your Own Key)">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           BYOK allows API consumers to override the model for a single request by passing
           their own API key in request headers. This is useful for multi-tenant deployments
           where each customer uses their own LLM account.
@@ -1731,7 +1731,7 @@ curl -N http://localhost:8080/api/v1/agents/my-agent/chat \\
       </SubSection>
 
       <SubSection title="Logging level">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Change the engine&apos;s logging verbosity at runtime without restarting:
         </p>
         <ParamTable params={[
@@ -1761,14 +1761,14 @@ function AdminConfigContent() {
   return (
     <div>
       <PageTitle>Admin Dashboard: Config Management</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         The Config Management page provides three operations for managing engine configuration
         at runtime: hot reload, export, and import. These enable zero-downtime configuration
         changes and GitOps workflows.
       </p>
 
       <SubSection title="Hot Reload">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Apply configuration changes from the database without restarting the engine. This is
           triggered automatically when you save changes in the dashboard, but you can also
           trigger it manually or via API after a database import.
@@ -1788,7 +1788,7 @@ curl -X POST http://localhost:8080/api/v1/config/reload \\
       </SubSection>
 
       <SubSection title="Export">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Download the current configuration as a YAML file. Useful for backups, version control,
           and migrating between environments. Secrets (API keys) are excluded from the export.
         </p>
@@ -1803,7 +1803,7 @@ curl http://localhost:8080/api/v1/config/export \\
       </SubSection>
 
       <SubSection title="Import">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Upload a YAML file to merge with or replace the current configuration. This is the
           recommended way to deploy configuration changes in CI/CD pipelines.
         </p>
@@ -1818,7 +1818,7 @@ curl -X POST http://localhost:8080/api/v1/config/import \\
       </SubSection>
 
       <SubSection title="GitOps workflow">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           A common pattern is to store your <Ic>agents.yaml</Ic> in Git and deploy changes via CI/CD:
         </p>
         <BulletList items={[
@@ -1842,7 +1842,7 @@ function AdminAuditContent() {
   return (
     <div>
       <PageTitle>Admin Dashboard: Audit Log</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         The Audit Log provides a complete, immutable record of all administrative actions
         performed on the engine. Every configuration change, authentication event, and API key
         lifecycle event is captured with full context.
@@ -1850,28 +1850,28 @@ function AdminAuditContent() {
 
       <SubSection title="What is logged">
         <BulletList items={[
-          <><strong className="text-brand-shade2">Configuration changes</strong> -- creating, updating, or deleting agents, models, tools, triggers, and MCP servers. Includes before/after state.</>,
-          <><strong className="text-brand-shade2">Authentication events</strong> -- admin login attempts (successful and failed).</>,
-          <><strong className="text-brand-shade2">API key lifecycle</strong> -- key creation (with scopes) and revocation.</>,
-          <><strong className="text-brand-shade2">Config operations</strong> -- hot reload, import, and export events.</>,
-          <><strong className="text-brand-shade2">Settings changes</strong> -- BYOK toggles, logging level changes.</>,
+          <><strong className="text-text-secondary">Configuration changes</strong> -- creating, updating, or deleting agents, models, tools, triggers, and MCP servers. Includes before/after state.</>,
+          <><strong className="text-text-secondary">Authentication events</strong> -- admin login attempts (successful and failed).</>,
+          <><strong className="text-text-secondary">API key lifecycle</strong> -- key creation (with scopes) and revocation.</>,
+          <><strong className="text-text-secondary">Config operations</strong> -- hot reload, import, and export events.</>,
+          <><strong className="text-text-secondary">Settings changes</strong> -- BYOK toggles, logging level changes.</>,
         ]} />
       </SubSection>
 
       <SubSection title="Filtering and search">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           The audit log provides several filters to find specific events:
         </p>
         <BulletList items={[
-          <><strong className="text-brand-shade2">Actor type</strong> -- filter by who performed the action (admin user, API key, system).</>,
-          <><strong className="text-brand-shade2">Action</strong> -- create, update, delete, login, reload, import, export.</>,
-          <><strong className="text-brand-shade2">Resource</strong> -- agent, model, tool, trigger, mcp_server, api_key, config, settings.</>,
-          <><strong className="text-brand-shade2">Date range</strong> -- select a start and end date to narrow results.</>,
+          <><strong className="text-text-secondary">Actor type</strong> -- filter by who performed the action (admin user, API key, system).</>,
+          <><strong className="text-text-secondary">Action</strong> -- create, update, delete, login, reload, import, export.</>,
+          <><strong className="text-text-secondary">Resource</strong> -- agent, model, tool, trigger, mcp_server, api_key, config, settings.</>,
+          <><strong className="text-text-secondary">Date range</strong> -- select a start and end date to narrow results.</>,
         ]} />
       </SubSection>
 
       <SubSection title="Audit entry structure">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Click any entry to expand the detail view with the full JSON payload:
         </p>
         <CodeBlock>{`{
@@ -1922,28 +1922,28 @@ function ConceptAgentsContent() {
   return (
     <div>
       <PageTitle>Agents & Lifecycle</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         An agent in ByteBrew is an LLM-powered entity with a defined identity (system prompt),
         capabilities (tools), and memory scope (lifecycle). Agents are the fundamental building
         blocks of your AI-powered workflows.
       </p>
 
       <SubSection title="What is an agent?">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           At its core, an agent is a loop: receive input, reason about it using an LLM,
           optionally call tools to gather information or take actions, and return a response.
           The system prompt defines who the agent is and how it behaves.
         </p>
         <BulletList items={[
-          <><strong className="text-brand-shade2">Identity</strong> -- the system prompt gives the agent a role, personality, and knowledge boundaries.</>,
-          <><strong className="text-brand-shade2">Capabilities</strong> -- tools, MCP servers, and knowledge bases determine what the agent can do.</>,
-          <><strong className="text-brand-shade2">Memory</strong> -- the lifecycle setting controls whether the agent remembers previous conversations.</>,
-          <><strong className="text-brand-shade2">Autonomy</strong> -- the agent decides which tools to call and in what order based on the user&apos;s request.</>,
+          <><strong className="text-text-secondary">Identity</strong> -- the system prompt gives the agent a role, personality, and knowledge boundaries.</>,
+          <><strong className="text-text-secondary">Capabilities</strong> -- tools, MCP servers, and knowledge bases determine what the agent can do.</>,
+          <><strong className="text-text-secondary">Memory</strong> -- the lifecycle setting controls whether the agent remembers previous conversations.</>,
+          <><strong className="text-text-secondary">Autonomy</strong> -- the agent decides which tools to call and in what order based on the user&apos;s request.</>,
         ]} />
       </SubSection>
 
       <SubSection title="Lifecycle: persistent vs spawn">
-        <p className="text-sm text-brand-shade3 mb-4">
+        <p className="text-sm text-text-tertiary mb-4">
           The <Ic>lifecycle</Ic> setting is one of the most important decisions you make
           when configuring an agent. It controls the agent&apos;s memory scope:
         </p>
@@ -1981,7 +1981,7 @@ function ConceptAgentsContent() {
       </SubSection>
 
       <SubSection title="System prompts">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           The system prompt is the most important configuration for an agent. It defines the
           agent&apos;s personality, capabilities, constraints, and output format. You can set it
           inline or load it from a file:
@@ -2008,15 +2008,15 @@ function ConceptAgentsContent() {
       </SubSection>
 
       <SubSection title="Agent capabilities">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Each agent can be configured with a unique combination of capabilities:
         </p>
         <BulletList items={[
-          <><strong className="text-brand-shade2">Built-in tools</strong> -- <Ic>web_search</Ic>, <Ic>knowledge_search</Ic>, <Ic>manage_tasks</Ic>, <Ic>ask_user</Ic>.</>,
-          <><strong className="text-brand-shade2">Custom HTTP tools</strong> -- declarative API calls defined in YAML (see Tools docs).</>,
-          <><strong className="text-brand-shade2">MCP servers</strong> -- external tools via Model Context Protocol.</>,
-          <><strong className="text-brand-shade2">Knowledge base (RAG)</strong> -- auto-indexed document folder for grounded responses.</>,
-          <><strong className="text-brand-shade2">Sub-agent spawning</strong> -- ability to create and delegate to other agents.</>,
+          <><strong className="text-text-secondary">Built-in tools</strong> -- <Ic>web_search</Ic>, <Ic>knowledge_search</Ic>, <Ic>manage_tasks</Ic>, <Ic>ask_user</Ic>.</>,
+          <><strong className="text-text-secondary">Custom HTTP tools</strong> -- declarative API calls defined in YAML (see Tools docs).</>,
+          <><strong className="text-text-secondary">MCP servers</strong> -- external tools via Model Context Protocol.</>,
+          <><strong className="text-text-secondary">Knowledge base (RAG)</strong> -- auto-indexed document folder for grounded responses.</>,
+          <><strong className="text-text-secondary">Sub-agent spawning</strong> -- ability to create and delegate to other agents.</>,
         ]} />
       </SubSection>
 
@@ -2034,20 +2034,20 @@ function ConceptMultiAgentContent() {
   return (
     <div>
       <PageTitle>Multi-Agent Orchestration</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         Multi-agent orchestration lets you build teams of specialized agents that collaborate
         on complex tasks. A supervisor agent coordinates the team, delegating subtasks to
         specialist agents that each have their own tools and expertise.
       </p>
 
       <SubSection title="How it works">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           The orchestration model is simple but powerful:
         </p>
         <BulletList items={[
           <><Ic>can_spawn: [agent-name]</Ic> defines which agents a supervisor can create at runtime.</>,
           <>The engine auto-generates a <Ic>spawn_&lt;name&gt;</Ic> tool for each allowed target.</>,
-          <>The LLM decides <strong className="text-brand-shade2">when</strong> to spawn based on reasoning. The config limits <strong className="text-brand-shade2">what</strong> is possible.</>,
+          <>The LLM decides <strong className="text-text-secondary">when</strong> to spawn based on reasoning. The config limits <strong className="text-text-secondary">what</strong> is possible.</>,
           <>Spawned agents run with <Ic>lifecycle: spawn</Ic> (fresh context, focused on the subtask).</>,
           <>When the sub-agent completes, its summary is returned to the supervisor.</>,
           <>The supervisor integrates the result and continues its own reasoning.</>,
@@ -2055,7 +2055,7 @@ function ConceptMultiAgentContent() {
       </SubSection>
 
       <SubSection title="Spawn tree architecture">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           In a multi-agent system, agents form a tree structure. The supervisor sits at the root
           and delegates to specialists. Specialists can even spawn their own sub-agents:
         </p>
@@ -2073,15 +2073,15 @@ function ConceptMultiAgentContent() {
 
       <SubSection title="When to use multi-agent">
         <BulletList items={[
-          <><strong className="text-brand-shade2">Complex workflows</strong> -- a single agent cannot handle all aspects of a task (e.g., sales requires product lookup, inventory check, and order creation).</>,
-          <><strong className="text-brand-shade2">Specialized models</strong> -- use a powerful model for the supervisor (reasoning) and cheaper models for specialists (data retrieval).</>,
-          <><strong className="text-brand-shade2">Tool isolation</strong> -- a researcher should not have access to order creation tools, and vice versa.</>,
-          <><strong className="text-brand-shade2">Parallel processing</strong> -- spawn multiple agents simultaneously to work on independent subtasks.</>,
+          <><strong className="text-text-secondary">Complex workflows</strong> -- a single agent cannot handle all aspects of a task (e.g., sales requires product lookup, inventory check, and order creation).</>,
+          <><strong className="text-text-secondary">Specialized models</strong> -- use a powerful model for the supervisor (reasoning) and cheaper models for specialists (data retrieval).</>,
+          <><strong className="text-text-secondary">Tool isolation</strong> -- a researcher should not have access to order creation tools, and vice versa.</>,
+          <><strong className="text-text-secondary">Parallel processing</strong> -- spawn multiple agents simultaneously to work on independent subtasks.</>,
         ]} />
       </SubSection>
 
       <SubSection title="Full example">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           A sales team with a supervisor that delegates to a sales consultant and a support agent:
         </p>
         <CodeBlock>{`agents:
@@ -2146,7 +2146,7 @@ function ConceptToolsContent() {
   return (
     <div>
       <PageTitle>Tools (MCP + Declarative)</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         Tools are the bridge between an agent&apos;s reasoning and the outside world. Without tools,
         an agent can only generate text. With tools, it can search the web, query databases,
         create orders, send notifications, and interact with any API.
@@ -2171,7 +2171,7 @@ function ConceptToolsContent() {
       </SubSection>
 
       <SubSection title="Declarative HTTP tools">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Connect agents to any REST API without writing code. Define the endpoint, parameters,
           authentication, and the engine handles the HTTP request:
         </p>
@@ -2203,7 +2203,7 @@ function ConceptToolsContent() {
       </SubSection>
 
       <SubSection title="MCP tools">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           MCP (Model Context Protocol) is an open standard for connecting AI agents to external
           tools. Any MCP-compatible server works with ByteBrew:
         </p>
@@ -2223,7 +2223,7 @@ function ConceptToolsContent() {
       </SubSection>
 
       <SubSection title="Per-agent tool isolation">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Each agent sees only the tools listed in its configuration. This is a security and
           reliability feature:
         </p>
@@ -2254,7 +2254,7 @@ function ConceptTasksContent() {
   return (
     <div>
       <PageTitle>Tasks & Job System</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         The task system gives agents persistent memory for work items that survive context
         window limits and session boundaries. Tasks are also the mechanism for background
         execution -- triggers create tasks that agents process autonomously.
@@ -2262,10 +2262,10 @@ function ConceptTasksContent() {
 
       <SubSection title="Why tasks matter">
         <BulletList items={[
-          <><strong className="text-brand-shade2">Persistence</strong> -- tasks survive context window compression. Even if the agent forgets the conversation, it always knows what tasks are pending.</>,
-          <><strong className="text-brand-shade2">Background work</strong> -- cron and webhook triggers create tasks that agents work on without user interaction.</>,
-          <><strong className="text-brand-shade2">Cross-session tracking</strong> -- a user can create a task in one session and check its status in another.</>,
-          <><strong className="text-brand-shade2">Audit trail</strong> -- every task has a status history, making it easy to track what happened and when.</>,
+          <><strong className="text-text-secondary">Persistence</strong> -- tasks survive context window compression. Even if the agent forgets the conversation, it always knows what tasks are pending.</>,
+          <><strong className="text-text-secondary">Background work</strong> -- cron and webhook triggers create tasks that agents work on without user interaction.</>,
+          <><strong className="text-text-secondary">Cross-session tracking</strong> -- a user can create a task in one session and check its status in another.</>,
+          <><strong className="text-text-secondary">Audit trail</strong> -- every task has a status history, making it easy to track what happened and when.</>,
         ]} />
       </SubSection>
 
@@ -2294,7 +2294,7 @@ function ConceptTasksContent() {
       </SubSection>
 
       <SubSection title="The manage_tasks tool">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Agents interact with tasks through the built-in <Ic>manage_tasks</Ic> tool. The LLM
           decides when and how to use it based on the conversation:
         </p>
@@ -2326,7 +2326,7 @@ agents:
       </SubSection>
 
       <SubSection title="Task sources">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Tasks can be created from multiple sources:
         </p>
         <ParamTable params={[
@@ -2352,7 +2352,7 @@ function ConceptRagContent() {
   return (
     <div>
       <PageTitle>Knowledge / RAG</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         Retrieval-Augmented Generation (RAG) lets agents answer questions based on your documents.
         Instead of relying solely on the LLM&apos;s training data, the agent searches a knowledge base
         and includes relevant passages in its context before generating a response.
@@ -2402,7 +2402,7 @@ function ConceptRagContent() {
       </SubSection>
 
       <SubSection title="Per-agent isolation">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Each agent has its own isolated knowledge base. Agent A cannot search agent B&apos;s documents.
           This is important for multi-tenant deployments and role-based access:
         </p>
@@ -2421,11 +2421,11 @@ function ConceptRagContent() {
 
       <SubSection title="Best practices">
         <BulletList items={[
-          <><strong className="text-brand-shade2">Keep documents focused</strong> -- smaller, topic-specific documents work better than large monolithic ones.</>,
-          <><strong className="text-brand-shade2">Use clear headings</strong> -- Markdown headings help the chunking algorithm split documents at logical boundaries.</>,
-          <><strong className="text-brand-shade2">Update regularly</strong> -- keep knowledge bases current. Outdated information leads to incorrect agent responses.</>,
-          <><strong className="text-brand-shade2">Tell the agent to cite sources</strong> -- add instructions in the system prompt to reference which document the answer came from.</>,
-          <><strong className="text-brand-shade2">Set honest boundaries</strong> -- instruct the agent to say &quot;I don&apos;t know&quot; rather than hallucinate when the knowledge base does not contain the answer.</>,
+          <><strong className="text-text-secondary">Keep documents focused</strong> -- smaller, topic-specific documents work better than large monolithic ones.</>,
+          <><strong className="text-text-secondary">Use clear headings</strong> -- Markdown headings help the chunking algorithm split documents at logical boundaries.</>,
+          <><strong className="text-text-secondary">Update regularly</strong> -- keep knowledge bases current. Outdated information leads to incorrect agent responses.</>,
+          <><strong className="text-text-secondary">Tell the agent to cite sources</strong> -- add instructions in the system prompt to reference which document the answer came from.</>,
+          <><strong className="text-text-secondary">Set honest boundaries</strong> -- instruct the agent to say &quot;I don&apos;t know&quot; rather than hallucinate when the knowledge base does not contain the answer.</>,
         ]} />
       </SubSection>
 
@@ -2443,14 +2443,14 @@ function ConceptTriggersContent() {
   return (
     <div>
       <PageTitle>Triggers (Cron, Webhooks)</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         Triggers enable agents to operate autonomously without waiting for user messages.
         They are the foundation of proactive AI workflows -- agents that monitor, report,
         and react to events on their own.
       </p>
 
       <SubSection title="Cron triggers">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Schedule agents to run at specific times using standard 5-field cron expressions.
           At the scheduled time, the engine creates a background task with the configured message
           and assigns it to the specified agent.
@@ -2468,7 +2468,7 @@ function ConceptTriggersContent() {
     agent: monitor
     message: "Check all monitored services and report any issues."`}</CodeBlock>
 
-        <h4 className="text-sm font-semibold text-brand-light mt-4 mb-2">Common patterns</h4>
+        <h4 className="text-sm font-semibold text-text-primary mt-4 mb-2">Common patterns</h4>
         <ParamTable params={[
           { name: '*/5 * * * *', required: false, default: '--', desc: 'Every 5 minutes -- health checks, monitoring' },
           { name: '0 */2 * * *', required: false, default: '--', desc: 'Every 2 hours -- periodic data sync' },
@@ -2479,7 +2479,7 @@ function ConceptTriggersContent() {
       </SubSection>
 
       <SubSection title="Webhook triggers">
-        <p className="text-sm text-brand-shade3 mb-3">
+        <p className="text-sm text-text-tertiary mb-3">
           Expose HTTP endpoints that external services can call to activate agents. The webhook
           request body is forwarded to the agent as the task message, giving it full context
           about the event.
@@ -2499,7 +2499,7 @@ function ConceptTriggersContent() {
     agent: code-reviewer
     secret: \${GITHUB_WEBHOOK_SECRET}`}</CodeBlock>
 
-        <h4 className="text-sm font-semibold text-brand-light mt-4 mb-2">Calling a webhook</h4>
+        <h4 className="text-sm font-semibold text-text-primary mt-4 mb-2">Calling a webhook</h4>
         <CodeBlock>{`# External service sends a POST request:
 curl -X POST http://localhost:8080/api/v1/webhooks/stripe \\
   -H "X-Webhook-Secret: whsec_your_secret" \\
@@ -2519,11 +2519,11 @@ curl -X POST http://localhost:8080/api/v1/webhooks/stripe \\
 
       <SubSection title="Use cases">
         <BulletList items={[
-          <><strong className="text-brand-shade2">Daily reports</strong> -- cron trigger at 9 AM generates and distributes a summary.</>,
-          <><strong className="text-brand-shade2">Alert handling</strong> -- PagerDuty/Datadog webhook triggers an agent to analyze and triage alerts.</>,
-          <><strong className="text-brand-shade2">Order processing</strong> -- e-commerce webhook triggers an agent when a new order is placed.</>,
-          <><strong className="text-brand-shade2">CI/CD notifications</strong> -- GitHub webhook triggers a code review agent on new pull requests.</>,
-          <><strong className="text-brand-shade2">Periodic health checks</strong> -- cron trigger every 5 minutes monitors service endpoints.</>,
+          <><strong className="text-text-secondary">Daily reports</strong> -- cron trigger at 9 AM generates and distributes a summary.</>,
+          <><strong className="text-text-secondary">Alert handling</strong> -- PagerDuty/Datadog webhook triggers an agent to analyze and triage alerts.</>,
+          <><strong className="text-text-secondary">Order processing</strong> -- e-commerce webhook triggers an agent when a new order is placed.</>,
+          <><strong className="text-text-secondary">CI/CD notifications</strong> -- GitHub webhook triggers a code review agent on new pull requests.</>,
+          <><strong className="text-text-secondary">Periodic health checks</strong> -- cron trigger every 5 minutes monitors service endpoints.</>,
         ]} />
       </SubSection>
 
@@ -2545,7 +2545,7 @@ function ExampleSalesContent() {
   return (
     <div>
       <PageTitle>Example: Sales Agent</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         A multi-agent sales team with a supervisor that coordinates product search,
         inventory checks, order creation, and customer support. This example demonstrates
         agent spawning, custom HTTP tools, MCP integration, and cron triggers.
@@ -2553,11 +2553,11 @@ function ExampleSalesContent() {
 
       <SubSection title="What this demonstrates">
         <BulletList items={[
-          <><strong className="text-brand-shade2">Multi-agent orchestration</strong> -- a supervisor delegates to specialized sales and support agents.</>,
-          <><strong className="text-brand-shade2">Custom HTTP tools</strong> -- product search, inventory check, and order creation via REST APIs.</>,
-          <><strong className="text-brand-shade2">MCP integration</strong> -- CRM data access via an MCP server.</>,
-          <><strong className="text-brand-shade2">Cron trigger</strong> -- automatic morning lead review on weekdays.</>,
-          <><strong className="text-brand-shade2">Mixed models</strong> -- powerful model for the supervisor, cheaper models for specialists.</>,
+          <><strong className="text-text-secondary">Multi-agent orchestration</strong> -- a supervisor delegates to specialized sales and support agents.</>,
+          <><strong className="text-text-secondary">Custom HTTP tools</strong> -- product search, inventory check, and order creation via REST APIs.</>,
+          <><strong className="text-text-secondary">MCP integration</strong> -- CRM data access via an MCP server.</>,
+          <><strong className="text-text-secondary">Cron trigger</strong> -- automatic morning lead review on weekdays.</>,
+          <><strong className="text-text-secondary">Mixed models</strong> -- powerful model for the supervisor, cheaper models for specialists.</>,
         ]} />
       </SubSection>
 
@@ -2614,7 +2614,7 @@ function ExampleSupportContent() {
   return (
     <div>
       <PageTitle>Example: Support Agent</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         A knowledge-based customer support agent that answers questions from a documentation
         knowledge base, looks up order status, and creates support tickets for unresolved issues.
         This example demonstrates RAG, confirmation-required tools, and escalation patterns.
@@ -2622,10 +2622,10 @@ function ExampleSupportContent() {
 
       <SubSection title="What this demonstrates">
         <BulletList items={[
-          <><strong className="text-brand-shade2">Knowledge base (RAG)</strong> -- the agent searches your support docs before answering.</>,
-          <><strong className="text-brand-shade2">Ticket creation with confirmation</strong> -- the agent asks before creating a support ticket.</>,
-          <><strong className="text-brand-shade2">Order status lookup</strong> -- real-time order tracking via HTTP tool.</>,
-          <><strong className="text-brand-shade2">Escalation behavior</strong> -- the system prompt instructs the agent when to hand off to humans.</>,
+          <><strong className="text-text-secondary">Knowledge base (RAG)</strong> -- the agent searches your support docs before answering.</>,
+          <><strong className="text-text-secondary">Ticket creation with confirmation</strong> -- the agent asks before creating a support ticket.</>,
+          <><strong className="text-text-secondary">Order status lookup</strong> -- real-time order tracking via HTTP tool.</>,
+          <><strong className="text-text-secondary">Escalation behavior</strong> -- the system prompt instructs the agent when to hand off to humans.</>,
         ]} />
       </SubSection>
 
@@ -2681,7 +2681,7 @@ function ExampleDevopsContent() {
   return (
     <div>
       <PageTitle>Example: DevOps Monitor</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         An alert handling agent that monitors infrastructure health, triages incoming PagerDuty
         alerts, and performs automated remediation. This example demonstrates webhook triggers,
         cron scheduling, and task management for operational workflows.
@@ -2689,10 +2689,10 @@ function ExampleDevopsContent() {
 
       <SubSection title="What this demonstrates">
         <BulletList items={[
-          <><strong className="text-brand-shade2">Webhook trigger</strong> -- PagerDuty alerts are forwarded to the agent in real-time.</>,
-          <><strong className="text-brand-shade2">Cron trigger</strong> -- periodic health checks every 5 minutes.</>,
-          <><strong className="text-brand-shade2">Task management</strong> -- the agent tracks open incidents as tasks.</>,
-          <><strong className="text-brand-shade2">Escalation</strong> -- critical issues are flagged for human attention.</>,
+          <><strong className="text-text-secondary">Webhook trigger</strong> -- PagerDuty alerts are forwarded to the agent in real-time.</>,
+          <><strong className="text-text-secondary">Cron trigger</strong> -- periodic health checks every 5 minutes.</>,
+          <><strong className="text-text-secondary">Task management</strong> -- the agent tracks open incidents as tasks.</>,
+          <><strong className="text-text-secondary">Escalation</strong> -- critical issues are flagged for human attention.</>,
         ]} />
       </SubSection>
 
@@ -2754,7 +2754,7 @@ function ExampleIotContent() {
   return (
     <div>
       <PageTitle>Example: IoT Analyzer</PageTitle>
-      <p className="text-sm text-brand-shade3 mb-4">
+      <p className="text-sm text-text-tertiary mb-4">
         A telemetry monitoring system with a supervisor agent that coordinates anomaly detection
         across IoT sensors. This example demonstrates multi-agent orchestration, time-series
         data queries, Slack alerting with confirmation, and periodic cron triggers.
@@ -2762,10 +2762,10 @@ function ExampleIotContent() {
 
       <SubSection title="What this demonstrates">
         <BulletList items={[
-          <><strong className="text-brand-shade2">Multi-agent spawning</strong> -- the supervisor delegates anomaly detection to a specialized sub-agent.</>,
-          <><strong className="text-brand-shade2">Time-series queries</strong> -- custom HTTP tool queries InfluxDB for sensor data.</>,
-          <><strong className="text-brand-shade2">Slack alerting with confirmation</strong> -- the agent asks before sending alerts to avoid noise.</>,
-          <><strong className="text-brand-shade2">Cron trigger</strong> -- automatic analysis every 10 minutes.</>,
+          <><strong className="text-text-secondary">Multi-agent spawning</strong> -- the supervisor delegates anomaly detection to a specialized sub-agent.</>,
+          <><strong className="text-text-secondary">Time-series queries</strong> -- custom HTTP tool queries InfluxDB for sensor data.</>,
+          <><strong className="text-text-secondary">Slack alerting with confirmation</strong> -- the agent asks before sending alerts to avoid noise.</>,
+          <><strong className="text-text-secondary">Cron trigger</strong> -- automatic analysis every 10 minutes.</>,
         ]} />
       </SubSection>
 
@@ -3036,7 +3036,7 @@ models:
 
 function PageTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h1 className="text-2xl font-bold text-brand-light mb-2">
+    <h1 className="text-2xl font-bold text-text-primary mb-2">
       {children}
     </h1>
   );
@@ -3045,7 +3045,7 @@ function PageTitle({ children }: { children: React.ReactNode }) {
 function SubSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mb-8">
-      <h3 className="text-base font-semibold text-brand-light mb-3 pb-2 border-b border-brand-shade3/10">
+      <h3 className="text-base font-semibold text-text-primary mb-3 pb-2 border-b border-border">
         {title}
       </h3>
       {children}
@@ -3063,7 +3063,7 @@ function Callout({ type = 'info', title, children }: { type?: 'info' | 'warning'
   return (
     <div className={`my-4 rounded-[2px] border px-4 py-3 text-sm ${styles[type]}`}>
       {title && <div className="font-semibold mb-1">{icons[type]} {title}</div>}
-      <div className="text-brand-shade2">{children}</div>
+      <div className="text-text-secondary">{children}</div>
     </div>
   );
 }
@@ -3081,7 +3081,7 @@ function BulletList({ items }: { items: React.ReactNode[] }) {
   return (
     <ul className="mb-4 space-y-1.5">
       {items.map((item, i) => (
-        <li key={i} className="flex items-start gap-2 text-sm text-brand-shade3">
+        <li key={i} className="flex items-start gap-2 text-sm text-text-tertiary">
           <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-brand-accent/50 shrink-0" />
           <span>{item}</span>
         </li>
@@ -3105,7 +3105,7 @@ function QuickStartStep({
         <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-brand-accent/15 text-brand-accent text-xs font-bold shrink-0">
           {n}
         </span>
-        <h4 className="font-semibold text-brand-light text-sm">{title}</h4>
+        <h4 className="font-semibold text-text-primary text-sm">{title}</h4>
       </div>
       <div className="ml-9">{children}</div>
     </div>
@@ -3122,13 +3122,13 @@ function CodeBlock({ children }: { children: string }) {
   };
 
   return (
-    <div className="relative rounded-[2px] border border-brand-shade3/10 bg-brand-dark p-4 overflow-x-auto">
-      <pre className="font-mono text-sm text-brand-shade2 leading-relaxed whitespace-pre">
+    <div className="relative rounded-[2px] border border-border bg-surface p-4 overflow-x-auto">
+      <pre className="font-mono text-sm text-text-secondary leading-relaxed whitespace-pre">
         {children}
       </pre>
       <button
         onClick={handleCopy}
-        className="absolute top-3 right-3 rounded-[2px] border border-brand-shade3/20 px-2.5 py-1 text-xs text-brand-shade3 hover:text-brand-light hover:border-brand-shade3/40 transition-colors"
+        className="absolute top-3 right-3 rounded-[2px] border border-border px-2.5 py-1 text-xs text-text-tertiary hover:text-text-primary hover:border-border-hover transition-colors"
       >
         {copied ? 'Copied!' : 'Copy'}
       </button>
@@ -3142,10 +3142,10 @@ function ParamTable({ params }: { params: { name: string; required?: boolean; de
     <div className="mb-4 overflow-x-auto">
       <table className="w-full text-sm border-collapse">
         <thead>
-          <tr className="border-b border-brand-shade3/15">
-            <th className="text-left py-2 pr-3 text-brand-shade3 font-medium text-xs uppercase tracking-wider">Parameter</th>
-            <th className="text-left py-2 pr-3 text-brand-shade3 font-medium text-xs uppercase tracking-wider">Default</th>
-            <th className="text-left py-2 text-brand-shade3 font-medium text-xs uppercase tracking-wider">Description</th>
+          <tr className="border-b border-border">
+            <th className="text-left py-2 pr-3 text-text-tertiary font-medium text-xs uppercase tracking-wider">Parameter</th>
+            <th className="text-left py-2 pr-3 text-text-tertiary font-medium text-xs uppercase tracking-wider">Default</th>
+            <th className="text-left py-2 text-text-tertiary font-medium text-xs uppercase tracking-wider">Description</th>
           </tr>
         </thead>
         <tbody>
@@ -3155,10 +3155,10 @@ function ParamTable({ params }: { params: { name: string; required?: boolean; de
                 <code className="text-brand-accent text-xs bg-brand-accent/10 px-1.5 py-0.5 rounded font-mono">{p.name}</code>
                 {p.required && <span className="ml-1.5 text-red-400 text-xs">*</span>}
               </td>
-              <td className="py-2 pr-3 align-top text-brand-shade3 whitespace-nowrap text-xs">
+              <td className="py-2 pr-3 align-top text-text-tertiary whitespace-nowrap text-xs">
                 {p.default || '--'}
               </td>
-              <td className="py-2 align-top text-brand-shade3">{p.desc}</td>
+              <td className="py-2 align-top text-text-tertiary">{p.desc}</td>
             </tr>
           ))}
         </tbody>
@@ -3169,14 +3169,14 @@ function ParamTable({ params }: { params: { name: string; required?: boolean; de
 
 /** Section divider line */
 function SectionDivider() {
-  return <hr className="my-8 border-brand-shade3/10" />;
+  return <hr className="my-8 border-border" />;
 }
 
 /** "What's next" links */
 function WhatNext({ items }: { items: { label: string; id: string }[] }) {
   return (
     <div className="mt-2">
-      <h4 className="text-sm font-semibold text-brand-light mb-2">What&apos;s next</h4>
+      <h4 className="text-sm font-semibold text-text-primary mb-2">What&apos;s next</h4>
       <ul className="space-y-1">
         {items.map((item, i) => (
           <li key={i} className="text-sm text-brand-accent hover:text-brand-accent/80 cursor-pointer">

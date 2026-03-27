@@ -167,7 +167,7 @@ export function EnginePricingTable({ onSelectPlan }: EnginePricingTableProps = {
           <button
             onClick={() => setPeriod(period === 'monthly' ? 'annual' : 'monthly')}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              period === 'annual' ? 'bg-brand-accent' : 'bg-brand-shade3'
+              period === 'annual' ? 'bg-brand-accent' : 'bg-text-tertiary'
             }`}
           >
             <span
