@@ -216,3 +216,41 @@ nav[aria-label="Main"] a {
   border-color: rgba(215, 81, 62, 0.4);
   background: rgba(215, 81, 62, 0.07);
 }
+
+/* Sidebar group icons */
+.top-level > li > details > summary .group-label::before {
+  display: inline-block;
+  margin-right: 0.4em;
+  font-size: 1em;
+  vertical-align: middle;
+}
+
+/* 1: Getting Started */
+.top-level > li:nth-child(1) > details > summary .group-label::before {
+  content: '\1F680'; /* rocket */
+}
+
+/* 2: Admin Dashboard */
+.top-level > li:nth-child(2) > details > summary .group-label::before {
+  content: '\1F4BB'; /* laptop */
+}
+
+/* 3: Core Concepts */
+.top-level > li:nth-child(3) > details > summary .group-label::before {
+  content: '\1F9E9'; /* puzzle piece */
+}
+
+/* 4: Deployment */
+.top-level > li:nth-child(4) > details > summary .group-label::before {
+  content: '\2601\FE0F'; /* cloud */
+}
+
+/* 5: Integration */
+.top-level > li:nth-child(5) > details > summary .group-label::before {
+  content: '\1F50C'; /* plug */
+}
+
+/* 6: Examples */
+.top-level > li:nth-child(6) > details > summary .group-label::before {
+  content: '\1F4D6'; /* open book */
+}

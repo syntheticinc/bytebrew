@@ -21,6 +21,30 @@ export default defineConfig({
         {
           tag: 'script',
           content: `(function() {
+            var bwTheme = localStorage.getItem('bytebrew-theme');
+            if (bwTheme === 'light' || bwTheme === 'dark') {
+              var slTheme = localStorage.getItem('starlight-theme');
+              if (slTheme !== bwTheme) {
+                localStorage.setItem('starlight-theme', bwTheme);
+                document.documentElement.dataset.theme = bwTheme;
+              }
+            }
+            var obs = new MutationObserver(function(mutations) {
+              mutations.forEach(function(m) {
+                if (m.attributeName === 'data-theme') {
+                  var t = document.documentElement.dataset.theme;
+                  if (t === 'dark' || t === 'light') {
+                    localStorage.setItem('bytebrew-theme', t);
+                  }
+                }
+              });
+            });
+            obs.observe(document.documentElement, { attributes: true });
+          })();`,
+        },
+        {
+          tag: 'script',
+          content: `(function() {
             function fixLogo() {
               var logo = document.querySelector('a.site-title');
               if (logo) logo.href = 'https://bytebrew.ai';
