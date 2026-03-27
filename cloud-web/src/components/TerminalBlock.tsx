@@ -20,7 +20,7 @@ export function TerminalBlock({ command, prefix = '$', title }: TerminalBlockPro
       {title && (
         <p className="text-sm text-text-secondary mb-2 font-medium">{title}</p>
       )}
-      <div className="relative rounded-[2px] p-5 overflow-x-auto border" style={{ backgroundColor: '#1A1A1A', borderColor: 'rgba(135,134,127,0.12)' }}>
+      <div className="relative rounded-[2px] p-5 overflow-x-auto border bg-surface-elevated border-border">
         {/* Window dots */}
         <div className="flex gap-1.5 mb-4">
           <span className="w-3 h-3 rounded-full bg-red-500/80" />
@@ -29,10 +29,10 @@ export function TerminalBlock({ command, prefix = '$', title }: TerminalBlockPro
         </div>
 
         <div className="flex items-start gap-2">
-          <span className="font-mono text-sm select-none shrink-0" style={{ color: '#87867F' }}>
+          <span className="font-mono text-sm select-none shrink-0 text-text-tertiary">
             {prefix}
           </span>
-          <code className="font-mono text-sm text-green-400 break-all">
+          <code className="font-mono text-sm text-brand-accent break-all">
             {command}
           </code>
         </div>
@@ -40,8 +40,7 @@ export function TerminalBlock({ command, prefix = '$', title }: TerminalBlockPro
         {/* Copy button */}
         <button
           onClick={handleCopy}
-          className="absolute top-4 right-4 rounded-[2px] px-3 py-1 text-xs transition-colors"
-          style={{ color: '#DFD8D0', borderWidth: 1, borderColor: 'rgba(135,134,127,0.2)' }}
+          className="absolute top-4 right-4 rounded-[2px] border border-border px-3 py-1 text-xs text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors"
         >
           {copied ? 'Copied!' : 'Copy'}
         </button>

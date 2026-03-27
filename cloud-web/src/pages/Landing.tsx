@@ -304,7 +304,7 @@ function HowItWorksSection({ onImageClick }: { onImageClick: (src: string) => vo
                 <p className="text-sm text-text-tertiary leading-relaxed mb-3">
                   Open the Admin Dashboard and create your agent visually. Set the model, system prompt, tools, and spawn rules — no YAML needed.
                 </p>
-                <div className="rounded-[8px] border border-border overflow-hidden">
+                <div className="rounded-[2px] border border-border overflow-hidden">
                   <img src="/screenshots/admin-agents.png" alt="Admin Dashboard — Agents list with Create Agent button" className="w-full cursor-pointer hover:opacity-80 transition-opacity" onClick={() => onImageClick('/screenshots/admin-agents.png')} />
                 </div>
               </div>
@@ -699,7 +699,7 @@ function MCPDocsSection() {
             <button
               key={t.key}
               onClick={() => setActiveTab(t.key)}
-              className={`rounded-[8px] px-5 py-2 text-sm font-medium transition-colors ${
+              className={`rounded-[2px] px-5 py-2 text-sm font-medium transition-colors ${
                 activeTab === t.key
                   ? 'bg-brand-accent text-white'
                   : 'bg-surface-alt text-text-secondary hover:text-text-primary'
@@ -718,7 +718,7 @@ function MCPDocsSection() {
               <code className="text-lg font-mono text-brand-accent">https://mcp.bytebrew.ai/sse</code>
               <button
                 onClick={() => navigator.clipboard.writeText('https://mcp.bytebrew.ai/sse')}
-                className="rounded-[6px] border border-border px-3 py-1 text-xs text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors"
+                className="rounded-[2px] border border-border px-3 py-1 text-xs text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors"
               >
                 Copy
               </button>
