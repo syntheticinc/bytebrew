@@ -16,6 +16,7 @@ func TestHandleNonStreaming_EmptyMessageEventDoesNotOverwrite(t *testing.T) {
 		wantMsg  string
 		wantSID  string
 		wantTool int
+		wantErr  string
 	}{
 		{
 			name: "trailing empty message event does not erase answer",
@@ -81,6 +82,37 @@ func TestHandleNonStreaming_EmptyMessageEventDoesNotOverwrite(t *testing.T) {
 			wantMsg: "",
 			wantSID: "sess-6",
 		},
+		{
+			name: "error event with no message uses error as message",
+			events: []SSEEvent{
+				sseEvent("error", map[string]interface{}{"content": "exceeds max steps"}),
+				sseEvent("done", map[string]interface{}{"session_id": "sess-7"}),
+			},
+			wantMsg:  "exceeds max steps",
+			wantSID:  "sess-7",
+			wantErr:  "exceeds max steps",
+		},
+		{
+			name: "error event with message keeps both",
+			events: []SSEEvent{
+				sseEvent("message", map[string]interface{}{"content": "partial answer"}),
+				sseEvent("error", map[string]interface{}{"content": "model timeout"}),
+				sseEvent("done", map[string]interface{}{"session_id": "sess-8"}),
+			},
+			wantMsg:  "partial answer",
+			wantSID:  "sess-8",
+			wantErr:  "model timeout",
+		},
+		{
+			name: "error event with message field instead of content",
+			events: []SSEEvent{
+				sseEvent("error", map[string]interface{}{"message": "rate limited", "code": "429"}),
+				sseEvent("done", map[string]interface{}{"session_id": "sess-9"}),
+			},
+			wantMsg:  "rate limited",
+			wantSID:  "sess-9",
+			wantErr:  "rate limited",
+		},
 	}
 
 	for _, tt := range tests {
@@ -103,6 +135,7 @@ func TestHandleNonStreaming_EmptyMessageEventDoesNotOverwrite(t *testing.T) {
 			assert.Equal(t, tt.wantSID, resp.SessionID)
 			assert.Equal(t, "test-agent", resp.Agent)
 			assert.Len(t, resp.ToolCalls, tt.wantTool)
+			assert.Equal(t, tt.wantErr, resp.Error)
 		})
 	}
 }

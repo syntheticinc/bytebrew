@@ -68,10 +68,10 @@ export function PrivacyPage() {
           <p className="mt-2">
             Contact us at{' '}
             <a
-              href="mailto:privacy@bytebrew.ai"
+              href="mailto:info@bytebrew.ai"
               className="text-brand-accent hover:text-brand-accent-hover"
             >
-              privacy@bytebrew.ai
+              info@bytebrew.ai
             </a>{' '}
             to exercise these rights.
           </p>
@@ -111,10 +111,10 @@ export function PrivacyPage() {
           <p className="mt-2">
             For privacy-related questions:{' '}
             <a
-              href="mailto:privacy@bytebrew.ai"
+              href="mailto:info@bytebrew.ai"
               className="text-brand-accent hover:text-brand-accent-hover"
             >
-              privacy@bytebrew.ai
+              info@bytebrew.ai
             </a>
           </p>
           <p className="mt-2">

@@ -145,10 +145,10 @@ export function TermsPage() {
           <p className="mt-2">
             If you have questions about these Terms, please contact us at{' '}
             <a
-              href="mailto:support@bytebrewcloud.dev"
+              href="mailto:info@bytebrew.ai"
               className="text-brand-accent hover:text-brand-accent-hover"
             >
-              support@bytebrewcloud.dev
+              info@bytebrew.ai
             </a>
             .
           </p>

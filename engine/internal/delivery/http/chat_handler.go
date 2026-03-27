@@ -41,6 +41,7 @@ type nonStreamResponse struct {
 	SessionID string          `json:"session_id,omitempty"`
 	Agent     string          `json:"agent"`
 	Message   string          `json:"message"`
+	Error     string          `json:"error,omitempty"`
 	ToolCalls []toolCallEntry `json:"tool_calls,omitempty"`
 }
 
@@ -117,6 +118,7 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 func (h *ChatHandler) handleNonStreaming(w http.ResponseWriter, agentName string, events <-chan SSEEvent) {
 	var (
 		message   string
+		errMsg    string
 		toolCalls []toolCallEntry
 		sessionID string
 		lastTool  string
@@ -156,6 +158,12 @@ func (h *ChatHandler) handleNonStreaming(w http.ResponseWriter, agentName string
 					break
 				}
 			}
+		case "error":
+			if content, ok := data["content"].(string); ok && content != "" {
+				errMsg = content
+			} else if msg, ok := data["message"].(string); ok && msg != "" {
+				errMsg = msg
+			}
 		case "done":
 			if sid, ok := data["session_id"].(string); ok {
 				sessionID = sid
@@ -163,10 +171,17 @@ func (h *ChatHandler) handleNonStreaming(w http.ResponseWriter, agentName string
 		}
 	}
 
+	// If there was an error and no message content, use the error as the message
+	// so the client gets meaningful feedback instead of an empty response.
+	if message == "" && errMsg != "" {
+		message = errMsg
+	}
+
 	resp := nonStreamResponse{
 		SessionID: sessionID,
 		Agent:     agentName,
 		Message:   message,
+		Error:     errMsg,
 		ToolCalls: toolCalls,
 	}
 	writeJSON(w, http.StatusOK, resp)

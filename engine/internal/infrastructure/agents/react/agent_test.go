@@ -311,6 +311,16 @@ func TestIsRecoverableAgentError(t *testing.T) {
 			err:      fmt.Errorf("some random error"),
 			expected: true,
 		},
+		{
+			name:     "exceeds max steps - not recoverable",
+			err:      fmt.Errorf("agent exceeds max steps limit"),
+			expected: false,
+		},
+		{
+			name:     "max steps - not recoverable",
+			err:      fmt.Errorf("[GraphRunError] max steps reached"),
+			expected: false,
+		},
 	}
 
 	for _, tt := range tests {

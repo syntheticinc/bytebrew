@@ -584,6 +584,8 @@ func isRecoverableAgentError(err error) bool {
 		"authentication",
 		"invalid api key",
 		"permission denied",
+		"exceeds max steps",
+		"max steps",
 	}
 
 	errLower := strings.ToLower(errStr)
