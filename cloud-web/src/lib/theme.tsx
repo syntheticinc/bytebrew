@@ -1,13 +1,15 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 
-type ThemeMode = 'system' | 'light' | 'dark';
+type Theme = 'dark' | 'light' | 'system';
 
 interface ThemeContextValue {
-  /** The user's chosen setting (system | light | dark) */
-  theme: ThemeMode;
+  /** The user's chosen setting (dark | light | system) */
+  theme: Theme;
   /** The resolved appearance (light | dark) */
   resolved: 'light' | 'dark';
-  setTheme: (mode: ThemeMode) => void;
+  /** Alias for resolved — matches common convention */
+  resolvedTheme: 'light' | 'dark';
+  setTheme: (mode: Theme) => void;
   toggleTheme: () => void;
 }
 
@@ -20,19 +22,19 @@ function getSystemPreference(): 'light' | 'dark' {
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 }
 
-function resolveTheme(mode: ThemeMode): 'light' | 'dark' {
+function resolveTheme(mode: Theme): 'light' | 'dark' {
   if (mode === 'system') return getSystemPreference();
   return mode;
 }
 
-function readStoredTheme(): ThemeMode {
+function readStoredTheme(): Theme {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
   } catch {
     // localStorage unavailable
   }
-  return 'system';
+  return 'dark';
 }
 
 function applyThemeClass(resolved: 'light' | 'dark') {
@@ -42,13 +44,15 @@ function applyThemeClass(resolved: 'light' | 'dark') {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeMode>(readStoredTheme);
+  const [theme, setThemeState] = useState<Theme>(readStoredTheme);
   const [resolved, setResolved] = useState<'light' | 'dark'>(() => resolveTheme(readStoredTheme()));
 
-  const setTheme = useCallback((mode: ThemeMode) => {
+  const setTheme = useCallback((mode: Theme) => {
     setThemeState(mode);
     try {
       localStorage.setItem(STORAGE_KEY, mode);
+      // Sync for docs-site (Starlight)
+      localStorage.setItem('starlight-theme', mode === 'system' ? 'auto' : mode);
     } catch {
       // localStorage unavailable
     }
@@ -81,7 +85,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [theme]);
 
   return (
-    <ThemeContext.Provider value={{ theme, resolved, setTheme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, resolved, resolvedTheme: resolved, setTheme, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );
@@ -92,3 +96,5 @@ export function useTheme(): ThemeContextValue {
   if (!ctx) throw new Error('useTheme must be used within ThemeProvider');
   return ctx;
 }
+
+export type { Theme, ThemeContextValue };

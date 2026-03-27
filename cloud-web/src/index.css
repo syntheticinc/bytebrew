@@ -16,22 +16,26 @@
   /* Semantic tokens (default = dark) */
   --color-surface: #111111;
   --color-surface-alt: #1F1F1F;
+  --color-surface-elevated: #2A2A2A;
   --color-text-primary: #F7F8F1;
   --color-text-secondary: #DFD8D0;
   --color-text-tertiary: #87867F;
   --color-border: rgba(135,134,127,0.15);
   --color-border-hover: rgba(135,134,127,0.30);
+  --color-border-strong: rgba(135,134,127,0.3);
 }
 
 /* Light theme overrides */
 .light {
   --color-surface: #FAFAF7;
   --color-surface-alt: #FFFFFF;
+  --color-surface-elevated: #F0F0ED;
   --color-text-primary: #1F1F1F;
   --color-text-secondary: #555550;
   --color-text-tertiary: #87867F;
   --color-border: rgba(135,134,127,0.20);
   --color-border-hover: rgba(135,134,127,0.40);
+  --color-border-strong: rgba(135,134,127,0.4);
 }
 
 body {
