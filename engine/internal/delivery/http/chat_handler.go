@@ -3,7 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -83,26 +83,32 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Streaming: SSE.
+	//
+	// CRITICAL: Go's net/http buffers small responses and sets Content-Length,
+	// which breaks SSE streaming. To force chunked transfer encoding:
+	// 1. Set headers
+	// 2. Write initial comment
+	// 3. Flush IMMEDIATELY — before any events arrive
+	//
+	// The Flush() call commits the headers with Transfer-Encoding: chunked
+	// and sends the first chunk. Subsequent writes become additional chunks.
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	// Commit headers BEFORE writing body — prevents Go from buffering
-	// the entire response and setting Content-Length (which breaks SSE).
-	w.WriteHeader(http.StatusOK)
-
-	// Use ResponseController for flushing — works with wrapped ResponseWriters
-	// (chi middleware wraps w, so w.(http.Flusher) may fail).
+	// Get the underlying Flusher. chi wraps ResponseWriter, but
+	// http.NewResponseController can unwrap it.
 	rc := http.NewResponseController(w)
 
-	// Send initial SSE comment to start the stream.
-	_, _ = fmt.Fprintf(w, ": ok\n\n")
+	// CRITICAL: Write initial comment and flush BEFORE any events.
+	// This commits headers as chunked and sends the first chunk.
+	_, _ = io.WriteString(w, ": ok\n\n")
+
 	_ = rc.Flush()
 
-	// Block on events — handler stays alive until channel closes (on "done" event).
 	for event := range events {
-		_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event.Type, event.Data)
+		_, _ = io.WriteString(w, "event: "+event.Type+"\ndata: "+event.Data+"\n\n")
 		_ = rc.Flush()
 	}
 }
