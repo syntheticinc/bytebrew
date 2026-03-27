@@ -284,8 +284,8 @@ function AskButtons({ content, options, selected }: { content: string; options: 
               style={{
                 borderColor: isSelected ? '#D7513E' : 'rgba(135,134,127,0.25)',
                 backgroundColor: isSelected ? '#D7513E' : 'transparent',
-                color: isSelected ? '#fff' : isFaded ? 'rgba(135,134,127,0.3)' : '#CBC9BC',
-                opacity: isFaded ? 0.4 : 1,
+                color: isSelected ? '#fff' : isFaded ? 'rgba(135,134,127,0.5)' : '#CBC9BC',
+                opacity: isFaded ? 0.6 : 1,
               }}
             >
               {opt}
