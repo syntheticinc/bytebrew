@@ -684,7 +684,7 @@ function MCPDocsSection() {
 
   return (
     <section className="py-24 px-4 border-t border-border bg-surface">
-      <div className="max-w-[720px] mx-auto px-4">
+      <div className="max-w-[720px] mx-auto">
         <h2 className="text-3xl font-bold tracking-tight text-center text-text-primary mb-2">
           AI-Native Documentation
         </h2>
