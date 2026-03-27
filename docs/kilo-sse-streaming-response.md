@@ -16,9 +16,11 @@ Go's `net/http` buffers small responses and automatically sets `Content-Length`.
 
 ## Fix Applied
 
-Commit `b33cb035` — calls `w.WriteHeader(http.StatusOK)` before writing the first event. This commits the response headers immediately, forcing Go to use chunked transfer encoding.
+Two commits:
+- `b33cb035` — initial fix: `WriteHeader(200)` before body
+- `c27898a4` — complete fix: `io.WriteString` + `Flush()` before any events
 
-Additionally, `http.NewResponseController(w)` is used instead of `w.(http.Flusher)` to ensure `Flush()` works through middleware wrappers (chi router wraps ResponseWriter).
+Go's `net/http` buffers small responses (<4KB) and sets `Content-Length` even after `WriteHeader`. The fix writes an SSE comment (`: ok\n\n`) and flushes it immediately, forcing chunked transfer encoding before any LLM events arrive.
 
 ## Verification
 
