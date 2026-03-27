@@ -98,18 +98,28 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	// Get the underlying Flusher. chi wraps ResponseWriter, but
-	// http.NewResponseController can unwrap it.
+	// Get the underlying ResponseController for flushing through chi middleware.
 	rc := http.NewResponseController(w)
 
-	// CRITICAL: WriteHeader MUST be called before any Write.
-	// This commits the response headers immediately and prevents
-	// Go from buffering the entire body to compute Content-Length.
-	w.WriteHeader(http.StatusOK)
+	// CRITICAL: Disable Content-Length by setting Transfer-Encoding explicitly.
+	// Go net/http: "If the handler didn't decide the Content-Length or
+	// Transfer-Encoding, sniffing is suppressed by setting Transfer-Encoding."
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
 
-	// Write initial SSE comment and flush to send headers to client.
+	// Write and flush IMMEDIATELY — this commits headers and starts chunked transfer.
+	// Without this, Go buffers the entire body and adds Content-Length.
+	w.WriteHeader(http.StatusOK)
 	_, _ = io.WriteString(w, ": ok\n\n")
-	_ = rc.Flush()
+	if err := rc.Flush(); err != nil {
+		// Flush failed — fallback: write all events without streaming
+		for event := range events {
+			_, _ = io.WriteString(w, "event: "+event.Type+"\ndata: "+event.Data+"\n\n")
+		}
+		return
+	}
 
 	for event := range events {
 		_, _ = io.WriteString(w, "event: "+event.Type+"\ndata: "+event.Data+"\n\n")
