@@ -1,0 +1,16 @@
+# Local development Caddyfile
+#
+# Routes:
+#   /docs, /docs/* → docs-site Starlight (localhost:4321)
+#   /*             → cloud-web Vite (localhost:3011)
+
+:3000 {
+	@docs path /docs /docs/*
+	handle @docs {
+		reverse_proxy host.docker.internal:4321
+	}
+
+	handle {
+		reverse_proxy host.docker.internal:3011
+	}
+}
