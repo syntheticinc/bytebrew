@@ -602,7 +602,7 @@ export function HeroDemo() {
 
   return (
     <div
-      className="relative mx-auto w-full max-w-[720px]"
+      className="relative mx-auto w-full max-w-[720px] shadow-lg dark:shadow-none"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={handleMouseLeave}
     >

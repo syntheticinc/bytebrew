@@ -6,8 +6,10 @@ import { SHOW_EE_PRICING } from '../lib/feature-flags';
 
 export function RootLayout() {
   const { isAuthenticated, email, logout } = useAuth();
+  const { resolved } = useTheme();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const logoSrc = resolved === 'light' ? '/logo-light.png' : '/logo-dark.svg';
 
   const handleLogout = () => {
     logout();
@@ -24,7 +26,7 @@ export function RootLayout() {
           <div className="flex items-center justify-between h-14">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2" onClick={closeMobileMenu}>
-              <img src="/logo-dark.svg" alt="ByteBrew" className="h-8 logo-adaptive" />
+              <img src={logoSrc} alt="ByteBrew" className="h-8" />
             </Link>
 
             {/* Desktop nav links */}
