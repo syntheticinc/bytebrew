@@ -606,7 +606,7 @@ export function HeroDemo() {
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={handleMouseLeave}
     >
-      <div className="rounded-[2px] border overflow-hidden" style={{ borderColor: 'rgba(135,134,127,0.12)', backgroundColor: '#1A1A1A' }}>
+      <div className="rounded-[2px] border overflow-hidden" style={{ borderColor: 'rgba(135,134,127,0.15)', backgroundColor: '#252525' }}>
         {/* Header with tabs */}
         <div className="flex items-center justify-between px-4 py-2.5 border-b" style={{ borderColor: 'rgba(135,134,127,0.08)' }}>
           <div className="flex items-center gap-3">
