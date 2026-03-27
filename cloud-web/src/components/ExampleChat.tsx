@@ -238,6 +238,15 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
         signal: controller.signal,
       });
 
+      // Update rate limit from response headers (works for both success and error responses)
+      const rateLimitRemaining = response.headers.get('X-RateLimit-Remaining');
+      if (rateLimitRemaining != null) {
+        const remaining = parseInt(rateLimitRemaining, 10);
+        if (!isNaN(remaining)) {
+          setMessagesRemaining(remaining);
+        }
+      }
+
       if (response.status === 429) {
         setMessagesRemaining(0);
         setError('Rate limit exceeded. Try again later.');
