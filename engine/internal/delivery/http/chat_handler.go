@@ -109,17 +109,16 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	// Write and flush IMMEDIATELY — this commits headers and starts chunked transfer.
-	// Without this, Go buffers the entire body and adds Content-Length.
+	// CRITICAL: Delete Content-Length to force chunked encoding.
+	// Go sets Content-Length if it can determine body size before flushing.
+	w.Header().Del("Content-Length")
+
+	// WriteHeader commits headers to the wire.
 	w.WriteHeader(http.StatusOK)
+
+	// Write initial SSE comment and flush to start chunked transfer.
 	_, _ = io.WriteString(w, ": ok\n\n")
-	if err := rc.Flush(); err != nil {
-		// Flush failed — fallback: write all events without streaming
-		for event := range events {
-			_, _ = io.WriteString(w, "event: "+event.Type+"\ndata: "+event.Data+"\n\n")
-		}
-		return
-	}
+	_ = rc.Flush()
 
 	for event := range events {
 		_, _ = io.WriteString(w, "event: "+event.Type+"\ndata: "+event.Data+"\n\n")
