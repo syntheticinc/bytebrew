@@ -187,7 +187,7 @@ function SubscriptionBilling({ usage, error, loading, onManage }: SubscriptionBi
               {usage.tier}
             </h2>
           </div>
-          <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-400 ring-1 ring-inset ring-emerald-400/20">
+          <span className="inline-flex items-center rounded-[2px] bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-400 ring-1 ring-inset ring-emerald-400/20">
             Active
           </span>
         </div>
@@ -256,7 +256,7 @@ function SubscriptionBilling({ usage, error, loading, onManage }: SubscriptionBi
               Use your own LLM API keys for unlimited usage.
             </p>
           </div>
-          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${
+          <span className={`inline-flex items-center rounded-[2px] px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${
             usage.byok_enabled
               ? 'bg-emerald-400/10 text-emerald-400 ring-emerald-400/20'
               : 'bg-border text-text-tertiary ring-border'

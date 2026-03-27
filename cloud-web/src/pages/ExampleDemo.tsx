@@ -72,7 +72,7 @@ export function ExampleDemoPage() {
             {example.features.map((feature) => (
               <span
                 key={feature}
-                className="inline-flex items-center gap-1.5 rounded-full border border-brand-accent/20 bg-brand-accent/5 px-3 py-1 text-xs text-brand-accent"
+                className="inline-flex items-center gap-1.5 rounded-[2px] border border-brand-accent/20 bg-brand-accent/5 px-3 py-1 text-xs text-brand-accent"
               >
                 <svg
                   className="h-3 w-3"

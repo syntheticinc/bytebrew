@@ -42,7 +42,7 @@ export function ExamplesPage() {
                 {example.features.map((feature) => (
                   <span
                     key={feature}
-                    className="rounded-full border border-border px-2.5 py-0.5 text-[11px] text-text-secondary"
+                    className="rounded-[2px] border border-border px-2.5 py-0.5 text-[11px] text-text-secondary"
                   >
                     {feature}
                   </span>

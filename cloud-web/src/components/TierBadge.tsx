@@ -24,7 +24,7 @@ export function TierBadge({ tier }: TierBadgeProps) {
 
   return (
     <span
-      className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${style}`}
+      className={`inline-flex items-center rounded-[2px] px-3 py-1 text-sm font-medium ${style}`}
     >
       {label}
     </span>

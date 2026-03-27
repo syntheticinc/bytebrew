@@ -50,5 +50,5 @@ body {
 /* Focus-visible ring for interactive elements */
 a:focus-visible,
 button:focus-visible {
-  @apply outline-2 outline-offset-2 outline-brand-accent rounded-sm;
+  @apply outline-2 outline-offset-2 outline-brand-accent rounded-[2px];
 }

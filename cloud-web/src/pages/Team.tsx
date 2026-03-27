@@ -300,7 +300,7 @@ function MembersTable({ members }: { members: TeamMember[] }) {
                   </td>
                   <td className="py-3">
                     <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                      className={`inline-flex items-center rounded-[2px] px-2 py-0.5 text-xs font-medium ${
                         member.role === 'admin'
                           ? 'bg-purple-600/20 text-purple-400'
                           : 'bg-border text-text-secondary'
@@ -350,7 +350,7 @@ function PendingInvitesList({ invites }: { invites: TeamInvite[] }) {
               {new Date(invite.expires_at).toLocaleDateString()}
             </p>
           </div>
-          <span className="inline-flex items-center rounded-full bg-yellow-500/10 px-2 py-0.5 text-xs font-medium text-yellow-400">
+          <span className="inline-flex items-center rounded-[2px] bg-yellow-500/10 px-2 py-0.5 text-xs font-medium text-yellow-400">
             pending
           </span>
         </div>

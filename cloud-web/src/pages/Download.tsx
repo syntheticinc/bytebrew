@@ -26,7 +26,7 @@ export function DownloadPage() {
           }`}
         >
           Docker Compose
-          <span className="ml-2 inline-block text-[10px] font-semibold uppercase tracking-wide bg-green-600/20 text-green-400 border border-green-500/30 rounded-full px-2 py-0.5">
+          <span className="ml-2 inline-block text-[10px] font-semibold uppercase tracking-wide bg-green-600/20 text-green-400 border border-green-500/30 rounded-[2px] px-2 py-0.5">
             Recommended
           </span>
         </button>
