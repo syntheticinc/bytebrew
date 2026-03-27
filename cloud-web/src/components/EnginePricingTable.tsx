@@ -79,7 +79,7 @@ function CheckIcon({ dimmed }: { dimmed?: boolean }) {
 
 function ComingSoonBadge() {
   return (
-    <span className="ml-1.5 inline-flex items-center rounded-full bg-border px-1.5 py-0.5 text-[10px] font-medium text-text-tertiary ring-1 ring-inset ring-border">
+    <span className="ml-1.5 inline-flex items-center rounded-[2px] bg-border px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase text-text-tertiary ring-1 ring-inset ring-border">
       Coming Soon
     </span>
   );
@@ -127,7 +127,7 @@ function Badge({ text, color }: { text: string; color: 'accent' | 'gray' }) {
 
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${colorClasses[color]}`}
+      className={`inline-flex items-center rounded-[2px] px-3 py-1 text-xs font-medium tracking-wide uppercase ring-1 ring-inset ${colorClasses[color]}`}
     >
       {text}
     </span>
