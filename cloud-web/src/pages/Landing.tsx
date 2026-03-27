@@ -197,9 +197,9 @@ function SolutionSection() {
           {/* YAML config on the left */}
           <div className="rounded-[2px] border border-border bg-surface-alt p-5 overflow-x-auto">
             <div className="flex gap-1.5 mb-4">
-              <span className="w-3 h-3 rounded-full bg-red-500/80" />
-              <span className="w-3 h-3 rounded-full bg-yellow-500/80" />
-              <span className="w-3 h-3 rounded-full bg-green-500/80" />
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
             </div>
             <pre className="font-mono text-sm text-text-secondary leading-relaxed">
               <span className="text-text-tertiary"># Full agent configuration</span>{'\n'}
@@ -684,7 +684,7 @@ function MCPDocsSection() {
 
   return (
     <section className="py-24 px-4 border-t border-border bg-surface">
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-[720px] mx-auto px-4">
         <h2 className="text-3xl font-bold tracking-tight text-center text-text-primary mb-2">
           AI-Native Documentation
         </h2>
