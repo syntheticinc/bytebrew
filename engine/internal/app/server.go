@@ -629,8 +629,20 @@ func Run(sc ServerConfig) error {
 			})
 
 			// Configurable rate limiter (EE) — per-header rate limiting
-			if len(cfg.RateLimits) > 0 {
-				rules := convertRateLimitRules(cfg.RateLimits)
+			rateLimitRules := cfg.RateLimits
+			if len(rateLimitRules) == 0 {
+				// Fallback: read rate limits from env var (Docker/env-based deployments)
+				if envRL := os.Getenv("BYTEBREW_RATE_LIMITS"); envRL != "" {
+					var envRules []config.RateLimitRule
+					if err := json.Unmarshal([]byte(envRL), &envRules); err != nil {
+						slog.Warn("failed to parse BYTEBREW_RATE_LIMITS env var", "error", err)
+					} else {
+						rateLimitRules = envRules
+					}
+				}
+			}
+			if len(rateLimitRules) > 0 {
+				rules := convertRateLimitRules(rateLimitRules)
 				configurableRL = deliveryhttp.NewConfigurableRateLimiter(rules, sc.LicenseProvider.Pointer())
 			}
 

@@ -35,8 +35,39 @@ interface ExampleChatProps {
 }
 
 const MAX_MESSAGES_PER_HOUR = 15;
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const STORAGE_KEY_ACCESS = 'bytebrew_access_token';
 const STORAGE_KEY_REFRESH = 'bytebrew_refresh_token';
+const STORAGE_KEY_RATE = 'bytebrew_rate_limit';
+
+/** Persistent rate limit state — survives page reloads and tab switches */
+function getRateLimit(): { remaining: number; resetAt: number } {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_RATE);
+    if (raw) {
+      const { remaining, resetAt } = JSON.parse(raw);
+      if (Date.now() < resetAt) return { remaining, resetAt };
+    }
+  } catch { /* ignore */ }
+  // Window expired or no data — fresh window
+  const resetAt = Date.now() + RATE_LIMIT_WINDOW_MS;
+  const state = { remaining: MAX_MESSAGES_PER_HOUR, resetAt };
+  localStorage.setItem(STORAGE_KEY_RATE, JSON.stringify(state));
+  return state;
+}
+
+function decrementRateLimit(): number {
+  const state = getRateLimit();
+  state.remaining = Math.max(0, state.remaining - 1);
+  localStorage.setItem(STORAGE_KEY_RATE, JSON.stringify(state));
+  return state.remaining;
+}
+
+function setRateLimitRemaining(remaining: number): void {
+  const state = getRateLimit();
+  state.remaining = remaining;
+  localStorage.setItem(STORAGE_KEY_RATE, JSON.stringify(state));
+}
 
 function ToolCallBlock({ tc, expanded, onToggle }: { tc: ToolCallInfo; expanded: boolean; onToggle: () => void }) {
   const hasLongResult = tc.result != null && tc.result.length > 120;
@@ -141,7 +172,7 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [messagesRemaining, setMessagesRemaining] = useState(MAX_MESSAGES_PER_HOUR);
+  const [messagesRemaining, setMessagesRemaining] = useState(() => getRateLimit().remaining);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedToolIds, setExpandedToolIds] = useState<Set<string>>(new Set());
@@ -158,6 +189,7 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
       .then(r => r.json())
       .then(data => {
         if (data?.rate_limit?.remaining != null) {
+          setRateLimitRemaining(data.rate_limit.remaining);
           setMessagesRemaining(data.rate_limit.remaining);
         }
       })
@@ -238,16 +270,18 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
         signal: controller.signal,
       });
 
-      // Update rate limit from response headers (works for both success and error responses)
+      // Update rate limit from server headers if available (EE with rate limiting)
       const rateLimitRemaining = response.headers.get('X-RateLimit-Remaining');
       if (rateLimitRemaining != null) {
         const remaining = parseInt(rateLimitRemaining, 10);
         if (!isNaN(remaining)) {
+          setRateLimitRemaining(remaining);
           setMessagesRemaining(remaining);
         }
       }
 
       if (response.status === 429) {
+        setRateLimitRemaining(0);
         setMessagesRemaining(0);
         setError('Rate limit exceeded. Try again later.');
         setMessages(prev => prev.filter(m => m.id !== assistantId));
@@ -433,7 +467,7 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
       };
 
       setMessages(prev => [...prev, userMsg]);
-      setMessagesRemaining(prev => Math.max(0, prev - 1));
+      setMessagesRemaining(decrementRateLimit());
       setInput('');
 
       streamChat(trimmed, sessionId);
