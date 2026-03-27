@@ -533,7 +533,26 @@ func Run(sc ServerConfig) error {
 				})
 			}
 
-			// Audit logs — always recorded by middleware, READ API moved to EE block below.
+			// Audit log READ API — always registered so Admin UI doesn't get 404.
+			// Returns 403 "EE required" when no license is active.
+			auditRepo := config_repo.NewGORMAuditRepository(pgDB)
+			auditHandler := deliveryhttp.NewAuditHandler(&auditServiceHTTPAdapter{repo: auditRepo})
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireAdminSession)
+				if sc.LicenseProvider != nil {
+					eeMWAudit := deliveryhttp.NewEEMiddleware(sc.LicenseProvider.Pointer())
+					r.Use(eeMWAudit.RequireEE)
+				} else {
+					r.Use(func(next http.Handler) http.Handler {
+						return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+							w.Header().Set("Content-Type", "application/json")
+							w.WriteHeader(http.StatusForbidden)
+							_, _ = w.Write([]byte(`{"error":"Enterprise Edition license required","upgrade_url":"https://bytebrew.ai/billing"}`))
+						})
+					})
+				}
+				r.Get("/api/v1/audit", auditHandler.List)
+			})
 
 			// API Tokens (admin-only)
 			tokenHandler := deliveryhttp.NewTokenHandler(&tokenRepoHTTPAdapter{repo: apiTokenRepo})
@@ -619,12 +638,7 @@ func Run(sc ServerConfig) error {
 				r.Use(authMW.Authenticate)
 				r.Use(eeMW.RequireEE)
 
-				// Audit log READ API (EE) — data always recorded by middleware
-				auditRepo := config_repo.NewGORMAuditRepository(pgDB)
-				auditHandler := deliveryhttp.NewAuditHandler(&auditServiceHTTPAdapter{repo: auditRepo})
-				r.Get("/api/v1/audit", auditHandler.List)
-
-				// Tool call audit log (EE)
+				// Tool call audit log (EE) — detailed per-tool-call log
 				toolCallRepo := config_repo.NewToolCallEventRepository(pgDB)
 				toolCallLogHandler := deliveryhttp.NewToolCallLogHandler(&toolCallLogHTTPAdapter{repo: toolCallRepo})
 				r.Get("/api/v1/audit/tool-calls", toolCallLogHandler.List)
