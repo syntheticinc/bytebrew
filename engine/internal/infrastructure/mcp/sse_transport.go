@@ -16,19 +16,32 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 )
 
+const (
+	// sseEndpointTimeout is the max time to wait for the endpoint event after SSE connect.
+	sseEndpointTimeout = 5 * time.Second
+
+	// sseReconnectDelay is the delay before attempting to reconnect after SSE stream drop.
+	sseReconnectDelay = 1 * time.Second
+
+	// sseMaxReconnectAttempts is the max consecutive reconnect attempts before giving up.
+	sseMaxReconnectAttempts = 5
+)
+
 // SSETransport connects to an MCP server via SSE (Server-Sent Events).
-// Per MCP spec: GET /sse for server→client events, POST /message for client→server requests.
+// Per MCP spec: GET /sse for server->client events, POST /message for client->server requests.
 type SSETransport struct {
 	baseURL        string
-	sseClient      *http.Client // For SSE GET — no timeout (long-lived stream)
-	postClient     *http.Client // For POST /message — with timeout
+	sseClient      *http.Client // For SSE GET -- no timeout (long-lived stream)
+	postClient     *http.Client // For POST /message -- with timeout
 	messageURL     string       // discovered from SSE endpoint event
 	forwardHeaders []string
 
-	mu       sync.Mutex
-	pending  map[interface{}]chan *Response
-	cancel   context.CancelFunc
-	closed   bool
+	mu            sync.Mutex
+	pending       map[interface{}]chan *Response
+	cancel        context.CancelFunc
+	closed        bool
+	endpointReady chan struct{} // closed when endpoint event is received
+	reconnectMu   sync.Mutex   // prevents concurrent reconnect attempts
 }
 
 // NewSSETransport creates a transport for MCP SSE servers.
@@ -40,22 +53,38 @@ func NewSSETransport(baseURL string, forwardHeaders ...[]string) *SSETransport {
 	}
 	return &SSETransport{
 		baseURL:        baseURL,
-		sseClient:      &http.Client{},                            // No timeout — SSE stream is persistent
-		postClient:     &http.Client{Timeout: 30 * time.Second},   // Timeout for POST requests
+		sseClient:      &http.Client{},                          // No timeout -- SSE stream is persistent
+		postClient:     &http.Client{Timeout: 30 * time.Second}, // Timeout for POST requests
 		pending:        make(map[interface{}]chan *Response),
 		forwardHeaders: fh,
 	}
 }
 
 func (t *SSETransport) Start(_ context.Context) error {
-	// Use background context for SSE connection lifecycle — it must outlive the
+	// Use background context for SSE connection lifecycle -- it must outlive the
 	// caller's context (e.g. connectCtx with 10s timeout). The SSE stream stays
 	// open until Close() is called.
 	sseCtx, cancel := context.WithCancel(context.Background())
 	t.cancel = cancel
 
-	// Connect to SSE endpoint
-	req, err := http.NewRequestWithContext(sseCtx, http.MethodGet, t.baseURL, nil)
+	if err := t.connectSSE(sseCtx); err != nil {
+		cancel()
+		return err
+	}
+
+	// Wait for endpoint event with timeout (replaces time.Sleep(100ms))
+	select {
+	case <-t.endpointReady:
+		return nil
+	case <-time.After(sseEndpointTimeout):
+		return fmt.Errorf("timeout waiting for SSE endpoint event after %s", sseEndpointTimeout)
+	}
+}
+
+// connectSSE establishes a new SSE connection and starts reading events.
+// Caller must hold no locks. The endpointReady channel is recreated.
+func (t *SSETransport) connectSSE(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.baseURL, nil)
 	if err != nil {
 		return fmt.Errorf("create SSE request: %w", err)
 	}
@@ -71,20 +100,49 @@ func (t *SSETransport) Start(_ context.Context) error {
 		return fmt.Errorf("SSE server returned %d", resp.StatusCode)
 	}
 
-	// Start reading SSE events in background
-	go t.readSSE(sseCtx, resp.Body)
+	// Reset endpoint state for the new connection
+	t.mu.Lock()
+	t.messageURL = ""
+	t.endpointReady = make(chan struct{})
+	t.mu.Unlock()
 
-	// Wait briefly for endpoint event
-	time.Sleep(100 * time.Millisecond)
+	go t.readSSE(ctx, resp.Body)
 
 	return nil
 }
 
 func (t *SSETransport) Send(ctx context.Context, req *Request) (*Response, error) {
+	resp, errBody, err := t.doSend(ctx, req)
+	if err == nil {
+		return resp, nil
+	}
+
+	// If error looks session-related (stale session ID), reconnect once and retry
+	if !isSessionError(errBody) {
+		return nil, err
+	}
+
+	slog.Warn("SSE transport: session error on Send, attempting reconnect",
+		"error", err, "body", string(errBody))
+
+	if reconnErr := t.reconnect(); reconnErr != nil {
+		return nil, fmt.Errorf("reconnect after session error: %w (original: %w)", reconnErr, err)
+	}
+
+	resp, _, retryErr := t.doSend(ctx, req)
+	if retryErr != nil {
+		return nil, fmt.Errorf("retry after reconnect: %w", retryErr)
+	}
+	return resp, nil
+}
+
+// doSend performs the actual HTTP POST and waits for a response.
+// Returns the response body bytes on 4xx errors for inspection by the caller.
+func (t *SSETransport) doSend(ctx context.Context, req *Request) (*Response, []byte, error) {
 	t.mu.Lock()
 	if t.closed {
 		t.mu.Unlock()
-		return nil, fmt.Errorf("transport closed")
+		return nil, nil, fmt.Errorf("transport closed")
 	}
 
 	// Create response channel for this request ID
@@ -101,29 +159,30 @@ func (t *SSETransport) Send(ctx context.Context, req *Request) (*Response, error
 	// POST request to message endpoint
 	msgURL := t.getMessageURL()
 	if msgURL == "" {
-		return nil, fmt.Errorf("message endpoint not discovered yet")
+		return nil, nil, fmt.Errorf("message endpoint not discovered yet")
 	}
 
 	data, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("marshal: %w", err)
+		return nil, nil, fmt.Errorf("marshal: %w", err)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, msgURL, bytes.NewReader(data))
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return nil, nil, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	t.applyForwardHeaders(ctx, httpReq)
 
 	httpResp, err := t.postClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("send message: %w", err)
+		return nil, nil, fmt.Errorf("send message: %w", err)
 	}
 	defer httpResp.Body.Close()
 
 	if httpResp.StatusCode >= 400 {
-		return nil, fmt.Errorf("message endpoint returned %d", httpResp.StatusCode)
+		errBody, _ := io.ReadAll(io.LimitReader(httpResp.Body, 512))
+		return nil, errBody, fmt.Errorf("message endpoint returned %d: %s", httpResp.StatusCode, string(errBody))
 	}
 
 	// Some MCP servers return the JSON-RPC response in the HTTP body
@@ -132,18 +191,18 @@ func (t *SSETransport) Send(ctx context.Context, req *Request) (*Response, error
 	if readErr == nil && len(body) > 2 {
 		var directResp Response
 		if json.Unmarshal(body, &directResp) == nil && directResp.ID != nil {
-			return &directResp, nil
+			return &directResp, nil, nil
 		}
 	}
 
 	// Otherwise wait for response via SSE stream
 	select {
 	case resp := <-ch:
-		return resp, nil
+		return resp, nil, nil
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, nil, ctx.Err()
 	case <-time.After(30 * time.Second):
-		return nil, fmt.Errorf("timeout waiting for SSE response")
+		return nil, nil, fmt.Errorf("timeout waiting for SSE response")
 	}
 }
 
@@ -217,6 +276,7 @@ func (t *SSETransport) setMessageURL(url string) {
 }
 
 // readSSE processes the SSE stream from the server.
+// When the stream drops (not due to context cancellation), it attempts to reconnect.
 func (t *SSETransport) readSSE(ctx context.Context, body io.ReadCloser) {
 	defer body.Close()
 
@@ -251,6 +311,74 @@ func (t *SSETransport) readSSE(ctx context.Context, body io.ReadCloser) {
 	if err := scanner.Err(); err != nil {
 		slog.Warn("SSE transport: stream error", "error", err)
 	}
+
+	// Stream ended. If context is still active, the server dropped the connection.
+	select {
+	case <-ctx.Done():
+		// Intentional shutdown -- do not reconnect
+		return
+	default:
+	}
+
+	slog.Warn("SSE transport: stream dropped, attempting reconnect", "base_url", t.baseURL)
+	if err := t.reconnect(); err != nil {
+		slog.Error("SSE transport: reconnect failed after stream drop", "error", err)
+	}
+}
+
+// reconnect tears down the old SSE connection and establishes a new one.
+// It is safe to call from multiple goroutines -- only one reconnect runs at a time.
+func (t *SSETransport) reconnect() error {
+	t.reconnectMu.Lock()
+	defer t.reconnectMu.Unlock()
+
+	t.mu.Lock()
+	if t.closed {
+		t.mu.Unlock()
+		return fmt.Errorf("transport closed")
+	}
+	t.mu.Unlock()
+
+	// Cancel old SSE context to stop any lingering readSSE goroutine
+	if t.cancel != nil {
+		t.cancel()
+	}
+
+	var lastErr error
+	for attempt := 1; attempt <= sseMaxReconnectAttempts; attempt++ {
+		slog.Info("SSE transport: reconnect attempt", "attempt", attempt, "max", sseMaxReconnectAttempts)
+
+		// Create a fresh context for the new connection
+		sseCtx, cancel := context.WithCancel(context.Background())
+		t.cancel = cancel
+
+		if err := t.connectSSE(sseCtx); err != nil {
+			cancel()
+			lastErr = err
+			slog.Warn("SSE transport: reconnect attempt failed",
+				"attempt", attempt, "error", err)
+			time.Sleep(sseReconnectDelay * time.Duration(attempt))
+			continue
+		}
+
+		// Wait for the new endpoint event
+		t.mu.Lock()
+		ready := t.endpointReady
+		t.mu.Unlock()
+
+		select {
+		case <-ready:
+			slog.Info("SSE transport: reconnected successfully", "attempt", attempt)
+			return nil
+		case <-time.After(sseEndpointTimeout):
+			cancel()
+			lastErr = fmt.Errorf("timeout waiting for endpoint event")
+			slog.Warn("SSE transport: reconnect endpoint timeout", "attempt", attempt)
+			continue
+		}
+	}
+
+	return fmt.Errorf("reconnect failed after %d attempts: %w", sseMaxReconnectAttempts, lastErr)
 }
 
 func (t *SSETransport) handleSSEData(eventType, data string) {
@@ -259,6 +387,16 @@ func (t *SSETransport) handleSSEData(eventType, data string) {
 		// Server announces its message endpoint
 		t.setMessageURL(strings.TrimSpace(data))
 		slog.Info("SSE transport: discovered message endpoint", "url", data)
+
+		// Signal that endpoint is ready
+		t.mu.Lock()
+		select {
+		case <-t.endpointReady:
+			// Already closed -- nothing to do
+		default:
+			close(t.endpointReady)
+		}
+		t.mu.Unlock()
 
 	case "message":
 		// JSON-RPC response
@@ -281,6 +419,15 @@ func (t *SSETransport) handleSSEData(eventType, data string) {
 	default:
 		slog.Debug("SSE transport: unknown event", "type", eventType, "data", data[:min(len(data), 100)])
 	}
+}
+
+// isSessionError checks if an HTTP error response body indicates a stale session.
+func isSessionError(body []byte) bool {
+	if len(body) == 0 {
+		return false
+	}
+	lower := strings.ToLower(string(body))
+	return strings.Contains(lower, "session")
 }
 
 // normalizeID converts JSON-unmarshalled float64 IDs back to int64 for map lookup.

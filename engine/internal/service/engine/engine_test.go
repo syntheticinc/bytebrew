@@ -621,3 +621,289 @@ func TestEngine_SnapshotCompression(t *testing.T) {
 	}
 	assert.True(t, hasSystem, "system prompt should be preserved")
 }
+
+// --- Tests for Bug 2 fixes: user message in snapshot + empty assistant content sanitization ---
+
+// helperCollectorWithMessages creates a MessageCollector pre-loaded with given schema messages.
+// This avoids running the full event pipeline — we inject messages directly.
+func helperCollectorWithMessages(sessionID, agentID string, messages []*schema.Message) *MessageCollector {
+	mc := NewMessageCollector(sessionID, agentID, nil)
+	mc.messages = append(mc.messages, messages...)
+	return mc
+}
+
+// TestSaveSnapshot_IncludesUserMessage verifies that saveSnapshot() includes
+// the user message from cfg.Input in the saved context data.
+func TestSaveSnapshot_IncludesUserMessage(t *testing.T) {
+	ctx := context.Background()
+	snapshotRepo := newMockSnapshotRepo()
+	historyRepo := newMockHistoryRepo()
+	eng := New(snapshotRepo, historyRepo)
+
+	// Collector has one assistant answer message
+	collectorMessages := []*schema.Message{
+		{Role: schema.Assistant, Content: "Here is the answer"},
+	}
+	collector := helperCollectorWithMessages("session-1", "supervisor", collectorMessages)
+
+	cfg := ExecutionConfig{
+		SessionID: "session-1",
+		AgentID:   "supervisor",
+		Flow:      testFlow(),
+		Input:     "What is the meaning of life?",
+	}
+
+	err := eng.saveSnapshot(ctx, cfg, collector, nil, StatusCompleted)
+	require.NoError(t, err)
+
+	// Deserialize saved snapshot
+	snap := snapshotRepo.snapshots["supervisor"]
+	require.NotNil(t, snap)
+
+	messages, err := adapters.DeserializeSchemaMessages(snap.ContextData)
+	require.NoError(t, err)
+
+	// Must contain a user message with cfg.Input
+	var foundUserMsg *schema.Message
+	for _, msg := range messages {
+		if msg.Role == schema.User && msg.Content == "What is the meaning of life?" {
+			foundUserMsg = msg
+			break
+		}
+	}
+	require.NotNil(t, foundUserMsg, "user message from cfg.Input must be saved in snapshot")
+	assert.Equal(t, schema.User, foundUserMsg.Role)
+	assert.Equal(t, "What is the meaning of life?", foundUserMsg.Content)
+}
+
+// TestSaveSnapshot_PreservesUserMessageOrder verifies the ordering:
+// [...history, user_input, ...new_collector_messages]
+func TestSaveSnapshot_PreservesUserMessageOrder(t *testing.T) {
+	ctx := context.Background()
+	snapshotRepo := newMockSnapshotRepo()
+	historyRepo := newMockHistoryRepo()
+	eng := New(snapshotRepo, historyRepo)
+
+	// History from previous snapshot
+	historyMessages := []*schema.Message{
+		{Role: schema.User, Content: "Previous question"},
+		{Role: schema.Assistant, Content: "Previous answer"},
+	}
+
+	// New messages from this execution (collector captures tool_call, tool_result, answer)
+	collectorMessages := []*schema.Message{
+		{
+			Role:    schema.Assistant,
+			Content: "Let me check",
+			ToolCalls: []schema.ToolCall{{
+				ID:       "call-1",
+				Function: schema.FunctionCall{Name: "read_file", Arguments: `{"path":"x.go"}`},
+			}},
+		},
+		{Role: schema.Tool, Content: "file content", ToolCallID: "call-1", Name: "read_file"},
+		{Role: schema.Assistant, Content: "Done"},
+	}
+	collector := helperCollectorWithMessages("session-1", "supervisor", collectorMessages)
+
+	cfg := ExecutionConfig{
+		SessionID: "session-1",
+		AgentID:   "supervisor",
+		Flow:      testFlow(),
+		Input:     "New user question",
+	}
+
+	err := eng.saveSnapshot(ctx, cfg, collector, historyMessages, StatusCompleted)
+	require.NoError(t, err)
+
+	snap := snapshotRepo.snapshots["supervisor"]
+	require.NotNil(t, snap)
+
+	messages, err := adapters.DeserializeSchemaMessages(snap.ContextData)
+	require.NoError(t, err)
+
+	// Expected order:
+	// [0] history: User "Previous question"
+	// [1] history: Assistant "Previous answer"
+	// [2] user input: User "New user question"
+	// [3] collector: Assistant "Let me check" (tool_call)
+	// [4] collector: Tool "file content"
+	// [5] collector: Assistant "Done"
+	require.Len(t, messages, 6)
+
+	assert.Equal(t, schema.User, messages[0].Role)
+	assert.Equal(t, "Previous question", messages[0].Content)
+
+	assert.Equal(t, schema.Assistant, messages[1].Role)
+	assert.Equal(t, "Previous answer", messages[1].Content)
+
+	assert.Equal(t, schema.User, messages[2].Role)
+	assert.Equal(t, "New user question", messages[2].Content)
+
+	assert.Equal(t, schema.Assistant, messages[3].Role)
+	assert.Equal(t, "Let me check", messages[3].Content)
+	assert.NotEmpty(t, messages[3].ToolCalls)
+
+	assert.Equal(t, schema.Tool, messages[4].Role)
+	assert.Equal(t, "file content", messages[4].Content)
+
+	assert.Equal(t, schema.Assistant, messages[5].Role)
+	assert.Equal(t, "Done", messages[5].Content)
+}
+
+// TestSaveSnapshot_SanitizesEmptyAssistantContent verifies that assistant messages
+// with ToolCalls and empty Content get Content = " " before saving.
+func TestSaveSnapshot_SanitizesEmptyAssistantContent(t *testing.T) {
+	ctx := context.Background()
+	snapshotRepo := newMockSnapshotRepo()
+	historyRepo := newMockHistoryRepo()
+	eng := New(snapshotRepo, historyRepo)
+
+	// Collector has an assistant message with tool calls but empty content
+	// (this happens in streaming mode where content is lost)
+	collectorMessages := []*schema.Message{
+		{
+			Role:    schema.Assistant,
+			Content: "", // Empty! Should be sanitized to " "
+			ToolCalls: []schema.ToolCall{{
+				ID:       "call-1",
+				Function: schema.FunctionCall{Name: "execute_command", Arguments: `{"cmd":"ls"}`},
+			}},
+		},
+		{Role: schema.Tool, Content: "output", ToolCallID: "call-1", Name: "execute_command"},
+		{Role: schema.Assistant, Content: "Done"},
+	}
+	collector := helperCollectorWithMessages("session-1", "supervisor", collectorMessages)
+
+	cfg := ExecutionConfig{
+		SessionID: "session-1",
+		AgentID:   "supervisor",
+		Flow:      testFlow(),
+		Input:     "Run ls",
+	}
+
+	err := eng.saveSnapshot(ctx, cfg, collector, nil, StatusCompleted)
+	require.NoError(t, err)
+
+	snap := snapshotRepo.snapshots["supervisor"]
+	require.NotNil(t, snap)
+
+	messages, err := adapters.DeserializeSchemaMessages(snap.ContextData)
+	require.NoError(t, err)
+
+	// Find the assistant message with tool calls
+	var toolCallMsg *schema.Message
+	for _, msg := range messages {
+		if msg.Role == schema.Assistant && len(msg.ToolCalls) > 0 {
+			toolCallMsg = msg
+			break
+		}
+	}
+	require.NotNil(t, toolCallMsg, "assistant message with tool calls must exist")
+	assert.Equal(t, " ", toolCallMsg.Content,
+		"empty content on assistant message with ToolCalls must be sanitized to single space")
+}
+
+// TestSaveSnapshot_DoesNotSanitizeNonToolCallMessages verifies that regular assistant
+// messages (no ToolCalls) with empty content are NOT sanitized.
+func TestSaveSnapshot_DoesNotSanitizeNonToolCallMessages(t *testing.T) {
+	ctx := context.Background()
+	snapshotRepo := newMockSnapshotRepo()
+	historyRepo := newMockHistoryRepo()
+	eng := New(snapshotRepo, historyRepo)
+
+	collectorMessages := []*schema.Message{
+		// Assistant message without tool calls and empty content
+		// (edge case: should NOT be sanitized)
+		{Role: schema.Assistant, Content: ""},
+		// Also check that user messages with empty content are not touched
+		// (though in practice users don't send empty messages)
+	}
+	collector := helperCollectorWithMessages("session-1", "supervisor", collectorMessages)
+
+	// Also add a history user message with empty content to ensure it's untouched
+	historyMessages := []*schema.Message{
+		{Role: schema.User, Content: "Hello"},
+		{Role: schema.Assistant, Content: "non-empty response"},
+	}
+
+	cfg := ExecutionConfig{
+		SessionID: "session-1",
+		AgentID:   "supervisor",
+		Flow:      testFlow(),
+		Input:     "Follow up",
+	}
+
+	err := eng.saveSnapshot(ctx, cfg, collector, historyMessages, StatusCompleted)
+	require.NoError(t, err)
+
+	snap := snapshotRepo.snapshots["supervisor"]
+	require.NotNil(t, snap)
+
+	messages, err := adapters.DeserializeSchemaMessages(snap.ContextData)
+	require.NoError(t, err)
+
+	// Find assistant messages without tool calls
+	for _, msg := range messages {
+		if msg.Role == schema.Assistant && len(msg.ToolCalls) == 0 {
+			// These should NOT have been sanitized — content stays as-is
+			assert.NotEqual(t, " ", msg.Content,
+				"assistant messages without ToolCalls should NOT be sanitized to space; content=%q", msg.Content)
+		}
+	}
+
+	// Additionally verify: user messages are never sanitized
+	for _, msg := range messages {
+		if msg.Role == schema.User {
+			assert.NotEqual(t, " ", msg.Content,
+				"user messages should never be sanitized")
+		}
+	}
+}
+
+// TestSaveSnapshot_EmptyInput verifies that if cfg.Input is empty,
+// no user message is added to the snapshot.
+func TestSaveSnapshot_EmptyInput(t *testing.T) {
+	ctx := context.Background()
+	snapshotRepo := newMockSnapshotRepo()
+	historyRepo := newMockHistoryRepo()
+	eng := New(snapshotRepo, historyRepo)
+
+	historyMessages := []*schema.Message{
+		{Role: schema.User, Content: "Earlier question"},
+		{Role: schema.Assistant, Content: "Earlier answer"},
+	}
+
+	collectorMessages := []*schema.Message{
+		{Role: schema.Assistant, Content: "Continued processing"},
+	}
+	collector := helperCollectorWithMessages("session-1", "supervisor", collectorMessages)
+
+	cfg := ExecutionConfig{
+		SessionID: "session-1",
+		AgentID:   "supervisor",
+		Flow:      testFlow(),
+		Input:     "", // Empty input — no user message should be added
+	}
+
+	err := eng.saveSnapshot(ctx, cfg, collector, historyMessages, StatusCompleted)
+	require.NoError(t, err)
+
+	snap := snapshotRepo.snapshots["supervisor"]
+	require.NotNil(t, snap)
+
+	messages, err := adapters.DeserializeSchemaMessages(snap.ContextData)
+	require.NoError(t, err)
+
+	// Should have: 2 history + 1 collector = 3 messages (no extra user message)
+	require.Len(t, messages, 3)
+
+	// The only user message should be the one from history
+	userMessages := make([]*schema.Message, 0)
+	for _, msg := range messages {
+		if msg.Role == schema.User {
+			userMessages = append(userMessages, msg)
+		}
+	}
+	require.Len(t, userMessages, 1, "only the history user message should exist")
+	assert.Equal(t, "Earlier question", userMessages[0].Content)
+}

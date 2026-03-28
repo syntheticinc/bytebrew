@@ -296,11 +296,30 @@ func (e *Engine) saveSnapshot(
 	historyMessages []*schema.Message,
 	status ExecutionStatus,
 ) error {
-	// Merge history + new messages from this execution
+	// Merge history + current user message + new messages from this execution.
+	// The user message must be persisted so the next turn sees it in history —
+	// MessageCollector only captures agent events (tool_call, tool_result, answer),
+	// not the user input.
 	allMessages := historyMessages
+	if cfg.Input != "" {
+		allMessages = append(allMessages, &schema.Message{
+			Role:    schema.User,
+			Content: cfg.Input,
+		})
+	}
 	newMessages := collector.GetAccumulatedMessages()
 	if len(newMessages) > 0 {
 		allMessages = append(allMessages, newMessages...)
+	}
+
+	// Sanitize assistant messages: some LLM providers require a non-empty "content"
+	// field on assistant messages with tool_calls. In streaming mode, the content may
+	// be lost. Set a minimal placeholder so serialization (e.g. go-openai's omitempty)
+	// doesn't strip the field entirely.
+	for _, msg := range allMessages {
+		if msg.Role == schema.Assistant && msg.Content == "" && len(msg.ToolCalls) > 0 {
+			msg.Content = " "
+		}
 	}
 
 	// Compress snapshot to prevent unbounded growth across session resumes.
