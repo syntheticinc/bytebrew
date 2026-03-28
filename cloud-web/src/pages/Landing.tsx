@@ -19,17 +19,63 @@ export function LandingPage() {
   return (
     <div>
       <HeroSection />
-      <MCPDocsSection />
+      <div className="py-6 px-4 border-t border-border bg-surface">
+        <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
+          <span className="text-xs font-sans text-text-tertiary uppercase tracking-wider">Works with</span>
+          <span className="text-text-tertiary">·</span>
+          <span className="text-sm font-mono font-medium text-text-secondary">OpenAI</span>
+          <span className="text-text-tertiary">·</span>
+          <span className="text-sm font-mono font-medium text-text-secondary">Anthropic</span>
+          <span className="text-text-tertiary">·</span>
+          <span className="text-sm font-mono font-medium text-text-secondary">Google AI</span>
+          <span className="text-text-tertiary">·</span>
+          <span className="text-sm font-mono font-medium text-text-secondary">Ollama</span>
+          <span className="text-text-tertiary">·</span>
+          <span className="text-sm font-mono font-medium text-text-secondary">PostgreSQL</span>
+          <span className="text-text-tertiary">·</span>
+          <span className="text-sm font-mono font-medium text-text-secondary">Docker</span>
+        </div>
+      </div>
       <ProblemSection />
       <SolutionSection />
       <HowItWorksSection onImageClick={setLightboxSrc} />
       <CapabilitiesSection />
       <ProductShowcaseSection onImageClick={setLightboxSrc} />
+      <ProductionReadySection />
       <UseCasesSection />
       <ComparisonSection />
       <InstallSection />
+      <section className="py-16 px-4 border-t border-border bg-surface">
+        <div className="max-w-3xl mx-auto text-center">
+          <p className="text-lg font-sans font-medium text-text-primary">
+            Powering AI agents in production.
+          </p>
+          <p className="text-sm font-sans text-text-secondary mt-2">
+            Teams choose ByteBrew as their unfair advantage — a production-ready AI engine they deploy on their own infrastructure.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-6 mt-6">
+            <div className="rounded-[2px] border border-border bg-surface-alt px-4 py-2">
+              <div className="text-xs font-sans text-text-tertiary">Self-dogfooding</div>
+              <div className="text-sm font-sans font-medium text-text-primary">This site's AI docs are powered by ByteBrew</div>
+            </div>
+            <div className="rounded-[2px] border border-border bg-surface-alt px-4 py-2">
+              <div className="text-xs font-sans text-text-tertiary">Live examples</div>
+              <div className="text-sm font-sans font-medium text-text-primary">
+                <a href="/examples" className="text-brand-accent hover:underline">Try working agents &rarr;</a>
+              </div>
+            </div>
+            <div className="rounded-[2px] border border-border bg-surface-alt px-4 py-2">
+              <div className="text-xs font-sans text-text-tertiary">Open examples</div>
+              <div className="text-sm font-sans font-medium text-text-primary">
+                <a href="https://github.com/syntheticinc/bytebrew-examples" target="_blank" rel="noopener noreferrer" className="text-brand-accent hover:underline">GitHub &rarr;</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
       <PricingSection />
       <FreeForeverBanner />
+      {/* MCPDocsSection removed from landing — available on /docs and /download */}
       <FinalCTASection />
 
       {lightboxSrc && (
@@ -77,34 +123,46 @@ function CheckIcon({ className = 'h-5 w-5 text-emerald-400' }: { className?: str
 function HeroSection() {
   return (
     <section className="py-20 px-4 bg-surface">
-      <div className="max-w-5xl mx-auto">
-        <div className="text-center mb-12">
-          <h1 className="text-5xl sm:text-6xl font-bold tracking-tight text-text-primary leading-tight">
-            Add an AI agent to{' '}
-            <span className="text-brand-accent">your product</span>
-          </h1>
-          <p className="mt-6 text-lg text-text-secondary leading-relaxed max-w-2xl mx-auto">
-            Multi-step reasoning. Tool calling. Sub-agents. Any LLM.
-            <br />
-            One Docker command. No vendor lock-in.
-          </p>
-          <div className="mt-8 flex items-center justify-center gap-4 flex-wrap">
-            <Link
-              to="/download"
-              className="rounded-[2px] bg-brand-accent px-7 py-3.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
-            >
-              Get Started Free &rarr;
-            </Link>
-            <Link
-              to="/pricing"
-              className="rounded-[2px] border border-border px-7 py-3.5 text-sm font-medium text-text-secondary hover:border-border-hover hover:text-text-primary transition-colors"
-            >
-              View Pricing &rarr;
-            </Link>
-          </div>
+      <div className="max-w-5xl mx-auto text-center mb-12">
+        <div className="flex items-center justify-center gap-3 mb-4">
+          <span className="rounded-full border border-brand-accent/30 bg-brand-accent/10 px-3 py-1 text-xs font-sans font-medium text-brand-accent">
+            Self-hosted
+          </span>
+          <span className="rounded-full border border-border px-3 py-1 text-xs font-sans font-medium text-text-secondary">
+            Free forever
+          </span>
         </div>
+        <h1 className="text-5xl sm:text-6xl font-bold tracking-tight text-text-primary leading-tight">
+          Ship AI agents in your product —{' '}
+          <span className="text-brand-accent">not months of infrastructure</span>
+        </h1>
+        <p className="mt-6 text-lg text-text-secondary font-sans leading-relaxed max-w-2xl mx-auto">
+          Self-hosted. One Docker container. Any LLM. Free forever.
+        </p>
+        <div className="mt-8 flex items-center justify-center gap-4 flex-wrap">
+          <Link
+            to="/download"
+            className="rounded-[2px] bg-brand-accent px-7 py-3.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
+          >
+            Get Started Free &rarr;
+          </Link>
+          <Link
+            to="/pricing"
+            className="rounded-[2px] border border-border px-7 py-3.5 text-sm font-medium text-text-secondary hover:border-border-hover hover:text-text-primary transition-colors"
+          >
+            View Pricing &rarr;
+          </Link>
+        </div>
+        <div className="mt-3 flex items-center justify-center gap-4 flex-wrap">
+          <a href="/docs/getting-started/quick-start/" className="text-sm text-text-tertiary hover:text-text-secondary transition-colors">5-minute Quick Start &rarr;</a>
+          <a href="/examples" className="inline-flex items-center gap-1 rounded-full border border-brand-accent/30 bg-brand-accent/5 px-4 py-1.5 text-sm font-sans font-medium text-brand-accent hover:bg-brand-accent/10 transition-colors">
+            Try a live agent &rarr;
+          </a>
+        </div>
+      </div>
 
-        <HeroDemo />
+      <div className="max-w-5xl mx-auto">
+          <HeroDemo />
       </div>
     </section>
   );
@@ -116,9 +174,9 @@ function HeroSection() {
 
 const PROBLEMS = [
   {
-    title: 'Months of Development',
+    title: 'Without ByteBrew',
     description:
-      'Building agent infrastructure from scratch takes 3-6 months. Multi-agent orchestration, tool integration, state management, streaming APIs \u2014 all before your first user interaction.',
+      '3-6 months building agent infrastructure. Your actual product waits.',
     icon: (
       <svg className="h-6 w-6 text-brand-accent" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -126,9 +184,9 @@ const PROBLEMS = [
     ),
   },
   {
-    title: 'Vendor Lock-in',
+    title: 'With cloud AI platforms',
     description:
-      'Cloud-only AI platforms lock you into per-token pricing. $600+/month for 1,000 dialogues. No self-hosting option. Your data on their servers.',
+      '$500-2,000/month. Your data leaves. Locked to one provider.',
     icon: (
       <svg className="h-6 w-6 text-brand-accent" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
@@ -136,9 +194,9 @@ const PROBLEMS = [
     ),
   },
   {
-    title: 'Integration Complexity',
+    title: 'With AI frameworks',
     description:
-      'SDKs require dedicated engineering teams. Visual builders produce reactive chatbots, not autonomous daemon agents that work around the clock.',
+      'A Python library, not a product. You\'re still building infrastructure.',
     icon: (
       <svg className="h-6 w-6 text-brand-accent" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M14.25 9.75L16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" />
@@ -149,13 +207,13 @@ const PROBLEMS = [
 
 function ProblemSection() {
   return (
-    <section className="py-24 px-4 border-t border-border bg-surface-alt">
+    <section className="py-28 px-4 border-t border-border bg-surface-alt">
       <div className="max-w-5xl mx-auto">
         <h2 className="text-3xl font-bold tracking-tight text-center text-text-primary mb-4">
-          Building AI agents is hard. It shouldn&apos;t be.
+          You want AI in your product. Not a 3-month infrastructure project.
         </h2>
-        <p className="text-center text-text-tertiary mb-14 max-w-2xl mx-auto">
-          Every team building AI agents hits the same walls.
+        <p className="text-center text-text-secondary font-sans mb-14 max-w-2xl mx-auto">
+          Sound familiar?
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {PROBLEMS.map((p) => (
@@ -167,7 +225,7 @@ function ProblemSection() {
                 {p.icon}
               </div>
               <h3 className="text-lg font-semibold text-text-primary">{p.title}</h3>
-              <p className="mt-3 text-sm text-text-tertiary leading-relaxed">
+              <p className="mt-3 text-sm text-text-secondary font-sans leading-relaxed">
                 {p.description}
               </p>
             </div>
@@ -184,72 +242,86 @@ function ProblemSection() {
 
 function SolutionSection() {
   return (
-    <section className="py-24 px-4 border-t border-border bg-surface">
+    <section className="py-28 px-4 border-t border-border bg-surface">
       <div className="max-w-6xl mx-auto">
         <h2 className="text-3xl font-bold tracking-tight text-center text-text-primary mb-4">
-          ByteBrew Engine: AI agent infrastructure that just works
+          One Docker container. Full AI agent runtime. Your data stays with you.
         </h2>
-        <p className="text-center text-text-tertiary mb-14 max-w-2xl mx-auto">
-          Configure visually or in YAML. Deploy with Docker. Scale when ready.
+        <p className="text-center text-text-secondary font-sans mb-14 max-w-2xl mx-auto">
+          Your server talks to ByteBrew via REST API. Agents think, call tools, stream responses back.
         </p>
 
+        <div className="flex items-center justify-center gap-4 mt-12 mb-12 py-6 flex-wrap">
+          <div className="rounded-[2px] border border-border bg-surface-alt px-8 py-4 text-center">
+            <div className="text-sm text-text-tertiary">Your Server</div>
+            <div className="text-base font-semibold text-text-primary mt-0.5">Next.js, FastAPI, Go</div>
+          </div>
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-sm text-brand-accent font-medium">REST API →</span>
+            <span className="text-sm text-text-tertiary">← SSE stream</span>
+          </div>
+          <div className="rounded-[2px] border-2 border-brand-accent shadow-md bg-surface-alt px-8 py-4 text-center">
+            <div className="text-sm text-brand-accent font-medium">ByteBrew Engine</div>
+            <div className="text-base font-semibold text-text-primary mt-0.5">Docker Container</div>
+          </div>
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-sm text-text-tertiary font-medium">→</span>
+          </div>
+          <div className="rounded-[2px] border border-border bg-surface-alt px-8 py-4 text-center">
+            <div className="text-sm text-text-tertiary">Any LLM</div>
+            <div className="text-base font-semibold text-text-primary mt-0.5">OpenAI, Gemini, Ollama</div>
+          </div>
+        </div>
+        <p className="text-center text-xs font-sans text-text-tertiary -mt-8 mb-8">Your server handles authentication, then forwards requests to ByteBrew.</p>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
-          {/* YAML config on the left */}
-          <div className="rounded-[2px] border border-border bg-surface-alt p-5 overflow-x-auto">
-            <div className="flex gap-1.5 mb-4">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
+          {/* Admin Dashboard workflow on the left */}
+          <div className="rounded-[2px] border border-border bg-surface-elevated p-6">
+            <div className="text-xs font-mono text-text-tertiary uppercase tracking-wider mb-4">Admin Dashboard</div>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-brand-accent"></div>
+                <span className="text-sm font-sans text-text-primary">Create agents visually — name, model, system prompt</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-brand-accent"></div>
+                <span className="text-sm font-sans text-text-primary">Enable tools — MCP servers, built-in tools, HTTP APIs</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-brand-accent"></div>
+                <span className="text-sm font-sans text-text-primary">Set up multi-agent delegation — which agents can spawn which</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-brand-accent"></div>
+                <span className="text-sm font-sans text-text-primary">Configure triggers — cron schedules, webhook endpoints</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-brand-accent"></div>
+                <span className="text-sm font-sans text-text-primary">Manage models — add providers, test connectivity, set defaults</span>
+              </div>
             </div>
-            <pre className="font-mono text-sm text-text-secondary leading-relaxed">
-              <span className="text-text-tertiary"># Full agent configuration</span>{'\n'}
-              <span className="text-brand-accent">agents</span>:{'\n'}
-              {'  '}<span className="text-brand-accent">supervisor</span>:{'\n'}
-              {'    '}<span className="text-text-tertiary">model</span>: <span className="text-emerald-400">glm-5</span>{'\n'}
-              {'    '}<span className="text-text-tertiary">system</span>: <span className="text-emerald-400">"Route customer requests"</span>{'\n'}
-              {'    '}<span className="text-text-tertiary">can_spawn</span>:{'\n'}
-              {'      '}- <span className="text-emerald-400">sales-agent</span>{'\n'}
-              {'      '}- <span className="text-emerald-400">support-agent</span>{'\n'}
-              {'\n'}
-              {'  '}<span className="text-brand-accent">sales-agent</span>:{'\n'}
-              {'    '}<span className="text-text-tertiary">model</span>: <span className="text-emerald-400">qwen-3-32b</span>{'\n'}
-              {'    '}<span className="text-text-tertiary">tools</span>:{'\n'}
-              {'      '}- <span className="text-emerald-400">product_search</span>{'\n'}
-              {'      '}- <span className="text-emerald-400">create_order</span>{'\n'}
-              {'    '}<span className="text-text-tertiary">mcp_servers</span>:{'\n'}
-              {'      '}- <span className="text-emerald-400">crm-api</span>{'\n'}
-              {'\n'}
-              {'  '}<span className="text-brand-accent">support-agent</span>:{'\n'}
-              {'    '}<span className="text-text-tertiary">model</span>: <span className="text-emerald-400">claude-sonnet-4</span>{'\n'}
-              {'    '}<span className="text-text-tertiary">tools</span>:{'\n'}
-              {'      '}- <span className="text-emerald-400">web_search</span>{'\n'}
-              {'      '}- <span className="text-emerald-400">create_ticket</span>{'\n'}
-              {'\n'}
-              <span className="text-brand-accent">triggers</span>:{'\n'}
-              {'  '}<span className="text-text-tertiary">daily-report</span>:{'\n'}
-              {'    '}<span className="text-text-tertiary">cron</span>: <span className="text-emerald-400">"0 9 * * *"</span>{'\n'}
-              {'    '}<span className="text-text-tertiary">agent</span>: <span className="text-emerald-400">supervisor</span>{'\n'}
-              {'    '}<span className="text-text-tertiary">message</span>: <span className="text-emerald-400">"Generate daily report"</span>
-            </pre>
+            <div className="mt-4 pt-3 border-t border-border">
+              <span className="text-xs font-sans text-text-tertiary">Prefer code? Export/import configuration as YAML anytime.</span>
+            </div>
           </div>
 
           {/* Explanation on the right */}
           <div className="space-y-6">
             <ExplainerItem
-              title="Multi-agent hierarchy"
-              description="Define supervisor agents that spawn sub-agents on demand. Each agent has its own model, tools, and system prompt."
+              title="Agents that delegate"
+              description="Supervisor breaks tasks into sub-tasks and assigns to specialist agents."
             />
             <ExplainerItem
-              title="Universal tool system"
-              description="Connect any API through MCP servers or declarative YAML tools. No backend code required. Per-agent security isolation."
+              title="Any tool your app needs"
+              description="Connect via MCP protocol or declare HTTP tools in the dashboard."
             />
             <ExplainerItem
-              title="Built-in triggers"
-              description="Cron schedules, webhooks, and background tasks. Your agents work 24/7 without polling or external orchestration."
+              title="Agents that work on their own"
+              description="Cron schedules and webhook triggers — no user interaction needed."
             />
             <ExplainerItem
-              title="Model-agnostic"
-              description="Mix models across agents. GLM-5 for the supervisor, Claude Sonnet for support, local Qwen for internal tasks. Any OpenAI-compatible provider."
+              title="Any AI model, no lock-in"
+              description="Mix different models across agents. Switch providers with one config change."
             />
           </div>
         </div>
@@ -266,7 +338,7 @@ function ExplainerItem({ title, description }: { title: string; description: str
       </div>
       <div>
         <h4 className="font-semibold text-text-primary">{title}</h4>
-        <p className="mt-1 text-sm text-text-tertiary leading-relaxed">{description}</p>
+        <p className="mt-1 text-sm text-text-secondary font-sans leading-relaxed">{description}</p>
       </div>
     </div>
   );
@@ -281,10 +353,10 @@ function HowItWorksSection({ onImageClick }: { onImageClick: (src: string) => vo
     <section className="py-24 px-4 border-t border-border bg-surface-alt">
       <div className="max-w-5xl mx-auto">
         <h2 className="text-3xl font-bold tracking-tight text-center text-text-primary mb-4">
-          Three steps to your first agent
+          From zero to AI agent in 5 minutes
         </h2>
-        <p className="text-center text-text-tertiary mb-14">
-          From zero to production-ready agent in under 5 minutes.
+        <p className="text-center text-text-secondary font-sans mb-14">
+          No backend code required. Configure visually or in YAML.
         </p>
 
         <div className="space-y-16">
@@ -293,15 +365,15 @@ function HowItWorksSection({ onImageClick }: { onImageClick: (src: string) => vo
             <div>
               <StepBadge n={1} />
               <h3 className="mt-3 text-xl font-semibold text-text-primary">Configure</h3>
-              <p className="mt-2 text-text-tertiary leading-relaxed">
-                Create your agent visually through the Admin Dashboard, or define everything in YAML for version control and CI/CD.
+              <p className="mt-2 text-text-secondary font-sans leading-relaxed">
+                Open the Admin Dashboard and create your agent visually — pick a model, write a system prompt, enable tools. Or define everything in a YAML file if you prefer code.
               </p>
             </div>
             <div className="space-y-4">
-              {/* Option A: Admin Dashboard */}
+              {/* Admin Dashboard */}
               <div className="rounded-[2px] border border-brand-accent/30 bg-brand-accent/5 p-4">
-                <p className="text-xs font-semibold text-brand-accent uppercase tracking-wider mb-2">Option A: Admin Dashboard</p>
-                <p className="text-sm text-text-tertiary leading-relaxed mb-3">
+                <p className="text-xs font-semibold text-brand-accent uppercase tracking-wider mb-2">Admin Dashboard</p>
+                <p className="text-sm text-text-secondary font-sans leading-relaxed mb-3">
                   Open the Admin Dashboard and create your agent visually. Set the model, system prompt, tools, and spawn rules — no YAML needed.
                 </p>
                 <div className="rounded-[2px] border border-border overflow-hidden">
@@ -312,13 +384,13 @@ function HowItWorksSection({ onImageClick }: { onImageClick: (src: string) => vo
               {/* OR separator */}
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-border" />
-                <span className="text-xs font-medium text-text-tertiary uppercase tracking-wider">or</span>
+                <span className="text-xs text-text-tertiary uppercase tracking-wider">or</span>
                 <div className="flex-1 h-px bg-border" />
               </div>
 
-              {/* Option B: YAML */}
-              <div className="rounded-[2px] border border-border bg-surface p-4">
-                <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-2">Option B: YAML (GitOps)</p>
+              {/* YAML (secondary option) */}
+              <div className="rounded-[2px] border border-border bg-surface p-4 opacity-60">
+                <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-2">Or use YAML</p>
                 <pre className="font-mono text-sm text-text-secondary leading-relaxed overflow-x-auto">
                   <span className="text-text-tertiary"># agents.yaml</span>{'\n'}
                   <span className="text-brand-accent">agents</span>:{'\n'}
@@ -337,46 +409,41 @@ function HowItWorksSection({ onImageClick }: { onImageClick: (src: string) => vo
             <div>
               <StepBadge n={2} />
               <h3 className="mt-3 text-xl font-semibold text-text-primary">Deploy</h3>
-              <p className="mt-2 text-text-tertiary leading-relaxed">
-                One command. Engine + PostgreSQL, ready in 30 seconds. Self-hosted on your infrastructure, your data never leaves your network.
+              <p className="mt-2 text-text-secondary font-sans leading-relaxed">
+                One command. Docker Compose pulls the engine and PostgreSQL, starts everything. Your agent is live.
               </p>
             </div>
-            <div className="rounded-[2px] border border-border bg-surface p-4 overflow-x-auto">
-              <pre className="font-mono text-sm text-text-secondary leading-relaxed">
-                <span className="text-text-tertiary">$</span> <span className="text-text-primary">docker compose up -d</span>{'\n'}
-                <span className="text-emerald-400">Creating bytebrew-postgres ... done</span>{'\n'}
-                <span className="text-emerald-400">Creating bytebrew-engine  ... done</span>{'\n'}
-                {'\n'}
-                <span className="text-text-tertiary">$</span> <span className="text-text-primary">curl localhost:8443/api/v1/health</span>{'\n'}
-                <span className="text-emerald-400">{'{"status":"ok"}'}</span>
-              </pre>
-            </div>
+            <TerminalBlock command="docker compose up -d">
+              <div style={{ color: '#87867F' }}>Creating bytebrew-postgres ... done{'\n'}Creating bytebrew-engine  ... done</div>
+              <div className="mt-3">
+                <span style={{ color: '#87867F' }}>$ </span>
+                <span style={{ color: '#4ade80' }}>curl localhost:8443/api/v1/health</span>
+              </div>
+              <div style={{ color: '#87867F' }}>{'{"status":"ok"}'}</div>
+            </TerminalBlock>
           </div>
 
           {/* Step 3: Integrate */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             <div>
               <StepBadge n={3} />
               <h3 className="mt-3 text-xl font-semibold text-text-primary">Integrate</h3>
-              <p className="mt-2 text-text-tertiary leading-relaxed">
-                REST API + SSE streaming. Send a message, get a real-time agent response. OpenAI-compatible format your team already knows.
+              <p className="mt-2 text-text-secondary font-sans leading-relaxed">
+                Send a message, get a streaming response. One HTTP call from any frontend.
               </p>
             </div>
-            <div className="rounded-[2px] border border-border bg-surface p-4 overflow-x-auto">
-              <pre className="font-mono text-sm text-text-secondary leading-relaxed">
-                <span className="text-text-tertiary">$</span> <span className="text-text-primary">curl -N localhost:8443/api/v1/agents/my-agent/chat \</span>{'\n'}
-                {'  '}<span className="text-text-primary">-d '{'"'}message":"Hello"{'"'}'</span>{'\n'}
+            <TerminalBlock command={'curl -N localhost:8443/api/v1/agents/my-agent/chat \\\n  -d \'{"message":"Hello"}\''}>
+              <div className="mt-1" style={{ color: '#87867F' }}>
+                {'event: message_delta'}{'\n'}
+                {'data: {"content":"Hello! How can"}'}{'\n'}
                 {'\n'}
-                <span className="text-text-tertiary">{'event: message_delta'}</span>{'\n'}
-                <span className="text-text-tertiary">{'data: {"content":"Hello! How can"}'}</span>{'\n'}
+                {'event: message_delta'}{'\n'}
+                {'data: {"content":" I help you?"}'}{'\n'}
                 {'\n'}
-                <span className="text-text-tertiary">{'event: message_delta'}</span>{'\n'}
-                <span className="text-text-tertiary">{'data: {"content":" I help you?"}'}</span>{'\n'}
-                {'\n'}
-                <span className="text-text-tertiary">{'event: done'}</span>{'\n'}
-                <span className="text-text-tertiary">{'data: {"session_id":"abc-123"}'}</span>
-              </pre>
-            </div>
+                {'event: done'}{'\n'}
+                {'data: {"session_id":"abc-123"}'}
+              </div>
+            </TerminalBlock>
           </div>
         </div>
       </div>
@@ -398,40 +465,40 @@ function StepBadge({ n }: { n: number }) {
 
 const CAPABILITIES = [
   {
-    title: 'Multi-Agent Orchestration',
-    description: 'Supervisor agents spawn sub-agents on demand. Persistent and spawn lifecycle modes. Hierarchical delegation.',
+    title: 'Multiple agents, one goal',
+    description: 'Supervisor delegates to specialists — research, writing, QA — all coordinated automatically.',
   },
   {
-    title: 'Universal Tool System',
-    description: 'MCP servers + declarative YAML tools. Connect any API without backend code. Per-agent security isolation.',
+    title: 'Connect any tool or API',
+    description: '20+ built-in tools plus any external service via MCP or YAML declarations.',
   },
   {
-    title: 'Background Automation',
-    description: 'Cron schedules, webhook triggers, background task system. Long-running jobs that work while you sleep.',
+    title: 'Agents that work while you sleep',
+    description: 'Cron schedules and webhook triggers for automated lead scoring, reports, monitoring.',
   },
   {
-    title: 'Knowledge / RAG',
-    description: 'Document ingestion and semantic search. Per-agent knowledge isolation. Built-in vector storage.',
+    title: 'Your docs become agent memory',
+    description: 'Upload PDFs or markdown. Agents search via vector similarity with per-agent isolation.',
   },
   {
-    title: 'REST API + SSE + WS',
-    description: 'OpenAI-compatible format. Real-time streaming. WebSocket support for persistent connections.',
+    title: 'Plug into any app in minutes',
+    description: 'Standard REST API with real-time SSE streaming. No SDK required.',
   },
   {
-    title: 'Self-Hosted & Secure',
-    description: 'Air-gap capable. BYOK (bring your own keys). Your models, your data, your infrastructure.',
+    title: 'Your data never leaves your servers',
+    description: 'Self-hosted with BYOK, API key scopes, and audit logging.',
   },
 ];
 
 function CapabilitiesSection() {
   return (
-    <section className="py-24 px-4 border-t border-border bg-surface">
+    <section className="py-28 px-4 border-t border-border bg-surface">
       <div className="max-w-6xl mx-auto">
         <h2 className="text-3xl font-bold tracking-tight text-center text-text-primary mb-4">
-          Everything you need to ship AI agents
+          Built-in, not bolted on
         </h2>
-        <p className="text-center text-text-tertiary mb-14 max-w-2xl mx-auto">
-          Production-ready features built into the engine. No plugins, no add-ons.
+        <p className="text-center text-text-secondary font-sans mb-14 max-w-2xl mx-auto">
+          Every feature your AI agent needs — included in one container.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {CAPABILITIES.map((c) => (
@@ -440,9 +507,61 @@ function CapabilitiesSection() {
               className="rounded-[2px] border border-border bg-surface-alt p-5 transition-all duration-200 hover:border-border-hover hover:-translate-y-0.5"
             >
               <h3 className="text-base font-semibold text-text-primary">{c.title}</h3>
-              <p className="mt-2 text-sm text-text-tertiary leading-relaxed">
+              <p className="mt-2 text-sm text-text-secondary font-sans leading-relaxed">
                 {c.description}
               </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  5b. Production-Ready (trust signals + doc links)                   */
+/* ------------------------------------------------------------------ */
+
+function ProductionReadySection() {
+  const items = [
+    {
+      title: 'Session persistence',
+      description: 'PostgreSQL-backed. Crash mid-conversation? Resumes from last checkpoint.',
+    },
+    {
+      title: 'Structured logging',
+      description: 'Every step, tool call, and LLM request logged with trace IDs.',
+    },
+    {
+      title: 'Production deployment guide',
+      description: 'Caddy reverse proxy, systemd, SSL/TLS — full ops runbook included.',
+      link: '/docs/deployment/production/',
+    },
+    {
+      title: 'Prometheus metrics (EE)',
+      description: 'Request latency, token usage, error rates. Alert before users notice.',
+    },
+  ];
+
+  return (
+    <section className="py-24 px-4 border-t border-border bg-surface">
+      <div className="max-w-5xl mx-auto">
+        <h2 className="text-3xl font-bold tracking-tight text-center text-text-primary">
+          Built for production, not just demos
+        </h2>
+        <p className="text-center text-text-secondary font-sans mt-3 max-w-2xl mx-auto">
+          Everything you need to run AI agents reliably in production — logging, persistence, security, and monitoring.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-12">
+          {items.map((item) => (
+            <div key={item.title} className="rounded-[2px] border border-border bg-surface-alt p-5">
+              <h3 className="text-sm font-semibold text-text-primary">{item.title}</h3>
+              <p className="mt-1.5 text-sm text-text-secondary font-sans leading-relaxed">{item.description}</p>
+              {item.link && (
+                <a href={item.link} className="mt-2 inline-block text-xs text-brand-accent hover:underline">
+                  Read the guide →
+                </a>
+              )}
             </div>
           ))}
         </div>
@@ -457,9 +576,9 @@ function CapabilitiesSection() {
 
 const USE_CASES = [
   {
-    title: 'Customer-Facing Agents',
+    title: 'AI Support Assistant',
     description:
-      'Sales consultants, support assistants, onboarding guides — AI agents that interact with your users 24/7. Any industry, any product.',
+      'User asks \'why was I charged twice?\' Agent checks your billing API, finds the duplicate charge, initiates a refund, and replies with confirmation — no human touched this ticket. Connect your docs via RAG, add your APIs as tools, deploy.',
     outcome: 'Automate customer interactions at scale',
     icon: (
       <svg className="h-6 w-6 text-brand-accent" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
@@ -468,9 +587,9 @@ const USE_CASES = [
     ),
   },
   {
-    title: 'Internal Automation',
+    title: 'Operations Autopilot',
     description:
-      'Background agents that monitor, process, and report — without human intervention. Cron schedules, webhook triggers, proactive actions.',
+      'Incident triage, log analysis, automated remediation — agents monitor and act around the clock.',
     outcome: 'Autonomous operations, not reactive scripts',
     icon: (
       <svg className="h-6 w-6 text-brand-accent" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
@@ -479,9 +598,9 @@ const USE_CASES = [
     ),
   },
   {
-    title: 'Multi-Step Workflows',
+    title: 'Research & Analysis Agents',
     description:
-      'Complex chains where each step requires reasoning — not a predetermined DAG. Approvals, reviews, document processing, research tasks.',
+      'Multi-step lead research, competitor analysis, report generation. Each step adapts dynamically.',
     outcome: 'AI reasoning replaces rigid pipelines',
     icon: (
       <svg className="h-6 w-6 text-brand-accent" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
@@ -490,9 +609,9 @@ const USE_CASES = [
     ),
   },
   {
-    title: 'Domain Expert Agents',
+    title: 'Knowledge-Powered Assistants',
     description:
-      'Agents with deep knowledge bases — for any field. Medicine, finance, law, engineering, education. RAG-powered answers from your documents.',
+      'Upload docs and policies. Agents answer with accurate, sourced responses.',
     outcome: 'Your knowledge, amplified by AI',
     icon: (
       <svg className="h-6 w-6 text-brand-accent" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
@@ -513,7 +632,7 @@ function ProductShowcaseSection({ onImageClick }: { onImageClick: (src: string) 
         <h2 className="text-3xl font-bold tracking-tight text-center text-text-primary mb-4">
           See it in action
         </h2>
-        <p className="text-center text-text-tertiary mb-14 max-w-2xl mx-auto">
+        <p className="text-center text-text-secondary font-sans mb-14 max-w-2xl mx-auto">
           ByteBrew comes with a ready-to-use web client and a full Admin Dashboard. Use them as-is, or build your own UI on top of the REST API.
         </p>
 
@@ -522,8 +641,8 @@ function ProductShowcaseSection({ onImageClick }: { onImageClick: (src: string) 
           {/* Web Client */}
           <div>
             <h3 className="text-lg font-semibold text-text-primary mb-2">Web Client — Chat Interface</h3>
-            <p className="text-sm text-text-tertiary leading-relaxed mb-4">
-              Ready-to-use chat interface with multi-agent sidebar, tool calls, and rich markdown. Open source — fork and customize.
+            <p className="text-sm text-text-secondary font-sans leading-relaxed mb-4">
+              Chat interface with multi-agent sidebar, tool calls, and markdown. Included with Engine.
             </p>
             <div className="rounded-[2px] border border-border overflow-hidden shadow-2xl shadow-brand-accent/5">
               <img src="/screenshots/admin-agents.png" alt="ByteBrew Web Client — AI sales agent recommending laptops with web search tool calls and structured markdown response" className="w-full cursor-pointer hover:opacity-80 transition-opacity" onClick={() => onImageClick('/screenshots/admin-agents.png')} />
@@ -533,8 +652,8 @@ function ProductShowcaseSection({ onImageClick }: { onImageClick: (src: string) 
           {/* Admin Dashboard */}
           <div>
             <h3 className="text-lg font-semibold text-text-primary mb-2">Admin Dashboard — Visual Management</h3>
-            <p className="text-sm text-text-tertiary leading-relaxed mb-4">
-              Configure agents, models, MCP servers, triggers, and API keys through a visual interface. No YAML required.
+            <p className="text-sm text-text-secondary font-sans leading-relaxed mb-4">
+              Configure agents, models, MCP servers, triggers, and API keys visually.
             </p>
             <div className="rounded-[2px] border border-border overflow-hidden shadow-2xl shadow-brand-accent/5">
               <img src="/screenshots/admin-agent-detail.png" alt="Admin Dashboard — Agent detail panel with model, system prompt, tools, and spawn rules configuration" className="w-full cursor-pointer hover:opacity-80 transition-opacity" onClick={() => onImageClick('/screenshots/admin-agent-detail.png')} />
@@ -546,20 +665,20 @@ function ProductShowcaseSection({ onImageClick }: { onImageClick: (src: string) 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="rounded-[2px] border border-border bg-surface p-5 transition-all duration-200 hover:border-border-hover hover:-translate-y-0.5">
             <h3 className="text-sm font-semibold text-text-primary mb-2">Multi-Agent Sidebar</h3>
-            <p className="text-xs text-text-tertiary leading-relaxed">
-              Switch between agents instantly. Each agent has its own session history, tools, and context. See tool calls and results inline.
+            <p className="text-xs text-text-secondary font-sans leading-relaxed">
+              Switch between agents instantly with dedicated session history and inline tool calls.
             </p>
           </div>
           <div className="rounded-[2px] border border-border bg-surface p-5 transition-all duration-200 hover:border-border-hover hover:-translate-y-0.5">
             <h3 className="text-sm font-semibold text-text-primary mb-2">Rich Responses</h3>
-            <p className="text-xs text-text-tertiary leading-relaxed">
-              Full markdown rendering — bold, code blocks, tables, lists, links. Tool call results expandable inline. Real-time SSE streaming.
+            <p className="text-xs text-text-secondary font-sans leading-relaxed">
+              Full markdown with code blocks, tables, and expandable tool call results.
             </p>
           </div>
           <div className="rounded-[2px] border border-border bg-surface p-5 transition-all duration-200 hover:border-border-hover hover:-translate-y-0.5">
             <h3 className="text-sm font-semibold text-text-primary mb-2">Visual Agent Editor</h3>
-            <p className="text-xs text-text-tertiary leading-relaxed">
-              Create and configure agents through the Admin Dashboard. Set models, prompts, tools, security zones, and spawn rules — all without touching YAML.
+            <p className="text-xs text-text-secondary font-sans leading-relaxed">
+              Configure agents, models, prompts, and spawn rules — no YAML needed.
             </p>
           </div>
         </div>
@@ -570,13 +689,13 @@ function ProductShowcaseSection({ onImageClick }: { onImageClick: (src: string) 
 
 function UseCasesSection() {
   return (
-    <section className="py-24 px-4 border-t border-border bg-surface-alt">
+    <section className="py-28 px-4 border-t border-border bg-surface-alt">
       <div className="max-w-6xl mx-auto">
         <h2 className="text-3xl font-bold tracking-tight text-center text-text-primary mb-4">
-          Any product. Any industry. One Engine.
+          What teams build with ByteBrew
         </h2>
-        <p className="text-center text-text-tertiary mb-14 max-w-2xl mx-auto">
-          ByteBrew is an infrastructure layer for AI agents — like PostgreSQL for data, but for autonomous reasoning.
+        <p className="text-center text-text-secondary font-sans mb-14 max-w-2xl mx-auto">
+          Real use cases, running in production.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           {USE_CASES.map((uc) => (
@@ -588,7 +707,7 @@ function UseCasesSection() {
                 {uc.icon}
               </div>
               <h3 className="text-lg font-semibold text-text-primary">{uc.title}</h3>
-              <p className="mt-2 text-sm text-text-tertiary leading-relaxed">
+              <p className="mt-2 text-sm text-text-secondary font-sans leading-relaxed">
                 {uc.description}
               </p>
               <p className="mt-4 text-xs font-medium text-brand-accent">
@@ -607,11 +726,11 @@ function UseCasesSection() {
 /* ------------------------------------------------------------------ */
 
 const APPROACH_COMPARISON = [
-  { approach: 'Cloud-only AI platforms', problem: 'Per-token pricing, vendor lock-in, data on their servers', bytebrew: 'Self-hosted, BYOK, your data stays with you' },
-  { approach: 'AI SDKs & frameworks', problem: 'Months of development, requires dedicated engineering team', bytebrew: 'YAML config, deploy in 30 seconds, no code required' },
-  { approach: 'Visual workflow builders', problem: 'Reactive chatbots, no autonomous reasoning, limited logic', bytebrew: 'Autonomous daemon agents with multi-step reasoning' },
-  { approach: 'Single-model APIs', problem: 'Locked to one provider, no orchestration, no tool system', bytebrew: 'Any model, multi-agent spawn tree, universal tool system' },
-  { approach: 'Custom in-house solutions', problem: '3-6 months to build, ongoing maintenance burden', bytebrew: 'Production-ready engine, maintained and updated for you' },
+  { approach: 'Cloud AI platforms', problem: 'Per-token pricing, data leaves your servers, locked to one provider', bytebrew: 'Self-hosted with your own API keys. Pay only your LLM provider directly — no markup' },
+  { approach: 'Agent SDKs / frameworks', problem: 'You get a library, not a product. No API server, no admin UI, no scheduling', bytebrew: 'Complete runtime with REST API, admin dashboard, cron triggers, and session management' },
+  { approach: 'Visual AI builders', problem: 'Simple chatbots only. No autonomous reasoning, no tool calling, no sub-agents', bytebrew: 'Multi-step reasoning agents that delegate tasks, call tools, and work autonomously' },
+  { approach: 'Single-model APIs', problem: 'One provider, no orchestration, no memory, no background jobs', bytebrew: 'Mix any models across agents. Built-in RAG, sessions, and background automation' },
+  { approach: 'Custom in-house solutions', problem: '3-6 months to build, ongoing maintenance, team distracted from core product', bytebrew: 'Production-ready in 5 minutes. We maintain the engine — you focus on your product' },
 ];
 
 function ComparisonSection() {
@@ -619,19 +738,19 @@ function ComparisonSection() {
     <section className="py-24 px-4 border-t border-border bg-surface">
       <div className="max-w-5xl mx-auto">
         <h2 className="text-3xl font-bold tracking-tight text-center text-text-primary mb-4">
-          Why ByteBrew?
+          How ByteBrew compares
         </h2>
-        <p className="text-center text-text-tertiary mb-14">
-          How ByteBrew Engine compares to traditional approaches.
+        <p className="text-center text-text-secondary font-sans mb-14">
+          Every approach has trade-offs. Here&apos;s where ByteBrew fits.
         </p>
 
         <div className="overflow-x-auto rounded-[2px] border border-border">
-          <table className="w-full text-sm">
+          <table className="w-full text-base">
             <thead>
               <tr className="border-b border-border bg-surface-alt">
                 <th className="text-left py-3 px-4 font-medium text-text-tertiary">Traditional Approach</th>
                 <th className="text-left py-3 px-4 font-medium text-text-tertiary">The Problem</th>
-                <th className="text-left py-3 px-4 font-semibold text-brand-accent bg-brand-accent/5">ByteBrew Engine</th>
+                <th className="text-left py-3 px-4 font-bold text-brand-accent bg-brand-accent/5">ByteBrew Engine</th>
               </tr>
             </thead>
             <tbody>
@@ -654,9 +773,10 @@ function ComparisonSection() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  8a. MCP Docs                                                       */
+/*  8a. MCP Docs — removed from landing, available on /docs & /download */
 /* ------------------------------------------------------------------ */
 
+/*
 const MCP_TABS = [
   { key: 'claude' as const, label: 'Claude Code' },
   { key: 'codex' as const, label: 'Codex' },
@@ -679,64 +799,9 @@ const MCP_CODE: Record<'claude' | 'codex' | 'other', { code: string; prefix?: st
 };
 
 function MCPDocsSection() {
-  const [activeTab, setActiveTab] = useState<'claude' | 'codex' | 'other'>('claude');
-  const tab = MCP_CODE[activeTab];
-
-  return (
-    <section className="py-24 px-4 border-t border-border bg-surface">
-      <div className="max-w-[720px] mx-auto">
-        <h2 className="text-3xl font-bold tracking-tight text-center text-text-primary mb-2">
-          AI-Native Documentation
-        </h2>
-        <p className="text-center text-text-tertiary mb-10 max-w-2xl mx-auto">
-          Connect your AI coding assistant to ByteBrew docs. Get accurate answers about
-          configuration, API, deployment, and more &mdash; powered by RAG over our documentation.
-        </p>
-
-        {/* Tabs */}
-        <div className="flex items-center justify-center gap-2 mb-6">
-          {MCP_TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setActiveTab(t.key)}
-              className={`rounded-[2px] px-5 py-2 text-sm font-medium transition-colors ${
-                activeTab === t.key
-                  ? 'bg-brand-accent text-white'
-                  : 'bg-surface-alt text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Code block */}
-        {activeTab === 'other' ? (
-          <div className="rounded-[2px] border border-border bg-surface-alt p-6 text-center">
-            <p className="text-sm text-text-tertiary mb-3">SSE Endpoint</p>
-            <div className="flex items-center justify-center gap-3">
-              <code className="text-lg font-mono text-brand-accent">https://mcp.bytebrew.ai/sse</code>
-              <button
-                onClick={() => navigator.clipboard.writeText('https://mcp.bytebrew.ai/sse')}
-                className="rounded-[2px] border border-border px-3 py-1 text-xs text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors"
-              >
-                Copy
-              </button>
-            </div>
-            <p className="text-xs text-text-tertiary mt-3">Use this URL with any MCP-compatible client (Cursor, Windsurf, etc.)</p>
-          </div>
-        ) : (
-          <TerminalBlock command={tab.code} />
-        )}
-
-        <p className="mt-6 text-center text-sm text-text-tertiary">
-          After connecting, ask your AI assistant about ByteBrew &mdash; it will search our
-          documentation automatically.
-        </p>
-      </div>
-    </section>
-  );
+  return null;
 }
+*/
 
 /* ------------------------------------------------------------------ */
 /*  8b. Install / Quick Start                                          */
@@ -749,13 +814,28 @@ function InstallSection() {
         <h2 className="text-3xl font-bold tracking-tight text-center text-text-primary mb-2">
           Get Started in 30 Seconds
         </h2>
-        <p className="text-center text-text-tertiary mb-10">
+        <p className="text-center text-text-secondary font-sans mb-10">
           No PostgreSQL? No problem &mdash; it&apos;s included.
         </p>
 
         <TerminalBlock
           command="curl -fsSL https://bytebrew.ai/releases/docker-compose.yml -o docker-compose.yml && docker compose up -d"
         />
+        <p className="text-center text-sm font-sans font-medium text-brand-accent mt-4">Community Edition is free forever — no limits, no credit card.</p>
+
+        <div className="bg-surface-alt border border-border rounded-[2px] p-6 mt-6 max-w-3xl mx-auto">
+          <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-4">What happens next</p>
+          <ol className="text-sm text-text-secondary space-y-2 list-decimal list-inside">
+            <li>Open localhost:8443 — you'll see the Admin Dashboard</li>
+            <li>Add your OpenAI / Gemini / Claude API key</li>
+            <li>Create an agent — name, system prompt, model</li>
+            <li>Send your first message via curl or the built-in Web Client</li>
+            <li>Watch the agent think and respond in real time</li>
+          </ol>
+          <p className="mt-4 text-xs text-text-tertiary">
+            Total time: under 5 minutes. No config files. No backend code.
+          </p>
+        </div>
 
         <p className="mt-6 text-center text-sm text-text-tertiary">
           Already have PostgreSQL?{' '}
@@ -782,7 +862,7 @@ function PricingSection() {
         <h2 className="text-3xl font-bold tracking-tight text-center text-text-primary mb-4">
           Simple, Transparent Pricing
         </h2>
-        <p className="text-center text-text-tertiary mb-14">
+        <p className="text-center text-text-secondary font-sans mb-14">
           Start free. Scale when you need observability and compliance.
         </p>
         <EnginePricingTable />
@@ -802,10 +882,10 @@ function FreeForeverBanner() {
         <h2 className="text-2xl font-bold tracking-tight text-text-primary">
           ByteBrew Community Edition is free forever.
         </h2>
-        <p className="mt-4 text-text-secondary leading-relaxed">
-          No agent limits. No session limits. No time limits.
+        <p className="mt-4 text-text-secondary font-sans leading-relaxed">
+          No agent limits. No session limits. No time limits. No credit card required.
           <br />
-          CE features will never move behind a paywall.
+          Community Edition features will never move behind a paywall — we promise.
         </p>
         <p className="mt-2 text-sm text-text-tertiary">
           Build your product with confidence.
@@ -824,10 +904,10 @@ function FinalCTASection() {
     <section className="py-24 px-4 border-t border-border bg-surface">
       <div className="max-w-2xl mx-auto text-center">
         <h2 className="text-3xl font-bold text-text-primary">
-          Start building with ByteBrew Engine
+          Add AI agents to your product today
         </h2>
-        <p className="mt-4 text-text-tertiary">
-          One Docker command. Full AI agent runtime. Free forever.
+        <p className="mt-4 text-text-secondary font-sans">
+          One Docker command. Full AI agent runtime. Works with any LLM. Free forever.
         </p>
         <Link
           to="/download"

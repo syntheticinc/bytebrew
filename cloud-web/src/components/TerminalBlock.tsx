@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 interface TerminalBlockProps {
   command: string;
   prefix?: string;
   title?: string;
+  /** Additional output lines rendered below the command */
+  children?: ReactNode;
 }
 
-export function TerminalBlock({ command, prefix = '$', title }: TerminalBlockProps) {
+export function TerminalBlock({ command, prefix = '$', title, children }: TerminalBlockProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -36,6 +38,12 @@ export function TerminalBlock({ command, prefix = '$', title }: TerminalBlockPro
             {command}
           </code>
         </div>
+
+        {children && (
+          <div className="mt-3 font-mono text-sm leading-relaxed" style={{ color: '#DFD8D0' }}>
+            {children}
+          </div>
+        )}
 
         {/* Copy button */}
         <button

@@ -27,15 +27,15 @@
 
 /* Light theme overrides */
 .light {
-  --color-surface: #FAFAF7;
-  --color-surface-alt: #FFFFFF;
-  --color-surface-elevated: #F0F0ED;
-  --color-text-primary: #1F1F1F;
-  --color-text-secondary: #555550;
-  --color-text-tertiary: #87867F;
-  --color-border: rgba(135,134,127,0.20);
-  --color-border-hover: rgba(135,134,127,0.40);
-  --color-border-strong: rgba(135,134,127,0.4);
+  --color-surface: #FAFAF8;
+  --color-surface-alt: #F2F1ED;
+  --color-surface-elevated: #FFFFFF;
+  --color-text-primary: #1A1A1A;
+  --color-text-secondary: #4A4A45;
+  --color-text-tertiary: #6E6E68;
+  --color-border: rgba(30,30,25,0.12);
+  --color-border-hover: rgba(30,30,25,0.25);
+  --color-border-strong: rgba(30,30,25,0.20);
 }
 
 body {

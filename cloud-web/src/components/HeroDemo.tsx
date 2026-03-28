@@ -610,19 +610,21 @@ export function HeroDemo() {
 
   return (
     <div
-      className="relative mx-auto w-full max-w-[720px] shadow-lg dark:shadow-none"
+      className="relative mx-auto w-full max-w-[720px] rounded-lg shadow-2xl"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={handleMouseLeave}
     >
-      <div className="rounded-[2px] border overflow-hidden" style={{ borderColor: 'rgba(135,134,127,0.15)', backgroundColor: '#252525' }}>
+      <div className="rounded-lg overflow-hidden" style={{ backgroundColor: '#252525' }}>
+        {/* macOS-style title bar */}
+        <div className="flex items-center gap-1.5 px-4 py-2.5 bg-[#1a1a1a] border-b border-[#333]">
+          <div className="w-3 h-3 rounded-full bg-[#ff5f57]"></div>
+          <div className="w-3 h-3 rounded-full bg-[#febc2e]"></div>
+          <div className="w-3 h-3 rounded-full bg-[#28c840]"></div>
+        </div>
+
         {/* Header with tabs */}
         <div className="flex items-center justify-between px-4 py-2.5 border-b" style={{ borderColor: 'rgba(135,134,127,0.08)' }}>
           <div className="flex items-center gap-3">
-            <div className="flex gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
-            </div>
             <span className="text-xs font-mono" style={{ color: MUTED }}>
               ByteBrew Agent <span style={{ color: 'rgba(135,134,127,0.5)' }}>&middot; analytics &middot; glm-5</span>
             </span>

@@ -1,52 +1,99 @@
 # ByteBrew Engine
-> Open infrastructure for autonomous AI agents. Configure in YAML, deploy with Docker, bring your own models.
 
-ByteBrew Engine is a self-hosted AI agent runtime. It provides multi-agent orchestration, tool calling (MCP + declarative YAML), knowledge/RAG, background automation (cron, webhooks), and a REST API with SSE streaming. Free Community Edition with no limits.
+> Add an AI agent to your product in one day. Self-hosted, any LLM, free forever.
 
-## Getting Started
-- [Quick Start](https://bytebrew.ai/docs/getting-started/quick-start/): Deploy Engine with Docker Compose in 5 minutes. One command, includes PostgreSQL.
-- [Configuration Reference](https://bytebrew.ai/docs/getting-started/configuration/): YAML reference for agents, models, tools, MCP servers, triggers. Parameter tables with defaults.
-- [API Reference](https://bytebrew.ai/docs/getting-started/api-reference/): REST API endpoints — chat (SSE), agents, models, sessions, tasks, config, health. Curl examples.
+ByteBrew Engine is a ready-to-deploy AI agent runtime. Instead of spending months building agent infrastructure from scratch, you get a Docker container with everything included: multi-step reasoning agents, tool calling, session memory, background automation, and a REST API your app connects to in minutes.
 
-## Admin Dashboard
-- [Login](https://bytebrew.ai/docs/admin/login/): JWT authentication, default credentials via environment variables.
-- [Agents](https://bytebrew.ai/docs/admin/agents/): Create, edit, delete agents. Form fields: name, model, system prompt, tools, lifecycle, spawn rules.
-- [Models](https://bytebrew.ai/docs/admin/models/): LLM provider management. Ollama, OpenAI-compatible, Anthropic. Connectivity verification.
-- [MCP Servers](https://bytebrew.ai/docs/admin/mcp-servers/): Connect external tool servers via MCP protocol. Stdio, HTTP, SSE transports.
-- [Tasks](https://bytebrew.ai/docs/admin/tasks/): Background task management with filters and pagination.
-- [Triggers](https://bytebrew.ai/docs/admin/triggers/): Cron schedules and webhook endpoints for autonomous agent execution.
-- [API Keys](https://bytebrew.ai/docs/admin/api-keys/): Token management with scopes (chat, tasks, agents:read, config, admin).
-- [Settings](https://bytebrew.ai/docs/admin/settings/): BYOK configuration per provider, logging levels.
-- [Config Management](https://bytebrew.ai/docs/admin/config-management/): Hot-reload, YAML export/import, config versioning.
-- [Audit Log](https://bytebrew.ai/docs/admin/audit-log/): All configuration changes, auth events, API token lifecycle.
+## Who Is This For
 
-## Core Concepts
-- [Agents & Lifecycle](https://bytebrew.ai/docs/concepts/agents/): Persistent vs spawn lifecycle. System prompts, max steps, context size.
-- [Multi-Agent Orchestration](https://bytebrew.ai/docs/concepts/multi-agent/): Supervisor → sub-agents via can_spawn. Spawn tree, delegation patterns.
-- [Tools](https://bytebrew.ai/docs/concepts/tools/): Built-in tools (20+), MCP servers, declarative YAML HTTP tools. Per-agent whitelisting.
-- [Tasks & Jobs](https://bytebrew.ai/docs/concepts/tasks/): manage_tasks tool for persistent state. Background execution, status tracking.
-- [Knowledge / RAG](https://bytebrew.ai/docs/concepts/knowledge/): Document ingestion (md, txt, pdf), vector search (pgvector), per-agent isolation.
-- [Triggers](https://bytebrew.ai/docs/concepts/triggers/): Cron expressions, webhook endpoints with signature verification.
+- **Product teams** adding AI features to an existing app — connect via REST API + SSE streaming, keep your own frontend
+- **Solo developers & indie hackers** who want agent capabilities without building infrastructure — configure in YAML or visual Admin Dashboard, deploy with one Docker command
+- **Enterprise teams** needing data control — fully self-hosted, your data never leaves your servers, audit logging, API key management
 
-## Deployment
-- [Docker](https://bytebrew.ai/docs/deployment/docker/): Docker Compose setup, host.docker.internal, volumes, environment variables, troubleshooting.
-- [Model Selection](https://bytebrew.ai/docs/deployment/model-selection/): Tool calling requirements, provider comparison, recommended models (14B+ for stable tool calling).
-- [Production](https://bytebrew.ai/docs/deployment/production/): VPS deployment, Caddy reverse proxy, systemd services, SSL/TLS.
+## What ByteBrew Does
 
-## Integration
-- [REST API Chat](https://bytebrew.ai/docs/integration/rest-api/): SSE event types (message_delta, tool_call, agent_spawn, done, etc.), session management, non-streaming mode.
-- [Multi-Agent Configuration](https://bytebrew.ai/docs/integration/multi-agent/): Orchestrator pattern, complete YAML examples, per-agent models, tool isolation.
-- [BYOK](https://bytebrew.ai/docs/integration/byok/): Per-request model override via X-Model-Provider/API-Key/Name headers.
+Your app sends a message to ByteBrew via REST API. ByteBrew's agent thinks, calls tools (web search, databases, your APIs), delegates to sub-agents if needed, and streams the response back. All conversation context is preserved across sessions automatically.
 
-## Examples
-- [Sales Agent](https://bytebrew.ai/docs/examples/sales-agent/): Multi-agent sales with supervisor, product search, order management.
-- [Support Agent](https://bytebrew.ai/docs/examples/support-agent/): Knowledge-based support with ticket creation and escalation.
-- [DevOps Monitor](https://bytebrew.ai/docs/examples/devops-monitor/): Alert filtering with webhook triggers and automated remediation.
-- [IoT Analyzer](https://bytebrew.ai/docs/examples/iot-analyzer/): Telemetry monitoring with anomaly detection.
+**Key capabilities:**
+- **Agents that reason and act** — multi-step problem solving, not just chat completion. Agents decide what tools to use and when.
+- **Any tool, any API** — connect external tools via MCP protocol or declare HTTP tools in YAML. 20+ built-in tools included.
+- **Multiple agents working together** — supervisor agent delegates tasks to specialized sub-agents automatically.
+- **Session memory** — conversations persist across requests. Your users pick up where they left off.
+- **Background automation** — agents run on schedule (cron) or triggered by webhooks, without user interaction.
+- **Knowledge base (RAG)** — upload documents (PDF, markdown, text), agents search them automatically via vector search.
+- **Visual Admin Dashboard** — create agents, configure models, manage tools — no code required.
+- **Any LLM** — OpenAI, Anthropic, Google, Ollama, or any OpenAI-compatible provider. Mix models per agent. Switch with one config change.
+
+## How It Compares
+
+| | ByteBrew | OpenAI Assistants | LangChain / CrewAI | Cloud platforms (AWS Bedrock, etc.) |
+|---|---|---|---|---|
+| Self-hosted (your data stays with you) | Yes | No | Partial (you build the infra) | Vendor's cloud |
+| Any LLM provider | Yes | OpenAI only | Yes | Limited selection |
+| Ready-to-use REST API | Yes, built-in | Yes | No (you build it) | Yes, but complex setup |
+| Visual configuration (no code) | Yes (Admin Dashboard) | No | No | Console (complex) |
+| Background automation (cron, webhooks) | Built-in | No | No (you build it) | Lambda + EventBridge |
+| Session memory | Built-in | Built-in | You build it | You build it |
+| Cost | Free forever (CE) | Pay per token | Free (library) | Pay per use |
+| Time to first agent | ~5 minutes | ~30 minutes | Days–weeks | Days–weeks |
+
+## Quick Start
+
+```bash
+curl -fsSL https://bytebrew.ai/releases/docker-compose.yml -o docker-compose.yml
+docker compose up -d
+# Open http://localhost:8443/admin — create your first agent
+# POST http://localhost:8443/api/v1/agents/{name}/chat — start chatting
+```
+
+Includes PostgreSQL. No external dependencies.
+
+## Pricing
+
+- **Community Edition**: Free forever. No agent limits. No session limits. No time limits. All core features included.
+- **Enterprise Edition**: $499/month. Adds: audit log API, configurable rate limiting, Prometheus metrics, priority support.
+
+CE features will never move behind a paywall.
+
+## Integration Example
+
+```
+Your App (Next.js, React, mobile, etc.)
+    │
+    │  POST /api/v1/agents/support-bot/chat
+    │  { "message": "How do I reset my password?", "session_id": "abc123" }
+    │
+    ▼
+ByteBrew Engine (Docker container)
+    │
+    │  Agent reasons → calls tools → searches knowledge base
+    │
+    ▼
+SSE stream back to your app
+    data: {"type": "message_delta", "content": "To reset your password..."}
+    data: {"type": "done", "status": "completed"}
+```
+
+Works with any frontend framework. No SDK required — standard HTTP + SSE.
+
+## Documentation
+
+- [Quick Start](https://bytebrew.ai/docs/getting-started/quick-start/): Deploy with Docker Compose in 5 minutes
+- [Configuration](https://bytebrew.ai/docs/getting-started/configuration/): YAML reference for agents, models, tools, triggers
+- [REST API](https://bytebrew.ai/docs/getting-started/api-reference/): All endpoints with examples
+- [Admin Dashboard](https://bytebrew.ai/docs/admin/agents/): Visual agent management
+- [Multi-Agent Setup](https://bytebrew.ai/docs/integration/multi-agent/): Orchestrator + sub-agents
+- [BYOK](https://bytebrew.ai/docs/integration/byok/): Per-request model override
+- [Knowledge / RAG](https://bytebrew.ai/docs/concepts/knowledge/): Document ingestion and vector search
+- [Background Triggers](https://bytebrew.ai/docs/concepts/triggers/): Cron and webhook automation
+- [Docker Deployment](https://bytebrew.ai/docs/deployment/docker/): Production setup guide
+- [Examples](https://bytebrew.ai/docs/examples/sales-agent/): Sales, Support, DevOps, IoT agents
 
 ## Links
+
 - Website: https://bytebrew.ai
 - Documentation: https://bytebrew.ai/docs/
 - Docker Hub: https://hub.docker.com/r/bytebrew/engine
 - Pricing: https://bytebrew.ai/pricing
 - Download: https://bytebrew.ai/download
+- MCP Documentation Server: https://mcp.bytebrew.ai/sse (connect your AI coding assistant)

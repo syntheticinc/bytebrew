@@ -34,7 +34,7 @@ function readStoredTheme(): Theme {
   } catch {
     // localStorage unavailable
   }
-  return 'dark';
+  return 'light';
 }
 
 function applyThemeClass(resolved: 'light' | 'dark') {
