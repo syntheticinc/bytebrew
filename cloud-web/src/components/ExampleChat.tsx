@@ -2,6 +2,10 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '../lib/auth';
 import { refreshAccessToken } from '../api/auth';
 
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
+
 interface ToolCallInfo {
   id: string;
   tool: string;
@@ -34,13 +38,26 @@ interface ExampleChatProps {
   suggestions: string[];
 }
 
+/* ------------------------------------------------------------------ */
+/*  Constants                                                          */
+/* ------------------------------------------------------------------ */
+
 const MAX_MESSAGES_PER_HOUR = 15;
-const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const STORAGE_KEY_ACCESS = 'bytebrew_access_token';
 const STORAGE_KEY_REFRESH = 'bytebrew_refresh_token';
 const STORAGE_KEY_RATE = 'bytebrew_rate_limit';
 
-/** Persistent rate limit state — survives page reloads and tab switches */
+const MUTED = '#87867F';
+const SURFACE = 'rgba(30,30,30,0.6)';
+const BORDER_TOOL = 'rgba(135,134,127,0.25)';
+const BORDER_DONE = 'rgba(135,134,127,0.15)';
+const ACCENT = '#D7513E';
+
+/* ------------------------------------------------------------------ */
+/*  Rate limiting helpers                                              */
+/* ------------------------------------------------------------------ */
+
 function getRateLimit(): { remaining: number; resetAt: number } {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_RATE);
@@ -49,7 +66,6 @@ function getRateLimit(): { remaining: number; resetAt: number } {
       if (Date.now() < resetAt) return { remaining, resetAt };
     }
   } catch { /* ignore */ }
-  // Window expired or no data — fresh window
   const resetAt = Date.now() + RATE_LIMIT_WINDOW_MS;
   const state = { remaining: MAX_MESSAGES_PER_HOUR, resetAt };
   localStorage.setItem(STORAGE_KEY_RATE, JSON.stringify(state));
@@ -69,58 +85,127 @@ function setRateLimitRemaining(remaining: number): void {
   localStorage.setItem(STORAGE_KEY_RATE, JSON.stringify(state));
 }
 
+/* ------------------------------------------------------------------ */
+/*  Tiny markdown renderer                                             */
+/* ------------------------------------------------------------------ */
+
+function renderMarkdown(raw: string): React.ReactNode[] {
+  const lines = raw.split('\n');
+  const nodes: React.ReactNode[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line === '') { nodes.push(<br key={`br-${i}`} />); continue; }
+
+    const listMatch = line.match(/^(\d+)\.\s+(.+)$/);
+    if (listMatch) {
+      nodes.push(
+        <div key={`li-${i}`} className="pl-3">
+          <span className="mr-1" style={{ color: MUTED }}>{listMatch[1]}.</span>
+          {inlineBold(listMatch[2])}
+        </div>,
+      );
+      continue;
+    }
+    nodes.push(<div key={`ln-${i}`}>{inlineBold(line)}</div>);
+  }
+  return nodes;
+}
+
+function inlineBold(text: string): React.ReactNode {
+  const parts = text.split(/\*\*(.+?)\*\*/g);
+  if (parts.length === 1) return text;
+  return parts.map((p, i) => (i % 2 === 1 ? <strong key={i} style={{ color: '#F7F8F1' }}>{p}</strong> : p));
+}
+
+/* ------------------------------------------------------------------ */
+/*  Visual sub-components                                              */
+/* ------------------------------------------------------------------ */
+
+function StatusDot({ status }: { status: 'calling' | 'completed' | 'error' }) {
+  const color = status === 'completed' ? '#4ade80' : status === 'error' ? '#ef4444' : MUTED;
+  const glow = status === 'completed' ? '0 0 4px rgba(74,222,128,0.4)' : status === 'error' ? '0 0 4px rgba(239,68,68,0.4)' : 'none';
+  return (
+    <span
+      className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 shrink-0"
+      style={{ backgroundColor: color, boxShadow: glow }}
+    />
+  );
+}
+
+const BREW_PHRASES = ['Grinding beans...', 'Brewing...', 'Pulling a shot...', 'Steaming...', 'Almost ready...'];
+let brewCounter = 0;
+
+function BrewingSpinner() {
+  const phrase = BREW_PHRASES[brewCounter++ % BREW_PHRASES.length];
+  return (
+    <div className="flex items-center gap-2 py-2">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4" style={{ color: MUTED }}>
+        <path d="M17 8h1a4 4 0 010 8h-1" strokeLinecap="round" />
+        <path d="M3 8h14v9a4 4 0 01-4 4H7a4 4 0 01-4-4V8z" />
+        <path d="M7 2v3" strokeLinecap="round" style={{ animation: 'heroSteam 1.2s ease-in-out infinite' }} />
+        <path d="M10 1v3" strokeLinecap="round" style={{ animation: 'heroSteam 1.2s ease-in-out infinite 0.3s' }} />
+        <path d="M13 2v3" strokeLinecap="round" style={{ animation: 'heroSteam 1.2s ease-in-out infinite 0.6s' }} />
+      </svg>
+      <span className="text-xs font-mono animate-pulse" style={{ color: MUTED }}>{phrase}</span>
+      <style>{`
+        @keyframes heroSteam {
+          0% { opacity: 0.3; transform: translateY(0); }
+          50% { opacity: 1; transform: translateY(-3px); }
+          100% { opacity: 0.3; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 function ToolCallBlock({ tc, expanded, onToggle }: { tc: ToolCallInfo; expanded: boolean; onToggle: () => void }) {
-  const hasLongResult = tc.result != null && tc.result.length > 120;
+  const isDone = tc.status === 'completed' || tc.status === 'error';
+  const resultColor = tc.status === 'error' ? 'rgba(239,68,68,0.7)' : 'rgba(135,134,127,0.6)';
 
   return (
-    <div className="bg-slate-800/50 border-l-2 border-orange-500/50 rounded px-3 py-1.5 text-sm my-1.5">
-      <div className="flex items-center gap-1.5">
-        <span className="text-xs">
-          {tc.status === 'calling' ? '\u2699\uFE0F' : tc.status === 'error' ? '\u274C' : '\u2705'}
-        </span>
-        <span className="font-mono font-semibold text-orange-400 text-xs">{tc.tool}</span>
-        {tc.arguments && (
-          <span className="text-slate-400 font-mono text-xs truncate max-w-[200px]">
-            ({tc.arguments.length > 60 ? tc.arguments.slice(0, 60) + '...' : tc.arguments})
+    <div
+      className="rounded-[2px] border-l-2 px-3 py-1.5 text-xs font-mono my-1.5 cursor-pointer select-none"
+      style={{ borderColor: isDone ? BORDER_DONE : BORDER_TOOL, backgroundColor: SURFACE }}
+      onClick={onToggle}
+    >
+      {/* Collapsed: single truncated line */}
+      {!expanded && (
+        <div className="truncate" style={{ color: MUTED }}>
+          <span className="inline-flex items-center">
+            <StatusDot status={tc.status} />
+            {tc.tool}
           </span>
-        )}
-      </div>
-      {tc.status === 'calling' && (
-        <div className="text-slate-500 text-xs mt-0.5 animate-pulse">Running...</div>
-      )}
-      {tc.status === 'completed' && tc.result && (
-        <div
-          className={`text-xs mt-0.5 break-words ${hasLongResult ? 'cursor-pointer select-none' : ''}`}
-          onClick={hasLongResult ? onToggle : undefined}
-        >
-          <span className="text-slate-500 mr-1">
-            {hasLongResult ? (expanded ? '\u25BE' : '\u25B8') : '\u2192'}
-          </span>
-          {expanded ? (
-            <pre className="text-slate-300 mt-1 overflow-x-auto whitespace-pre-wrap font-mono inline">{tc.result}</pre>
-          ) : (
-            <span className="text-slate-300">
-              {tc.result.length > 120 ? tc.result.slice(0, 120) + '...' : tc.result}
-            </span>
+          {tc.arguments && (
+            <span style={{ color: 'rgba(135,134,127,0.4)' }}> ({tc.arguments})</span>
+          )}
+          {isDone && tc.result && (
+            <span style={{ color: resultColor }}> &mdash; {tc.result}</span>
+          )}
+          {tc.status === 'calling' && (
+            <span className="animate-pulse ml-1"> running...</span>
           )}
         </div>
       )}
-      {tc.status === 'error' && tc.result && (
-        <div
-          className={`text-xs mt-0.5 break-words ${hasLongResult ? 'cursor-pointer select-none' : ''}`}
-          onClick={hasLongResult ? onToggle : undefined}
-        >
-          <span className="mr-1">
-            {hasLongResult ? (expanded ? '\u25BE' : '\u25B8') : '\u2192'}
-          </span>
-          {expanded ? (
-            <pre className="text-red-400 mt-1 overflow-x-auto whitespace-pre-wrap font-mono inline">{tc.result}</pre>
-          ) : (
-            <span className="text-red-400">
-              {tc.result.length > 120 ? tc.result.slice(0, 120) + '...' : tc.result}
-            </span>
+      {/* Expanded: full details */}
+      {expanded && (
+        <>
+          <div className="flex items-center" style={{ color: MUTED }}>
+            <StatusDot status={tc.status} />
+            <span>{tc.tool}</span>
+            <span className="ml-1" style={{ color: resultColor }}>{'\u25BE'}</span>
+          </div>
+          {tc.arguments && (
+            <div className="mt-1 whitespace-pre-wrap break-all" style={{ color: 'rgba(135,134,127,0.5)' }}>
+              {tc.arguments}
+            </div>
           )}
-        </div>
+          {tc.result && (
+            <pre className="mt-1 whitespace-pre-wrap break-words" style={{ color: resultColor }}>
+              {tc.result}
+            </pre>
+          )}
+        </>
       )}
     </div>
   );
@@ -131,27 +216,49 @@ function AskUserBlock({ segment, onAnswer }: {
   onAnswer: (callId: string, answer: string) => void;
 }) {
   return (
-    <div className="bg-blue-900/20 border-l-2 border-blue-400/50 rounded px-3 py-2 my-2">
+    <div className="space-y-2 my-2">
       {segment.questions.map((q, i) => (
-        <div key={i} className="mb-2 last:mb-0">
-          <p className="text-sm text-brand-light mb-1.5">{q.text}</p>
+        <div key={i}>
+          <div className="text-sm" style={{ color: '#DFD8D0' }}>{q.text}</div>
           {!segment.answered && q.options && (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2 mt-1.5">
               {q.options.map((opt) => (
                 <button
                   key={opt.label}
                   onClick={() => onAnswer(segment.callId, opt.label)}
-                  className="rounded-[2px] border border-blue-400/30 px-2.5 py-1 text-xs text-blue-300 hover:bg-blue-400/10 hover:border-blue-400/50 transition-colors"
+                  className="rounded-[2px] border px-3 py-1 text-xs transition-all duration-300 cursor-pointer"
+                  style={{
+                    borderColor: 'rgba(135,134,127,0.25)',
+                    color: '#CBC9BC',
+                    backgroundColor: 'transparent',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(215,81,62,0.3)'; e.currentTarget.style.color = '#DFD8D0'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(135,134,127,0.25)'; e.currentTarget.style.color = '#CBC9BC'; }}
                 >
                   {opt.label}
                 </button>
               ))}
             </div>
           )}
-          {segment.answered && segment.answer && (
-            <div className="text-xs text-blue-300 mt-1">
-              <span className="text-blue-400/60 mr-1">{'\u21B3'}</span>
-              {segment.answer}
+          {segment.answered && q.options && (
+            <div className="flex flex-wrap gap-2 mt-1.5">
+              {q.options.map((opt) => {
+                const isSelected = segment.answer === opt.label;
+                return (
+                  <span
+                    key={opt.label}
+                    className="rounded-[2px] border px-3 py-1 text-xs transition-all duration-300"
+                    style={{
+                      borderColor: isSelected ? ACCENT : 'rgba(135,134,127,0.25)',
+                      backgroundColor: isSelected ? ACCENT : 'transparent',
+                      color: isSelected ? '#fff' : 'rgba(135,134,127,0.5)',
+                      opacity: isSelected ? 1 : 0.6,
+                    }}
+                  >
+                    {opt.label}
+                  </span>
+                );
+              })}
             </div>
           )}
         </div>
@@ -159,6 +266,10 @@ function AskUserBlock({ segment, onAnswer }: {
     </div>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/*  Main Component                                                     */
+/* ------------------------------------------------------------------ */
 
 export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps) {
   const { isAuthenticated, triggerAuthPopup } = useAuth();
@@ -172,7 +283,6 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Sync rate limit from server on mount
   useEffect(() => {
     const token = localStorage.getItem(STORAGE_KEY_ACCESS);
     if (!token) return;
@@ -192,11 +302,8 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
   const toggleToolExpand = useCallback((toolId: string) => {
     setExpandedToolIds(prev => {
       const next = new Set(prev);
-      if (next.has(toolId)) {
-        next.delete(toolId);
-      } else {
-        next.add(toolId);
-      }
+      if (next.has(toolId)) next.delete(toolId);
+      else next.add(toolId);
       return next;
     });
   }, []);
@@ -263,7 +370,6 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
         signal: controller.signal,
       });
 
-      // Update rate limit from server headers if available (EE with rate limiting)
       const rateLimitRemaining = response.headers.get('X-RateLimit-Remaining');
       if (rateLimitRemaining != null) {
         const remaining = parseInt(rateLimitRemaining, 10);
@@ -391,11 +497,9 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
           currentEvent = '';
         }
 
-        // Render after each chunk from ReadableStream
         render();
       }
 
-      // Final flush
       if (currentText) { segments.push({ type: 'text', content: currentText }); currentText = ''; }
       render();
     } catch (err: unknown) {
@@ -443,20 +547,47 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
   };
 
   const showSuggestions = messages.length === 0 && !isStreaming;
+  const lastMsg = messages[messages.length - 1];
+  const isLastAssistantStreaming = isStreaming && lastMsg?.role === 'assistant';
 
   return (
-    <div className="rounded-[2px] border border-brand-shade3/15 bg-brand-dark flex flex-col overflow-hidden" style={{ height: '480px' }}>
+    <div
+      className="rounded-[2px] border overflow-hidden flex flex-col shadow-lg"
+      style={{ borderColor: 'rgba(135,134,127,0.15)', backgroundColor: '#252525', height: '480px' }}
+    >
+      {/* Window chrome header */}
+      <div className="flex items-center gap-3 px-4 py-2.5 border-b" style={{ borderColor: 'rgba(135,134,127,0.08)' }}>
+        <div className="flex gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
+          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
+          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'rgba(135,134,127,0.3)' }} />
+        </div>
+        <span className="text-xs font-mono" style={{ color: MUTED }}>
+          ByteBrew Agent <span style={{ color: 'rgba(135,134,127,0.5)' }}>&middot; {agentName}</span>
+        </span>
+      </div>
+
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div
+        className="flex-1 overflow-y-auto px-4 py-3 space-y-3"
+        style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}
+      >
         {showSuggestions && (
           <div className="flex flex-col items-center justify-center h-full gap-4">
-            <p className="text-sm text-brand-shade3">Try one of these conversation starters:</p>
+            <p className="text-sm font-mono" style={{ color: MUTED }}>Try one of these:</p>
             <div className="flex flex-wrap justify-center gap-2 max-w-lg">
               {suggestions.map((suggestion) => (
                 <button
                   key={suggestion}
                   onClick={() => handleSend(suggestion)}
-                  className="rounded-[2px] border border-brand-shade3/20 px-3 py-2 text-xs text-brand-shade2 hover:text-brand-light hover:border-brand-accent/40 hover:bg-brand-accent/5 transition-colors text-left"
+                  className="rounded-[2px] border px-3 py-1.5 text-xs font-mono transition-all duration-200 cursor-pointer text-left"
+                  style={{
+                    borderColor: 'rgba(135,134,127,0.25)',
+                    color: '#CBC9BC',
+                    backgroundColor: 'transparent',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(215,81,62,0.3)'; e.currentTarget.style.color = '#DFD8D0'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(135,134,127,0.25)'; e.currentTarget.style.color = '#CBC9BC'; }}
                 >
                   {suggestion}
                 </button>
@@ -466,76 +597,75 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
         )}
 
         {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[80%] rounded-[2px] px-4 py-2.5 text-sm leading-relaxed ${
-                msg.role === 'user'
-                  ? 'bg-brand-accent text-white whitespace-pre-wrap'
-                  : 'bg-brand-dark-alt text-brand-light border border-brand-shade3/15'
-              }`}
-            >
-              {msg.role === 'assistant' ? (
-                // Render segments in order: text and tool calls interleaved
-                <>
-                  {msg.segments.map((seg, i) =>
-                    seg.type === 'tool' ? (
-                      <ToolCallBlock
-                        key={seg.toolCall.id}
-                        tc={seg.toolCall}
-                        expanded={expandedToolIds.has(seg.toolCall.id)}
-                        onToggle={() => toggleToolExpand(seg.toolCall.id)}
-                      />
-                    ) : seg.type === 'ask_user' ? (
-                      <AskUserBlock key={seg.callId} segment={seg} onAnswer={respondToAskUser} />
-                    ) : (
-                      seg.content ? (
-                        <span key={i} className="whitespace-pre-wrap">{seg.content}</span>
-                      ) : null
-                    )
-                  )}
-                  {isStreaming && msg.id === messages[messages.length - 1]?.id && (
-                    <span className="inline-block w-1.5 h-4 bg-brand-accent ml-0.5 animate-pulse" />
-                  )}
-                </>
-              ) : (
-                <span className="whitespace-pre-wrap">{msg.content}</span>
+          msg.role === 'user' ? (
+            <div key={msg.id} className="flex justify-end">
+              <div
+                className="max-w-[80%] rounded-[2px] px-3 py-2 text-sm text-white whitespace-pre-wrap"
+                style={{ backgroundColor: ACCENT }}
+              >
+                {msg.content}
+              </div>
+            </div>
+          ) : (
+            <div key={msg.id} className="space-y-1.5">
+              {msg.segments.map((seg, i) =>
+                seg.type === 'tool' ? (
+                  <ToolCallBlock
+                    key={seg.toolCall.id}
+                    tc={seg.toolCall}
+                    expanded={expandedToolIds.has(seg.toolCall.id)}
+                    onToggle={() => toggleToolExpand(seg.toolCall.id)}
+                  />
+                ) : seg.type === 'ask_user' ? (
+                  <AskUserBlock key={seg.callId} segment={seg} onAnswer={respondToAskUser} />
+                ) : seg.content ? (
+                  <div key={i} className="text-sm" style={{ color: '#DFD8D0' }}>
+                    {renderMarkdown(seg.content)}
+                  </div>
+                ) : null
+              )}
+              {isLastAssistantStreaming && msg.id === lastMsg.id && (
+                <BrewingSpinner />
               )}
             </div>
-          </div>
+          )
         ))}
 
         {error && (
-          <div className="text-center text-xs text-red-400 py-2">{error}</div>
+          <div className="text-center text-xs font-mono py-2" style={{ color: 'rgba(239,68,68,0.7)' }}>{error}</div>
         )}
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input area */}
-      <div className="border-t border-brand-shade3/15 p-3">
-        <form onSubmit={handleSubmit} className="flex gap-2">
+      {/* Input bar */}
+      <div className="flex items-center gap-2 px-4 py-2.5 border-t" style={{ borderColor: 'rgba(135,134,127,0.08)' }}>
+        <form onSubmit={handleSubmit} className="flex items-center gap-2 flex-1">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={messagesRemaining <= 0 ? 'Rate limit reached' : 'Type a message...'}
             disabled={isStreaming || messagesRemaining <= 0}
-            className="flex-1 rounded-[2px] border border-brand-shade3/20 bg-brand-dark-alt px-4 py-2 text-sm text-brand-light placeholder:text-brand-shade3 focus:outline-none focus:border-brand-accent/50 disabled:opacity-50 transition-colors"
+            className="flex-1 rounded-[2px] border px-3 py-1.5 text-xs font-mono focus:outline-none disabled:opacity-50 transition-colors"
+            style={{
+              borderColor: input ? 'rgba(215,81,62,0.3)' : 'rgba(135,134,127,0.12)',
+              color: '#DFD8D0',
+              backgroundColor: 'rgba(17,17,17,0.4)',
+            }}
           />
           <button
             type="submit"
             disabled={!input.trim() || isStreaming || messagesRemaining <= 0}
-            className="rounded-[2px] bg-brand-accent px-4 py-2 text-sm font-medium text-white hover:bg-brand-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="rounded-[2px] px-3 py-1.5 text-xs text-white shrink-0 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            style={{ backgroundColor: ACCENT }}
           >
             Send
           </button>
         </form>
-        <div className="mt-2 text-xs text-brand-shade3 text-center">
-          {messagesRemaining}/{MAX_MESSAGES_PER_HOUR} messages remaining this hour
-        </div>
+        <span className="text-[10px] font-mono shrink-0" style={{ color: 'rgba(135,134,127,0.4)' }}>
+          {messagesRemaining}/{MAX_MESSAGES_PER_HOUR}
+        </span>
       </div>
     </div>
   );
