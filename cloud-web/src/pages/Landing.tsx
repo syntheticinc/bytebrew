@@ -20,20 +20,14 @@ export function LandingPage() {
     <div>
       <HeroSection />
       <div className="py-6 px-4 border-t border-border bg-surface">
-        <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
-          <span className="text-xs font-sans text-text-tertiary uppercase tracking-wider">Works with</span>
-          <span className="text-text-tertiary">·</span>
-          <span className="text-sm font-mono font-medium text-text-secondary">OpenAI</span>
-          <span className="text-text-tertiary">·</span>
-          <span className="text-sm font-mono font-medium text-text-secondary">Anthropic</span>
-          <span className="text-text-tertiary">·</span>
-          <span className="text-sm font-mono font-medium text-text-secondary">Google AI</span>
-          <span className="text-text-tertiary">·</span>
-          <span className="text-sm font-mono font-medium text-text-secondary">Ollama</span>
-          <span className="text-text-tertiary">·</span>
-          <span className="text-sm font-mono font-medium text-text-secondary">PostgreSQL</span>
-          <span className="text-text-tertiary">·</span>
-          <span className="text-sm font-mono font-medium text-text-secondary">Docker</span>
+        <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-center gap-x-8 gap-y-2">
+          <span className="text-xs font-sans text-text-tertiary">Works with</span>
+          <span className="text-sm font-semibold text-text-secondary">OpenAI</span>
+          <span className="text-sm font-semibold text-text-secondary">Anthropic</span>
+          <span className="text-sm font-semibold text-text-secondary">Google AI</span>
+          <span className="text-sm font-semibold text-text-secondary">Ollama</span>
+          <span className="text-sm font-semibold text-text-secondary">PostgreSQL</span>
+          <span className="text-sm font-semibold text-text-secondary">Docker</span>
         </div>
       </div>
       <ProblemSection />
@@ -124,14 +118,6 @@ function HeroSection() {
   return (
     <section className="py-20 px-4 bg-surface">
       <div className="max-w-5xl mx-auto text-center mb-12">
-        <div className="flex items-center justify-center gap-3 mb-4">
-          <span className="rounded-full border border-brand-accent/30 bg-brand-accent/10 px-3 py-1 text-xs font-sans font-medium text-brand-accent">
-            Self-hosted
-          </span>
-          <span className="rounded-full border border-border px-3 py-1 text-xs font-sans font-medium text-text-secondary">
-            Free forever
-          </span>
-        </div>
         <h1 className="text-5xl sm:text-6xl font-bold tracking-tight text-text-primary leading-tight">
           Ship AI agents in your product —{' '}
           <span className="text-brand-accent">not months of infrastructure</span>
@@ -153,12 +139,8 @@ function HeroSection() {
             View Pricing &rarr;
           </Link>
         </div>
-        <div className="mt-3 flex items-center justify-center gap-4 flex-wrap">
-          <a href="/docs/getting-started/quick-start/" className="text-sm text-text-tertiary hover:text-text-secondary transition-colors">5-minute Quick Start &rarr;</a>
-          <a href="/examples" className="inline-flex items-center gap-1 rounded-full border border-brand-accent/30 bg-brand-accent/5 px-4 py-1.5 text-sm font-sans font-medium text-brand-accent hover:bg-brand-accent/10 transition-colors">
-            Try a live agent &rarr;
-          </a>
-        </div>
+        <a href="/docs/getting-started/quick-start/" className="text-sm text-text-tertiary hover:text-text-secondary transition-colors">5-minute Quick Start &rarr;</a>
+        <a href="/examples" className="text-sm text-brand-accent hover:underline transition-colors ml-4">Try a live agent &rarr;</a>
       </div>
 
       <div className="max-w-5xl mx-auto">
@@ -821,8 +803,6 @@ function InstallSection() {
         <TerminalBlock
           command="curl -fsSL https://bytebrew.ai/releases/docker-compose.yml -o docker-compose.yml && docker compose up -d"
         />
-        <p className="text-center text-sm font-sans font-medium text-brand-accent mt-4">Community Edition is free forever — no limits, no credit card.</p>
-
         <div className="bg-surface-alt border border-border rounded-[2px] p-6 mt-6 max-w-3xl mx-auto">
           <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-4">What happens next</p>
           <ol className="text-sm text-text-secondary space-y-2 list-decimal list-inside">
