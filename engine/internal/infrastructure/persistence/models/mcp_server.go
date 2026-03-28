@@ -6,7 +6,7 @@ import "time"
 type MCPServerModel struct {
 	ID             uint      `gorm:"primaryKey"`
 	Name           string    `gorm:"uniqueIndex;not null"`
-	Type           string    `gorm:"type:varchar(10);not null"`
+	Type           string    `gorm:"type:varchar(20);not null"`
 	Command        string    `gorm:"type:varchar(500)"`
 	Args           string    `gorm:"type:text"`
 	URL            string    `gorm:"type:varchar(500)"`

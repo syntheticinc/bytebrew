@@ -366,6 +366,7 @@ export default function MCPPage() {
             { value: 'stdio', label: 'stdio' },
             { value: 'http', label: 'http' },
             { value: 'sse', label: 'sse' },
+            { value: 'streamable-http', label: 'streamable-http' },
           ]}
         />
         {customForm.type === 'stdio' ? (

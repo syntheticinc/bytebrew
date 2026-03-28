@@ -77,7 +77,7 @@ export interface CreateModelRequest {
 export interface MCPServer {
   id: number;
   name: string;
-  type: 'stdio' | 'http' | 'sse';
+  type: 'stdio' | 'http' | 'sse' | 'streamable-http';
   command?: string;
   args?: string[];
   url?: string;

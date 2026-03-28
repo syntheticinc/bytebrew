@@ -1240,6 +1240,8 @@ func connectMCPServers(ctx context.Context, mcpServers []models.MCPServerModel, 
 			transport = mcp.NewHTTPTransport(srv.URL, forwardHeaders)
 		case "sse":
 			transport = mcp.NewSSETransport(srv.URL, forwardHeaders)
+		case "streamable-http":
+			transport = mcp.NewStreamableHTTPTransport(srv.URL, forwardHeaders)
 		default:
 			slog.Warn("unknown MCP server type, skipping", "name", srv.Name, "type", srv.Type)
 			continue

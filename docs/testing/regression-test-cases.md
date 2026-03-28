@@ -1430,6 +1430,36 @@
 
 ---
 
+## TC-MCP-SH: Streamable HTTP MCP Transport (6 TC)
+
+### TC-MCP-SH-01: Создание streamable-http MCP сервера через Admin API
+**Шаги:** `POST /api/v1/mcp-servers` с `type: "streamable-http"`, `url: "https://gitbook.com/docs/~gitbook/mcp"`
+**Ожидание:** Сервер создан, `type` = `streamable-http` в ответе и в БД
+
+### TC-MCP-SH-02: Подключение к Streamable HTTP серверу (SSE response)
+**Предусловие:** MCP сервер gitbook-test создан с type=streamable-http
+**Шаги:** Рестарт Engine
+**Ожидание:** Лог `MCP server connected name=gitbook-test tools=1`, transport отправляет POST с `Accept: application/json, text/event-stream`, парсит SSE ответ
+
+### TC-MCP-SH-03: Подключение к Streamable HTTP серверу (JSON response)
+**Шаги:** Unit test `TestStreamableHTTP_JSONResponse` — mock server отвечает `application/json`
+**Ожидание:** Транспорт парсит JSON ответ корректно
+
+### TC-MCP-SH-04: Session ID management
+**Шаги:** Unit test `TestStreamableHTTP_SessionIDManagement`
+**Ожидание:** Транспорт сохраняет `Mcp-Session-Id` из ответа сервера и отправляет его в последующих запросах
+
+### TC-MCP-SH-05: Forward headers
+**Шаги:** Создать streamable-http сервер с `forward_headers: ["Authorization"]`, отправить запрос с RequestContext
+**Ожидание:** Заголовок Authorization проксируется в MCP запрос (unit test pattern из http_transport)
+
+### TC-MCP-SH-06: Tool call через Streamable HTTP
+**Шаги:** Прямой вызов `tools/call` с `name: "searchDocumentation"` на GitBook MCP endpoint
+**Ожидание:** SSE ответ с результатами поиска (titles, links, content)
+**PASS:** Проверен через curl — GitBook возвращает результаты по запросу "getting started"
+
+---
+
 ## TC-EE: EE Activation, Stripe, License Lifecycle (27 TC)
 
 ### TC-EE-01: stripe-setup создаёт Engine EE product

@@ -34,9 +34,10 @@ const (
 
 // MCPServerType — MCP server transport.
 const (
-	MCPServerTypeStdio = "stdio"
-	MCPServerTypeHTTP  = "http"
-	MCPServerTypeSSE   = "sse"
+	MCPServerTypeStdio          = "stdio"
+	MCPServerTypeHTTP           = "http"
+	MCPServerTypeSSE            = "sse"
+	MCPServerTypeStreamableHTTP = "streamable-http"
 )
 
 // MCPServerStatus — runtime connection status.
