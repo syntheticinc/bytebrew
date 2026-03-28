@@ -160,13 +160,6 @@ function AskUserBlock({ segment, onAnswer }: {
   );
 }
 
-function isJsonToolResult(text: string): boolean {
-  const t = text.trimStart();
-  return t.startsWith('{') &&
-    (t.includes('"id"') || t.includes('"count"') || t.includes('"products"') ||
-     t.includes('"employee_id"') || t.includes('"inventory"') || t.includes('"entries"'));
-}
-
 export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps) {
   const { isAuthenticated, triggerAuthPopup } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -325,25 +318,17 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
       const decoder = new TextDecoder();
       let buffer = '';
       let currentEvent = '';
-      // Track segments in order: text chunks accumulate into last text segment,
-      // tool events insert tool segments breaking the text flow.
       const segments: MessageSegment[] = [];
       let currentText = '';
 
-      const flushText = () => {
-        if (currentText) {
-          segments.push({ type: 'text', content: currentText });
-          currentText = '';
-        }
-      };
-
-      const updateMessage = () => {
-        const content = segments
+      const render = () => {
+        const allSegments = [...segments, ...(currentText ? [{ type: 'text' as const, content: currentText }] : [])];
+        const content = allSegments
           .filter((s): s is { type: 'text'; content: string } => s.type === 'text')
           .map(s => s.content)
           .join('');
         setMessages(prev =>
-          prev.map(m => m.id === assistantId ? { ...m, content, segments: [...segments] } : m)
+          prev.map(m => m.id === assistantId ? { ...m, content, segments: allSegments } : m)
         );
       };
 
@@ -351,7 +336,8 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
         const { done, value } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
+        const raw = decoder.decode(value, { stream: true });
+        buffer += raw;
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
 
@@ -360,82 +346,58 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
             currentEvent = line.slice(7).trim();
             continue;
           }
+          if (!line.startsWith('data: ')) continue;
 
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
+          try {
+            const data = JSON.parse(line.slice(6));
 
-              if (currentEvent === 'tool_call') {
-                flushText(); // Close current text segment before tool
-                const argsStr = data.arguments
-                  ? (typeof data.arguments === 'string' ? data.arguments : JSON.stringify(data.arguments))
-                  : undefined;
-                segments.push({
-                  type: 'tool',
-                  toolCall: {
-                    id: data.call_id || crypto.randomUUID(),
-                    tool: data.tool || 'unknown',
-                    arguments: argsStr,
-                    status: 'calling',
-                  },
-                });
-                updateMessage();
-              } else if (currentEvent === 'tool_result') {
-                // Find matching tool segment and update
-                const callId = data.call_id;
-                const hasError = data.has_error === true;
-                for (let i = segments.length - 1; i >= 0; i--) {
-                  const seg = segments[i];
-                  if (seg.type === 'tool' && seg.toolCall.id === callId) {
-                    seg.toolCall.status = hasError ? 'error' : 'completed';
-                    seg.toolCall.result = data.content || '';
-                    break;
-                  }
-                }
-                updateMessage();
-              } else if (currentEvent === 'confirmation') {
-                flushText();
-                try {
-                  const questions = JSON.parse(data.content) as AskUserQuestion[];
-                  segments.push({
-                    type: 'ask_user',
-                    callId: data.call_id || '',
-                    questions,
-                    answered: false,
-                  });
-                } catch {
-                  // If content isn't valid JSON questions, show as text
-                  currentText += data.content || '';
-                }
-                updateMessage();
-              } else if (data.content && currentEvent !== 'message') {
-                const chunk = data.content as string;
-                if (!isJsonToolResult(chunk)) {
-                  currentText += chunk;
-                  // Update with accumulated text (don't flush yet — more chunks coming)
-                  const allSegments = [...segments, { type: 'text' as const, content: currentText }];
-                  const content = allSegments
-                    .filter((s): s is { type: 'text'; content: string } => s.type === 'text')
-                    .map(s => s.content)
-                    .join('');
-                  setMessages(prev =>
-                    prev.map(m => m.id === assistantId ? { ...m, content, segments: allSegments } : m)
-                  );
+            if (currentEvent === 'message_delta') {
+              currentText += (data.content as string) || '';
+            } else if (currentEvent === 'tool_call') {
+              if (currentText) { segments.push({ type: 'text', content: currentText }); currentText = ''; }
+              const argsStr = data.arguments
+                ? (typeof data.arguments === 'string' ? data.arguments as string : JSON.stringify(data.arguments))
+                : undefined;
+              segments.push({
+                type: 'tool',
+                toolCall: {
+                  id: (data.call_id as string) || crypto.randomUUID(),
+                  tool: (data.tool as string) || 'unknown',
+                  arguments: argsStr,
+                  status: 'calling',
+                },
+              });
+            } else if (currentEvent === 'tool_result') {
+              const callId = data.call_id as string;
+              for (let i = segments.length - 1; i >= 0; i--) {
+                const seg = segments[i];
+                if (seg.type === 'tool' && seg.toolCall.id === callId) {
+                  seg.toolCall.status = data.has_error ? 'error' : 'completed';
+                  seg.toolCall.result = (data.content as string) || '';
+                  break;
                 }
               }
-
-              if (data.session_id) setSessionId(data.session_id);
-              if (data.error) setError(data.error);
-            } catch {
-              // skip non-JSON data lines
+            } else if (currentEvent === 'confirmation') {
+              if (currentText) { segments.push({ type: 'text', content: currentText }); currentText = ''; }
+              try {
+                const questions = JSON.parse(data.content as string) as AskUserQuestion[];
+                segments.push({ type: 'ask_user', callId: (data.call_id as string) || '', questions, answered: false });
+              } catch { currentText += (data.content as string) || ''; }
             }
-            currentEvent = '';
-          }
+
+            if (data.session_id) setSessionId(data.session_id);
+            if (data.error) setError(data.error);
+          } catch { /* skip */ }
+          currentEvent = '';
         }
+
+        // Render after each chunk from ReadableStream
+        render();
       }
-      // Flush any remaining text
-      flushText();
-      updateMessage();
+
+      // Final flush
+      if (currentText) { segments.push({ type: 'text', content: currentText }); currentText = ''; }
+      render();
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return;
       setError(`Connection error: ${err instanceof Error ? err.message : 'unknown'}`);

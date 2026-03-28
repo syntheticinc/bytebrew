@@ -98,16 +98,7 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	// Get the underlying ResponseController for flushing through chi middleware.
 	rc := http.NewResponseController(w)
-
-	// CRITICAL: Disable Content-Length by setting Transfer-Encoding explicitly.
-	// Go net/http: "If the handler didn't decide the Content-Length or
-	// Transfer-Encoding, sniffing is suppressed by setting Transfer-Encoding."
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
 
 	// CRITICAL: Delete Content-Length to force chunked encoding.
 	// Go sets Content-Length if it can determine body size before flushing.

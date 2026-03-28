@@ -269,7 +269,7 @@ func toAgentRecord(a models.AgentModel) (AgentRecord, error) {
 		rec.ModelName = a.Model.Name
 	}
 
-	// ConfirmBefore: JSON string -> []string
+	// ConfirmBefore: JSON array -> []string
 	if a.ConfirmBefore != "" {
 		if err := json.Unmarshal([]byte(a.ConfirmBefore), &rec.ConfirmBefore); err != nil {
 			return AgentRecord{}, fmt.Errorf("parse confirm_before: %w", err)

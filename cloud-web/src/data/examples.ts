@@ -22,7 +22,7 @@ export const EXAMPLES: ExampleConfig[] = [
       'Watch the agent search policy documents, look up employee records, check leave balances, and submit requests — each step visible in real-time.',
     features: ['Knowledge Base (RAG)', 'Employee Lookup', 'Leave Management', 'Multi-step Workflows'],
     agentName: 'hr-assistant',
-    apiUrl: '/examples/hr-assistant/api',
+    apiUrl: import.meta.env.DEV ? 'http://localhost:3001/api' : '/examples/hr-assistant/api',
     suggestions: [
       "Check Alice Johnson's vacation balance",
       'Submit a sick day for Bob Martinez next Monday',
@@ -45,7 +45,7 @@ export const EXAMPLES: ExampleConfig[] = [
       'See the agent identify issue type, run diagnostics on service health, analyze error logs, and create tickets — with parallel tool execution.',
     features: ['Parallel Diagnostics', 'Error Log Analysis', 'Knowledge Base', 'Ticket Management'],
     agentName: 'support-router',
-    apiUrl: '/examples/support-agent/api',
+    apiUrl: import.meta.env.DEV ? 'http://localhost:3002/api' : '/examples/support-agent/api',
     suggestions: [
       'Customer CUST-001 reports file uploads failing with timeouts',
       'CUST-003 was overcharged, check their billing and process a refund',
@@ -68,7 +68,7 @@ export const EXAMPLES: ExampleConfig[] = [
       'The agent searches products, checks inventory, validates discount rules, and creates quotes with confirmation gates — showing approval workflows.',
     features: ['Product Catalog', 'Inventory Checks', 'Business Rules', 'Quote Confirmation'],
     agentName: 'sales-agent',
-    apiUrl: '/examples/sales-agent/api',
+    apiUrl: import.meta.env.DEV ? 'http://localhost:3003/api' : '/examples/sales-agent/api',
     suggestions: [
       'Find laptops under $1200 and check which are in stock',
       'Create a quote for 10 Keychron keyboards with maximum discount',

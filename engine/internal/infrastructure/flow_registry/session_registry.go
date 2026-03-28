@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	// eventChannelBuffer is the buffer size for subscriber event channels.
-	eventChannelBuffer = 128
+	// publishTimeout is how long PublishEvent waits for a slow subscriber
+	// before dropping the event.
+	publishTimeout = 5 * time.Second
 )
 
 // EventStoreReader reads persisted events for replay on reconnect (consumer-side interface).
@@ -131,7 +132,7 @@ func (r *SessionRegistry) Subscribe(sessionID string) (<-chan *pb.SessionEvent, 
 		return ch, func() {}
 	}
 
-	ch := make(chan *pb.SessionEvent, eventChannelBuffer)
+	ch := make(chan *pb.SessionEvent)
 
 	entry.mu.Lock()
 	subID := entry.nextSubID
@@ -162,12 +163,18 @@ func (r *SessionRegistry) PublishEvent(sessionID string, event *pb.SessionEvent)
 
 	entry.lastActivityAt = time.Now()
 
-	// Fan-out to subscribers (non-blocking)
+	// Fan-out to subscribers (blocking with timeout).
+	// Blocking send preserves natural LLM token pacing through the entire
+	// pipeline — without it, events accumulate and TCP coalesces them into
+	// 4KB bursts, breaking the streaming UX.
+	timer := time.NewTimer(publishTimeout)
+	defer timer.Stop()
 	for _, ch := range entry.subscribers {
 		select {
 		case ch <- event:
-		default:
-			// Subscriber too slow — drop event to avoid blocking
+		case <-timer.C:
+			// Subscriber too slow — drop remaining events
+			return
 		}
 	}
 

@@ -363,8 +363,18 @@ type escalationYAML struct {
 type modelYAML struct {
 	Name      string `yaml:"name"`
 	Type      string `yaml:"type"`
+	Provider  string `yaml:"provider,omitempty"` // alias for type (used in agents.yaml)
 	BaseURL   string `yaml:"base_url,omitempty"`
 	ModelName string `yaml:"model_name"`
+	APIKey    string `yaml:"api_key,omitempty"`
+}
+
+// resolvedType returns Type, falling back to Provider for backwards compatibility.
+func (m modelYAML) resolvedType() string {
+	if m.Type != "" {
+		return m.Type
+	}
+	return m.Provider
 }
 
 type mcpServerYAML struct {
@@ -619,7 +629,7 @@ func (a *configImportExportHTTPAdapter) importModels(tx *gorm.DB, items []modelY
 		err := tx.Where("name = ?", m.Name).First(&existing).Error
 		if err == nil {
 			// Update existing (preserve API key).
-			existing.Type = m.Type
+			existing.Type = m.resolvedType()
 			existing.BaseURL = m.BaseURL
 			existing.ModelName = m.ModelName
 			if err := tx.Save(&existing).Error; err != nil {
@@ -630,7 +640,7 @@ func (a *configImportExportHTTPAdapter) importModels(tx *gorm.DB, items []modelY
 
 		newModel := models.LLMProviderModel{
 			Name:      m.Name,
-			Type:      m.Type,
+			Type:      m.resolvedType(),
 			BaseURL:   m.BaseURL,
 			ModelName: m.ModelName,
 		}
@@ -748,7 +758,11 @@ func (a *configImportExportHTTPAdapter) importAgents(tx *gorm.DB, items []agentY
 			existing.ToolExecution = ag.ToolExecution
 			existing.MaxSteps = ag.MaxSteps
 			existing.MaxContextSize = ag.MaxContextSize
-			existing.ConfirmBefore = strings.Join(ag.ConfirmBefore, ",")
+			if cbJSON, err := json.Marshal(ag.ConfirmBefore); err == nil && len(ag.ConfirmBefore) > 0 {
+				existing.ConfirmBefore = string(cbJSON)
+			} else {
+				existing.ConfirmBefore = ""
+			}
 			if err := tx.Save(&existing).Error; err != nil {
 				return fmt.Errorf("update agent %q: %w", ag.Name, err)
 			}
@@ -766,7 +780,13 @@ func (a *configImportExportHTTPAdapter) importAgents(tx *gorm.DB, items []agentY
 			ToolExecution:  ag.ToolExecution,
 			MaxSteps:       ag.MaxSteps,
 			MaxContextSize: ag.MaxContextSize,
-			ConfirmBefore:  strings.Join(ag.ConfirmBefore, ","),
+			ConfirmBefore: func() string {
+				if len(ag.ConfirmBefore) == 0 {
+					return ""
+				}
+				d, _ := json.Marshal(ag.ConfirmBefore)
+				return string(d)
+			}(),
 		}
 		if err := tx.Create(&newAgent).Error; err != nil {
 			return fmt.Errorf("create agent %q: %w", ag.Name, err)
@@ -1572,6 +1592,7 @@ func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, agentName, message, u
 			if sseEvent.Type == "done" {
 				return
 			}
+
 		}
 	}()
 
