@@ -12,7 +12,7 @@ type AgentModel struct {
 	KnowledgePath  string    `gorm:"type:varchar(500)"`
 	Lifecycle      string    `gorm:"type:varchar(20);not null;default:persistent"`
 	ToolExecution  string    `gorm:"type:varchar(20);not null;default:sequential"`
-	MaxSteps       int       `gorm:"not null;default:500"`
+	MaxSteps       int       `gorm:"not null;default:0"`
 	MaxContextSize int       `gorm:"not null;default:16000"`
 	ConfirmBefore  string    `gorm:"type:text"`
 	Public         bool      `gorm:"default:false"`
