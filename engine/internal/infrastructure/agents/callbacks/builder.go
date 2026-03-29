@@ -73,6 +73,11 @@ func (b *AgentCallbackBuilder) GetStep() int {
 	return b.counter.GetStep()
 }
 
+// StreamDone returns a channel that is closed when the streaming goroutine completes.
+func (b *AgentCallbackBuilder) StreamDone() <-chan struct{} {
+	return b.modelHandler.streamDone
+}
+
 // FinalizeAccumulatedText emits EventTypeAnswer for any accumulated streamed text.
 func (b *AgentCallbackBuilder) FinalizeAccumulatedText(ctx context.Context) {
 	b.modelHandler.FinalizeAccumulatedText(ctx)

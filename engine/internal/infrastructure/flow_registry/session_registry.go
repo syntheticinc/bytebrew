@@ -13,6 +13,12 @@ import (
 )
 
 const (
+	// subscriberBuffer is the buffer size for subscriber event channels.
+	// Buffered channels prevent deadlock when PublishEvent is called under
+	// entry.mu.Lock — without buffering, a slow subscriber blocks the publisher,
+	// which holds the lock and blocks all subsequent PublishEvent calls.
+	subscriberBuffer = 64
+
 	// publishTimeout is how long PublishEvent waits for a slow subscriber
 	// before dropping the event.
 	publishTimeout = 5 * time.Second
@@ -132,7 +138,7 @@ func (r *SessionRegistry) Subscribe(sessionID string) (<-chan *pb.SessionEvent, 
 		return ch, func() {}
 	}
 
-	ch := make(chan *pb.SessionEvent)
+	ch := make(chan *pb.SessionEvent, subscriberBuffer)
 
 	entry.mu.Lock()
 	subID := entry.nextSubID
@@ -163,18 +169,15 @@ func (r *SessionRegistry) PublishEvent(sessionID string, event *pb.SessionEvent)
 
 	entry.lastActivityAt = time.Now()
 
-	// Fan-out to subscribers (blocking with timeout).
-	// Blocking send preserves natural LLM token pacing through the entire
-	// pipeline — without it, events accumulate and TCP coalesces them into
-	// 4KB bursts, breaking the streaming UX.
-	timer := time.NewTimer(publishTimeout)
-	defer timer.Stop()
+	// Fan-out to subscribers (non-blocking with buffered channels).
+	// Subscriber channels are buffered (subscriberBuffer=64) so events queue up
+	// without blocking the publisher. If a subscriber is too slow and buffer is
+	// full, the event is dropped for that subscriber to prevent deadlock.
 	for _, ch := range entry.subscribers {
 		select {
 		case ch <- event:
-		case <-timer.C:
-			// Subscriber too slow — drop remaining events
-			return
+		default:
+			// Subscriber buffer full — drop event to avoid blocking
 		}
 	}
 

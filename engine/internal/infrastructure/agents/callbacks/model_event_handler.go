@@ -29,6 +29,11 @@ type ModelEventHandler struct {
 	answerStarted        bool
 	accumulatedChunks    string
 	accumulatedMu        sync.Mutex
+
+	// streamDone is closed when the streaming goroutine completes.
+	// Agent.Stream() waits on this before returning, preventing ProcessingStopped
+	// from being sent before all chunks are delivered via SSE.
+	streamDone chan struct{}
 }
 
 // NewModelEventHandler creates a new ModelEventHandler.
@@ -40,11 +45,12 @@ func NewModelEventHandler(
 	chunkCb func(chunk string) error,
 ) *ModelEventHandler {
 	return &ModelEventHandler{
-		emitter:   emitter,
-		counter:   counter,
-		extractor: extractor,
-		store:     store,
-		chunkCb:   chunkCb,
+		emitter:    emitter,
+		counter:    counter,
+		extractor:  extractor,
+		store:      store,
+		chunkCb:    chunkCb,
+		streamDone: make(chan struct{}),
 	}
 }
 
@@ -120,8 +126,9 @@ func (h *ModelEventHandler) OnModelEndWithStreamOutput(ctx context.Context, info
 	go func() {
 		slog.InfoContext(ctx, "[CALLBACK] goroutine started, will process stream frames")
 		defer func() {
-			slog.InfoContext(ctx, "[CALLBACK] goroutine defer: closing output stream")
+			slog.InfoContext(ctx, "[CALLBACK] goroutine defer: closing output stream + signaling done")
 			output.Close()
+			close(h.streamDone)
 		}()
 
 		var streamErr error

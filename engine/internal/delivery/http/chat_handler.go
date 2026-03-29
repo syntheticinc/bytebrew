@@ -98,24 +98,18 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	rc := http.NewResponseController(w)
+	// Unwrap to find http.Flusher — chi middleware wraps ResponseWriter.
+	flush := findFlusher(w)
 
-	// CRITICAL: Delete Content-Length to force chunked encoding.
-	// Go sets Content-Length if it can determine body size before flushing.
 	w.Header().Del("Content-Length")
-
-	// WriteHeader commits headers to the wire.
 	w.WriteHeader(http.StatusOK)
 
-	// Write initial SSE comment and flush to start chunked transfer.
 	_, _ = io.WriteString(w, ": ok\n\n")
-	_ = rc.Flush()
+	flush()
 
 	for event := range events {
 		_, _ = io.WriteString(w, "event: "+event.Type+"\ndata: "+event.Data+"\n\n")
-		if err := rc.Flush(); err != nil {
-			return // client disconnected
-		}
+		flush()
 	}
 }
 
@@ -213,4 +207,21 @@ func (h *ChatHandler) buildRequestContext(r *http.Request) context.Context {
 
 	rc := &domain.RequestContext{Headers: headers}
 	return domain.WithRequestContext(ctx, rc)
+}
+
+// findFlusher unwraps a ResponseWriter to find http.Flusher.
+// Chi middleware wraps the ResponseWriter, hiding the Flusher interface.
+// Returns a no-op function if Flusher is not available.
+func findFlusher(w http.ResponseWriter) func() {
+	type unwrapper interface{ Unwrap() http.ResponseWriter }
+	for {
+		if f, ok := w.(http.Flusher); ok {
+			return f.Flush
+		}
+		if u, ok := w.(unwrapper); ok {
+			w = u.Unwrap()
+			continue
+		}
+		return func() {} // no flusher found
+	}
 }

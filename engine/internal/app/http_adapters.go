@@ -1611,25 +1611,28 @@ func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, agentName, message, u
 	a.processor.StartProcessing(ctx, sessionID)
 
 	// Fan-out: read proto events, convert to SSE, close when processing stops.
-	// Unbuffered channel ensures back-pressure: goroutine blocks until handler
-	// reads and flushes each event, enabling real-time SSE streaming.
-	sseCh := make(chan deliveryhttp.SSEEvent)
+	// Buffered channel prevents deadlock: PublishEvent holds entry.mu.Lock while
+	// sending to subscriber channel. If sseCh is unbuffered and the HTTP handler
+	// is slow to read/flush, the fan-out goroutine blocks on sseCh send, which
+	// blocks the subscriber channel read, which blocks PublishEvent, which holds
+	// the lock and blocks ALL subsequent events — causing stream truncation.
+	sseCh := make(chan deliveryhttp.SSEEvent, 64)
 	go func() {
 		defer close(sseCh)
 		defer cleanup()
+		eventCount := 0
 
 		for protoEvent := range eventCh {
 			sseEvent := convertSessionEventToSSE(protoEvent, sessionID)
 			if sseEvent == nil {
 				continue
 			}
+			eventCount++
 			sseCh <- *sseEvent
 
-			// Close after "done" — processing has stopped.
 			if sseEvent.Type == "done" {
 				return
 			}
-
 		}
 	}()
 
