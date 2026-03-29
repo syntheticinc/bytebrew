@@ -153,6 +153,9 @@ func (e *Engine) Execute(ctx context.Context, cfg ExecutionConfig) (*ExecutionRe
 	collector := NewMessageCollector(cfg.SessionID, cfg.AgentID, e.historyRepo)
 	wrappedEventCb := collector.WrapEventCallback(cfg.EventCallback)
 
+	// 3b. Persist user message to history (so it appears on session reload)
+	collector.CollectUserMessage(ctx, cfg.Input)
+
 	// 4. Create and run agent
 	agent, err := react.NewAgent(ctx, *agentConfig)
 	if err != nil {
