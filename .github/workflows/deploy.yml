@@ -79,10 +79,26 @@ jobs:
         id: version
         run: echo "VERSION=$(cat VERSION)" >> $GITHUB_OUTPUT
 
+      - name: Build Web Client for Engine embed
+        run: |
+          if [ -d "../bytebrew-web-client" ]; then
+            cd ../bytebrew-web-client
+          else
+            git clone https://github.com/syntheticinc/bytebrew-web-client.git /tmp/bytebrew-web-client
+            cd /tmp/bytebrew-web-client
+          fi
+          npm ci
+          VITE_BASE_PATH=/chat/ npm run build
+          cp -r dist $GITHUB_WORKSPACE/engine/webclient-dist
+
       - name: Build and push Engine Docker image
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
           cd engine
+          # Include web-client in Docker image if built
+          if [ -d webclient-dist ]; then
+            echo "COPY webclient-dist /usr/share/bytebrew/webclient" >> Dockerfile
+          fi
           docker build \
             --build-arg VERSION=$VERSION \
             -t bytebrew/engine:latest \

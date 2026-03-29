@@ -18,5 +18,11 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /app
 COPY --from=builder /app/bytebrew-ce /usr/local/bin/
 COPY --from=admin-builder /admin/dist /usr/share/bytebrew/admin
-EXPOSE 8443
+
+# Web client and widget are optional — built by CI/CD and copied into build context.
+# If webclient-dist/ or widget-dist/ directories don't exist, these COPY commands
+# are skipped by the CI/CD pipeline (conditional copy before docker build).
+# To include them locally: place built assets in webclient-dist/ and widget-dist/.
+
+EXPOSE 8443 8444
 ENTRYPOINT ["bytebrew-ce"]
