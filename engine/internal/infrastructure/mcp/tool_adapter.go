@@ -33,7 +33,14 @@ func (a *mcpToolAdapter) InvokableRun(ctx context.Context, argumentsInJSON strin
 	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
 		return "", fmt.Errorf("parse args: %w", err)
 	}
-	return a.client.CallTool(ctx, a.mcpTool.Name, args)
+	result, isError, err := a.client.CallTool(ctx, a.mcpTool.Name, args)
+	if err != nil {
+		return "", err
+	}
+	if isError {
+		return "", &MCPToolError{Content: result}
+	}
+	return result, nil
 }
 
 // parseJSONSchemaToParams converts JSON Schema to Eino params.

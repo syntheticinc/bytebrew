@@ -2,11 +2,13 @@ package callbacks
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/mcp"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	"github.com/cloudwego/eino/callbacks"
 	einotool "github.com/cloudwego/eino/components/tool"
@@ -163,5 +165,56 @@ func (h *ToolEventHandler) OnToolEnd(ctx context.Context, info *callbacks.RunInf
 	// This ensures onToolStart and onToolEnd use the same step number for callId
 	h.counter.IncrementStep()
 	slog.InfoContext(ctx, "[CALLBACK] onToolEnd completed, step incremented", "tool_name", info.Name, "new_step", h.counter.GetStep())
+	return ctx
+}
+
+// OnToolError handles tool execution errors. Called by Eino when InvokableRun returns a Go error.
+// For MCP tools with isError: true, the error wraps MCPToolError with the original content.
+func (h *ToolEventHandler) OnToolError(ctx context.Context, info *callbacks.RunInfo, err error) context.Context {
+	currentStep := h.counter.GetStep()
+	slog.WarnContext(ctx, "[CALLBACK] onToolError called", "tool_name", info.Name, "step", currentStep, "error", err)
+
+	// Extract error content — MCPToolError carries the original tool response text.
+	content := err.Error()
+	var mcpErr *mcp.MCPToolError
+	if errors.As(err, &mcpErr) {
+		content = mcpErr.Content
+	}
+
+	callID := fmt.Sprintf("server-%s-%d", info.Name, currentStep)
+
+	metadata := map[string]interface{}{
+		"tool_name":     info.Name,
+		"result_length": len(content),
+		"full_result":   content,
+	}
+
+	summary := tools.SummarizeToolResult(info.Name, content)
+	if summary != "" {
+		metadata["summary"] = summary
+	}
+
+	event := &domain.AgentEvent{
+		Type:      domain.EventTypeToolResult,
+		Timestamp: time.Now(),
+		Step:      currentStep,
+		Content:   content,
+		Metadata:  metadata,
+		Error:     &domain.AgentError{Code: "tool_error", Message: content},
+	}
+
+	slog.InfoContext(ctx, "[CALLBACK] emitting ToolResult event (error)",
+		"tool_name", info.Name,
+		"step", currentStep,
+		"call_id", callID)
+
+	h.emitter.Emit(ctx, event)
+
+	if h.recorder != nil && h.sessionID != "" && info.Name != "" {
+		h.recorder.RecordToolResult(h.sessionID, info.Name, content)
+	}
+
+	h.counter.IncrementStep()
+	slog.InfoContext(ctx, "[CALLBACK] onToolError completed, step incremented", "tool_name", info.Name, "new_step", h.counter.GetStep())
 	return ctx
 }

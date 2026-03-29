@@ -100,6 +100,28 @@ func TestAdaptMCPTool_InvokableRunInvalidJSON(t *testing.T) {
 	assert.Contains(t, err.Error(), "parse args")
 }
 
+func TestAdaptMCPTool_InvokableRun_IsError(t *testing.T) {
+	transport := newMockTransport()
+	result, _ := json.Marshal(ToolCallResult{
+		Content: []ToolContent{{Type: "text", Text: "permission denied: /etc/shadow"}},
+		IsError: true,
+	})
+	transport.responses["tools/call"] = &Response{JSONRPC: "2.0", ID: 1, Result: result}
+
+	client := NewClient("test", transport)
+	mcpTool := MCPTool{Name: "read_file", Description: "Read a file"}
+	adapted := AdaptMCPTool(client, mcpTool)
+
+	output, err := adapted.InvokableRun(context.Background(), `{"path": "/etc/shadow"}`)
+	require.Error(t, err)
+	assert.Empty(t, output)
+
+	var toolErr *MCPToolError
+	require.ErrorAs(t, err, &toolErr)
+	assert.Equal(t, "permission denied: /etc/shadow", toolErr.Content)
+	assert.Contains(t, err.Error(), "mcp tool error:")
+}
+
 func TestParseJSONSchemaToParams(t *testing.T) {
 	tests := []struct {
 		name       string

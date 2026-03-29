@@ -93,7 +93,8 @@ func (c *Client) IsConnected() bool {
 }
 
 // CallTool invokes a tool on the MCP server.
-func (c *Client) CallTool(ctx context.Context, name string, args map[string]interface{}) (string, error) {
+// Returns (result, isError, error) where isError reflects the MCP protocol isError flag.
+func (c *Client) CallTool(ctx context.Context, name string, args map[string]interface{}) (string, bool, error) {
 	req := &Request{
 		JSONRPC: "2.0",
 		ID:      c.nextRequestID(),
@@ -105,7 +106,7 @@ func (c *Client) CallTool(ctx context.Context, name string, args map[string]inte
 	}
 	resp, err := c.transport.Send(ctx, req)
 	if err != nil {
-		return "", fmt.Errorf("call tool %q: %w", name, err)
+		return "", false, fmt.Errorf("call tool %q: %w", name, err)
 	}
 	return extractToolResult(resp)
 }

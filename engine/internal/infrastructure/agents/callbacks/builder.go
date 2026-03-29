@@ -59,6 +59,7 @@ func (b *AgentCallbackBuilder) BuildCallbackOption() agent.AgentOption {
 	toolHandler := &ucb.ToolCallbackHandler{
 		OnStart: b.toolHandler.OnToolStart,
 		OnEnd:   b.toolHandler.OnToolEnd,
+		OnError: b.toolHandler.OnToolError,
 	}
 	handler := ucb.NewHandlerHelper().
 		ChatModel(modelHandler).

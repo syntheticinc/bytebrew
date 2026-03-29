@@ -179,7 +179,7 @@ func TestClient_CallTool(t *testing.T) {
 			tt.setup(transport)
 
 			client := NewClient("test", transport)
-			result, err := client.CallTool(context.Background(), "read_file", map[string]interface{}{"path": "/tmp/x"})
+			result, _, err := client.CallTool(context.Background(), "read_file", map[string]interface{}{"path": "/tmp/x"})
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -209,6 +209,62 @@ func TestClient_Close(t *testing.T) {
 	require.NoError(t, client.Close())
 	assert.False(t, client.IsConnected())
 	assert.True(t, transport.closed)
+}
+
+func TestClient_CallTool_IsError(t *testing.T) {
+	tests := []struct {
+		name        string
+		result      json.RawMessage
+		wantText    string
+		wantIsError bool
+	}{
+		{
+			name: "isError true returns content and flag",
+			result: json.RawMessage(`{"content":[{"type":"text","text":"ERROR: service unavailable"}],"isError":true}`),
+			wantText:    "ERROR: service unavailable",
+			wantIsError: true,
+		},
+		{
+			name: "isError false returns content without flag",
+			result: json.RawMessage(`{"content":[{"type":"text","text":"all good"}],"isError":false}`),
+			wantText:    "all good",
+			wantIsError: false,
+		},
+		{
+			name: "isError omitted defaults to false",
+			result: json.RawMessage(`{"content":[{"type":"text","text":"result"}]}`),
+			wantText:    "result",
+			wantIsError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			transport := newMockTransport()
+			transport.responses["tools/call"] = &Response{JSONRPC: "2.0", ID: 3, Result: tt.result}
+
+			client := NewClient("test", transport)
+			result, isError, err := client.CallTool(context.Background(), "my_tool", nil)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantText, result)
+			assert.Equal(t, tt.wantIsError, isError)
+		})
+	}
+}
+
+func TestMCPToolError_Error(t *testing.T) {
+	err := &MCPToolError{Content: "disk full"}
+	assert.Equal(t, "mcp tool error: disk full", err.Error())
+}
+
+func TestMCPToolError_ErrorsAs(t *testing.T) {
+	original := &MCPToolError{Content: "rate limited"}
+	wrapped := fmt.Errorf("invoke failed: %w", original)
+
+	var toolErr *MCPToolError
+	require.ErrorAs(t, wrapped, &toolErr)
+	assert.Equal(t, "rate limited", toolErr.Content)
 }
 
 func TestClient_Name(t *testing.T) {

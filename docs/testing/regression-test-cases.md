@@ -1430,6 +1430,40 @@
 
 ---
 
+## TC-TOOL-ERR: MCP Tool Error Propagation (5 TC)
+
+### TC-TOOL-ERR-01: MCP tool isError:true → SSE has_error:true
+**Предусловие:** MCP сервер возвращает `{"content":[...],"isError":true}` в ответе на `tools/call`
+**Шаги:** Agent вызывает MCP tool → SSE stream
+**Ожидание:** `event: tool_result` содержит `"has_error": true`, content содержит текст ошибки от MCP сервера
+**Unit test:** `TestClient_CallTool_IsError`, `TestAdaptMCPTool_InvokableRun_IsError`, `TestOnToolError_MCPToolError`
+
+### TC-TOOL-ERR-02: MCP tool isError:false → SSE has_error:false (регрессия)
+**Предусловие:** MCP сервер возвращает успешный результат (isError отсутствует или false)
+**Шаги:** Agent вызывает MCP tool → SSE stream
+**Ожидание:** `event: tool_result` содержит `"has_error": false`, content содержит результат
+**Unit test:** `TestClient_CallTool_IsError/isError_false`, `TestAdaptMCPTool_InvokableRun`
+
+### TC-TOOL-ERR-03: MCP transport error → SSE has_error:true
+**Предусловие:** MCP сервер недоступен или возвращает HTTP ошибку
+**Шаги:** Agent вызывает MCP tool → transport error
+**Ожидание:** `event: tool_result` содержит `"has_error": true`
+**Unit test:** `TestClient_CallTool/transport_error`, `TestOnToolError_EmitsEventWithError`
+
+### TC-TOOL-ERR-04: MCPToolError содержит оригинальный текст
+**Предусловие:** MCP сервер возвращает `isError: true` с текстом "service unavailable"
+**Шаги:** MCPToolError propagated through OnToolError
+**Ожидание:** AgentEvent.Error.Message == "service unavailable" (не "mcp tool error: service unavailable")
+**Unit test:** `TestOnToolError_MCPToolError`, `TestOnToolError_MCPToolError_RecordsContent`
+
+### TC-TOOL-ERR-05: Step counter инкрементируется после ошибки
+**Предусловие:** Tool вызван и вернул ошибку
+**Шаги:** OnToolError called
+**Ожидание:** Step counter увеличивается (не зависает на одном шаге)
+**Unit test:** `TestOnToolError_IncrementsStep`, `TestOnToolError_UsesCurrentStep`
+
+---
+
 ## TC-MCP-SH: Streamable HTTP MCP Transport (6 TC)
 
 ### TC-MCP-SH-01: Создание streamable-http MCP сервера через Admin API

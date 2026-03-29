@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 )
 
 // JSON-RPC 2.0 types for MCP protocol.
@@ -46,6 +47,18 @@ type ToolsListResult struct {
 // ToolCallResult is the result of tools/call.
 type ToolCallResult struct {
 	Content []ToolContent `json:"content"`
+	IsError bool          `json:"isError,omitempty"`
+}
+
+// MCPToolError represents a tool-level error returned by an MCP server (isError: true).
+// Distinguished from transport errors — the MCP server responded successfully,
+// but the tool itself reported a failure.
+type MCPToolError struct {
+	Content string // The error message from the tool
+}
+
+func (e *MCPToolError) Error() string {
+	return fmt.Sprintf("mcp tool error: %s", e.Content)
 }
 
 // ToolContent represents a content block in a tool call result.
@@ -73,13 +86,13 @@ func parseToolsFromResponse(resp *Response) ([]MCPTool, error) {
 	return result.Tools, nil
 }
 
-func extractToolResult(resp *Response) (string, error) {
+func extractToolResult(resp *Response) (string, bool, error) {
 	if resp.Error != nil {
-		return "", resp.Error
+		return "", false, resp.Error
 	}
 	var result ToolCallResult
 	if err := json.Unmarshal(resp.Result, &result); err != nil {
-		return string(resp.Result), nil // fallback to raw
+		return string(resp.Result), false, nil // fallback to raw
 	}
 	var texts []string
 	for _, c := range result.Content {
@@ -88,7 +101,7 @@ func extractToolResult(resp *Response) (string, error) {
 		}
 	}
 	if len(texts) == 0 {
-		return string(resp.Result), nil
+		return string(resp.Result), result.IsError, nil
 	}
-	return texts[0], nil
+	return texts[0], result.IsError, nil
 }
