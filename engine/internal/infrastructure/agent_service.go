@@ -211,7 +211,11 @@ func createWebTools(cfg config.Config) (einotool.InvokableTool, einotool.Invokab
 	if webSearchAPIKey == "" {
 		webSearchAPIKey = os.Getenv("TAVILY_API_KEY")
 	}
-	if cfg.WebSearch.Provider != "tavily" || webSearchAPIKey == "" {
+	webProvider := cfg.WebSearch.Provider
+	if webProvider == "" && webSearchAPIKey != "" {
+		webProvider = "tavily" // auto-detect from API key presence
+	}
+	if webProvider != "tavily" || webSearchAPIKey == "" {
 		return nil, nil
 	}
 
