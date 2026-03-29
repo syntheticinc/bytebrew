@@ -69,3 +69,56 @@ func TestExpandEnvVars(t *testing.T) {
 		})
 	}
 }
+
+func TestSplitAndTrim(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		sep   string
+		want  []string
+	}{
+		{
+			name:  "simple comma separated",
+			input: "a,b,c",
+			sep:   ",",
+			want:  []string{"a", "b", "c"},
+		},
+		{
+			name:  "with spaces around values",
+			input: " https://example.com , https://app.example.com ",
+			sep:   ",",
+			want:  []string{"https://example.com", "https://app.example.com"},
+		},
+		{
+			name:  "empty elements excluded",
+			input: "a,,b, ,c",
+			sep:   ",",
+			want:  []string{"a", "b", "c"},
+		},
+		{
+			name:  "empty string",
+			input: "",
+			sep:   ",",
+			want:  []string{},
+		},
+		{
+			name:  "single value",
+			input: "https://example.com",
+			sep:   ",",
+			want:  []string{"https://example.com"},
+		},
+		{
+			name:  "only whitespace and separators",
+			input: " , , ",
+			sep:   ",",
+			want:  []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := splitAndTrim(tt.input, tt.sep)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

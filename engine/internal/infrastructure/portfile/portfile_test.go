@@ -129,3 +129,111 @@ func TestWriterPath(t *testing.T) {
 	expected := filepath.Join(dir, fileName)
 	assert.Equal(t, expected, writer.Path())
 }
+
+func TestPortInfo_WithHTTPAndInternalPort(t *testing.T) {
+	dir := t.TempDir()
+	writer := NewWriter(dir)
+	reader := NewReader(dir)
+
+	info := PortInfo{
+		PID:          12345,
+		Port:         50051,
+		HTTPPort:     8443,
+		InternalPort: 8444,
+		Host:         "0.0.0.0",
+		StartedAt:    "2026-03-29T10:00:00Z",
+	}
+
+	err := writer.Write(info)
+	require.NoError(t, err)
+
+	got, err := reader.Read()
+	require.NoError(t, err)
+	require.NotNil(t, got)
+
+	assert.Equal(t, 12345, got.PID)
+	assert.Equal(t, 50051, got.Port)
+	assert.Equal(t, 8443, got.HTTPPort)
+	assert.Equal(t, 8444, got.InternalPort)
+	assert.Equal(t, "0.0.0.0", got.Host)
+}
+
+func TestPortInfo_BackwardCompat(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, fileName)
+
+	// Write old-format JSON without http_port/internal_port fields.
+	oldJSON := `{"pid":12345,"port":50051,"host":"localhost","startedAt":"2026-03-29T10:00:00Z"}`
+	require.NoError(t, os.WriteFile(path, []byte(oldJSON), 0644))
+
+	reader := NewReader(dir)
+	got, err := reader.Read()
+	require.NoError(t, err)
+	require.NotNil(t, got)
+
+	assert.Equal(t, 12345, got.PID)
+	assert.Equal(t, 50051, got.Port)
+	assert.Equal(t, "localhost", got.Host)
+	// New fields default to zero.
+	assert.Equal(t, 0, got.HTTPPort)
+	assert.Equal(t, 0, got.InternalPort)
+}
+
+func TestPortInfo_OmitEmpty(t *testing.T) {
+	dir := t.TempDir()
+	writer := NewWriter(dir)
+
+	info := PortInfo{
+		PID:       12345,
+		Port:      50051,
+		Host:      "localhost",
+		StartedAt: "2026-03-29T10:00:00Z",
+		// HTTPPort and InternalPort are 0 — should be omitted from JSON.
+	}
+
+	err := writer.Write(info)
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(filepath.Join(dir, fileName))
+	require.NoError(t, err)
+
+	jsonStr := string(data)
+	assert.NotContains(t, jsonStr, "http_port")
+	assert.NotContains(t, jsonStr, "internal_port")
+	assert.NotContains(t, jsonStr, "ws_port")
+
+	// Fields that are always present.
+	assert.Contains(t, jsonStr, `"pid"`)
+	assert.Contains(t, jsonStr, `"port"`)
+	assert.Contains(t, jsonStr, `"host"`)
+}
+
+func TestPortInfo_WithAllPorts(t *testing.T) {
+	dir := t.TempDir()
+	writer := NewWriter(dir)
+	reader := NewReader(dir)
+
+	info := PortInfo{
+		PID:          99999,
+		Port:         50051,
+		WsPort:       8080,
+		HTTPPort:     8443,
+		InternalPort: 8444,
+		Host:         "127.0.0.1",
+		StartedAt:    "2026-03-29T12:00:00Z",
+	}
+
+	require.NoError(t, writer.Write(info))
+
+	got, err := reader.Read()
+	require.NoError(t, err)
+	require.NotNil(t, got)
+
+	assert.Equal(t, info.PID, got.PID)
+	assert.Equal(t, info.Port, got.Port)
+	assert.Equal(t, info.WsPort, got.WsPort)
+	assert.Equal(t, info.HTTPPort, got.HTTPPort)
+	assert.Equal(t, info.InternalPort, got.InternalPort)
+	assert.Equal(t, info.Host, got.Host)
+	assert.Equal(t, info.StartedAt, got.StartedAt)
+}

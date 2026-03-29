@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -171,4 +172,175 @@ func TestDefaultBootstrapConfig(t *testing.T) {
 	assert.Equal(t, 8080, cfg.Engine.Port)
 	assert.Equal(t, "info", cfg.Logging.Level)
 	assert.Empty(t, cfg.Database.URL)
+}
+
+func TestBootstrapValidation_InternalPort(t *testing.T) {
+	baseYAML := func(port, internalPort int) string {
+		return fmt.Sprintf(`
+engine:
+  port: %d
+  internal_port: %d
+database:
+  url: "postgresql://localhost/db"
+`, port, internalPort)
+	}
+
+	tests := []struct {
+		name         string
+		port         int
+		internalPort int
+		wantErr      string
+	}{
+		{
+			name:         "internal port same as port",
+			port:         8443,
+			internalPort: 8443,
+			wantErr:      "internal_port (8443) must differ from port (8443)",
+		},
+		{
+			name:         "internal port valid",
+			port:         8443,
+			internalPort: 8444,
+		},
+		{
+			name:         "internal port zero is single-port mode",
+			port:         8443,
+			internalPort: 0,
+		},
+		{
+			name:         "internal port negative",
+			port:         8443,
+			internalPort: -1,
+			wantErr:      "invalid internal port",
+		},
+		{
+			name:         "internal port too large",
+			port:         8443,
+			internalPort: 70000,
+			wantErr:      "invalid internal port",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			configPath := filepath.Join(tmpDir, "config.yaml")
+			require.NoError(t, os.WriteFile(configPath, []byte(baseYAML(tt.port, tt.internalPort)), 0644))
+
+			cfg, err := LoadBootstrap(configPath)
+
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, cfg)
+			assert.Equal(t, tt.internalPort, cfg.Engine.InternalPort)
+		})
+	}
+}
+
+func TestBootstrapEnvOverrides_InternalPort(t *testing.T) {
+	t.Setenv("BYTEBREW_INTERNAL_PORT", "8444")
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	yaml := `
+engine:
+  port: 8443
+database:
+  url: "postgresql://localhost/db"
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(yaml), 0644))
+
+	cfg, err := LoadBootstrap(configPath)
+	require.NoError(t, err)
+	assert.Equal(t, 8444, cfg.Engine.InternalPort)
+}
+
+func TestBootstrapEnvOverrides_CORSOrigins(t *testing.T) {
+	t.Setenv("BYTEBREW_CORS_ORIGINS", "https://example.com, https://app.example.com")
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	yaml := `
+engine:
+  port: 8443
+database:
+  url: "postgresql://localhost/db"
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(yaml), 0644))
+
+	cfg, err := LoadBootstrap(configPath)
+	require.NoError(t, err)
+	require.Len(t, cfg.Engine.CORSOrigins, 2)
+	assert.Equal(t, "https://example.com", cfg.Engine.CORSOrigins[0])
+	assert.Equal(t, "https://app.example.com", cfg.Engine.CORSOrigins[1])
+}
+
+func TestBootstrapEnvOverrides_InternalPortConflict(t *testing.T) {
+	// Env override sets internal_port = port, should fail validation.
+	t.Setenv("BYTEBREW_INTERNAL_PORT", "8443")
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	yaml := `
+engine:
+  port: 8443
+database:
+  url: "postgresql://localhost/db"
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(yaml), 0644))
+
+	_, err := LoadBootstrap(configPath)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must differ from port")
+}
+
+func TestLoadBootstrapFromEnv_InternalPort(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgresql://localhost/db")
+	t.Setenv("BYTEBREW_INTERNAL_PORT", "9090")
+
+	cfg, err := LoadBootstrap("/nonexistent/config.yaml")
+	require.NoError(t, err)
+	assert.Equal(t, 9090, cfg.Engine.InternalPort)
+}
+
+func TestLoadBootstrapFromEnv_CORSOrigins(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgresql://localhost/db")
+	t.Setenv("BYTEBREW_CORS_ORIGINS", "https://a.com,https://b.com, https://c.com ")
+
+	cfg, err := LoadBootstrap("/nonexistent/config.yaml")
+	require.NoError(t, err)
+	require.Len(t, cfg.Engine.CORSOrigins, 3)
+	assert.Equal(t, "https://a.com", cfg.Engine.CORSOrigins[0])
+	assert.Equal(t, "https://b.com", cfg.Engine.CORSOrigins[1])
+	assert.Equal(t, "https://c.com", cfg.Engine.CORSOrigins[2])
+}
+
+func TestBootstrapValidation_TwoPortYAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	yaml := `
+engine:
+  host: "0.0.0.0"
+  port: 8443
+  internal_port: 8444
+  cors_origins:
+    - "https://example.com"
+    - "https://app.example.com"
+database:
+  url: "postgresql://localhost/db"
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(yaml), 0644))
+
+	cfg, err := LoadBootstrap(configPath)
+	require.NoError(t, err)
+	assert.Equal(t, 8443, cfg.Engine.Port)
+	assert.Equal(t, 8444, cfg.Engine.InternalPort)
+	require.Len(t, cfg.Engine.CORSOrigins, 2)
+	assert.Equal(t, "https://example.com", cfg.Engine.CORSOrigins[0])
+	assert.Equal(t, "https://app.example.com", cfg.Engine.CORSOrigins[1])
 }
