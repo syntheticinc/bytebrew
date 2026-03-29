@@ -80,13 +80,17 @@ jobs:
         run: echo "VERSION=$(cat VERSION)" >> $GITHUB_OUTPUT
 
       - name: Build Web Client for Engine embed
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: syntheticinc/bytebrew-web-client
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          path: webclient-src
+
+      - name: Build Web Client
+        if: hashFiles('webclient-src/package.json') != ''
         run: |
-          if [ -d "../bytebrew-web-client" ]; then
-            cd ../bytebrew-web-client
-          else
-            git clone https://github.com/syntheticinc/bytebrew-web-client.git /tmp/bytebrew-web-client
-            cd /tmp/bytebrew-web-client
-          fi
+          cd webclient-src
           npm ci
           VITE_BASE_PATH=/chat/ npm run build
           cp -r dist $GITHUB_WORKSPACE/engine/webclient-dist
