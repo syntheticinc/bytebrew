@@ -464,10 +464,10 @@ func (a *messageServiceHTTPAdapter) ListMessages(ctx context.Context, sessionID 
 		}
 		if m.Metadata != "" {
 			var meta struct {
-				Tool string `json:"tool"`
+				ToolName string `json:"tool_name"`
 			}
-			if json.Unmarshal([]byte(m.Metadata), &meta) == nil && meta.Tool != "" {
-				resp.ToolName = meta.Tool
+			if json.Unmarshal([]byte(m.Metadata), &meta) == nil && meta.ToolName != "" {
+				resp.ToolName = meta.ToolName
 			}
 		}
 		result = append(result, resp)
