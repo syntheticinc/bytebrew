@@ -32,11 +32,26 @@ const NAV_SECTIONS = [
     title: 'Core Concepts',
     items: [
       { id: 'concept-agents', label: 'Agents & Lifecycle' },
+      { id: 'concept-visibility', label: 'Agent Visibility' },
       { id: 'concept-multi-agent', label: 'Multi-Agent' },
       { id: 'concept-tools', label: 'Tools' },
       { id: 'concept-tasks', label: 'Tasks & Jobs' },
       { id: 'concept-rag', label: 'Knowledge / RAG' },
       { id: 'concept-triggers', label: 'Triggers' },
+    ],
+  },
+  {
+    title: 'Integration',
+    items: [
+      { id: 'integration-widget', label: 'Embeddable Widget' },
+      { id: 'integration-web-client', label: 'Web Client' },
+    ],
+  },
+  {
+    title: 'Deployment',
+    items: [
+      { id: 'deploy-ports', label: 'Two-Port Architecture' },
+      { id: 'deploy-cors', label: 'CORS Configuration' },
     ],
   },
   {
@@ -69,11 +84,16 @@ const CONTENT_MAP: Record<string, () => React.JSX.Element> = {
   'admin-config': AdminConfigContent,
   'admin-audit': AdminAuditContent,
   'concept-agents': ConceptAgentsContent,
+  'concept-visibility': ConceptVisibilityContent,
   'concept-multi-agent': ConceptMultiAgentContent,
   'concept-tools': ConceptToolsContent,
   'concept-tasks': ConceptTasksContent,
   'concept-rag': ConceptRagContent,
   'concept-triggers': ConceptTriggersContent,
+  'integration-widget': IntegrationWidgetContent,
+  'integration-web-client': IntegrationWebClientContent,
+  'deploy-ports': DeployPortsContent,
+  'deploy-cors': DeployCorsContent,
   'example-sales': ExampleSalesContent,
   'example-support': ExampleSupportContent,
   'example-devops': ExampleDevopsContent,
@@ -312,11 +332,16 @@ data: {"session_id":"a1b2c3d4","tokens":42}`}</CodeBlock>
   -d '{"message": "Tell me more about that", "session_id": "a1b2c3d4"}'`}</CodeBlock>
       </QuickStartStep>
 
-      <QuickStartStep n={5} title="Open the Admin Dashboard">
+      <QuickStartStep n={5} title="Open the Admin Dashboard and Web Client">
         <p className="text-sm text-text-tertiary mb-3">
           Navigate to <Ic>http://localhost:8443/admin</Ic> in your browser to manage agents,
           models, tools, and triggers through a visual interface. Default credentials
           are configured via <Ic>ADMIN_USER</Ic> and <Ic>ADMIN_PASSWORD</Ic> environment variables.
+        </p>
+        <p className="text-sm text-text-tertiary mb-3">
+          Once your agent is configured, open <Ic>http://localhost:8443/chat/</Ic> for a full-featured
+          chat interface. The built-in Web Client lets you test conversations, see tool calls in real time,
+          and manage sessions -- no extra setup required.
         </p>
         <img
           src="/screenshots/admin-health.png"
@@ -1659,7 +1684,8 @@ function AdminApiKeysContent() {
 
       <SubSection title="Available scopes">
         <ParamTable params={[
-          { name: 'chat', required: false, default: '--', desc: 'Send messages to agents (POST /agents/{name}/chat). The most common scope for client applications.' },
+          { name: 'chat', required: false, default: '--', desc: 'Send messages to any agent (POST /agents/{name}/chat). The most common scope for server-to-server integrations.' },
+          { name: 'chat_public', required: false, default: '--', desc: 'Send messages only to agents marked as public. Designed for the embeddable widget and browser-facing integrations where the key is visible to end users.' },
           { name: 'tasks', required: false, default: '--', desc: 'CRUD operations on /tasks. Create, list, cancel tasks and provide input.' },
           { name: 'agents:read', required: false, default: '--', desc: 'Read-only access to agent configurations (GET /agents).' },
           { name: 'config', required: false, default: '--', desc: 'Reload, export, and import configuration. Useful for CI/CD pipelines.' },
@@ -2532,6 +2558,383 @@ curl -X POST http://localhost:8080/api/v1/webhooks/stripe \\
         { label: 'Admin: Triggers', id: 'admin-triggers' },
         { label: 'Tasks & Jobs', id: 'concept-tasks' },
         { label: 'Example: DevOps Monitor', id: 'example-devops' },
+      ]} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Core Concepts > Agent Visibility                                   */
+/* ------------------------------------------------------------------ */
+
+function ConceptVisibilityContent() {
+  return (
+    <div>
+      <PageTitle>Agent Visibility</PageTitle>
+      <p className="text-sm text-text-tertiary mb-4">
+        Every agent in ByteBrew has a visibility setting that controls who can interact with it.
+        By default, all agents are private. Making an agent public allows it to be accessed through
+        the embeddable widget and browser-facing API keys without exposing your other agents.
+      </p>
+
+      <SubSection title="Public vs Private agents">
+        <ParamTable params={[
+          { name: 'private', required: false, default: 'Yes', desc: 'Only accessible via admin JWT or API keys with the chat scope. Suitable for internal tools, server-to-server integrations, and agents that handle sensitive data.' },
+          { name: 'public', required: false, default: 'No', desc: 'Accessible via API keys with either chat or chat_public scope. Suitable for customer-facing chatbots, embeddable widgets, and public-facing integrations.' },
+        ]} />
+      </SubSection>
+
+      <SubSection title="How to make an agent public">
+        <p className="text-sm text-text-tertiary mb-3">
+          There are two ways to set an agent as public:
+        </p>
+        <BulletList items={[
+          <><strong className="text-text-secondary">Admin Dashboard</strong> -- open the agent editor, toggle the &quot;Public&quot; switch, and save.</>,
+          <><strong className="text-text-secondary">REST API</strong> -- send <Ic>{'PUT /api/v1/agents/{name}'}</Ic> with <Ic>{'"public": true'}</Ic> in the request body.</>,
+          <><strong className="text-text-secondary">YAML config</strong> -- add <Ic>public: true</Ic> to the agent definition.</>,
+        ]} />
+        <CodeBlock>{`agents:
+  # Public: accessible via widget and chat_public API keys
+  support-bot:
+    model: glm-5
+    public: true
+    system: "You are a customer support assistant."
+
+  # Private (default): only accessible via admin or chat API keys
+  internal-analyst:
+    model: glm-5
+    system: "You are an internal data analyst."`}</CodeBlock>
+      </SubSection>
+
+      <SubSection title="API key scopes and visibility">
+        <p className="text-sm text-text-tertiary mb-3">
+          Visibility works together with API key scopes to control access:
+        </p>
+        <ParamTable params={[
+          { name: 'chat', required: false, default: '--', desc: 'Can talk to all agents (public and private). Use for server-to-server integrations where the key is kept secret.' },
+          { name: 'chat_public', required: false, default: '--', desc: 'Can talk only to agents marked as public. Use for the embeddable widget and any integration where the key is visible to end users.' },
+        ]} />
+
+        <Callout type="tip" title="Widget integration">
+          When embedding the widget on a third-party website, create an API key with
+          the <Ic>chat_public</Ic> scope. This ensures that even if someone extracts the key from your
+          page source, they can only interact with agents you have explicitly marked as public.
+        </Callout>
+      </SubSection>
+
+      <SectionDivider />
+      <WhatNext items={[
+        { label: 'Embeddable Widget', id: 'integration-widget' },
+        { label: 'API Keys', id: 'admin-api-keys' },
+        { label: 'Agents & Lifecycle', id: 'concept-agents' },
+      ]} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Integration > Embeddable Widget                                    */
+/* ------------------------------------------------------------------ */
+
+function IntegrationWidgetContent() {
+  return (
+    <div>
+      <PageTitle>Embeddable Widget</PageTitle>
+      <p className="text-sm text-text-tertiary mb-4">
+        The ByteBrew widget is a lightweight chat bubble that you can embed on any website with
+        a single <Ic>{'<script>'}</Ic> tag. It connects to your ByteBrew Engine and lets end users
+        chat with your agents directly from your website.
+      </p>
+
+      <SubSection title="Quick start">
+        <p className="text-sm text-text-tertiary mb-3">
+          Add this snippet before the closing <Ic>{'</body>'}</Ic> tag of your HTML page:
+        </p>
+        <CodeBlock>{`<script
+  src="https://your-engine-host:8443/widget.js"
+  data-agent="support-bot"
+  data-api-key="bb_pub_your_public_api_key"
+></script>`}</CodeBlock>
+        <p className="text-sm text-text-tertiary mt-3">
+          That is it. A chat bubble appears in the bottom-right corner of the page.
+          Clicking it opens a conversation with the specified agent.
+        </p>
+      </SubSection>
+
+      <SubSection title="Configuration attributes">
+        <ParamTable params={[
+          { name: 'data-agent', required: true, default: '--', desc: 'Name of the agent to connect to. The agent must be marked as public if you are using a chat_public API key.' },
+          { name: 'data-api-key', required: false, default: '--', desc: 'API key with chat or chat_public scope. Used in Direct mode where the widget talks to the engine directly.' },
+          { name: 'data-endpoint', required: false, default: '--', desc: 'URL of your backend proxy. Used in Proxy mode where the widget talks to your server instead of the engine directly.' },
+          { name: 'data-position', required: false, default: 'bottom-right', desc: 'Position of the chat bubble: bottom-right or bottom-left.' },
+          { name: 'data-theme', required: false, default: 'auto', desc: 'Color theme: light, dark, or auto (follows system preference).' },
+          { name: 'data-title', required: false, default: 'Chat', desc: 'Title shown in the chat window header.' },
+        ]} />
+      </SubSection>
+
+      <SubSection title="Direct mode vs Proxy mode">
+        <p className="text-sm text-text-tertiary mb-4">
+          The widget supports two connection modes depending on your architecture:
+        </p>
+
+        <h4 className="text-sm font-semibold text-text-primary mt-4 mb-2">Direct mode (data-api-key)</h4>
+        <p className="text-sm text-text-tertiary mb-3">
+          The widget connects directly to your ByteBrew Engine. Simple to set up,
+          ideal when the engine is publicly accessible. Use a <Ic>chat_public</Ic> scoped API key
+          so that only public agents are exposed.
+        </p>
+        <CodeBlock>{`<!-- Direct mode: widget talks to engine -->
+<script
+  src="https://engine.example.com:8443/widget.js"
+  data-agent="support-bot"
+  data-api-key="bb_pub_abc123"
+  data-title="Support"
+  data-theme="light"
+></script>`}</CodeBlock>
+
+        <h4 className="text-sm font-semibold text-text-primary mt-6 mb-2">Proxy mode (data-endpoint)</h4>
+        <p className="text-sm text-text-tertiary mb-3">
+          The widget sends requests to your backend, which forwards them to the engine.
+          This keeps your API key server-side and lets you add custom authentication,
+          rate limiting, or logging.
+        </p>
+        <CodeBlock>{`<!-- Proxy mode: widget talks to your backend -->
+<script
+  src="https://engine.example.com:8443/widget.js"
+  data-agent="support-bot"
+  data-endpoint="https://myapp.com/api/chat"
+  data-title="Support"
+></script>`}</CodeBlock>
+
+        <Callout type="tip" title="Which mode to use?">
+          Use <strong className="text-text-secondary">Direct mode</strong> for quick prototyping and
+          simple deployments. Use <strong className="text-text-secondary">Proxy mode</strong> for
+          production when you want to keep API keys secret, add your own authentication, or log
+          conversations on your side.
+        </Callout>
+      </SubSection>
+
+      <SubSection title="Full HTML example">
+        <CodeBlock>{`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>My Website</title>
+</head>
+<body>
+  <h1>Welcome to our site</h1>
+  <p>Click the chat bubble in the corner to talk to our AI assistant.</p>
+
+  <!-- ByteBrew Widget -->
+  <script
+    src="https://engine.example.com:8443/widget.js"
+    data-agent="support-bot"
+    data-api-key="bb_pub_abc123"
+    data-position="bottom-right"
+    data-theme="auto"
+    data-title="Ask us anything"
+  ></script>
+</body>
+</html>`}</CodeBlock>
+      </SubSection>
+
+      <SectionDivider />
+      <WhatNext items={[
+        { label: 'Agent Visibility', id: 'concept-visibility' },
+        { label: 'Web Client', id: 'integration-web-client' },
+        { label: 'CORS Configuration', id: 'deploy-cors' },
+        { label: 'API Keys', id: 'admin-api-keys' },
+      ]} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Integration > Web Client                                           */
+/* ------------------------------------------------------------------ */
+
+function IntegrationWebClientContent() {
+  return (
+    <div>
+      <PageTitle>Web Client</PageTitle>
+      <p className="text-sm text-text-tertiary mb-4">
+        ByteBrew Engine ships with a built-in Web Client -- a full-featured chat interface served
+        at <Ic>/chat/</Ic>. It requires no extra setup: once the engine is running, open the URL
+        in your browser and start chatting with your agents.
+      </p>
+
+      <SubSection title="Accessing the Web Client">
+        <BulletList items={[
+          <>Navigate to <Ic>http://localhost:8443/chat/</Ic> (same host as the Admin Dashboard).</>,
+          <>Log in with the same admin credentials (<Ic>ADMIN_USER</Ic> / <Ic>ADMIN_PASSWORD</Ic>).</>,
+          <>Select an agent from the sidebar and start a conversation.</>,
+        ]} />
+      </SubSection>
+
+      <SubSection title="Features">
+        <BulletList items={[
+          <><strong className="text-text-secondary">Agent sidebar</strong> -- switch between configured agents.</>,
+          <><strong className="text-text-secondary">Session management</strong> -- create new sessions, continue previous conversations.</>,
+          <><strong className="text-text-secondary">SSE streaming</strong> -- see tokens as they are generated in real time.</>,
+          <><strong className="text-text-secondary">Tool calls display</strong> -- see which tools the agent calls and their results.</>,
+          <><strong className="text-text-secondary">Markdown rendering</strong> -- code blocks, tables, and rich text in responses.</>,
+          <><strong className="text-text-secondary">Responsive design</strong> -- works on desktop and mobile browsers.</>,
+        ]} />
+      </SubSection>
+
+      <SubSection title="When to use Web Client vs Widget">
+        <ParamTable params={[
+          { name: 'Web Client', required: false, default: '--', desc: 'Full admin-level chat interface. Use for testing, internal tools, and admin access. Requires login. Served from the engine.' },
+          { name: 'Widget', required: false, default: '--', desc: 'Lightweight chat bubble embedded on your website. Use for customer-facing interactions. No login required. Uses API key authentication.' },
+        ]} />
+      </SubSection>
+
+      <SectionDivider />
+      <WhatNext items={[
+        { label: 'Embeddable Widget', id: 'integration-widget' },
+        { label: 'Quick Start', id: 'quick-start' },
+        { label: 'Two-Port Architecture', id: 'deploy-ports' },
+      ]} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Deployment > Two-Port Architecture                                 */
+/* ------------------------------------------------------------------ */
+
+function DeployPortsContent() {
+  return (
+    <div>
+      <PageTitle>Two-Port Architecture</PageTitle>
+      <p className="text-sm text-text-tertiary mb-4">
+        ByteBrew Engine can split traffic across two ports to separate public-facing endpoints (data plane)
+        from admin and management endpoints (control plane). This is optional -- the default
+        single-port mode is fully backward compatible.
+      </p>
+
+      <SubSection title="Overview">
+        <ParamTable params={[
+          { name: 'External port (8443)', required: false, default: '--', desc: 'Data plane -- chat API (POST /agents/{name}/chat), widget (widget.js), health check (/api/v1/health), webhook triggers. Exposed to the internet or your users.' },
+          { name: 'Internal port (8444)', required: false, default: '--', desc: 'Control plane -- Admin Dashboard (/admin/), Web Client (/chat/), management API (agents CRUD, models, config, API keys, audit log). Restricted to internal network or VPN.' },
+        ]} />
+      </SubSection>
+
+      <SubSection title="Configuration">
+        <p className="text-sm text-text-tertiary mb-3">
+          Enable two-port mode by setting the <Ic>BYTEBREW_INTERNAL_PORT</Ic> environment variable.
+          When set, the engine starts two HTTP listeners.
+        </p>
+        <CodeBlock>{`# .env
+BYTEBREW_INTERNAL_PORT=8444`}</CodeBlock>
+
+        <p className="text-sm text-text-tertiary mt-4 mb-3">
+          If <Ic>BYTEBREW_INTERNAL_PORT</Ic> is not set, the engine runs in single-port mode --
+          all endpoints are served on the main port (default <Ic>8443</Ic>). This is the default
+          and requires no changes to existing deployments.
+        </p>
+      </SubSection>
+
+      <SubSection title="Docker Compose example">
+        <CodeBlock>{`services:
+  engine:
+    image: ghcr.io/syntheticinc/bytebrew-engine:latest
+    ports:
+      - "8443:8443"   # External: chat API, widget, health
+      - "8444:8444"   # Internal: admin, web client, management
+    environment:
+      BYTEBREW_INTERNAL_PORT: 8444
+      ADMIN_USER: admin
+      ADMIN_PASSWORD: \${ADMIN_PASSWORD}
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: bytebrew
+      POSTGRES_USER: bytebrew
+      POSTGRES_PASSWORD: \${DB_PASSWORD}`}</CodeBlock>
+      </SubSection>
+
+      <SubSection title="Security recommendations">
+        <BulletList items={[
+          <><strong className="text-text-secondary">External port</strong> -- place behind a reverse proxy (Caddy, nginx) with TLS. Expose to the internet or your user network.</>,
+          <><strong className="text-text-secondary">Internal port</strong> -- restrict to VPN, private network, or localhost only. Never expose to the public internet.</>,
+          <><strong className="text-text-secondary">Firewall rules</strong> -- allow <Ic>8443</Ic> from the internet, allow <Ic>8444</Ic> only from management IPs or VPN CIDR.</>,
+          <><strong className="text-text-secondary">Kubernetes</strong> -- create two Services: a <Ic>LoadBalancer</Ic> for the external port and a <Ic>ClusterIP</Ic> for the internal port. Use <Ic>NetworkPolicy</Ic> to restrict internal port access.</>,
+        ]} />
+
+        <Callout type="warning" title="Single-port mode in production">
+          If you run in single-port mode, all admin endpoints are available on the same port as
+          the chat API. Make sure to protect admin routes with a reverse proxy or network-level access
+          control in production.
+        </Callout>
+      </SubSection>
+
+      <SectionDivider />
+      <WhatNext items={[
+        { label: 'CORS Configuration', id: 'deploy-cors' },
+        { label: 'Configuration Reference', id: 'configuration' },
+        { label: 'Embeddable Widget', id: 'integration-widget' },
+      ]} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Deployment > CORS Configuration                                    */
+/* ------------------------------------------------------------------ */
+
+function DeployCorsContent() {
+  return (
+    <div>
+      <PageTitle>CORS Configuration</PageTitle>
+      <p className="text-sm text-text-tertiary mb-4">
+        Cross-Origin Resource Sharing (CORS) controls which websites can make requests to your
+        ByteBrew Engine from the browser. This is important when using the embeddable widget or
+        building a custom frontend that talks to the engine directly.
+      </p>
+
+      <SubSection title="Configuration">
+        <p className="text-sm text-text-tertiary mb-3">
+          Set the <Ic>BYTEBREW_CORS_ORIGINS</Ic> environment variable to a comma-separated list
+          of allowed origins:
+        </p>
+        <CodeBlock>{`# Allow specific origins
+BYTEBREW_CORS_ORIGINS=https://myapp.com,https://staging.myapp.com
+
+# Allow everything (development only)
+BYTEBREW_CORS_ORIGINS=*`}</CodeBlock>
+
+        <p className="text-sm text-text-tertiary mt-3">
+          When not set, the engine allows all origins by default. This is convenient for development
+          but should be restricted in production.
+        </p>
+      </SubSection>
+
+      <SubSection title="Two-port mode">
+        <p className="text-sm text-text-tertiary mb-3">
+          When using the two-port architecture, CORS settings apply to the external port only.
+          The internal port does not need CORS because the Admin Dashboard and Web Client are served
+          from the same origin.
+        </p>
+        <CodeBlock>{`# .env — production example
+BYTEBREW_INTERNAL_PORT=8444
+BYTEBREW_CORS_ORIGINS=https://myapp.com,https://www.myapp.com`}</CodeBlock>
+      </SubSection>
+
+      <SubSection title="Troubleshooting">
+        <BulletList items={[
+          <><strong className="text-text-secondary">Widget not loading</strong> -- check browser console for CORS errors. Add your website&apos;s origin to <Ic>BYTEBREW_CORS_ORIGINS</Ic>.</>,
+          <><strong className="text-text-secondary">Preflight fails</strong> -- the engine handles <Ic>OPTIONS</Ic> requests automatically. If using a reverse proxy, make sure it forwards <Ic>OPTIONS</Ic> requests to the engine.</>,
+          <><strong className="text-text-secondary">Credentials / cookies</strong> -- the widget uses <Ic>Authorization</Ic> headers (API keys), not cookies. Standard CORS with allowed origins is sufficient.</>,
+        ]} />
+      </SubSection>
+
+      <SectionDivider />
+      <WhatNext items={[
+        { label: 'Two-Port Architecture', id: 'deploy-ports' },
+        { label: 'Embeddable Widget', id: 'integration-widget' },
+        { label: 'API Keys', id: 'admin-api-keys' },
       ]} />
     </div>
   );
