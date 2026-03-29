@@ -30,10 +30,11 @@ type ModelEventHandler struct {
 	accumulatedChunks    string
 	accumulatedMu        sync.Mutex
 
-	// streamDone is closed when the streaming goroutine completes.
-	// Agent.Stream() waits on this before returning, preventing ProcessingStopped
-	// from being sent before all chunks are delivered via SSE.
-	streamDone chan struct{}
+	// streamWg tracks active streaming goroutines. Agent.Stream() waits on this
+	// before returning, preventing ProcessingStopped from firing before all chunks
+	// are delivered. Used instead of a channel because OnModelEndWithStreamOutput
+	// may be called multiple times during multi-step agent execution.
+	streamWg sync.WaitGroup
 }
 
 // NewModelEventHandler creates a new ModelEventHandler.
@@ -50,7 +51,6 @@ func NewModelEventHandler(
 		extractor:  extractor,
 		store:      store,
 		chunkCb:    chunkCb,
-		streamDone: make(chan struct{}),
 	}
 }
 
@@ -123,12 +123,13 @@ func (h *ModelEventHandler) OnModelEndWithStreamOutput(ctx context.Context, info
 	modelCallIdx := h.counter.GetModelCallCount()
 	h.counter.IncrementModelCallCount()
 	slog.InfoContext(ctx, "[CALLBACK] onModelEndWithStreamOutput called, starting goroutine", "step", h.counter.GetStep(), "model_call_idx", modelCallIdx)
+	h.streamWg.Add(1)
 	go func() {
 		slog.InfoContext(ctx, "[CALLBACK] goroutine started, will process stream frames")
 		defer func() {
 			slog.InfoContext(ctx, "[CALLBACK] goroutine defer: closing output stream + signaling done")
 			output.Close()
-			close(h.streamDone)
+			h.streamWg.Done()
 		}()
 
 		var streamErr error

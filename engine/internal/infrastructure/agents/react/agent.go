@@ -536,7 +536,7 @@ func (a *Agent) Stream(ctx context.Context, input string, callback func(chunk st
 	// The drain loop reads the main Eino reader fast, but the callback goroutine
 	// reads its own tee'd copy and delivers chunks via chunkCb. Without this wait,
 	// ProcessingStopped fires before all chunks reach the SSE client.
-	<-cb.StreamDone()
+	cb.WaitStreamDone()
 	slog.InfoContext(ctx, "[STREAM] Callback goroutine completed")
 
 	// Finalize any accumulated text that wasn't flushed by onToolStart
