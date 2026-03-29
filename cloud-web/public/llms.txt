@@ -37,13 +37,35 @@ Your app sends a message to ByteBrew via REST API. ByteBrew's agent thinks, call
 | Cost | Free forever (CE) | Pay per token | Free (library) | Pay per use |
 | Time to first agent | ~5 minutes | ~30 minutes | Days–weeks | Days–weeks |
 
+## Integration Options
+
+- **REST API + SSE**: Full control. POST to `/api/v1/agents/{name}/chat`, receive SSE stream. Works with any language/framework.
+- **Embeddable Widget**: Copy-paste `<script>` tag to add AI chat bubble to any website in 30 seconds. Zero dependencies, Shadow DOM isolated, 6 KB gzipped.
+- **Web Client**: Built-in chat UI at `/chat/` for testing agents immediately after deployment.
+- **Admin Dashboard**: Visual agent management at `/admin/` — no code required.
+
+## Architecture: Two-Port Mode (Production)
+
+ByteBrew supports optional two-port architecture for secure production deployments:
+- **External port (8443)**: Data plane — chat API, agent list, widget.js. Exposed to the internet.
+- **Internal port (8444)**: Control plane — admin dashboard, web client, management API. Behind VPN/firewall.
+
+Default: single-port mode (all on 8443). Enable two-port via `BYTEBREW_INTERNAL_PORT=8444`.
+
+## Agent Visibility
+
+Agents can be marked `public` or `private`:
+- **Public agents**: accessible via widget and public API keys (`ScopeChatPublic`)
+- **Private agents**: only accessible via server-to-server API keys (`ScopeChat`) or admin JWT
+
 ## Quick Start
 
 ```bash
 curl -fsSL https://bytebrew.ai/releases/docker-compose.yml -o docker-compose.yml
 docker compose up -d
 # Open http://localhost:8443/admin — create your first agent
-# POST http://localhost:8443/api/v1/agents/{name}/chat — start chatting
+# Open http://localhost:8443/chat/ — test your agent in the built-in web client
+# POST http://localhost:8443/api/v1/agents/{name}/chat — integrate via REST API
 ```
 
 Includes PostgreSQL. No external dependencies.
@@ -75,6 +97,18 @@ SSE stream back to your app
 ```
 
 Works with any frontend framework. No SDK required — standard HTTP + SSE.
+
+## Widget Integration Example
+
+```html
+<!-- Add this to any HTML page to embed AI chat -->
+<script src="https://your-engine:8443/widget.js"
+        data-agent="support-bot"
+        data-api-key="bb_pk_your_public_key">
+</script>
+```
+
+Configurable via data-* attributes: `data-theme` (light/dark), `data-position` (bottom-right/left), `data-title`.
 
 ## Documentation
 

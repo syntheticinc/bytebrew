@@ -417,21 +417,50 @@ function HowItWorksSection({ onImageClick }: { onImageClick: (src: string) => vo
               <StepBadge n={3} />
               <h3 className="mt-3 text-xl font-semibold text-text-primary">Integrate</h3>
               <p className="mt-2 text-text-secondary font-sans leading-relaxed">
-                Send a message, get a streaming response. One HTTP call from any frontend.
+                Two ways to add AI chat to your product. Widget for speed, REST API for full control.
               </p>
             </div>
-            <TerminalBlock command={'curl -N localhost:8443/api/v1/agents/my-agent/chat \\\n  -d \'{"message":"Hello"}\''}>
-              <div className="mt-1" style={{ color: '#87867F' }}>
-                {'event: message_delta'}{'\n'}
-                {'data: {"content":"Hello! How can"}'}{'\n'}
-                {'\n'}
-                {'event: message_delta'}{'\n'}
-                {'data: {"content":" I help you?"}'}{'\n'}
-                {'\n'}
-                {'event: done'}{'\n'}
-                {'data: {"session_id":"abc-123"}'}
+            <div className="space-y-4">
+              {/* Option A: Widget */}
+              <div className="rounded-[2px] border border-brand-accent/30 bg-brand-accent/5 p-4">
+                <p className="text-xs font-semibold text-brand-accent uppercase tracking-wider mb-2">Option A: Widget (fastest)</p>
+                <p className="text-sm text-text-secondary font-sans leading-relaxed mb-3">
+                  Copy-paste one line to add AI chat to any website.
+                </p>
+                <pre className="font-mono text-sm text-text-secondary leading-relaxed overflow-x-auto bg-surface rounded-[2px] border border-border p-3">
+                  <span style={{ color: '#87867F' }}>{'<!-- Add to any HTML page -->'}</span>{'\n'}
+                  <span className="text-brand-accent">{'<script'}</span>{' '}
+                  <span className="text-text-tertiary">src</span>=<span className="text-emerald-400">"http://localhost:8443/widget.js"</span>{'\n'}
+                  {'        '}<span className="text-text-tertiary">data-agent</span>=<span className="text-emerald-400">"support-bot"</span>{'\n'}
+                  {'        '}<span className="text-text-tertiary">data-api-key</span>=<span className="text-emerald-400">"bb_pk_..."</span><span className="text-brand-accent">{'>'}</span>{'\n'}
+                  <span className="text-brand-accent">{'</script>'}</span>
+                </pre>
               </div>
-            </TerminalBlock>
+
+              {/* OR separator */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-border" />
+                <span className="text-xs text-text-tertiary uppercase tracking-wider">or</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+
+              {/* Option B: REST API */}
+              <div className="rounded-[2px] border border-border bg-surface p-4 opacity-60">
+                <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-2">Option B: REST API (full control)</p>
+                <TerminalBlock command={'curl -N localhost:8443/api/v1/agents/my-agent/chat \\\n  -d \'{"message":"Hello"}\''}>
+                  <div className="mt-1" style={{ color: '#87867F' }}>
+                    {'event: message_delta'}{'\n'}
+                    {'data: {"content":"Hello! How can"}'}{'\n'}
+                    {'\n'}
+                    {'event: message_delta'}{'\n'}
+                    {'data: {"content":" I help you?"}'}{'\n'}
+                    {'\n'}
+                    {'event: done'}{'\n'}
+                    {'data: {"session_id":"abc-123"}'}
+                  </div>
+                </TerminalBlock>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -471,6 +500,14 @@ const CAPABILITIES = [
   {
     title: 'Plug into any app in minutes',
     description: 'Standard REST API with real-time SSE streaming. No SDK required.',
+  },
+  {
+    title: 'Embeddable Widget',
+    description: 'Add AI chat to any website with a single <script> tag. Shadow DOM isolated, 6KB gzipped, zero dependencies.',
+  },
+  {
+    title: 'Built-in Web Client',
+    description: 'Open /chat/ to test and use your agents instantly. No frontend code needed.',
   },
   {
     title: 'Your data never leaves your servers',
@@ -628,9 +665,9 @@ function ProductShowcaseSection({ onImageClick }: { onImageClick: (src: string) 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
           {/* Web Client */}
           <div>
-            <h3 className="text-lg font-semibold text-text-primary mb-2">Web Client — Chat Interface</h3>
+            <h3 className="text-lg font-semibold text-text-primary mb-2">Web Client — Built-in Chat</h3>
             <p className="text-sm text-text-secondary font-sans leading-relaxed mb-4">
-              Chat interface with multi-agent sidebar, tool calls, and markdown. Included with Engine.
+              Open <span className="font-mono text-brand-accent">/chat/</span> to test and use agents instantly. Multi-agent sidebar, tool calls, markdown. Embedded in Engine — no separate deploy.
             </p>
             <div className="rounded-[2px] border border-border overflow-hidden shadow-2xl shadow-brand-accent/5">
               <img src="/screenshots/admin-agents.png" alt="ByteBrew Web Client — AI sales agent recommending laptops with web search tool calls and structured markdown response" className="w-full cursor-pointer hover:opacity-80 transition-opacity" onClick={() => onImageClick('/screenshots/admin-agents.png')} />
@@ -815,7 +852,7 @@ function InstallSection() {
             <li>Open localhost:8443 — you'll see the Admin Dashboard</li>
             <li>Add your OpenAI / Gemini / Claude API key</li>
             <li>Create an agent — name, system prompt, model</li>
-            <li>Send your first message via curl or the built-in Web Client</li>
+            <li>Open <span className="font-mono text-brand-accent">localhost:8443/chat/</span> to test your agents instantly</li>
             <li>Watch the agent think and respond in real time</li>
           </ol>
           <p className="mt-4 text-xs text-text-tertiary">
