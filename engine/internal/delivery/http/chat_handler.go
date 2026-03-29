@@ -113,7 +113,9 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 
 	for event := range events {
 		_, _ = io.WriteString(w, "event: "+event.Type+"\ndata: "+event.Data+"\n\n")
-		_ = rc.Flush()
+		if err := rc.Flush(); err != nil {
+			return // client disconnected
+		}
 	}
 }
 
