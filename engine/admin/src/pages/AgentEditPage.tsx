@@ -144,6 +144,7 @@ export default function AgentEditPage() {
         can_spawn: agent.can_spawn,
         mcp_servers: agent.mcp_servers,
         confirm_before: agent.confirm_before,
+        public: agent.public ?? false,
       });
       // Expand dangerous section if agent already has dangerous tools
       const dangerousNames = new Set(toolsByZone.dangerous.map((t) => t.name));
@@ -564,6 +565,37 @@ export default function AgentEditPage() {
               </span>
             ))}
           </div>
+        </div>
+
+        {/* Public */}
+        <div>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <div
+              role="switch"
+              aria-checked={form.public ?? false}
+              tabIndex={0}
+              onClick={() => updateField('public', !(form.public ?? false))}
+              onKeyDown={(e) => {
+                if (e.key === ' ' || e.key === 'Enter') {
+                  e.preventDefault();
+                  updateField('public', !(form.public ?? false));
+                }
+              }}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                form.public ? 'bg-brand-accent' : 'bg-brand-shade3/30'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
+                  form.public ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </div>
+            <span className="text-sm font-medium text-brand-light">Public</span>
+          </label>
+          <p className="mt-1 text-xs text-brand-shade3 ml-14">
+            Public agents are accessible via widget and public API keys.
+          </p>
         </div>
 
         {/* Actions */}

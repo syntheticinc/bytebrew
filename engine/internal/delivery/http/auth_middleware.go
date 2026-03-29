@@ -35,6 +35,7 @@ const (
 	ScopeMCPWrite      = 512
 	ScopeTriggersRead  = 1024
 	ScopeTriggersWrite = 2048
+	ScopeChatPublic    = 4096
 )
 
 // APITokenVerifier looks up API tokens by their SHA-256 hash.

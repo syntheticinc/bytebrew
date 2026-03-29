@@ -27,6 +27,7 @@ type AgentRecord struct {
 	CustomTools    []CustomToolRecord
 	MCPServers     []string
 	CanSpawn       []string
+	Public         bool
 	Escalation     *EscalationRecord
 }
 
@@ -189,6 +190,7 @@ func (r *GORMAgentRepository) Update(ctx context.Context, name string, record *A
 			"max_steps":        agent.MaxSteps,
 			"max_context_size": agent.MaxContextSize,
 			"confirm_before":   agent.ConfirmBefore,
+			"public":           agent.Public,
 		}
 		if err := tx.Model(&models.AgentModel{}).Where("id = ?", existing.ID).Updates(updates).Error; err != nil {
 			return fmt.Errorf("update agent %q: %w", name, err)
@@ -261,6 +263,7 @@ func toAgentRecord(a models.AgentModel) (AgentRecord, error) {
 		ToolExecution:  a.ToolExecution,
 		MaxSteps:       a.MaxSteps,
 		MaxContextSize: a.MaxContextSize,
+		Public:         a.Public,
 	}
 
 	// Model ID and name
@@ -331,6 +334,7 @@ func (r *GORMAgentRepository) toAgentModelWithDB(db *gorm.DB, rec *AgentRecord) 
 		ToolExecution:  rec.ToolExecution,
 		MaxSteps:       rec.MaxSteps,
 		MaxContextSize: rec.MaxContextSize,
+		Public:         rec.Public,
 	}
 
 	// Resolve model name -> ID
