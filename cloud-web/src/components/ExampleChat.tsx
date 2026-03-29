@@ -473,6 +473,7 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
                   status: 'calling',
                 },
               });
+              render(); // show tool call immediately
             } else if (currentEvent === 'tool_result') {
               const callId = data.call_id as string;
               for (let i = segments.length - 1; i >= 0; i--) {
@@ -483,6 +484,7 @@ export function ExampleChat({ agentName, apiUrl, suggestions }: ExampleChatProps
                   break;
                 }
               }
+              render(); // show tool result immediately
             } else if (currentEvent === 'confirmation') {
               if (currentText) { segments.push({ type: 'text', content: currentText }); currentText = ''; }
               try {
