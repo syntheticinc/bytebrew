@@ -1165,12 +1165,14 @@ func (a *agentManagerHTTPAdapter) toAgentRecord(req deliveryhttp.CreateAgentRequ
 		Public:         req.Public,
 	}
 
-	// Resolve model ID to model name.
+	// Resolve model: by ID or by name.
 	if req.ModelID != nil {
 		var llm models.LLMProviderModel
 		if err := a.db.First(&llm, *req.ModelID).Error; err == nil {
 			rec.ModelName = llm.Name
 		}
+	} else if req.Model != "" {
+		rec.ModelName = req.Model
 	}
 
 	if req.Escalation != nil {

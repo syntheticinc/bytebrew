@@ -195,6 +195,24 @@ export default function Sidebar() {
         </div>
       )}
 
+      {/* Chat link */}
+      <div className="mx-3 mb-2">
+        <a
+          href="/chat/"
+          className="flex items-center gap-2.5 px-2.5 py-[7px] rounded-btn text-[13px] font-medium text-brand-shade2 hover:bg-brand-dark-surface hover:text-brand-light border border-brand-shade3/20 transition-all duration-150"
+        >
+          <span className="flex-shrink-0 text-brand-shade3">
+            <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+            </svg>
+          </span>
+          Open Chat
+          <svg className="w-3 h-3 ml-auto text-brand-shade3/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
+          </svg>
+        </a>
+      </div>
+
       {/* Logout */}
       <div className="px-3 pb-4 border-t border-brand-shade3/10 pt-3">
         <button

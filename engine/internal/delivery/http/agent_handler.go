@@ -54,6 +54,7 @@ type AgentEscalation struct {
 // Accepts both "system_prompt" and "system" for the system prompt field.
 type CreateAgentRequest struct {
 	Name           string           `json:"name"`
+	Model          string           `json:"model,omitempty"`
 	ModelID        *uint            `json:"model_id,omitempty"`
 	SystemPrompt   string           `json:"system_prompt"`
 	Kit            string           `json:"kit,omitempty"`
