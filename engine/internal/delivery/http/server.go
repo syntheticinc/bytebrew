@@ -19,15 +19,26 @@ type Server struct {
 	port       int
 }
 
-// NewServer creates a new HTTP server with standard middleware.
+// NewServer creates a new HTTP server with standard middleware and permissive CORS.
 func NewServer(port int) *Server {
+	return NewServerWithCORS(port, nil)
+}
+
+// NewServerWithCORS creates a new HTTP server with standard middleware and configurable CORS.
+// If allowedOrigins is nil or empty, all origins are allowed (wildcard).
+func NewServerWithCORS(port int, allowedOrigins []string) *Server {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+
+	origins := []string{"*"}
+	if len(allowedOrigins) > 0 {
+		origins = allowedOrigins
+	}
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
+		AllowedOrigins:   origins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Model-Provider", "X-Model-API-Key", "X-Model-Name"},
 		ExposedHeaders:   []string{"Link", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset", "Retry-After"},

@@ -11,11 +11,13 @@ const fileName = "server.port"
 
 // PortInfo содержит информацию о запущенном сервере.
 type PortInfo struct {
-	PID       int    `json:"pid"`
-	Port      int    `json:"port"`
-	WsPort    int    `json:"ws_port,omitempty"`
-	Host      string `json:"host"`
-	StartedAt string `json:"startedAt"`
+	PID          int    `json:"pid"`
+	Port         int    `json:"port"`                    // gRPC port
+	WsPort       int    `json:"ws_port,omitempty"`       // WebSocket port
+	HTTPPort     int    `json:"http_port,omitempty"`     // External HTTP (data plane)
+	InternalPort int    `json:"internal_port,omitempty"` // Internal HTTP (control plane), 0 = single-port
+	Host         string `json:"host"`
+	StartedAt    string `json:"startedAt"`
 }
 
 // Writer записывает port file в dataDir.

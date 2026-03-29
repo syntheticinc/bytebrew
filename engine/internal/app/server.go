@@ -402,9 +402,14 @@ func Run(sc ServerConfig) error {
 		components.AgentToolResolver.SetSpawner(components.AgentPoolAdapter, components.AgentPoolAdapter)
 	}
 
-	// HTTP REST API server (Phase 5) — starts only when bootstrap config is available.
-	var httpServer *deliveryhttp.Server
+	// HTTP REST API server — starts only when bootstrap config is available.
+	// Supports two modes:
+	//   Single-port (default): all routes on one port (backward compatible)
+	//   Two-port: external (data plane) + internal (control plane)
+	var httpServer *deliveryhttp.Server         // main server (single-port) or external (two-port)
+	var internalHTTPServer *deliveryhttp.Server  // nil in single-port mode
 	var httpPort int
+	var internalHTTPPort int
 	var httpAuthMW *deliveryhttp.AuthMiddleware
 	var configurableRL *deliveryhttp.ConfigurableRateLimiter
 	if agentRegistry != nil && bootstrapCfg != nil {
@@ -412,12 +417,31 @@ func Run(sc ServerConfig) error {
 		if httpPort == 0 {
 			httpPort = 8443
 		}
-		httpServer = deliveryhttp.NewServer(httpPort)
+		internalHTTPPort = bootstrapCfg.Engine.InternalPort // 0 = single-port mode
+
+		if internalHTTPPort > 0 {
+			// Two-port mode: external gets configurable CORS, internal gets permissive CORS
+			httpServer = deliveryhttp.NewServerWithCORS(httpPort, bootstrapCfg.Engine.CORSOrigins)
+			internalHTTPServer = deliveryhttp.NewServer(internalHTTPPort)
+		} else {
+			// Single-port mode (backward compatible)
+			httpServer = deliveryhttp.NewServer(httpPort)
+		}
 		r := httpServer.Router()
+		// internalRouter is the router for management/admin routes.
+		// In single-port mode it points to the same router as r.
+		// In two-port mode it points to the internal server's router.
+		internalRouter := r
+		if internalHTTPServer != nil {
+			internalRouter = internalHTTPServer.Router()
+		}
 
 		// Metrics middleware — records request count and duration for all routes.
 		// Applied before auth so every request is instrumented regardless of auth status.
 		r.Use(deliveryhttp.MetricsMiddleware)
+		if internalHTTPServer != nil {
+			internalRouter.Use(deliveryhttp.MetricsMiddleware)
+		}
 
 		// Auth
 		jwtSecret := bootstrapCfg.Security.AdminPassword
@@ -431,7 +455,7 @@ func Run(sc ServerConfig) error {
 		updateChecker := infrastructure.NewUpdateChecker(sc.Version)
 		updateChecker.Start(ctx)
 
-		// Health (public)
+		// Health (public) — available on both ports
 		healthHandler := deliveryhttp.NewHealthHandler(sc.Version, &agentCounterHTTPAdapter{registry: agentRegistry})
 		healthHandler.SetUpdateChecker(updateChecker)
 		r.Get("/api/v1/health", healthHandler.ServeHTTP)
@@ -439,8 +463,6 @@ func Run(sc ServerConfig) error {
 		// Model registry (public — read-only catalog, no auth needed)
 		modelRegistry := registry.New()
 		registryHandler := deliveryhttp.NewModelRegistryHandler(modelRegistry)
-		r.Get("/api/v1/models/registry", registryHandler.List)
-		r.Get("/api/v1/models/registry/providers", registryHandler.ListProviders)
 
 		// Auth login (public)
 		authHandler := deliveryhttp.NewAuthHandler(
@@ -448,10 +470,21 @@ func Run(sc ServerConfig) error {
 			bootstrapCfg.Security.AdminPassword,
 			jwtSecret,
 		)
+
+		if internalHTTPServer != nil {
+			// Two-port mode: register public routes on internal router too
+			internalRouter.Get("/api/v1/health", healthHandler.ServeHTTP)
+			internalRouter.Get("/api/v1/models/registry", registryHandler.List)
+			internalRouter.Get("/api/v1/models/registry/providers", registryHandler.ListProviders)
+			internalRouter.Post("/api/v1/auth/login", authHandler.Login)
+		}
+		// Single-port or external: model registry + login on main router
+		r.Get("/api/v1/models/registry", registryHandler.List)
+		r.Get("/api/v1/models/registry/providers", registryHandler.ListProviders)
 		r.Post("/api/v1/auth/login", authHandler.Login)
 
-		// Protected routes
-		r.Group(func(r chi.Router) {
+		// Protected management routes — on internalRouter (= r in single-port mode)
+		internalRouter.Group(func(r chi.Router) {
 			r.Use(authMW.Authenticate)
 			r.Use(deliveryhttp.AuditMiddleware(&auditHTTPAdapter{logger: auditLogger}))
 
@@ -618,12 +651,12 @@ func Run(sc ServerConfig) error {
 			})
 		})
 
-		// EE-only routes (require auth + valid Enterprise license).
+		// EE-only routes (require auth + valid Enterprise license) — on internal router.
 		if sc.LicenseProvider != nil {
 			eeMW := deliveryhttp.NewEEMiddleware(sc.LicenseProvider.Pointer())
 
 			// Prometheus /metrics endpoint (EE, no auth — Prometheus scrapes without tokens).
-			r.Group(func(r chi.Router) {
+			internalRouter.Group(func(r chi.Router) {
 				r.Use(eeMW.RequireEE)
 				r.Handle("/metrics", promhttp.Handler())
 			})
@@ -646,7 +679,7 @@ func Run(sc ServerConfig) error {
 				configurableRL = deliveryhttp.NewConfigurableRateLimiter(rules, sc.LicenseProvider.Pointer())
 			}
 
-			r.Group(func(r chi.Router) {
+			internalRouter.Group(func(r chi.Router) {
 				r.Use(authMW.Authenticate)
 				r.Use(eeMW.RequireEE)
 
@@ -663,8 +696,8 @@ func Run(sc ServerConfig) error {
 			})
 		}
 
-		// Webhook route (public, no auth — triggered by external services)
-		r.Post("/api/v1/webhooks/{path}", func(w http.ResponseWriter, req *http.Request) {
+		// Webhook route (internal only — triggered by external services, requires network access)
+		internalRouter.Post("/api/v1/webhooks/{path}", func(w http.ResponseWriter, req *http.Request) {
 			webhookPath := chi.URLParam(req, "path")
 			w.Header().Set("Content-Type", "application/json")
 
@@ -702,29 +735,64 @@ func Run(sc ServerConfig) error {
 			w.Write([]byte(fmt.Sprintf(`{"task_id":%d}`, t.ID)))
 		})
 
-		// Serve Admin Dashboard SPA (static files)
+		// Serve Admin Dashboard SPA (static files) — internal only
 		adminDir := "/usr/share/bytebrew/admin"
 		if _, statErr := os.Stat(adminDir); statErr == nil {
 			spaFS := http.Dir(adminDir)
-			r.Get("/admin/*", func(w http.ResponseWriter, req *http.Request) {
-				// Strip /admin prefix for file lookup
+			adminFileHandler := func(w http.ResponseWriter, req *http.Request) {
 				filePath := strings.TrimPrefix(req.URL.Path, "/admin")
 				if filePath == "" || filePath == "/" {
 					filePath = "/index.html"
 				}
-				// Try serving the file; if not found, serve index.html (SPA routing)
 				if _, err := os.Stat(filepath.Join(adminDir, filePath)); os.IsNotExist(err) {
 					http.ServeFile(w, req, filepath.Join(adminDir, "index.html"))
 					return
 				}
 				http.StripPrefix("/admin", http.FileServer(spaFS)).ServeHTTP(w, req)
-			})
-			r.Get("/admin", func(w http.ResponseWriter, req *http.Request) {
+			}
+			adminRedirect := func(w http.ResponseWriter, req *http.Request) {
 				http.Redirect(w, req, "/admin/", http.StatusMovedPermanently)
-			})
+			}
+			internalRouter.Get("/admin/*", adminFileHandler)
+			internalRouter.Get("/admin", adminRedirect)
 			slog.InfoContext(ctx, "Admin Dashboard served", "path", adminDir)
 		} else {
 			slog.InfoContext(ctx, "Admin Dashboard not found (optional)", "path", adminDir)
+		}
+
+		// Serve Web Client SPA (static files) — internal only
+		webclientDir := "/usr/share/bytebrew/webclient"
+		if _, statErr := os.Stat(webclientDir); statErr == nil {
+			chatSpaFS := http.Dir(webclientDir)
+			chatFileHandler := func(w http.ResponseWriter, req *http.Request) {
+				filePath := strings.TrimPrefix(req.URL.Path, "/chat")
+				if filePath == "" || filePath == "/" {
+					filePath = "/index.html"
+				}
+				if _, err := os.Stat(filepath.Join(webclientDir, filePath)); os.IsNotExist(err) {
+					http.ServeFile(w, req, filepath.Join(webclientDir, "index.html"))
+					return
+				}
+				http.StripPrefix("/chat", http.FileServer(chatSpaFS)).ServeHTTP(w, req)
+			}
+			chatRedirect := func(w http.ResponseWriter, req *http.Request) {
+				http.Redirect(w, req, "/chat/", http.StatusMovedPermanently)
+			}
+			internalRouter.Get("/chat/*", chatFileHandler)
+			internalRouter.Get("/chat", chatRedirect)
+			slog.InfoContext(ctx, "Web Client served", "path", webclientDir)
+		}
+
+		// Serve widget.js (static file) — external only (or both in single-port mode)
+		widgetPath := "/usr/share/bytebrew/widget/widget.js"
+		if _, statErr := os.Stat(widgetPath); statErr == nil {
+			widgetHandler := func(w http.ResponseWriter, req *http.Request) {
+				w.Header().Set("Content-Type", "application/javascript")
+				w.Header().Set("Cache-Control", "public, max-age=3600")
+				http.ServeFile(w, req, widgetPath)
+			}
+			r.Get("/widget.js", widgetHandler)
+			slog.InfoContext(ctx, "Widget served", "path", widgetPath)
 		}
 
 		// NOTE: HTTP server start is deferred until after SessionProcessor is created,
@@ -833,7 +901,7 @@ func Run(sc ServerConfig) error {
 
 	grpcServer.RegisterServices(flowHandler)
 
-	// Wire chat endpoint and start HTTP server now that SessionProcessor is ready.
+	// Wire chat endpoint and start HTTP server(s) now that SessionProcessor is ready.
 	if httpServer != nil && agentRegistry != nil {
 		chatService := &chatServiceHTTPAdapter{
 			registry:    sessionRegistry,
@@ -846,29 +914,64 @@ func Run(sc ServerConfig) error {
 		})
 		respondHandler := deliveryhttp.NewRespondHandler(sessionRegistry)
 
-		httpRouter := httpServer.Router()
-		httpRouter.Group(func(r chi.Router) {
-			if httpAuthMW != nil {
-				r.Use(httpAuthMW.Authenticate)
-			}
-			if configurableRL != nil {
-				r.Use(configurableRL.Middleware)
-			}
-			r.Group(func(r chi.Router) {
+		// Register chat routes on external router (or single-port router)
+		registerChatRoutes := func(router chi.Router) {
+			router.Group(func(r chi.Router) {
 				if httpAuthMW != nil {
-					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeChat))
+					r.Use(httpAuthMW.Authenticate)
 				}
-				r.Post("/api/v1/agents/{name}/chat", chatHandler.Chat)
-				r.Post("/api/v1/sessions/{id}/respond", respondHandler.Respond)
+				if configurableRL != nil {
+					r.Use(configurableRL.Middleware)
+				}
+				r.Group(func(r chi.Router) {
+					if httpAuthMW != nil {
+						r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeChat))
+					}
+					r.Post("/api/v1/agents/{name}/chat", chatHandler.Chat)
+					r.Post("/api/v1/sessions/{id}/respond", respondHandler.Respond)
+				})
 			})
-		})
+		}
 
+		// Chat API available on external port (or single-port)
+		registerChatRoutes(httpServer.Router())
+		// In two-port mode, also register on internal port (for /chat/ web client)
+		if internalHTTPServer != nil {
+			registerChatRoutes(internalHTTPServer.Router())
+		}
+
+		// Agent list endpoint on external router (read-only, for widget agent discovery)
+		if internalHTTPServer != nil {
+			httpServer.Router().Group(func(r chi.Router) {
+				if httpAuthMW != nil {
+					r.Use(httpAuthMW.Authenticate)
+					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
+				}
+				r.Get("/api/v1/agents", deliveryhttp.NewAgentHandlerWithManager(
+					&agentManagerHTTPAdapter{
+						repo:     config_repo.NewGORMAgentRepository(pgDB),
+						registry: agentRegistry, db: pgDB,
+					}).List)
+			})
+		}
+
+		// Start HTTP server(s)
 		go func() {
 			if err := httpServer.Start(); err != nil && err != http.ErrServerClosed {
 				slog.Error("HTTP server error", "error", err)
 			}
 		}()
-		slog.InfoContext(ctx, "HTTP REST API server started", "port", httpPort)
+		if internalHTTPServer != nil {
+			go func() {
+				if err := internalHTTPServer.Start(); err != nil && err != http.ErrServerClosed {
+					slog.Error("Internal HTTP server error", "error", err)
+				}
+			}()
+			slog.InfoContext(ctx, "Two-port mode enabled",
+				"external_port", httpPort, "internal_port", internalHTTPPort)
+		} else {
+			slog.InfoContext(ctx, "HTTP REST API server started", "port", httpPort)
+		}
 	}
 
 	// CronScheduler: load triggers from DB and start
@@ -930,11 +1033,13 @@ func Run(sc ServerConfig) error {
 	}
 	portWriter := portfile.NewWriter(dataDir)
 	if err := portWriter.Write(portfile.PortInfo{
-		PID:       os.Getpid(),
-		Port:      grpcServer.ActualPort(),
-		WsPort:    wsServer.Port(),
-		Host:      portFileHost,
-		StartedAt: time.Now().UTC().Format(time.RFC3339),
+		PID:          os.Getpid(),
+		Port:         grpcServer.ActualPort(),
+		WsPort:       wsServer.Port(),
+		HTTPPort:     httpPort,
+		InternalPort: internalHTTPPort,
+		Host:         portFileHost,
+		StartedAt:    time.Now().UTC().Format(time.RFC3339),
 	}); err != nil {
 		slog.Warn("Failed to write port file", "error", err)
 	} else {
@@ -1002,6 +1107,17 @@ func Run(sc ServerConfig) error {
 
 	if err := wsServer.Shutdown(shutdownCtx); err != nil {
 		slog.Warn("WS server shutdown error", "error", err)
+	}
+
+	if httpServer != nil {
+		if err := httpServer.Shutdown(shutdownCtx); err != nil {
+			slog.Warn("HTTP server shutdown error", "error", err)
+		}
+	}
+	if internalHTTPServer != nil {
+		if err := internalHTTPServer.Shutdown(shutdownCtx); err != nil {
+			slog.Warn("Internal HTTP server shutdown error", "error", err)
+		}
 	}
 
 	if err := grpcServer.Shutdown(shutdownCtx); err != nil {

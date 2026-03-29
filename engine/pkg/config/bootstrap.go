@@ -19,9 +19,11 @@ type BootstrapConfig struct {
 
 // EngineBootstrap holds the minimal engine settings needed at startup.
 type EngineBootstrap struct {
-	Host    string `mapstructure:"host"`
-	Port    int    `mapstructure:"port"`
-	DataDir string `mapstructure:"data_dir"`
+	Host         string   `mapstructure:"host"`
+	Port         int      `mapstructure:"port"`           // External/data plane port (default 8443)
+	InternalPort int      `mapstructure:"internal_port"`  // Control plane port (default 0 = single-port mode)
+	CORSOrigins  []string `mapstructure:"cors_origins"`   // Allowed CORS origins for external port (empty = allow all)
+	DataDir      string   `mapstructure:"data_dir"`
 }
 
 // BootstrapDatabase holds the database connection settings.
@@ -69,6 +71,7 @@ func LoadBootstrap(path string) (*BootstrapConfig, error) {
 	}
 
 	expandBootstrapEnvVars(&cfg)
+	applyBootstrapEnvOverrides(&cfg)
 
 	if err := validateBootstrap(&cfg); err != nil {
 		return nil, fmt.Errorf("validate bootstrap config: %w", err)
@@ -108,6 +111,16 @@ func loadBootstrapFromEnv() (*BootstrapConfig, error) {
 		cfg.Engine.Port = 8443
 	}
 
+	if portStr := os.Getenv("BYTEBREW_INTERNAL_PORT"); portStr != "" {
+		var port int
+		fmt.Sscanf(portStr, "%d", &port)
+		cfg.Engine.InternalPort = port
+	}
+
+	if origins := os.Getenv("BYTEBREW_CORS_ORIGINS"); origins != "" {
+		cfg.Engine.CORSOrigins = splitAndTrim(origins, ",")
+	}
+
 	if user := os.Getenv("ADMIN_USER"); user != "" {
 		cfg.Security.AdminUser = user
 	}
@@ -120,6 +133,20 @@ func loadBootstrapFromEnv() (*BootstrapConfig, error) {
 	}
 
 	return cfg, nil
+}
+
+// applyBootstrapEnvOverrides applies BYTEBREW_* environment variable overrides
+// on top of YAML-loaded config. This allows env vars to override YAML settings
+// (e.g., BYTEBREW_INTERNAL_PORT=8444 enables two-port mode regardless of YAML).
+func applyBootstrapEnvOverrides(cfg *BootstrapConfig) {
+	if portStr := os.Getenv("BYTEBREW_INTERNAL_PORT"); portStr != "" {
+		var port int
+		fmt.Sscanf(portStr, "%d", &port)
+		cfg.Engine.InternalPort = port
+	}
+	if origins := os.Getenv("BYTEBREW_CORS_ORIGINS"); origins != "" {
+		cfg.Engine.CORSOrigins = splitAndTrim(origins, ",")
+	}
 }
 
 // expandBootstrapEnvVars expands ${VAR} placeholders in all string fields of BootstrapConfig.
@@ -139,6 +166,12 @@ func validateBootstrap(cfg *BootstrapConfig) error {
 	}
 	if cfg.Engine.Port < 0 || cfg.Engine.Port > 65535 {
 		return fmt.Errorf("invalid engine port: %d", cfg.Engine.Port)
+	}
+	if cfg.Engine.InternalPort < 0 || cfg.Engine.InternalPort > 65535 {
+		return fmt.Errorf("invalid internal port: %d", cfg.Engine.InternalPort)
+	}
+	if cfg.Engine.InternalPort > 0 && cfg.Engine.InternalPort == cfg.Engine.Port {
+		return fmt.Errorf("internal_port (%d) must differ from port (%d)", cfg.Engine.InternalPort, cfg.Engine.Port)
 	}
 	return nil
 }
