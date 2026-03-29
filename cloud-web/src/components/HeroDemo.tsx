@@ -418,7 +418,7 @@ function ConfigView() {
 /* ------------------------------------------------------------------ */
 
 export function HeroDemo() {
-  const [activeTab, setActiveTab] = useState<'config' | 'chat'>('config');
+  const [activeTab, setActiveTab] = useState<'config' | 'chat'>('chat');
   const [userClickedConfig, setUserClickedConfig] = useState(false);
   const [visibleSteps, setVisibleSteps] = useState(0);
   const [isPaused, setIsPaused] = useState(false);

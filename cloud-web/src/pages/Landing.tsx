@@ -116,25 +116,28 @@ function CheckIcon({ className = 'h-5 w-5 text-emerald-400' }: { className?: str
 
 function HeroSection() {
   return (
-    <section className="py-20 px-4 bg-surface">
-      <div className="max-w-5xl mx-auto text-center mb-12">
-        <h1 className="text-5xl sm:text-6xl font-bold tracking-tight text-text-primary leading-tight">
+    <section className="pt-12 pb-16 px-4 bg-surface">
+      <div className="max-w-5xl mx-auto text-center mb-8">
+        <p className="text-xs font-sans font-medium text-text-tertiary uppercase tracking-wider mb-3">AI Agent Engine</p>
+        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-text-primary leading-tight">
           Ship AI agents in your product —{' '}
           <span className="text-brand-accent">not months of infrastructure</span>
         </h1>
-        <p className="mt-6 text-lg text-text-secondary font-sans leading-relaxed max-w-2xl mx-auto">
-          Self-hosted. One Docker container. Any LLM. Free forever.
+        <p className="mt-4 text-base text-text-secondary font-sans leading-relaxed max-w-2xl mx-auto">
+          Deploy in 5 minutes. REST API + Admin Dashboard. No backend code.
+          <br />
+          <span className="text-text-tertiary">Self-hosted. Any LLM. Free forever.</span>
         </p>
-        <div className="mt-8 flex items-center justify-center gap-4 flex-wrap">
+        <div className="mt-5 flex items-center justify-center gap-3 flex-wrap">
           <Link
             to="/download"
-            className="rounded-[2px] bg-brand-accent px-7 py-3.5 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
+            className="rounded-[2px] bg-brand-accent px-6 py-3 text-sm font-medium text-white hover:bg-brand-accent-hover transition-colors"
           >
             Get Started Free &rarr;
           </Link>
           <Link
             to="/pricing"
-            className="rounded-[2px] border border-border px-7 py-3.5 text-sm font-medium text-text-secondary hover:border-border-hover hover:text-text-primary transition-colors"
+            className="rounded-[2px] border border-border px-6 py-3 text-sm font-medium text-text-secondary hover:border-border-hover hover:text-text-primary transition-colors"
           >
             View Pricing &rarr;
           </Link>
@@ -145,6 +148,9 @@ function HeroSection() {
 
       <div className="max-w-5xl mx-auto">
           <HeroDemo />
+          <p className="text-center text-xs font-sans text-text-tertiary mt-3">
+            Live demo: an AI agent analyzing enterprise churn — tool calls, sub-agent delegation, and real-time streaming
+          </p>
       </div>
     </section>
   );
