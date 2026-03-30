@@ -125,7 +125,10 @@ func (h *ToolEventHandler) OnToolEnd(ctx context.Context, info *callbacks.RunInf
 		preview = output.Response[:500] + "..."
 	}
 
-	slog.InfoContext(ctx, "[CALLBACK] onToolEnd: emitting ToolResult event", "tool_name", info.Name, "result_length", len(output.Response))
+	slog.InfoContext(ctx, "[CALLBACK] onToolEnd: emitting ToolResult event",
+		"tool_name", info.Name,
+		"full_result_length", len(output.Response),
+		"preview_length", len(preview))
 
 	// Store full result in metadata for server-side tools
 	// agent_event_stream.go will use this for TOOL_RESULT

@@ -166,11 +166,17 @@ func (s *EventStream) convertEvent(event *domain.AgentEvent) *pb.SessionEvent {
 			summary = SanitizeUTF8(s)
 		}
 
+		// Use full result for Content, not the truncated preview
+		fullContent := SanitizeUTF8(event.Content)
+		if fr, ok := event.Metadata["full_result"].(string); ok {
+			fullContent = SanitizeUTF8(fr)
+		}
+
 		return &pb.SessionEvent{
 			Type:              pb.SessionEventType_SESSION_EVENT_TOOL_EXECUTION_END,
 			ToolName:          toolName,
 			CallId:            callID,
-			Content:           SanitizeUTF8(event.Content),
+			Content:           fullContent,
 			ToolResultSummary: summary,
 			ToolHasError:      event.Error != nil,
 			AgentId:           agentID,

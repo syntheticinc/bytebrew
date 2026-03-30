@@ -5150,7 +5150,131 @@ mcp_servers:
 
 ---
 
-## Итого: 410 TC
+## TC-TRUNC: Tool Result Truncation Fix (7 TC)
+
+Категория: MCP tool results в SSE/WS delivery layer.
+Bug report: `chirp-mono2/docs/bytebrew-tool-result-truncation-bug.md`
+Root cause: SSE/WS отправляли 500-char preview вместо полного результата. LLM (Eino) получал полные данные.
+
+### TC-TRUNC-01: SSE — полный tool result в content (>500 chars)
+
+**Предусловие:** Engine запущен, агент с MCP tool возвращающим >500 chars
+
+**Шаги:**
+1. POST /api/v1/agents/{name}/chat с запросом вызывающим MCP tool
+2. Прочитать SSE event `tool_result`
+
+**Ожидание:**
+- `content` содержит ПОЛНЫЙ результат (не обрезан до 500 chars)
+- `summary` содержит краткое описание для UI
+- Длина `content` == полный размер tool output
+
+**PASS:** content содержит полные данные
+
+---
+
+### TC-TRUNC-02: SSE — короткий tool result (<500 chars)
+
+**Предусловие:** Engine запущен, агент с MCP tool возвращающим <500 chars
+
+**Шаги:**
+1. POST /api/v1/agents/{name}/chat с запросом вызывающим MCP tool
+2. Прочитать SSE event `tool_result`
+
+**Ожидание:**
+- `content` == полный результат (без изменений)
+- `summary` может быть пустым или совпадать с content
+
+**PASS:** короткий результат передан без изменений
+
+---
+
+### TC-TRUNC-03: smart_search — полный результат (спец. обработка)
+
+**Предусловие:** Engine с Knowledge/RAG настроенным
+
+**Шаги:**
+1. POST /api/v1/agents/{name}/chat с запросом вызывающим smart_search
+2. Прочитать SSE event `tool_result`
+
+**Ожидание:**
+- `content` содержит ПОЛНЫЙ результат с citations
+- `summary` содержит "N citations"
+
+**PASS:** smart_search результат не обрезан, summary корректный
+
+---
+
+### TC-TRUNC-04: WS — полный tool result
+
+**Предусловие:** Engine запущен, WS клиент подключён
+
+**Шаги:**
+1. Отправить chat через WS
+2. Дождаться `ToolExecutionCompleted` event
+
+**Ожидание:**
+- `result` содержит ПОЛНЫЙ результат
+- `result_summary` содержит краткое описание
+
+**PASS:** WS event содержит полный результат в `result`
+
+---
+
+### TC-TRUNC-05: tool error — полный error content
+
+**Предусловие:** Engine запущен, MCP tool возвращает ошибку с длинным описанием
+
+**Шаги:**
+1. POST /api/v1/agents/{name}/chat с запросом вызывающим failing tool
+2. Прочитать SSE event `tool_result`
+
+**Ожидание:**
+- `content` содержит ПОЛНЫЙ error content
+- `has_error` == true
+
+**PASS:** error content не обрезан
+
+---
+
+### TC-TRUNC-06: логи — корректное отображение длин
+
+**Предусловие:** Engine запущен с debug логами
+
+**Шаги:**
+1. Вызвать MCP tool возвращающий >500 chars
+2. Проверить логи engine
+
+**Ожидание:**
+- Лог содержит `full_result_length=XXXX` (полная длина)
+- Лог содержит `preview_length=503` (preview длина)
+- НЕ содержит вводящий в заблуждение `result_length` или `content_length` без пояснений
+
+**PASS:** логи чётко разделяют full_result vs preview
+
+---
+
+### TC-TRUNC-07: LLM получает полные данные (unit test)
+
+**Предусловие:** Unit тесты в `engine/internal/service/session_processor/`
+
+**Шаги:**
+1. `go test ./internal/service/session_processor/... -run ToolResult -v`
+2. `go test ./internal/delivery/ws/... -run ToolResult -v`
+3. `go test ./internal/service/eventformat/... -run ToolResult -v`
+
+**Ожидание:**
+- `TestSend_ToolResult_UsesFullResultFromMetadata` — PASS
+- `TestSend_ToolResult_FallsBackToContent` — PASS
+- `TestSend_ToolResult_PreservesSummary` — PASS
+- `TestSerializeEvent_ToolResult_IncludesFullResult` — PASS
+- `TestFormatMobileEvent_ToolResult_IncludesFullResult` — PASS
+
+**PASS:** все 5 unit тестов проходят
+
+---
+
+## Итого: 417 TC
 
 | Категория | Кол-во | Покрытие |
 |-----------|--------|----------|
@@ -5200,7 +5324,8 @@ mcp_servers:
 | TC-SSE-STREAM | 5 | SSE streaming reliability (headers, events, long-running, non-stream, disconnect) |
 | TC-MCP-CRUD | 5 | MCP server API CRUD (forward_headers persistence, config import/export) |
 | TC-BYOK | 5 | Bring Your Own Key (provider override, disabled, invalid key, not persisted) |
-| **ВСЕГО** | **410** |
+| TC-TRUNC | 7 | Tool result truncation fix (SSE/WS full result, logs clarity, unit tests) |
+| **ВСЕГО** | **417** |
 
 ### Примечания
 - Multi-agent spawn работает через HTTP REST API и gRPC/WS

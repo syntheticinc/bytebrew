@@ -1672,7 +1672,8 @@ func convertSessionEventToSSE(event *pb.SessionEvent, sessionID string) *deliver
 		return sseEventJSON("tool_result", map[string]interface{}{
 			"tool":      event.GetToolName(),
 			"call_id":   event.GetCallId(),
-			"content":   event.GetToolResultSummary(),
+			"content":   event.GetContent(),
+			"summary":   event.GetToolResultSummary(),
 			"has_error": event.GetToolHasError(),
 		})
 

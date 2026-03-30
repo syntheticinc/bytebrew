@@ -43,6 +43,7 @@ func SerializeForMobile(event *pb.SessionEvent) map[string]interface{} {
 			"type":           "ToolExecutionCompleted",
 			"call_id":        event.GetCallId(),
 			"tool_name":      event.GetToolName(),
+			"result":         event.GetContent(),
 			"result_summary": event.GetToolResultSummary(),
 			"has_error":      event.GetToolHasError(),
 			"agent_id":       event.GetAgentId(),
