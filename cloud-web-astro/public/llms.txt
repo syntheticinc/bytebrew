@@ -271,6 +271,7 @@ Configurable via data-* attributes: `data-theme` (light/dark), `data-position` (
 
 ## Documentation
 
+- [Full Documentation (plain text)](https://bytebrew.ai/docs/llms-full.txt): Complete technical documentation in one file — ideal for AI agents and LLMs
 - [Quick Start](https://bytebrew.ai/docs/getting-started/quick-start/): Deploy with Docker Compose in 5 minutes
 - [Configuration](https://bytebrew.ai/docs/getting-started/configuration/): YAML reference for agents, models, tools, triggers
 - [REST API](https://bytebrew.ai/docs/getting-started/api-reference/): All endpoints with examples

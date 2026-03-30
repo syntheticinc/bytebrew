@@ -1,0 +1,64 @@
+---
+interface Props {
+  command: string;
+  prefix?: string;
+  title?: string;
+}
+
+const { command, prefix = '$', title } = Astro.props;
+---
+
+<div>
+  {title && (
+    <p class="text-sm text-text-secondary mb-2 font-medium">{title}</p>
+  )}
+  <div class="terminal-block relative rounded-[2px] p-5 overflow-x-auto border" style="background-color: #252525; border-color: rgba(135,134,127,0.15);">
+    <!-- Window dots -->
+    <div class="flex gap-1.5 mb-4">
+      <span class="w-2.5 h-2.5 rounded-full" style="background-color: rgba(135,134,127,0.3);"></span>
+      <span class="w-2.5 h-2.5 rounded-full" style="background-color: rgba(135,134,127,0.3);"></span>
+      <span class="w-2.5 h-2.5 rounded-full" style="background-color: rgba(135,134,127,0.3);"></span>
+    </div>
+
+    <div class="flex items-start gap-2">
+      <span class="font-mono text-sm select-none shrink-0" style="color: #87867F;">
+        {prefix}
+      </span>
+      <code class="font-mono text-sm break-all" style="color: #4ade80;">
+        {command}
+      </code>
+    </div>
+
+    <slot />
+
+    <!-- Copy button -->
+    <button
+      class="terminal-copy-btn absolute top-4 right-4 rounded-[2px] px-3 py-1 text-xs transition-colors cursor-pointer"
+      style="color: #DFD8D0; border-width: 1px; border-style: solid; border-color: rgba(135,134,127,0.2);"
+      data-command={command}
+    >
+      Copy
+    </button>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('astro:page-load', () => {
+    document.querySelectorAll<HTMLButtonElement>('.terminal-copy-btn').forEach((btn) => {
+      // Skip if already initialized
+      if (btn.dataset.initialized) return;
+      btn.dataset.initialized = 'true';
+
+      btn.addEventListener('click', () => {
+        const command = btn.dataset.command;
+        if (!command) return;
+
+        navigator.clipboard.writeText(command);
+        btn.textContent = 'Copied!';
+        setTimeout(() => {
+          btn.textContent = 'Copy';
+        }, 2000);
+      });
+    });
+  });
+</script>

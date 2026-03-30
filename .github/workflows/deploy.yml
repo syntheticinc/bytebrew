@@ -6,6 +6,7 @@ on:
     paths:
       - 'cloud-api/**'
       - 'cloud-web/**'
+      - 'cloud-web-astro/**'
       - 'docs-site/**'
       - 'engine/**'
       - 'mcp-docs-server/**'
@@ -48,7 +49,15 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Build frontend
+      - name: Build frontend (Astro — public pages)
+        env:
+          PUBLIC_SHOW_EE_PRICING: 'true'
+        run: |
+          cd cloud-web-astro
+          npm ci
+          npm run build
+
+      - name: Build frontend (React SPA — dashboard/auth)
         env:
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           VITE_SHOW_EE_PRICING: 'true'
@@ -134,7 +143,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: deploy
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: "build/,cloud-web/dist,docs-site/dist,docs-site/src/content/docs,deploy/config.production.yaml,deploy/Caddyfile"
+          source: "build/,cloud-web-astro/dist,cloud-web/dist,docs-site/dist,docs-site/src/content/docs,deploy/config.production.yaml,deploy/Caddyfile"
           target: "/tmp/bytebrew-deploy"
 
       - name: Configure secrets
@@ -179,10 +188,15 @@ jobs:
             sudo mv /tmp/bytebrew-deploy/build/bytebrew-cloud-api /usr/local/bin/bytebrew-cloud-api
             sudo chmod +x /usr/local/bin/bytebrew-cloud-api
 
-            # Install cloud-web frontend
+            # Install Astro public pages
             sudo rm -rf /var/www/bytebrew-cloud-web
             sudo mkdir -p /var/www/bytebrew-cloud-web
-            sudo cp -r /tmp/bytebrew-deploy/cloud-web/dist/* /var/www/bytebrew-cloud-web/
+            sudo cp -r /tmp/bytebrew-deploy/cloud-web-astro/dist/* /var/www/bytebrew-cloud-web/
+
+            # Install React SPA (dashboard/auth)
+            sudo rm -rf /var/www/bytebrew-cloud-web-spa
+            sudo mkdir -p /var/www/bytebrew-cloud-web-spa
+            sudo cp -r /tmp/bytebrew-deploy/cloud-web/dist/* /var/www/bytebrew-cloud-web-spa/
 
             # Install docs site
             sudo rm -rf /var/www/bytebrew-docs/docs/_astro

@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import starlightLlmsTxt from 'starlight-llms-txt';
 
 export default defineConfig({
   site: 'https://bytebrew.ai',
@@ -8,6 +9,12 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'ByteBrew Engine',
+      plugins: [
+        starlightLlmsTxt({
+          projectName: 'ByteBrew Engine',
+          description: 'Self-hosted AI agent runtime. Multi-agent orchestration, tool calling (MCP), SSE streaming, BYOLLM, session memory. Deploy with Docker, integrate via REST API.',
+        }),
+      ],
       logo: {
         dark: './src/assets/logo.svg',
         light: './src/assets/logo-light.png',
