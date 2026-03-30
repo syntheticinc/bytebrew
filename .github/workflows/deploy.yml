@@ -191,7 +191,9 @@ jobs:
             # Install Astro public pages
             sudo rm -rf /var/www/bytebrew-cloud-web
             sudo mkdir -p /var/www/bytebrew-cloud-web
-            sudo cp -r /tmp/bytebrew-deploy/cloud-web-astro/dist/* /var/www/bytebrew-cloud-web/
+            echo "Astro dist contents:" && ls -R /tmp/bytebrew-deploy/cloud-web-astro/dist/ | head -30
+            sudo cp -a /tmp/bytebrew-deploy/cloud-web-astro/dist/. /var/www/bytebrew-cloud-web/
+            echo "Installed Astro files:" && ls -la /var/www/bytebrew-cloud-web/logo-* /var/www/bytebrew-cloud-web/screenshots/ 2>/dev/null || echo "WARN: some static files missing"
 
             # Install React SPA (dashboard/auth)
             sudo rm -rf /var/www/bytebrew-cloud-web-spa
