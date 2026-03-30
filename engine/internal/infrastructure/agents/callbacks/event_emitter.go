@@ -34,9 +34,9 @@ func (e *EventEmitter) Emit(ctx context.Context, event *domain.AgentEvent) {
 		event.AgentID = e.agentID
 	}
 
-	// Log only important events (skip intermediate reasoning chunks to avoid log spam)
+	// Debug-only: internal event routing, not useful for operators
 	if event.Type != domain.EventTypeReasoning || event.IsComplete {
-		slog.InfoContext(ctx, "[CALLBACK] emitEvent: sending event", "type", event.Type, "step", event.Step, "agent_id", event.AgentID, "content_length", len(event.Content), "is_complete", event.IsComplete)
+		slog.DebugContext(ctx, "[CALLBACK] emitEvent: sending event", "type", event.Type, "step", event.Step, "agent_id", event.AgentID)
 	}
 
 	if err := e.eventCallback(event); err != nil {

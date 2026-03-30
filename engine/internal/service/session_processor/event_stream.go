@@ -170,20 +170,6 @@ func (s *EventStream) convertEvent(event *domain.AgentEvent) *pb.SessionEvent {
 		fullContent := SanitizeUTF8(event.Content)
 		if fr, ok := event.Metadata["full_result"].(string); ok && fr != "" {
 			fullContent = SanitizeUTF8(fr)
-			slog.Info("[EventStream] using full_result from metadata",
-				"tool_name", toolName,
-				"full_result_length", len(fr),
-				"preview_length", len(event.Content))
-		} else {
-			// Log metadata keys for debugging
-			var keys []string
-			for k := range event.Metadata {
-				keys = append(keys, k)
-			}
-			slog.Warn("[EventStream] full_result NOT found in metadata, using preview",
-				"tool_name", toolName,
-				"metadata_keys", keys,
-				"content_length", len(event.Content))
 		}
 
 		return &pb.SessionEvent{
