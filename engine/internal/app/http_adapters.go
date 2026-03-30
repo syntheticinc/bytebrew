@@ -1669,6 +1669,10 @@ func convertSessionEventToSSE(event *pb.SessionEvent, sessionID string) *deliver
 		return sseEventJSON("tool_call", data)
 
 	case pb.SessionEventType_SESSION_EVENT_TOOL_EXECUTION_END:
+		slog.Info("[SSE] tool_result event",
+			"tool", event.GetToolName(),
+			"proto_content_length", len(event.GetContent()),
+			"proto_summary_length", len(event.GetToolResultSummary()))
 		return sseEventJSON("tool_result", map[string]interface{}{
 			"tool":      event.GetToolName(),
 			"call_id":   event.GetCallId(),
