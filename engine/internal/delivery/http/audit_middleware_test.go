@@ -127,3 +127,45 @@ func TestStatusWriter_PreventDoubleWriteHeader(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, sw.status)
 }
+
+func TestStatusWriter_Unwrap(t *testing.T) {
+	inner := httptest.NewRecorder()
+	sw := &statusWriter{ResponseWriter: inner}
+
+	got := sw.Unwrap()
+	assert.Equal(t, inner, got, "Unwrap must return the underlying ResponseWriter")
+}
+
+func TestStatusWriter_Flush(t *testing.T) {
+	// httptest.ResponseRecorder implements http.Flusher
+	inner := httptest.NewRecorder()
+	sw := &statusWriter{ResponseWriter: inner}
+
+	assert.True(t, inner.Flushed == false)
+	sw.Flush()
+	assert.True(t, inner.Flushed, "Flush must delegate to underlying Flusher")
+}
+
+func TestFindFlusher_ThroughStatusWriter(t *testing.T) {
+	// Simulate the middleware chain: statusWriter wraps httptest.ResponseRecorder.
+	// findFlusher should unwrap statusWriter and find the Flusher on the recorder.
+	inner := httptest.NewRecorder()
+	sw := &statusWriter{ResponseWriter: inner}
+
+	flush := findFlusher(sw)
+
+	// Should NOT be a no-op — it should actually flush.
+	flush()
+	assert.True(t, inner.Flushed, "findFlusher must traverse statusWriter via Unwrap() to find Flusher")
+}
+
+func TestFindFlusher_DoubleWrapped(t *testing.T) {
+	// Two layers of statusWriter wrapping.
+	inner := httptest.NewRecorder()
+	sw1 := &statusWriter{ResponseWriter: inner}
+	sw2 := &statusWriter{ResponseWriter: sw1}
+
+	flush := findFlusher(sw2)
+	flush()
+	assert.True(t, inner.Flushed, "findFlusher must traverse multiple wrapper layers")
+}

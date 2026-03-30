@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -224,6 +225,7 @@ func findFlusher(w http.ResponseWriter) func() {
 			w = u.Unwrap()
 			continue
 		}
-		return func() {} // no flusher found
+		slog.Warn("[SSE] Flush not available — middleware may be wrapping ResponseWriter without Unwrap()")
+		return func() {}
 	}
 }

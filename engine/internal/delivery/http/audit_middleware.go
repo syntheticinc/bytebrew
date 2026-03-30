@@ -70,3 +70,18 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 	}
 	return w.ResponseWriter.Write(b)
 }
+
+// Unwrap returns the underlying ResponseWriter, allowing middleware traversal
+// (e.g. findFlusher in chat_handler.go can reach http.Flusher through the chain).
+func (w *statusWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
+// Flush delegates to the underlying ResponseWriter if it implements http.Flusher.
+// This is critical for SSE streaming — without it, events buffer in Go's internal
+// writer and browsers receive them in ~4KB TCP batches instead of per-token.
+func (w *statusWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
