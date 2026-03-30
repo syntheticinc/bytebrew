@@ -102,7 +102,9 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	flush := findFlusher(w)
 
 	w.Header().Del("Content-Length")
+	w.Header().Set("Transfer-Encoding", "chunked")
 	w.WriteHeader(http.StatusOK)
+	flush() // commit headers immediately — before any body
 
 	_, _ = io.WriteString(w, ": ok\n\n")
 	flush()

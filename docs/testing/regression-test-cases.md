@@ -786,18 +786,19 @@
 
 **PASS:** Несуществующий агент → "agent not found", без crash
 
-### TC-CHAT-05: Agent without model → error
-**Предусловие:** Создан агент `no-model-agent` без привязки к модели
+### TC-CHAT-05: Agent without model → fallback to default
+**Предусловие:** Создан агент `no-model-agent` без привязки к модели, Engine имеет default LLM в config
 
 **Шаги:**
 1. `curl -s -X POST http://localhost:8443/api/v1/agents/no-model-agent/chat -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"message":"Hello"}'`
 
 **Ожидание:**
-- HTTP 400/422 или SSE stream с `error` event
-- Сообщение об ошибке объясняет что модель не настроена
+- SSE stream с ответом от default модели (из config)
+- Агент работает, не ошибка
+- Если default модель НЕ настроена — SSE `error` event: "no model available, configure via Admin Dashboard"
 - Не 500, не stack trace
 
-**PASS:** Агент без модели → понятная ошибка, не 500
+**PASS:** Агент без модели → fallback на default из config, или понятная ошибка если нет default
 
 ### TC-CHAT-06: Chat without auth → 401
 **Шаги:**
