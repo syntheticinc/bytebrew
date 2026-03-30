@@ -209,8 +209,10 @@ jobs:
             fi
 
             # Restart hosted stack (Engine + MCP docs + examples)
+            # --force-recreate ensures containers use the freshly loaded images
+            # (docker compose up alone skips recreate if tag hasn't changed)
             cd /opt/bytebrew-examples/hosted
-            docker compose up -d --remove-orphans
+            docker compose up -d --force-recreate --remove-orphans
 
             # Start Cloud API
             sudo systemctl start bytebrew-cloud-api
@@ -224,6 +226,14 @@ jobs:
               sudo mv /usr/local/bin/bytebrew-cloud-api.bak /usr/local/bin/bytebrew-cloud-api
               sudo systemctl start bytebrew-cloud-api
               exit 1
+            fi
+
+            # Engine health check (inside Docker network)
+            ENGINE_HEALTH=$(docker exec hosted-engine-1 curl -sf http://localhost:8443/api/v1/health 2>/dev/null)
+            if [ -z "$ENGINE_HEALTH" ]; then
+              echo "WARNING: Engine health check failed — container may need manual inspection"
+            else
+              echo "Engine healthy: $ENGINE_HEALTH"
             fi
 
             # Cleanup
