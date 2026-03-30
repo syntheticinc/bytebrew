@@ -89,16 +89,38 @@ In SSE this appears as: `message_delta` events → `tool_call` → `tool_result`
 
 ## Action Required (Chirp side)
 
-**Pull the latest image:**
+**IMPORTANT: `--force-recreate` is mandatory** — `docker compose up -d` alone does NOT update the container when the `latest` tag already exists locally.
+
 ```bash
 docker pull bytebrew/engine:latest
 docker compose up -d --force-recreate
 ```
 
-After updating, verify with:
+### How to verify the fix is applied
+
+After restarting, check engine logs during a tool call. You should see:
+
+```
+[CALLBACK] onToolEnd: emitting ToolResult event  tool_name=device.list  full_result_length=570  preview_length=503
+[CALLBACK] emitEvent: sending event  type=tool_result  content_length=503
+```
+
+**`content_length=503` in the emitEvent log is EXPECTED** — this is the domain event preview, NOT what SSE sends. The SSE layer reads `full_result` from event metadata and sends the full 570 chars.
+
+To verify SSE output directly, parse the tool_result SSE event and check `content` length:
 ```bash
-# Send a chat that triggers a tool with >500 char result
-# Check SSE event: content should now be the full result, not truncated
+# The content field should be 570 chars (full), not 503 (truncated)
+curl -sN -X POST /api/v1/agents/{name}/chat ... | \
+  grep "tool_result" | python3 -c "import sys,json; d=json.loads(input().split('data: ')[1]); print(len(d['content']))"
+```
+
+### Our verification (Docker Hub image `bytebrew/engine:latest`)
+
+We tested the exact same Docker Hub image:
+```
+full_result_length=1879  (full tool result)
+preview_length=503       (domain event preview — internal only)
+SSE content length=1879  (what the client receives — FULL)
 ```
 
 ## UUID Hallucination
