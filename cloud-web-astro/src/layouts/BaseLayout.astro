@@ -4,12 +4,17 @@ import '../styles/global.css';
 interface Props {
   title?: string;
   description?: string;
+  image?: string;
 }
 
 const {
   title = 'ByteBrew Engine — Self-hosted AI Agent Runtime',
   description = 'Add an AI agent to your product in one day. Self-hosted, any LLM, free forever. Multi-agent orchestration, tool calling, SSE streaming, REST API.',
+  image = '/screenshots/admin-agent-detail.png',
 } = Astro.props;
+
+const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+const imageURL = new URL(image, Astro.site);
 ---
 
 <!DOCTYPE html>
@@ -20,19 +25,49 @@ const {
     <title>{title}</title>
     <meta name="description" content={description} />
 
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/logo-dark.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
     <!-- Open Graph -->
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content={Astro.url.href} />
+    <meta property="og:url" content={canonicalURL} />
     <meta property="og:site_name" content="ByteBrew Engine" />
+    <meta property="og:image" content={imageURL} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={imageURL} />
 
-    <link rel="canonical" href={Astro.url.href} />
+    <link rel="canonical" href={canonicalURL} />
+
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "ByteBrew Engine",
+      "description": description,
+      "url": "https://bytebrew.ai",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Linux, macOS, Windows",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+        "description": "Community Edition — free forever"
+      },
+      "author": {
+        "@type": "Organization",
+        "name": "ByteBrew",
+        "url": "https://bytebrew.ai"
+      }
+    })} />
 
     <!-- Font -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
