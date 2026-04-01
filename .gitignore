@@ -1,3 +1,6 @@
+# OMC (oh-my-claudecode)
+.omc/
+
 # Windsurf / IDE
 .vscode/
 .idea/
@@ -105,6 +108,10 @@ bytebrew-cloud-web/node_modules
 
 # Screenshots (testing artifacts)
 *.png
+# Allow PNGs in web assets
+!cloud-web-astro/public/**/*.png
+!cloud-web/public/**/*.png
+!docs-site/src/**/*.png
 
 # Vite build output
 **/dist/
