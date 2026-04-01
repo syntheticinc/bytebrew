@@ -72,6 +72,37 @@ func TestSend_ToolResult_FallsBackToContent(t *testing.T) {
 	assert.Equal(t, content, evt.Content, "Content should fall back to event.Content when full_result is absent")
 }
 
+func TestSend_Answer_SkipsSSEWhenAlreadyStreamed(t *testing.T) {
+	pub := &mockPublisher{}
+	stream := NewEventStream("session-1", pub, &mockStore{})
+
+	err := stream.Send(&domain.AgentEvent{
+		Type:    domain.EventTypeAnswer,
+		Content: "This text was already sent via message_delta chunks",
+		Metadata: map[string]interface{}{
+			"already_streamed": true,
+		},
+	})
+
+	require.NoError(t, err)
+	assert.Empty(t, pub.events, "Should NOT publish SSE when already_streamed=true")
+}
+
+func TestSend_Answer_PublishesWhenNotStreamed(t *testing.T) {
+	pub := &mockPublisher{}
+	stream := NewEventStream("session-1", pub, &mockStore{})
+
+	err := stream.Send(&domain.AgentEvent{
+		Type:    domain.EventTypeAnswer,
+		Content: "Non-streaming answer",
+	})
+
+	require.NoError(t, err)
+	require.Len(t, pub.events, 1)
+	assert.Equal(t, pb.SessionEventType_SESSION_EVENT_ANSWER, pub.events[0].Type)
+	assert.Equal(t, "Non-streaming answer", pub.events[0].Content)
+}
+
 func TestSend_ToolResult_PreservesSummary(t *testing.T) {
 	pub := &mockPublisher{}
 	stream := NewEventStream("session-1", pub, &mockStore{})

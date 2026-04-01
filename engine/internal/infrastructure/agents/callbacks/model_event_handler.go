@@ -29,6 +29,7 @@ type ModelEventHandler struct {
 	answerStarted        bool
 	accumulatedChunks    string
 	accumulatedMu        sync.Mutex
+	chunksStreamed       bool // true if chunks were sent via chunkCb (avoid duplicate EventTypeAnswer)
 
 	// streamWg tracks active streaming goroutines. Agent.Stream() waits on this
 	// before returning, preventing ProcessingStopped from firing before all chunks
@@ -213,6 +214,7 @@ func (h *ModelEventHandler) OnModelEndWithStreamOutput(ctx context.Context, info
 					// Track accumulated text for finalizing before tool calls
 					h.accumulatedMu.Lock()
 					h.accumulatedChunks += msg.Content
+					h.chunksStreamed = true
 					h.accumulatedMu.Unlock()
 
 					if err := h.chunkCb(msg.Content); err != nil {
@@ -285,20 +287,32 @@ func (h *ModelEventHandler) OnModelEndWithStreamOutput(ctx context.Context, info
 func (h *ModelEventHandler) FinalizeAccumulatedText(ctx context.Context) {
 	h.accumulatedMu.Lock()
 	accumulated := h.accumulatedChunks
+	alreadyStreamed := h.chunksStreamed
 	h.accumulatedChunks = ""
+	h.chunksStreamed = false
 	h.accumulatedMu.Unlock()
 
 	if accumulated == "" {
 		return
 	}
 
-	slog.InfoContext(ctx, "[CALLBACK] finalizing accumulated text", "length", len(accumulated))
+	slog.InfoContext(ctx, "[CALLBACK] finalizing accumulated text", "length", len(accumulated), "already_streamed", alreadyStreamed)
+
+	metadata := make(map[string]interface{})
+	// If chunks were already streamed via chunkCb (message_delta SSE events),
+	// mark the event so SSE/WS delivery skips it (client already has the text).
+	// The event is still emitted for MessageCollector (history persistence).
+	if alreadyStreamed {
+		metadata["already_streamed"] = true
+	}
+
 	event := &domain.AgentEvent{
 		Type:       domain.EventTypeAnswer,
 		Timestamp:  time.Now(),
 		Step:       h.counter.GetStep(),
 		Content:    accumulated,
 		IsComplete: false,
+		Metadata:   metadata,
 	}
 	h.emitter.Emit(ctx, event)
 }

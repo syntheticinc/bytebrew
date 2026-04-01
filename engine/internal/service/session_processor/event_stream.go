@@ -136,6 +136,11 @@ func (s *EventStream) convertEvent(event *domain.AgentEvent) *pb.SessionEvent {
 		}
 
 	case domain.EventTypeAnswer:
+		// Skip SSE delivery if text was already streamed via message_delta chunks.
+		// The event is still processed by MessageCollector for history persistence.
+		if streamed, _ := event.Metadata["already_streamed"].(bool); streamed {
+			return nil
+		}
 		return &pb.SessionEvent{
 			Type:    pb.SessionEventType_SESSION_EVENT_ANSWER,
 			Content: SanitizeUTF8(event.Content),
