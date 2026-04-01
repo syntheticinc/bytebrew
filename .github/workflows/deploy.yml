@@ -137,14 +137,30 @@ jobs:
             sudo cp /usr/local/bin/bytebrew-cloud-api /usr/local/bin/bytebrew-cloud-api.bak 2>/dev/null || true
             sudo systemctl stop bytebrew-cloud-api || true
 
-      - name: Copy files to VPS
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: deploy
-          key: ${{ secrets.VPS_SSH_KEY }}
-          source: "build/,cloud-web-astro/dist,cloud-web/dist,docs-site/dist,docs-site/src/content/docs,deploy/config.production.yaml,deploy/Caddyfile"
-          target: "/tmp/bytebrew-deploy"
+      - name: Pack deploy artifacts
+        run: |
+          tar czf /tmp/deploy-bundle.tar.gz \
+            build/ \
+            cloud-web-astro/dist \
+            cloud-web/dist \
+            docs-site/dist \
+            docs-site/src/content/docs \
+            deploy/config.production.yaml \
+            deploy/Caddyfile
+          echo "Bundle size: $(du -h /tmp/deploy-bundle.tar.gz | cut -f1)"
+
+      - name: Copy bundle to VPS
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key \
+            /tmp/deploy-bundle.tar.gz \
+            deploy@${{ secrets.VPS_HOST }}:/tmp/deploy-bundle.tar.gz
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key \
+            deploy@${{ secrets.VPS_HOST }} \
+            "mkdir -p /tmp/bytebrew-deploy && tar xzf /tmp/deploy-bundle.tar.gz -C /tmp/bytebrew-deploy && rm /tmp/deploy-bundle.tar.gz"
+          rm ~/.ssh/deploy_key
 
       - name: Configure secrets
         uses: appleboy/ssh-action@v1
