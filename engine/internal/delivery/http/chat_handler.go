@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
@@ -98,6 +99,12 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
+
+	// Disable WriteTimeout for SSE — long-running streams (multi-tool ReAct chains)
+	// can exceed the server's default WriteTimeout (60s). Without this, Go closes
+	// the connection mid-stream and the client gets unexpected EOF without event:done.
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Time{}) // zero = no deadline
 
 	// Unwrap to find http.Flusher — chi middleware wraps ResponseWriter.
 	flush := findFlusher(w)

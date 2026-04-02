@@ -432,15 +432,26 @@ func (a *Agent) Stream(ctx context.Context, input string, callback func(chunk st
 	// Retry on recoverable errors
 	const maxErrorRetries = 2
 	const maxRateLimitRetries = 5
+	const streamTimeout = 120 * time.Second // max time for a single LLM stream attempt
 	var reader *schema.StreamReader[*schema.Message]
 	var err error
 	var rateLimitCount int
 
+	var activeStreamCancel context.CancelFunc // cancel for successful stream (deferred cleanup)
 	for retryCount := 0; retryCount <= maxErrorRetries; retryCount++ {
-		reader, err = a.agent.Stream(ctx, messages, callbackOpt)
+		// Per-attempt timeout prevents hanging on unresponsive LLM providers.
+		// If the provider hangs after an EOF or during retry, we fail fast
+		// instead of blocking the SSE connection indefinitely.
+		var streamCtx context.Context
+		var streamCancel context.CancelFunc
+		streamCtx, streamCancel = context.WithTimeout(ctx, streamTimeout)
+		reader, err = a.agent.Stream(streamCtx, messages, callbackOpt)
 		if err == nil {
+			// Keep context alive for drain loop; cancel deferred at function exit
+			activeStreamCancel = streamCancel
 			break
 		}
+		streamCancel() // cancel failed attempt immediately
 
 		// 1. Rate limit — backoff + retry (no feedback, LLM can't fix this)
 		if isRateLimitError(err) {
@@ -500,6 +511,9 @@ func (a *Agent) Stream(ctx context.Context, input string, callback func(chunk st
 			ToolCallRecorder: a.toolCallRecorder,
 		})
 		callbackOpt = cb.BuildCallbackOption()
+	}
+	if activeStreamCancel != nil {
+		defer activeStreamCancel()
 	}
 	slog.InfoContext(ctx, "[STREAM] agent.Stream returned reader, starting drain loop...")
 
