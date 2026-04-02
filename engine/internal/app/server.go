@@ -914,17 +914,8 @@ func Run(sc ServerConfig) error {
 		})
 		respondHandler := deliveryhttp.NewRespondHandler(sessionRegistry)
 
-		// Visibility middleware enforces public-only access for ScopeChatPublic tokens.
-		var visibilityMW *deliveryhttp.AgentVisibilityMiddleware
-		if pgDB != nil {
-			visibilityMW = deliveryhttp.NewAgentVisibilityMiddleware(&agentPublicCheckerDB{db: pgDB})
-		} else if agentRegistry != nil {
-			visibilityMW = deliveryhttp.NewAgentVisibilityMiddleware(&agentPublicCheckerRegistry{registry: agentRegistry})
-		}
-
 		// Register chat routes on external router (or single-port router).
-		// isExternal controls whether agent visibility middleware is applied.
-		registerChatRoutes := func(router chi.Router, isExternal bool) {
+		registerChatRoutes := func(router chi.Router) {
 			router.Group(func(r chi.Router) {
 				if httpAuthMW != nil {
 					r.Use(httpAuthMW.Authenticate)
@@ -934,10 +925,7 @@ func Run(sc ServerConfig) error {
 				}
 				r.Group(func(r chi.Router) {
 					if httpAuthMW != nil {
-						r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeChat | deliveryhttp.ScopeChatPublic))
-					}
-					if isExternal && visibilityMW != nil {
-						r.Use(visibilityMW.Middleware)
+						r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeChat))
 					}
 					r.Post("/api/v1/agents/{name}/chat", chatHandler.Chat)
 					r.Post("/api/v1/sessions/{id}/respond", respondHandler.Respond)
@@ -946,18 +934,18 @@ func Run(sc ServerConfig) error {
 		}
 
 		// Chat API available on external port (or single-port)
-		registerChatRoutes(httpServer.Router(), internalHTTPServer != nil)
+		registerChatRoutes(httpServer.Router())
 		// In two-port mode, also register on internal port (for /chat/ web client)
 		if internalHTTPServer != nil {
-			registerChatRoutes(internalHTTPServer.Router(), false)
+			registerChatRoutes(internalHTTPServer.Router())
 		}
 
-		// Agent list endpoint on external router (read-only, for widget agent discovery)
+		// Agent list endpoint on external router (read-only, requires ScopeAgentsRead)
 		if internalHTTPServer != nil {
 			httpServer.Router().Group(func(r chi.Router) {
 				if httpAuthMW != nil {
 					r.Use(httpAuthMW.Authenticate)
-					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead | deliveryhttp.ScopeChatPublic))
+					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
 				}
 				r.Get("/api/v1/agents", deliveryhttp.NewAgentHandlerWithManager(
 					&agentManagerHTTPAdapter{

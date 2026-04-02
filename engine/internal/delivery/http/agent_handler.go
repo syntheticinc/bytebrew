@@ -23,7 +23,6 @@ type AgentInfo struct {
 	ToolsCount   int    `json:"tools_count"`
 	Kit          string `json:"kit,omitempty"`
 	HasKnowledge bool   `json:"has_knowledge"`
-	Public       bool   `json:"public"`
 }
 
 // AgentDetail is the full agent information returned by the detail endpoint.
@@ -67,7 +66,6 @@ type CreateAgentRequest struct {
 	Tools          []string         `json:"tools,omitempty"`
 	CanSpawn       []string         `json:"can_spawn,omitempty"`
 	MCPServers     []string         `json:"mcp_servers,omitempty"`
-	Public         bool             `json:"public,omitempty"`
 	Escalation     *AgentEscalation `json:"escalation,omitempty"`
 }
 
@@ -139,28 +137,10 @@ func (h *AgentHandler) Routes() http.Handler {
 }
 
 // List handles GET /api/v1/agents.
-// When the requester only has ScopeChatPublic, returns only public agents
-// with limited fields (no system_prompt, tools config, etc.).
 func (h *AgentHandler) List(w http.ResponseWriter, r *http.Request) {
 	agents, err := h.lister.ListAgents(r.Context())
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	scopes, _ := r.Context().Value(ContextKeyScopes).(int)
-	if !hasFullChatAccess(scopes) && scopes&ScopeChatPublic != 0 {
-		filtered := make([]AgentInfo, 0, len(agents))
-		for _, a := range agents {
-			if a.Public {
-				filtered = append(filtered, AgentInfo{
-					Name:        a.Name,
-					Description: a.Description,
-					Public:      true,
-				})
-			}
-		}
-		writeJSON(w, http.StatusOK, filtered)
 		return
 	}
 

@@ -68,7 +68,6 @@ func (a *agentListerHTTPAdapter) ListAgents(_ context.Context) ([]deliveryhttp.A
 			ToolsCount:   len(agent.Record.BuiltinTools) + len(agent.Record.CustomTools),
 			Kit:          agent.Record.Kit,
 			HasKnowledge: agent.Record.KnowledgePath != "",
-			Public:       agent.Record.Public,
 		})
 	}
 	return result, nil
@@ -90,7 +89,6 @@ func (a *agentListerHTTPAdapter) GetAgent(_ context.Context, name string) (*deli
 			ToolsCount:   len(tools),
 			Kit:          agent.Record.Kit,
 			HasKnowledge: agent.Record.KnowledgePath != "",
-			Public:       agent.Record.Public,
 		},
 		Tools:    tools,
 		CanSpawn: agent.Record.CanSpawn,
@@ -1038,7 +1036,6 @@ func (a *agentManagerHTTPAdapter) ListAgents(ctx context.Context) ([]deliveryhtt
 			ToolsCount:   len(rec.BuiltinTools) + len(rec.CustomTools),
 			Kit:          rec.Kit,
 			HasKnowledge: rec.KnowledgePath != "",
-			Public:       rec.Public,
 		})
 	}
 	return result, nil
@@ -1062,7 +1059,6 @@ func (a *agentManagerHTTPAdapter) GetAgent(ctx context.Context, name string) (*d
 			ToolsCount:   len(tools),
 			Kit:          rec.Kit,
 			HasKnowledge: rec.KnowledgePath != "",
-			Public:       rec.Public,
 		},
 		SystemPrompt:   rec.SystemPrompt,
 		KnowledgePath:  rec.KnowledgePath,
@@ -1162,7 +1158,6 @@ func (a *agentManagerHTTPAdapter) toAgentRecord(req deliveryhttp.CreateAgentRequ
 		BuiltinTools:   req.Tools,
 		CanSpawn:       req.CanSpawn,
 		MCPServers:     req.MCPServers,
-		Public:         req.Public,
 	}
 
 	// Resolve model: by ID or by name.
@@ -1227,36 +1222,6 @@ func (a *agentManagerHTTPAdapter) resolveModelID(_ context.Context, modelName st
 		return nil
 	}
 	return &llm.ID
-}
-
-// agentPublicCheckerDB implements deliveryhttp.AgentPublicChecker using the database.
-type agentPublicCheckerDB struct {
-	db *gorm.DB
-}
-
-func (c *agentPublicCheckerDB) IsAgentPublic(_ context.Context, name string) (bool, bool, error) {
-	var agent models.AgentModel
-	err := c.db.Select("id", "public").Where("name = ?", name).First(&agent).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return false, false, nil
-		}
-		return false, false, fmt.Errorf("check agent public: %w", err)
-	}
-	return true, agent.Public, nil
-}
-
-// agentPublicCheckerRegistry implements deliveryhttp.AgentPublicChecker using the in-memory agent registry.
-type agentPublicCheckerRegistry struct {
-	registry *agent_registry.AgentRegistry
-}
-
-func (c *agentPublicCheckerRegistry) IsAgentPublic(_ context.Context, name string) (bool, bool, error) {
-	agent, err := c.registry.Get(name)
-	if err != nil {
-		return false, false, nil
-	}
-	return true, agent.Record.Public, nil
 }
 
 // ModelCacheInvalidator allows invalidating cached model clients when models are modified.

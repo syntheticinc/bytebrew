@@ -32,7 +32,6 @@ const NAV_SECTIONS = [
     title: 'Core Concepts',
     items: [
       { id: 'concept-agents', label: 'Agents & Lifecycle' },
-      { id: 'concept-visibility', label: 'Agent Visibility' },
       { id: 'concept-multi-agent', label: 'Multi-Agent' },
       { id: 'concept-tools', label: 'Tools' },
       { id: 'concept-tasks', label: 'Tasks & Jobs' },
@@ -84,7 +83,6 @@ const CONTENT_MAP: Record<string, () => React.JSX.Element> = {
   'admin-config': AdminConfigContent,
   'admin-audit': AdminAuditContent,
   'concept-agents': ConceptAgentsContent,
-  'concept-visibility': ConceptVisibilityContent,
   'concept-multi-agent': ConceptMultiAgentContent,
   'concept-tools': ConceptToolsContent,
   'concept-tasks': ConceptTasksContent,
@@ -1685,7 +1683,6 @@ function AdminApiKeysContent() {
       <SubSection title="Available scopes">
         <ParamTable params={[
           { name: 'chat', required: false, default: '--', desc: 'Send messages to any agent (POST /agents/{name}/chat). The most common scope for server-to-server integrations.' },
-          { name: 'chat_public', required: false, default: '--', desc: 'Send messages only to agents marked as public. Designed for the embeddable widget and browser-facing integrations where the key is visible to end users.' },
           { name: 'tasks', required: false, default: '--', desc: 'CRUD operations on /tasks. Create, list, cancel tasks and provide input.' },
           { name: 'agents:read', required: false, default: '--', desc: 'Read-only access to agent configurations (GET /agents).' },
           { name: 'config', required: false, default: '--', desc: 'Reload, export, and import configuration. Useful for CI/CD pipelines.' },
@@ -2564,75 +2561,6 @@ curl -X POST http://localhost:8080/api/v1/webhooks/stripe \\
 }
 
 /* ------------------------------------------------------------------ */
-/*  Core Concepts > Agent Visibility                                   */
-/* ------------------------------------------------------------------ */
-
-function ConceptVisibilityContent() {
-  return (
-    <div>
-      <PageTitle>Agent Visibility</PageTitle>
-      <p className="text-sm text-text-tertiary mb-4">
-        Every agent in ByteBrew has a visibility setting that controls who can interact with it.
-        By default, all agents are private. Making an agent public allows it to be accessed through
-        the embeddable widget and browser-facing API keys without exposing your other agents.
-      </p>
-
-      <SubSection title="Public vs Private agents">
-        <ParamTable params={[
-          { name: 'private', required: false, default: 'Yes', desc: 'Only accessible via admin JWT or API keys with the chat scope. Suitable for internal tools, server-to-server integrations, and agents that handle sensitive data.' },
-          { name: 'public', required: false, default: 'No', desc: 'Accessible via API keys with either chat or chat_public scope. Suitable for customer-facing chatbots, embeddable widgets, and public-facing integrations.' },
-        ]} />
-      </SubSection>
-
-      <SubSection title="How to make an agent public">
-        <p className="text-sm text-text-tertiary mb-3">
-          There are two ways to set an agent as public:
-        </p>
-        <BulletList items={[
-          <><strong className="text-text-secondary">Admin Dashboard</strong> -- open the agent editor, toggle the &quot;Public&quot; switch, and save.</>,
-          <><strong className="text-text-secondary">REST API</strong> -- send <Ic>{'PUT /api/v1/agents/{name}'}</Ic> with <Ic>{'"public": true'}</Ic> in the request body.</>,
-          <><strong className="text-text-secondary">YAML config</strong> -- add <Ic>public: true</Ic> to the agent definition.</>,
-        ]} />
-        <CodeBlock>{`agents:
-  # Public: accessible via widget and chat_public API keys
-  support-bot:
-    model: glm-5
-    public: true
-    system: "You are a customer support assistant."
-
-  # Private (default): only accessible via admin or chat API keys
-  internal-analyst:
-    model: glm-5
-    system: "You are an internal data analyst."`}</CodeBlock>
-      </SubSection>
-
-      <SubSection title="API key scopes and visibility">
-        <p className="text-sm text-text-tertiary mb-3">
-          Visibility works together with API key scopes to control access:
-        </p>
-        <ParamTable params={[
-          { name: 'chat', required: false, default: '--', desc: 'Can talk to all agents (public and private). Use for server-to-server integrations where the key is kept secret.' },
-          { name: 'chat_public', required: false, default: '--', desc: 'Can talk only to agents marked as public. Use for the embeddable widget and any integration where the key is visible to end users.' },
-        ]} />
-
-        <Callout type="tip" title="Widget integration">
-          When embedding the widget on a third-party website, create an API key with
-          the <Ic>chat_public</Ic> scope. This ensures that even if someone extracts the key from your
-          page source, they can only interact with agents you have explicitly marked as public.
-        </Callout>
-      </SubSection>
-
-      <SectionDivider />
-      <WhatNext items={[
-        { label: 'Embeddable Widget', id: 'integration-widget' },
-        { label: 'API Keys', id: 'admin-api-keys' },
-        { label: 'Agents & Lifecycle', id: 'concept-agents' },
-      ]} />
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /*  Integration > Embeddable Widget                                    */
 /* ------------------------------------------------------------------ */
 
@@ -2653,7 +2581,7 @@ function IntegrationWidgetContent() {
         <CodeBlock>{`<script
   src="https://your-engine-host:8443/widget.js"
   data-agent="support-bot"
-  data-api-key="bb_pub_your_public_api_key"
+  data-api-key="bb_your_api_key"
 ></script>`}</CodeBlock>
         <p className="text-sm text-text-tertiary mt-3">
           That is it. A chat bubble appears in the bottom-right corner of the page.
@@ -2663,8 +2591,8 @@ function IntegrationWidgetContent() {
 
       <SubSection title="Configuration attributes">
         <ParamTable params={[
-          { name: 'data-agent', required: true, default: '--', desc: 'Name of the agent to connect to. The agent must be marked as public if you are using a chat_public API key.' },
-          { name: 'data-api-key', required: false, default: '--', desc: 'API key with chat or chat_public scope. Used in Direct mode where the widget talks to the engine directly.' },
+          { name: 'data-agent', required: true, default: '--', desc: 'Name of the agent to connect to.' },
+          { name: 'data-api-key', required: false, default: '--', desc: 'API key with chat scope. Used in Direct mode where the widget talks to the engine directly. For production use, prefer Proxy mode to keep the key server-side.' },
           { name: 'data-endpoint', required: false, default: '--', desc: 'URL of your backend proxy. Used in Proxy mode where the widget talks to your server instead of the engine directly.' },
           { name: 'data-position', required: false, default: 'bottom-right', desc: 'Position of the chat bubble: bottom-right or bottom-left.' },
           { name: 'data-theme', required: false, default: 'auto', desc: 'Color theme: light, dark, or auto (follows system preference).' },
@@ -2680,14 +2608,14 @@ function IntegrationWidgetContent() {
         <h4 className="text-sm font-semibold text-text-primary mt-4 mb-2">Direct mode (data-api-key)</h4>
         <p className="text-sm text-text-tertiary mb-3">
           The widget connects directly to your ByteBrew Engine. Simple to set up,
-          ideal when the engine is publicly accessible. Use a <Ic>chat_public</Ic> scoped API key
-          so that only public agents are exposed.
+          ideal for prototyping. Note that the API key is visible in the page source, so
+          prefer Proxy mode for production deployments.
         </p>
         <CodeBlock>{`<!-- Direct mode: widget talks to engine -->
 <script
   src="https://engine.example.com:8443/widget.js"
   data-agent="support-bot"
-  data-api-key="bb_pub_abc123"
+  data-api-key="bb_abc123"
   data-title="Support"
   data-theme="light"
 ></script>`}</CodeBlock>
@@ -2729,7 +2657,7 @@ function IntegrationWidgetContent() {
   <script
     src="https://engine.example.com:8443/widget.js"
     data-agent="support-bot"
-    data-api-key="bb_pub_abc123"
+    data-api-key="bb_abc123"
     data-position="bottom-right"
     data-theme="auto"
     data-title="Ask us anything"
@@ -2740,7 +2668,6 @@ function IntegrationWidgetContent() {
 
       <SectionDivider />
       <WhatNext items={[
-        { label: 'Agent Visibility', id: 'concept-visibility' },
         { label: 'Web Client', id: 'integration-web-client' },
         { label: 'CORS Configuration', id: 'deploy-cors' },
         { label: 'API Keys', id: 'admin-api-keys' },

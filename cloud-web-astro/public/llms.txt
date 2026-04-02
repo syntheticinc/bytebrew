@@ -206,12 +206,6 @@ ByteBrew supports optional two-port architecture for secure production deploymen
 
 Default: single-port mode (all on 8443). Enable two-port via `BYTEBREW_INTERNAL_PORT=8444`.
 
-## Agent Visibility
-
-Agents can be marked `public` or `private`:
-- **Public agents**: accessible via widget and public API keys (`ScopeChatPublic`)
-- **Private agents**: only accessible via server-to-server API keys (`ScopeChat`) or admin JWT
-
 ## Quick Start
 
 ```bash

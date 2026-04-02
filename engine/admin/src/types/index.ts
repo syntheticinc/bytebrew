@@ -8,7 +8,6 @@ export interface AgentInfo {
   tools_count: number;
   kit?: string;
   has_knowledge: boolean;
-  public?: boolean;
 }
 
 export interface AgentDetail extends AgentInfo {
@@ -45,7 +44,6 @@ export interface CreateAgentRequest {
   can_spawn?: string[];
   mcp_servers?: string[];
   escalation?: AgentEscalation;
-  public?: boolean;
 }
 
 // ============================================================================

@@ -52,11 +52,6 @@ export default function AgentsPage() {
       render: (row: AgentInfo) => (
         <span className="flex items-center gap-2">
           {row.name}
-          {row.public && (
-            <span className="px-1.5 py-0.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded text-[10px] font-medium leading-none">
-              Public
-            </span>
-          )}
         </span>
       ),
     },
@@ -145,13 +140,6 @@ export default function AgentsPage() {
               <DetailRow label="Lifecycle">
                 <StatusBadge status={selected.lifecycle === 'persistent' ? 'active' : 'idle'} className="text-xs" />
                 <span className="ml-2 text-xs">{selected.lifecycle}</span>
-              </DetailRow>
-              <DetailRow label="Visibility">
-                {selected.public ? (
-                  <span className="px-1.5 py-0.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded text-xs font-medium">Public</span>
-                ) : (
-                  <span className="text-xs text-brand-shade3">Private</span>
-                )}
               </DetailRow>
               {selected.kit && <DetailRow label="Kit">{selected.kit}</DetailRow>}
               <DetailRow label="Tool Execution">{selected.tool_execution}</DetailRow>

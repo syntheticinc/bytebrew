@@ -15,7 +15,6 @@ type AgentModel struct {
 	MaxSteps       int       `gorm:"not null;default:0"`
 	MaxContextSize int       `gorm:"not null;default:16000"`
 	ConfirmBefore  string    `gorm:"type:text"`
-	Public         bool      `gorm:"default:false"`
 	CreatedAt      time.Time `gorm:"autoCreateTime"`
 	UpdatedAt      time.Time `gorm:"autoUpdateTime"`
 

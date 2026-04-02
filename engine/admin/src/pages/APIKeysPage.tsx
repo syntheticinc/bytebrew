@@ -7,7 +7,6 @@ import type { APIToken } from '../types';
 
 const SCOPES = [
   { bit: 1, label: 'Chat', description: 'POST /agents/{name}/chat — all agents' },
-  { bit: 4096, label: 'Chat (Public)', description: 'POST /agents/{name}/chat — public agents only' },
   { bit: 2, label: 'Tasks', description: 'CRUD /tasks' },
   { bit: 4, label: 'Agents Read', description: 'GET /agents' },
   { bit: 32, label: 'Agents Write', description: 'POST/PUT/DELETE /agents' },
