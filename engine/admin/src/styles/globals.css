@@ -76,3 +76,36 @@
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
   }
 }
+
+/* React Flow — dark theme controls (outside @layer to beat rf's unlayered styles) */
+.react-flow__controls {
+  background: #1F1F1F !important;
+  border: 1px solid rgba(135, 134, 127, 0.2) !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+}
+
+.react-flow__controls-button {
+  background: #1F1F1F !important;
+  border-bottom: 1px solid rgba(135, 134, 127, 0.15) !important;
+  fill: #87867F !important;
+  color: #87867F !important;
+}
+
+.react-flow__controls-button:hover {
+  background: #2a2a2a !important;
+  fill: #CBC9BC !important;
+  color: #CBC9BC !important;
+}
+
+.react-flow__controls-button:last-child {
+  border-bottom: none !important;
+}
+
+.react-flow__controls-button svg {
+  fill: #87867F !important;
+}
+
+.react-flow__controls-button:hover svg {
+  fill: #CBC9BC !important;
+}
