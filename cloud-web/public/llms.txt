@@ -25,6 +25,7 @@ Your app sends a message to ByteBrew via REST API. The engine executes everythin
 - **Background automation** — agents run on schedule (cron) or triggered by webhooks, without user interaction
 - **Knowledge base (RAG)** — upload documents (PDF, markdown, text), agents search them automatically via vector search
 - **Visual Admin Dashboard** — create agents, configure models, manage tools — no code required
+- **Agent Builder** — interactive canvas (React Flow) for designing agent topologies. Visualize spawn chains, triggers, lifecycle states. Includes AI assistant (17 MCP tools), flow testing panel, and GitOps-friendly YAML export/import with drift detection
 - **Any LLM** — OpenAI, Anthropic, Google, Ollama, or any OpenAI-compatible provider. Mix models per agent. Switch with one config change
 - **BYOK (Bring Your Own Key)** — end users pass their own LLM API keys via HTTP headers (`X-Model-Provider`, `X-Model-API-Key`, `X-Model-Name`). Keys are used for one request and never stored
 

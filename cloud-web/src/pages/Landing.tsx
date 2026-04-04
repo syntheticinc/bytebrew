@@ -679,6 +679,9 @@ function ProductShowcaseSection({ onImageClick }: { onImageClick: (src: string) 
             <h3 className="text-lg font-semibold text-text-primary mb-2">Admin Dashboard — Visual Management</h3>
             <p className="text-sm text-text-secondary font-sans leading-relaxed mb-4">
               Configure agents, models, MCP servers, triggers, and API keys visually.
+              The Agent Builder canvas lets you design agent topologies with drag-and-drop,
+              visualize spawn chains and triggers, test flows in real time, and manage configuration
+              with GitOps-friendly YAML export/import.
             </p>
             <div className="rounded-[2px] border border-border overflow-hidden shadow-2xl shadow-brand-accent/5">
               <img src="/screenshots/admin-agent-detail.png" alt="Admin Dashboard — Agent detail panel with model, system prompt, tools, and spawn rules configuration" className="w-full cursor-pointer hover:opacity-80 transition-opacity" onClick={() => onImageClick('/screenshots/admin-agent-detail.png')} />
@@ -701,9 +704,9 @@ function ProductShowcaseSection({ onImageClick }: { onImageClick: (src: string) 
             </p>
           </div>
           <div className="rounded-[2px] border border-border bg-surface p-5 transition-all duration-200 hover:border-border-hover hover:-translate-y-0.5">
-            <h3 className="text-sm font-semibold text-text-primary mb-2">Visual Agent Editor</h3>
+            <h3 className="text-sm font-semibold text-text-primary mb-2">Agent Builder Canvas</h3>
             <p className="text-xs text-text-secondary font-sans leading-relaxed">
-              Configure agents, models, prompts, and spawn rules — no YAML needed.
+              Interactive graph editor for agent topologies. AI assistant with 17 admin tools, flow testing, and drift detection.
             </p>
           </div>
         </div>

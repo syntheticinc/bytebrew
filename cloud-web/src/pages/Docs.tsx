@@ -18,6 +18,7 @@ const NAV_SECTIONS = [
     items: [
       { id: 'admin-login', label: 'Login' },
       { id: 'admin-agents', label: 'Agents' },
+      { id: 'admin-builder', label: 'Agent Builder' },
       { id: 'admin-models', label: 'Models' },
       { id: 'admin-mcp', label: 'MCP Servers' },
       { id: 'admin-tasks', label: 'Tasks' },
@@ -74,6 +75,7 @@ const CONTENT_MAP: Record<string, () => React.JSX.Element> = {
   'api-reference': ApiReferenceContent,
   'admin-login': AdminLoginContent,
   'admin-agents': AdminAgentsContent,
+  'admin-builder': AdminBuilderContent,
   'admin-models': AdminModelsContent,
   'admin-mcp': AdminMcpContent,
   'admin-tasks': AdminTasksContent,
@@ -1235,8 +1237,109 @@ ADMIN_PASSWORD=your-secure-password
       <SectionDivider />
       <WhatNext items={[
         { label: 'Agents', id: 'admin-agents' },
+        { label: 'Agent Builder', id: 'admin-builder' },
         { label: 'Models', id: 'admin-models' },
         { label: 'API Keys', id: 'admin-api-keys' },
+      ]} />
+    </div>
+  );
+}
+
+function AdminBuilderContent() {
+  return (
+    <div>
+      <PageTitle>Admin Dashboard: Agent Builder</PageTitle>
+      <p className="text-sm text-text-tertiary mb-4">
+        The Agent Builder is a visual canvas for designing and managing your agent topology.
+        Built on React Flow, it renders agents, triggers, and their relationships as an interactive graph
+        that you can drag, connect, and configure in real time.
+      </p>
+
+      <SubSection title="Canvas overview">
+        <p className="text-sm text-text-tertiary mb-3">
+          Navigate to <strong className="text-text-secondary">Builder</strong> in the sidebar.
+          The canvas displays all configured agents as nodes, with edges representing spawn relationships.
+          Triggers (cron schedules and webhooks) appear as separate nodes connected to their target agents.
+        </p>
+        <BulletList items={[
+          <><strong className="text-text-secondary">Agent nodes</strong> -- show name, model, spawn count, and lifecycle. Click <strong className="text-text-secondary">Details</strong> to open the side panel.</>,
+          <><strong className="text-text-secondary">Trigger nodes</strong> -- purple-bordered nodes showing type (cron/webhook), schedule or path, and enabled state. Disabled triggers appear at reduced opacity.</>,
+          <><strong className="text-text-secondary">Spawn edges</strong> -- solid lines with &quot;spawns&quot; label. Drag between agent handles to create new spawn relationships.</>,
+          <><strong className="text-text-secondary">Trigger edges</strong> -- dashed purple lines with &quot;triggers&quot; label. Read-only (managed via the Triggers page).</>,
+        ]} />
+      </SubSection>
+
+      <SubSection title="Lifecycle visualization">
+        <p className="text-sm text-text-tertiary mb-3">
+          Agents with <Ic>lifecycle: spawn</Ic> are visually distinct on the canvas:
+        </p>
+        <BulletList items={[
+          <><strong className="text-text-secondary">Dashed border</strong> -- indicates the agent is spawned by another agent, not persistent.</>,
+          <><strong className="text-text-secondary">&quot;sub-agent&quot; badge</strong> -- blue label next to the agent name for quick identification.</>,
+          <><strong className="text-text-secondary">Persistent agents</strong> -- solid border, no badge (default).</>,
+        ]} />
+      </SubSection>
+
+      <SubSection title="Side panel editing">
+        <p className="text-sm text-text-tertiary mb-3">
+          Click <strong className="text-text-secondary">Details</strong> on any agent node to open the side panel.
+          All agent fields are editable inline:
+        </p>
+        <BulletList items={[
+          <><strong className="text-text-secondary">Model</strong> -- dropdown of configured models.</>,
+          <><strong className="text-text-secondary">System prompt</strong> -- full-height textarea.</>,
+          <><strong className="text-text-secondary">Tools</strong> -- grouped by security zone (safe, caution, dangerous). Dangerous tools are collapsed by default.</>,
+          <><strong className="text-text-secondary">MCP Servers</strong> -- checkbox chips for available servers.</>,
+          <><strong className="text-text-secondary">Can Spawn, Confirm Before, Lifecycle, Tool Execution, Limits</strong> -- collapsible sections with item counts.</>,
+        ]} />
+        <p className="text-sm text-text-tertiary mb-3">
+          The panel tracks dirty state across all fields. Click <strong className="text-text-secondary">Save</strong> to
+          persist changes -- the canvas node updates immediately to reflect the new configuration.
+        </p>
+      </SubSection>
+
+      <SubSection title="AI Assistant">
+        <p className="text-sm text-text-tertiary mb-3">
+          Click the floating button (bottom-right) to open the AI Configuration Assistant.
+          This is a chat interface powered by the <Ic>builder-assistant</Ic> agent, which has access
+          to 17 admin MCP tools for managing agents, models, triggers, and configuration.
+        </p>
+        <BulletList items={[
+          <>Ask it to create agents, configure tools, set up MCP servers, or export/import configuration.</>,
+          <>After each response, the canvas automatically refreshes to show any changes made by the assistant.</>,
+          <>If the <Ic>builder-assistant</Ic> agent is not configured, a placeholder with setup instructions is shown.</>,
+        ]} />
+      </SubSection>
+
+      <SubSection title="Flow testing">
+        <p className="text-sm text-text-tertiary mb-3">
+          Click <strong className="text-text-secondary">Test Flow</strong> in the toolbar to open the testing panel.
+          Select an agent, type a message, and run it to see the SSE streaming response in real time --
+          including tool calls and their results.
+        </p>
+        <BulletList items={[
+          <><strong className="text-text-secondary">Custom headers</strong> -- add key-value headers that are forwarded with the request (useful for testing API key scoping).</>,
+          <><strong className="text-text-secondary">Streaming display</strong> -- tokens appear as they are generated, with expandable tool call details.</>,
+        ]} />
+      </SubSection>
+
+      <SubSection title="Export &amp; Import">
+        <p className="text-sm text-text-tertiary mb-3">
+          The toolbar includes <strong className="text-text-secondary">Export</strong> and <strong className="text-text-secondary">Import</strong> buttons
+          for full configuration management:
+        </p>
+        <BulletList items={[
+          <><strong className="text-text-secondary">Export</strong> -- downloads <Ic>bytebrew-config.yaml</Ic> containing all agents, models, and triggers. API keys are never included.</>,
+          <><strong className="text-text-secondary">Import</strong> -- opens a preview modal showing the YAML content before applying. Import uses upsert semantics (creates or updates, never deletes).</>,
+          <><strong className="text-text-secondary">Drift detection</strong> -- after exporting, an amber notification appears if the configuration changes. Helps track when the running config has diverged from the last export.</>,
+        ]} />
+      </SubSection>
+
+      <SectionDivider />
+      <WhatNext items={[
+        { label: 'Agents', id: 'admin-agents' },
+        { label: 'Triggers', id: 'admin-triggers' },
+        { label: 'Config Management', id: 'admin-config' },
       ]} />
     </div>
   );
