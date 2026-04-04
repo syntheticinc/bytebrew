@@ -88,16 +88,6 @@ const icons = {
       <polyline points="10 9 9 9 8 9" />
     </svg>
   ),
-  builder: (
-    <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="5" cy="6" r="2" />
-      <circle cx="19" cy="6" r="2" />
-      <circle cx="12" cy="18" r="2" />
-      <line x1="5" y1="8" x2="12" y2="16" />
-      <line x1="19" y1="8" x2="12" y2="16" />
-      <line x1="5" y1="6" x2="19" y2="6" />
-    </svg>
-  ),
   logout: (
     <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
@@ -118,7 +108,6 @@ const sections: NavSection[] = [
     label: 'Resources',
     items: [
       { to: '/agents', label: 'Agents', icon: icons.agents },
-      { to: '/builder', label: 'Builder', icon: icons.builder },
       { to: '/mcp', label: 'MCP Servers', icon: icons.mcp },
       { to: '/models', label: 'Models', icon: icons.models },
     ],
