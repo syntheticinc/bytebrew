@@ -29,6 +29,7 @@ type CreateTriggerRequest struct {
 	Type        string `json:"type"`
 	Title       string `json:"title"`
 	AgentID     uint   `json:"agent_id"`
+	AgentName   string `json:"agent_name,omitempty"`
 	Schedule    string `json:"schedule,omitempty"`
 	WebhookPath string `json:"webhook_path,omitempty"`
 	Description string `json:"description,omitempty"`

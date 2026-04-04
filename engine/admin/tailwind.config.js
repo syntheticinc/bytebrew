@@ -24,6 +24,9 @@ export default {
       fontFamily: {
         mono: ['"IBM Plex Mono"', 'monospace'],
       },
+      zIndex: {
+        60: '60',
+      },
       borderRadius: {
         card: '2px',
         btn: '2px',

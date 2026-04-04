@@ -37,7 +37,8 @@ func (r *GORMTriggerRepository) Create(ctx context.Context, model *models.Trigge
 
 // Update updates a trigger model by ID.
 func (r *GORMTriggerRepository) Update(ctx context.Context, id uint, model *models.TriggerModel) error {
-	result := r.db.WithContext(ctx).Model(&models.TriggerModel{}).Where("id = ?", id).Updates(model)
+	// Select("*") ensures zero-value fields (e.g. Enabled=false) are persisted.
+	result := r.db.WithContext(ctx).Model(&models.TriggerModel{}).Where("id = ?", id).Select("*").Omit("id", "created_at").Updates(model)
 	if result.Error != nil {
 		return fmt.Errorf("update trigger: %w", result.Error)
 	}

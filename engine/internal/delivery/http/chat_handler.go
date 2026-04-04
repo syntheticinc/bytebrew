@@ -100,11 +100,12 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	// Disable WriteTimeout for SSE — long-running streams (multi-tool ReAct chains)
-	// can exceed the server's default WriteTimeout (60s). Without this, Go closes
-	// the connection mid-stream and the client gets unexpected EOF without event:done.
+	// Disable Read/Write timeouts for SSE — long-running streams (multi-tool ReAct chains)
+	// can exceed the server's default timeouts. The model may pause for extended periods
+	// during tool calling or reasoning before producing the next token.
 	rc := http.NewResponseController(w)
 	_ = rc.SetWriteDeadline(time.Time{}) // zero = no deadline
+	_ = rc.SetReadDeadline(time.Time{})  // clear read deadline too — prevents context cancellation during long model calls
 
 	// Unwrap to find http.Flusher — chi middleware wraps ResponseWriter.
 	flush := findFlusher(w)

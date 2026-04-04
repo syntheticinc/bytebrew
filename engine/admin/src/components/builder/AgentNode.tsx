@@ -16,25 +16,31 @@ export interface AgentNodeData {
 export default function AgentNode({ data, selected }: NodeProps) {
   const d = data as AgentNodeData;
 
+  const isSpawn = d.lifecycle === 'spawn';
+
   return (
     <div
       className={`
-        relative bg-brand-dark-alt border rounded-card min-w-[180px] max-w-[220px]
+        relative border rounded-card min-w-[180px] max-w-[220px]
         transition-all duration-150 cursor-pointer select-none
+        ${isSpawn ? 'border-dashed' : ''}
         ${selected
           ? 'border-brand-accent shadow-[0_0_0_2px_rgba(215,81,62,0.3)]'
-          : 'border-brand-shade3/30 hover:border-brand-shade3/60'
+          : isSpawn
+            ? 'border-brand-shade3/55 hover:border-brand-shade3/80'
+            : 'border-brand-shade3/30 hover:border-brand-shade3/60'
         }
       `}
+      style={{ background: isSpawn ? '#1A1A1A' : '#1F1F1F' }}
     >
       <Handle
         type="target"
         position={Position.Top}
-        className="!w-2.5 !h-2.5 !bg-brand-shade3 !border-brand-dark hover:!bg-brand-accent transition-colors"
+        className="!w-3 !h-3 !bg-transparent !border-2 !border-brand-shade2 transition-colors"
       />
 
       {/* Header */}
-      <div className={`px-3 py-2 border-b flex items-center gap-2 ${selected ? 'border-brand-accent/30' : 'border-brand-shade3/20'}`}>
+      <div className={`px-3 py-2 border-b flex items-center gap-2 ${isSpawn ? 'border-dashed' : ''} ${selected ? 'border-brand-accent/30' : 'border-brand-shade3/20'}`}>
         <span className="text-brand-shade3 flex-shrink-0">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <rect x="4" y="4" width="16" height="16" rx="2" />
@@ -43,6 +49,11 @@ export default function AgentNode({ data, selected }: NodeProps) {
           </svg>
         </span>
         <span className="text-sm font-semibold text-brand-light truncate">{d.name}</span>
+        {isSpawn && (
+          <span className="ml-auto px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/15 text-blue-400 whitespace-nowrap">
+            sub-agent
+          </span>
+        )}
       </div>
 
       {/* Details */}
@@ -90,7 +101,7 @@ export default function AgentNode({ data, selected }: NodeProps) {
       >
         <button
           onClick={() => d.onSelect(d.name)}
-          className="flex-1 py-0.5 text-[11px] text-brand-shade2 hover:text-brand-accent rounded transition-colors"
+          className="flex-1 py-0.5 text-[11px] text-brand-shade2 hover:text-brand-accent hover:bg-brand-shade3/10 rounded transition-colors"
           title="Open side panel"
         >
           Details
@@ -98,7 +109,7 @@ export default function AgentNode({ data, selected }: NodeProps) {
         <div className="w-px h-3 bg-brand-shade3/20" />
         <button
           onClick={() => d.onDelete(d.name)}
-          className="flex-1 py-0.5 text-[11px] text-brand-shade3 hover:text-red-400 rounded transition-colors"
+          className="flex-1 py-0.5 text-[11px] text-brand-shade3 hover:text-red-400 hover:bg-brand-shade3/10 rounded transition-colors"
           title="Delete agent"
         >
           Delete
@@ -108,7 +119,7 @@ export default function AgentNode({ data, selected }: NodeProps) {
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!w-2.5 !h-2.5 !bg-brand-shade3 !border-brand-dark hover:!bg-brand-accent transition-colors"
+        className="!w-3 !h-3 !bg-[#A0A090] !border-brand-dark hover:!bg-brand-accent transition-colors"
       />
     </div>
   );

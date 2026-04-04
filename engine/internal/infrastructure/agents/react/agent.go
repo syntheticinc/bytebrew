@@ -432,7 +432,7 @@ func (a *Agent) Stream(ctx context.Context, input string, callback func(chunk st
 	// Retry on recoverable errors
 	const maxErrorRetries = 2
 	const maxRateLimitRetries = 5
-	const streamTimeout = 120 * time.Second // max time for a single LLM stream attempt
+	const streamTimeout = 5 * time.Minute // max time for a single LLM stream attempt (reasoning models with tools need extended time)
 	var reader *schema.StreamReader[*schema.Message]
 	var err error
 	var rateLimitCount int

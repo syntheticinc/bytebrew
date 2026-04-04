@@ -35,6 +35,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/indexing"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/knowledge"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/kit"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/admin_mcp"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/mcp"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
@@ -392,6 +393,50 @@ func Run(sc ServerConfig) error {
 		components.AgentToolResolver.SetMCPProvider(mcpRegistry)
 	}
 
+	// Register admin-api MCP server (in-process) for builder-assistant and AI-powered config management.
+	if pgDB != nil && agentRegistry != nil {
+		adminMCPSrv := admin_mcp.NewServer(admin_mcp.ServerConfig{
+			AgentManager: &adminMCPAgentAdapter{
+				repo:     config_repo.NewGORMAgentRepository(pgDB),
+				registry: agentRegistry,
+				db:       pgDB,
+			},
+			ModelManager: &adminMCPModelAdapter{
+				repo:       config_repo.NewGORMLLMProviderRepository(pgDB),
+				modelCache: components.ModelCache,
+			},
+			TriggerManager: &adminMCPTriggerAdapter{
+				repo: config_repo.NewGORMTriggerRepository(pgDB),
+			},
+			MCPServerLister: &adminMCPServerListerAdapter{
+				repo: config_repo.NewGORMMCPServerRepository(pgDB),
+			},
+			ToolMetadataProvider: &adminMCPToolMetadataAdapter{},
+			ConfigExporter:       &adminMCPConfigAdapter{db: pgDB},
+			Reloader: &adminMCPReloaderAdapter{
+				registry:            agentRegistry,
+				mcpRegistry:         mcpRegistry,
+				db:                  pgDB,
+				forwardHeadersStore: &forwardHeadersStore,
+			},
+		})
+		adminTransport := mcp.NewInProcessTransport(adminMCPSrv.Handle)
+		adminClient := mcp.NewClient("admin-api", adminTransport)
+		if connErr := adminClient.Connect(ctx); connErr != nil {
+			slog.WarnContext(ctx, "failed to initialize admin-api MCP server", "error", connErr)
+		} else {
+			mcpRegistry.Register("admin-api", adminClient)
+			slog.InfoContext(ctx, "admin-api MCP server registered (in-process)")
+		}
+
+		seedBuilderAssistant(ctx, pgDB)
+
+		// Reload registry so the seeded builder-assistant is available at runtime.
+		if err := agentRegistry.Load(ctx); err != nil {
+			slog.WarnContext(ctx, "failed to reload agent registry after seed", "error", err)
+		}
+	}
+
 	// Wire knowledge search into AgentToolResolver
 	if components.AgentToolResolver != nil && knowledgeRepo != nil && embeddingsClient != nil {
 		components.AgentToolResolver.SetKnowledge(knowledgeRepo, embeddingsClient)
@@ -612,7 +657,7 @@ func Run(sc ServerConfig) error {
 
 			// Triggers
 			triggerRepo := config_repo.NewGORMTriggerRepository(pgDB)
-			triggerHandler := deliveryhttp.NewTriggerHandler(&triggerServiceHTTPAdapter{repo: triggerRepo})
+			triggerHandler := deliveryhttp.NewTriggerHandler(&triggerServiceHTTPAdapter{repo: triggerRepo, db: pgDB})
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeTriggersRead))
 				r.Get("/api/v1/triggers", triggerHandler.List)

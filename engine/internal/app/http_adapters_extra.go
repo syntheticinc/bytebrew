@@ -192,6 +192,7 @@ func (a *mcpServiceHTTPAdapter) DeleteMCPServer(ctx context.Context, name string
 // triggerServiceHTTPAdapter bridges GORMTriggerRepository to the http.TriggerService interface.
 type triggerServiceHTTPAdapter struct {
 	repo *config_repo.GORMTriggerRepository
+	db   *gorm.DB
 }
 
 func (a *triggerServiceHTTPAdapter) ListTriggers(ctx context.Context) ([]deliveryhttp.TriggerResponse, error) {
@@ -221,7 +222,22 @@ func (a *triggerServiceHTTPAdapter) ListTriggers(ctx context.Context) ([]deliver
 	return result, nil
 }
 
+func (a *triggerServiceHTTPAdapter) resolveAgentID(ctx context.Context, req *deliveryhttp.CreateTriggerRequest) error {
+	if req.AgentID != 0 || req.AgentName == "" {
+		return nil
+	}
+	var agent models.AgentModel
+	if err := a.db.WithContext(ctx).Where("name = ?", req.AgentName).First(&agent).Error; err != nil {
+		return fmt.Errorf("agent not found: %s", req.AgentName)
+	}
+	req.AgentID = agent.ID
+	return nil
+}
+
 func (a *triggerServiceHTTPAdapter) CreateTrigger(ctx context.Context, req deliveryhttp.CreateTriggerRequest) (*deliveryhttp.TriggerResponse, error) {
+	if err := a.resolveAgentID(ctx, &req); err != nil {
+		return nil, err
+	}
 	model := &models.TriggerModel{
 		Type:        req.Type,
 		Title:       req.Title,
@@ -251,6 +267,9 @@ func (a *triggerServiceHTTPAdapter) CreateTrigger(ctx context.Context, req deliv
 }
 
 func (a *triggerServiceHTTPAdapter) UpdateTrigger(ctx context.Context, id uint, req deliveryhttp.CreateTriggerRequest) (*deliveryhttp.TriggerResponse, error) {
+	if err := a.resolveAgentID(ctx, &req); err != nil {
+		return nil, err
+	}
 	model := &models.TriggerModel{
 		Type:        req.Type,
 		Title:       req.Title,

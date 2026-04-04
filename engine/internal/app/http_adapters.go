@@ -726,7 +726,7 @@ func applyAgentImportDefaults(ag *agentYAML) {
 		ag.ToolExecution = "sequential"
 	}
 	if ag.MaxSteps == 0 {
-		ag.MaxSteps = 0
+		ag.MaxSteps = 50
 	}
 	if ag.MaxContextSize == 0 {
 		ag.MaxContextSize = 16000
@@ -1186,7 +1186,7 @@ func (a *agentManagerHTTPAdapter) toAgentRecord(req deliveryhttp.CreateAgentRequ
 		rec.ToolExecution = "sequential"
 	}
 	if rec.MaxSteps == 0 {
-		rec.MaxSteps = 0
+		rec.MaxSteps = 50
 	}
 	if rec.MaxContextSize == 0 {
 		rec.MaxContextSize = 16000

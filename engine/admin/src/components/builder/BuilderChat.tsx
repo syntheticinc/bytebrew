@@ -1,4 +1,45 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { parseSSELine, type ToolCall } from '../../lib/sse';
+
+// Simple markdown renderer: fenced code blocks, inline code, bold, bullet lists
+function renderMarkdown(text: string): React.ReactNode {
+  const parts = text.split(/(```[\s\S]*?```)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('```')) {
+      const inner = part.replace(/^```\w*\n?/, '').replace(/\n?```$/, '');
+      return (
+        <pre key={i} className="bg-brand-dark border border-brand-shade3/20 rounded p-2 my-1 text-[10px] font-mono overflow-x-auto whitespace-pre">
+          {inner}
+        </pre>
+      );
+    }
+    const lines = part.split('\n');
+    return (
+      <span key={i}>
+        {lines.map((line, li) => {
+          const isList = /^[\s]*[-*+] /.test(line);
+          const content = isList ? line.replace(/^[\s]*[-*+] /, '') : line;
+          const inlined = content.split(/(`[^`]+`|\*\*[^*]+\*\*)/g).map((seg, si) => {
+            if (seg.startsWith('`') && seg.endsWith('`')) {
+              return <code key={si} className="bg-brand-dark border border-brand-shade3/20 rounded px-1 text-[10px] font-mono text-status-active">{seg.slice(1, -1)}</code>;
+            }
+            if (seg.startsWith('**') && seg.endsWith('**')) {
+              return <strong key={si} className="font-semibold text-brand-light">{seg.slice(2, -2)}</strong>;
+            }
+            return <span key={si}>{seg}</span>;
+          });
+          return (
+            <span key={li} className={isList ? 'flex gap-1' : 'block'}>
+              {isList && <span className="text-brand-shade3 flex-shrink-0">•</span>}
+              <span>{inlined}</span>
+              {!isList && li < lines.length - 1 && <br />}
+            </span>
+          );
+        })}
+      </span>
+    );
+  });
+}
 
 interface Message {
   id: string;
@@ -8,20 +49,8 @@ interface Message {
   streaming?: boolean;
 }
 
-interface ToolCall {
-  tool: string;
-  input?: string;
-  output?: string;
-}
-
 interface BuilderChatProps {
   agentName: string;
-}
-
-function parseSSELine(line: string): { event?: string; data?: string } {
-  if (line.startsWith('event: ')) return { event: line.slice(7).trim() };
-  if (line.startsWith('data: ')) return { data: line.slice(6) };
-  return {};
 }
 
 export default function BuilderChat({ agentName }: BuilderChatProps) {
@@ -86,6 +115,7 @@ export default function BuilderChat({ agentName }: BuilderChatProps) {
 
       if (!res.ok || !res.body) {
         const errText = await res.text().catch(() => 'Request failed');
+        sessionIdRef.current = '';
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
@@ -184,6 +214,7 @@ export default function BuilderChat({ agentName }: BuilderChatProps) {
       updateAssistant({ streaming: false });
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
+        sessionIdRef.current = '';
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
@@ -232,9 +263,9 @@ export default function BuilderChat({ agentName }: BuilderChatProps) {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
         {messages.length === 0 && (
-          <div className="text-center text-sm text-brand-shade3 mt-8">
+          <div className="text-center text-sm text-brand-shade3 mt-8 px-4">
             <p>Chat with <span className="text-brand-light font-medium">{agentName}</span></p>
-            <p className="text-xs mt-1 text-brand-shade3/60">Type a message to start testing</p>
+            <p className="text-xs mt-1 text-brand-shade3/60">Test this agent's responses here. For platform configuration, use the AI Assistant (bottom-right button).</p>
           </div>
         )}
 
@@ -265,8 +296,8 @@ export default function BuilderChat({ agentName }: BuilderChatProps) {
 
                 {/* Message content */}
                 {(msg.content || msg.streaming) && (
-                  <div className="text-sm text-brand-light leading-relaxed whitespace-pre-wrap">
-                    {msg.content}
+                  <div className="text-sm text-brand-light leading-relaxed">
+                    {msg.streaming ? msg.content : renderMarkdown(msg.content)}
                     {msg.streaming && (
                       <span className="inline-block w-1.5 h-3.5 bg-brand-accent ml-0.5 animate-pulse" />
                     )}

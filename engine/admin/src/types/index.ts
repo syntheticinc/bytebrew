@@ -164,7 +164,8 @@ export interface Trigger {
 export interface CreateTriggerRequest {
   type: string;
   title: string;
-  agent_id: number;
+  agent_id?: number;
+  agent_name?: string;
   schedule?: string;
   webhook_path?: string;
   description?: string;
