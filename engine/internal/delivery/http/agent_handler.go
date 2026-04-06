@@ -18,11 +18,12 @@ const agentNameMaxLen = 255
 
 // AgentInfo is a summary of an agent returned in list responses.
 type AgentInfo struct {
-	Name         string `json:"name"`
-	Description  string `json:"description,omitempty"`
-	ToolsCount   int    `json:"tools_count"`
-	Kit          string `json:"kit,omitempty"`
-	HasKnowledge bool   `json:"has_knowledge"`
+	Name           string   `json:"name"`
+	Description    string   `json:"description,omitempty"`
+	ToolsCount     int      `json:"tools_count"`
+	Kit            string   `json:"kit,omitempty"`
+	HasKnowledge   bool     `json:"has_knowledge"`
+	UsedInSchemas  []string `json:"used_in_schemas,omitempty"`
 }
 
 // AgentDetail is the full agent information returned by the detail endpoint.

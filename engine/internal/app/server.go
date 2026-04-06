@@ -533,9 +533,12 @@ func Run(sc ServerConfig) error {
 			r.Use(authMW.Authenticate)
 			r.Use(deliveryhttp.AuditMiddleware(&auditHTTPAdapter{logger: auditLogger}))
 
+			// Schema repo (created early because agent manager needs it for used_in_schemas)
+			schemaRepo := config_repo.NewGORMSchemaRepository(pgDB)
+
 			// Agents
 			agentRepo := config_repo.NewGORMAgentRepository(pgDB)
-			agentManager := &agentManagerHTTPAdapter{repo: agentRepo, registry: agentRegistry, db: pgDB}
+			agentManager := &agentManagerHTTPAdapter{repo: agentRepo, registry: agentRegistry, db: pgDB, schemaRepo: schemaRepo}
 			agentHandler := deliveryhttp.NewAgentHandlerWithManager(agentManager)
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
@@ -547,6 +550,20 @@ func Run(sc ServerConfig) error {
 				r.Post("/api/v1/agents", agentHandler.Create)
 				r.Put("/api/v1/agents/{name}", agentHandler.Update)
 				r.Delete("/api/v1/agents/{name}", agentHandler.Delete)
+			})
+
+			// Agent Capabilities
+			capRepo := config_repo.NewGORMCapabilityRepository(pgDB)
+			capHandler := deliveryhttp.NewCapabilityHandler(&capabilityServiceHTTPAdapter{repo: capRepo})
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
+				r.Get("/api/v1/agents/{name}/capabilities", capHandler.List)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsWrite))
+				r.Post("/api/v1/agents/{name}/capabilities", capHandler.Add)
+				r.Put("/api/v1/agents/{name}/capabilities/{capId}", capHandler.Update)
+				r.Delete("/api/v1/agents/{name}/capabilities/{capId}", capHandler.Remove)
 			})
 
 			// Models
@@ -667,6 +684,39 @@ func Run(sc ServerConfig) error {
 				r.Post("/api/v1/triggers", triggerHandler.Create)
 				r.Put("/api/v1/triggers/{id}", triggerHandler.Update)
 				r.Delete("/api/v1/triggers/{id}", triggerHandler.Delete)
+			})
+
+			// Schemas (with gates and edges) — schemaRepo already created above for agent cross-refs
+			gateRepo := config_repo.NewGORMGateRepository(pgDB)
+			edgeRepo := config_repo.NewGORMEdgeRepository(pgDB)
+			schemaHandler := deliveryhttp.NewSchemaHandler(
+				&schemaServiceHTTPAdapter{repo: schemaRepo},
+				&gateServiceHTTPAdapter{repo: gateRepo},
+				&edgeServiceHTTPAdapter{repo: edgeRepo},
+			)
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeSchemasRead))
+				r.Get("/api/v1/schemas", schemaHandler.ListSchemas)
+				r.Get("/api/v1/schemas/{id}", schemaHandler.GetSchema)
+				r.Get("/api/v1/schemas/{id}/agents", schemaHandler.ListSchemaAgents)
+				r.Get("/api/v1/schemas/{id}/gates", schemaHandler.ListGates)
+				r.Get("/api/v1/schemas/{id}/gates/{gateId}", schemaHandler.GetGate)
+				r.Get("/api/v1/schemas/{id}/edges", schemaHandler.ListEdges)
+				r.Get("/api/v1/schemas/{id}/edges/{edgeId}", schemaHandler.GetEdge)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeSchemasWrite))
+				r.Post("/api/v1/schemas", schemaHandler.CreateSchema)
+				r.Put("/api/v1/schemas/{id}", schemaHandler.UpdateSchema)
+				r.Delete("/api/v1/schemas/{id}", schemaHandler.DeleteSchema)
+				r.Post("/api/v1/schemas/{id}/agents", schemaHandler.AddSchemaAgent)
+				r.Delete("/api/v1/schemas/{id}/agents/{name}", schemaHandler.RemoveSchemaAgent)
+				r.Post("/api/v1/schemas/{id}/gates", schemaHandler.CreateGate)
+				r.Put("/api/v1/schemas/{id}/gates/{gateId}", schemaHandler.UpdateGate)
+				r.Delete("/api/v1/schemas/{id}/gates/{gateId}", schemaHandler.DeleteGate)
+				r.Post("/api/v1/schemas/{id}/edges", schemaHandler.CreateEdge)
+				r.Put("/api/v1/schemas/{id}/edges/{edgeId}", schemaHandler.UpdateEdge)
+				r.Delete("/api/v1/schemas/{id}/edges/{edgeId}", schemaHandler.DeleteEdge)
 			})
 
 			// Settings (admin-only)
@@ -994,8 +1044,10 @@ func Run(sc ServerConfig) error {
 				}
 				r.Get("/api/v1/agents", deliveryhttp.NewAgentHandlerWithManager(
 					&agentManagerHTTPAdapter{
-						repo:     config_repo.NewGORMAgentRepository(pgDB),
-						registry: agentRegistry, db: pgDB,
+						repo:       config_repo.NewGORMAgentRepository(pgDB),
+						registry:   agentRegistry,
+						db:         pgDB,
+						schemaRepo: config_repo.NewGORMSchemaRepository(pgDB),
 					}).List)
 			})
 		}

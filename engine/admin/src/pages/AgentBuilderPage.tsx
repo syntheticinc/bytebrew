@@ -23,7 +23,6 @@ import dagre from '@dagrejs/dagre';
 import { api } from '../api/client';
 import { usePrototype } from '../hooks/usePrototype';
 import { createMockSchemas, type SchemaName } from '../mocks/canvas';
-import BottomPanel from '../components/builder/BottomPanel';
 import type { AgentDetail, Model, CreateAgentRequest, CreateTriggerRequest, Trigger } from '../types';
 import AgentNode, { type AgentNodeData } from '../components/builder/AgentNode';
 import TriggerNode from '../components/builder/TriggerNode';
@@ -36,6 +35,7 @@ import BuilderAssistant, { AssistantToggleButton } from '../components/builder/B
 import DriftNotification from '../components/builder/DriftNotification';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { ToastProvider, useToast } from '../components/builder/Toast';
+import CronScheduler from '../components/CronScheduler';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -90,26 +90,22 @@ function applyDagre(nodes: Node[], edges: Edge[]): Node[] {
   });
 }
 
-// ─── Cron validation ──────────────────────────────────────────────────────────
+// ─── Instant creation helpers ─────────────────────────────────────────────────
 
-function isValidCron(expr: string): boolean {
-  const parts = expr.trim().split(/\s+/);
-  if (parts.length !== 5) return false;
-  const ranges: [number, number][] = [
-    [0, 59],  // minute
-    [0, 23],  // hour
-    [1, 31],  // day
-    [1, 12],  // month
-    [0, 7],   // weekday
-  ];
-  return parts.every((part, i) => {
-    if (part === '*') return true;
-    const range = ranges[i];
-    if (!range) return false;
-    const [min, max] = range;
-    const num = Number(part);
-    return Number.isInteger(num) && num >= min && num <= max;
-  });
+function generateAgentName(existing: string[]): string {
+  let n = 1;
+  while (existing.includes(`new-agent-${n}`)) n++;
+  return `new-agent-${n}`;
+}
+
+function generateTriggerName(existing: string[]): string {
+  let n = 1;
+  while (existing.includes(`new-trigger-${n}`)) n++;
+  return `new-trigger-${n}`;
+}
+
+function generateShortId(): string {
+  return Math.random().toString(36).substring(2, 10);
 }
 
 // ─── Edge factory ─────────────────────────────────────────────────────────────
@@ -189,36 +185,6 @@ function makeNode(
   };
 }
 
-// ─── Default new-agent form ────────────────────────────────────────────────────
-
-const DEFAULT_NEW_FORM: Partial<CreateAgentRequest> = {
-  name: '',
-  system_prompt: '',
-  lifecycle: 'persistent',
-  tool_execution: 'sequential',
-  max_steps: 50,
-  max_context_size: 16000,
-  max_turn_duration: 120,
-  tools: [],
-  can_spawn: [],
-  mcp_servers: [],
-  confirm_before: [],
-};
-
-const DEFAULT_TRIGGER_FORM: Partial<CreateTriggerRequest> = {
-  type: 'cron',
-  title: '',
-  enabled: true,
-};
-
-// ─── Cron presets ─────────────────────────────────────────────────────────────
-
-const CRON_PRESETS = [
-  { label: 'Every hour', value: '0 * * * *' },
-  { label: 'Daily at 9:00', value: '0 9 * * *' },
-  { label: 'Weekly Monday', value: '0 9 * * 1' },
-];
-
 // ─── Inner component (needs ReactFlow context for useReactFlow) ───────────────
 
 function AgentBuilderInner() {
@@ -238,22 +204,12 @@ function AgentBuilderInner() {
   const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showNewForm, setShowNewForm] = useState(false);
-  const [newForm, setNewForm] = useState<Partial<CreateAgentRequest>>(DEFAULT_NEW_FORM);
-  const [nameError, setNameError] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState('');
   const [showFlowTest, setShowFlowTest] = useState(false);
   const [showAssistant, setShowAssistant] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; canvasX: number; canvasY: number } | null>(null);
   const [nodeMenu, setNodeMenu] = useState<{ x: number; y: number; nodeId: string; nodeType: string } | null>(null);
   const [edgeMenu, setEdgeMenu] = useState<{ x: number; y: number; edgeId: string; source: string; target: string } | null>(null);
-  const [showTriggerForm, setShowTriggerForm] = useState(false);
-  const [triggerForm, setTriggerForm] = useState<Partial<CreateTriggerRequest>>(DEFAULT_TRIGGER_FORM);
-  const [triggerCreating, setTriggerCreating] = useState(false);
-  const [triggerError, setTriggerError] = useState('');
-  const [cronError, setCronError] = useState('');
   const [savedIndicator, setSavedIndicator] = useState<'saved' | 'saving' | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
@@ -282,8 +238,6 @@ function AgentBuilderInner() {
         setContextMenu(null);
         setNodeMenu(null);
         setEdgeMenu(null);
-        setShowNewForm(false);
-        setShowTriggerForm(false);
       }
     }
     document.addEventListener('keydown', handleKeyDown);
@@ -565,58 +519,94 @@ function AgentBuilderInner() {
     }
   }
 
-  // ── Create new agent ────────────────────────────────────────────────────────
+  // ── Instant agent creation (no modal) ──────────────────────────────────────
 
-  async function handleCreate() {
-    const trimmedName = (newForm.name ?? '').trim();
-    if (!trimmedName || !newForm.system_prompt) return;
-    if (nameError) return;
-    setCreateError('');
-    setCreating(true);
+  async function handleInstantAgentCreate(canvasPosition?: { x: number; y: number }) {
+    const existingNames = nodes.filter((n) => n.type === 'agentNode').map((n) => n.id);
+    const name = generateAgentName(existingNames);
+    const pos = canvasPosition ?? { x: Math.random() * 400 + 100, y: Math.random() * 200 + 50 };
+
+    if (isPrototype) {
+      const newNode: Node = {
+        id: name,
+        type: 'agentNode',
+        position: pos,
+        data: {
+          name,
+          modelName: '',
+          toolsCount: 0,
+          spawnCount: 0,
+          confirmCount: 0,
+          lifecycle: 'spawn',
+          onSelect: handleSelect,
+          onDelete: handleDeleteRequest,
+        } satisfies AgentNodeData,
+      };
+      setNodes((nds) => [...nds, newNode]);
+      addToast(`Agent "${name}" created — click to configure`, 'success');
+      return;
+    }
+
+    // Production mode: create via API
     try {
-      const created = await api.createAgent({ ...newForm, name: trimmedName } as CreateAgentRequest);
+      const created = await api.createAgent({
+        name,
+        system_prompt: '',
+        lifecycle: 'spawn',
+        tool_execution: 'sequential',
+        max_steps: 25,
+        max_context_size: 16000,
+        max_turn_duration: 120,
+        tools: [],
+        can_spawn: [],
+        mcp_servers: [],
+        confirm_before: [],
+      } as CreateAgentRequest);
       agentsCache.current.set(created.name, created);
       agentsListRef.current = [...agentsListRef.current, created];
       setAgents((prev) => [...prev, created]);
 
       const modelMap = new Map(modelsRef.current.map((m) => [m.id, m.name]));
-      const pos = { x: Math.random() * 400 + 100, y: Math.random() * 200 + 50 };
       const newNode = makeNode(created, modelMap, pos, handleSelect, handleDeleteRequest);
-
       setNodes((nds) => [...nds, newNode]);
-      setShowNewForm(false);
-      setNewForm(DEFAULT_NEW_FORM);
-      setNameError('');
-      setSelectedAgent(created);
-      addToast(`Agent "${created.name}" created`, 'success');
+      addToast(`Agent "${created.name}" created — click to configure`, 'success');
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Create failed');
-    } finally {
-      setCreating(false);
+      addToast(`Failed to create agent: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
     }
   }
 
-  // ── Create new trigger ─────────────────────────────────────────────────────
+  // ── Instant trigger creation (no modal) ──────────────────────────────────
 
-  async function handleCreateTrigger() {
-    if (!triggerForm.title || !triggerForm.agent_name) return;
-    if (triggerForm.type === 'cron' && triggerForm.schedule && !isValidCron(triggerForm.schedule)) {
-      setCronError('Invalid cron expression');
+  async function handleInstantTriggerCreate(canvasPosition?: { x: number; y: number }) {
+    const existingNames = nodes.filter((n) => n.type === 'triggerNode').map((n) => (n.data as Record<string, unknown>).title as string);
+    const title = generateTriggerName(existingNames);
+    const webhookPath = `/webhook/${generateShortId()}`;
+    const pos = canvasPosition ?? { x: Math.random() * 200 + 50, y: Math.random() * 200 + 50 };
+
+    if (isPrototype) {
+      const mockId = Date.now();
+      const newNode = makeTriggerNode(
+        { id: mockId, type: 'webhook', title, webhook_path: webhookPath, enabled: true, agent_name: '', schedule: '', description: '', created_at: new Date().toISOString() } as Trigger,
+        pos,
+      );
+      setNodes((nds) => [...nds, newNode]);
+      addToast(`Trigger "${title}" created — click to configure`, 'success');
       return;
     }
-    setTriggerError('');
-    setCronError('');
-    setTriggerCreating(true);
+
+    // Production mode: create via API
     try {
-      await api.createTrigger(triggerForm as CreateTriggerRequest);
-      setShowTriggerForm(false);
-      setTriggerForm(DEFAULT_TRIGGER_FORM);
-      refetchCanvas();
-      addToast('Trigger created', 'success');
+      const created = await api.createTrigger({
+        type: 'webhook',
+        title,
+        webhook_path: webhookPath,
+        enabled: true,
+      } as CreateTriggerRequest);
+      const newNode = makeTriggerNode(created, pos);
+      setNodes((nds) => [...nds, newNode]);
+      addToast(`Trigger "${created.title}" created — click to configure`, 'success');
     } catch (err) {
-      setTriggerError(err instanceof Error ? err.message : 'Create failed');
-    } finally {
-      setTriggerCreating(false);
+      addToast(`Failed to create trigger: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
     }
   }
 
@@ -787,21 +777,6 @@ function AgentBuilderInner() {
     }
   }, [edgeMenu, selectedAgent, setEdges, setNodes, addToast]);
 
-  // ── Name validation ────────────────────────────────────────────────────────
-
-  function handleNameChange(raw: string) {
-    const lower = raw.toLowerCase();
-    const valid = /^[a-z][a-z0-9-]*$/.test(lower);
-    setNewForm((p) => ({ ...p, name: lower }));
-    if (!lower) {
-      setNameError('Name is required');
-    } else if (!valid) {
-      setNameError('Lowercase letters, numbers, hyphens. Must start with a letter.');
-    } else {
-      setNameError('');
-    }
-  }
-
   // ── Hint text based on selection state ────────────────────────────────────
 
   const hintText = selectedNodeId
@@ -813,7 +788,7 @@ function AgentBuilderInner() {
   return (
     <div
       className="flex flex-col overflow-hidden"
-      style={{ margin: '-24px', height: '100vh' }}
+      style={{ margin: '-24px', height: 'calc(100% + 48px)' }}
     >
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-4 h-12 border-b border-brand-shade3/15 bg-brand-dark-alt flex-shrink-0 flex-wrap">
@@ -928,23 +903,13 @@ function AgentBuilderInner() {
           </button>
         )}
         <button
-          onClick={() => {
-            setShowTriggerForm(true);
-            setTriggerForm(DEFAULT_TRIGGER_FORM);
-            setTriggerError('');
-            setCronError('');
-          }}
+          onClick={() => handleInstantTriggerCreate()}
           className="px-3 py-1.5 text-xs text-brand-shade2 border border-brand-shade3/30 rounded-btn hover:text-brand-light hover:border-brand-shade3 transition-colors"
         >
           + Add Trigger
         </button>
         <button
-          onClick={() => {
-            setShowNewForm(true);
-            setNewForm(DEFAULT_NEW_FORM);
-            setNameError('');
-            setCreateError('');
-          }}
+          onClick={() => handleInstantAgentCreate()}
           className="px-3 py-1.5 text-xs bg-brand-accent text-brand-light rounded-btn hover:bg-brand-accent-hover transition-colors"
         >
           + Add Agent
@@ -1017,12 +982,7 @@ function AgentBuilderInner() {
               <p className="text-brand-shade2 text-sm mb-2">No agents yet</p>
               <p className="text-brand-shade3/60 text-xs mb-4">Create your first agent to get started</p>
               <button
-                onClick={() => {
-                  setShowNewForm(true);
-                  setNewForm(DEFAULT_NEW_FORM);
-                  setNameError('');
-                  setCreateError('');
-                }}
+                onClick={() => handleInstantAgentCreate({ x: 200, y: 100 })}
                 className="px-4 py-2 bg-brand-accent text-brand-light rounded-btn text-xs hover:bg-brand-accent-hover transition-colors"
               >
                 Create your first agent
@@ -1107,8 +1067,19 @@ function AgentBuilderInner() {
               {selectedTrigger.type === 'cron' && (
                 <div>
                   <label className="block text-xs text-brand-shade3 mb-1 font-mono">Schedule</label>
-                  <input className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light font-mono opacity-60 cursor-not-allowed" value={String(selectedTrigger.schedule ?? '')} readOnly />
-                  <p className="mt-1 text-xs text-brand-shade3">Cron expression (e.g. 0 9 * * * = daily at 9am)</p>
+                  <CronScheduler
+                    value={String(selectedTrigger.schedule ?? '')}
+                    onChange={(cron) => {
+                      setSelectedTrigger((prev) => prev ? { ...prev, schedule: cron } : prev);
+                      // Update the node data in canvas
+                      setNodes((nds) => nds.map((n) => {
+                        if (n.type !== 'triggerNode') return n;
+                        const d = n.data as Record<string, unknown>;
+                        if (d.id !== selectedTrigger.id) return n;
+                        return { ...n, data: { ...d, schedule: cron } };
+                      }));
+                    }}
+                  />
                 </div>
               )}
               {selectedTrigger.type === 'webhook' && (
@@ -1135,7 +1106,7 @@ function AgentBuilderInner() {
         )}
       </div>
 
-      {/* AI Assistant — production: floating overlay, prototype: BottomPanel */}
+      {/* AI Assistant — production: floating overlay */}
       {!isPrototype && showAssistant && (
         <BuilderAssistant
           onClose={() => setShowAssistant(false)}
@@ -1144,34 +1115,6 @@ function AgentBuilderInner() {
       )}
       {!isPrototype && !showAssistant && (
         <AssistantToggleButton onClick={() => setShowAssistant(true)} />
-      )}
-      {isPrototype && (
-        <BottomPanel
-          tabs={[
-            {
-              id: 'assistant',
-              label: 'AI Assistant',
-              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" rx="1" /></svg>,
-              content: (
-                <div className="flex flex-col gap-2 p-4 text-xs text-brand-shade2 font-mono">
-                  <p className="text-brand-shade3">AI Assistant is ready. Describe what you need.</p>
-                </div>
-              ),
-            },
-            {
-              id: 'test',
-              label: 'Test Flow',
-              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polygon points="5 3 19 12 5 21 5 3" /></svg>,
-              content: (
-                <div className="flex flex-col gap-2 p-4 text-xs text-brand-shade2 font-mono">
-                  <p className="text-brand-shade3">Select an agent and send a test message.</p>
-                </div>
-              ),
-            },
-          ]}
-          defaultHeight={200}
-          inputPlaceholder="Ask AI to configure agents..."
-        />
       )}
 
       {/* Canvas context menu */}
@@ -1183,11 +1126,9 @@ function AgentBuilderInner() {
           <button
             className="w-full px-4 py-2 text-left text-xs text-brand-shade2 hover:bg-brand-accent/10 hover:text-brand-light transition-colors flex items-center gap-2"
             onClick={() => {
+              const pos = { x: contextMenu.canvasX, y: contextMenu.canvasY };
               setContextMenu(null);
-              setShowNewForm(true);
-              setNewForm(DEFAULT_NEW_FORM);
-              setNameError('');
-              setCreateError('');
+              handleInstantAgentCreate(pos);
             }}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1198,11 +1139,9 @@ function AgentBuilderInner() {
           <button
             className="w-full px-4 py-2 text-left text-xs text-brand-shade2 hover:bg-brand-accent/10 hover:text-brand-light transition-colors flex items-center gap-2"
             onClick={() => {
+              const pos = { x: contextMenu.canvasX, y: contextMenu.canvasY };
               setContextMenu(null);
-              setShowTriggerForm(true);
-              setTriggerForm(DEFAULT_TRIGGER_FORM);
-              setTriggerError('');
-              setCronError('');
+              handleInstantTriggerCreate(pos);
             }}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1307,219 +1246,6 @@ function AgentBuilderInner() {
           {hintText}
         </span>
       </div>
-
-      {/* New agent dialog */}
-      {showNewForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowNewForm(false)} />
-          <div className="relative bg-brand-dark-alt border border-brand-shade3/20 rounded-card shadow-xl w-[440px] animate-modal-in">
-            <div className="px-5 py-4 border-b border-brand-shade3/15 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-brand-light">New Agent</h3>
-              <button onClick={() => setShowNewForm(false)} className="text-brand-shade3 hover:text-brand-light p-1">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-brand-shade3 mb-1 uppercase tracking-wide">Name *</label>
-                <input
-                  type="text"
-                  value={newForm.name ?? ''}
-                  onChange={(e) => handleNameChange(e.target.value)}
-                  placeholder="my-agent"
-                  className={`w-full px-3 py-2 bg-brand-dark border rounded-card text-sm text-brand-light placeholder-brand-shade3 focus:outline-none focus:ring-1 transition-colors ${
-                    nameError
-                      ? 'border-red-500/60 focus:border-red-500 focus:ring-red-500/30'
-                      : 'border-brand-shade3/30 focus:border-brand-accent focus:ring-brand-accent'
-                  }`}
-                />
-                {nameError ? (
-                  <p className="text-[10px] text-red-400 mt-0.5">{nameError}</p>
-                ) : (
-                  <p className="text-[10px] text-brand-shade3/60 mt-0.5">Lowercase letters, numbers, hyphens. Must start with a letter.</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-brand-shade3 mb-1 uppercase tracking-wide">Model</label>
-                <select
-                  value={newForm.model_id ?? ''}
-                  onChange={(e) => setNewForm((p) => ({ ...p, model_id: e.target.value ? Number(e.target.value) : undefined }))}
-                  className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent transition-colors"
-                >
-                  <option value="">Default model</option>
-                  {modelsRef.current.map((m) => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-brand-shade3 mb-1 uppercase tracking-wide">System Prompt *</label>
-                <textarea
-                  value={newForm.system_prompt ?? ''}
-                  onChange={(e) => setNewForm((p) => ({ ...p, system_prompt: e.target.value }))}
-                  rows={5}
-                  placeholder="You are a helpful assistant."
-                  className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light placeholder-brand-shade3 font-mono focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors resize-none"
-                />
-              </div>
-
-              {createError && (
-                <p className="text-xs text-red-400">{createError}</p>
-              )}
-            </div>
-            <div className="px-5 py-4 border-t border-brand-shade3/15 flex gap-3">
-              <button
-                onClick={handleCreate}
-                disabled={creating || !newForm.name || !newForm.system_prompt || !!nameError}
-                className="flex-1 py-2 bg-brand-accent text-brand-light rounded-btn text-sm font-medium hover:bg-brand-accent-hover disabled:opacity-40 transition-colors"
-              >
-                {creating ? 'Creating…' : 'Create Agent'}
-              </button>
-              <button
-                onClick={() => setShowNewForm(false)}
-                className="px-4 py-2 border border-brand-shade3/30 text-brand-shade2 rounded-btn text-sm hover:text-brand-light transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* New trigger dialog */}
-      {showTriggerForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowTriggerForm(false)} />
-          <div className="relative bg-brand-dark-alt border border-brand-shade3/20 rounded-card shadow-xl w-[440px] animate-modal-in">
-            <div className="px-5 py-4 border-b border-brand-shade3/15 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-brand-light">New Trigger</h3>
-              <button onClick={() => setShowTriggerForm(false)} className="text-brand-shade3 hover:text-brand-light p-1">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-brand-shade3 mb-1 uppercase tracking-wide">Title *</label>
-                <input
-                  type="text"
-                  value={triggerForm.title ?? ''}
-                  onChange={(e) => setTriggerForm((p) => ({ ...p, title: e.target.value }))}
-                  placeholder="Daily report"
-                  className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light placeholder-brand-shade3 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-brand-shade3 mb-1 uppercase tracking-wide">Type</label>
-                <select
-                  value={triggerForm.type ?? 'cron'}
-                  onChange={(e) => setTriggerForm((p) => ({ ...p, type: e.target.value }))}
-                  className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent transition-colors"
-                >
-                  <option value="cron">Cron Schedule</option>
-                  <option value="webhook">Webhook</option>
-                </select>
-              </div>
-
-              {triggerForm.type === 'cron' ? (
-                <div>
-                  <label className="block text-xs font-medium text-brand-shade3 mb-1 uppercase tracking-wide">Schedule *</label>
-                  {/* Presets */}
-                  <div className="flex gap-1.5 mb-1.5 flex-wrap">
-                    {CRON_PRESETS.map((preset) => (
-                      <button
-                        key={preset.value}
-                        type="button"
-                        onClick={() => {
-                          setTriggerForm((p) => ({ ...p, schedule: preset.value }));
-                          setCronError('');
-                        }}
-                        className="px-2 py-0.5 text-[10px] bg-brand-dark border border-brand-shade3/30 rounded text-brand-shade2 hover:text-brand-light hover:border-brand-shade3 transition-colors"
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-                  <input
-                    type="text"
-                    value={triggerForm.schedule ?? ''}
-                    onChange={(e) => {
-                      setTriggerForm((p) => ({ ...p, schedule: e.target.value }));
-                      if (cronError) setCronError('');
-                    }}
-                    placeholder="0 9 * * *"
-                    className={`w-full px-3 py-2 bg-brand-dark border rounded-card text-sm text-brand-light placeholder-brand-shade3 font-mono focus:outline-none focus:ring-1 transition-colors ${
-                      cronError
-                        ? 'border-red-500/60 focus:border-red-500 focus:ring-red-500/30'
-                        : 'border-brand-shade3/30 focus:border-brand-accent focus:ring-brand-accent'
-                    }`}
-                  />
-                  {cronError ? (
-                    <p className="text-[10px] text-red-400 mt-0.5">{cronError}</p>
-                  ) : (
-                    <p className="text-[10px] text-brand-shade3/60 mt-0.5">Cron expression (minute hour day month weekday)</p>
-                  )}
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-xs font-medium text-brand-shade3 mb-1 uppercase tracking-wide">Webhook Path *</label>
-                  <input
-                    type="text"
-                    value={triggerForm.webhook_path ?? ''}
-                    onChange={(e) => setTriggerForm((p) => ({ ...p, webhook_path: e.target.value }))}
-                    placeholder="/my-webhook"
-                    className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light placeholder-brand-shade3 font-mono focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
-                  />
-                  {triggerForm.webhook_path && (
-                    <p className="text-[10px] text-brand-shade3/60 mt-0.5 font-mono">
-                      POST /api/v1/webhooks{triggerForm.webhook_path}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-medium text-brand-shade3 mb-1 uppercase tracking-wide">Target Agent *</label>
-                <select
-                  value={triggerForm.agent_name ?? ''}
-                  onChange={(e) => setTriggerForm((p) => ({ ...p, agent_name: e.target.value || undefined }))}
-                  className="w-full px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent transition-colors"
-                >
-                  <option value="">Select agent…</option>
-                  {agents.map((a) => (
-                    <option key={a.name} value={a.name}>{a.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {triggerError && (
-                <p className="text-xs text-red-400">{triggerError}</p>
-              )}
-            </div>
-            <div className="px-5 py-4 border-t border-brand-shade3/15 flex gap-3">
-              <button
-                onClick={handleCreateTrigger}
-                disabled={triggerCreating || !triggerForm.title || !triggerForm.agent_name || (triggerForm.type === 'cron' ? !triggerForm.schedule : !triggerForm.webhook_path)}
-                className="flex-1 py-2 bg-brand-accent text-brand-light rounded-btn text-sm font-medium hover:bg-brand-accent-hover disabled:opacity-40 transition-colors"
-              >
-                {triggerCreating ? 'Creating…' : 'Create Trigger'}
-              </button>
-              <button
-                onClick={() => setShowTriggerForm(false)}
-                className="px-4 py-2 border border-brand-shade3/30 text-brand-shade2 rounded-btn text-sm hover:text-brand-light transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Delete confirm */}
       <ConfirmDialog

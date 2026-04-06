@@ -23,6 +23,7 @@ import type {
   PaginatedResponse,
   ModelRegistryEntry,
   RegistryProviderInfo,
+  Schema,
 } from '../types';
 import {
   MOCK_HEALTH,
@@ -37,6 +38,7 @@ import {
   MOCK_CONFIG_YAML,
 } from '../mocks/pages';
 import { MOCK_AGENTS } from '../mocks/agents';
+import { SCHEMA_NAMES } from '../mocks/canvas';
 
 const BASE_URL = '/api/v1';
 const PROTOTYPE_KEY = 'bytebrew_prototype_mode';
@@ -294,6 +296,22 @@ class APIClient {
 
   getRegistryProviders() {
     return this.request<RegistryProviderInfo[]>('GET', `/models/registry/providers`);
+  }
+
+  // ─── Schemas ─────────────────────────────────────────────────────────────────
+
+  listSchemas() {
+    if (this.isPrototype) {
+      return this.mock<Schema[]>(
+        SCHEMA_NAMES.map((name, i) => ({
+          id: i + 1,
+          name,
+          agents_count: 3,
+          created_at: new Date().toISOString(),
+        })),
+      );
+    }
+    return this.request<Schema[]>('GET', '/schemas');
   }
 
   /**

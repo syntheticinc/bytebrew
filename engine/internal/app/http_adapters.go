@@ -1025,9 +1025,10 @@ func isEnvPlaceholder(v string) bool {
 
 // agentManagerHTTPAdapter bridges GORMAgentRepository + AgentRegistry to the http.AgentManager interface.
 type agentManagerHTTPAdapter struct {
-	repo     *config_repo.GORMAgentRepository
-	registry *agent_registry.AgentRegistry
-	db       *gorm.DB
+	repo       *config_repo.GORMAgentRepository
+	registry   *agent_registry.AgentRegistry
+	db         *gorm.DB
+	schemaRepo *config_repo.GORMSchemaRepository
 }
 
 func (a *agentManagerHTTPAdapter) ListAgents(ctx context.Context) ([]deliveryhttp.AgentInfo, error) {
@@ -1038,12 +1039,17 @@ func (a *agentManagerHTTPAdapter) ListAgents(ctx context.Context) ([]deliveryhtt
 
 	result := make([]deliveryhttp.AgentInfo, 0, len(records))
 	for _, rec := range records {
-		result = append(result, deliveryhttp.AgentInfo{
+		info := deliveryhttp.AgentInfo{
 			Name:         rec.Name,
 			ToolsCount:   len(rec.BuiltinTools) + len(rec.CustomTools),
 			Kit:          rec.Kit,
 			HasKnowledge: rec.KnowledgePath != "",
-		})
+		}
+		if a.schemaRepo != nil {
+			schemaNames, _ := a.schemaRepo.ListSchemasForAgent(ctx, rec.Name)
+			info.UsedInSchemas = schemaNames
+		}
+		result = append(result, info)
 	}
 	return result, nil
 }
@@ -1095,6 +1101,12 @@ func (a *agentManagerHTTPAdapter) GetAgent(ctx context.Context, name string) (*d
 			WebhookURL: rec.Escalation.WebhookURL,
 			Triggers:   rec.Escalation.Triggers,
 		}
+	}
+
+	// Populate used_in_schemas (AC-ENT-03)
+	if a.schemaRepo != nil {
+		schemaNames, _ := a.schemaRepo.ListSchemasForAgent(ctx, name)
+		detail.UsedInSchemas = schemaNames
 	}
 
 	return detail, nil

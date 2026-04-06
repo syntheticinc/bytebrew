@@ -47,6 +47,18 @@ func AutoMigrate(db *gorm.DB) error {
 		// Knowledge / RAG tables (2)
 		&KnowledgeDocument{},
 		&KnowledgeChunk{},
+
+		// Schema / flow tables (4)
+		&SchemaModel{},
+		&SchemaAgentModel{},
+		&GateModel{},
+		&EdgeModel{},
+
+		// Capability table (1)
+		&CapabilityModel{},
+
+		// Memory table (1)
+		&MemoryModel{},
 	); err != nil {
 		return err
 	}
