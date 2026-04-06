@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useApi } from '../../hooks/useApi';
-import type { AgentDetail, AgentEscalation, AgentInfo, Model, MCPServer, ToolMetadata, SecurityZone, CreateAgentRequest } from '../../types';
+import type { AgentDetail, AgentEscalation, AgentInfo, Model, MCPServer, ToolMetadata, SecurityZone, CreateAgentRequest, EscalationTrigger } from '../../types';
 import BuilderChat from './BuilderChat';
 
 // ---------------------------------------------------------------------------
@@ -788,7 +788,7 @@ export default function BuilderSidePanel({ agent, agents, onClose, onSaved, onDe
                     className="w-full px-2 py-1.5 bg-brand-dark border border-brand-shade3/30 rounded-card text-xs text-brand-light focus:outline-none focus:border-brand-accent transition-colors"
                   >
                     <option value="none">None</option>
-                    <option value="transfer_to_human">Transfer to Human</option>
+                    <option value="transfer_to_user">Transfer to User</option>
                     <option value="notify">Notify</option>
                   </select>
                 </div>
@@ -807,10 +807,10 @@ export default function BuilderSidePanel({ agent, agents, onClose, onSaved, onDe
                     <div>
                       <label className="block text-[9px] text-brand-shade3 mb-0.5">Trigger Conditions (one per line)</label>
                       <textarea
-                        value={(form.escalation.triggers ?? []).join('\n')}
+                        value={(form.escalation.triggers ?? []).map((t: EscalationTrigger) => t.prompt ?? t.condition).join('\n')}
                         onChange={(e) => updateField('escalation', {
                           ...form.escalation!,
-                          triggers: e.target.value.split('\n').filter((t) => t.trim()),
+                          triggers: e.target.value.split('\n').filter((t) => t.trim()).map((t): EscalationTrigger => ({ condition: 'custom', prompt: t })),
                         })}
                         rows={3}
                         placeholder="user is angry&#10;urgent request"

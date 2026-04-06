@@ -20,16 +20,35 @@ export interface AgentDetail extends AgentInfo {
   max_steps: number;
   max_context_size: number;
   max_turn_duration: number;
+  temperature?: number;
+  top_p?: number;
+  max_tokens?: number;
+  stop_sequences?: string[];
   confirm_before: string[];
   mcp_servers: string[];
   escalation?: AgentEscalation;
 }
 
 export interface AgentEscalation {
-  action: 'transfer_to_human' | 'notify';
+  action: 'transfer_to_user' | 'notify';
   webhook_url?: string;
-  triggers: string[];
+  triggers: EscalationTrigger[];
 }
+
+export interface EscalationTrigger {
+  condition: EscalationConditionType;
+  threshold?: number;
+  pattern?: string;
+  prompt?: string;
+}
+
+export type EscalationConditionType =
+  | 'confidence_below'
+  | 'topic_matches'
+  | 'user_sentiment'
+  | 'max_turns_exceeded'
+  | 'tool_failed'
+  | 'custom';
 
 export interface CreateAgentRequest {
   name: string;
@@ -102,7 +121,11 @@ export interface WellKnownMCP {
   command: string;
   args: string[];
   env: string[];
+  category?: MCPCatalogCategory;
+  auth_types?: WebhookAuthType[];
 }
+
+export type MCPCatalogCategory = 'search' | 'data' | 'communication' | 'dev_tools' | 'productivity' | 'generic';
 
 export interface CreateMCPServerRequest {
   name: string;
@@ -298,21 +321,21 @@ export interface CapabilityConfig {
   config: Record<string, unknown>;
 }
 
-export const CAPABILITY_META: Record<CapabilityType, { label: string; abbr: string; description: string }> = {
-  memory:        { label: 'Memory',           abbr: 'MEM', description: 'Cross-session persistence, per-user isolation' },
-  knowledge:     { label: 'Knowledge',        abbr: 'KB',  description: 'RAG sources (PDF, URL, text)' },
-  guardrail:     { label: 'Output Guardrail', abbr: 'GRD', description: 'JSON Schema, LLM check, webhook validation' },
-  output_schema: { label: 'Output Schema',    abbr: 'SCH', description: 'Structured JSON output format' },
-  escalation:    { label: 'Escalation',       abbr: 'ESC', description: 'transfer_to_human, notify, webhook' },
-  recovery:      { label: 'Recovery Policy',  abbr: 'REC', description: 'Retry rules per failure type' },
-  policies:      { label: 'Agent Policies',   abbr: 'POL', description: 'When [condition] → Do [action] rules' },
+export const CAPABILITY_META: Record<CapabilityType, { label: string; icon: string; description: string }> = {
+  memory:        { label: 'Memory',           icon: 'brain',          description: 'Per-schema cross-session persistence' },
+  knowledge:     { label: 'Knowledge',        icon: 'book-open',      description: 'RAG sources (PDF, DOCX, URL, text)' },
+  guardrail:     { label: 'Output Guardrail', icon: 'shield-check',   description: 'JSON Schema, LLM judge, webhook validation' },
+  output_schema: { label: 'Output Schema',    icon: 'file-json',      description: 'Structured JSON output via response_format' },
+  escalation:    { label: 'Escalation',       icon: 'arrow-up-right', description: 'transfer_to_user, notify, webhook' },
+  recovery:      { label: 'Recovery Policy',  icon: 'refresh-cw',     description: 'Retry rules per failure type (per-session scope)' },
+  policies:      { label: 'Agent Policies',   icon: 'settings',       description: 'When [condition] → Do [action] rules' },
 };
 
 // ============================================================================
 // V2: Inspect types
 // ============================================================================
 
-export type InspectStepKind = 'reasoning' | 'tool_call' | 'memory_recall' | 'final_answer';
+export type InspectStepKind = 'reasoning' | 'tool_call' | 'memory_recall' | 'knowledge_search' | 'guardrail_check' | 'final_answer';
 
 export interface InspectStep {
   id: number;
@@ -356,4 +379,63 @@ export interface RegistryProviderInfo {
   display_name: string;
   auth_type: string;
   website: string;
+}
+
+// ============================================================================
+// V2: Webhook & Auth types
+// ============================================================================
+
+export type WebhookAuthType = 'none' | 'api_key' | 'forward_headers' | 'oauth2';
+
+export interface WebhookConfig {
+  url: string;
+  auth_type: WebhookAuthType;
+  token?: string;
+  client_id?: string;
+  client_secret?: string;
+  timeout_ms?: number;
+}
+
+// ============================================================================
+// V2: Policy types
+// ============================================================================
+
+export type PolicyConditionType =
+  | 'before_tool_call'
+  | 'after_tool_call'
+  | 'tool_matches'
+  | 'time_range'
+  | 'error_occurred';
+
+export type PolicyActionType =
+  | 'block'
+  | 'log_to_webhook'
+  | 'notify'
+  | 'inject_header'
+  | 'write_audit';
+
+export interface PolicyRule {
+  condition: PolicyConditionType;
+  action: PolicyActionType;
+  tool_pattern?: string;
+  time_start?: string;
+  time_end?: string;
+  webhook_url?: string;
+  webhook_auth?: WebhookAuthType;
+  header_name?: string;
+  header_value?: string;
+}
+
+// ============================================================================
+// V2: Knowledge file types
+// ============================================================================
+
+export type KnowledgeFileStatus = 'uploading' | 'indexing' | 'ready' | 'error';
+
+export interface KnowledgeFile {
+  name: string;
+  type: string;
+  size: string;
+  uploaded_at: string;
+  status: KnowledgeFileStatus;
 }

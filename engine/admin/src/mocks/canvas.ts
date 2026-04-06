@@ -10,7 +10,7 @@ export function createMockSchemas(
   onDelete: (name: string) => void,
 ): Record<SchemaName, { nodes: Node[]; edges: Edge[] }> {
   return {
-    'Support Flow': {
+    'Support Schema': {
       nodes: [
         // Triggers
         {
@@ -117,7 +117,7 @@ export function createMockSchemas(
       ],
     },
 
-    'Dev Flow': {
+    'Dev Schema': {
       nodes: [
         // Triggers
         {
@@ -224,7 +224,7 @@ export function createMockSchemas(
       ],
     },
 
-    'Sales Flow': {
+    'Sales Schema': {
       nodes: [
         // Triggers
         {
@@ -333,4 +333,4 @@ export function createMockSchemas(
   };
 }
 
-export const SCHEMA_NAMES: SchemaName[] = ['Support Flow', 'Dev Flow', 'Sales Flow'];
+export const SCHEMA_NAMES: SchemaName[] = ['Support Schema', 'Dev Schema', 'Sales Schema'];

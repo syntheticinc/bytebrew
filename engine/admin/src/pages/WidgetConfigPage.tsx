@@ -16,7 +16,7 @@ const MOCK_WIDGETS: Widget[] = [
   {
     id: 'wid_abc123',
     name: 'Support Chat',
-    schema: 'Support Flow',
+    schema: 'Support Schema',
     status: 'active',
     primary_color: '#D7513E',
     position: 'bottom-right',
@@ -25,7 +25,7 @@ const MOCK_WIDGETS: Widget[] = [
   {
     id: 'wid_def456',
     name: 'Sales Bot',
-    schema: 'Sales Flow',
+    schema: 'Sales Schema',
     status: 'disabled',
     primary_color: '#3B82F6',
     position: 'bottom-left',
@@ -34,9 +34,9 @@ const MOCK_WIDGETS: Widget[] = [
 ];
 
 const SCHEMA_OPTIONS = [
-  { value: 'Support Flow', label: 'Support Flow' },
-  { value: 'Sales Flow', label: 'Sales Flow' },
-  { value: 'Onboarding Flow', label: 'Onboarding Flow' },
+  { value: 'Support Schema', label: 'Support Schema' },
+  { value: 'Sales Schema', label: 'Sales Schema' },
+  { value: 'Onboarding Schema', label: 'Onboarding Schema' },
 ];
 
 const POSITION_OPTIONS = [

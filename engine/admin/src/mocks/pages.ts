@@ -32,9 +32,18 @@ export const MOCK_MCP_SERVERS: MCPServer[] = [
 ];
 
 export const MOCK_WELL_KNOWN: WellKnownMCP[] = [
-  { name: 'google-sheets', display: 'Google Sheets', command: 'npx', args: ['-y', '@anthropic/mcp-google-sheets'], env: ['GOOGLE_API_KEY'] },
-  { name: 'web-search', display: 'Web Search', command: 'npx', args: ['-y', '@anthropic/mcp-web-search'], env: ['TAVILY_API_KEY'] },
-  { name: 'github', display: 'GitHub', command: 'npx', args: ['-y', '@anthropic/mcp-github'], env: ['GITHUB_TOKEN'] },
+  { name: 'tavily-search', display: 'Tavily Search', command: 'npx', args: ['-y', 'tavily-mcp'], env: ['TAVILY_API_KEY'], category: 'search', auth_types: ['api_key'] },
+  { name: 'brave-search', display: 'Brave Search', command: 'npx', args: ['-y', '@anthropic/brave-search-mcp'], env: ['BRAVE_API_KEY'], category: 'search', auth_types: ['api_key'] },
+  { name: 'exa-search', display: 'Exa Search', command: 'npx', args: ['-y', 'exa-mcp'], env: ['EXA_API_KEY'], category: 'search', auth_types: ['api_key'] },
+  { name: 'google-sheets', display: 'Google Sheets', command: 'npx', args: ['-y', 'google-sheets-mcp'], env: ['GOOGLE_API_KEY'], category: 'data', auth_types: ['api_key', 'oauth2'] },
+  { name: 'postgresql', display: 'PostgreSQL', command: 'npx', args: ['-y', 'postgres-mcp'], env: ['DATABASE_URL'], category: 'data', auth_types: ['none'] },
+  { name: 'slack', display: 'Slack', command: 'npx', args: ['-y', 'slack-mcp'], env: ['SLACK_BOT_TOKEN'], category: 'communication', auth_types: ['api_key'] },
+  { name: 'resend-email', display: 'Email (Resend)', command: 'npx', args: ['-y', 'resend-mcp'], env: ['RESEND_API_KEY'], category: 'communication', auth_types: ['api_key'] },
+  { name: 'github', display: 'GitHub', command: 'npx', args: ['-y', '@anthropic/github-mcp'], env: ['GITHUB_TOKEN'], category: 'dev_tools', auth_types: ['api_key'] },
+  { name: 'linear', display: 'Linear', command: 'npx', args: ['-y', 'linear-mcp'], env: ['LINEAR_API_KEY'], category: 'dev_tools', auth_types: ['api_key'] },
+  { name: 'stripe', display: 'Stripe', command: 'npx', args: ['-y', 'stripe-mcp'], env: ['STRIPE_API_KEY'], category: 'productivity', auth_types: ['api_key'] },
+  { name: 'notion', display: 'Notion', command: 'npx', args: ['-y', 'notion-mcp'], env: ['NOTION_TOKEN'], category: 'productivity', auth_types: ['api_key', 'oauth2'] },
+  { name: 'http-webhook', display: 'HTTP / Webhook', command: 'npx', args: ['-y', 'http-mcp'], env: [], category: 'generic', auth_types: ['none', 'api_key', 'forward_headers'] },
 ];
 
 export const MOCK_TRIGGERS: Trigger[] = [

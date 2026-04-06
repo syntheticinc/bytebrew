@@ -13,6 +13,7 @@ import ConfigPage from './pages/ConfigPage';
 import AuditPage from './pages/AuditPage';
 import AgentBuilderPage from './pages/AgentBuilderPage';
 import AgentDrillInPage from './pages/AgentDrillInPage';
+import AgentsPage from './pages/AgentsPage';
 import InspectPage from './pages/InspectPage';
 import WidgetConfigPage from './pages/WidgetConfigPage';
 
@@ -50,10 +51,7 @@ export default function App() {
             <Route path="/config" element={<ConfigPage />} />
             <Route path="/audit" element={<AuditPage />} />
             <Route path="/widget" element={<WidgetConfigPage />} />
-            {/* Legacy /agents routes redirect to canvas */}
-            <Route path="/agents" element={<Navigate to="/builder" replace />} />
-            <Route path="/agents/:name/edit" element={<Navigate to="/builder" replace />} />
-            <Route path="/agents/new" element={<Navigate to="/builder" replace />} />
+            <Route path="/agents" element={<AgentsPage />} />
             <Route path="/" element={<Navigate to="/builder" replace />} />
           </Route>
           <Route path="*" element={<Navigate to="/builder" replace />} />

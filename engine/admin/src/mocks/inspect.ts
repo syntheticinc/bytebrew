@@ -4,8 +4,8 @@ export const MOCK_TRACE: SessionTrace = {
   session_id: 'sess_a3f2e8b1',
   agent_name: 'support-agent',
   status: 'completed',
-  total_duration_ms: 4300,
-  total_tokens: 2270,
+  total_duration_ms: 4500,
+  total_tokens: 2420,
   created_at: '2026-04-05T12:00:00Z',
   steps: [
     {
@@ -46,6 +46,19 @@ export const MOCK_TRACE: SessionTrace = {
     },
     {
       id: 4,
+      kind: 'knowledge_search',
+      label: 'Search knowledge base',
+      input: JSON.stringify({ query: 'refund policy' }, null, 2),
+      output: JSON.stringify(
+        { results: [{ content: 'Our refund policy allows...', score: 0.92 }] },
+        null,
+        2,
+      ),
+      duration_ms: 150,
+      tokens: 50,
+    },
+    {
+      id: 5,
       kind: 'tool_call',
       label: 'check_account',
       input: JSON.stringify({ user_id: 'u_4f3a' }, null, 2),
@@ -58,7 +71,7 @@ export const MOCK_TRACE: SessionTrace = {
       tokens: 280,
     },
     {
-      id: 5,
+      id: 6,
       kind: 'reasoning',
       label:
         'Customer has prior interaction history. Forming personalized response with account context.',
@@ -66,7 +79,16 @@ export const MOCK_TRACE: SessionTrace = {
       tokens: 220,
     },
     {
-      id: 6,
+      id: 7,
+      kind: 'guardrail_check',
+      label: 'Output validation (JSON Schema)',
+      input: JSON.stringify({ schema: { type: 'object', required: ['answer'] } }, null, 2),
+      output: JSON.stringify({ pass: true }, null, 2),
+      duration_ms: 50,
+      tokens: 100,
+    },
+    {
+      id: 8,
       kind: 'final_answer',
       label:
         'Hello! I see you have previously contacted us. Happy to help with upgrading to the Team plan. Your current Pro plan ($29/mo) can be upgraded to Team ($49/seat/mo) which includes collaboration features and priority support.',

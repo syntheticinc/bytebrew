@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import FormField from '../components/FormField';
-import CapabilityBlock from '../components/builder/CapabilityBlock';
+import CapabilityBlock, { capabilityIcon } from '../components/builder/CapabilityBlock';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { ToastProvider, useToast } from '../components/builder/Toast';
 import type { AgentDetail, CapabilityConfig, CapabilityType, Model } from '../types';
@@ -13,8 +13,7 @@ import { MOCK_SESSIONS } from '../mocks/inspect';
 
 const ALL_CAPABILITY_TYPES = Object.keys(CAPABILITY_META) as CapabilityType[];
 
-const ZONE_ORDER = ['safe', 'caution', 'dangerous'] as const;
-type Zone = (typeof ZONE_ORDER)[number];
+type Zone = 'safe' | 'caution' | 'dangerous';
 
 const ZONE_CONFIG: Record<Zone, { label: string; labelClass: string; borderClass: string }> = {
   safe:      { label: 'Safe',      labelClass: 'text-brand-shade3',  borderClass: 'border-brand-shade3/30' },
@@ -22,11 +21,38 @@ const ZONE_CONFIG: Record<Zone, { label: string; labelClass: string; borderClass
   dangerous: { label: 'Dangerous', labelClass: 'text-brand-accent',  borderClass: 'border-brand-accent/50' },
 };
 
-// Mock tools grouped by zone for display when metadata is unavailable
-const MOCK_TOOLS: Record<Zone, string[]> = {
-  safe:      ['search_web', 'read_url', 'get_time'],
-  caution:   ['read_file', 'list_files', 'send_http'],
-  dangerous: ['write_file', 'execute_command', 'delete_file'],
+// Tool tiers for display
+type ToolTier = 'core' | 'auto' | 'selfhost' | 'mcp';
+
+const TOOL_TIERS: Record<ToolTier, { label: string; description: string; tools: string[]; labelClass: string; borderClass: string; alwaysOn?: boolean }> = {
+  core: {
+    label: 'Core',
+    description: 'Essential tools always available to every agent',
+    tools: ['ask_user', 'show_structured_output', 'manage_tasks', 'manage_subtasks', 'wait'],
+    labelClass: 'text-brand-shade3',
+    borderClass: 'border-brand-shade3/30',
+  },
+  auto: {
+    label: 'Auto-injected',
+    description: 'Added automatically when capability is enabled (Memory, Knowledge, Escalation)',
+    tools: ['memory_recall', 'memory_store', 'knowledge_search', 'escalate'],
+    labelClass: 'text-purple-400',
+    borderClass: 'border-purple-500/30',
+  },
+  selfhost: {
+    label: 'Self-hosted',
+    description: 'File system and shell access — available only in self-hosted deployment, blocked in Cloud',
+    tools: ['read_file', 'write_file', 'edit_file', 'execute_command', 'glob', 'grep_search', 'search_code', 'smart_search', 'get_project_tree', 'lsp'],
+    labelClass: 'text-amber-400',
+    borderClass: 'border-amber-500/30',
+  },
+  mcp: {
+    label: 'MCP',
+    description: 'External tools from connected MCP servers (web search, APIs, integrations)',
+    tools: [],  // filled dynamically from agent.mcp_servers
+    labelClass: 'text-brand-accent',
+    borderClass: 'border-brand-accent/30',
+  },
 };
 
 function AgentDrillInInner() {
@@ -59,7 +85,7 @@ function AgentDrillInInner() {
       }
       // Pre-populate capabilities for prototype (matching original prototype)
       setCapabilities([
-        { type: 'memory', enabled: true, config: { unlimited_retention: false, retention_days: 30, unlimited_entries: false, max_entries: 500 } },
+        { type: 'memory', enabled: true, config: { unlimited_retention: true, unlimited_entries: false, max_entries: 500 } },
         { type: 'knowledge', enabled: true, config: { sources: ['support-docs.pdf'], chunks: 2341, top_k: 5, similarity_threshold: 0.75 } },
       ]);
       setModels(MOCK_MODELS as Model[]);
@@ -210,6 +236,17 @@ function AgentDrillInInner() {
         </div>
       </div>
 
+      {/* Global entity banner */}
+      <div className="px-6 py-2 bg-blue-500/5 border-b border-blue-500/20">
+        <div className="flex items-center gap-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400 shrink-0">
+            <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+          </svg>
+          <span className="text-xs text-blue-400 font-mono">This agent is global — changes affect all schemas using it</span>
+        </div>
+        <p className="text-[11px] text-brand-shade3/70 font-mono ml-[22px] mt-0.5">Used in: Support Schema, Sales Schema</p>
+      </div>
+
       {/* Delete confirmation */}
       <ConfirmDialog
         open={showDeleteConfirm}
@@ -323,6 +360,51 @@ function AgentDrillInInner() {
               hint="Sequential: tools one by one. Parallel: multiple tools simultaneously"
             />
           </div>
+
+          {/* Model Parameters */}
+          <div className="border-t border-brand-shade3/10 mt-4 pt-4">
+            <p className="text-xs font-semibold text-brand-shade3 uppercase tracking-widest mb-3 font-mono">Model Parameters</p>
+            <div className="grid grid-cols-3 gap-4">
+              <FormField
+                label="Temperature"
+                type="number"
+                value={agent?.temperature ?? 0.7}
+                onChange={(v) => updateAgentField('temperature', Number(v))}
+                min={0}
+                max={2}
+                step={0.1}
+                hint="Controls randomness. 0 = deterministic, 2 = maximum creativity. Most tasks work best at 0.3-0.7"
+              />
+              <FormField
+                label="Top P"
+                type="number"
+                value={agent?.top_p ?? 1.0}
+                onChange={(v) => updateAgentField('top_p', Number(v))}
+                min={0}
+                max={1}
+                step={0.05}
+                hint="Nucleus sampling: considers tokens with top P probability mass. Alternative to temperature — usually change one, not both"
+              />
+              <FormField
+                label="Max Tokens"
+                type="number"
+                value={agent?.max_tokens ?? 4096}
+                onChange={(v) => updateAgentField('max_tokens', Number(v))}
+                min={1}
+                max={128000}
+                step={256}
+                hint="Maximum length of model response in tokens (~4 chars per token). Higher = longer responses, higher cost"
+              />
+              <FormField
+                label="Stop Sequences"
+                type="text"
+                value={agent?.stop_sequences?.join(', ') ?? ''}
+                onChange={(v) => updateAgentField('stop_sequences', v ? String(v).split(',').map(s => s.trim()).filter(Boolean) : [])}
+                placeholder="e.g. \n\n, END, ---"
+                hint="Comma-separated strings that stop generation. Model stops when it outputs any of these sequences"
+              />
+            </div>
+          </div>
         </div>
 
         {/* Capabilities card */}
@@ -349,7 +431,7 @@ function AgentDrillInInner() {
                       onClick={() => addCapability(type)}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-brand-shade2 hover:bg-brand-dark hover:text-brand-light font-mono transition-colors"
                     >
-                      <span className="text-[10px] font-semibold text-brand-shade3 bg-brand-dark px-1.5 py-0.5 rounded-card">{CAPABILITY_META[type].abbr}</span>
+                      <span className="text-brand-shade3 shrink-0">{capabilityIcon(CAPABILITY_META[type].icon)}</span>
                       <span>{CAPABILITY_META[type].label}</span>
                     </button>
                   ))}
@@ -372,6 +454,7 @@ function AgentDrillInInner() {
                   capability={cap}
                   onChange={(updated) => updateCapability(i, updated)}
                   onRemove={() => removeCapability(i)}
+                  models={models as { id: number; name: string; model_name: string }[]}
                 />
               ))}
             </div>
@@ -384,43 +467,79 @@ function AgentDrillInInner() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" /></svg>
             Tools
           </h2>
-          <p className="text-xs text-brand-shade3 mb-3">Predefined engine tools available to this agent. External integrations connect via MCP servers.</p>
+          <p className="text-xs text-brand-shade3 mb-3">Tools are organized by availability tier. External integrations connect via MCP servers.</p>
           <div className="space-y-3">
-            {ZONE_ORDER.map((zone) => {
-              if (zone === 'dangerous') {
-                return (
-                  <div key={zone} className={`border-2 ${ZONE_CONFIG[zone].borderClass} rounded-card overflow-hidden`}>
-                    <button
-                      type="button"
-                      onClick={() => setDangerousExpanded((v) => !v)}
-                      className="w-full flex items-center justify-between px-3 py-2 bg-brand-accent/10 text-brand-accent text-xs font-semibold font-mono hover:bg-brand-accent/15 transition-colors"
-                    >
-                      <span>Dangerous — Filesystem & Command Access</span>
-                      <span className="text-brand-accent/60">{dangerousExpanded ? '▲' : '▼'}</span>
-                    </button>
-                    {dangerousExpanded && (
-                      <div className="p-3 flex flex-wrap gap-2">
-                        {MOCK_TOOLS[zone].map((tool) => (
-                          <ToolChip key={tool} name={tool} zone={zone} enabled={enabledTools.includes(tool)} onToggle={toggleTool} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              }
+            {/* Core — on by default, toggleable */}
+            <div className={`border ${TOOL_TIERS.core.borderClass} rounded-card p-3`}>
+              <p className={`text-xs font-semibold ${TOOL_TIERS.core.labelClass} mb-1 font-mono`}>
+                {TOOL_TIERS.core.label} <span className="font-normal text-brand-shade3/60">— {TOOL_TIERS.core.description}</span>
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {TOOL_TIERS.core.tools.map((tool) => (
+                  <ToolChip key={tool} name={tool} zone="safe" enabled={enabledTools.includes(tool)} onToggle={toggleTool} />
+                ))}
+              </div>
+            </div>
+
+            {/* Auto-injected — from capabilities, toggleable */}
+            {capabilities.length > 0 && (() => {
+              const autoTools: string[] = [];
+              if (capabilities.some(c => c.type === 'memory')) autoTools.push('memory_recall', 'memory_store');
+              if (capabilities.some(c => c.type === 'knowledge')) autoTools.push('knowledge_search');
+              if (capabilities.some(c => c.type === 'escalation')) autoTools.push('escalate');
+              if (autoTools.length === 0) return null;
               return (
-                <div key={zone} className={`border ${ZONE_CONFIG[zone].borderClass} rounded-card p-3`}>
-                  <p className={`text-xs font-semibold ${ZONE_CONFIG[zone].labelClass} mb-2 font-mono`}>
-                    {ZONE_CONFIG[zone].label}
+                <div className={`border ${TOOL_TIERS.auto.borderClass} rounded-card p-3`}>
+                  <p className={`text-xs font-semibold ${TOOL_TIERS.auto.labelClass} mb-1 font-mono`}>
+                    {TOOL_TIERS.auto.label} <span className="font-normal text-brand-shade3/60">— {TOOL_TIERS.auto.description}</span>
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {MOCK_TOOLS[zone].map((tool) => (
-                      <ToolChip key={tool} name={tool} zone={zone} enabled={enabledTools.includes(tool)} onToggle={toggleTool} />
+                    {autoTools.map((tool) => (
+                      <span key={tool} className="px-2 py-0.5 bg-purple-500/10 border border-purple-500/20 rounded text-xs text-purple-300 font-mono">
+                        {tool}
+                      </span>
                     ))}
                   </div>
                 </div>
               );
-            })}
+            })()}
+
+            {/* Self-hosted — toggleable */}
+            <div className={`border-2 ${TOOL_TIERS.selfhost.borderClass} rounded-card overflow-hidden`}>
+              <button
+                type="button"
+                onClick={() => setDangerousExpanded((v) => !v)}
+                className="w-full flex items-center justify-between px-3 py-2 bg-amber-500/10 text-amber-400 text-xs font-semibold font-mono hover:bg-amber-500/15 transition-colors"
+              >
+                <span>{TOOL_TIERS.selfhost.label} — {TOOL_TIERS.selfhost.description}</span>
+                <span className="text-amber-400/60">{dangerousExpanded ? '\u25B2' : '\u25BC'}</span>
+              </button>
+              {dangerousExpanded && (
+                <div className="p-3 flex flex-wrap gap-2">
+                  {TOOL_TIERS.selfhost.tools.map((tool) => (
+                    <ToolChip key={tool} name={tool} zone="caution" enabled={enabledTools.includes(tool)} onToggle={toggleTool} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* MCP — from connected servers */}
+            <div className={`border ${TOOL_TIERS.mcp.borderClass} rounded-card p-3`}>
+              <p className={`text-xs font-semibold ${TOOL_TIERS.mcp.labelClass} mb-1 font-mono`}>
+                {TOOL_TIERS.mcp.label} <span className="font-normal text-brand-shade3/60">— {TOOL_TIERS.mcp.description}</span>
+              </p>
+              {(agent?.mcp_servers?.length ?? 0) > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {agent!.mcp_servers.map((srv) => (
+                    <span key={srv} className="px-2 py-0.5 bg-brand-accent/10 border border-brand-accent/20 rounded text-xs text-brand-accent font-mono">
+                      {srv}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-brand-shade3/50 font-mono italic">No MCP servers connected. Add via Settings → MCP Servers</p>
+              )}
+            </div>
           </div>
         </div>
 

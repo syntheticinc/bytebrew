@@ -42,6 +42,8 @@ const KIND_COLORS: Record<InspectStepKind, string> = {
   reasoning: 'text-blue-400',
   tool_call: 'text-brand-accent',
   memory_recall: 'text-purple-400',
+  knowledge_search: 'text-amber-400',
+  guardrail_check: 'text-red-400',
   final_answer: 'text-status-active',
 };
 

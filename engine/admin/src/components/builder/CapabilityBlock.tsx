@@ -1,11 +1,12 @@
-import { useState, useRef, type DragEvent } from 'react';
-import type { CapabilityConfig } from '../../types';
+import React, { useState, useRef, type DragEvent } from 'react';
+import type { CapabilityConfig, EscalationConditionType, EscalationTrigger, KnowledgeFile, KnowledgeFileStatus, WebhookAuthType } from '../../types';
 import { CAPABILITY_META } from '../../types';
 
 interface CapabilityBlockProps {
   capability: CapabilityConfig;
   onChange: (updated: CapabilityConfig) => void;
   onRemove: () => void;
+  models?: { id: number; name: string; model_name: string }[];
 }
 
 const inputCls =
@@ -17,6 +18,63 @@ const selectCls =
 const labelCls = 'block text-xs text-brand-shade3 mb-1 font-mono';
 const descCls = 'text-xs text-brand-shade3 mb-3';
 const hintCls = 'text-[11px] text-brand-shade3/70 mt-1';
+
+// ---------------------------------------------------------------------------
+// B.1: Capability SVG icons
+// ---------------------------------------------------------------------------
+
+export function capabilityIcon(name: string): React.ReactElement {
+  const props = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  switch (name) {
+    case 'brain':
+      return <svg {...props}><circle cx="12" cy="12" r="9" /><path d="M9 9c0-1 1-2 3-2s3 1 3 2-1 2-3 2v2" /><circle cx="12" cy="17" r=".5" fill="currentColor" /></svg>;
+    case 'book-open':
+      return <svg {...props}><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" /></svg>;
+    case 'shield-check':
+      return <svg {...props}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M9 12l2 2 4-4" /></svg>;
+    case 'file-json':
+      return <svg {...props}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><path d="M14 2v6h6" /><path d="M10 13l-1 3 1 3" /><path d="M14 13l1 3-1 3" /></svg>;
+    case 'arrow-up-right':
+      return <svg {...props}><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></svg>;
+    case 'refresh-cw':
+      return <svg {...props}><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" /></svg>;
+    case 'settings':
+      return <svg {...props}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" /></svg>;
+    default:
+      return <span className="text-[10px] font-semibold">{name}</span>;
+  }
+}
+
+// Mock knowledge files for prototype
+const MOCK_KNOWLEDGE_FILES: KnowledgeFile[] = [
+  { name: 'support-docs.pdf', type: 'PDF', size: '2.4 MB', uploaded_at: '2026-04-01', status: 'ready' },
+  { name: 'faq.docx', type: 'DOCX', size: '512 KB', uploaded_at: '2026-04-03', status: 'indexing' },
+];
+
+const FILE_STATUS_CLASSES: Record<KnowledgeFileStatus, string> = {
+  uploading: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
+  indexing: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  ready: 'bg-green-500/15 text-green-400 border-green-500/30',
+  error: 'bg-red-500/15 text-red-400 border-red-500/30',
+};
+
+// Escalation condition metadata
+const ESCALATION_CONDITIONS: { value: EscalationConditionType; label: string; paramType: 'slider' | 'text' | 'toggle' | 'number' | 'textarea' }[] = [
+  { value: 'confidence_below', label: 'Confidence below', paramType: 'slider' },
+  { value: 'topic_matches', label: 'Topic matches', paramType: 'text' },
+  { value: 'user_sentiment', label: 'User sentiment negative', paramType: 'toggle' },
+  { value: 'max_turns_exceeded', label: 'Max turns exceeded', paramType: 'number' },
+  { value: 'tool_failed', label: 'Tool failed', paramType: 'text' },
+  { value: 'custom', label: 'Custom prompt', paramType: 'textarea' },
+];
+
+// Webhook auth types
+const WEBHOOK_AUTH_OPTIONS: { value: WebhookAuthType; label: string }[] = [
+  { value: 'none', label: 'None' },
+  { value: 'api_key', label: 'API Key' },
+  { value: 'forward_headers', label: 'Forward Headers' },
+  { value: 'oauth2', label: 'OAuth2' },
+];
 
 function setKey(cap: CapabilityConfig, key: string, value: unknown): CapabilityConfig {
   return { ...cap, config: { ...cap.config, [key]: value } };
@@ -31,7 +89,7 @@ function getKey<T>(cap: CapabilityConfig, key: string, fallback: T): T {
 // Per-type config panels
 // ---------------------------------------------------------------------------
 
-type PanelProps = { cap: CapabilityConfig; onChange: (u: CapabilityConfig) => void };
+type PanelProps = { cap: CapabilityConfig; onChange: (u: CapabilityConfig) => void; models?: { id: number; name: string; model_name: string }[] };
 
 function MemoryConfig({ cap, onChange }: PanelProps) {
   const unlimitedRetention = getKey(cap, 'unlimited_retention', false) as boolean;
@@ -42,7 +100,7 @@ function MemoryConfig({ cap, onChange }: PanelProps) {
       <p className={descCls}>Agent remembers facts across sessions within this schema. Recalled automatically at session start, stored during conversation. Users can also ask the agent to remember things explicitly.</p>
       <div className="bg-brand-dark rounded-card px-3 py-2 space-y-1">
         <span className="text-[11px] text-brand-shade2 font-mono">Scope: per-schema, cross-session</span>
-        <p className={hintCls}>Memory is isolated per schema and persists between sessions. Support Flow and Sales Flow have separate memory spaces.</p>
+        <p className={hintCls}>Memory is isolated per schema and persists between sessions. Support Schema and Sales Schema have separate memory spaces.</p>
       </div>
       <div className="bg-brand-dark rounded-card px-3 py-2 space-y-1">
         <span className="text-[11px] text-brand-shade2 font-mono">Auto-included tools:</span>
@@ -75,7 +133,7 @@ function MemoryConfig({ cap, onChange }: PanelProps) {
         {!unlimitedEntries && (
           <input type="number" className={inputCls} min={1} value={getKey(cap, 'max_entries', 500) as number} onChange={(e) => onChange(setKey(cap, 'max_entries', Number(e.target.value)))} />
         )}
-        <p className={hintCls}>{unlimitedEntries ? 'No limit on stored entries (bounded by schema storage quota)' : 'Oldest entries evicted when limit reached'}</p>
+        <p className={hintCls}>{unlimitedEntries ? 'No limit on stored entries (bounded by schema storage quota)' : 'Oldest entries removed first (FIFO) when limit reached'}</p>
       </div>
     </div>
   );
@@ -85,6 +143,7 @@ function KnowledgeConfig({ cap, onChange }: PanelProps) {
   const sources = getKey<string[]>(cap, 'sources', []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeFile[]>(MOCK_KNOWLEDGE_FILES);
 
   function addFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -108,9 +167,53 @@ function KnowledgeConfig({ cap, onChange }: PanelProps) {
         </div>
         <p className={hintCls}>Automatically available to agent when Knowledge is enabled</p>
       </div>
-      <input ref={fileInputRef} type="file" multiple accept=".pdf,.txt,.md" className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />
+
+      {/* Knowledge files table */}
+      {knowledgeFiles.length > 0 && (
+        <div className="border border-brand-shade3/20 rounded-card overflow-hidden">
+          <table className="w-full text-xs font-mono">
+            <thead>
+              <tr className="bg-brand-dark text-brand-shade3 text-left">
+                <th className="px-3 py-2">Name</th>
+                <th className="px-3 py-2">Type</th>
+                <th className="px-3 py-2">Size</th>
+                <th className="px-3 py-2">Date</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {knowledgeFiles.map((file, i) => (
+                <tr key={file.name + '-' + i} className="border-t border-brand-shade3/10 text-brand-shade2">
+                  <td className="px-3 py-2">{file.name}</td>
+                  <td className="px-3 py-2">{file.type}</td>
+                  <td className="px-3 py-2">{file.size}</td>
+                  <td className="px-3 py-2">{file.uploaded_at}</td>
+                  <td className="px-3 py-2">
+                    <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] border ${FILE_STATUS_CLASSES[file.status]}`}>
+                      {file.status}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button type="button" title="Reindex" className="p-1 text-brand-shade3 hover:text-brand-light transition-colors" onClick={() => setKnowledgeFiles(prev => prev.map((f, j) => j === i ? { ...f, status: 'indexing' as KnowledgeFileStatus } : f))}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" /></svg>
+                      </button>
+                      <button type="button" title="Delete" className="p-1 text-brand-shade3 hover:text-brand-accent transition-colors" onClick={() => setKnowledgeFiles(prev => prev.filter((_, j) => j !== i))}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <input ref={fileInputRef} type="file" multiple accept=".pdf,.docx,.doc,.txt,.md,.csv" className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />
       <div
-        className={`border border-dashed rounded-card px-4 py-6 text-center text-xs cursor-pointer transition-colors ${
+        className={`border-2 border-dashed rounded-card px-4 py-8 text-center cursor-pointer transition-colors ${
           dragOver ? 'border-brand-accent bg-brand-accent/5 text-brand-accent' : 'border-brand-shade3/30 text-brand-shade3 hover:border-brand-shade3/50'
         }`}
         onClick={() => fileInputRef.current?.click()}
@@ -118,8 +221,11 @@ function KnowledgeConfig({ cap, onChange }: PanelProps) {
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
       >
-        {dragOver ? 'Drop files to add' : 'Drop files here or click to upload (PDF, TXT, MD)'}
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-2 opacity-50"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+        <p className="text-xs">{dragOver ? 'Drop files to upload' : 'Drag & drop files here or click to browse'}</p>
+        <p className="text-[10px] text-brand-shade3/60 mt-1">Supported: PDF, DOCX, DOC, TXT, MD, CSV</p>
       </div>
+
       {sources.length > 0 && (
         <ul className="space-y-1">
           {sources.map((src, i) => (
@@ -151,9 +257,14 @@ function GuardrailConfig({ cap, onChange }: PanelProps) {
     llm_check: 'A secondary LLM evaluates the output quality',
     webhook: 'Output sent to webhook for external validation',
   };
+  const configLabels: Record<string, string> = {
+    json_schema: 'Schema',
+    llm_check: 'Judge LLM Prompt',
+    webhook: 'Webhook URL',
+  };
   const placeholders: Record<string, string> = {
     json_schema: '{"type":"object","required":["answer"]}',
-    llm_check: 'Is this response professional and accurate? Reply YES or NO.',
+    llm_check: 'Judge LLM Prompt \u2014 a separate LLM evaluates the agent\'s response',
     webhook: 'https://validate.example.com/check',
   };
   return (
@@ -169,9 +280,29 @@ function GuardrailConfig({ cap, onChange }: PanelProps) {
         <p className={hintCls}>{modeHints[mode]}</p>
       </div>
       <div>
-        <label className={labelCls}>Config</label>
+        <label className={labelCls}>{configLabels[mode] ?? 'Config'}</label>
         <textarea className={`${inputCls} font-mono resize-y`} rows={4} placeholder={placeholders[mode]} value={getKey(cap, 'config_text', '') as string} onChange={(e) => onChange(setKey(cap, 'config_text', e.target.value))} />
       </div>
+      {mode === 'webhook' && (
+        <>
+          <div>
+            <label className={labelCls}>Auth type</label>
+            <select className={selectCls} value={getKey(cap, 'webhook_auth', 'none') as string} onChange={(e) => onChange(setKey(cap, 'webhook_auth', e.target.value))}>
+              {WEBHOOK_AUTH_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <p className={hintCls}>Authentication method for the webhook endpoint</p>
+          </div>
+          <div className="bg-brand-dark rounded-card px-3 py-2">
+            <p className="text-[10px] text-brand-shade3 font-mono mb-1">Contract</p>
+            <pre className="text-[10px] text-brand-shade2 font-mono leading-relaxed whitespace-pre">
+{`Request:  POST { event, agent, session_id, response }
+Response: { pass: boolean, reason?: string }`}
+            </pre>
+          </div>
+        </>
+      )}
       <div>
         <label className={labelCls}>On failure</label>
         <select className={selectCls} value={getKey(cap, 'on_failure', 'retry_max_3') as string} onChange={(e) => onChange(setKey(cap, 'on_failure', e.target.value))}>
@@ -219,11 +350,26 @@ function OutputSchemaConfig({ cap, onChange }: PanelProps) {
 }
 
 function EscalationConfig({ cap, onChange }: PanelProps) {
-  const action = getKey(cap, 'action', 'transfer_to_human') as string;
+  const action = getKey(cap, 'action', 'transfer_to_user') as string;
+  const triggers = getKey<EscalationTrigger[]>(cap, 'triggers', []);
   const actionHints: Record<string, string> = {
-    transfer_to_human: 'Session marked as needing human, agent stops responding',
+    transfer_to_user: 'Session marked as needing human, agent stops responding',
     notify: 'Webhook called with session context, agent continues',
   };
+
+  function updateTrigger(i: number, updated: EscalationTrigger) {
+    const next = triggers.map((t, j) => (j === i ? updated : t));
+    onChange(setKey(cap, 'triggers', next));
+  }
+
+  function removeTrigger(i: number) {
+    onChange(setKey(cap, 'triggers', triggers.filter((_, j) => j !== i)));
+  }
+
+  function addTrigger() {
+    onChange(setKey(cap, 'triggers', [...triggers, { condition: 'confidence_below' as EscalationConditionType, threshold: 0.4 }]));
+  }
+
   return (
     <div className="space-y-3">
       <p className={descCls}>Defines when and how agent escalates to human or another system</p>
@@ -237,12 +383,12 @@ function EscalationConfig({ cap, onChange }: PanelProps) {
       <div>
         <label className={labelCls}>Action</label>
         <select className={selectCls} value={action} onChange={(e) => onChange(setKey(cap, 'action', e.target.value))}>
-          <option value="transfer_to_human">Transfer to Human</option>
+          <option value="transfer_to_user">Transfer to User</option>
           <option value="notify">Notify</option>
         </select>
         <p className={hintCls}>{actionHints[action]}</p>
       </div>
-      {action !== 'transfer_to_human' && (
+      {action !== 'transfer_to_user' && (
         <div>
           <label className={labelCls}>Webhook URL</label>
           <input className={inputCls} placeholder="https://hooks.example.com/escalate" value={getKey(cap, 'webhook_url', '') as string} onChange={(e) => onChange(setKey(cap, 'webhook_url', e.target.value))} />
@@ -251,8 +397,68 @@ function EscalationConfig({ cap, onChange }: PanelProps) {
       )}
       <div>
         <label className={labelCls}>Triggers</label>
-        <textarea className={`${inputCls} resize-y`} rows={2} placeholder="confidence < 0.4, user requests human" value={getKey(cap, 'triggers_text', '') as string} onChange={(e) => onChange(setKey(cap, 'triggers_text', e.target.value))} />
-        <p className={hintCls}>Comma-separated conditions. Examples: 'confidence {'<'} 0.4', 'user requests human', 'sentiment negative'</p>
+        <div className="space-y-2">
+          {triggers.map((trigger, i) => {
+            const condMeta = ESCALATION_CONDITIONS.find(c => c.value === trigger.condition);
+            return (
+              <div key={trigger.condition + '-' + i} className="bg-brand-dark rounded-card p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <select
+                    className={`${selectCls} flex-1`}
+                    value={trigger.condition}
+                    onChange={(e) => updateTrigger(i, { condition: e.target.value as EscalationConditionType })}
+                  >
+                    {ESCALATION_CONDITIONS.map((c) => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={() => removeTrigger(i)} className="text-brand-shade3 hover:text-brand-accent text-lg leading-none flex-shrink-0">x</button>
+                </div>
+                {/* Parameter input based on condition type */}
+                {condMeta?.paramType === 'slider' && (
+                  <div>
+                    <label className={labelCls}>Threshold: {trigger.threshold ?? 0.4}</label>
+                    <input type="range" min={0} max={1} step={0.05} className="w-full accent-brand-accent" value={trigger.threshold ?? 0.4} onChange={(e) => updateTrigger(i, { ...trigger, threshold: Number(e.target.value) })} />
+                    <div className="flex justify-between text-[10px] text-brand-shade3/60"><span>0.0</span><span>1.0</span></div>
+                  </div>
+                )}
+                {condMeta?.paramType === 'text' && trigger.condition === 'topic_matches' && (
+                  <div>
+                    <label className={labelCls}>Pattern</label>
+                    <input className={inputCls} placeholder="refund, billing, complaint" value={trigger.pattern ?? ''} onChange={(e) => updateTrigger(i, { ...trigger, pattern: e.target.value })} />
+                  </div>
+                )}
+                {condMeta?.paramType === 'text' && trigger.condition === 'tool_failed' && (
+                  <div>
+                    <label className={labelCls}>Tool name</label>
+                    <input className={inputCls} placeholder="payment_process, send_email" value={trigger.pattern ?? ''} onChange={(e) => updateTrigger(i, { ...trigger, pattern: e.target.value })} />
+                  </div>
+                )}
+                {condMeta?.paramType === 'toggle' && (
+                  <label className="flex items-center gap-2 text-sm text-brand-shade2 cursor-pointer select-none">
+                    <input type="checkbox" className="accent-brand-accent" checked={true} readOnly />
+                    Trigger on negative sentiment
+                  </label>
+                )}
+                {condMeta?.paramType === 'number' && (
+                  <div>
+                    <label className={labelCls}>Max turns</label>
+                    <input type="number" className={inputCls} min={1} max={100} value={trigger.threshold ?? 10} onChange={(e) => updateTrigger(i, { ...trigger, threshold: Number(e.target.value) })} />
+                  </div>
+                )}
+                {condMeta?.paramType === 'textarea' && (
+                  <div>
+                    <label className={labelCls}>Custom prompt</label>
+                    <textarea className={`${inputCls} resize-y`} rows={2} placeholder="Describe when escalation should trigger..." value={trigger.prompt ?? ''} onChange={(e) => updateTrigger(i, { ...trigger, prompt: e.target.value })} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <button type="button" onClick={addTrigger} className="text-xs text-brand-shade3 hover:text-brand-light transition-colors mt-2">
+          + Add trigger
+        </button>
       </div>
     </div>
   );
@@ -274,7 +480,7 @@ const failureMeta: Record<string, [string, string]> = {
   context_overflow: ['Context Overflow', 'Context too large -- auto-compact and retry'],
 };
 
-function RecoveryConfig({ cap, onChange }: PanelProps) {
+function RecoveryConfig({ cap, onChange, models }: PanelProps) {
   const rules = getKey<RecoveryRule[]>(cap, 'rules', defaultRules);
 
   function updateRule(i: number, field: keyof RecoveryRule, value: string | number) {
@@ -285,6 +491,10 @@ function RecoveryConfig({ cap, onChange }: PanelProps) {
   return (
     <div className="space-y-3">
       <p className={descCls}>Defines automatic recovery behavior per failure type. Each failure type has its own recovery strategy.</p>
+      <div className="bg-brand-dark rounded-card px-3 py-2 space-y-1">
+        <p className="text-[11px] text-brand-shade2 font-mono">Degrade mode applies until end of current session</p>
+        <p className="text-[11px] text-brand-shade3/70">1 automatic recovery attempt before escalation</p>
+      </div>
       {rules.map((rule, i) => (
         <div key={rule.failure_type} className="bg-brand-dark rounded-card p-3 space-y-2">
           <span className="text-xs font-semibold text-brand-shade2">{failureMeta[rule.failure_type]?.[0] ?? rule.failure_type}</span>
@@ -318,8 +528,13 @@ function RecoveryConfig({ cap, onChange }: PanelProps) {
           {rule.action === 'fallback' && (
             <div>
               <label className={labelCls}>Fallback model</label>
-              <input className={inputCls} placeholder="e.g. gpt-4o-mini" value={rule.fallback_model} onChange={(e) => updateRule(i, 'fallback_model', e.target.value)} />
-              <p className="text-[11px] text-brand-shade3/70 mt-1">Model name as shown on Models page (e.g. gpt-4o-mini, claude-haiku-3)</p>
+              <select className={selectCls} value={rule.fallback_model} onChange={(e) => updateRule(i, 'fallback_model', e.target.value)}>
+                <option value="">Select fallback model...</option>
+                {(models ?? []).map((m) => (
+                  <option key={m.id} value={m.name}>{m.name} ({m.model_name})</option>
+                ))}
+              </select>
+              <p className="text-[11px] text-brand-shade3/70 mt-1">Backup model used when primary model is unavailable</p>
             </div>
           )}
         </div>
@@ -328,7 +543,7 @@ function RecoveryConfig({ cap, onChange }: PanelProps) {
   );
 }
 
-type PolicyRule = { condition: string; action: string; pattern?: string; webhook_url?: string; header_name?: string; header_value?: string; time_range?: string };
+type PolicyRule = { condition: string; action: string; pattern?: string; webhook_url?: string; webhook_auth?: string; header_name?: string; header_value?: string; time_range?: string };
 
 const conditionHints: Record<string, string> = {
   before_tool_call: 'Runs before any tool is invoked. Can block or modify the call',
@@ -392,11 +607,21 @@ function PoliciesConfig({ cap, onChange }: PanelProps) {
             </div>
           )}
           {(rule.action === 'log_to_webhook' || rule.action === 'notify') && (
-            <div>
-              <label className={labelCls}>Webhook URL</label>
-              <input className={inputCls} placeholder="https://hooks.example.com/events" value={rule.webhook_url ?? ''} onChange={(e) => updateRule(i, 'webhook_url', e.target.value)} />
-              <p className={hintCls}>Receives JSON payload with event type, tool name, agent name, timestamp</p>
-            </div>
+            <>
+              <div>
+                <label className={labelCls}>Webhook URL</label>
+                <input className={inputCls} placeholder="https://hooks.example.com/events" value={rule.webhook_url ?? ''} onChange={(e) => updateRule(i, 'webhook_url', e.target.value)} />
+                <p className={hintCls}>Receives JSON payload with event type, tool name, agent name, timestamp</p>
+              </div>
+              <div>
+                <label className={labelCls}>Auth type</label>
+                <select className={selectCls} value={rule.webhook_auth ?? 'none'} onChange={(e) => updateRule(i, 'webhook_auth', e.target.value)}>
+                  {WEBHOOK_AUTH_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            </>
           )}
           {rule.action === 'inject_header' && (
             <div>
@@ -427,7 +652,8 @@ function getSummary(cap: CapabilityConfig): string {
     case 'memory': {
       const parts: string[] = ['Per-schema'];
       if (c.unlimited_retention) parts.push('unlimited retention');
-      else parts.push(`${c.retention_days ?? 30}d retention`);
+      else if (c.retention_days) parts.push(`${c.retention_days}d retention`);
+      else parts.push('unlimited retention');
       if (c.unlimited_entries) parts.push('unlimited entries');
       else parts.push(`max ${c.max_entries ?? 500}`);
       return parts.join(', ');
@@ -457,7 +683,7 @@ function getSummary(cap: CapabilityConfig): string {
     }
     case 'escalation': {
       const parts: string[] = [];
-      parts.push(c.action ? String(c.action) : 'transfer_to_human');
+      parts.push(c.action ? String(c.action) : 'transfer_to_user');
       const triggers = c.triggers_text as string | undefined;
       if (triggers) {
         const count = triggers.split(',').filter(Boolean).length;
@@ -492,7 +718,7 @@ const configMap: Record<string, React.FC<PanelProps>> = {
   policies: PoliciesConfig,
 };
 
-export default function CapabilityBlock({ capability, onChange, onRemove }: CapabilityBlockProps) {
+export default function CapabilityBlock({ capability, onChange, onRemove, models }: CapabilityBlockProps) {
   const [open, setOpen] = useState(false);
   const meta = CAPABILITY_META[capability.type];
   const summary = getSummary(capability);
@@ -506,7 +732,7 @@ export default function CapabilityBlock({ capability, onChange, onRemove }: Capa
         onClick={() => setOpen((v) => !v)}
       >
         <div className="flex items-center gap-2 text-sm min-w-0">
-          <span className="text-[10px] font-semibold text-brand-shade3 bg-brand-dark px-1.5 py-0.5 rounded-card shrink-0">{meta.abbr}</span>
+          <span className="text-brand-shade3 shrink-0">{capabilityIcon(meta.icon)}</span>
           <span className={`shrink-0 ${capability.enabled ? 'text-brand-light' : 'text-brand-shade3'}`}>{meta.label}</span>
           {!open && summary && <span className="text-[11px] text-brand-shade3 truncate ml-1">{summary}</span>}
         </div>
@@ -541,7 +767,7 @@ export default function CapabilityBlock({ capability, onChange, onRemove }: Capa
       </div>
       {open && ConfigPanel && (
         <div className="px-3 py-3 border-t border-brand-shade3/10">
-          <ConfigPanel cap={capability} onChange={onChange} />
+          <ConfigPanel cap={capability} onChange={onChange} models={models} />
         </div>
       )}
     </div>

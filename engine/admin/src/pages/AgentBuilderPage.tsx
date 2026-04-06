@@ -225,8 +225,8 @@ function AgentBuilderInner() {
   const { fitView } = useReactFlow();
   const { isPrototype } = usePrototype();
   const navigate = useNavigate();
-  const [protoSchemas, setProtoSchemas] = useState<string[]>(['Support Flow', 'Dev Flow', 'Sales Flow']);
-  const [protoSchema, setProtoSchema] = useState<SchemaName>('Support Flow');
+  const [protoSchemas, setProtoSchemas] = useState<string[]>(['Support Schema', 'Dev Schema', 'Sales Schema']);
+  const [protoSchema, setProtoSchema] = useState<SchemaName>('Support Schema');
   const [protoSchemaDropdown, setProtoSchemaDropdown] = useState(false);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
