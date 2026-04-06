@@ -97,11 +97,10 @@ export default function TriggerNode({ data, selected }: NodeProps) {
         </div>
       )}
 
-      {/* Bottom handle — source, connects to agent */}
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!w-2.5 !h-2.5 !border-brand-dark transition-colors"
+        className="!w-2.5 !h-2.5 !border-brand-dark transition-colors hover:!bg-brand-accent"
         style={{ background: isCron ? '#F59E0B' : '#A855F7' }}
       />
     </div>

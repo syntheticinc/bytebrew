@@ -98,6 +98,19 @@ const icons = {
       <line x1="5" y1="6" x2="19" y2="6" />
     </svg>
   ),
+  widget: (
+    <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+      <path d="M9 10h.01M15 10h.01M12 14h.01" />
+    </svg>
+  ),
+  prototype: (
+    <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="20" height="14" rx="2" />
+      <line x1="8" y1="21" x2="16" y2="21" />
+      <line x1="12" y1="17" x2="12" y2="21" />
+    </svg>
+  ),
   logout: (
     <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
@@ -111,16 +124,16 @@ const sections: NavSection[] = [
   {
     label: 'Core',
     items: [
+      { to: '/builder', label: 'Canvas', icon: icons.builder },
       { to: '/health', label: 'Health', icon: icons.health },
     ],
   },
   {
     label: 'Resources',
     items: [
-      { to: '/agents', label: 'Agents', icon: icons.agents },
-      { to: '/builder', label: 'Builder', icon: icons.builder },
       { to: '/mcp', label: 'MCP Servers', icon: icons.mcp },
       { to: '/models', label: 'Models', icon: icons.models },
+      { to: '/widget', label: 'Widgets', icon: icons.widget },
     ],
   },
   {

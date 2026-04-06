@@ -46,12 +46,12 @@ describe('Sidebar', () => {
     renderSidebar();
 
     expect(screen.getByText('Health')).toBeInTheDocument();
-    expect(screen.getByText('Agents')).toBeInTheDocument();
+    expect(screen.getByText('Canvas')).toBeInTheDocument();
     expect(screen.getByText('MCP Servers')).toBeInTheDocument();
     expect(screen.getByText('Settings')).toBeInTheDocument();
   });
 
-  it('shows update indicator dot on Health link when update is available', async () => {
+  it('shows update banner when update is available', async () => {
     mockApi.health.mockResolvedValue({
       status: 'ok',
       version: '1.0.0',
@@ -63,13 +63,11 @@ describe('Sidebar', () => {
     renderSidebar();
 
     await waitFor(() => {
-      const dot = screen.getByTitle('Update available: v1.0.1');
-      expect(dot).toBeInTheDocument();
-      expect(dot).toHaveClass('bg-amber-400');
+      expect(screen.getByText('v1.0.1 available')).toBeInTheDocument();
     });
   });
 
-  it('does not show update indicator when no update available', async () => {
+  it('does not show update banner when no update available', async () => {
     mockApi.health.mockResolvedValue({
       status: 'ok',
       version: '1.0.0',
@@ -79,11 +77,10 @@ describe('Sidebar', () => {
 
     renderSidebar();
 
-    // Wait for the health fetch to resolve
     await waitFor(() => {
       expect(mockApi.health).toHaveBeenCalled();
     });
 
-    expect(screen.queryByTitle(/Update available/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/available/)).not.toBeInTheDocument();
   });
 });

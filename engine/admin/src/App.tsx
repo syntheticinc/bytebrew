@@ -3,8 +3,6 @@ import { AuthContext, useAuthProvider } from './hooks/useAuth';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import HealthPage from './pages/HealthPage';
-import AgentsPage from './pages/AgentsPage';
-import AgentEditPage from './pages/AgentEditPage';
 import MCPPage from './pages/MCPPage';
 import ModelsPage from './pages/ModelsPage';
 import TriggersPage from './pages/TriggersPage';
@@ -14,6 +12,9 @@ import APIKeysPage from './pages/APIKeysPage';
 import ConfigPage from './pages/ConfigPage';
 import AuditPage from './pages/AuditPage';
 import AgentBuilderPage from './pages/AgentBuilderPage';
+import AgentDrillInPage from './pages/AgentDrillInPage';
+import InspectPage from './pages/InspectPage';
+import WidgetConfigPage from './pages/WidgetConfigPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('jwt');
@@ -37,9 +38,9 @@ export default function App() {
             }
           >
             <Route path="/health" element={<HealthPage />} />
-            <Route path="/agents" element={<AgentsPage />} />
-            <Route path="/agents/:name/edit" element={<AgentEditPage />} />
-            <Route path="/agents/new" element={<AgentEditPage />} />
+            <Route path="/builder" element={<AgentBuilderPage />} />
+            <Route path="/builder/:schema/:agent" element={<AgentDrillInPage />} />
+            <Route path="/builder/:schema/:agent/inspect/:session" element={<InspectPage />} />
             <Route path="/mcp" element={<MCPPage />} />
             <Route path="/models" element={<ModelsPage />} />
             <Route path="/triggers" element={<TriggersPage />} />
@@ -48,10 +49,14 @@ export default function App() {
             <Route path="/api-keys" element={<APIKeysPage />} />
             <Route path="/config" element={<ConfigPage />} />
             <Route path="/audit" element={<AuditPage />} />
-            <Route path="/builder" element={<AgentBuilderPage />} />
-            <Route path="/" element={<Navigate to="/health" replace />} />
+            <Route path="/widget" element={<WidgetConfigPage />} />
+            {/* Legacy /agents routes redirect to canvas */}
+            <Route path="/agents" element={<Navigate to="/builder" replace />} />
+            <Route path="/agents/:name/edit" element={<Navigate to="/builder" replace />} />
+            <Route path="/agents/new" element={<Navigate to="/builder" replace />} />
+            <Route path="/" element={<Navigate to="/builder" replace />} />
           </Route>
-          <Route path="*" element={<Navigate to="/health" replace />} />
+          <Route path="*" element={<Navigate to="/builder" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthContext.Provider>

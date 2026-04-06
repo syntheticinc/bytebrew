@@ -8,10 +8,19 @@ export interface AgentNodeData {
   spawnCount: number;
   confirmCount: number;
   lifecycle: string;
+  state?: 'ready' | 'running' | 'blocked' | 'degraded' | 'finished';
   onSelect: (name: string) => void;
   onDelete: (name: string) => void;
   [key: string]: unknown;
 }
+
+const stateClasses: Record<NonNullable<AgentNodeData['state']>, string> = {
+  ready: 'bg-status-active',
+  running: 'bg-status-active animate-pulse',
+  blocked: 'bg-brand-accent',
+  degraded: 'bg-amber-400',
+  finished: 'bg-brand-shade3',
+};
 
 export default function AgentNode({ data, selected }: NodeProps) {
   const d = data as AgentNodeData;
@@ -48,6 +57,9 @@ export default function AgentNode({ data, selected }: NodeProps) {
             <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3" />
           </svg>
         </span>
+        {d.state && (
+          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${stateClasses[d.state]}`} />
+        )}
         <span className="text-sm font-semibold text-brand-light truncate">{d.name}</span>
         {isSpawn && (
           <span className="ml-auto px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/15 text-blue-400 whitespace-nowrap">

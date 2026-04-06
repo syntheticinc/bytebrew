@@ -266,6 +266,73 @@ export interface ToolMetadata {
 }
 
 // ============================================================================
+// V2: Schema types
+// ============================================================================
+
+export interface Schema {
+  id: number;
+  name: string;
+  description?: string;
+  agents_count: number;
+  created_at: string;
+}
+
+// ============================================================================
+// V2: Capability types
+// ============================================================================
+
+export type CapabilityType =
+  | 'memory'
+  | 'knowledge'
+  | 'guardrail'
+  | 'output_schema'
+  | 'escalation'
+  | 'recovery'
+  | 'policies';
+
+export interface CapabilityConfig {
+  type: CapabilityType;
+  enabled: boolean;
+  config: Record<string, unknown>;
+}
+
+export const CAPABILITY_META: Record<CapabilityType, { label: string; abbr: string; description: string }> = {
+  memory:        { label: 'Memory',           abbr: 'MEM', description: 'Cross-session persistence, per-user isolation' },
+  knowledge:     { label: 'Knowledge',        abbr: 'KB',  description: 'RAG sources (PDF, URL, text)' },
+  guardrail:     { label: 'Output Guardrail', abbr: 'GRD', description: 'JSON Schema, LLM check, webhook validation' },
+  output_schema: { label: 'Output Schema',    abbr: 'SCH', description: 'Structured JSON output format' },
+  escalation:    { label: 'Escalation',       abbr: 'ESC', description: 'transfer_to_human, notify, webhook' },
+  recovery:      { label: 'Recovery Policy',  abbr: 'REC', description: 'Retry rules per failure type' },
+  policies:      { label: 'Agent Policies',   abbr: 'POL', description: 'When [condition] → Do [action] rules' },
+};
+
+// ============================================================================
+// V2: Inspect types
+// ============================================================================
+
+export type InspectStepKind = 'reasoning' | 'tool_call' | 'memory_recall' | 'final_answer';
+
+export interface InspectStep {
+  id: number;
+  kind: InspectStepKind;
+  label: string;
+  input?: string;
+  output?: string;
+  duration_ms: number;
+  tokens?: number;
+}
+
+export interface SessionTrace {
+  session_id: string;
+  agent_name: string;
+  status: 'running' | 'completed' | 'failed';
+  steps: InspectStep[];
+  total_duration_ms: number;
+  total_tokens: number;
+  created_at: string;
+}
+
+// ============================================================================
 // Model Registry types
 // ============================================================================
 

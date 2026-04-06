@@ -32,6 +32,9 @@ export default function MCPPage() {
   const [argsInput, setArgsInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [authType, setAuthType] = useState<string>('none');
+  const [authEnvVar, setAuthEnvVar] = useState('');
+  const [authClientId, setAuthClientId] = useState('');
 
   function openCreate() {
     resetCustomForm();
@@ -63,6 +66,9 @@ export default function MCPPage() {
     setCustomForm({ ...emptyForm });
     setArgsInput('');
     setEnvInput({});
+    setAuthType('none');
+    setAuthEnvVar('');
+    setAuthClientId('');
   }
 
   function buildPayload(): CreateMCPServerRequest {
@@ -439,6 +445,57 @@ export default function MCPPage() {
               + Add variable
             </button>
           </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-brand-light mb-1">Authentication</label>
+          <FormField
+            label="Auth Type"
+            type="select"
+            value={authType}
+            onChange={setAuthType}
+            options={[
+              { value: 'none', label: 'None' },
+              { value: 'forward_headers', label: 'Forward Headers' },
+              { value: 'api_key', label: 'API Key' },
+              { value: 'oauth2', label: 'OAuth 2.0' },
+              { value: 'service_account', label: 'Service Account' },
+            ]}
+          />
+          {authType === 'api_key' && (
+            <FormField
+              label="API Key Env Variable"
+              value={authEnvVar}
+              onChange={setAuthEnvVar}
+              placeholder="e.g. SHEETS_API_KEY"
+              hint="Name of the environment variable containing the API key"
+              className="mt-2"
+            />
+          )}
+          {authType === 'oauth2' && (
+            <>
+              <FormField
+                label="Client ID"
+                value={authClientId}
+                onChange={setAuthClientId}
+                placeholder="OAuth client ID"
+                className="mt-2"
+              />
+              <p className="mt-1 text-xs text-brand-shade3">OAuth flow configured via admin. Tokens are managed automatically.</p>
+            </>
+          )}
+          {authType === 'forward_headers' && (
+            <p className="mt-2 text-xs text-brand-shade3">Headers from the calling system will be forwarded to this MCP server.</p>
+          )}
+          {authType === 'service_account' && (
+            <FormField
+              label="Credentials Env Variable"
+              value={authEnvVar}
+              onChange={setAuthEnvVar}
+              placeholder="e.g. GCP_SERVICE_ACCOUNT_JSON"
+              hint="Name of the environment variable containing service account credentials"
+              className="mt-2"
+            />
+          )}
         </div>
       </FormModal>
 

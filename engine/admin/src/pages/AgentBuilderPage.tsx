@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ReactFlow,
   Background,
@@ -20,9 +21,14 @@ import {
 import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
 import { api } from '../api/client';
+import { usePrototype } from '../hooks/usePrototype';
+import { createMockSchemas, type SchemaName } from '../mocks/canvas';
+import BottomPanel from '../components/builder/BottomPanel';
 import type { AgentDetail, Model, CreateAgentRequest, CreateTriggerRequest, Trigger } from '../types';
 import AgentNode, { type AgentNodeData } from '../components/builder/AgentNode';
 import TriggerNode from '../components/builder/TriggerNode';
+import GateNode from '../components/builder/GateNode';
+import EdgeConfigPanel from '../components/builder/EdgeConfigPanel';
 import BuilderSidePanel from '../components/builder/BuilderSidePanel';
 import { ExportButton, ImportButton } from '../components/builder/BuilderExportImport';
 import BuilderFlowTest from '../components/builder/BuilderFlowTest';
@@ -33,7 +39,7 @@ import { ToastProvider, useToast } from '../components/builder/Toast';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const nodeTypes = { agentNode: AgentNode, triggerNode: TriggerNode };
+const nodeTypes = { agentNode: AgentNode, triggerNode: TriggerNode, gateNode: GateNode };
 const NODE_WIDTH = 210;
 const NODE_HEIGHT = 135;
 const TRIGGER_NODE_WIDTH = 190;
@@ -216,6 +222,11 @@ const CRON_PRESETS = [
 
 function AgentBuilderInner() {
   const { fitView } = useReactFlow();
+  const { isPrototype } = usePrototype();
+  const navigate = useNavigate();
+  const [protoSchemas, setProtoSchemas] = useState<string[]>(['Support Flow', 'Dev Flow', 'Sales Flow']);
+  const [protoSchema, setProtoSchema] = useState<SchemaName>('Support Flow');
+  const [protoSchemaDropdown, setProtoSchemaDropdown] = useState(false);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -307,6 +318,19 @@ function AgentBuilderInner() {
   // ── Initial load ────────────────────────────────────────────────────────────
 
   useEffect(() => {
+    // Prototype mode: use mock data
+    if (isPrototype) {
+      const mockSchemas = createMockSchemas(handleSelect, handleDeleteRequest);
+      const schema = mockSchemas[protoSchema] ?? Object.values(mockSchemas)[0];
+      if (schema) {
+        const laid = applyDagre(schema.nodes, schema.edges);
+        setNodes(laid);
+        setEdges(schema.edges);
+      }
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
     setLoading(true);
     setError('');
@@ -387,7 +411,7 @@ function AgentBuilderInner() {
       });
 
     return () => { cancelled = true; };
-  }, [handleSelect, handleDeleteRequest, refreshKey]);
+  }, [handleSelect, handleDeleteRequest, refreshKey, isPrototype, protoSchema]);
 
   // ── Connect handler (draw edge = add can_spawn) ──────────────────────────────
 
@@ -395,6 +419,12 @@ function AgentBuilderInner() {
     async (connection: Connection) => {
       const { source, target } = connection;
       if (!source || !target) return;
+
+      // Prototype mode: add edge visually without API call
+      if (isPrototype) {
+        setEdges((eds) => addEdge({ ...connection, type: 'smoothstep', style: { stroke: '#4CAF50', strokeWidth: 1.5 }, label: 'flow' }, eds));
+        return;
+      }
 
       // Self-connection guard
       if (source === target) {
@@ -440,7 +470,7 @@ function AgentBuilderInner() {
         setSavedIndicator(null);
       }
     },
-    [selectedAgent, setNodes, setEdges, addToast],
+    [selectedAgent, setNodes, setEdges, addToast, isPrototype],
   );
 
   // ── isValidConnection — prevent self-loops and trigger→agent drags ──────────
@@ -455,6 +485,9 @@ function AgentBuilderInner() {
 
   const onEdgesDelete = useCallback(
     async (deletedEdges: Edge[]) => {
+      // Prototype mode: just remove from local state, no API calls
+      if (isPrototype) return;
+
       for (const edge of deletedEdges) {
         // Trigger edges are read-only — managed via Triggers page
         if (edge.id.startsWith('trigger:')) continue;
@@ -487,7 +520,7 @@ function AgentBuilderInner() {
         }
       }
     },
-    [selectedAgent, setNodes, setEdges, addToast],
+    [selectedAgent, setNodes, setEdges, addToast, isPrototype],
   );
 
   // ── Save positions on drag stop ─────────────────────────────────────────────
@@ -635,16 +668,43 @@ function AgentBuilderInner() {
 
   // ── Prevent node click selecting when clicking node buttons ────────────────
 
+  // State for prototype gate/trigger config panels
+  const [selectedGate, setSelectedGate] = useState<Record<string, unknown> | null>(null);
+  const [selectedTrigger, setSelectedTrigger] = useState<Record<string, unknown> | null>(null);
+
   const onNodeClick: NodeMouseHandler = useCallback((_event, node) => {
     setSelectedNodeId(node.id);
-    // Trigger nodes: show toast with details and link to Triggers page
+
+    if (isPrototype) {
+      // Gate node → show gate config panel
+      if (node.type === 'gateNode') {
+        setSelectedGate(node.data as Record<string, unknown>);
+        setSelectedTrigger(null);
+        setSelectedEdge(null);
+        return;
+      }
+      // Trigger node → show trigger config panel
+      if (node.type === 'triggerNode') {
+        setSelectedTrigger(node.data as Record<string, unknown>);
+        setSelectedGate(null);
+        setSelectedEdge(null);
+        return;
+      }
+      // Agent node → navigate to drill-in
+      setSelectedGate(null);
+      setSelectedTrigger(null);
+      navigate(`/builder/${encodeURIComponent(protoSchema)}/${node.id}`);
+      return;
+    }
+
+    // Production mode
     if (node.id.startsWith('trigger-')) {
       const data = node.data as Record<string, unknown>;
       addToast(`Trigger "${data.title as string}" — manage on the Triggers page`, 'info');
       return;
     }
     handleSelect(node.id);
-  }, [handleSelect, addToast]);
+  }, [handleSelect, addToast, isPrototype, navigate, protoSchema]);
 
   // ── Canvas context menu (right-click) ────────────────────────────────────
   const reactFlowRef = useRef<HTMLDivElement>(null);
@@ -679,6 +739,15 @@ function AgentBuilderInner() {
     setContextMenu(null);
     setNodeMenu(null);
   }, [addToast]);
+
+  // ── Edge click (for prototype edge config panel) ─────────────────────────
+  const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
+
+  const onEdgeClick = useCallback((_event: React.MouseEvent, edge: Edge) => {
+    if (isPrototype) {
+      setSelectedEdge(edge);
+    }
+  }, [isPrototype]);
 
   // ── Node context menu ─────────────────────────────────────────────────────
 
@@ -748,10 +817,87 @@ function AgentBuilderInner() {
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-4 h-12 border-b border-brand-shade3/15 bg-brand-dark-alt flex-shrink-0 flex-wrap">
         <span className="text-sm font-semibold text-brand-light">Agent Builder</span>
+
+        {/* Prototype: schema switcher */}
+        {isPrototype && (
+          <>
+            <div className="w-px h-4 bg-brand-shade3/20" />
+            <div className="relative">
+              <button
+                onClick={() => setProtoSchemaDropdown(v => !v)}
+                className="bg-brand-dark border border-brand-shade3/20 rounded-btn text-brand-light text-xs px-2.5 py-1 cursor-pointer flex items-center gap-1.5 font-mono"
+              >
+                {protoSchema}
+                <span className="text-brand-shade3 text-[10px]">&#9662;</span>
+              </button>
+              {protoSchemaDropdown && (
+                <div className="absolute top-full left-0 mt-1 bg-brand-dark-alt border border-brand-shade3/20 rounded-card z-50 min-w-[180px] shadow-lg">
+                  {protoSchemas.map(s => (
+                    <div
+                      key={s}
+                      className={`flex items-center justify-between text-xs px-3 py-[7px] font-mono transition-colors ${
+                        s === protoSchema ? 'bg-brand-accent/[0.13] text-brand-accent' : 'text-brand-light hover:bg-brand-shade3/20'
+                      }`}
+                    >
+                      <button
+                        className="flex-1 text-left cursor-pointer"
+                        onClick={() => { setProtoSchema(s); setProtoSchemaDropdown(false); }}
+                      >
+                        {s}
+                      </button>
+                      <div className="flex items-center gap-1 ml-2 shrink-0">
+                        <button
+                          title="Rename"
+                          className="text-brand-shade3 hover:text-brand-light transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const newName = window.prompt('Rename schema:', s);
+                            if (newName && newName.trim() && newName.trim() !== s) {
+                              setProtoSchemas(prev => prev.map(n => n === s ? newName.trim() : n));
+                              if (protoSchema === s) setProtoSchema(newName.trim());
+                            }
+                          }}
+                        >
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                        </button>
+                        {s !== protoSchema && (
+                          <button
+                            title="Delete"
+                            className="text-brand-shade3 hover:text-red-400 transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setProtoSchemas(prev => prev.filter(n => n !== s));
+                            }}
+                          >
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              className="px-2.5 py-1 text-xs text-brand-shade2 border border-brand-shade3/20 rounded-btn font-mono hover:text-brand-light transition-colors"
+              onClick={() => {
+                const name = window.prompt('New schema name:');
+                if (name && name.trim()) {
+                  const trimmed = name.trim();
+                  setProtoSchemas(prev => [...prev, trimmed]);
+                  setProtoSchema(trimmed);
+                }
+              }}
+            >
+              + Schema
+            </button>
+          </>
+        )}
+
         <div className="flex-1" />
 
-        {/* Saved indicator */}
-        {savedIndicator && (
+        {/* Saved indicator — production only */}
+        {!isPrototype && savedIndicator && (
           <span className={`text-[10px] transition-opacity ${savedIndicator === 'saving' ? 'text-brand-shade3' : 'text-green-400'}`}>
             {savedIndicator === 'saving' ? 'Saving…' : 'All changes saved'}
           </span>
@@ -763,21 +909,23 @@ function AgentBuilderInner() {
         >
           Auto Layout
         </button>
-        <ExportButton />
-        <ImportButton onImported={refetchCanvas} />
-        <button
-          onClick={() => { setShowFlowTest((v) => !v); }}
-          className={`px-3 py-1.5 text-xs border rounded-btn transition-colors inline-flex items-center gap-1.5 ${
-            showFlowTest
-              ? 'text-brand-accent border-brand-accent/50 bg-brand-accent/10'
-              : 'text-brand-shade2 border-brand-shade3/30 hover:text-brand-light hover:border-brand-shade3'
-          }`}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="5 3 19 12 5 21 5 3" />
-          </svg>
-          Test Flow
-        </button>
+        {!isPrototype && <ExportButton />}
+        {!isPrototype && <ImportButton onImported={refetchCanvas} />}
+        {!isPrototype && (
+          <button
+            onClick={() => { setShowFlowTest((v) => !v); }}
+            className={`px-3 py-1.5 text-xs border rounded-btn transition-colors inline-flex items-center gap-1.5 ${
+              showFlowTest
+                ? 'text-brand-accent border-brand-accent/50 bg-brand-accent/10'
+                : 'text-brand-shade2 border-brand-shade3/30 hover:text-brand-light hover:border-brand-shade3'
+            }`}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            Test Flow
+          </button>
+        )}
         <button
           onClick={() => {
             setShowTriggerForm(true);
@@ -802,8 +950,8 @@ function AgentBuilderInner() {
         </button>
       </div>
 
-      {/* Drift notification */}
-      <DriftNotification checkTrigger={refreshKey} />
+      {/* Drift notification — production only */}
+      {!isPrototype && <DriftNotification checkTrigger={refreshKey} />}
 
       {/* Canvas + Side Panel */}
       <div className="flex flex-1 min-h-0">
@@ -834,6 +982,7 @@ function AgentBuilderInner() {
             onNodeDragStop={onNodeDragStop}
             onPaneContextMenu={onPaneContextMenu}
             onPaneClick={onPaneClick}
+            onEdgeClick={onEdgeClick}
             onEdgeContextMenu={onEdgeContextMenu}
             nodeTypes={nodeTypes}
             fitView
@@ -881,7 +1030,7 @@ function AgentBuilderInner() {
           )}
         </div>
 
-        {selectedAgent && (
+        {!isPrototype && selectedAgent && (
           <BuilderSidePanel
             agent={selectedAgent}
             onClose={() => setSelectedAgent(null)}
@@ -890,23 +1039,138 @@ function AgentBuilderInner() {
           />
         )}
 
-        {showFlowTest && (
+        {isPrototype && selectedEdge && (
+          <EdgeConfigPanel
+            edge={selectedEdge}
+            onClose={() => setSelectedEdge(null)}
+          />
+        )}
+
+        {!isPrototype && showFlowTest && (
           <BuilderFlowTest
             agents={agents.map((a) => ({ name: a.name, model_id: String(a.model_id ?? '') }))}
             onClose={() => setShowFlowTest(false)}
           />
         )}
+
+        {/* Prototype: Gate config panel */}
+        {isPrototype && selectedGate && (
+          <div className="w-80 border-l border-brand-shade3/10 bg-brand-dark-surface flex flex-col shrink-0 overflow-y-auto">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-brand-shade3/10">
+              <h3 className="text-sm font-semibold text-brand-light font-mono">Gate Configuration</h3>
+              <button onClick={() => setSelectedGate(null)} className="text-brand-shade3 hover:text-brand-light p-1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg></button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-xs text-brand-shade3 mb-1 font-mono">Label</label>
+                <input className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light font-mono opacity-60 cursor-not-allowed" value={String(selectedGate.label ?? '')} readOnly />
+              </div>
+              <div>
+                <label className="block text-xs text-brand-shade3 mb-1 font-mono">Condition Type</label>
+                <select className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light font-mono opacity-60 cursor-not-allowed" value={String(selectedGate.conditionType ?? 'auto')} disabled>
+                  <option value="auto">Auto (JSON Schema / regex)</option>
+                  <option value="human">Human Approval</option>
+                  <option value="llm">LLM-based Evaluation</option>
+                  <option value="all_completed">Join (wait for all inputs)</option>
+                </select>
+                <p className="mt-1 text-xs text-brand-shade3">Determines how the gate evaluates whether to pass or fail</p>
+              </div>
+              <div>
+                <label className="block text-xs text-brand-shade3 mb-1 font-mono">Condition Config</label>
+                <textarea className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light font-mono resize-y opacity-60 cursor-not-allowed" rows={4} value={String(selectedGate.conditionConfig ?? '')} placeholder='{"type":"object","required":["approved"]}' readOnly />
+                <p className="mt-1 text-xs text-brand-shade3">JSON Schema for auto, prompt for LLM, ignored for human/join</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Prototype: Trigger config panel */}
+        {isPrototype && selectedTrigger && (
+          <div className="w-80 border-l border-brand-shade3/10 bg-brand-dark-surface flex flex-col shrink-0 overflow-y-auto">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-brand-shade3/10">
+              <h3 className="text-sm font-semibold text-brand-light font-mono">Trigger Configuration</h3>
+              <button onClick={() => setSelectedTrigger(null)} className="text-brand-shade3 hover:text-brand-light p-1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg></button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-xs text-brand-shade3 mb-1 font-mono">Title</label>
+                <input className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light font-mono opacity-60 cursor-not-allowed" value={String(selectedTrigger.title ?? '')} readOnly />
+              </div>
+              <div>
+                <label className="block text-xs text-brand-shade3 mb-1 font-mono">Type</label>
+                <select className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light font-mono opacity-60 cursor-not-allowed" value={String(selectedTrigger.type ?? 'webhook')} disabled>
+                  <option value="webhook">Webhook</option>
+                  <option value="cron">Cron Schedule</option>
+                </select>
+              </div>
+              {selectedTrigger.type === 'cron' && (
+                <div>
+                  <label className="block text-xs text-brand-shade3 mb-1 font-mono">Schedule</label>
+                  <input className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light font-mono opacity-60 cursor-not-allowed" value={String(selectedTrigger.schedule ?? '')} readOnly />
+                  <p className="mt-1 text-xs text-brand-shade3">Cron expression (e.g. 0 9 * * * = daily at 9am)</p>
+                </div>
+              )}
+              {selectedTrigger.type === 'webhook' && (
+                <div>
+                  <label className="block text-xs text-brand-shade3 mb-1 font-mono">Webhook Path</label>
+                  <input className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light font-mono opacity-60 cursor-not-allowed" value={String(selectedTrigger.webhook_path ?? '')} readOnly />
+                  <p className="mt-1 text-xs text-brand-shade3">POST requests to this path will trigger the agent</p>
+                </div>
+              )}
+              <div>
+                <label className="flex items-center gap-2 text-sm text-brand-shade2 cursor-pointer select-none">
+                  <input type="checkbox" className="accent-brand-accent" checked={selectedTrigger.enabled !== false} disabled />
+                  Enabled
+                </label>
+                <p className="mt-1 text-xs text-brand-shade3">Disabled triggers will not fire</p>
+              </div>
+              <div>
+                <label className="block text-xs text-brand-shade3 mb-1 font-mono">Target Agent</label>
+                <input className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light font-mono opacity-60 cursor-not-allowed" value={String(selectedTrigger.agentName ?? '')} readOnly />
+                <p className="mt-1 text-xs text-brand-shade3">Entry agent that receives trigger events</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* AI Assistant */}
-      {showAssistant && (
+      {/* AI Assistant — production: floating overlay, prototype: BottomPanel */}
+      {!isPrototype && showAssistant && (
         <BuilderAssistant
           onClose={() => setShowAssistant(false)}
           onConfigChanged={refetchCanvas}
         />
       )}
-      {!showAssistant && (
+      {!isPrototype && !showAssistant && (
         <AssistantToggleButton onClick={() => setShowAssistant(true)} />
+      )}
+      {isPrototype && (
+        <BottomPanel
+          tabs={[
+            {
+              id: 'assistant',
+              label: 'AI Assistant',
+              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" rx="1" /></svg>,
+              content: (
+                <div className="flex flex-col gap-2 p-4 text-xs text-brand-shade2 font-mono">
+                  <p className="text-brand-shade3">AI Assistant is ready. Describe what you need.</p>
+                </div>
+              ),
+            },
+            {
+              id: 'test',
+              label: 'Test Flow',
+              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polygon points="5 3 19 12 5 21 5 3" /></svg>,
+              content: (
+                <div className="flex flex-col gap-2 p-4 text-xs text-brand-shade2 font-mono">
+                  <p className="text-brand-shade3">Select an agent and send a test message.</p>
+                </div>
+              ),
+            },
+          ]}
+          defaultHeight={200}
+          inputPlaceholder="Ask AI to configure agents..."
+        />
       )}
 
       {/* Canvas context menu */}
