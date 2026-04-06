@@ -25,8 +25,9 @@ type Flow struct {
 	SystemPrompt   string
 	ToolNames      []string
 	MaxSteps       int
-	MaxContextSize int
-	ToolExecution  string // "sequential" or "parallel"
+	MaxContextSize  int
+	MaxTurnDuration int // max seconds for a single LLM stream turn (0 = use default 120s)
+	ToolExecution   string // "sequential" or "parallel"
 	Lifecycle      LifecyclePolicy
 	Spawn          SpawnPolicy
 	KnowledgePath  string   // path to knowledge folder for RAG

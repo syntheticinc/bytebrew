@@ -309,6 +309,7 @@ type agentYAML struct {
 	ToolExecution  string          `yaml:"tool_execution"`
 	MaxSteps       int             `yaml:"max_steps"`
 	MaxContextSize int             `yaml:"max_context_size"`
+	MaxTurnDuration int            `yaml:"max_turn_duration"`
 	ConfirmBefore  []string        `yaml:"confirm_before,omitempty"`
 	Tools          []string        `yaml:"tools,omitempty"`
 	CanSpawn       []string        `yaml:"can_spawn,omitempty"`
@@ -470,9 +471,10 @@ func (a *configImportExportHTTPAdapter) exportAgents(_ context.Context) ([]agent
 			KnowledgePath:  ag.KnowledgePath,
 			Lifecycle:      ag.Lifecycle,
 			ToolExecution:  ag.ToolExecution,
-			MaxSteps:       ag.MaxSteps,
-			MaxContextSize: ag.MaxContextSize,
-			MCPServers:     mcpByAgent[ag.ID],
+			MaxSteps:        ag.MaxSteps,
+			MaxContextSize:  ag.MaxContextSize,
+			MaxTurnDuration: ag.MaxTurnDuration,
+			MCPServers:      mcpByAgent[ag.ID],
 		}
 
 		if ag.Model != nil {
@@ -731,6 +733,9 @@ func applyAgentImportDefaults(ag *agentYAML) {
 	if ag.MaxContextSize == 0 {
 		ag.MaxContextSize = 16000
 	}
+	if ag.MaxTurnDuration == 0 {
+		ag.MaxTurnDuration = 120
+	}
 }
 
 func (a *configImportExportHTTPAdapter) importAgents(tx *gorm.DB, items []agentYAML) error {
@@ -758,6 +763,7 @@ func (a *configImportExportHTTPAdapter) importAgents(tx *gorm.DB, items []agentY
 			existing.ToolExecution = ag.ToolExecution
 			existing.MaxSteps = ag.MaxSteps
 			existing.MaxContextSize = ag.MaxContextSize
+			existing.MaxTurnDuration = ag.MaxTurnDuration
 			if cbJSON, err := json.Marshal(ag.ConfirmBefore); err == nil && len(ag.ConfirmBefore) > 0 {
 				existing.ConfirmBefore = string(cbJSON)
 			} else {
@@ -771,15 +777,16 @@ func (a *configImportExportHTTPAdapter) importAgents(tx *gorm.DB, items []agentY
 		}
 
 		newAgent := models.AgentModel{
-			Name:           ag.Name,
-			SystemPrompt:   ag.SystemPrompt,
-			ModelID:        modelID,
-			Kit:            ag.Kit,
-			KnowledgePath:  ag.KnowledgePath,
-			Lifecycle:      ag.Lifecycle,
-			ToolExecution:  ag.ToolExecution,
-			MaxSteps:       ag.MaxSteps,
-			MaxContextSize: ag.MaxContextSize,
+			Name:            ag.Name,
+			SystemPrompt:    ag.SystemPrompt,
+			ModelID:         modelID,
+			Kit:             ag.Kit,
+			KnowledgePath:   ag.KnowledgePath,
+			Lifecycle:       ag.Lifecycle,
+			ToolExecution:   ag.ToolExecution,
+			MaxSteps:        ag.MaxSteps,
+			MaxContextSize:  ag.MaxContextSize,
+			MaxTurnDuration: ag.MaxTurnDuration,
 			ConfirmBefore: func() string {
 				if len(ag.ConfirmBefore) == 0 {
 					return ""
@@ -1066,10 +1073,11 @@ func (a *agentManagerHTTPAdapter) GetAgent(ctx context.Context, name string) (*d
 		CanSpawn:       rec.CanSpawn,
 		Lifecycle:      rec.Lifecycle,
 		ToolExecution:  rec.ToolExecution,
-		MaxSteps:       rec.MaxSteps,
-		MaxContextSize: rec.MaxContextSize,
-		ConfirmBefore:  rec.ConfirmBefore,
-		MCPServers:     rec.MCPServers,
+		MaxSteps:        rec.MaxSteps,
+		MaxContextSize:  rec.MaxContextSize,
+		MaxTurnDuration: rec.MaxTurnDuration,
+		ConfirmBefore:   rec.ConfirmBefore,
+		MCPServers:      rec.MCPServers,
 	}
 
 	// Load MCP servers separately (GORM many2many has naming issues).
@@ -1152,9 +1160,10 @@ func (a *agentManagerHTTPAdapter) toAgentRecord(req deliveryhttp.CreateAgentRequ
 		KnowledgePath:  req.KnowledgePath,
 		Lifecycle:      req.Lifecycle,
 		ToolExecution:  req.ToolExecution,
-		MaxSteps:       req.MaxSteps,
-		MaxContextSize: req.MaxContextSize,
-		ConfirmBefore:  req.ConfirmBefore,
+		MaxSteps:        req.MaxSteps,
+		MaxContextSize:  req.MaxContextSize,
+		MaxTurnDuration: req.MaxTurnDuration,
+		ConfirmBefore:   req.ConfirmBefore,
 		BuiltinTools:   req.Tools,
 		CanSpawn:       req.CanSpawn,
 		MCPServers:     req.MCPServers,
@@ -1190,6 +1199,9 @@ func (a *agentManagerHTTPAdapter) toAgentRecord(req deliveryhttp.CreateAgentRequ
 	}
 	if rec.MaxContextSize == 0 {
 		rec.MaxContextSize = 16000
+	}
+	if rec.MaxTurnDuration == 0 {
+		rec.MaxTurnDuration = 120
 	}
 
 	return rec

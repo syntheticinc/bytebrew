@@ -1018,3 +1018,68 @@ func TestBuildEffectiveAgentConfig_FlowZeroMaxContext_KeepsGlobal(t *testing.T) 
 	assert.Equal(t, 16000, result.MaxContextSize,
 		"when Flow.MaxContextSize is 0, global default should be kept")
 }
+
+// --- MaxTurnDuration tests ---
+
+func TestBuildEffectiveAgentConfig_FlowOverridesGlobalMaxTurnDuration(t *testing.T) {
+	engine := New(newMockSnapshotRepo(), newMockHistoryRepo())
+
+	globalConfig := &config.AgentConfig{
+		MaxContextSize:                16000,
+		MaxTurnDuration:               120, // global default
+		EnableEnhancedToolCallChecker: true,
+	}
+
+	flow := testFlow()
+	flow.MaxTurnDuration = 300 // per-agent DB value
+
+	cfg := ExecutionConfig{
+		AgentConfig: globalConfig,
+		Flow:        flow,
+	}
+
+	result := engine.buildEffectiveAgentConfig(cfg)
+
+	assert.Equal(t, 300, result.MaxTurnDuration,
+		"Flow.MaxTurnDuration from DB should override global default")
+}
+
+func TestBuildEffectiveAgentConfig_ZeroFlowMaxTurnDuration_KeepsGlobal(t *testing.T) {
+	engine := New(newMockSnapshotRepo(), newMockHistoryRepo())
+
+	globalConfig := &config.AgentConfig{
+		MaxContextSize:                16000,
+		MaxTurnDuration:               120,
+		EnableEnhancedToolCallChecker: true,
+	}
+
+	flow := testFlow()
+	flow.MaxTurnDuration = 0
+
+	cfg := ExecutionConfig{
+		AgentConfig: globalConfig,
+		Flow:        flow,
+	}
+
+	result := engine.buildEffectiveAgentConfig(cfg)
+
+	assert.Equal(t, 120, result.MaxTurnDuration,
+		"when Flow.MaxTurnDuration is 0, global default should be kept")
+}
+
+func TestBuildEffectiveAgentConfig_NilAgentConfig_UsesFlowMaxTurnDuration(t *testing.T) {
+	engine := New(newMockSnapshotRepo(), newMockHistoryRepo())
+
+	flow := testFlow()
+	flow.MaxTurnDuration = 600
+
+	cfg := ExecutionConfig{
+		AgentConfig: nil,
+		Flow:        flow,
+	}
+
+	result := engine.buildEffectiveAgentConfig(cfg)
+
+	assert.Equal(t, 600, result.MaxTurnDuration,
+		"nil AgentConfig should use Flow.MaxTurnDuration directly")
+}

@@ -30,6 +30,7 @@ type Agent struct {
 	toolNames         []string // List of available tool names for system prompt injection
 	messageModifier   *MessageModifier
 	toolCallRecorder  ToolCallRecorder
+	maxTurnDuration   int // seconds, max time for a single LLM stream turn (0 = default 120s)
 }
 
 
@@ -148,6 +149,7 @@ func NewAgent(ctx context.Context, config AgentConfig) (*Agent, error) {
 		slog.InfoContext(ctx, "processing AgentConfig",
 			"system_prompt_length", promptLen,
 			"max_context_size", config.AgentConfig.MaxContextSize,
+			"max_turn_duration", config.AgentConfig.MaxTurnDuration,
 			"enable_tool_call_checker", config.AgentConfig.EnableEnhancedToolCallChecker)
 
 		// Add MessageModifier (AgentPrompts) if system prompt is provided
@@ -209,6 +211,12 @@ func NewAgent(ctx context.Context, config AgentConfig) (*Agent, error) {
 		agentID = "supervisor"
 	}
 
+	// Extract maxTurnDuration from config (0 = use default 120s)
+	maxTurnDuration := 0
+	if config.AgentConfig != nil {
+		maxTurnDuration = config.AgentConfig.MaxTurnDuration
+	}
+
 	return &Agent{
 		agent:             agent,
 		contextLogger:     contextLogger,
@@ -220,6 +228,7 @@ func NewAgent(ctx context.Context, config AgentConfig) (*Agent, error) {
 		toolNames:         toolNames,
 		messageModifier:   modifier,
 		toolCallRecorder:  config.ToolCallRecorder,
+		maxTurnDuration:   maxTurnDuration,
 	}, nil
 }
 
@@ -432,7 +441,11 @@ func (a *Agent) Stream(ctx context.Context, input string, callback func(chunk st
 	// Retry on recoverable errors
 	const maxErrorRetries = 2
 	const maxRateLimitRetries = 5
-	const streamTimeout = 120 * time.Second // max time for a single LLM stream attempt
+	// Use per-agent max_turn_duration from config; fall back to 120s default
+	streamTimeout := 120 * time.Second
+	if a.maxTurnDuration > 0 {
+		streamTimeout = time.Duration(a.maxTurnDuration) * time.Second
+	}
 	var reader *schema.StreamReader[*schema.Message]
 	var err error
 	var rateLimitCount int

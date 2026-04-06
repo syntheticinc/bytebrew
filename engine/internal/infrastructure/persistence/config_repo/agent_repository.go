@@ -21,8 +21,9 @@ type AgentRecord struct {
 	Lifecycle      string
 	ToolExecution  string
 	MaxSteps       int
-	MaxContextSize int
-	ConfirmBefore  []string
+	MaxContextSize  int
+	MaxTurnDuration int
+	ConfirmBefore   []string
 	BuiltinTools   []string
 	CustomTools    []CustomToolRecord
 	MCPServers     []string
@@ -187,8 +188,9 @@ func (r *GORMAgentRepository) Update(ctx context.Context, name string, record *A
 			"lifecycle":        agent.Lifecycle,
 			"tool_execution":   agent.ToolExecution,
 			"max_steps":        agent.MaxSteps,
-			"max_context_size": agent.MaxContextSize,
-			"confirm_before":   agent.ConfirmBefore,
+			"max_context_size":  agent.MaxContextSize,
+			"max_turn_duration": agent.MaxTurnDuration,
+			"confirm_before":    agent.ConfirmBefore,
 		}
 		if err := tx.Model(&models.AgentModel{}).Where("id = ?", existing.ID).Updates(updates).Error; err != nil {
 			return fmt.Errorf("update agent %q: %w", name, err)
@@ -259,8 +261,9 @@ func toAgentRecord(a models.AgentModel) (AgentRecord, error) {
 		KnowledgePath:  a.KnowledgePath,
 		Lifecycle:      a.Lifecycle,
 		ToolExecution:  a.ToolExecution,
-		MaxSteps:       a.MaxSteps,
-		MaxContextSize: a.MaxContextSize,
+		MaxSteps:        a.MaxSteps,
+		MaxContextSize:  a.MaxContextSize,
+		MaxTurnDuration: a.MaxTurnDuration,
 	}
 
 	// Model ID and name
@@ -329,8 +332,9 @@ func (r *GORMAgentRepository) toAgentModelWithDB(db *gorm.DB, rec *AgentRecord) 
 		KnowledgePath:  rec.KnowledgePath,
 		Lifecycle:      rec.Lifecycle,
 		ToolExecution:  rec.ToolExecution,
-		MaxSteps:       rec.MaxSteps,
-		MaxContextSize: rec.MaxContextSize,
+		MaxSteps:        rec.MaxSteps,
+		MaxContextSize:  rec.MaxContextSize,
+		MaxTurnDuration: rec.MaxTurnDuration,
 	}
 
 	// Resolve model name -> ID

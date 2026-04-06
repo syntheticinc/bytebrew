@@ -13,7 +13,8 @@ type AgentModel struct {
 	Lifecycle      string    `gorm:"type:varchar(20);not null;default:persistent"`
 	ToolExecution  string    `gorm:"type:varchar(20);not null;default:sequential"`
 	MaxSteps       int       `gorm:"not null;default:0"`
-	MaxContextSize int       `gorm:"not null;default:16000"`
+	MaxContextSize  int       `gorm:"not null;default:16000"`
+	MaxTurnDuration int       `gorm:"not null;default:120"` // seconds, max time for a single LLM stream turn
 	ConfirmBefore  string    `gorm:"type:text"`
 	CreatedAt      time.Time `gorm:"autoCreateTime"`
 	UpdatedAt      time.Time `gorm:"autoUpdateTime"`
