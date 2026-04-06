@@ -35,9 +35,10 @@ type AgentDetail struct {
 	CanSpawn       []string         `json:"can_spawn,omitempty"`
 	Lifecycle      string           `json:"lifecycle"`
 	ToolExecution  string           `json:"tool_execution"`
-	MaxSteps       int              `json:"max_steps"`
-	MaxContextSize int              `json:"max_context_size"`
-	ConfirmBefore  []string         `json:"confirm_before,omitempty"`
+	MaxSteps        int              `json:"max_steps"`
+	MaxContextSize  int              `json:"max_context_size"`
+	MaxTurnDuration int              `json:"max_turn_duration"`
+	ConfirmBefore   []string         `json:"confirm_before,omitempty"`
 	MCPServers     []string         `json:"mcp_servers,omitempty"`
 	Escalation     *AgentEscalation `json:"escalation,omitempty"`
 }
@@ -60,9 +61,10 @@ type CreateAgentRequest struct {
 	KnowledgePath  string           `json:"knowledge_path,omitempty"`
 	Lifecycle      string           `json:"lifecycle,omitempty"`
 	ToolExecution  string           `json:"tool_execution,omitempty"`
-	MaxSteps       int              `json:"max_steps,omitempty"`
-	MaxContextSize int              `json:"max_context_size,omitempty"`
-	ConfirmBefore  []string         `json:"confirm_before,omitempty"`
+	MaxSteps        int              `json:"max_steps,omitempty"`
+	MaxContextSize  int              `json:"max_context_size,omitempty"`
+	MaxTurnDuration int              `json:"max_turn_duration,omitempty"`
+	ConfirmBefore   []string         `json:"confirm_before,omitempty"`
 	Tools          []string         `json:"tools,omitempty"`
 	CanSpawn       []string         `json:"can_spawn,omitempty"`
 	MCPServers     []string         `json:"mcp_servers,omitempty"`

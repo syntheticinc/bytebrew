@@ -260,6 +260,7 @@ func (e *Engine) buildEffectiveAgentConfig(cfg ExecutionConfig) *config.AgentCon
 				SystemPrompt: cfg.Flow.SystemPrompt,
 			},
 			MaxContextSize:                cfg.Flow.MaxContextSize,
+			MaxTurnDuration:               cfg.Flow.MaxTurnDuration,
 			EnableEnhancedToolCallChecker: true,
 		}
 	}
@@ -268,9 +269,12 @@ func (e *Engine) buildEffectiveAgentConfig(cfg ExecutionConfig) *config.AgentCon
 	result := *cfg.AgentConfig
 	result.EnableEnhancedToolCallChecker = true
 
-	// Per-agent MaxContextSize from Flow (DB) overrides global default
+	// Per-agent values from Flow (DB) override global defaults
 	if cfg.Flow.MaxContextSize > 0 {
 		result.MaxContextSize = cfg.Flow.MaxContextSize
+	}
+	if cfg.Flow.MaxTurnDuration > 0 {
+		result.MaxTurnDuration = cfg.Flow.MaxTurnDuration
 	}
 
 	// Overlay Flow's system prompt when AgentConfig doesn't provide one

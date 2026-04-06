@@ -213,7 +213,8 @@ type PromptsConfig struct {
 // AgentConfig holds agent configuration
 type AgentConfig struct {
 	MaxSteps                      int                 `mapstructure:"max_steps"`
-	MaxContextSize                int                 `mapstructure:"max_context_size"` // Maximum context size in TOKENS (not characters). 1 token ≈ 4 chars.
+	MaxContextSize                int                 `mapstructure:"max_context_size"`  // Maximum context size in TOKENS (not characters). 1 token ≈ 4 chars.
+	MaxTurnDuration               int                 `mapstructure:"max_turn_duration"` // Max seconds for a single LLM stream turn. 0 = default (120s).
 	ContextLogPath                string              `mapstructure:"context_log_path"`
 	ToolReturnDirectly            map[string]struct{} `mapstructure:"tool_return_directly"`
 	EnableEnhancedToolCallChecker bool                `mapstructure:"enable_enhanced_tool_call_checker"`
