@@ -395,7 +395,8 @@ function ConfigurationContent() {
         <ParamTable params={[
           { name: 'model', required: true, default: '--', desc: 'References a model defined in the models: section. Determines which LLM the agent uses for reasoning.' },
           { name: 'system', required: false, default: '--', desc: 'Inline system prompt string that defines the agent\'s personality, role, and behavior rules.' },
-          { name: 'system_file', required: false, default: '--', desc: 'Path to a text file containing the system prompt. Mutually exclusive with system:. Useful for long prompts.' },
+          { name: 'system_file', required: false, default: '--', desc: 'Path to a text file containing the system prompt. Mutually exclusive with system:. The file is read once during config import and the content is stored in the database.' },
+          { name: 'max_turn_duration', required: false, default: '120', desc: 'Maximum time in seconds for a single LLM stream turn (30-600). Increase for agents that generate large structured outputs with slow models.' },
           { name: 'lifecycle', required: false, default: 'persistent', desc: 'persistent keeps context across sessions. spawn creates a fresh instance per invocation and terminates after.' },
           { name: 'kit', required: false, default: 'none', desc: 'Preset tool bundle. developer adds code-related tools (read_file, edit_file, bash, etc.).' },
           { name: 'tool_execution', required: false, default: 'sequential', desc: 'sequential runs tool calls one at a time. parallel runs independent tool calls concurrently.' },
@@ -407,6 +408,13 @@ function ConfigurationContent() {
           { name: 'can_spawn', required: false, default: '[]', desc: 'List of agent names this agent can create at runtime. The engine auto-generates spawn_<name> tools.' },
           { name: 'confirm_before', required: false, default: '[]', desc: 'List of tool names that require user confirmation before execution.' },
         ]} />
+
+        <Callout type="warning" title="Prompt files are read once, not on every restart">
+          When you use <Ic>system_file</Ic>, the file content is read <strong>only during config import</strong> (<Ic>POST /api/v1/config/import</Ic>)
+          and stored in the database. Restarting the engine does <strong>not</strong> re-read prompt files from disk.
+          To update an agent&apos;s prompt after changing the file, either re-import your YAML config
+          or update the prompt directly via the Admin Dashboard or <Ic>PUT /api/v1/agents/:name</Ic>.
+        </Callout>
 
         <CodeBlock>{`agents:
   sales-agent:
