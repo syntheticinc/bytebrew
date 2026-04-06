@@ -250,7 +250,8 @@ func (e *Engine) validateConfig(cfg ExecutionConfig) error {
 	return nil
 }
 
-// buildEffectiveAgentConfig creates effective agent config from ExecutionConfig
+// buildEffectiveAgentConfig creates effective agent config from ExecutionConfig.
+// Flow.MaxContextSize (from DB) always takes priority over global AgentConfig default.
 func (e *Engine) buildEffectiveAgentConfig(cfg ExecutionConfig) *config.AgentConfig {
 	if cfg.AgentConfig == nil {
 		// Build minimal config from Flow if AgentConfig not provided
@@ -263,20 +264,19 @@ func (e *Engine) buildEffectiveAgentConfig(cfg ExecutionConfig) *config.AgentCon
 		}
 	}
 
-	// Overlay Flow's system prompt when AgentConfig doesn't provide one
-	hasFlowPrompt := cfg.Flow.SystemPrompt != ""
-	hasConfigPrompt := cfg.AgentConfig.Prompts != nil && cfg.AgentConfig.Prompts.SystemPrompt != ""
-	needsOverlay := hasFlowPrompt && !hasConfigPrompt
-
-	if !needsOverlay && cfg.AgentConfig.EnableEnhancedToolCallChecker {
-		return cfg.AgentConfig
-	}
-
+	// Copy to avoid mutating shared global config pointer
 	result := *cfg.AgentConfig
-	// Always enable enhanced tool call checker for streaming compatibility
 	result.EnableEnhancedToolCallChecker = true
 
-	if needsOverlay {
+	// Per-agent MaxContextSize from Flow (DB) overrides global default
+	if cfg.Flow.MaxContextSize > 0 {
+		result.MaxContextSize = cfg.Flow.MaxContextSize
+	}
+
+	// Overlay Flow's system prompt when AgentConfig doesn't provide one
+	hasFlowPrompt := cfg.Flow.SystemPrompt != ""
+	hasConfigPrompt := result.Prompts != nil && result.Prompts.SystemPrompt != ""
+	if hasFlowPrompt && !hasConfigPrompt {
 		if result.Prompts == nil {
 			result.Prompts = &config.PromptsConfig{}
 		} else {
@@ -284,10 +284,8 @@ func (e *Engine) buildEffectiveAgentConfig(cfg ExecutionConfig) *config.AgentCon
 			result.Prompts = &promptsCopy
 		}
 		result.Prompts.SystemPrompt = cfg.Flow.SystemPrompt
-		if result.MaxContextSize == 0 && cfg.Flow.MaxContextSize > 0 {
-			result.MaxContextSize = cfg.Flow.MaxContextSize
-		}
 	}
+
 	return &result
 }
 

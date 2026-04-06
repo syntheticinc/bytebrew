@@ -907,3 +907,114 @@ func TestSaveSnapshot_EmptyInput(t *testing.T) {
 	require.Len(t, userMessages, 1, "only the history user message should exist")
 	assert.Equal(t, "Earlier question", userMessages[0].Content)
 }
+
+// --- buildEffectiveAgentConfig tests ---
+
+func TestBuildEffectiveAgentConfig_FlowOverridesGlobalMaxContext(t *testing.T) {
+	engine := New(newMockSnapshotRepo(), newMockHistoryRepo())
+
+	globalConfig := &config.AgentConfig{
+		MaxContextSize:                16000, // global default
+		EnableEnhancedToolCallChecker: true,
+	}
+
+	flow := testFlow()
+	flow.MaxContextSize = 128000 // per-agent DB value
+
+	cfg := ExecutionConfig{
+		AgentConfig: globalConfig,
+		Flow:        flow,
+	}
+
+	result := engine.buildEffectiveAgentConfig(cfg)
+
+	assert.Equal(t, 128000, result.MaxContextSize,
+		"Flow.MaxContextSize from DB should override global default")
+}
+
+func TestBuildEffectiveAgentConfig_FlowOverridesWithPromptOverlay(t *testing.T) {
+	engine := New(newMockSnapshotRepo(), newMockHistoryRepo())
+
+	globalConfig := &config.AgentConfig{
+		MaxContextSize:                16000,
+		EnableEnhancedToolCallChecker: true,
+		// No Prompts — triggers needsOverlay when Flow has prompt
+	}
+
+	flow := testFlow()
+	flow.SystemPrompt = "You are a helpful agent"
+	flow.MaxContextSize = 64000
+
+	cfg := ExecutionConfig{
+		AgentConfig: globalConfig,
+		Flow:        flow,
+	}
+
+	result := engine.buildEffectiveAgentConfig(cfg)
+
+	assert.Equal(t, 64000, result.MaxContextSize,
+		"Flow.MaxContextSize should override even in prompt overlay path")
+	assert.Equal(t, "You are a helpful agent", result.Prompts.SystemPrompt,
+		"Flow's system prompt should be overlayed")
+}
+
+func TestBuildEffectiveAgentConfig_NilAgentConfig_UsesFlow(t *testing.T) {
+	engine := New(newMockSnapshotRepo(), newMockHistoryRepo())
+
+	flow := testFlow()
+	flow.MaxContextSize = 200000
+
+	cfg := ExecutionConfig{
+		AgentConfig: nil,
+		Flow:        flow,
+	}
+
+	result := engine.buildEffectiveAgentConfig(cfg)
+
+	assert.Equal(t, 200000, result.MaxContextSize,
+		"nil AgentConfig should use Flow.MaxContextSize directly")
+}
+
+func TestBuildEffectiveAgentConfig_NoMutationOfOriginal(t *testing.T) {
+	engine := New(newMockSnapshotRepo(), newMockHistoryRepo())
+
+	globalConfig := &config.AgentConfig{
+		MaxContextSize:                16000,
+		EnableEnhancedToolCallChecker: true,
+	}
+
+	flow := testFlow()
+	flow.MaxContextSize = 128000
+
+	cfg := ExecutionConfig{
+		AgentConfig: globalConfig,
+		Flow:        flow,
+	}
+
+	_ = engine.buildEffectiveAgentConfig(cfg)
+
+	assert.Equal(t, 16000, globalConfig.MaxContextSize,
+		"original global config must not be mutated")
+}
+
+func TestBuildEffectiveAgentConfig_FlowZeroMaxContext_KeepsGlobal(t *testing.T) {
+	engine := New(newMockSnapshotRepo(), newMockHistoryRepo())
+
+	globalConfig := &config.AgentConfig{
+		MaxContextSize:                16000,
+		EnableEnhancedToolCallChecker: true,
+	}
+
+	flow := testFlow()
+	flow.MaxContextSize = 0 // safety net: shouldn't happen in prod (Flow.Validate rejects 0)
+
+	cfg := ExecutionConfig{
+		AgentConfig: globalConfig,
+		Flow:        flow,
+	}
+
+	result := engine.buildEffectiveAgentConfig(cfg)
+
+	assert.Equal(t, 16000, result.MaxContextSize,
+		"when Flow.MaxContextSize is 0, global default should be kept")
+}
