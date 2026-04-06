@@ -84,6 +84,7 @@ function agentToYaml(agent: AgentDetail): string {
   lines.push(`tool_execution: ${agent.tool_execution}`);
   lines.push(`max_steps: ${agent.max_steps}`);
   lines.push(`max_context_size: ${agent.max_context_size}`);
+  lines.push(`max_turn_duration: ${agent.max_turn_duration}`);
   lines.push(`public: ${agent.has_knowledge ?? false}`);
   if (agent.kit) lines.push(`kit: ${agent.kit}`);
 
@@ -299,6 +300,7 @@ export default function BuilderSidePanel({ agent, agents, onClose, onSaved, onDe
       tool_execution: agent.tool_execution,
       max_steps: agent.max_steps,
       max_context_size: agent.max_context_size,
+      max_turn_duration: agent.max_turn_duration,
       tools: agent.tools ?? [],
       can_spawn: agent.can_spawn ?? [],
       mcp_servers: agent.mcp_servers ?? [],
@@ -331,6 +333,7 @@ export default function BuilderSidePanel({ agent, agents, onClose, onSaved, onDe
     if ((form.tool_execution ?? 'sequential') !== (agent.tool_execution ?? 'sequential')) return true;
     if ((form.max_steps ?? 50) !== (agent.max_steps ?? 50)) return true;
     if ((form.max_context_size ?? 16000) !== (agent.max_context_size ?? 16000)) return true;
+    if ((form.max_turn_duration ?? 120) !== (agent.max_turn_duration ?? 120)) return true;
     if (!arraysEqual(form.tools, agent.tools)) return true;
     if (!arraysEqual(form.can_spawn, agent.can_spawn)) return true;
     if (!arraysEqual(form.mcp_servers, agent.mcp_servers)) return true;
@@ -411,6 +414,7 @@ export default function BuilderSidePanel({ agent, agents, onClose, onSaved, onDe
     tool_execution: (form.tool_execution as AgentDetail['tool_execution']) ?? agent.tool_execution,
     max_steps: form.max_steps ?? agent.max_steps,
     max_context_size: form.max_context_size ?? agent.max_context_size,
+    max_turn_duration: form.max_turn_duration ?? agent.max_turn_duration,
     tools: form.tools ?? agent.tools,
     can_spawn: form.can_spawn ?? agent.can_spawn,
     mcp_servers: form.mcp_servers ?? agent.mcp_servers,
@@ -865,6 +869,18 @@ export default function BuilderSidePanel({ agent, agents, onClose, onSaved, onDe
                     min={1000}
                     max={200000}
                     step={1000}
+                    className="w-full px-2 py-1 bg-brand-dark border border-brand-shade3/30 rounded text-xs text-brand-light focus:outline-none focus:border-brand-accent transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] text-brand-shade3 mb-0.5">Turn Duration (s)</label>
+                  <input
+                    type="number"
+                    value={form.max_turn_duration ?? 120}
+                    onChange={(e) => updateField('max_turn_duration', Number(e.target.value))}
+                    min={30}
+                    max={600}
+                    step={10}
                     className="w-full px-2 py-1 bg-brand-dark border border-brand-shade3/30 rounded text-xs text-brand-light focus:outline-none focus:border-brand-accent transition-colors"
                   />
                 </div>

@@ -198,6 +198,7 @@ const DEFAULT_NEW_FORM: Partial<CreateAgentRequest> = {
   tool_execution: 'sequential',
   max_steps: 50,
   max_context_size: 16000,
+  max_turn_duration: 120,
   tools: [],
   can_spawn: [],
   mcp_servers: [],

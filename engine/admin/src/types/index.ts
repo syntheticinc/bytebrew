@@ -19,6 +19,7 @@ export interface AgentDetail extends AgentInfo {
   tool_execution: 'sequential' | 'parallel';
   max_steps: number;
   max_context_size: number;
+  max_turn_duration: number;
   confirm_before: string[];
   mcp_servers: string[];
   escalation?: AgentEscalation;
@@ -39,6 +40,7 @@ export interface CreateAgentRequest {
   tool_execution?: string;
   max_steps?: number;
   max_context_size?: number;
+  max_turn_duration?: number;
   confirm_before?: string[];
   tools?: string[];
   can_spawn?: string[];

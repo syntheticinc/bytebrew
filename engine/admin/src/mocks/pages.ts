@@ -99,5 +99,6 @@ auth:
 agents:
   max_steps: 50
   max_context_size: 16000
+  max_turn_duration: 120
   default_model: claude-sonnet-3.7
 `;

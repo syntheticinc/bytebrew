@@ -15,6 +15,7 @@ export const MOCK_AGENTS: Record<string, AgentDetail> = {
     tool_execution: 'sequential',
     max_steps: 10,
     max_context_size: 8192,
+    max_turn_duration: 120,
     confirm_before: [],
     mcp_servers: [],
   },
@@ -42,6 +43,7 @@ export const MOCK_AGENTS: Record<string, AgentDetail> = {
     tool_execution: 'sequential',
     max_steps: 50,
     max_context_size: 16000,
+    max_turn_duration: 120,
     confirm_before: ['cancel_subscription', 'process_refund'],
     mcp_servers: ['google-sheets'],
     escalation: {
@@ -69,6 +71,7 @@ export const MOCK_AGENTS: Record<string, AgentDetail> = {
     tool_execution: 'sequential',
     max_steps: 30,
     max_context_size: 16000,
+    max_turn_duration: 120,
     confirm_before: ['process_refund'],
     mcp_servers: [],
   },

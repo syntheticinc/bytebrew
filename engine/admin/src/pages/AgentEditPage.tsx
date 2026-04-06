@@ -63,6 +63,7 @@ export default function AgentEditPage() {
     tool_execution: 'sequential',
     max_steps: 50,
     max_context_size: 16000,
+    max_turn_duration: 120,
     tools: [],
     can_spawn: [],
     mcp_servers: [],
@@ -140,6 +141,7 @@ export default function AgentEditPage() {
         tool_execution: agent.tool_execution,
         max_steps: agent.max_steps,
         max_context_size: agent.max_context_size,
+        max_turn_duration: agent.max_turn_duration,
         tools: agent.tools,
         can_spawn: agent.can_spawn,
         mcp_servers: agent.mcp_servers,
@@ -379,6 +381,18 @@ export default function AgentEditPage() {
               min={1000}
               max={200000}
               step={1000}
+              className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-brand-light mb-1">Max Turn Duration (s)</label>
+            <input
+              type="number"
+              value={form.max_turn_duration}
+              onChange={(e) => updateField('max_turn_duration', Number(e.target.value))}
+              min={30}
+              max={600}
+              step={10}
               className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
             />
           </div>

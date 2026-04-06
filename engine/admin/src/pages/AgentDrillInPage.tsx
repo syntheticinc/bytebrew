@@ -127,6 +127,7 @@ function AgentDrillInInner() {
         tool_execution: agent.tool_execution,
         max_steps: agent.max_steps,
         max_context_size: agent.max_context_size,
+        max_turn_duration: agent.max_turn_duration,
         tools: enabledTools,
         can_spawn: canSpawn,
       });
@@ -299,6 +300,16 @@ function AgentDrillInInner() {
               max={200000}
               step={1000}
               hint="Token window for conversation history (larger = more memory, higher cost)"
+            />
+            <FormField
+              label="Max Turn Duration (seconds)"
+              type="number"
+              value={agent?.max_turn_duration ?? 120}
+              onChange={(v) => updateAgentField('max_turn_duration', Number(v))}
+              min={30}
+              max={600}
+              step={10}
+              hint="Maximum time in seconds for a single LLM stream turn"
             />
             <FormField
               label="Execution"
