@@ -17,8 +17,12 @@ export default function QuotaBanner() {
     api
       .getUsage()
       .then((data) => {
-        setMetrics(data.metrics);
-        setStripeUrl(data.stripe_portal_url);
+        if (data && Array.isArray(data.metrics)) {
+          setMetrics(data.metrics);
+        }
+        if (data?.stripe_portal_url) {
+          setStripeUrl(data.stripe_portal_url);
+        }
       })
       .catch(() => {});
   }, []);
