@@ -49,6 +49,41 @@ type ContextReminderProvider interface {
 	GetContextReminder(ctx context.Context, sessionID string) (string, int, bool)
 }
 
+// GuardrailChecker evaluates agent output against guardrail rules (consumer-side interface).
+type GuardrailChecker interface {
+	Evaluate(ctx context.Context, config *GuardrailCheckConfig, output string) (*GuardrailCheckResult, error)
+}
+
+// GuardrailCheckConfig holds guardrail configuration for a check.
+type GuardrailCheckConfig struct {
+	Mode         string
+	OnFailure    string
+	MaxRetries   int
+	FallbackText string
+	JSONSchema   string
+	JudgePrompt  string
+	JudgeModel   string
+	WebhookURL   string
+}
+
+// GuardrailCheckResult holds the result of a guardrail check.
+type GuardrailCheckResult struct {
+	Passed bool
+	Reason string
+}
+
+// FlowExecutor executes multi-agent flow pipelines (consumer-side interface).
+type FlowExecutor interface {
+	HasOutgoingEdges(ctx context.Context, schemaID uint, agentName string) (bool, error)
+	Execute(ctx context.Context, cfg FlowExecConfig, entryAgent, input string) error
+}
+
+// FlowExecConfig holds flow execution configuration.
+type FlowExecConfig struct {
+	SchemaID  uint
+	SessionID string
+}
+
 // EngineAdapter adapts Engine to TurnExecutor interface (orchestrator.TurnExecutor)
 // It bridges the Orchestrator event loop with the new Engine
 type EngineAdapter struct {
@@ -63,6 +98,12 @@ type EngineAdapter struct {
 	// pass-through deps
 	contextReminders []ContextReminderProvider
 	toolCallRecorder ToolCallRecorder
+	// US-002: Flow executor for multi-agent pipelines
+	flowExecutor FlowExecutor
+	schemaID     uint
+	// US-003: Guardrail pipeline
+	guardrail       GuardrailChecker
+	guardrailConfig *GuardrailCheckConfig
 }
 
 // Config holds configuration for EngineAdapter
@@ -77,6 +118,12 @@ type Config struct {
 	AgentName        string
 	ContextReminders []ContextReminderProvider
 	ToolCallRecorder ToolCallRecorder
+	// US-002: Flow executor (nil = no flow execution)
+	FlowExecutor FlowExecutor
+	SchemaID     uint
+	// US-003: Guardrail pipeline (nil = no guardrails)
+	Guardrail       GuardrailChecker
+	GuardrailConfig *GuardrailCheckConfig
 }
 
 // NewEngineAdapter creates a new EngineAdapter
@@ -108,6 +155,10 @@ func NewEngineAdapter(cfg Config) (*EngineAdapter, error) {
 		agentName:        cfg.AgentName,
 		contextReminders: cfg.ContextReminders,
 		toolCallRecorder: cfg.ToolCallRecorder,
+		flowExecutor:     cfg.FlowExecutor,
+		schemaID:         cfg.SchemaID,
+		guardrail:        cfg.Guardrail,
+		guardrailConfig:  cfg.GuardrailConfig,
 	}, nil
 }
 
@@ -182,6 +233,29 @@ func (e *EngineAdapter) ExecuteTurn(
 		"status", result.Status,
 		"suspended_at", result.SuspendedAt)
 
+	answer := result.Answer
+
+	// US-003: Guardrail check on agent output before sending to user
+	if e.guardrail != nil && e.guardrailConfig != nil && answer != "" {
+		checkResult, grErr := e.guardrail.Evaluate(ctx, e.guardrailConfig, answer)
+		if grErr != nil {
+			slog.ErrorContext(ctx, "[EngineAdapter] guardrail evaluation failed",
+				"agent", e.agentName, "error", grErr)
+			// On guardrail error with fallback configured, use fallback text
+			if e.guardrailConfig.OnFailure == "fallback" && e.guardrailConfig.FallbackText != "" {
+				answer = e.guardrailConfig.FallbackText
+			} else {
+				return fmt.Errorf("guardrail check failed: %w", grErr)
+			}
+		} else if !checkResult.Passed {
+			slog.WarnContext(ctx, "[EngineAdapter] guardrail check failed",
+				"agent", e.agentName, "reason", checkResult.Reason)
+			if e.guardrailConfig.OnFailure == "fallback" && e.guardrailConfig.FallbackText != "" {
+				answer = e.guardrailConfig.FallbackText
+			}
+		}
+	}
+
 	// 8. Send final completion signal so the client knows the turn is done.
 	// agent.Stream() only emits IsComplete=false; we must emit IsComplete=true
 	// after the engine finishes so the gRPC layer sends IsFinal=true to the client.
@@ -189,10 +263,31 @@ func (e *EngineAdapter) ExecuteTurn(
 		eventCallback(&domain.AgentEvent{
 			Type:       domain.EventTypeAnswer,
 			Timestamp:  time.Now(),
-			Content:    result.Answer,
+			Content:    answer,
 			IsComplete: true,
 			AgentID:    e.agentName,
 		})
+	}
+
+	// US-002: Execute flow pipeline if agent has outgoing edges
+	if e.flowExecutor != nil && e.schemaID > 0 {
+		hasEdges, edgeErr := e.flowExecutor.HasOutgoingEdges(ctx, e.schemaID, e.agentName)
+		if edgeErr != nil {
+			slog.WarnContext(ctx, "[EngineAdapter] failed to check outgoing edges",
+				"agent", e.agentName, "schema_id", e.schemaID, "error", edgeErr)
+		} else if hasEdges {
+			slog.InfoContext(ctx, "[EngineAdapter] executing flow pipeline",
+				"agent", e.agentName, "schema_id", e.schemaID)
+			flowCfg := FlowExecConfig{
+				SchemaID:  e.schemaID,
+				SessionID: sessionID,
+			}
+			if flowErr := e.flowExecutor.Execute(ctx, flowCfg, e.agentName, answer); flowErr != nil {
+				slog.ErrorContext(ctx, "[EngineAdapter] flow execution failed",
+					"agent", e.agentName, "error", flowErr)
+				// Flow failure is not fatal — the primary agent answer was already sent
+			}
+		}
 	}
 
 	return nil

@@ -47,6 +47,10 @@ import (
 	mcpcatalog "github.com/syntheticinc/bytebrew/engine/internal/service/mcp"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/capability"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/eventstore"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/guardrail"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/policy"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/recovery"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/resilience"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/session_processor"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/task"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/turn_executor"
@@ -450,6 +454,43 @@ func Run(sc ServerConfig) error {
 		components.AgentToolResolver.SetSpawner(components.AgentPoolAdapter, components.AgentPoolAdapter)
 	}
 
+	// US-001: Wire capability injector into AgentToolResolver
+	if components.AgentToolResolver != nil && pgDB != nil {
+		capRepo := config_repo.NewGORMCapabilityRepository(pgDB)
+		injector := capability.NewInjector(&capabilityInjectorAdapter{repo: capRepo})
+		components.AgentToolResolver.SetCapabilityInjector(injector)
+		slog.InfoContext(ctx, "Capability injector wired into AgentToolResolver")
+	}
+
+	// US-004: Wire policy engine into AgentToolResolver
+	// Policy rules are loaded from DB per-agent at evaluation time.
+	// For now, create with empty rules — the policy engine is stateless and
+	// rules are passed per-evaluation in production via the adapter.
+	if components.AgentToolResolver != nil {
+		policyEngine := policy.New(nil, nil, nil)
+		components.AgentToolResolver.SetPolicyEvaluator(&policyEvaluatorAdapter{engine: policyEngine})
+		slog.InfoContext(ctx, "Policy engine wired into AgentToolResolver")
+	}
+
+	// US-006: Wire circuit breaker registry into AgentToolResolver
+	var cbRegistry *resilience.CircuitBreakerRegistry
+	if components.AgentToolResolver != nil {
+		cbRegistry = resilience.NewCircuitBreakerRegistry(resilience.DefaultCircuitBreakerConfig())
+		components.AgentToolResolver.SetCircuitBreakerRegistry(&circuitBreakerRegistryAdapter{registry: cbRegistry})
+		slog.InfoContext(ctx, "Circuit breaker registry wired into AgentToolResolver")
+	}
+
+	// US-005: Wire recovery executor into AgentToolResolver
+	if components.AgentToolResolver != nil {
+		recoveryExec := recovery.New(nil) // nil recorder — events logged via slog
+		components.AgentToolResolver.SetRecoveryExecutor(&recoveryExecutorAdapter{executor: recoveryExec})
+		slog.InfoContext(ctx, "Recovery executor wired into AgentToolResolver")
+	}
+
+	// US-003: Create guardrail pipeline (registered checkers added later if needed)
+	guardrailPipeline := guardrail.NewPipeline()
+	_ = guardrailPipeline // available for EngineAdapter wiring via factory
+
 	// HTTP REST API server — starts only when bootstrap config is available.
 	// Supports two modes:
 	//   Single-port (default): all routes on one port (backward compatible)
@@ -794,12 +835,8 @@ func Run(sc ServerConfig) error {
 				r.Post("/api/v1/admin/assistant/chat", assistantHandler.Chat)
 			})
 
-			// Capability Injector — instantiated here, available for agent runtime integration.
-			// To inject capability-derived tools at agent startup, call:
-			//   injectedTools, _ := capInjector.InjectedTools(ctx, agentName)
-			// and merge them into the agent's tool set.
-			capInjector := capability.NewInjector(&capabilityInjectorAdapter{repo: capRepo})
-			_ = capInjector // TODO: wire into AgentToolResolver at agent startup
+			// Capability injector is wired into AgentToolResolver above (US-001).
+			// capRepo is also used here for capability CRUD HTTP handlers.
 		})
 
 		// EE-only routes (require auth + valid Enterprise license) — on internal router.

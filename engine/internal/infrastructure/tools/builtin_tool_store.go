@@ -65,6 +65,16 @@ type MCPClientProvider interface {
 	GetMCPTools(name string) ([]tool.InvokableTool, error)
 }
 
+// CapabilityToolInjector returns additional tool names based on agent capabilities.
+type CapabilityToolInjector interface {
+	InjectedTools(ctx context.Context, agentName string) ([]string, error)
+}
+
+// CircuitBreakerRegistry provides circuit breakers for named resources.
+type CircuitBreakerRegistry interface {
+	Get(name string) CircuitBreakerChecker
+}
+
 // AgentToolResolver composes tools for a specific agent from various sources.
 type AgentToolResolver struct {
 	builtins          *BuiltinToolStore
@@ -74,6 +84,10 @@ type AgentToolResolver struct {
 	mcpProvider       MCPClientProvider
 	spawner           GenericAgentSpawner
 	inspector         GenericAgentInspector
+	capInjector       CapabilityToolInjector
+	policyEvaluator   PolicyEvaluator
+	cbRegistry        CircuitBreakerRegistry
+	recoveryExecutor  RecoveryExecutor
 }
 
 // NewAgentToolResolver creates a new AgentToolResolver.
@@ -103,6 +117,26 @@ func (r *AgentToolResolver) SetSpawner(spawner GenericAgentSpawner, inspector Ge
 	r.inspector = inspector
 }
 
+// SetCapabilityInjector configures the capability injector for auto-injecting tools based on agent capabilities.
+func (r *AgentToolResolver) SetCapabilityInjector(injector CapabilityToolInjector) {
+	r.capInjector = injector
+}
+
+// SetPolicyEvaluator configures the policy evaluator for wrapping tools with policy checks.
+func (r *AgentToolResolver) SetPolicyEvaluator(evaluator PolicyEvaluator) {
+	r.policyEvaluator = evaluator
+}
+
+// SetCircuitBreakerRegistry configures the circuit breaker registry for MCP tool protection.
+func (r *AgentToolResolver) SetCircuitBreakerRegistry(registry CircuitBreakerRegistry) {
+	r.cbRegistry = registry
+}
+
+// SetRecoveryExecutor configures the recovery executor for MCP tool failure recovery.
+func (r *AgentToolResolver) SetRecoveryExecutor(executor RecoveryExecutor) {
+	r.recoveryExecutor = executor
+}
+
 // ResolveContext holds per-agent resolution context.
 type ResolveContext struct {
 	Agent            *agent_registry.RegisteredAgent
@@ -121,7 +155,28 @@ type ResolveContext struct {
 func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveContext) ([]tool.InvokableTool, error) {
 	var tools []tool.InvokableTool
 
-	for _, name := range rc.Agent.Record.BuiltinTools {
+	// US-001: Inject capability-derived tool names
+	builtinTools := rc.Agent.Record.BuiltinTools
+	if r.capInjector != nil {
+		injected, err := r.capInjector.InjectedTools(ctx, rc.Agent.Record.Name)
+		if err != nil {
+			slog.WarnContext(ctx, "capability injection failed in ResolveForAgent, continuing",
+				"agent", rc.Agent.Record.Name, "error", err)
+		} else if len(injected) > 0 {
+			existing := make(map[string]bool, len(builtinTools))
+			for _, n := range builtinTools {
+				existing[n] = true
+			}
+			for _, n := range injected {
+				if !existing[n] {
+					builtinTools = append(builtinTools, n)
+					existing[n] = true
+				}
+			}
+		}
+	}
+
+	for _, name := range builtinTools {
 		// knowledge_search is auto-injected below based on KnowledgePath — skip here
 		if name == "knowledge_search" {
 			continue
@@ -195,12 +250,25 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 	}
 	tools = append(tools, kitTools...)
 
-	// MCP tools — append tools from connected MCP servers configured for this agent
+	// MCP tools — append tools from connected MCP servers configured for this agent.
+	// Circuit breaker (US-006) and recovery (US-005) wrapping happens inside resolveMCPTools.
 	mcpTools, err := r.resolveMCPTools(rc)
 	if err != nil {
 		return nil, fmt.Errorf("resolve mcp tools for agent %q: %w", rc.Agent.Record.Name, err)
 	}
 	tools = append(tools, mcpTools...)
+
+	// US-004: Wrap all tools with policy evaluator
+	if r.policyEvaluator != nil {
+		for i, t := range tools {
+			info, _ := t.Info(ctx)
+			toolName := "unknown"
+			if info != nil {
+				toolName = info.Name
+			}
+			tools[i] = NewPolicyToolWrapper(t, r.policyEvaluator, rc.Agent.Record.Name, toolName)
+		}
+	}
 
 	return tools, nil
 }
@@ -209,9 +277,31 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 // This allows AgentToolResolver to be used as a drop-in replacement for DefaultToolResolver
 // in the turn_executor pipeline where RegisteredAgent is not yet available.
 func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, deps ToolDependencies) ([]tool.InvokableTool, error) {
+	// US-001: Inject capability-derived tool names before resolution
+	allToolNames := toolNames
+	if r.capInjector != nil && deps.AgentName != "" {
+		injected, err := r.capInjector.InjectedTools(ctx, deps.AgentName)
+		if err != nil {
+			slog.WarnContext(ctx, "capability injection failed, continuing without injected tools",
+				"agent", deps.AgentName, "error", err)
+		} else if len(injected) > 0 {
+			// Deduplicate: only add tools not already in the list
+			existing := make(map[string]bool, len(toolNames))
+			for _, n := range toolNames {
+				existing[n] = true
+			}
+			for _, n := range injected {
+				if !existing[n] {
+					allToolNames = append(allToolNames, n)
+					existing[n] = true
+				}
+			}
+		}
+	}
+
 	var resolved []tool.InvokableTool
 
-	for _, name := range toolNames {
+	for _, name := range allToolNames {
 		// knowledge_search is auto-injected below based on KnowledgePath — skip here
 		if name == "knowledge_search" {
 			continue
@@ -234,7 +324,7 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 	if deps.KnowledgePath != "" && deps.AgentName != "" && r.knowledgeSearcher != nil && r.knowledgeEmbedder != nil {
 		knowledgeTool := NewKnowledgeSearchTool(deps.AgentName, r.knowledgeSearcher, r.knowledgeEmbedder)
 		resolved = append(resolved, knowledgeTool)
-	} else if hasToolInList(toolNames, "knowledge_search") {
+	} else if hasToolInList(allToolNames, "knowledge_search") {
 		slog.WarnContext(ctx, "knowledge_search in tool list but knowledge path not configured — skipping",
 			"agent", deps.AgentName,
 			"knowledge_path", deps.KnowledgePath)
@@ -257,7 +347,35 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 					"server", serverName, "error", err)
 				continue
 			}
+			// US-006: Wrap MCP tools with circuit breaker
+			// US-005: Wrap MCP tools with recovery
+			for i, mt := range mcpTools {
+				if r.cbRegistry != nil {
+					mcpTools[i] = NewCircuitBreakerToolWrapper(mt, r.cbRegistry.Get(serverName))
+					mt = mcpTools[i]
+				}
+				if r.recoveryExecutor != nil {
+					info, _ := mt.Info(ctx)
+					toolName := serverName
+					if info != nil {
+						toolName = info.Name
+					}
+					mcpTools[i] = NewRecoveryToolWrapper(mt, r.recoveryExecutor, deps.SessionID, toolName)
+				}
+			}
 			resolved = append(resolved, mcpTools...)
+		}
+	}
+
+	// US-004: Wrap all tools with policy evaluator
+	if r.policyEvaluator != nil && deps.AgentName != "" {
+		for i, t := range resolved {
+			info, _ := t.Info(ctx)
+			toolName := "unknown"
+			if info != nil {
+				toolName = info.Name
+			}
+			resolved[i] = NewPolicyToolWrapper(t, r.policyEvaluator, deps.AgentName, toolName)
 		}
 	}
 
@@ -280,11 +398,13 @@ func (r *AgentToolResolver) resolveKitTools(rc ResolveContext) ([]tool.Invokable
 }
 
 // resolveMCPTools returns tools from MCP servers configured for the agent.
+// US-005/US-006: MCP tools are wrapped with circuit breaker and recovery if configured.
 func (r *AgentToolResolver) resolveMCPTools(rc ResolveContext) ([]tool.InvokableTool, error) {
 	if r.mcpProvider == nil || len(rc.Agent.Record.MCPServers) == 0 {
 		return nil, nil
 	}
 
+	ctx := context.Background()
 	var result []tool.InvokableTool
 	for _, serverName := range rc.Agent.Record.MCPServers {
 		mcpTools, err := r.mcpProvider.GetMCPTools(serverName)
@@ -292,6 +412,21 @@ func (r *AgentToolResolver) resolveMCPTools(rc ResolveContext) ([]tool.Invokable
 			slog.Warn("failed to get MCP tools, skipping server",
 				"server", serverName, "agent", rc.Agent.Record.Name, "error", err)
 			continue
+		}
+		// Wrap each MCP tool with circuit breaker + recovery
+		for i, mt := range mcpTools {
+			if r.cbRegistry != nil {
+				mcpTools[i] = NewCircuitBreakerToolWrapper(mt, r.cbRegistry.Get(serverName))
+				mt = mcpTools[i]
+			}
+			if r.recoveryExecutor != nil {
+				info, _ := mt.Info(ctx)
+				toolName := serverName
+				if info != nil {
+					toolName = info.Name
+				}
+				mcpTools[i] = NewRecoveryToolWrapper(mt, r.recoveryExecutor, rc.Deps.SessionID, toolName)
+			}
 		}
 		result = append(result, mcpTools...)
 	}
