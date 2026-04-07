@@ -29,9 +29,11 @@ export default function WidgetConfigPage() {
   useEffect(() => {
     Promise.all([api.listWidgets(), api.listSchemas()])
       .then(([w, s]) => {
-        setWidgets(w);
-        if (w.length > 0 && !selectedId) setSelectedId(w[0]!.id);
-        setSchemas(s.map((sc) => ({ value: sc.name, label: sc.name })));
+        const safeWidgets = Array.isArray(w) ? w : [];
+        const safeSchemas = Array.isArray(s) ? s : [];
+        setWidgets(safeWidgets);
+        if (safeWidgets.length > 0 && !selectedId) setSelectedId(safeWidgets[0]!.id);
+        setSchemas(safeSchemas.map((sc) => ({ value: sc.name, label: sc.name })));
       })
       .catch(() => {})
       .finally(() => setLoading(false));

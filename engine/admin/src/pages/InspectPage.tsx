@@ -177,8 +177,8 @@ function SessionList({
         sort_dir: 'desc',
       })
       .then((res) => {
-        setSessions(res.sessions);
-        setTotal(res.total);
+        setSessions(Array.isArray(res?.sessions) ? res.sessions : []);
+        setTotal(res?.total ?? 0);
       })
       .catch(() => {
         setSessions([]);
