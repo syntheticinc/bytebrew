@@ -90,13 +90,13 @@ func (e *Executor) Execute(ctx context.Context, cfg ExecutorConfig, entryAgent, 
 	adjacency := buildAdjacency(edges)
 
 	// Execute pipeline starting from entry agent
-	output, err := e.executeAgent(ctx, cfg, execution, adjacency, entryAgent, userInput, 0)
+	_, err = e.executeAgent(ctx, cfg, execution, adjacency, entryAgent, userInput, 0)
 	if err != nil {
 		execution.Fail()
 		return execution, err
 	}
 
-	_ = output
+	// output is already recorded in the last FlowStep
 	execution.Complete()
 	return execution, nil
 }

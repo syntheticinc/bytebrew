@@ -36,12 +36,10 @@ func NewQuotaEnforcer(usage UsageReader, plans PlanReader, upgradeURL string) *Q
 
 // CheckAPICall checks if a tenant can make an API call.
 func (q *QuotaEnforcer) CheckAPICall(ctx context.Context, tenantID string) (*domain.QuotaCheckResult, error) {
-	plan, usage, limits, err := q.loadContext(ctx, tenantID)
+	_, usage, limits, err := q.loadContext(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
-
-	_ = plan
 	if limits.MaxAPICalls == 0 {
 		return &domain.QuotaCheckResult{Allowed: true, Resource: "api_calls"}, nil
 	}

@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -105,8 +106,7 @@ func (h *KnowledgeHandler) Reindex(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		ctx := context.Background()
 		if err := h.reindexer.Reindex(ctx, name); err != nil {
-			// Logged inside reindexer; nothing more to do here.
-			_ = err
+			slog.ErrorContext(ctx, "reindex failed", "agent", name, "error", err)
 		}
 	}()
 
