@@ -28,6 +28,7 @@ import AgentNode, { type AgentNodeData } from '../components/builder/AgentNode';
 import TriggerNode from '../components/builder/TriggerNode';
 import GateNode from '../components/builder/GateNode';
 import EdgeConfigPanel from '../components/builder/EdgeConfigPanel';
+import GateConfigPanel from '../components/builder/GateConfigPanel';
 import BuilderSidePanel from '../components/builder/BuilderSidePanel';
 import { ExportButton, ImportButton } from '../components/builder/BuilderExportImport';
 import BuilderFlowTest from '../components/builder/BuilderFlowTest';
@@ -666,14 +667,15 @@ function AgentBuilderInner() {
   const onNodeClick: NodeMouseHandler = useCallback((_event, node) => {
     setSelectedNodeId(node.id);
 
+    // Gate node → show gate config panel (both modes)
+    if (node.type === 'gateNode') {
+      setSelectedGate(node.data as Record<string, unknown>);
+      setSelectedTrigger(null);
+      setSelectedEdge(null);
+      return;
+    }
+
     if (isPrototype) {
-      // Gate node → show gate config panel
-      if (node.type === 'gateNode') {
-        setSelectedGate(node.data as Record<string, unknown>);
-        setSelectedTrigger(null);
-        setSelectedEdge(null);
-        return;
-      }
       // Trigger node → show trigger config panel
       if (node.type === 'triggerNode') {
         setSelectedTrigger(node.data as Record<string, unknown>);
@@ -731,14 +733,14 @@ function AgentBuilderInner() {
     setNodeMenu(null);
   }, [addToast]);
 
-  // ── Edge click (for prototype edge config panel) ─────────────────────────
+  // ── Edge click (opens edge config side panel) ────────────────────────────
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
 
   const onEdgeClick = useCallback((_event: React.MouseEvent, edge: Edge) => {
-    if (isPrototype) {
-      setSelectedEdge(edge);
-    }
-  }, [isPrototype]);
+    setSelectedEdge(edge);
+    setSelectedGate(null);
+    setSelectedTrigger(null);
+  }, []);
 
   // ── Node context menu ─────────────────────────────────────────────────────
 
@@ -1000,10 +1002,18 @@ function AgentBuilderInner() {
           />
         )}
 
-        {isPrototype && selectedEdge && (
+        {selectedEdge && (
           <EdgeConfigPanel
             edge={selectedEdge}
             onClose={() => setSelectedEdge(null)}
+            onSave={(_edge, _config) => {
+              // TODO: persist edge config to API when backend is ready
+              setSelectedEdge(null);
+            }}
+            onDelete={(edgeId) => {
+              setEdges((eds) => eds.filter((e) => e.id !== edgeId));
+              setSelectedEdge(null);
+            }}
           />
         )}
 
@@ -1014,35 +1024,16 @@ function AgentBuilderInner() {
           />
         )}
 
-        {/* Prototype: Gate config panel */}
-        {isPrototype && selectedGate && (
-          <div className="w-80 border-l border-brand-shade3/10 bg-brand-dark-surface flex flex-col shrink-0 overflow-y-auto">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-brand-shade3/10">
-              <h3 className="text-sm font-semibold text-brand-light font-mono">Gate Configuration</h3>
-              <button onClick={() => setSelectedGate(null)} className="text-brand-shade3 hover:text-brand-light p-1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg></button>
-            </div>
-            <div className="p-4 space-y-4">
-              <div>
-                <label className="block text-xs text-brand-shade3 mb-1 font-mono">Label</label>
-                <input className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light font-mono opacity-60 cursor-not-allowed" value={String(selectedGate.label ?? '')} readOnly />
-              </div>
-              <div>
-                <label className="block text-xs text-brand-shade3 mb-1 font-mono">Condition Type</label>
-                <select className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light font-mono opacity-60 cursor-not-allowed" value={String(selectedGate.conditionType ?? 'auto')} disabled>
-                  <option value="auto">Auto (JSON Schema / regex)</option>
-                  <option value="human">Human Approval</option>
-                  <option value="llm">LLM-based Evaluation</option>
-                  <option value="all_completed">Join (wait for all inputs)</option>
-                </select>
-                <p className="mt-1 text-xs text-brand-shade3">Determines how the gate evaluates whether to pass or fail</p>
-              </div>
-              <div>
-                <label className="block text-xs text-brand-shade3 mb-1 font-mono">Condition Config</label>
-                <textarea className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light font-mono resize-y opacity-60 cursor-not-allowed" rows={4} value={String(selectedGate.conditionConfig ?? '')} placeholder='{"type":"object","required":["approved"]}' readOnly />
-                <p className="mt-1 text-xs text-brand-shade3">JSON Schema for auto, prompt for LLM, ignored for human/join</p>
-              </div>
-            </div>
-          </div>
+        {/* Gate config panel */}
+        {selectedGate && (
+          <GateConfigPanel
+            gate={selectedGate}
+            onClose={() => setSelectedGate(null)}
+            onSave={(_gateId, _config) => {
+              // TODO: persist gate config to API when backend is ready
+              setSelectedGate(null);
+            }}
+          />
         )}
 
         {/* Prototype: Trigger config panel */}

@@ -1,0 +1,401 @@
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useSSEChat, type SSEMessage } from '../hooks/useSSEChat';
+import { useBottomPanel } from '../hooks/useBottomPanel';
+import { usePrototype } from '../hooks/usePrototype';
+import { api } from '../api/client';
+import HeadersEditor, { type HeaderEntry } from './HeadersEditor';
+
+// ─── Mock streaming for prototype mode ──────────────────────────────────────
+
+const MOCK_TOOL_CALLS = [
+  { tool: 'memory_recall', input: '{"query": "previous interactions"}', output: '{"memories": []}' },
+  { tool: 'search_knowledge', input: '{"query": "product FAQ"}', output: '{"results": [{"title": "FAQ", "content": "..."}]}' },
+];
+
+const MOCK_RESPONSES = [
+  'Based on the knowledge base, here is the answer to your question. The system supports multiple agent configurations with memory, knowledge, and escalation capabilities.',
+  'I have processed your request. The agent flow executed successfully through the classifier and support pipeline.',
+  'Your test message has been routed through the schema flow. All tools executed correctly and the response was generated.',
+];
+
+// ─── Component ──────────────────────────────────────────────────────────────
+
+export default function TestFlowTab() {
+  const navigate = useNavigate();
+  const { selectedSchema } = useBottomPanel();
+  const { isPrototype } = usePrototype();
+
+  const [agents, setAgents] = useState<string[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState('');
+  const [headers, setHeaders] = useState<HeaderEntry[]>([]);
+  const [message, setMessage] = useState('');
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+
+  // Prototype mode state
+  const [protoMessages, setProtoMessages] = useState<SSEMessage[]>([]);
+  const [protoStreaming, setProtoStreaming] = useState(false);
+  const [protoSessionId, setProtoSessionId] = useState('');
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const headersRef = useRef(headers);
+  useEffect(() => { headersRef.current = headers; }, [headers]);
+
+  // Build headers getter for SSE hook
+  const getHeaders = useCallback((): Record<string, string> => {
+    const result: Record<string, string> = {};
+    const blocked = ['authorization', 'host', 'cookie', 'origin', 'referer', 'content-type', 'content-length'];
+    for (const h of headersRef.current) {
+      const k = h.key.trim();
+      const v = h.value.trim();
+      if (k && v && !blocked.includes(k.toLowerCase())) result[k] = v;
+    }
+    return result;
+  }, []);
+
+  const sseChat = useSSEChat({
+    endpoint: selectedAgent ? `/api/v1/agents/${encodeURIComponent(selectedAgent)}/chat` : '',
+    agentName: selectedAgent,
+    getHeaders,
+  });
+
+  // Use either prototype or production messages
+  const messages = isPrototype ? protoMessages : sseChat.messages;
+  const isStreaming = isPrototype ? protoStreaming : sseChat.isStreaming;
+  const sessionId = isPrototype ? protoSessionId : (sseChat as unknown as Record<string, unknown>).sessionId as string | undefined;
+
+  // Load agents
+  useEffect(() => {
+    api.listAgents()
+      .then((list) => {
+        const names = list.map((a) => a.name);
+        setAgents(names);
+        if (names.length > 0 && !selectedAgent) {
+          setSelectedAgent(names[0]!);
+        }
+      })
+      .catch(() => {});
+  }, [selectedAgent]);
+
+  // Auto-scroll
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  function toggleItem(key: string) {
+    setExpandedItems((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  // ── Prototype mock send ──────────────────────────────────────────────────
+
+  function protoSend(text: string) {
+    if (!text.trim() || protoStreaming) return;
+
+    const userMsg: SSEMessage = { id: crypto.randomUUID(), role: 'user', content: text };
+    const assistantId = crypto.randomUUID();
+    const sid = protoSessionId || `session-${Date.now()}`;
+    if (!protoSessionId) setProtoSessionId(sid);
+
+    setProtoMessages((prev) => [
+      ...prev,
+      userMsg,
+      { id: assistantId, role: 'assistant', content: '', toolCalls: [], streaming: true },
+    ]);
+    setProtoStreaming(true);
+
+    // Simulate streaming with tool calls
+    const toolCalls = MOCK_TOOL_CALLS.map((tc) => ({ ...tc }));
+    const responseText = MOCK_RESPONSES[Math.floor(Math.random() * MOCK_RESPONSES.length)]!;
+
+    // Step 1: show tool calls after 500ms
+    setTimeout(() => {
+      setProtoMessages((prev) =>
+        prev.map((m) => m.id === assistantId ? { ...m, toolCalls } : m),
+      );
+    }, 500);
+
+    // Step 2: stream response text
+    let charIndex = 0;
+    const interval = setInterval(() => {
+      charIndex += 3;
+      if (charIndex >= responseText.length) {
+        clearInterval(interval);
+        setProtoMessages((prev) =>
+          prev.map((m) => m.id === assistantId ? { ...m, content: responseText, streaming: false } : m),
+        );
+        setProtoStreaming(false);
+        return;
+      }
+      setProtoMessages((prev) =>
+        prev.map((m) => m.id === assistantId ? { ...m, content: responseText.slice(0, charIndex) } : m),
+      );
+    }, 30);
+  }
+
+  // ── Send message ─────────────────────────────────────────────────────────
+
+  async function handleSend() {
+    const text = message.trim();
+    if (!text || !selectedAgent || isStreaming) return;
+    setMessage('');
+
+    if (isPrototype) {
+      protoSend(text);
+      return;
+    }
+
+    await sseChat.sendMessage(text);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  }
+
+  function handleReset() {
+    if (isPrototype) {
+      setProtoMessages([]);
+      setProtoSessionId('');
+    } else {
+      sseChat.resetSession();
+    }
+  }
+
+  function handleStop() {
+    if (isPrototype) {
+      setProtoStreaming(false);
+      setProtoMessages((prev) => prev.map((m) => m.streaming ? { ...m, streaming: false } : m));
+    } else {
+      sseChat.stopStreaming();
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
+  const hasError = lastMsg?.role === 'assistant' && lastMsg.content.startsWith('Error:');
+  const showInspectLink = lastMsg?.role === 'assistant' && !lastMsg.streaming && !hasError && messages.length > 0;
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Config section */}
+      <div className="px-3 py-2 space-y-2 border-b border-brand-shade3/10 flex-shrink-0">
+        {/* Agent selector */}
+        <div className="flex items-center gap-2">
+          <label className="text-[10px] text-brand-shade3 uppercase tracking-wide shrink-0">Agent:</label>
+          <select
+            value={selectedAgent}
+            onChange={(e) => { setSelectedAgent(e.target.value); handleReset(); }}
+            className="flex-1 px-2 py-1 bg-brand-dark border border-brand-shade3/30 rounded text-xs text-brand-light focus:outline-none focus:border-brand-accent transition-colors"
+          >
+            {agents.length === 0 && <option value="">No agents</option>}
+            {agents.map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+          {selectedSchema && (
+            <span className="text-[10px] text-brand-shade3/60 shrink-0">Schema: {selectedSchema}</span>
+          )}
+          {messages.length > 0 && (
+            <button
+              onClick={handleReset}
+              className="p-1 text-brand-shade3 hover:text-brand-light transition-colors shrink-0"
+              title="New Session"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="1 4 1 10 7 10" />
+                <path d="M3.51 15a9 9 0 102.13-9.36L1 10" />
+              </svg>
+            </button>
+          )}
+        </div>
+
+        {/* Headers editor */}
+        <HeadersEditor headers={headers} onChange={setHeaders} />
+      </div>
+
+      {/* Messages area */}
+      <div className="flex-1 overflow-y-auto min-h-0 px-3 py-2 space-y-2">
+        {messages.length === 0 && (
+          <p className="text-[11px] text-brand-shade3/50 text-center mt-4">
+            Send a message to test the agent flow.
+          </p>
+        )}
+
+        {messages.map((msg) => (
+          <div key={msg.id} className={msg.role === 'user' ? 'flex justify-end' : ''}>
+            {msg.role === 'user' ? (
+              <div className="max-w-[85%] px-2.5 py-1.5 bg-brand-accent/10 border border-brand-accent/20 rounded-lg text-xs text-brand-light font-mono">
+                {msg.content}
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {/* Error */}
+                {hasError && msg.id === lastMsg?.id && (
+                  <div className="px-2 py-1.5 bg-red-900/20 border border-red-500/20 rounded text-[11px] text-red-400">
+                    {msg.content.replace(/^Error:\s*/, '')}
+                  </div>
+                )}
+
+                {/* Tool calls */}
+                {msg.toolCalls && msg.toolCalls.length > 0 && (
+                  <div className="space-y-1">
+                    {msg.toolCalls.map((tc, i) => {
+                      const key = `${msg.id}-tc-${i}`;
+                      const isExpanded = expandedItems[key] ?? false;
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => toggleItem(key)}
+                          className="w-full text-left px-2 py-1 bg-brand-dark border border-brand-shade3/15 rounded text-[11px] font-mono hover:border-brand-shade3/30 transition-colors"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-blue-400">
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="inline">
+                                <circle cx="12" cy="12" r="3" />
+                                <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+                              </svg>
+                            </span>
+                            <span className="text-blue-400 font-medium">{tc.tool}</span>
+                            <svg
+                              width="8" height="8" viewBox="0 0 24 24" fill="currentColor"
+                              className={`text-brand-shade3 transition-transform ml-auto ${isExpanded ? 'rotate-90' : ''}`}
+                            >
+                              <path d="M8 5l10 7-10 7V5z" />
+                            </svg>
+                          </div>
+                          {isExpanded && (
+                            <div className="mt-1 space-y-1 text-[10px]">
+                              {tc.input && (
+                                <div className="text-brand-shade3 whitespace-pre-wrap break-all">
+                                  <span className="text-brand-shade3/60">Input: </span>{tc.input}
+                                </div>
+                              )}
+                              {tc.output !== undefined && (
+                                <div className="text-emerald-400/80 whitespace-pre-wrap break-all">
+                                  <span className="text-emerald-400/50">Output: </span>{tc.output}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Reasoning (if present as a special content pattern) */}
+                {msg.content.includes('[thinking]') && (() => {
+                  const thinkKey = `${msg.id}-think`;
+                  const isExpanded = expandedItems[thinkKey] ?? false;
+                  const thinkMatch = msg.content.match(/\[thinking\]([\s\S]*?)\[\/thinking\]/);
+                  if (!thinkMatch) return null;
+                  return (
+                    <button
+                      onClick={() => toggleItem(thinkKey)}
+                      className="w-full text-left px-2 py-1 bg-amber-900/10 border border-amber-500/15 rounded text-[11px] font-mono hover:border-amber-500/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5 text-amber-400">
+                        <span>Thinking...</span>
+                        <svg
+                          width="8" height="8" viewBox="0 0 24 24" fill="currentColor"
+                          className={`transition-transform ml-auto ${isExpanded ? 'rotate-90' : ''}`}
+                        >
+                          <path d="M8 5l10 7-10 7V5z" />
+                        </svg>
+                      </div>
+                      {isExpanded && (
+                        <div className="mt-1 text-[10px] text-amber-400/70 whitespace-pre-wrap">
+                          {thinkMatch[1]}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })()}
+
+                {/* Content */}
+                {msg.content && !msg.content.startsWith('Error:') && (
+                  <div className="text-xs text-brand-light leading-relaxed whitespace-pre-wrap">
+                    {msg.content.replace(/\[thinking\][\s\S]*?\[\/thinking\]/g, '').trim()}
+                    {msg.streaming && (
+                      <span className="inline-block w-1.5 h-3 bg-brand-accent ml-0.5 animate-pulse" />
+                    )}
+                  </div>
+                )}
+
+                {/* Waiting indicator */}
+                {msg.streaming && !msg.content && (!msg.toolCalls || msg.toolCalls.length === 0) && (
+                  <span className="text-brand-shade3/50 text-[11px]">Waiting for response...</span>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Streaming indicator */}
+        {isStreaming && (
+          <div className="flex justify-end">
+            <span className="text-[10px] text-brand-accent animate-pulse">streaming...</span>
+          </div>
+        )}
+
+        {/* View in Inspect link */}
+        {showInspectLink && (sessionId || protoSessionId) && (
+          <div className="flex justify-start mt-1">
+            <button
+              onClick={() => {
+                const sid = sessionId || protoSessionId;
+                const schema = selectedSchema || 'default';
+                navigate(`/builder/${encodeURIComponent(schema)}/${encodeURIComponent(selectedAgent)}/inspect/${encodeURIComponent(sid)}`);
+              }}
+              className="text-[11px] text-brand-accent hover:text-brand-accent-hover transition-colors inline-flex items-center gap-1"
+            >
+              View in Inspect
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input area */}
+      <div className="flex items-center gap-2 px-3 py-2 border-t border-brand-shade3/10 flex-shrink-0">
+        <textarea
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Send test message to entry agent..."
+          rows={1}
+          className="flex-1 px-2.5 py-1.5 bg-brand-dark-alt border border-brand-shade3/20 rounded-card text-xs text-brand-light placeholder-brand-shade3 font-mono focus:outline-none focus:border-brand-accent resize-none transition-colors"
+        />
+        {isStreaming ? (
+          <button
+            onClick={handleStop}
+            className="px-2.5 py-1.5 bg-brand-dark border border-brand-shade3/30 rounded-card text-xs text-brand-shade2 hover:text-brand-light hover:border-brand-shade3 transition-colors flex-shrink-0 inline-flex items-center gap-1"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="4" y="4" width="16" height="16" rx="2" />
+            </svg>
+            Stop
+          </button>
+        ) : (
+          <button
+            onClick={handleSend}
+            disabled={!message.trim() || !selectedAgent}
+            className="px-2.5 py-1.5 bg-brand-accent text-brand-light rounded-card text-xs font-medium hover:bg-brand-accent-hover disabled:opacity-40 transition-colors flex-shrink-0 inline-flex items-center gap-1"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            Run
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}

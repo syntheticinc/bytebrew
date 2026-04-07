@@ -42,7 +42,13 @@ func NewEventStream(sessionID string, publisher EventPublisher, store EventStore
 }
 
 // Send converts a domain AgentEvent to a proto SessionEvent, persists it, and publishes.
+// SchemaVersion is injected here so all events carry it (AC-EVT-01).
 func (s *EventStream) Send(event *domain.AgentEvent) error {
+	// AC-EVT-01: ensure schema_version is set on every event
+	if event.SchemaVersion == "" {
+		event.SchemaVersion = domain.EventSchemaVersion
+	}
+
 	pbEvent := s.convertEvent(event)
 	if pbEvent == nil {
 		return nil
@@ -232,6 +238,22 @@ func (s *EventStream) convertEvent(event *domain.AgentEvent) *pb.SessionEvent {
 	case domain.EventTypeAgentSpawned, domain.EventTypeAgentCompleted, domain.EventTypeAgentFailed:
 		eventTypeStr := string(event.Type)
 		content := fmt.Sprintf("[%s] %s: %s", eventTypeStr, agentID, SanitizeUTF8(event.Content))
+		return &pb.SessionEvent{
+			Type:    pb.SessionEventType_SESSION_EVENT_ANSWER_CHUNK,
+			Content: content,
+			AgentId: agentID,
+		}
+
+	case domain.EventTypeStateChanged:
+		// AC-STATE-02: agent.state_changed event
+		content := SanitizeUTF8(event.Content)
+		if content == "" {
+			if m := event.Metadata; m != nil {
+				newState, _ := m["new_state"].(string)
+				oldState, _ := m["old_state"].(string)
+				content = fmt.Sprintf("state: %s -> %s", oldState, newState)
+			}
+		}
 		return &pb.SessionEvent{
 			Type:    pb.SessionEventType_SESSION_EVENT_ANSWER_CHUNK,
 			Content: content,

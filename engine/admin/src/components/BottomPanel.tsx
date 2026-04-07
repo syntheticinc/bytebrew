@@ -1,6 +1,7 @@
 import { useRef, useCallback, useState } from 'react';
 import { useBottomPanel } from '../hooks/useBottomPanel';
 import SchemaSelector from './SchemaSelector';
+import TestFlowTab from './TestFlowTab';
 
 const MIN_HEIGHT = 150;
 const COLLAPSED_HEIGHT = 40;
@@ -10,7 +11,6 @@ export default function BottomPanel() {
   const { height, tab, collapsed, setHeight, setTab, setCollapsed, toggleCollapsed, selectedSchema } = useBottomPanel();
   const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
   const [assistantInput, setAssistantInput] = useState('');
-  const [testInput, setTestInput] = useState('');
 
   const maxHeight = Math.round(
     (typeof window !== 'undefined' ? window.innerHeight : 800) * MAX_HEIGHT_RATIO,
@@ -54,12 +54,6 @@ export default function BottomPanel() {
     if (!assistantInput.trim()) return;
     // Placeholder — real assistant integration in Phase 5
     setAssistantInput('');
-  };
-
-  const handleSendTest = () => {
-    if (!testInput.trim()) return;
-    // Placeholder — real test flow in Phase 2 WP-13
-    setTestInput('');
   };
 
   return (
@@ -163,58 +157,28 @@ export default function BottomPanel() {
             </div>
           )}
           {tab === 'testflow' && (
-            <div className="flex flex-col h-full">
-              <div className="flex-1 p-4">
-                <div className="flex flex-col gap-2 text-xs text-brand-shade2 font-mono">
-                  <div className="flex items-center gap-2 text-brand-shade3">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polygon points="5 3 19 12 5 21 5 3" />
-                    </svg>
-                    <span>Test Flow</span>
-                    {selectedSchema && (
-                      <span className="text-brand-shade3/60">— {selectedSchema}</span>
-                    )}
-                  </div>
-                  <p className="text-brand-shade3/80 mt-1">
-                    Test Flow will be available in a future update. You'll be able to send test messages to entry agents and observe the flow execution.
-                  </p>
-                </div>
-              </div>
-            </div>
+            <TestFlowTab />
           )}
         </div>
       )}
 
-      {/* Message input */}
-      {!collapsed && (
+      {/* Message input — assistant tab only (testflow has its own) */}
+      {!collapsed && tab === 'assistant' && (
         <div className="flex items-center gap-2 px-3 py-2 border-t border-brand-shade3/10 flex-shrink-0">
           <input
             type="text"
-            value={tab === 'assistant' ? assistantInput : testInput}
-            onChange={(e) => {
-              if (tab === 'assistant') setAssistantInput(e.target.value);
-              else setTestInput(e.target.value);
-            }}
+            value={assistantInput}
+            onChange={(e) => setAssistantInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                if (tab === 'assistant') handleSendAssistant();
-                else handleSendTest();
-              }
+              if (e.key === 'Enter') handleSendAssistant();
             }}
-            placeholder={
-              tab === 'assistant'
-                ? 'Ask AI to configure agents...'
-                : 'Send test message to entry agent...'
-            }
-            aria-label={tab === 'assistant' ? 'Assistant message input' : 'Test flow message input'}
+            placeholder="Ask AI to configure agents..."
+            aria-label="Assistant message input"
             className="flex-1 bg-brand-dark-alt border border-brand-shade3/20 rounded-card text-brand-light text-xs px-2.5 py-1.5 outline-none font-mono focus:border-brand-accent transition-colors"
           />
           <button
             type="button"
-            onClick={() => {
-              if (tab === 'assistant') handleSendAssistant();
-              else handleSendTest();
-            }}
+            onClick={handleSendAssistant}
             aria-label="Send message"
             className="bg-brand-accent hover:bg-brand-accent-hover border-none rounded-card text-brand-light text-xs px-3 py-1.5 cursor-pointer font-medium font-mono transition-colors"
           >

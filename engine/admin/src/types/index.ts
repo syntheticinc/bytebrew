@@ -335,7 +335,19 @@ export const CAPABILITY_META: Record<CapabilityType, { label: string; icon: stri
 // V2: Inspect types
 // ============================================================================
 
-export type InspectStepKind = 'reasoning' | 'tool_call' | 'memory_recall' | 'knowledge_search' | 'guardrail_check' | 'final_answer';
+export type InspectStepKind =
+  | 'reasoning'
+  | 'tool_call'
+  | 'memory_recall'
+  | 'knowledge_search'
+  | 'guardrail_check'
+  | 'final_answer'
+  | 'error'
+  | 'escalation'
+  | 'task_dispatch'
+  | 'task_timeout';
+
+export type SessionStatus = 'running' | 'completed' | 'failed' | 'blocked' | 'timeout';
 
 export interface InspectStep {
   id: number;
@@ -350,11 +362,27 @@ export interface InspectStep {
 export interface SessionTrace {
   session_id: string;
   agent_name: string;
-  status: 'running' | 'completed' | 'failed';
+  status: SessionStatus;
   steps: InspectStep[];
   total_duration_ms: number;
   total_tokens: number;
   created_at: string;
+}
+
+export interface SessionSummary {
+  session_id: string;
+  entry_agent: string;
+  status: SessionStatus;
+  duration_ms: number;
+  total_tokens: number;
+  created_at: string;
+}
+
+export interface PaginatedSessions {
+  sessions: SessionSummary[];
+  total: number;
+  page: number;
+  per_page: number;
 }
 
 // ============================================================================

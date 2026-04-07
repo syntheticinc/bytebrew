@@ -1,0 +1,242 @@
+catalog_version: "1.0"
+servers:
+  - name: "tavily-web-search"
+    display: "Tavily Web Search"
+    description: "AI-optimized web search, content extraction, site crawling"
+    category: "search"
+    verified: true
+    packages:
+      - type: "stdio"
+        command: "npx"
+        args: ["-y", "@mcptools/mcp-tavily"]
+        env_vars:
+          - name: "TAVILY_API_KEY"
+            description: "Get key at tavily.com/app/api-keys"
+            required: true
+            secret: true
+      - type: "remote"
+        transport: "streamable-http"
+        url_template: "https://mcp.tavily.com/mcp/?tavilyApiKey=${TAVILY_API_KEY}"
+        env_vars:
+          - name: "TAVILY_API_KEY"
+            required: true
+            secret: true
+    provided_tools:
+      - name: "tavily_search"
+        description: "Search the web"
+      - name: "tavily_extract"
+        description: "Extract content from URLs"
+      - name: "tavily_crawl"
+        description: "Crawl a website"
+
+  - name: "brave-search"
+    display: "Brave Search"
+    description: "Privacy-focused web search and local search"
+    category: "search"
+    verified: true
+    packages:
+      - type: "stdio"
+        command: "npx"
+        args: ["-y", "@anthropic/mcp-brave-search"]
+        env_vars:
+          - name: "BRAVE_API_KEY"
+            description: "Get key at brave.com/search/api"
+            required: true
+            secret: true
+    provided_tools:
+      - name: "web_search"
+        description: "Search the web"
+      - name: "local_search"
+        description: "Search for local businesses"
+
+  - name: "exa-search"
+    display: "Exa Search"
+    description: "Neural web search with content retrieval"
+    category: "search"
+    verified: true
+    packages:
+      - type: "stdio"
+        command: "npx"
+        args: ["-y", "@anthropic/mcp-exa"]
+        env_vars:
+          - name: "EXA_API_KEY"
+            description: "Get key at exa.ai"
+            required: true
+            secret: true
+    provided_tools:
+      - name: "web_search_exa"
+        description: "Neural search the web"
+      - name: "web_fetch_exa"
+        description: "Fetch and extract page content"
+
+  - name: "google-sheets"
+    display: "Google Sheets"
+    description: "Read and write Google Sheets data"
+    category: "data"
+    verified: true
+    packages:
+      - type: "stdio"
+        command: "npx"
+        args: ["-y", "@anthropic/mcp-google-sheets"]
+        env_vars:
+          - name: "GOOGLE_SERVICE_ACCOUNT_KEY"
+            description: "Path to Google service account JSON key"
+            required: true
+    provided_tools:
+      - name: "read_sheet"
+        description: "Read data from a Google Sheet"
+      - name: "write_sheet"
+        description: "Write data to a Google Sheet"
+
+  - name: "postgresql"
+    display: "PostgreSQL"
+    description: "Query and execute SQL on PostgreSQL databases"
+    category: "data"
+    verified: true
+    packages:
+      - type: "stdio"
+        command: "npx"
+        args: ["-y", "@anthropic/mcp-postgres"]
+        env_vars:
+          - name: "POSTGRES_URL"
+            description: "PostgreSQL connection string"
+            required: true
+            secret: true
+    provided_tools:
+      - name: "query"
+        description: "Execute a SELECT query"
+      - name: "execute"
+        description: "Execute an INSERT/UPDATE/DELETE"
+
+  - name: "slack"
+    display: "Slack"
+    description: "Send messages and read Slack channels"
+    category: "communication"
+    verified: true
+    packages:
+      - type: "stdio"
+        command: "npx"
+        args: ["-y", "@anthropic/mcp-slack"]
+        env_vars:
+          - name: "SLACK_BOT_TOKEN"
+            description: "Slack bot OAuth token (xoxb-...)"
+            required: true
+            secret: true
+    provided_tools:
+      - name: "send_message"
+        description: "Send a message to a Slack channel"
+      - name: "read_channel"
+        description: "Read recent messages from a channel"
+
+  - name: "resend-email"
+    display: "Email (Resend)"
+    description: "Send transactional emails via Resend"
+    category: "communication"
+    verified: true
+    packages:
+      - type: "stdio"
+        command: "npx"
+        args: ["-y", "@anthropic/mcp-resend"]
+        env_vars:
+          - name: "RESEND_API_KEY"
+            description: "Get key at resend.com"
+            required: true
+            secret: true
+    provided_tools:
+      - name: "send_email"
+        description: "Send an email"
+
+  - name: "github"
+    display: "GitHub"
+    description: "Create issues, pull requests, search code on GitHub"
+    category: "dev-tools"
+    verified: true
+    packages:
+      - type: "stdio"
+        command: "npx"
+        args: ["-y", "@modelcontextprotocol/server-github"]
+        env_vars:
+          - name: "GITHUB_PERSONAL_ACCESS_TOKEN"
+            description: "GitHub personal access token"
+            required: true
+            secret: true
+    provided_tools:
+      - name: "create_issue"
+        description: "Create a GitHub issue"
+      - name: "create_pr"
+        description: "Create a pull request"
+      - name: "search_code"
+        description: "Search code on GitHub"
+
+  - name: "notion"
+    display: "Notion"
+    description: "Search and create pages in Notion"
+    category: "productivity"
+    verified: true
+    packages:
+      - type: "stdio"
+        command: "npx"
+        args: ["-y", "@anthropic/mcp-notion"]
+        env_vars:
+          - name: "NOTION_API_KEY"
+            description: "Notion integration token"
+            required: true
+            secret: true
+    provided_tools:
+      - name: "search"
+        description: "Search Notion pages"
+      - name: "create_page"
+        description: "Create a new Notion page"
+
+  - name: "linear"
+    display: "Linear"
+    description: "Create and list issues in Linear"
+    category: "productivity"
+    verified: true
+    packages:
+      - type: "stdio"
+        command: "npx"
+        args: ["-y", "@anthropic/mcp-linear"]
+        env_vars:
+          - name: "LINEAR_API_KEY"
+            description: "Linear API key"
+            required: true
+            secret: true
+    provided_tools:
+      - name: "create_issue"
+        description: "Create a Linear issue"
+      - name: "list_issues"
+        description: "List issues in a project"
+
+  - name: "stripe"
+    display: "Stripe"
+    description: "Manage payments and customers via Stripe"
+    category: "payments"
+    verified: true
+    packages:
+      - type: "stdio"
+        command: "npx"
+        args: ["-y", "@anthropic/mcp-stripe"]
+        env_vars:
+          - name: "STRIPE_SECRET_KEY"
+            description: "Stripe secret key (sk_...)"
+            required: true
+            secret: true
+    provided_tools:
+      - name: "create_payment"
+        description: "Create a payment intent"
+      - name: "list_customers"
+        description: "List Stripe customers"
+
+  - name: "http-webhook"
+    display: "HTTP / Webhook"
+    description: "Make arbitrary HTTP requests to any API"
+    category: "generic"
+    verified: true
+    packages:
+      - type: "stdio"
+        command: "npx"
+        args: ["-y", "@anthropic/mcp-http"]
+    provided_tools:
+      - name: "http_request"
+        description: "Make an HTTP request (GET/POST/PUT/DELETE)"

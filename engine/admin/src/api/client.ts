@@ -24,6 +24,8 @@ import type {
   ModelRegistryEntry,
   RegistryProviderInfo,
   Schema,
+  PaginatedSessions,
+  SessionTrace,
 } from '../types';
 import {
   MOCK_HEALTH,
@@ -39,6 +41,7 @@ import {
 } from '../mocks/pages';
 import { MOCK_AGENTS } from '../mocks/agents';
 import { SCHEMA_NAMES } from '../mocks/canvas';
+import { MOCK_SESSIONS_LIST, MOCK_TRACE, MOCK_TRACE_ERROR } from '../mocks/inspect';
 
 const BASE_URL = '/api/v1';
 const PROTOTYPE_KEY = 'bytebrew_prototype_mode';
@@ -312,6 +315,58 @@ class APIClient {
       );
     }
     return this.request<Schema[]>('GET', '/schemas');
+  }
+
+  // ─── Sessions / Inspect ──────────────────────────────────────────────────────
+
+  listSessions(params?: {
+    page?: number;
+    per_page?: number;
+    search?: string;
+    status?: string[];
+    sort_by?: string;
+    sort_dir?: 'asc' | 'desc';
+  }): Promise<PaginatedSessions> {
+    if (this.isPrototype) {
+      const page = params?.page ?? 1;
+      const perPage = params?.per_page ?? 20;
+      let filtered = [...MOCK_SESSIONS_LIST];
+
+      if (params?.search) {
+        const q = params.search.toLowerCase();
+        filtered = filtered.filter(
+          (s) => s.session_id.toLowerCase().includes(q) || s.entry_agent.toLowerCase().includes(q),
+        );
+      }
+      if (params?.status && params.status.length > 0) {
+        filtered = filtered.filter((s) => params.status!.includes(s.status));
+      }
+
+      const total = filtered.length;
+      const start = (page - 1) * perPage;
+      const sessions = filtered.slice(start, start + perPage);
+      return this.mock<PaginatedSessions>({ sessions, total, page, per_page: perPage });
+    }
+
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.per_page) qs.set('per_page', String(params.per_page));
+    if (params?.search) qs.set('search', params.search);
+    if (params?.status) qs.set('status', params.status.join(','));
+    if (params?.sort_by) qs.set('sort_by', params.sort_by);
+    if (params?.sort_dir) qs.set('sort_dir', params.sort_dir);
+    const q = qs.toString() ? '?' + qs.toString() : '';
+    return this.request<PaginatedSessions>('GET', `/sessions${q}`);
+  }
+
+  getSessionTrace(sessionId: string): Promise<SessionTrace> {
+    if (this.isPrototype) {
+      if (sessionId === MOCK_TRACE_ERROR.session_id) {
+        return this.mock(MOCK_TRACE_ERROR);
+      }
+      return this.mock({ ...MOCK_TRACE, session_id: sessionId });
+    }
+    return this.request<SessionTrace>('GET', `/sessions/${sessionId}`);
   }
 
   /**

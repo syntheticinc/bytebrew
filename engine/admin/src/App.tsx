@@ -42,6 +42,8 @@ export default function App() {
             <Route path="/builder" element={<AgentBuilderPage />} />
             <Route path="/builder/:schema/:agent" element={<AgentDrillInPage />} />
             <Route path="/builder/:schema/:agent/inspect/:session" element={<InspectPage />} />
+            <Route path="/inspect" element={<InspectPage />} />
+            <Route path="/inspect/:session" element={<InspectPage />} />
             <Route path="/mcp" element={<MCPPage />} />
             <Route path="/models" element={<ModelsPage />} />
             <Route path="/triggers" element={<TriggersPage />} />

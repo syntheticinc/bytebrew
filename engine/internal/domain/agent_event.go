@@ -4,7 +4,31 @@ import (
 	"time"
 )
 
-// AgentEventType represents the type of agent event
+// AgentEventType represents the type of agent event.
+//
+// Event Contract (AC-EVT-03):
+//
+// All events carry:
+//   - type: one of the AgentEventType constants below
+//   - schema_version: "1.0" (AC-EVT-01) — for forward compatibility
+//   - timestamp: RFC3339 time
+//   - agent_id: identifies the agent that produced the event
+//
+// Clients MUST ignore unknown event types gracefully (AC-EVT-02).
+//
+// Event types:
+//   - answer: final agent answer text
+//   - answer_chunk: streaming text chunk
+//   - reasoning: LLM reasoning/thinking content
+//   - tool_call: tool invocation (content = tool name, metadata has arguments)
+//   - tool_result: tool execution result
+//   - plan_created/plan_progress/plan_completed: plan lifecycle
+//   - error: agent error (includes error.code + error.message)
+//   - agent_spawned/agent_completed/agent_failed: sub-agent lifecycle
+//   - user_question: ask_user prompt for client
+//   - structured_output: tables, action buttons
+//   - state_changed: agent lifecycle state transition (metadata: agent_name, old_state, new_state, reason)
+//   - flow.*: flow pipeline events (flow.step_started, flow.step_completed, flow.gate_evaluated, etc.)
 type AgentEventType string
 
 const (

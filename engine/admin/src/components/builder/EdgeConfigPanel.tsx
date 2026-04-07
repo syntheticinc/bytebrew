@@ -1,14 +1,26 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import type { Edge } from '@xyflow/react';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
+interface FieldMapping {
+  source: string;
+  target: string;
+}
+
 interface EdgeConfigPanelProps {
   edge: Edge;
   onClose: () => void;
-  onChange?: (updated: Edge) => void;
+  onSave?: (edge: Edge, config: EdgeConfig) => void;
+  onDelete?: (edgeId: string) => void;
+}
+
+export interface EdgeConfig {
+  mode: ConfigMode;
+  fieldMappings: FieldMapping[];
+  promptTemplate: string;
 }
 
 type ConfigMode = 'full' | 'field' | 'prompt';
@@ -22,50 +34,69 @@ const EDGE_TYPE_COLORS: Record<string, { bg: string; text: string; border: strin
 };
 
 const MODE_OPTIONS: { value: ConfigMode; label: string; description: string }[] = [
-  { value: 'full', label: 'Full output', description: 'Next agent receives the complete output' },
-  { value: 'field', label: 'Field mapping', description: 'Extract a specific field from the output' },
-  { value: 'prompt', label: 'Custom prompt', description: 'Transform output with a template' },
+  { value: 'full', label: 'Full Output', description: 'Next agent receives the complete output' },
+  { value: 'field', label: 'Field Mapping', description: 'Map specific fields from source to target' },
+  { value: 'prompt', label: 'Custom Prompt', description: 'Transform output with a template' },
 ];
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export default function EdgeConfigPanel({ edge, onClose, onChange }: EdgeConfigPanelProps) {
-  const [mode, setMode] = useState<ConfigMode>('full');
-  const [fieldName, setFieldName] = useState('');
-  const [promptTemplate, setPromptTemplate] = useState('{{output}}');
+export default function EdgeConfigPanel({ edge, onClose, onSave, onDelete }: EdgeConfigPanelProps) {
+  const edgeData = (edge.data ?? {}) as Record<string, unknown>;
+
+  const [mode, setMode] = useState<ConfigMode>(
+    (edgeData.configMode as ConfigMode) ?? 'full',
+  );
+  const [fieldMappings, setFieldMappings] = useState<FieldMapping[]>(
+    (edgeData.fieldMappings as FieldMapping[]) ?? [{ source: '', target: '' }],
+  );
+  const [promptTemplate, setPromptTemplate] = useState(
+    (edgeData.promptTemplate as string) ?? '{{output}}',
+  );
 
   const edgeType = (edge.label as string) ?? 'flow';
   const defaultColors = { bg: 'bg-green-500/15', text: 'text-green-400', border: 'border-green-500/30' };
   const resolved = EDGE_TYPE_COLORS[edgeType];
   const colors = resolved !== undefined ? resolved : defaultColors;
 
-  // Build preview text based on current config mode
+  const addMapping = useCallback(() => {
+    setFieldMappings((prev) => [...prev, { source: '', target: '' }]);
+  }, []);
+
+  const removeMapping = useCallback((index: number) => {
+    setFieldMappings((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const updateMapping = useCallback((index: number, field: 'source' | 'target', value: string) => {
+    setFieldMappings((prev) =>
+      prev.map((m, i) => (i === index ? { ...m, [field]: value } : m)),
+    );
+  }, []);
+
+  const handleSave = () => {
+    onSave?.(edge, { mode, fieldMappings, promptTemplate });
+  };
+
+  const handleDelete = () => {
+    onDelete?.(edge.id);
+  };
+
+  // Preview
   const preview = (() => {
     switch (mode) {
       case 'full':
         return '{ ...full agent output }';
-      case 'field':
-        return fieldName
-          ? `output.${fieldName}`
-          : '(select a field name)';
+      case 'field': {
+        const mapped = fieldMappings.filter((m) => m.source && m.target);
+        if (mapped.length === 0) return '(add field mappings)';
+        return mapped.map((m) => `${m.target}: output.${m.source}`).join('\n');
+      }
       case 'prompt':
         return promptTemplate || '(empty template)';
     }
   })();
-
-  const handleModeChange = (next: ConfigMode) => {
-    setMode(next);
-    if (!onChange) return;
-
-    // Propagate a data update on the edge (consumers can store config in edge.data)
-    const updated: Edge = {
-      ...edge,
-      data: { ...((edge.data as Record<string, unknown>) ?? {}), configMode: next, fieldName, promptTemplate },
-    };
-    onChange(updated);
-  };
 
   return (
     <div className="w-80 bg-brand-dark-surface border-l border-brand-shade3/10 flex flex-col h-full flex-shrink-0 animate-slide-in-right">
@@ -90,7 +121,7 @@ export default function EdgeConfigPanel({ edge, onClose, onChange }: EdgeConfigP
         </button>
       </div>
 
-      {/* Edge type badge */}
+      {/* Edge type badge (read-only) */}
       <div className="px-4 py-3 border-b border-brand-shade3/15">
         <span className="text-[10px] text-brand-shade3 uppercase tracking-wider">Edge type</span>
         <div className="mt-1.5">
@@ -101,7 +132,7 @@ export default function EdgeConfigPanel({ edge, onClose, onChange }: EdgeConfigP
       </div>
 
       {/* Configuration mode */}
-      <div className="px-4 py-3 border-b border-brand-shade3/15 flex-1 overflow-y-auto">
+      <div className="px-4 py-3 flex-1 overflow-y-auto">
         <span className="text-[10px] text-brand-shade3 uppercase tracking-wider">Configuration</span>
         <div className="mt-2 space-y-2">
           {MODE_OPTIONS.map((opt) => (
@@ -118,7 +149,7 @@ export default function EdgeConfigPanel({ edge, onClose, onChange }: EdgeConfigP
                 name="edge-config-mode"
                 value={opt.value}
                 checked={mode === opt.value}
-                onChange={() => handleModeChange(opt.value)}
+                onChange={() => setMode(opt.value)}
                 className="mt-0.5 accent-brand-accent"
               />
               <div className="min-w-0">
@@ -129,17 +160,50 @@ export default function EdgeConfigPanel({ edge, onClose, onChange }: EdgeConfigP
           ))}
         </div>
 
-        {/* Field mapping input */}
+        {/* Field Mapping — key-value pairs */}
         {mode === 'field' && (
           <div className="mt-3">
-            <span className="text-[10px] text-brand-shade3 uppercase tracking-wider">Field name</span>
-            <input
-              type="text"
-              value={fieldName}
-              onChange={(e) => setFieldName(e.target.value)}
-              placeholder="e.g. task_description"
-              className="mt-1 w-full px-2 py-1.5 bg-brand-dark border border-brand-shade3/30 rounded-card text-xs text-brand-light font-mono focus:outline-none focus:border-brand-accent placeholder-brand-shade3 transition-colors"
-            />
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] text-brand-shade3 uppercase tracking-wider">Field Mappings</span>
+              <button
+                onClick={addMapping}
+                className="text-[10px] text-brand-accent hover:text-brand-accent-hover transition-colors font-medium"
+              >
+                + Add row
+              </button>
+            </div>
+            <div className="space-y-2">
+              {fieldMappings.map((mapping, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    value={mapping.source}
+                    onChange={(e) => updateMapping(i, 'source', e.target.value)}
+                    placeholder="source field"
+                    className="flex-1 px-2 py-1.5 bg-brand-dark border border-brand-shade3/30 rounded-card text-xs text-brand-light font-mono focus:outline-none focus:border-brand-accent placeholder-brand-shade3/50 transition-colors min-w-0"
+                  />
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-brand-shade3 flex-shrink-0">
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                  <input
+                    type="text"
+                    value={mapping.target}
+                    onChange={(e) => updateMapping(i, 'target', e.target.value)}
+                    placeholder="target field"
+                    className="flex-1 px-2 py-1.5 bg-brand-dark border border-brand-shade3/30 rounded-card text-xs text-brand-light font-mono focus:outline-none focus:border-brand-accent placeholder-brand-shade3/50 transition-colors min-w-0"
+                  />
+                  <button
+                    onClick={() => removeMapping(i)}
+                    className="p-1 text-brand-shade3 hover:text-red-400 transition-colors flex-shrink-0"
+                    title="Remove mapping"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -150,22 +214,41 @@ export default function EdgeConfigPanel({ edge, onClose, onChange }: EdgeConfigP
             <textarea
               value={promptTemplate}
               onChange={(e) => setPromptTemplate(e.target.value)}
-              placeholder="Use {{output}} to reference the previous agent output"
+              placeholder="Use {{output}} or {{output.field}} to reference agent output"
               rows={4}
-              className="mt-1 w-full px-2 py-1.5 bg-brand-dark border border-brand-shade3/30 rounded-card text-xs text-brand-light font-mono focus:outline-none focus:border-brand-accent placeholder-brand-shade3 transition-colors resize-y leading-relaxed"
+              className="mt-1 w-full px-2 py-1.5 bg-brand-dark border border-brand-shade3/30 rounded-card text-xs text-brand-light font-mono focus:outline-none focus:border-brand-accent placeholder-brand-shade3/50 transition-colors resize-y leading-relaxed"
             />
+            <p className="mt-1 text-[10px] text-brand-shade3/70">
+              Variables: <code className="text-brand-shade2">{'{{output}}'}</code>, <code className="text-brand-shade2">{'{{output.field_name}}'}</code>
+            </p>
           </div>
         )}
+
+        {/* Preview */}
+        <div className="mt-4">
+          <span className="text-[10px] text-brand-shade3 uppercase tracking-wider">Preview</span>
+          <div className="mt-1.5 px-2 py-2 bg-brand-dark border border-brand-shade3/20 rounded-card">
+            <pre className="text-[11px] text-brand-shade2 font-mono whitespace-pre-wrap break-all leading-relaxed">
+              {preview}
+            </pre>
+          </div>
+        </div>
       </div>
 
-      {/* Preview */}
-      <div className="px-4 py-3 border-t border-brand-shade3/15">
-        <span className="text-[10px] text-brand-shade3 uppercase tracking-wider">Preview</span>
-        <div className="mt-1.5 px-2 py-2 bg-brand-dark border border-brand-shade3/20 rounded-card">
-          <pre className="text-[11px] text-brand-shade2 font-mono whitespace-pre-wrap break-all leading-relaxed">
-            {preview}
-          </pre>
-        </div>
+      {/* Action buttons */}
+      <div className="px-4 py-3 border-t border-brand-shade3/15 flex items-center gap-2">
+        <button
+          onClick={handleSave}
+          className="flex-1 px-3 py-1.5 bg-brand-accent hover:bg-brand-accent-hover text-brand-light text-xs font-medium rounded-card transition-colors"
+        >
+          Save
+        </button>
+        <button
+          onClick={handleDelete}
+          className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-medium rounded-card border border-red-500/20 transition-colors"
+        >
+          Delete Edge
+        </button>
       </div>
     </div>
   );
