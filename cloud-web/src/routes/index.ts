@@ -21,6 +21,7 @@ import { PrivacyPage } from '../pages/Privacy';
 import { ExamplesPage } from '../pages/Examples';
 import { ExampleDemoPage } from '../pages/ExampleDemo';
 import { VerifyEmailPage } from '../pages/VerifyEmail';
+import { DocsPage } from '../pages/Docs';
 
 const rootRoute = createRootRoute({
   component: RootLayout,
@@ -116,9 +117,11 @@ const privacyRoute = createRoute({
   component: PrivacyPage,
 });
 
-/* /docs is served by Starlight (docs-site).
-   In dev: Vite proxy → localhost:4321/docs
-   In prod: Caddy serves /var/www/bytebrew-docs */
+const docsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/docs',
+  component: DocsPage,
+});
 
 const examplesRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -155,6 +158,7 @@ export const routeTree = rootRoute.addChildren([
   downloadRoute,
   privacyRoute,
 
+  docsRoute,
   examplesRoute,
   exampleDemoRoute,
   verifyEmailRoute,

@@ -33,23 +33,40 @@ const NAV_SECTIONS = [
     title: 'Core Concepts',
     items: [
       { id: 'concept-agents', label: 'Agents & Lifecycle' },
+      { id: 'concept-schemas', label: 'Schemas' },
       { id: 'concept-multi-agent', label: 'Multi-Agent' },
       { id: 'concept-tools', label: 'Tools' },
       { id: 'concept-tasks', label: 'Tasks & Jobs' },
-      { id: 'concept-rag', label: 'Knowledge / RAG' },
       { id: 'concept-triggers', label: 'Triggers' },
+      { id: 'concept-gates', label: 'Gates & Edges' },
+      { id: 'concept-capabilities', label: 'Capabilities' },
+      { id: 'concept-memory', label: 'Memory' },
+      { id: 'concept-rag', label: 'Knowledge / RAG' },
+    ],
+  },
+  {
+    title: 'Configuration',
+    items: [
+      { id: 'config-models', label: 'Models (BYOK)' },
+      { id: 'config-mcp', label: 'MCP Servers' },
+      { id: 'config-policies', label: 'Policies' },
+      { id: 'config-recovery', label: 'Recovery' },
+      { id: 'config-escalation', label: 'Escalation' },
     ],
   },
   {
     title: 'Integration',
     items: [
-      { id: 'integration-widget', label: 'Embeddable Widget' },
+      { id: 'integration-widget', label: 'Widget Embed' },
       { id: 'integration-web-client', label: 'Web Client' },
     ],
   },
   {
-    title: 'Deployment',
+    title: 'Self-Hosting',
     items: [
+      { id: 'deploy-docker', label: 'Docker Compose' },
+      { id: 'deploy-kubernetes', label: 'Kubernetes (Helm)' },
+      { id: 'deploy-bare-metal', label: 'Bare Metal' },
       { id: 'deploy-ports', label: 'Two-Port Architecture' },
       { id: 'deploy-cors', label: 'CORS Configuration' },
     ],
@@ -85,13 +102,25 @@ const CONTENT_MAP: Record<string, () => React.JSX.Element> = {
   'admin-config': AdminConfigContent,
   'admin-audit': AdminAuditContent,
   'concept-agents': ConceptAgentsContent,
+  'concept-schemas': ConceptSchemasContent,
   'concept-multi-agent': ConceptMultiAgentContent,
   'concept-tools': ConceptToolsContent,
   'concept-tasks': ConceptTasksContent,
-  'concept-rag': ConceptRagContent,
   'concept-triggers': ConceptTriggersContent,
+  'concept-gates': ConceptGatesContent,
+  'concept-capabilities': ConceptCapabilitiesContent,
+  'concept-memory': ConceptMemoryContent,
+  'concept-rag': ConceptRagContent,
+  'config-models': ConfigModelsContent,
+  'config-mcp': ConfigMcpContent,
+  'config-policies': ConfigPoliciesContent,
+  'config-recovery': ConfigRecoveryContent,
+  'config-escalation': ConfigEscalationContent,
   'integration-widget': IntegrationWidgetContent,
   'integration-web-client': IntegrationWebClientContent,
+  'deploy-docker': DeployDockerContent,
+  'deploy-kubernetes': DeployKubernetesContent,
+  'deploy-bare-metal': DeployBareMetalContent,
   'deploy-ports': DeployPortsContent,
   'deploy-cors': DeployCorsContent,
   'example-sales': ExampleSalesContent,
@@ -3470,6 +3499,619 @@ models:
   qwen-3-32b:
     provider: openai
     api_key: "\${OPENAI_API_KEY}"`;
+
+/* ------------------------------------------------------------------ */
+/*  V2: Schemas                                                        */
+/* ------------------------------------------------------------------ */
+
+function ConceptSchemasContent() {
+  return (
+    <div>
+      <PageTitle>Schemas</PageTitle>
+      <p className="text-sm text-text-tertiary mb-4">
+        A Schema defines a complete agent workflow — which agents participate, how they connect,
+        and what triggers start the flow. Think of it as a blueprint for a multi-agent pipeline.
+      </p>
+
+      <Callout type="info" title="Key Concept">
+        Agents are global entities. Schemas reference agents — they don't own them.
+        The same agent can appear in multiple schemas.
+      </Callout>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Schema Structure</h3>
+      <CodeBlock>{`{
+  "name": "support-flow",
+  "description": "Customer support pipeline",
+  "agents": ["classifier", "support-agent", "escalation"],
+  "triggers": [1, 2],
+  "edges": [
+    { "source": "classifier", "target": "support-agent", "type": "flow" },
+    { "source": "classifier", "target": "escalation", "type": "transfer" }
+  ]
+}`}</CodeBlock>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">API</h3>
+      <CodeBlock>{`# List schemas
+GET /api/v1/schemas
+
+# Create schema
+POST /api/v1/schemas
+{ "name": "my-flow", "description": "..." }
+
+# Add agent to schema
+POST /api/v1/schemas/{id}/agents
+{ "agent_name": "classifier" }
+
+# Remove agent from schema
+DELETE /api/v1/schemas/{id}/agents/{name}`}</CodeBlock>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Visual Builder</h3>
+      <p className="text-sm text-text-tertiary">
+        The Admin Dashboard provides a visual canvas (Agent Builder) where you can create and
+        edit schemas by dragging agents, drawing edges, and configuring triggers — all without
+        writing code.
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  V2: Gates & Edges                                                  */
+/* ------------------------------------------------------------------ */
+
+function ConceptGatesContent() {
+  return (
+    <div>
+      <PageTitle>Gates &amp; Edges</PageTitle>
+      <p className="text-sm text-text-tertiary mb-4">
+        Edges connect agents within a schema. Gates are conditional checkpoints that control
+        whether output flows forward, loops back, or waits for multiple inputs.
+      </p>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Edge Types</h3>
+      <table className="w-full text-sm border border-border rounded-[8px] overflow-hidden mb-6">
+        <thead className="bg-surface-alt">
+          <tr>
+            <th className="px-3 py-2 text-left text-text-secondary font-medium">Type</th>
+            <th className="px-3 py-2 text-left text-text-secondary font-medium">Behavior</th>
+          </tr>
+        </thead>
+        <tbody className="text-text-tertiary">
+          <tr className="border-t border-border"><td className="px-3 py-2 font-mono text-xs text-green-400">flow</td><td className="px-3 py-2">Pass full output to next agent</td></tr>
+          <tr className="border-t border-border"><td className="px-3 py-2 font-mono text-xs text-blue-400">transfer</td><td className="px-3 py-2">Hand off conversation context</td></tr>
+          <tr className="border-t border-border"><td className="px-3 py-2 font-mono text-xs text-red-400">can_spawn</td><td className="px-3 py-2">Parent can create child agent</td></tr>
+          <tr className="border-t border-border"><td className="px-3 py-2 font-mono text-xs text-orange-400">loop</td><td className="px-3 py-2">Return to previous agent (via gate)</td></tr>
+          <tr className="border-t border-border"><td className="px-3 py-2 font-mono text-xs text-purple-400">trigger</td><td className="px-3 py-2">Trigger → entry agent (auto-created)</td></tr>
+        </tbody>
+      </table>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Gate Types</h3>
+      <table className="w-full text-sm border border-border rounded-[8px] overflow-hidden mb-6">
+        <thead className="bg-surface-alt">
+          <tr>
+            <th className="px-3 py-2 text-left text-text-secondary font-medium">Condition</th>
+            <th className="px-3 py-2 text-left text-text-secondary font-medium">Description</th>
+          </tr>
+        </thead>
+        <tbody className="text-text-tertiary">
+          <tr className="border-t border-border"><td className="px-3 py-2 font-mono text-xs">auto</td><td className="px-3 py-2">JSON Schema or regex validation on output</td></tr>
+          <tr className="border-t border-border"><td className="px-3 py-2 font-mono text-xs">human</td><td className="px-3 py-2">Wait for human approval before proceeding</td></tr>
+          <tr className="border-t border-border"><td className="px-3 py-2 font-mono text-xs">llm</td><td className="px-3 py-2">LLM-based evaluation (pass/fail with prompt)</td></tr>
+          <tr className="border-t border-border"><td className="px-3 py-2 font-mono text-xs">all_completed</td><td className="px-3 py-2">Join — wait for all incoming agents to finish</td></tr>
+        </tbody>
+      </table>
+
+      <Callout type="tip" title="Loop Prevention">
+        Gates with loops have a configurable <Ic>max_iterations</Ic> (default: 3) and <Ic>timeout</Ic> to
+        prevent infinite loops.
+      </Callout>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  V2: Capabilities                                                   */
+/* ------------------------------------------------------------------ */
+
+function ConceptCapabilitiesContent() {
+  return (
+    <div>
+      <PageTitle>Capabilities</PageTitle>
+      <p className="text-sm text-text-tertiary mb-4">
+        Capabilities are modular features that you can enable per-agent. When activated,
+        they automatically inject the required tools into the agent's runtime.
+      </p>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Available Capabilities</h3>
+      <table className="w-full text-sm border border-border rounded-[8px] overflow-hidden mb-6">
+        <thead className="bg-surface-alt">
+          <tr>
+            <th className="px-3 py-2 text-left text-text-secondary font-medium">Capability</th>
+            <th className="px-3 py-2 text-left text-text-secondary font-medium">Auto-Injected Tools</th>
+            <th className="px-3 py-2 text-left text-text-secondary font-medium">Description</th>
+          </tr>
+        </thead>
+        <tbody className="text-text-tertiary">
+          <tr className="border-t border-border"><td className="px-3 py-2 font-medium">Memory</td><td className="px-3 py-2 font-mono text-xs">memory_recall, memory_store</td><td className="px-3 py-2">Cross-session persistence per schema</td></tr>
+          <tr className="border-t border-border"><td className="px-3 py-2 font-medium">Knowledge</td><td className="px-3 py-2 font-mono text-xs">search_knowledge</td><td className="px-3 py-2">RAG — search uploaded documents</td></tr>
+          <tr className="border-t border-border"><td className="px-3 py-2 font-medium">Escalation</td><td className="px-3 py-2 font-mono text-xs">escalate</td><td className="px-3 py-2">Transfer to human or notify webhook</td></tr>
+          <tr className="border-t border-border"><td className="px-3 py-2 font-medium">Output Guardrail</td><td className="px-3 py-2 font-mono text-xs">—</td><td className="px-3 py-2">Validate output (JSON Schema, LLM judge)</td></tr>
+          <tr className="border-t border-border"><td className="px-3 py-2 font-medium">Output Schema</td><td className="px-3 py-2 font-mono text-xs">—</td><td className="px-3 py-2">Structured JSON output via response_format</td></tr>
+          <tr className="border-t border-border"><td className="px-3 py-2 font-medium">Recovery</td><td className="px-3 py-2 font-mono text-xs">—</td><td className="px-3 py-2">Retry rules per failure type</td></tr>
+          <tr className="border-t border-border"><td className="px-3 py-2 font-medium">Policies</td><td className="px-3 py-2 font-mono text-xs">—</td><td className="px-3 py-2">When [condition] → Do [action] rules</td></tr>
+        </tbody>
+      </table>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">API</h3>
+      <CodeBlock>{`# Add capability to agent
+POST /api/v1/agents/{name}/capabilities
+{
+  "type": "memory",
+  "enabled": true,
+  "config": {
+    "retention_days": 30,
+    "max_entries": 1000
+  }
+}
+
+# List agent capabilities
+GET /api/v1/agents/{name}/capabilities
+
+# Remove capability
+DELETE /api/v1/agents/{name}/capabilities/{type}`}</CodeBlock>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  V2: Memory                                                         */
+/* ------------------------------------------------------------------ */
+
+function ConceptMemoryContent() {
+  return (
+    <div>
+      <PageTitle>Memory</PageTitle>
+      <p className="text-sm text-text-tertiary mb-4">
+        Memory gives agents persistent recall across sessions. When enabled, agents automatically
+        get <Ic>memory_recall</Ic> and <Ic>memory_store</Ic> tools.
+      </p>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">How It Works</h3>
+      <p className="text-sm text-text-tertiary mb-3">
+        Memory is scoped per-schema (not per-agent or per-user). All agents within the same schema
+        share a memory space. This is cross-session by definition — within a single session,
+        everything is already in context.
+      </p>
+
+      <Callout type="info" title="Scope">
+        Different schemas have isolated memory spaces. A "Support Flow" and "Sales Flow"
+        will never see each other's memories.
+      </Callout>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Configuration</h3>
+      <CodeBlock>{`{
+  "type": "memory",
+  "enabled": true,
+  "config": {
+    "retention_days": 30,       // 0 = unlimited
+    "max_entries": 1000,        // FIFO eviction when exceeded
+    "unlimited": false          // Override retention_days
+  }
+}`}</CodeBlock>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Memory API</h3>
+      <CodeBlock>{`# List memories for a schema
+GET /api/v1/schemas/{id}/memory
+
+# Clear all memories
+DELETE /api/v1/schemas/{id}/memory`}</CodeBlock>
+
+      <p className="text-sm text-text-tertiary mt-4">
+        The agent decides what to remember. <Ic>memory_store</Ic> saves key facts,
+        and <Ic>memory_recall</Ic> searches them semantically at the start of each session.
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  V2: Configuration — Models                                         */
+/* ------------------------------------------------------------------ */
+
+function ConfigModelsContent() {
+  return (
+    <div>
+      <PageTitle>Models (BYOK)</PageTitle>
+      <p className="text-sm text-text-tertiary mb-4">
+        ByteBrew uses a Bring Your Own Key (BYOK) model. You configure LLM providers with
+        your own API keys. Any OpenAI-compatible API works.
+      </p>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Supported Providers</h3>
+      <p className="text-sm text-text-tertiary mb-3">
+        OpenAI, Anthropic, Google AI, Azure OpenAI, OpenRouter, Ollama, vLLM, and any
+        OpenAI-compatible endpoint.
+      </p>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Create a Model</h3>
+      <CodeBlock>{`POST /api/v1/models
+{
+  "name": "claude-sonnet",
+  "type": "openai_compatible",
+  "provider": "anthropic",
+  "model_name": "claude-sonnet-4-20250514",
+  "api_key": "sk-ant-...",
+  "base_url": "https://api.anthropic.com/v1"
+}`}</CodeBlock>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Per-Agent Parameters</h3>
+      <p className="text-sm text-text-tertiary mb-3">
+        Each agent can override model parameters:
+      </p>
+      <CodeBlock>{`{
+  "temperature": 0.7,
+  "top_p": 0.9,
+  "max_tokens": 4096,
+  "frequency_penalty": 0.0,
+  "presence_penalty": 0.0,
+  "stop_sequences": ["\\n\\nHuman:"]
+}`}</CodeBlock>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  V2: Configuration — MCP                                            */
+/* ------------------------------------------------------------------ */
+
+function ConfigMcpContent() {
+  return (
+    <div>
+      <PageTitle>MCP Servers</PageTitle>
+      <p className="text-sm text-text-tertiary mb-4">
+        MCP (Model Context Protocol) servers provide external tools to agents. ByteBrew
+        includes a curated catalog of trusted servers and supports custom servers.
+      </p>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Transport Types</h3>
+      <table className="w-full text-sm border border-border rounded-[8px] overflow-hidden mb-6">
+        <thead className="bg-surface-alt">
+          <tr>
+            <th className="px-3 py-2 text-left text-text-secondary font-medium">Transport</th>
+            <th className="px-3 py-2 text-left text-text-secondary font-medium">Use Case</th>
+          </tr>
+        </thead>
+        <tbody className="text-text-tertiary">
+          <tr className="border-t border-border"><td className="px-3 py-2 font-mono text-xs">stdio</td><td className="px-3 py-2">Local process (npx, binary)</td></tr>
+          <tr className="border-t border-border"><td className="px-3 py-2 font-mono text-xs">streamable-http</td><td className="px-3 py-2">HTTP with streaming support</td></tr>
+          <tr className="border-t border-border"><td className="px-3 py-2 font-mono text-xs">sse</td><td className="px-3 py-2">Server-Sent Events</td></tr>
+          <tr className="border-t border-border"><td className="px-3 py-2 font-mono text-xs">websocket</td><td className="px-3 py-2">Persistent WebSocket connection</td></tr>
+          <tr className="border-t border-border"><td className="px-3 py-2 font-mono text-xs">docker</td><td className="px-3 py-2">Containerized MCP server</td></tr>
+        </tbody>
+      </table>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Add from Catalog</h3>
+      <CodeBlock>{`# List catalog
+GET /api/v1/mcp/catalog
+
+# Install from catalog
+POST /api/v1/mcp-servers
+{
+  "name": "tavily-search",
+  "type": "stdio",
+  "command": "npx",
+  "args": ["-y", "tavily-mcp"],
+  "env_vars": { "TAVILY_API_KEY": "tvly-..." }
+}`}</CodeBlock>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Auth Types</h3>
+      <p className="text-sm text-text-tertiary">
+        MCP servers support <Ic>none</Ic>, <Ic>api_key</Ic>, <Ic>forward_headers</Ic>, and <Ic>oauth2</Ic> authentication.
+        Forward headers lets you pass auth from the calling system (e.g., Zitadel) through to the MCP server.
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  V2: Configuration — Policies                                       */
+/* ------------------------------------------------------------------ */
+
+function ConfigPoliciesContent() {
+  return (
+    <div>
+      <PageTitle>Policies</PageTitle>
+      <p className="text-sm text-text-tertiary mb-4">
+        Policies are "When [condition] → Do [action]" rules that run at specific points
+        in the agent lifecycle.
+      </p>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Conditions</h3>
+      <p className="text-sm text-text-tertiary mb-3">
+        <Ic>before_tool_call</Ic>, <Ic>after_tool_call</Ic>, <Ic>tool_matches</Ic>,
+        <Ic>time_range</Ic>, <Ic>error_occurred</Ic>
+      </p>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Actions</h3>
+      <p className="text-sm text-text-tertiary mb-3">
+        <Ic>block</Ic> — prevent the tool call, <Ic>log_to_webhook</Ic> — POST to URL,
+        <Ic>notify</Ic> — send notification, <Ic>inject_header</Ic> — add header to MCP call,
+        <Ic>write_audit</Ic> — log to audit trail
+      </p>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Example</h3>
+      <CodeBlock>{`{
+  "condition": "tool_matches",
+  "tool_pattern": "shell_*",
+  "action": "block",
+  "time_start": "22:00",
+  "time_end": "06:00"
+}`}</CodeBlock>
+      <p className="text-sm text-text-tertiary mt-2">
+        This policy blocks all shell tools between 10 PM and 6 AM.
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  V2: Configuration — Recovery                                       */
+/* ------------------------------------------------------------------ */
+
+function ConfigRecoveryContent() {
+  return (
+    <div>
+      <PageTitle>Recovery</PageTitle>
+      <p className="text-sm text-text-tertiary mb-4">
+        Recovery policies define retry behavior when agents encounter failures. Configure
+        per failure type with exponential backoff.
+      </p>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Configuration</h3>
+      <CodeBlock>{`{
+  "type": "recovery",
+  "enabled": true,
+  "config": {
+    "rules": [
+      {
+        "failure_type": "tool_timeout",
+        "max_retries": 3,
+        "backoff_ms": 1000,
+        "backoff_multiplier": 2.0
+      },
+      {
+        "failure_type": "model_rate_limit",
+        "max_retries": 5,
+        "backoff_ms": 5000,
+        "backoff_multiplier": 1.5
+      },
+      {
+        "failure_type": "mcp_connection_error",
+        "max_retries": 2,
+        "backoff_ms": 2000,
+        "backoff_multiplier": 2.0
+      }
+    ]
+  }
+}`}</CodeBlock>
+
+      <Callout type="info" title="Scope">
+        Recovery is per-session. If all retries are exhausted, the agent transitions
+        to the <Ic>blocked</Ic> state and emits an <Ic>agent.state_changed</Ic> SSE event.
+      </Callout>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  V2: Configuration — Escalation                                     */
+/* ------------------------------------------------------------------ */
+
+function ConfigEscalationContent() {
+  return (
+    <div>
+      <PageTitle>Escalation</PageTitle>
+      <p className="text-sm text-text-tertiary mb-4">
+        Escalation lets agents hand off to humans or notify external systems when they
+        cannot handle a request. When enabled, agents get an <Ic>escalate</Ic> tool.
+      </p>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Actions</h3>
+      <p className="text-sm text-text-tertiary mb-3">
+        <Ic>transfer_to_user</Ic> — pause agent, transfer conversation to human.
+        <Ic>notify</Ic> — POST to webhook URL, agent continues.
+      </p>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Triggers</h3>
+      <CodeBlock>{`{
+  "type": "escalation",
+  "enabled": true,
+  "config": {
+    "action": "transfer_to_user",
+    "webhook_url": "https://example.com/escalation",
+    "triggers": [
+      { "condition": "confidence_below", "threshold": 0.3 },
+      { "condition": "max_turns_exceeded", "threshold": 10 },
+      { "condition": "topic_matches", "pattern": "billing|refund|legal" },
+      { "condition": "tool_failed" }
+    ]
+  }
+}`}</CodeBlock>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  V2: Self-Hosting — Docker Compose                                  */
+/* ------------------------------------------------------------------ */
+
+function DeployDockerContent() {
+  return (
+    <div>
+      <PageTitle>Docker Compose</PageTitle>
+      <p className="text-sm text-text-tertiary mb-4">
+        The recommended way to run ByteBrew for development and small production deployments.
+      </p>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">docker-compose.yml</h3>
+      <CodeBlock>{`version: "3.8"
+services:
+  engine:
+    image: ghcr.io/syntheticinc/bytebrew-engine:latest
+    ports:
+      - "8443:8443"   # HTTPS API + Admin + Widget
+      - "8080:8080"   # HTTP (gRPC, health)
+    environment:
+      - DATABASE_URL=postgres://bytebrew:secret@db:5432/bytebrew?sslmode=disable
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin123
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=bytebrew
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_DB=bytebrew
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  pgdata:`}</CodeBlock>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Start</h3>
+      <CodeBlock>{`docker compose up -d
+# Admin: http://localhost:8443/admin/
+# API:   http://localhost:8443/api/v1/`}</CodeBlock>
+
+      <Callout type="tip" title="Persistence">
+        The <Ic>pgdata</Ic> volume persists data between restarts. Use <Ic>docker compose down -v</Ic> to
+        reset completely.
+      </Callout>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  V2: Self-Hosting — Kubernetes                                      */
+/* ------------------------------------------------------------------ */
+
+function DeployKubernetesContent() {
+  return (
+    <div>
+      <PageTitle>Kubernetes (Helm)</PageTitle>
+      <p className="text-sm text-text-tertiary mb-4">
+        For enterprise deployments with horizontal scaling. ByteBrew provides a Helm chart
+        in <Ic>engine/deploy/helm/</Ic>.
+      </p>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Install</h3>
+      <CodeBlock>{`helm repo add bytebrew https://charts.bytebrew.ai
+helm install bytebrew bytebrew/bytebrew-engine \\
+  --set database.url="postgres://..." \\
+  --set admin.password="secure-password" \\
+  --set ingress.enabled=true \\
+  --set ingress.host=bytebrew.example.com`}</CodeBlock>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">Key Values</h3>
+      <CodeBlock>{`# values.yaml
+replicaCount: 2
+
+database:
+  url: "postgres://bytebrew:secret@postgres:5432/bytebrew"
+
+admin:
+  username: admin
+  password: "change-me"
+
+ingress:
+  enabled: true
+  host: bytebrew.example.com
+  tls: true
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: 2000m
+    memory: 2Gi`}</CodeBlock>
+
+      <Callout type="warning" title="Database">
+        Helm chart does NOT include PostgreSQL. Use a managed database
+        (RDS, Cloud SQL, etc.) or deploy PostgreSQL separately.
+      </Callout>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  V2: Self-Hosting — Bare Metal                                      */
+/* ------------------------------------------------------------------ */
+
+function DeployBareMetalContent() {
+  return (
+    <div>
+      <PageTitle>Bare Metal</PageTitle>
+      <p className="text-sm text-text-tertiary mb-4">
+        Run ByteBrew directly on a VPS or on-premise server with systemd and Caddy.
+      </p>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">1. Download Binary</h3>
+      <CodeBlock>{`curl -fsSL https://bytebrew.ai/releases/latest/bytebrew-engine-linux-amd64 \\
+  -o /usr/local/bin/bytebrew-engine
+chmod +x /usr/local/bin/bytebrew-engine`}</CodeBlock>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">2. Environment File</h3>
+      <CodeBlock>{`# /etc/bytebrew/engine.env
+DATABASE_URL=postgres://bytebrew:secret@localhost:5432/bytebrew?sslmode=disable
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=secure-password
+LISTEN_ADDR=127.0.0.1:8443
+HTTP_ADDR=127.0.0.1:8080`}</CodeBlock>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">3. Systemd Unit</h3>
+      <CodeBlock>{`# /etc/systemd/system/bytebrew-engine.service
+[Unit]
+Description=ByteBrew Engine
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=bytebrew
+EnvironmentFile=/etc/bytebrew/engine.env
+ExecStart=/usr/local/bin/bytebrew-engine
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target`}</CodeBlock>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">4. Caddy Reverse Proxy</h3>
+      <CodeBlock>{`# /etc/caddy/Caddyfile
+bytebrew.example.com {
+    reverse_proxy 127.0.0.1:8443
+}
+
+bytebrew-grpc.example.com {
+    reverse_proxy 127.0.0.1:8080 {
+        transport http {
+            versions h2c
+        }
+    }
+}`}</CodeBlock>
+
+      <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">5. Start</h3>
+      <CodeBlock>{`systemctl enable --now bytebrew-engine
+systemctl enable --now caddy`}</CodeBlock>
+    </div>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /*  Shared components                                                  */
