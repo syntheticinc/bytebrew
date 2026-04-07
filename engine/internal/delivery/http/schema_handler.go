@@ -120,9 +120,10 @@ type AgentSchemaLister interface {
 
 // SchemaHandler serves /api/v1/schemas endpoints.
 type SchemaHandler struct {
-	schemas SchemaService
-	gates   GateService
-	edges   EdgeService
+	schemas        SchemaService
+	gates          GateService
+	edges          EdgeService
+	agentDetailer  SchemaAgentDetailer // optional, used by export
 }
 
 // NewSchemaHandler creates a SchemaHandler.

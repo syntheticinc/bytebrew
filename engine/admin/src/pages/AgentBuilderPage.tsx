@@ -32,7 +32,7 @@ import GateConfigPanel from '../components/builder/GateConfigPanel';
 import BuilderSidePanel from '../components/builder/BuilderSidePanel';
 import { ExportButton, ImportButton } from '../components/builder/BuilderExportImport';
 import BuilderFlowTest from '../components/builder/BuilderFlowTest';
-import BuilderAssistant, { AssistantToggleButton } from '../components/builder/BuilderAssistant';
+// BuilderAssistant moved to BottomPanel (Layout.tsx)
 import DriftNotification from '../components/builder/DriftNotification';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { ToastProvider, useToast } from '../components/builder/Toast';
@@ -206,7 +206,7 @@ function AgentBuilderInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showFlowTest, setShowFlowTest] = useState(false);
-  const [showAssistant, setShowAssistant] = useState(false);
+  // showAssistant removed — AI Assistant moved to BottomPanel
   const [refreshKey, setRefreshKey] = useState(0);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; canvasX: number; canvasY: number } | null>(null);
   const [nodeMenu, setNodeMenu] = useState<{ x: number; y: number; nodeId: string; nodeType: string } | null>(null);
@@ -1097,16 +1097,7 @@ function AgentBuilderInner() {
         )}
       </div>
 
-      {/* AI Assistant — production: floating overlay */}
-      {!isPrototype && showAssistant && (
-        <BuilderAssistant
-          onClose={() => setShowAssistant(false)}
-          onConfigChanged={refetchCanvas}
-        />
-      )}
-      {!isPrototype && !showAssistant && (
-        <AssistantToggleButton onClick={() => setShowAssistant(true)} />
-      )}
+      {/* AI Assistant moved to BottomPanel (Layout.tsx) — floating overlay removed */}
 
       {/* Canvas context menu */}
       {contextMenu && (
@@ -1153,18 +1144,7 @@ function AgentBuilderInner() {
             </svg>
             Auto Layout
           </button>
-          <button
-            className="w-full px-4 py-2 text-left text-xs text-brand-shade2 hover:bg-brand-accent/10 hover:text-brand-light transition-colors flex items-center gap-2"
-            onClick={() => {
-              setContextMenu(null);
-              setShowAssistant(true);
-            }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-            </svg>
-            AI Assistant
-          </button>
+          {/* AI Assistant moved to BottomPanel */}
         </div>
       )}
 

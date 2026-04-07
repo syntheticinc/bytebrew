@@ -738,6 +738,7 @@ func Run(sc ServerConfig) error {
 				&gateServiceHTTPAdapter{repo: gateRepo},
 				&edgeServiceHTTPAdapter{repo: edgeRepo},
 			)
+			schemaHandler.SetAgentDetailer(agentManager)
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeSchemasRead))
 				r.Get("/api/v1/schemas", schemaHandler.ListSchemas)
@@ -747,10 +748,12 @@ func Run(sc ServerConfig) error {
 				r.Get("/api/v1/schemas/{id}/gates/{gateId}", schemaHandler.GetGate)
 				r.Get("/api/v1/schemas/{id}/edges", schemaHandler.ListEdges)
 				r.Get("/api/v1/schemas/{id}/edges/{edgeId}", schemaHandler.GetEdge)
+				r.Get("/api/v1/schemas/{id}/export", schemaHandler.ExportSchema)
 			})
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeSchemasWrite))
 				r.Post("/api/v1/schemas", schemaHandler.CreateSchema)
+				r.Post("/api/v1/schemas/import", schemaHandler.ImportSchema)
 				r.Put("/api/v1/schemas/{id}", schemaHandler.UpdateSchema)
 				r.Delete("/api/v1/schemas/{id}", schemaHandler.DeleteSchema)
 				r.Post("/api/v1/schemas/{id}/agents", schemaHandler.AddSchemaAgent)
