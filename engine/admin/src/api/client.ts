@@ -29,6 +29,10 @@ import type {
   WidgetConfig,
   CreateWidgetRequest,
   UsageData,
+  MemoryEntry,
+  Capability,
+  CreateCapabilityRequest,
+  UpdateCapabilityRequest,
 } from '../types';
 import {
   MOCK_HEALTH,
@@ -461,6 +465,80 @@ class APIClient {
       });
     }
     return this.request<UsageData>('GET', '/usage');
+  }
+
+  // ─── Memory ──────────────────────────────────────────────────────────────────
+
+  async listMemories(schemaId: string): Promise<MemoryEntry[]> {
+    if (this.isPrototype) {
+      return this.mock<MemoryEntry[]>([
+        { id: 'mem_1', schema_id: schemaId, content: 'User prefers concise responses', metadata: { source: 'conversation' }, created_at: '2026-04-01T10:00:00Z' },
+        { id: 'mem_2', schema_id: schemaId, user_id: 'user_42', content: 'Customer is on Enterprise plan, prefers email communication', metadata: { source: 'crm_sync' }, created_at: '2026-04-02T14:30:00Z' },
+        { id: 'mem_3', schema_id: schemaId, content: 'Product FAQ: refund policy is 30 days', metadata: { source: 'knowledge_base' }, created_at: '2026-04-03T09:15:00Z' },
+        { id: 'mem_4', schema_id: schemaId, user_id: 'user_99', content: 'Reported bug with checkout flow — escalated to engineering', metadata: { source: 'conversation', priority: 'high' }, created_at: '2026-04-04T16:45:00Z' },
+      ]);
+    }
+    return this.request<MemoryEntry[]>('GET', `/schemas/${encodeURIComponent(schemaId)}/memories`);
+  }
+
+  async clearMemories(schemaId: string): Promise<void> {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('DELETE', `/schemas/${encodeURIComponent(schemaId)}/memories`);
+  }
+
+  async deleteMemory(schemaId: string, entryId: string): Promise<void> {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('DELETE', `/schemas/${encodeURIComponent(schemaId)}/memories/${encodeURIComponent(entryId)}`);
+  }
+
+  // ─── MCP Catalog ───────────────────────────────────────────────────────────────
+
+  async listCatalog(category?: string, query?: string): Promise<WellKnownMCP[]> {
+    if (this.isPrototype) {
+      let results = [...MOCK_WELL_KNOWN];
+      if (category) results = results.filter((e) => e.category === category);
+      if (query) {
+        const q = query.toLowerCase();
+        results = results.filter((e) => e.display.toLowerCase().includes(q) || e.name.toLowerCase().includes(q));
+      }
+      return this.mock(results);
+    }
+    const params = new URLSearchParams();
+    if (category) params.set('category', category);
+    if (query) params.set('q', query);
+    const qs = params.toString() ? '?' + params.toString() : '';
+    return this.request<WellKnownMCP[]>('GET', `/mcp/catalog${qs}`);
+  }
+
+  // ─── Capabilities ──────────────────────────────────────────────────────────────
+
+  async listCapabilities(agentName: string): Promise<Capability[]> {
+    if (this.isPrototype) {
+      return this.mock<Capability[]>([
+        { id: 1, agent_name: agentName, type: 'memory', config: { unlimited_retention: true, max_entries: 500 }, enabled: true },
+        { id: 2, agent_name: agentName, type: 'knowledge', config: { sources: ['support-docs.pdf'], top_k: 5 }, enabled: true },
+      ]);
+    }
+    return this.request<Capability[]>('GET', `/agents/${encodeURIComponent(agentName)}/capabilities`);
+  }
+
+  async addCapability(agentName: string, data: CreateCapabilityRequest): Promise<Capability> {
+    if (this.isPrototype) {
+      return this.mock<Capability>({ id: Date.now(), agent_name: agentName, ...data });
+    }
+    return this.request<Capability>('POST', `/agents/${encodeURIComponent(agentName)}/capabilities`, data);
+  }
+
+  async updateCapability(agentName: string, capId: number, data: UpdateCapabilityRequest): Promise<Capability> {
+    if (this.isPrototype) {
+      return this.mock<Capability>({ id: capId, agent_name: agentName, type: 'memory', config: {}, enabled: true, ...data });
+    }
+    return this.request<Capability>('PUT', `/agents/${encodeURIComponent(agentName)}/capabilities/${capId}`, data);
+  }
+
+  async removeCapability(agentName: string, capId: number): Promise<void> {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('DELETE', `/agents/${encodeURIComponent(agentName)}/capabilities/${capId}`);
   }
 
   /**

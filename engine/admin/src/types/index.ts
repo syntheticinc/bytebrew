@@ -298,6 +298,7 @@ export interface Schema {
   id: number;
   name: string;
   description?: string;
+  agents?: string[];
   agents_count: number;
   created_at: string;
 }
@@ -316,9 +317,47 @@ export type CapabilityType =
   | 'policies';
 
 export interface CapabilityConfig {
+  id?: number;
+  agent_name?: string;
   type: CapabilityType;
   enabled: boolean;
   config: Record<string, unknown>;
+}
+
+// ============================================================================
+// V2: Capability CRUD types
+// ============================================================================
+
+export interface Capability {
+  id: number;
+  agent_name: string;
+  type: string;
+  config: Record<string, unknown>;
+  enabled: boolean;
+}
+
+export interface CreateCapabilityRequest {
+  type: string;
+  config: Record<string, unknown>;
+  enabled: boolean;
+}
+
+export interface UpdateCapabilityRequest {
+  config?: Record<string, unknown>;
+  enabled?: boolean;
+}
+
+// ============================================================================
+// V2: Memory types
+// ============================================================================
+
+export interface MemoryEntry {
+  id: string;
+  schema_id: string;
+  user_id?: string;
+  content: string;
+  metadata?: Record<string, unknown>;
+  created_at: string;
 }
 
 export const CAPABILITY_META: Record<CapabilityType, { label: string; icon: string; description: string }> = {

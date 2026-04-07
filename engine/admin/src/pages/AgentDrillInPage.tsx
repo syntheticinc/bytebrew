@@ -84,21 +84,35 @@ function AgentDrillInInner() {
         setCanSpawn(mockAgent.can_spawn ?? []);
       }
       // Pre-populate capabilities for prototype (matching original prototype)
-      setCapabilities([
+      const protoCaps: CapabilityConfig[] = [
         { type: 'memory', enabled: true, config: { unlimited_retention: true, unlimited_entries: false, max_entries: 500 } },
         { type: 'knowledge', enabled: true, config: { sources: ['support-docs.pdf'], chunks: 2341, top_k: 5, similarity_threshold: 0.75 } },
-      ]);
+      ];
+      setCapabilities(protoCaps);
+      setInitialCapabilities(protoCaps.map((c) => ({ ...c })));
       setModels(MOCK_MODELS as Model[]);
       setAllAgentNames(Object.keys(MOCK_AGENTS));
       setLoading(false);
       return;
     }
 
-    api.getAgent(agentName)
-      .then((data) => {
+    Promise.all([
+      api.getAgent(agentName),
+      api.listCapabilities(agentName),
+    ])
+      .then(([data, caps]) => {
         setAgent(data);
         setEnabledTools(data.tools ?? []);
         setCanSpawn(data.can_spawn ?? []);
+        const mapped: CapabilityConfig[] = caps.map((c) => ({
+          id: c.id,
+          agent_name: c.agent_name,
+          type: c.type as CapabilityType,
+          config: c.config,
+          enabled: c.enabled,
+        }));
+        setCapabilities(mapped);
+        setInitialCapabilities(mapped.map((c) => ({ ...c })));
       })
       .catch(() => { /* fallback to empty */ })
       .finally(() => setLoading(false));
@@ -142,10 +156,14 @@ function AgentDrillInInner() {
     );
   }
 
+  // Track initial capabilities loaded from API for diffing on save
+  const [initialCapabilities, setInitialCapabilities] = useState<CapabilityConfig[]>([]);
+
   async function handleSave() {
     if (!agentName || !agent) return;
     setSaving(true);
     try {
+      // Save agent config
       await api.updateAgent(agentName, {
         system_prompt: agent.system_prompt,
         model_id: agent.model_id,
@@ -157,6 +175,32 @@ function AgentDrillInInner() {
         tools: enabledTools,
         can_spawn: canSpawn,
       });
+
+      // Save capabilities — diff against initial state
+      const initialTypes = new Set(initialCapabilities.map((c) => c.type));
+      const currentTypes = new Set(capabilities.map((c) => c.type));
+
+      // Removed capabilities
+      for (const cap of initialCapabilities) {
+        if (!currentTypes.has(cap.type) && cap.id) {
+          await api.removeCapability(agentName, cap.id);
+        }
+      }
+
+      // Added or updated capabilities
+      for (const cap of capabilities) {
+        if (!initialTypes.has(cap.type)) {
+          // New capability
+          await api.addCapability(agentName, { type: cap.type, config: cap.config, enabled: cap.enabled });
+        } else if (cap.id) {
+          // Existing — update
+          await api.updateCapability(agentName, cap.id, { config: cap.config, enabled: cap.enabled });
+        }
+      }
+
+      // Refresh initial state after save
+      setInitialCapabilities(capabilities.map((c) => ({ ...c })));
+
       addToast('Agent saved successfully', 'success');
     } catch (err) {
       addToast(err instanceof Error ? err.message : 'Save failed', 'error');

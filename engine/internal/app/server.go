@@ -43,6 +43,9 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm/registry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/portfile"
 	"github.com/syntheticinc/bytebrew/engine/internal/kits/developer"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/assistant"
+	mcpcatalog "github.com/syntheticinc/bytebrew/engine/internal/service/mcp"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/capability"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/eventstore"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/session_processor"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/task"
@@ -752,6 +755,51 @@ func Run(sc ServerConfig) error {
 				r.Use(deliveryhttp.RequireAdminSession)
 				r.Get("/api/v1/tools/metadata", toolMetaHandler.List)
 			})
+
+			// Memory (per-schema)
+			memoryStorage := persistence.NewMemoryStorage(pgDB)
+			memoryHandler := deliveryhttp.NewMemoryHandler(
+				&memoryListerHTTPAdapter{storage: memoryStorage},
+				&memoryClearerHTTPAdapter{storage: memoryStorage},
+			)
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeSchemasRead))
+				r.Get("/api/v1/schemas/{id}/memory", memoryHandler.ListMemories)
+			})
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeSchemasWrite))
+				r.Delete("/api/v1/schemas/{id}/memory", memoryHandler.ClearMemories)
+				r.Delete("/api/v1/schemas/{id}/memory/{entry_id}", memoryHandler.DeleteMemory)
+			})
+
+			// MCP Catalog (read-only)
+			catalogSvc, catalogErr := mcpcatalog.NewCatalogService()
+			if catalogErr == nil {
+				catalogHandler := deliveryhttp.NewCatalogHandler(catalogSvc)
+				r.Get("/api/v1/mcp/catalog", catalogHandler.ListCatalog)
+			}
+
+			// Usage (CE mode — unlimited)
+			usageHandler := deliveryhttp.NewUsageHandler()
+			r.Get("/api/v1/usage", usageHandler.GetUsage)
+
+			// Builder Assistant (admin-only)
+			builderAssistant := assistant.NewBuilder(&assistantAdminOpsAdapter{db: pgDB, registry: agentRegistry})
+			assistantHandler := deliveryhttp.NewAssistantHandler(
+				&assistantServiceHTTPAdapter{builder: builderAssistant},
+				&schemaCounterHTTPAdapter{repo: schemaRepo},
+			)
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireAdminSession)
+				r.Post("/api/v1/admin/assistant/chat", assistantHandler.Chat)
+			})
+
+			// Capability Injector — instantiated here, available for agent runtime integration.
+			// To inject capability-derived tools at agent startup, call:
+			//   injectedTools, _ := capInjector.InjectedTools(ctx, agentName)
+			// and merge them into the agent's tool set.
+			capInjector := capability.NewInjector(&capabilityInjectorAdapter{repo: capRepo})
+			_ = capInjector // TODO: wire into AgentToolResolver at agent startup
 		})
 
 		// EE-only routes (require auth + valid Enterprise license) — on internal router.
