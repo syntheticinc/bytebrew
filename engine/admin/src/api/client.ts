@@ -26,6 +26,8 @@ import type {
   Schema,
   PaginatedSessions,
   SessionTrace,
+  WidgetConfig,
+  CreateWidgetRequest,
 } from '../types';
 import {
   MOCK_HEALTH,
@@ -367,6 +369,77 @@ class APIClient {
       return this.mock({ ...MOCK_TRACE, session_id: sessionId });
     }
     return this.request<SessionTrace>('GET', `/sessions/${sessionId}`);
+  }
+
+  // ─── Widgets ─────────────────────────────────────────────────────────────────
+
+  private static MOCK_WIDGETS: WidgetConfig[] = [
+    {
+      id: 'wid_abc123',
+      name: 'Support Chat',
+      schema: 'Support Schema',
+      status: 'active',
+      primary_color: '#D7513E',
+      position: 'bottom-right',
+      size: 'standard',
+      welcome_message: 'Hi! How can we help you today?',
+      placeholder_text: 'Type your message...',
+      avatar_url: '',
+      domain_whitelist: 'example.com, app.example.com',
+      created_at: '2026-04-01T10:00:00Z',
+    },
+    {
+      id: 'wid_def456',
+      name: 'Sales Bot',
+      schema: 'Sales Schema',
+      status: 'disabled',
+      primary_color: '#3B82F6',
+      position: 'bottom-left',
+      size: 'compact',
+      welcome_message: 'Welcome! Looking for a demo?',
+      placeholder_text: 'Ask about our plans...',
+      avatar_url: '',
+      domain_whitelist: '',
+      created_at: '2026-04-02T14:30:00Z',
+    },
+  ];
+
+  listWidgets(): Promise<WidgetConfig[]> {
+    if (this.isPrototype) return this.mock(APIClient.MOCK_WIDGETS);
+    return this.request<WidgetConfig[]>('GET', '/widgets');
+  }
+
+  createWidget(data: CreateWidgetRequest): Promise<WidgetConfig> {
+    if (this.isPrototype) {
+      const widget: WidgetConfig = {
+        ...data,
+        id: `wid_${Math.random().toString(36).slice(2, 8)}`,
+        created_at: new Date().toISOString(),
+      };
+      APIClient.MOCK_WIDGETS.push(widget);
+      return this.mock(widget);
+    }
+    return this.request<WidgetConfig>('POST', '/widgets', data);
+  }
+
+  updateWidget(id: string, data: Partial<CreateWidgetRequest>): Promise<WidgetConfig> {
+    if (this.isPrototype) {
+      const idx = APIClient.MOCK_WIDGETS.findIndex((w) => w.id === id);
+      if (idx >= 0) {
+        APIClient.MOCK_WIDGETS[idx] = { ...APIClient.MOCK_WIDGETS[idx]!, ...data };
+        return this.mock(APIClient.MOCK_WIDGETS[idx]!);
+      }
+      return Promise.reject(new Error('Widget not found'));
+    }
+    return this.request<WidgetConfig>('PUT', `/widgets/${id}`, data);
+  }
+
+  deleteWidget(id: string): Promise<void> {
+    if (this.isPrototype) {
+      APIClient.MOCK_WIDGETS = APIClient.MOCK_WIDGETS.filter((w) => w.id !== id);
+      return this.mock(undefined as unknown as void);
+    }
+    return this.request<void>('DELETE', `/widgets/${id}`);
   }
 
   /**

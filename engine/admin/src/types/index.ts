@@ -386,6 +386,30 @@ export interface PaginatedSessions {
 }
 
 // ============================================================================
+// V2: Widget types
+// ============================================================================
+
+export type WidgetPosition = 'bottom-right' | 'bottom-left';
+export type WidgetSize = 'compact' | 'standard' | 'full';
+
+export interface WidgetConfig {
+  id: string;
+  name: string;
+  schema: string;
+  status: 'active' | 'disabled';
+  primary_color: string;
+  position: WidgetPosition;
+  size: WidgetSize;
+  welcome_message: string;
+  placeholder_text: string;
+  avatar_url: string;
+  domain_whitelist: string;
+  created_at?: string;
+}
+
+export type CreateWidgetRequest = Omit<WidgetConfig, 'id' | 'created_at'>;
+
+// ============================================================================
 // Model Registry types
 // ============================================================================
 

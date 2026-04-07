@@ -12,7 +12,11 @@ type KnowledgeDocument struct {
 	AgentName  string    `gorm:"type:varchar(255);not null;index"`
 	FilePath   string    `gorm:"type:text;not null"`
 	FileName   string    `gorm:"type:varchar(500);not null"`
-	FileHash   string    `gorm:"type:varchar(64);not null"` // SHA256
+	FileType   string    `gorm:"type:varchar(20);not null;default:txt"` // pdf, docx, doc, txt, md, csv (AC-KB-FMT-01..05)
+	FileSize   int64     `gorm:"not null;default:0"`                    // bytes (AC-KB-LIST-02)
+	FileHash   string    `gorm:"type:varchar(64);not null"`             // SHA256
+	Status     string    `gorm:"type:varchar(20);not null;default:uploading"` // uploading, indexing, ready, error (AC-KB-LIST-03)
+	StatusMsg  string    `gorm:"type:text"`                             // error message if status=error
 	ChunkCount int
 	IndexedAt  time.Time
 	CreatedAt  time.Time
