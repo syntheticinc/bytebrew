@@ -410,6 +410,26 @@ export interface WidgetConfig {
 export type CreateWidgetRequest = Omit<WidgetConfig, 'id' | 'created_at'>;
 
 // ============================================================================
+// V2: Usage / Quota types
+// ============================================================================
+
+export interface UsageMetric {
+  name: string;
+  label: string;
+  used: number;
+  limit: number;
+  unit: string;
+}
+
+export interface UsageData {
+  plan: string;
+  billing_cycle_start: string;
+  billing_cycle_end: string;
+  metrics: UsageMetric[];
+  stripe_portal_url?: string;
+}
+
+// ============================================================================
 // Model Registry types
 // ============================================================================
 

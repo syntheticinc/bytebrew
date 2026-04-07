@@ -719,6 +719,14 @@ func Run(sc ServerConfig) error {
 				r.Delete("/api/v1/schemas/{id}/edges/{edgeId}", schemaHandler.DeleteEdge)
 			})
 
+			// Widgets
+			widgetRepo := config_repo.NewGORMWidgetRepository(pgDB)
+			widgetHandler := deliveryhttp.NewWidgetHandler(&widgetServiceHTTPAdapter{repo: widgetRepo})
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireAdminSession)
+				r.Mount("/api/v1/widgets", widgetHandler.Routes())
+			})
+
 			// Settings (admin-only)
 			settingRepo := config_repo.NewGORMSettingRepository(pgDB)
 			settingHandler := deliveryhttp.NewSettingHandler(&settingServiceHTTPAdapter{repo: settingRepo})

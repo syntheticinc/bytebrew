@@ -59,6 +59,10 @@ func AutoMigrate(db *gorm.DB) error {
 
 		// Memory table (1)
 		&MemoryModel{},
+
+		// Tenant + Widget tables (2)
+		&TenantModel{},
+		&WidgetModel{},
 	); err != nil {
 		return err
 	}

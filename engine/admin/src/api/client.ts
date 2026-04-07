@@ -28,6 +28,7 @@ import type {
   SessionTrace,
   WidgetConfig,
   CreateWidgetRequest,
+  UsageData,
 } from '../types';
 import {
   MOCK_HEALTH,
@@ -440,6 +441,26 @@ class APIClient {
       return this.mock(undefined as unknown as void);
     }
     return this.request<void>('DELETE', `/widgets/${id}`);
+  }
+
+  // ─── Usage / Quota ───────────────────────────────────────────────────────────
+
+  getUsage(): Promise<UsageData> {
+    if (this.isPrototype) {
+      return this.mock<UsageData>({
+        plan: 'Pro',
+        billing_cycle_start: '2026-04-01T00:00:00Z',
+        billing_cycle_end: '2026-05-01T00:00:00Z',
+        metrics: [
+          { name: 'api_calls', label: 'API Calls', used: 8500, limit: 10000, unit: 'calls' },
+          { name: 'storage', label: 'Storage', used: 3.2, limit: 5, unit: 'GB' },
+          { name: 'schemas', label: 'Schemas', used: 2, limit: 5, unit: '' },
+          { name: 'agents', label: 'Agents per Schema', used: 7, limit: 20, unit: '' },
+        ],
+        stripe_portal_url: 'https://billing.stripe.com/p/session/test',
+      });
+    }
+    return this.request<UsageData>('GET', '/usage');
   }
 
   /**

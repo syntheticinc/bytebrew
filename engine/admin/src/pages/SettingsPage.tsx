@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
+import UsageDashboard from '../components/UsageDashboard';
 const BYOK_KEYS = [
   { key: 'byok.enabled', label: 'BYOK Enabled', description: 'Allow users to bring their own API keys' },
   { key: 'byok.allow_openai', label: 'Allow OpenAI', description: 'Users can use their OpenAI keys' },
@@ -15,7 +16,10 @@ const ENV_VARS = [
   { name: 'BYTEBREW_DB_URL', description: 'PostgreSQL connection string' },
 ];
 
+type SettingsTab = 'general' | 'usage';
+
 export default function SettingsPage() {
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const { data: settings, loading, error, refetch } = useApi(() => api.listSettings());
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [localSettings, setLocalSettings] = useState<Record<string, string>>({});
@@ -60,7 +64,31 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-2xl font-bold text-brand-light mb-6">Settings</h1>
+      <h1 className="text-2xl font-bold text-brand-light mb-4">Settings</h1>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-1 mb-6 border-b border-brand-shade3/15">
+        {(['general', 'usage'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={[
+              'px-4 py-2 text-sm font-medium font-mono transition-colors capitalize',
+              activeTab === tab
+                ? 'text-brand-light border-b-2 border-brand-accent'
+                : 'text-brand-shade3 hover:text-brand-shade2',
+            ].join(' ')}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {/* Usage tab */}
+      {activeTab === 'usage' && <UsageDashboard />}
+
+      {/* General tab */}
+      {activeTab === 'general' && <>
 
       {/* BYOK Configuration */}
       <section className="mb-8">
@@ -129,6 +157,7 @@ export default function SettingsPage() {
           ))}
         </div>
       </section>
+      </>}
     </div>
   );
 }

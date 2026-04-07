@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import BottomPanel from './BottomPanel';
+import QuotaBanner from './QuotaBanner';
 import { PrototypeProvider, usePrototype } from '../hooks/usePrototype';
 import { BottomPanelProvider } from '../hooks/useBottomPanel';
 
@@ -40,6 +41,7 @@ function LayoutInner() {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <ModeToggle />
+        <QuotaBanner />
         <main className="flex-1 bg-brand-dark p-6 overflow-auto animate-fade-in">
           <Outlet />
         </main>
