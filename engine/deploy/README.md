@@ -45,6 +45,18 @@ The `.env` file and `config.yaml` only control bootstrap settings: database, por
 | `engine-logs` | Engine log files |
 | `pg-data` | PostgreSQL data |
 
+## Updating
+
+To update the engine to the latest version:
+
+```bash
+docker compose pull engine
+docker compose up -d engine
+```
+
+> **Note:** Always check the [changelog](https://github.com/syntheticinc/bytebrew/releases) before updating.
+> Major versions may include database migrations or breaking changes.
+
 ## Troubleshooting
 
 Check engine logs:
