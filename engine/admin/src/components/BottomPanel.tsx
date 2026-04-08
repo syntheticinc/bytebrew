@@ -1,7 +1,8 @@
-import { useRef, useCallback, useState } from 'react';
+import { useRef, useCallback, useState, useEffect } from 'react';
 import { useBottomPanel } from '../hooks/useBottomPanel';
 import SchemaSelector from './SchemaSelector';
 import TestFlowTab from './TestFlowTab';
+import { api } from '../api/client';
 
 const MIN_HEIGHT = 150;
 const COLLAPSED_HEIGHT = 40;
@@ -11,6 +12,14 @@ export default function BottomPanel() {
   const { height, tab, collapsed, setHeight, setTab, setCollapsed, toggleCollapsed, selectedSchema } = useBottomPanel();
   const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
   const [assistantInput, setAssistantInput] = useState('');
+  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [loading, setLoading] = useState(false);
+  const sessionId = useRef('assistant-' + Math.random().toString(36).slice(2));
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const maxHeight = Math.round(
     (typeof window !== 'undefined' ? window.innerHeight : 800) * MAX_HEIGHT_RATIO,
@@ -42,18 +51,24 @@ export default function BottomPanel() {
   );
 
   const handleTabClick = (tabId: 'assistant' | 'testflow') => {
-    if (collapsed) {
-      setCollapsed(false);
-      setTab(tabId);
-    } else {
-      setTab(tabId);
-    }
+    if (collapsed) setCollapsed(false);
+    setTab(tabId);
   };
 
-  const handleSendAssistant = () => {
-    if (!assistantInput.trim()) return;
-    // Placeholder — real assistant integration in Phase 5
+  const handleSendAssistant = async () => {
+    const text = assistantInput.trim();
+    if (!text || loading) return;
     setAssistantInput('');
+    setMessages((prev) => [...prev, { role: 'user', content: text }]);
+    setLoading(true);
+    try {
+      const result = await api.assistantChat(text, sessionId.current);
+      setMessages((prev) => [...prev, { role: 'assistant', content: result.response }]);
+    } catch {
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Error: could not reach assistant.' }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -137,22 +152,46 @@ export default function BottomPanel() {
         <div className="flex-1 overflow-y-auto">
           {tab === 'assistant' && (
             <div className="flex flex-col h-full">
-              <div className="flex-1 p-4">
-                <div className="flex flex-col gap-2 text-xs text-brand-shade2 font-mono">
-                  <div className="flex items-center gap-2 text-brand-shade3">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="4" y="4" width="16" height="16" rx="2" />
-                      <rect x="9" y="9" width="6" height="6" rx="1" />
-                    </svg>
-                    <span>AI Assistant</span>
-                    {selectedSchema && (
-                      <span className="text-brand-shade3/60">— {selectedSchema}</span>
-                    )}
+              <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
+                {messages.length === 0 ? (
+                  <div className="flex flex-col gap-2 text-xs text-brand-shade2 font-mono">
+                    <div className="flex items-center gap-2 text-brand-shade3">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="4" y="4" width="16" height="16" rx="2" />
+                        <rect x="9" y="9" width="6" height="6" rx="1" />
+                      </svg>
+                      <span>AI Assistant</span>
+                      {selectedSchema && (
+                        <span className="text-brand-shade3/60">— {selectedSchema}</span>
+                      )}
+                    </div>
+                    <p className="text-brand-shade3/80 mt-1">
+                      Describe what you need. The assistant will configure agents, schemas, and flows for you.
+                    </p>
                   </div>
-                  <p className="text-brand-shade3/80 mt-1">
-                    Describe what you need. The assistant will configure agents, schemas, and flows for you.
-                  </p>
-                </div>
+                ) : (
+                  <>
+                    {messages.map((msg, i) => (
+                      <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[80%] px-3 py-2 rounded-card text-xs font-mono whitespace-pre-wrap ${
+                          msg.role === 'user'
+                            ? 'bg-brand-accent/20 text-brand-light'
+                            : 'bg-brand-dark border border-brand-shade3/20 text-brand-shade2'
+                        }`}>
+                          {msg.content}
+                        </div>
+                      </div>
+                    ))}
+                    {loading && (
+                      <div className="flex justify-start">
+                        <div className="px-3 py-2 rounded-card text-xs font-mono text-brand-shade3 bg-brand-dark border border-brand-shade3/20">
+                          <span className="animate-pulse">Thinking…</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+                <div ref={messagesEndRef} />
               </div>
             </div>
           )}

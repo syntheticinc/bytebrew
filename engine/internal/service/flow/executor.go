@@ -213,13 +213,15 @@ func (e *Executor) executeAgent(ctx context.Context, cfg ExecutorConfig, executi
 	return output, nil
 }
 
-// executeFork runs multiple agents in parallel and collects their outputs.
+// executeFork runs multiple agents in parallel using isolated sub-executions,
+// then merges their steps into the main execution after all branches complete.
 func (e *Executor) executeFork(ctx context.Context, cfg ExecutorConfig, execution *domain.FlowExecution,
 	adjacency map[string][]EdgeRecord, edges []EdgeRecord, input string, depth int) (string, error) {
 
 	type result struct {
 		agentName string
 		output    string
+		steps     []domain.FlowStep
 		err       error
 	}
 
@@ -235,23 +237,31 @@ func (e *Executor) executeFork(ctx context.Context, cfg ExecutorConfig, executio
 				results[idx] = result{agentName: e2.TargetAgentName, err: err}
 				return
 			}
-			out, err := e.executeAgent(ctx, cfg, execution, adjacency, e2.TargetAgentName, routedInput, depth)
-			results[idx] = result{agentName: e2.TargetAgentName, output: out, err: err}
+			// Each branch gets its own isolated sub-execution to avoid concurrent
+			// writes to the shared execution's Steps slice.
+			sub := domain.NewFlowExecution(fmt.Sprintf("%d", cfg.SchemaID), cfg.SessionID)
+			if startErr := sub.Start(); startErr != nil {
+				results[idx] = result{agentName: e2.TargetAgentName, err: startErr}
+				return
+			}
+			out, err := e.executeAgent(ctx, cfg, sub, adjacency, e2.TargetAgentName, routedInput, depth)
+			results[idx] = result{agentName: e2.TargetAgentName, output: out, steps: sub.Steps, err: err}
 		}(i, edge)
 	}
 
 	wg.Wait()
 
-	// Collect outputs — return concatenated or first error
+	// Merge branch steps into main execution sequentially (no concurrent access).
 	var outputs []string
 	for _, r := range results {
 		if r.err != nil {
 			return "", fmt.Errorf("parallel agent %q failed: %w", r.agentName, r.err)
 		}
+		execution.MergeSteps(r.steps)
 		outputs = append(outputs, r.output)
 	}
 
-	// For fork, concatenate all outputs (downstream gate/agent will process)
+	// Concatenate all branch outputs for downstream processing.
 	combined := ""
 	for i, o := range outputs {
 		if i > 0 {

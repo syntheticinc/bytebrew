@@ -107,8 +107,9 @@ func (a *flowExecutorAdapter) HasOutgoingEdges(ctx context.Context, schemaID uin
 
 func (a *flowExecutorAdapter) Execute(ctx context.Context, cfg turn_executor.FlowExecConfig, entryAgent, input string) error {
 	flowCfg := flow.ExecutorConfig{
-		SchemaID:  cfg.SchemaID,
-		SessionID: cfg.SessionID,
+		SchemaID:    cfg.SchemaID,
+		SessionID:   cfg.SessionID,
+		EventStream: cfg.EventStream,
 	}
 	_, err := a.executor.Execute(ctx, flowCfg, entryAgent, input)
 	return err

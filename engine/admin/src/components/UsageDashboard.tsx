@@ -2,17 +2,34 @@ import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import type { UsageData, UsageMetric } from '../types';
 
+function getBarColor(pct: number): string {
+  if (pct >= 100) return 'bg-red-500';
+  if (pct >= 80) return 'bg-amber-500';
+  return 'bg-brand-accent';
+}
+
+function getPctColor(pct: number): string {
+  if (pct >= 100) return 'text-red-400';
+  if (pct >= 80) return 'text-amber-400';
+  return 'text-brand-shade3';
+}
+
+function formatUsed(metric: UsageMetric): string {
+  if (metric.unit === 'GB') return `${metric.used.toFixed(1)} ${metric.unit}`;
+  return metric.used.toLocaleString();
+}
+
+function formatLimit(metric: UsageMetric): string {
+  if (metric.limit < 0) return 'Unlimited';
+  if (metric.unit === 'GB') return `${metric.limit} ${metric.unit}`;
+  return metric.limit.toLocaleString();
+}
+
 function UsageBar({ metric }: { metric: UsageMetric }) {
   const pct = metric.limit > 0 ? Math.min(100, (metric.used / metric.limit) * 100) : 0;
-  const barColor =
-    pct >= 100
-      ? 'bg-red-500'
-      : pct >= 80
-        ? 'bg-amber-500'
-        : 'bg-brand-accent';
-
-  const usedLabel = metric.unit === 'GB' ? `${metric.used.toFixed(1)} ${metric.unit}` : `${metric.used.toLocaleString()}`;
-  const limitLabel = metric.unit === 'GB' ? `${metric.limit} ${metric.unit}` : `${metric.limit.toLocaleString()}`;
+  const barColor = getBarColor(pct);
+  const usedLabel = formatUsed(metric);
+  const limitLabel = formatLimit(metric);
 
   return (
     <div className="bg-brand-dark border border-brand-shade3/15 rounded-card p-4">
@@ -30,7 +47,7 @@ function UsageBar({ metric }: { metric: UsageMetric }) {
         />
       </div>
       <div className="flex justify-end mt-1">
-        <span className={`text-[10px] font-mono ${pct >= 80 ? (pct >= 100 ? 'text-red-400' : 'text-amber-400') : 'text-brand-shade3'}`}>
+        <span className={`text-[10px] font-mono ${getPctColor(pct)}`}>
           {pct.toFixed(0)}%
         </span>
       </div>

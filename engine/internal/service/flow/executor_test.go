@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -14,14 +15,17 @@ import (
 
 type mockAgentRunner struct {
 	outputs map[string]string // agentName -> output
-	calls   []string          // track call order
+	mu      sync.Mutex
+	calls   []string // track call order (protected by mu for concurrent fork tests)
 	err     error
 	counter atomic.Int32
 }
 
 func (m *mockAgentRunner) RunAgent(_ context.Context, agentName, input, sessionID string, _ domain.AgentEventStream) (string, error) {
 	m.counter.Add(1)
+	m.mu.Lock()
 	m.calls = append(m.calls, agentName)
+	m.mu.Unlock()
 	if m.err != nil {
 		return "", m.err
 	}

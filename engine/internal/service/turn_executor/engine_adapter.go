@@ -80,8 +80,9 @@ type FlowExecutor interface {
 
 // FlowExecConfig holds flow execution configuration.
 type FlowExecConfig struct {
-	SchemaID  uint
-	SessionID string
+	SchemaID    uint
+	SessionID   string
+	EventStream domain.AgentEventStream
 }
 
 // EngineAdapter adapts Engine to TurnExecutor interface (orchestrator.TurnExecutor)
@@ -279,8 +280,9 @@ func (e *EngineAdapter) ExecuteTurn(
 			slog.InfoContext(ctx, "[EngineAdapter] executing flow pipeline",
 				"agent", e.agentName, "schema_id", e.schemaID)
 			flowCfg := FlowExecConfig{
-				SchemaID:  e.schemaID,
-				SessionID: sessionID,
+				SchemaID:    e.schemaID,
+				SessionID:   sessionID,
+				EventStream: eventCallbackStream(eventCallback),
 			}
 			if flowErr := e.flowExecutor.Execute(ctx, flowCfg, e.agentName, answer); flowErr != nil {
 				slog.ErrorContext(ctx, "[EngineAdapter] flow execution failed",
@@ -342,4 +344,25 @@ func convertToolCallRecorderToEngine(recorder ToolCallRecorder) react.ToolCallRe
 		return nil
 	}
 	return &toolCallRecorderEngineAdapter{recorder: recorder}
+}
+
+// eventCallbackStreamAdapter wraps eventCallback as domain.AgentEventStream.
+type eventCallbackStreamAdapter struct {
+	cb func(event *domain.AgentEvent) error
+}
+
+func (a *eventCallbackStreamAdapter) Send(event *domain.AgentEvent) error {
+	if a.cb == nil {
+		return nil
+	}
+	return a.cb(event)
+}
+
+// eventCallbackStream wraps eventCallback as domain.AgentEventStream.
+// Returns nil if eventCallback is nil.
+func eventCallbackStream(cb func(event *domain.AgentEvent) error) domain.AgentEventStream {
+	if cb == nil {
+		return nil
+	}
+	return &eventCallbackStreamAdapter{cb: cb}
 }

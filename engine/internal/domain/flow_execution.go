@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -47,6 +48,7 @@ const (
 
 // FlowExecution tracks the state of a schema pipeline execution.
 type FlowExecution struct {
+	mu        sync.Mutex
 	ID        string
 	SchemaID  string
 	SessionID string
@@ -107,6 +109,13 @@ func (fe *FlowExecution) AddStep(agentName string) *FlowStep {
 	}
 	fe.Steps = append(fe.Steps, step)
 	return &fe.Steps[len(fe.Steps)-1]
+}
+
+// MergeSteps appends steps from a completed fork branch. Safe for sequential post-fork use.
+func (fe *FlowExecution) MergeSteps(steps []FlowStep) {
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
+	fe.Steps = append(fe.Steps, steps...)
 }
 
 // IsTerminal returns true if the execution is in a terminal state.

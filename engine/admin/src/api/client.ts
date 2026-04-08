@@ -541,6 +541,15 @@ class APIClient {
     return this.request<void>('DELETE', `/agents/${encodeURIComponent(agentName)}/capabilities/${capId}`);
   }
 
+  // ─── AI Assistant ─────────────────────────────────────────────────────────────
+
+  assistantChat(message: string, sessionId: string): Promise<{ response: string; session_id: string }> {
+    if (this.isPrototype) {
+      return this.mock({ response: 'This is a mock response from the AI assistant.', session_id: sessionId });
+    }
+    return this.request<{ response: string; session_id: string }>('POST', '/admin/assistant/chat', { message, session_id: sessionId });
+  }
+
   /**
    * Send a request with a raw (non-JSON) body.
    */
