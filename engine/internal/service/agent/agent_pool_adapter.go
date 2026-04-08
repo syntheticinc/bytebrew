@@ -107,3 +107,18 @@ func (a *AgentPoolAdapter) SpawnAgent(ctx context.Context, params tools.SpawnPar
 func (a *AgentPoolAdapter) RestartAgent(ctx context.Context, agentID string, blocking bool) (string, error) {
 	return a.pool.RestartAgent(ctx, agentID, blocking)
 }
+
+// WaitForAgent waits for a specific agent to complete and returns its result.
+func (a *AgentPoolAdapter) WaitForAgent(ctx context.Context, sessionID, agentID string) (tools.AgentCompletionInfo, error) {
+	info, err := a.pool.WaitForAgent(ctx, sessionID, agentID)
+	if err != nil {
+		return tools.AgentCompletionInfo{}, err
+	}
+	return tools.AgentCompletionInfo{
+		AgentID:   info.AgentID,
+		SubtaskID: info.SubtaskID,
+		Status:    info.Status,
+		Result:    info.Result,
+		Error:     info.Error,
+	}, nil
+}

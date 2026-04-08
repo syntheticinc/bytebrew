@@ -13,6 +13,7 @@ import (
 // Used by the generic SpawnTool (as opposed to AgentPoolForTool used by the legacy spawn_code_agent).
 type GenericAgentSpawner interface {
 	SpawnAgent(ctx context.Context, params SpawnParams) (string, error)
+	WaitForAgent(ctx context.Context, sessionID, agentID string) (AgentCompletionInfo, error)
 	WaitForAllSessionAgents(ctx context.Context, sessionID string) (WaitResult, error)
 	HasBlockingWait(sessionID string) bool
 	NotifyUserMessage(sessionID, message string)
@@ -120,7 +121,21 @@ func (t *spawnTool) handleSpawn(ctx context.Context, args spawnToolArgs) (string
 		return "", fmt.Errorf("spawn agent: %w", err)
 	}
 
-	return fmt.Sprintf("Agent spawned with ID: %s", agentID), nil
+	// Block until child agent completes, then return its result to parent LLM
+	info, err := t.spawner.WaitForAgent(ctx, t.sessionID, agentID)
+	if err != nil {
+		return fmt.Sprintf("Agent '%s' spawned but wait failed: %v", t.targetAgent, err), nil
+	}
+
+	if info.Status == "failed" || info.Error != "" {
+		return fmt.Sprintf("Agent '%s' failed: %s", t.targetAgent, info.Error), nil
+	}
+
+	if info.Result != "" {
+		return fmt.Sprintf("Agent '%s' completed:\n%s", t.targetAgent, info.Result), nil
+	}
+
+	return fmt.Sprintf("Agent '%s' completed (no output)", t.targetAgent), nil
 }
 
 func (t *spawnTool) handleWait(ctx context.Context) (string, error) {
@@ -129,7 +144,18 @@ func (t *spawnTool) handleWait(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("wait for agents: %w", err)
 	}
 
-	data, err := json.Marshal(result.Summaries)
+	// Build summaries from Results (Summaries field is never populated by the adapter)
+	summaries := make([]AgentSummary, 0, len(result.Results))
+	for _, info := range result.Results {
+		summaries = append(summaries, AgentSummary{
+			AgentID:   info.AgentID,
+			AgentName: info.AgentID,
+			Summary:   info.Result,
+			Status:    info.Status,
+		})
+	}
+
+	data, err := json.Marshal(summaries)
 	if err != nil {
 		return "", fmt.Errorf("marshal wait result: %w", err)
 	}

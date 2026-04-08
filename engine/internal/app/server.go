@@ -887,6 +887,7 @@ func Run(sc ServerConfig) error {
 			components.AgentPool.SetEngine(
 				components.Engine, agentRegistry,
 				components.AgentToolResolver, components.ToolDepsProvider,
+				components.ModelCache, agentRegistry,
 			)
 		}
 		loggerInstance.InfoContext(ctx, "Multi-agent mode enabled (Supervisor + Code Agents)")

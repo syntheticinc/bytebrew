@@ -147,7 +147,7 @@ func main() {
 	)
 
 	// Set Engine deps on AgentPool so spawned agents can run
-	agentPool.SetEngine(agentEngine, flowManager, toolResolver, toolDepsProvider)
+	agentPool.SetEngine(agentEngine, flowManager, toolResolver, toolDepsProvider, nil, nil)
 
 	// 8. Create EngineTurnExecutorFactory (SAME as production!)
 	factory := infrastructure.NewEngineTurnExecutorFactory(
