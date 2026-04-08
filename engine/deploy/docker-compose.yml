@@ -2,17 +2,10 @@
 # Usage: cp .env.example .env && docker compose up -d
 
 services:
-  watchtower:
-    image: containrrr/watchtower
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 300 --cleanup --label-enable
-    restart: unless-stopped
-
   engine:
-    image: bytebrew/engine:latest
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
+    build:
+      context: ..
+      dockerfile: Dockerfile
     ports:
       - "${ENGINE_PORT:-8443}:8443"
     environment:
