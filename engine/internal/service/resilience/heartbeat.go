@@ -173,3 +173,28 @@ func (m *HeartbeatMonitor) AgentCount() int {
 	defer m.mu.RUnlock()
 	return len(m.agents)
 }
+
+// HeartbeatSnapshot is a point-in-time view of an agent's heartbeat state.
+type HeartbeatSnapshot struct {
+	AgentID       string    `json:"agent_id"`
+	AgentType     AgentType `json:"agent_type"`
+	LastHeartbeat time.Time `json:"last_heartbeat"`
+	CurrentStep   string    `json:"current_step,omitempty"`
+}
+
+// Snapshots returns a snapshot of all monitored agents.
+func (m *HeartbeatMonitor) Snapshots() []HeartbeatSnapshot {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	result := make([]HeartbeatSnapshot, 0, len(m.agents))
+	for agentID, entry := range m.agents {
+		result = append(result, HeartbeatSnapshot{
+			AgentID:       agentID,
+			AgentType:     entry.agentType,
+			LastHeartbeat: entry.lastHeartbeat,
+			CurrentStep:   entry.currentStep,
+		})
+	}
+	return result
+}

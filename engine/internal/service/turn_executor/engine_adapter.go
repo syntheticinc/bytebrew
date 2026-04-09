@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
@@ -181,6 +182,8 @@ func (e *EngineAdapter) ExecuteTurn(
 	toolDeps.AgentName = flow.Name
 	toolDeps.KnowledgePath = flow.KnowledgePath
 	toolDeps.MCPServers = flow.MCPServers
+	// Set schema scope for memory tools (0 = no explicit schema context)
+	toolDeps.SchemaID = strconv.FormatUint(uint64(e.schemaID), 10)
 
 	// Populate spawn targets from flow's SpawnPolicy
 	canSpawn := make([]string, len(flow.Spawn.AllowedFlows))

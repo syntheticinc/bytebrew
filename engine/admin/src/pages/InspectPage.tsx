@@ -162,6 +162,8 @@ function SessionList({
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<SessionStatus[]>([]);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [loading, setLoading] = useState(true);
   const perPage = 20;
 
@@ -175,6 +177,8 @@ function SessionList({
         status: statusFilter.length > 0 ? statusFilter : undefined,
         sort_by: 'created_at',
         sort_dir: 'desc',
+        ...(from && { from: new Date(from).toISOString() }),
+        ...(to && { to: new Date(to + 'T23:59:59').toISOString() }),
       })
       .then((res) => {
         setSessions(Array.isArray(res?.sessions) ? res.sessions : []);
@@ -185,7 +189,7 @@ function SessionList({
         setTotal(0);
       })
       .finally(() => setLoading(false));
-  }, [page, search, statusFilter]);
+  }, [page, search, statusFilter, from, to]);
 
   useEffect(() => {
     fetchSessions();
@@ -194,7 +198,7 @@ function SessionList({
   // Reset to page 1 when filters change
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter]);
+  }, [search, statusFilter, from, to]);
 
   const totalPages = Math.max(1, Math.ceil(total / perPage));
 
@@ -222,6 +226,32 @@ function SessionList({
           />
         </div>
         <StatusFilter selected={statusFilter} onChange={setStatusFilter} />
+        <div className="flex items-center gap-1.5">
+          <label className="text-[10px] text-brand-shade3 font-mono uppercase tracking-wider">From</label>
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            className="px-2 py-1.5 bg-brand-dark-surface border border-brand-shade3/20 rounded-btn text-xs text-brand-light font-mono focus:outline-none focus:border-brand-accent transition-colors"
+          />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <label className="text-[10px] text-brand-shade3 font-mono uppercase tracking-wider">To</label>
+          <input
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            className="px-2 py-1.5 bg-brand-dark-surface border border-brand-shade3/20 rounded-btn text-xs text-brand-light font-mono focus:outline-none focus:border-brand-accent transition-colors"
+          />
+        </div>
+        {(from || to) && (
+          <button
+            onClick={() => { setFrom(''); setTo(''); }}
+            className="text-xs text-brand-shade3 hover:text-brand-light font-mono transition-colors"
+          >
+            Clear dates
+          </button>
+        )}
         <span className="text-xs text-brand-shade3 font-mono ml-auto">
           {total} session{total !== 1 ? 's' : ''}
         </span>

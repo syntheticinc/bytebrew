@@ -46,7 +46,7 @@ type UpdateSessionRequest struct {
 
 // SessionService provides session CRUD operations.
 type SessionService interface {
-	ListSessions(ctx context.Context, agentName, userID, status string, page, perPage int) ([]SessionResponse, int64, error)
+	ListSessions(ctx context.Context, agentName, userID, status, from, to string, page, perPage int) ([]SessionResponse, int64, error)
 	GetSession(ctx context.Context, id string) (*SessionResponse, error)
 	CreateSession(ctx context.Context, req CreateSessionRequest) (*SessionResponse, error)
 	UpdateSession(ctx context.Context, id string, req UpdateSessionRequest) (*SessionResponse, error)
@@ -100,6 +100,8 @@ func (h *SessionHandler) List(w http.ResponseWriter, r *http.Request) {
 	agentName := r.URL.Query().Get("agent_name")
 	userID := r.URL.Query().Get("user_id")
 	status := r.URL.Query().Get("status")
+	from := r.URL.Query().Get("from")
+	to := r.URL.Query().Get("to")
 
 	page := 1
 	perPage := 20
@@ -118,7 +120,7 @@ func (h *SessionHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	sessions, total, err := h.service.ListSessions(r.Context(), agentName, userID, status, page, perPage)
+	sessions, total, err := h.service.ListSessions(r.Context(), agentName, userID, status, from, to, page, perPage)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return

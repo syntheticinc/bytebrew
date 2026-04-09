@@ -25,15 +25,19 @@ type mockSessionService struct {
 	lastListAgentName string
 	lastListUserID    string
 	lastListStatus    string
+	lastListFrom      string
+	lastListTo        string
 	lastListPage      int
 	lastListPerPage   int
 	lastDeleteID      string
 }
 
-func (m *mockSessionService) ListSessions(_ context.Context, agentName, userID, status string, page, perPage int) ([]SessionResponse, int64, error) {
+func (m *mockSessionService) ListSessions(_ context.Context, agentName, userID, status, from, to string, page, perPage int) ([]SessionResponse, int64, error) {
 	m.lastListAgentName = agentName
 	m.lastListUserID = userID
 	m.lastListStatus = status
+	m.lastListFrom = from
+	m.lastListTo = to
 	m.lastListPage = page
 	m.lastListPerPage = perPage
 	if m.err != nil {

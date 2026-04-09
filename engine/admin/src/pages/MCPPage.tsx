@@ -10,7 +10,7 @@ import FormModal from '../components/FormModal';
 import FormField from '../components/FormField';
 import ConfirmDialog from '../components/ConfirmDialog';
 import Modal from '../components/Modal';
-import type { MCPServer, WellKnownMCP, CreateMCPServerRequest, MCPCatalogCategory } from '../types';
+import type { MCPServer, WellKnownMCP, CreateMCPServerRequest, MCPCatalogCategory, CircuitBreakerState } from '../types';
 
 // ─── Category meta ──────────────────────────────────────────────────────────
 
@@ -36,6 +36,7 @@ export default function MCPPage() {
   const navigate = useNavigate();
   const { data: servers, loading, error, refetch } = useApi(() => api.listMCPServers());
   const { data: wellKnown } = useApi(() => api.getWellKnownMCP());
+  const { data: circuitBreakers } = useApi(() => api.listCircuitBreakers());
 
   const [selected, setSelected] = useState<MCPServer | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -54,6 +55,16 @@ export default function MCPPage() {
   const [catalogSearch, setCatalogSearch] = useState('');
   const [catalogCategory, setCatalogCategory] = useState<MCPCatalogCategory | 'all'>('all');
   const [catalogDetail, setCatalogDetail] = useState<WellKnownMCP | null>(null);
+
+  const circuitStateMap = useMemo(() => {
+    const map: Record<string, CircuitBreakerState> = {};
+    if (circuitBreakers) {
+      for (const cb of circuitBreakers) {
+        map[cb.name] = cb;
+      }
+    }
+    return map;
+  }, [circuitBreakers]);
 
   const filteredCatalog = useMemo(() => {
     if (!wellKnown) return [];
@@ -196,6 +207,29 @@ export default function MCPPage() {
         row.status ? <StatusBadge status={row.status.status} /> : <span className="text-brand-shade3 text-xs">--</span>,
     },
     {
+      key: 'circuit',
+      header: 'Circuit',
+      render: (row: MCPServer) => {
+        const cb = circuitStateMap[row.name];
+        if (!cb || cb.state === 'closed') {
+          return <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+            closed
+          </span>;
+        }
+        if (cb.state === 'half_open') {
+          return <span className="inline-flex items-center gap-1 text-xs text-amber-400">
+            <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+            half-open
+          </span>;
+        }
+        return <span className="inline-flex items-center gap-1 text-xs text-red-400">
+          <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />
+          open ({cb.failure_count})
+        </span>;
+      },
+    },
+    {
       key: 'tools_count',
       header: 'Tools',
       render: (row: MCPServer) => (
@@ -290,6 +324,19 @@ export default function MCPPage() {
             {selected.status && (
               <DetailSection title="Runtime Status">
                 <DetailRow label="Status"><StatusBadge status={selected.status.status} /></DetailRow>
+                {(() => {
+                  const cb = circuitStateMap[selected.name];
+                  if (!cb) return null;
+                  return (
+                    <DetailRow label="Circuit State">
+                      {cb.state === 'closed'
+                        ? <span className="text-emerald-400 text-sm">● Closed</span>
+                        : cb.state === 'half_open'
+                          ? <span className="text-amber-400 text-sm">● Half-Open</span>
+                          : <span className="text-red-400 text-sm">● Open ({cb.failure_count} failures)</span>}
+                    </DetailRow>
+                  );
+                })()}
                 <DetailRow label="Tools Count">{selected.status.tools_count}</DetailRow>
                 {selected.status.connected_at && (
                   <DetailRow label="Connected At">{new Date(selected.status.connected_at).toLocaleString()}</DetailRow>

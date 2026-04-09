@@ -144,9 +144,22 @@ type AgentModelSelector interface {
 	ModelName(flowType domain.FlowType) string
 }
 
+// AgentModelIDResolver resolves the model ID configured for a named agent (consumer-side).
+// Returns nil when no per-agent model is configured.
+type AgentModelIDResolver interface {
+	ResolveModelID(agentName string) *uint
+}
+
+// AgentModelCacheProvider fetches a cached LLM client by model ID (consumer-side).
+type AgentModelCacheProvider interface {
+	Get(ctx context.Context, modelID uint) (model.ToolCallingChatModel, string, error)
+}
+
 // AgentPoolConfig holds configuration for creating an AgentPool
 type AgentPoolConfig struct {
 	ModelSelector    AgentModelSelector
+	ModelIDResolver  AgentModelIDResolver  // optional: per-agent model resolution from DB
+	ModelCache       AgentModelCacheProvider // optional: paired with ModelIDResolver
 	SubtaskManager   SubtaskManager
 	AgentRunStorage  AgentRunStorage // optional: nil for backward compatibility
 	AgentConfig      *config.AgentConfig
@@ -159,6 +172,8 @@ type AgentPool struct {
 	agents                map[string]*RunningAgent
 	mu                    sync.RWMutex
 	modelSelector         AgentModelSelector
+	modelIDResolver       AgentModelIDResolver
+	modelCache            AgentModelCacheProvider
 	sessionProxies        map[string]ClientOperationsProxy
 	subtaskManager        SubtaskManager
 	agentRunStorage       AgentRunStorage // optional: nil for backward compatibility
@@ -187,6 +202,8 @@ func NewAgentPool(cfg AgentPoolConfig) *AgentPool {
 	return &AgentPool{
 		agents:                make(map[string]*RunningAgent),
 		modelSelector:         cfg.ModelSelector,
+		modelIDResolver:       cfg.ModelIDResolver,
+		modelCache:            cfg.ModelCache,
 		sessionProxies:        make(map[string]ClientOperationsProxy),
 		subtaskManager:        cfg.SubtaskManager,
 		agentRunStorage:       cfg.AgentRunStorage,
@@ -244,6 +261,16 @@ func (p *AgentPool) SetEngine(engine AgentEngine, flowProvider FlowProvider, too
 	p.flowProvider = flowProvider
 	p.toolResolver = toolResolver
 	p.toolDeps = toolDeps
+	p.mu.Unlock()
+}
+
+// SetModelResolver wires per-agent DB model resolution into the pool.
+// When set, spawned agents will use their configured model_id from the DB
+// instead of falling back to the static ModelSelector default.
+func (p *AgentPool) SetModelResolver(resolver AgentModelIDResolver, cache AgentModelCacheProvider) {
+	p.mu.Lock()
+	p.modelIDResolver = resolver
+	p.modelCache = cache
 	p.mu.Unlock()
 }
 
@@ -402,6 +429,32 @@ func (p *AgentPool) GetStatus(agentID string) (AgentSnapshot, bool) {
 		return AgentSnapshot{}, false
 	}
 	return agent.snapshot(), true
+}
+
+// WaitForAgent blocks until a specific agent reaches a terminal state, then returns its result.
+// Uses completionCh for efficient wait (no polling). Respects ctx cancellation.
+func (p *AgentPool) WaitForAgent(ctx context.Context, agentID string) (string, error) {
+	p.mu.RLock()
+	agent, ok := p.agents[agentID]
+	p.mu.RUnlock()
+	if !ok {
+		return "", fmt.Errorf("agent not found: %s", agentID)
+	}
+
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case <-agent.completionCh:
+	}
+
+	snap, ok := p.GetStatus(agentID)
+	if !ok {
+		return "", fmt.Errorf("agent %s has no status after completion", agentID)
+	}
+	if snap.Error != "" {
+		return "", fmt.Errorf("agent execution failed: %s", snap.Error)
+	}
+	return snap.Result, nil
 }
 
 // GetAllAgents returns immutable snapshots of all agents (safe to read without lock).

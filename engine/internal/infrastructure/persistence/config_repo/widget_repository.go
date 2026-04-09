@@ -2,6 +2,7 @@ package config_repo
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -22,6 +23,7 @@ type WidgetRecord struct {
 	Placeholder     string
 	AvatarURL       string
 	DomainWhitelist []string
+	CustomHeaders   map[string]string
 	Enabled         bool
 }
 
@@ -76,6 +78,15 @@ func (r *GORMWidgetRepository) Create(ctx context.Context, record *WidgetRecord)
 
 // Update updates an existing widget by ID.
 func (r *GORMWidgetRepository) Update(ctx context.Context, id uint, record *WidgetRecord) error {
+	customHeadersJSON := ""
+	if len(record.CustomHeaders) > 0 {
+		b, err := json.Marshal(record.CustomHeaders)
+		if err != nil {
+			return fmt.Errorf("marshal custom headers: %w", err)
+		}
+		customHeadersJSON = string(b)
+	}
+
 	result := r.db.WithContext(ctx).Model(&models.WidgetModel{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"name":             record.Name,
 		"schema_id":        record.SchemaID,
@@ -86,6 +97,7 @@ func (r *GORMWidgetRepository) Update(ctx context.Context, id uint, record *Widg
 		"placeholder":      record.Placeholder,
 		"avatar_url":       record.AvatarURL,
 		"domain_whitelist": strings.Join(record.DomainWhitelist, ","),
+		"custom_headers":   customHeadersJSON,
 		"enabled":          record.Enabled,
 	})
 	if result.Error != nil {
@@ -117,6 +129,12 @@ func toWidgetRecord(w models.WidgetModel) WidgetRecord {
 			domains[i] = strings.TrimSpace(domains[i])
 		}
 	}
+
+	var customHeaders map[string]string
+	if w.CustomHeaders != "" {
+		_ = json.Unmarshal([]byte(w.CustomHeaders), &customHeaders)
+	}
+
 	return WidgetRecord{
 		ID:              w.ID,
 		TenantID:        w.TenantID,
@@ -129,11 +147,18 @@ func toWidgetRecord(w models.WidgetModel) WidgetRecord {
 		Placeholder:     w.Placeholder,
 		AvatarURL:       w.AvatarURL,
 		DomainWhitelist: domains,
+		CustomHeaders:   customHeaders,
 		Enabled:         w.Enabled,
 	}
 }
 
 func toWidgetModel(r *WidgetRecord) models.WidgetModel {
+	customHeadersJSON := ""
+	if len(r.CustomHeaders) > 0 {
+		b, _ := json.Marshal(r.CustomHeaders)
+		customHeadersJSON = string(b)
+	}
+
 	return models.WidgetModel{
 		TenantID:        r.TenantID,
 		Name:            r.Name,
@@ -145,6 +170,7 @@ func toWidgetModel(r *WidgetRecord) models.WidgetModel {
 		Placeholder:     r.Placeholder,
 		AvatarURL:       r.AvatarURL,
 		DomainWhitelist: strings.Join(r.DomainWhitelist, ","),
+		CustomHeaders:   customHeadersJSON,
 		Enabled:         r.Enabled,
 	}
 }

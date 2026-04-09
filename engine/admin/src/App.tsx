@@ -16,6 +16,8 @@ import AgentDrillInPage from './pages/AgentDrillInPage';
 import AgentsPage from './pages/AgentsPage';
 import InspectPage from './pages/InspectPage';
 import WidgetConfigPage from './pages/WidgetConfigPage';
+import MemoryPage from './pages/MemoryPage';
+import KnowledgePage from './pages/KnowledgePage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('jwt');
@@ -54,6 +56,8 @@ export default function App() {
             <Route path="/audit" element={<AuditPage />} />
             <Route path="/widget" element={<WidgetConfigPage />} />
             <Route path="/agents" element={<AgentsPage />} />
+            <Route path="/memory" element={<MemoryPage />} />
+            <Route path="/knowledge" element={<KnowledgePage />} />
             <Route path="/" element={<Navigate to="/builder" replace />} />
           </Route>
           <Route path="*" element={<Navigate to="/builder" replace />} />

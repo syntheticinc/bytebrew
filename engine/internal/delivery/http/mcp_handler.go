@@ -20,6 +20,10 @@ type MCPServerResponse struct {
 	EnvVars        map[string]string `json:"env_vars,omitempty"`
 	ForwardHeaders []string          `json:"forward_headers,omitempty"`
 	IsWellKnown    bool              `json:"is_well_known"`
+	AuthType       string            `json:"auth_type,omitempty"`
+	AuthKeyEnv     string            `json:"auth_key_env,omitempty"`
+	AuthTokenEnv   string            `json:"auth_token_env,omitempty"`
+	AuthClientID   string            `json:"auth_client_id,omitempty"`
 	Status         *MCPStatusInfo    `json:"status,omitempty"`
 	Agents         []string          `json:"agents"`
 }
@@ -41,6 +45,10 @@ type CreateMCPServerRequest struct {
 	URL            string            `json:"url,omitempty"`
 	EnvVars        map[string]string `json:"env_vars,omitempty"`
 	ForwardHeaders []string          `json:"forward_headers,omitempty"`
+	AuthType       string            `json:"auth_type,omitempty"`
+	AuthKeyEnv     string            `json:"auth_key_env,omitempty"`
+	AuthTokenEnv   string            `json:"auth_token_env,omitempty"`
+	AuthClientID   string            `json:"auth_client_id,omitempty"`
 }
 
 // MCPService provides MCP server CRUD operations.

@@ -152,11 +152,16 @@ export function useCanvasNodes({
           spawnCount: 0,
           confirmCount: 0,
           lifecycle: 'spawn',
+          isNew: true,
           onSelect: handleSelect,
           onDelete: handleDeleteRequest,
         } satisfies AgentNodeData,
       };
       setNodes((nds) => [...nds, newNode]);
+      // Clear isNew after animation plays
+      setTimeout(() => {
+        setNodes((nds) => nds.map((n) => n.id === name ? { ...n, data: { ...n.data, isNew: false } } : n));
+      }, 1000);
       addToast(`Agent "${name}" created — click to configure`, 'success');
       return;
     }
@@ -181,7 +186,13 @@ export function useCanvasNodes({
 
       const modelMap = new Map(modelsRef.current.map((m) => [m.id, m.name]));
       const newNode = makeNode(created, modelMap, pos, handleSelect, handleDeleteRequest);
+      // Mark as new for fade-in animation
+      newNode.data = { ...newNode.data, isNew: true };
       setNodes((nds) => [...nds, newNode]);
+      // Clear isNew after animation plays
+      setTimeout(() => {
+        setNodes((nds) => nds.map((n) => n.id === created.name ? { ...n, data: { ...n.data, isNew: false } } : n));
+      }, 1000);
       addToast(`Agent "${created.name}" created — click to configure`, 'success');
     } catch (err) {
       addToast(`Failed to create agent: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');

@@ -21,6 +21,7 @@ type TaskPacket struct {
 	ID          string
 	ParentAgent string
 	ChildAgent  string
+	SessionID   string
 	Input       string
 	Status      TaskPacketStatus
 	Result      string
@@ -32,11 +33,12 @@ type TaskPacket struct {
 }
 
 // NewTaskPacket creates a new TaskPacket with validation.
-func NewTaskPacket(id, parentAgent, childAgent, input string, timeout time.Duration) (*TaskPacket, error) {
+func NewTaskPacket(id, parentAgent, childAgent, sessionID, input string, timeout time.Duration) (*TaskPacket, error) {
 	tp := &TaskPacket{
 		ID:          id,
 		ParentAgent: parentAgent,
 		ChildAgent:  childAgent,
+		SessionID:   sessionID,
 		Input:       input,
 		Status:      TaskPacketPending,
 		Timeout:     timeout,

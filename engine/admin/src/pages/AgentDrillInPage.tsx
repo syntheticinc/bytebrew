@@ -493,13 +493,14 @@ function AgentDrillInInner() {
           ) : (
             <div className="space-y-2">
               {capabilities.map((cap, i) => (
-                <CapabilityBlock
-                  key={cap.type}
-                  capability={cap}
-                  onChange={(updated) => updateCapability(i, updated)}
-                  onRemove={() => removeCapability(i)}
-                  models={models as { id: number; name: string; model_name: string }[]}
-                />
+                <div key={cap.type} className="animate-slide-down overflow-hidden">
+                  <CapabilityBlock
+                    capability={cap}
+                    onChange={(updated) => updateCapability(i, updated)}
+                    onRemove={() => removeCapability(i)}
+                    models={models as { id: number; name: string; model_name: string }[]}
+                  />
+                </div>
               ))}
             </div>
           )}

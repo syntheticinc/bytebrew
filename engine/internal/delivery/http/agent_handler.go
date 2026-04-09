@@ -191,11 +191,6 @@ func (h *AgentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if req.SystemPrompt == "" {
-		writeJSONError(w, http.StatusBadRequest, "system_prompt is required")
-		return
-	}
-
 	// Log a warning for unrecognized tool names (they might be MCP tools loaded at runtime).
 	for _, toolName := range req.Tools {
 		slog.WarnContext(r.Context(), "agent references tool that may not be registered", "agent", req.Name, "tool", toolName)

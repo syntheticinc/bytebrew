@@ -24,7 +24,7 @@ func TestDispatcher_DispatchSuccess(t *testing.T) {
 	dispatcher := NewDispatcher(mgr)
 	stream := &mockEventStream{}
 
-	packet, err := dispatcher.Dispatch(context.Background(), "task-1", "parent", "child", "do work",
+	packet, err := dispatcher.Dispatch(context.Background(), "task-1", "parent", "child", "session-1", "do work",
 		domain.LifecycleModeSpawn, 16000, 0, stream)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -61,7 +61,7 @@ func TestDispatcher_DispatchFailure(t *testing.T) {
 	dispatcher := NewDispatcher(mgr)
 	stream := &mockEventStream{}
 
-	packet, err := dispatcher.Dispatch(context.Background(), "task-1", "parent", "child", "do work",
+	packet, err := dispatcher.Dispatch(context.Background(), "task-1", "parent", "child", "session-1", "do work",
 		domain.LifecycleModeSpawn, 16000, 0, stream)
 	if err == nil {
 		t.Fatal("expected error")
@@ -92,7 +92,7 @@ func TestDispatcher_DispatchTimeout(t *testing.T) {
 	dispatcher := NewDispatcher(mgr)
 	stream := &mockEventStream{}
 
-	packet, err := dispatcher.Dispatch(context.Background(), "task-1", "parent", "child", "slow work",
+	packet, err := dispatcher.Dispatch(context.Background(), "task-1", "parent", "child", "session-1", "slow work",
 		domain.LifecycleModeSpawn, 16000, 50*time.Millisecond, stream)
 	if err == nil {
 		t.Fatal("expected timeout error")
@@ -128,7 +128,7 @@ func TestDispatcher_GetTask(t *testing.T) {
 	mgr := NewManager(runner)
 	dispatcher := NewDispatcher(mgr)
 
-	dispatcher.Dispatch(context.Background(), "task-1", "parent", "child", "work",
+	dispatcher.Dispatch(context.Background(), "task-1", "parent", "child", "session-1", "work",
 		domain.LifecycleModeSpawn, 16000, 0, nil)
 
 	tp, ok := dispatcher.GetTask("task-1")
@@ -145,11 +145,11 @@ func TestDispatcher_ListTasks(t *testing.T) {
 	mgr := NewManager(runner)
 	dispatcher := NewDispatcher(mgr)
 
-	dispatcher.Dispatch(context.Background(), "task-1", "parent-a", "child", "work 1",
+	dispatcher.Dispatch(context.Background(), "task-1", "parent-a", "child", "session-1", "work 1",
 		domain.LifecycleModeSpawn, 16000, 0, nil)
-	dispatcher.Dispatch(context.Background(), "task-2", "parent-a", "child", "work 2",
+	dispatcher.Dispatch(context.Background(), "task-2", "parent-a", "child", "session-1", "work 2",
 		domain.LifecycleModeSpawn, 16000, 0, nil)
-	dispatcher.Dispatch(context.Background(), "task-3", "parent-b", "child", "work 3",
+	dispatcher.Dispatch(context.Background(), "task-3", "parent-b", "child", "session-2", "work 3",
 		domain.LifecycleModeSpawn, 16000, 0, nil)
 
 	tasksA := dispatcher.ListTasks("parent-a")
@@ -169,7 +169,7 @@ func TestDispatcher_PersistentChild(t *testing.T) {
 	dispatcher := NewDispatcher(mgr)
 
 	// First task
-	p1, err := dispatcher.Dispatch(context.Background(), "task-1", "parent", "child", "work 1",
+	p1, err := dispatcher.Dispatch(context.Background(), "task-1", "parent", "child", "session-1", "work 1",
 		domain.LifecycleModePersistent, 16000, 0, nil)
 	if err != nil {
 		t.Fatalf("task 1: %v", err)
@@ -179,7 +179,7 @@ func TestDispatcher_PersistentChild(t *testing.T) {
 	}
 
 	// Second task — child should have context
-	p2, err := dispatcher.Dispatch(context.Background(), "task-2", "parent", "child", "work 2",
+	p2, err := dispatcher.Dispatch(context.Background(), "task-2", "parent", "child", "session-1", "work 2",
 		domain.LifecycleModePersistent, 16000, 0, nil)
 	if err != nil {
 		t.Fatalf("task 2: %v", err)

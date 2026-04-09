@@ -18,6 +18,16 @@ services:
         condition: service_healthy
     restart: "no"
 
+  mock-mcp:
+    build:
+      context: .
+      dockerfile: test-infra/mock-mcp-http/Dockerfile
+    ports:
+      - "9556:9556"
+    environment:
+      - LOG_FILE=/tmp/mcp-requests.jsonl
+    restart: "no"
+
   db:
     image: pgvector/pgvector:pg16
     environment:

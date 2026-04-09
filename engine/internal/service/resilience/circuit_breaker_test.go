@@ -120,3 +120,34 @@ func TestCircuitBreakerRegistry(t *testing.T) {
 	assert.Equal(t, CircuitClosed, states["tavily"])
 	assert.Equal(t, CircuitClosed, states["github"])
 }
+
+func TestCircuitBreakerRegistry_Reset(t *testing.T) {
+	registry := NewCircuitBreakerRegistry(DefaultCircuitBreakerConfig())
+
+	// Create and open a breaker
+	cb := registry.Get("openai")
+	cb.RecordFailure()
+	cb.RecordFailure()
+	cb.RecordFailure()
+	require.Equal(t, CircuitOpen, cb.State())
+
+	// Reset removes it
+	ok := registry.Reset("openai")
+	assert.True(t, ok)
+
+	// States no longer contains it
+	states := registry.States()
+	_, found := states["openai"]
+	assert.False(t, found)
+
+	// Next Get creates a fresh closed breaker
+	cb2 := registry.Get("openai")
+	assert.Equal(t, CircuitClosed, cb2.State())
+	assert.NotSame(t, cb, cb2)
+}
+
+func TestCircuitBreakerRegistry_ResetNotFound(t *testing.T) {
+	registry := NewCircuitBreakerRegistry(DefaultCircuitBreakerConfig())
+	ok := registry.Reset("nonexistent")
+	assert.False(t, ok)
+}

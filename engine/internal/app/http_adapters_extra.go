@@ -15,6 +15,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/task"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
+	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 )
 
 // mcpServiceHTTPAdapter bridges GORMMCPServerRepository to the http.MCPService interface.
@@ -30,13 +31,17 @@ func (a *mcpServiceHTTPAdapter) ListMCPServers(ctx context.Context) ([]deliveryh
 	result := make([]deliveryhttp.MCPServerResponse, 0, len(servers))
 	for _, s := range servers {
 		resp := deliveryhttp.MCPServerResponse{
-			ID:          s.ID,
-			Name:        s.Name,
-			Type:        s.Type,
-			Command:     s.Command,
-			URL:         s.URL,
-			IsWellKnown: s.IsWellKnown,
-			Agents:      []string{},
+			ID:           s.ID,
+			Name:         s.Name,
+			Type:         s.Type,
+			Command:      s.Command,
+			URL:          s.URL,
+			IsWellKnown:  s.IsWellKnown,
+			AuthType:     s.AuthType,
+			AuthKeyEnv:   s.AuthKeyEnv,
+			AuthTokenEnv: s.AuthTokenEnv,
+			AuthClientID: s.AuthClientID,
+			Agents:       []string{},
 		}
 		if s.Args != "" {
 			_ = json.Unmarshal([]byte(s.Args), &resp.Args)
@@ -64,10 +69,14 @@ func (a *mcpServiceHTTPAdapter) ListMCPServers(ctx context.Context) ([]deliveryh
 
 func (a *mcpServiceHTTPAdapter) CreateMCPServer(ctx context.Context, req deliveryhttp.CreateMCPServerRequest) (*deliveryhttp.MCPServerResponse, error) {
 	model := &models.MCPServerModel{
-		Name:    req.Name,
-		Type:    req.Type,
-		Command: req.Command,
-		URL:     req.URL,
+		Name:         req.Name,
+		Type:         req.Type,
+		Command:      req.Command,
+		URL:          req.URL,
+		AuthType:     req.AuthType,
+		AuthKeyEnv:   req.AuthKeyEnv,
+		AuthTokenEnv: req.AuthTokenEnv,
+		AuthClientID: req.AuthClientID,
 	}
 	if len(req.Args) > 0 {
 		data, _ := json.Marshal(req.Args)
@@ -91,6 +100,10 @@ func (a *mcpServiceHTTPAdapter) CreateMCPServer(ctx context.Context, req deliver
 		Command:        model.Command,
 		URL:            model.URL,
 		IsWellKnown:    model.IsWellKnown,
+		AuthType:       model.AuthType,
+		AuthKeyEnv:     model.AuthKeyEnv,
+		AuthTokenEnv:   model.AuthTokenEnv,
+		AuthClientID:   model.AuthClientID,
 		Args:           req.Args,
 		EnvVars:        req.EnvVars,
 		ForwardHeaders: req.ForwardHeaders,
@@ -115,10 +128,14 @@ func (a *mcpServiceHTTPAdapter) UpdateMCPServer(ctx context.Context, name string
 	}
 
 	model := &models.MCPServerModel{
-		Name:    req.Name,
-		Type:    req.Type,
-		Command: req.Command,
-		URL:     req.URL,
+		Name:         req.Name,
+		Type:         req.Type,
+		Command:      req.Command,
+		URL:          req.URL,
+		AuthType:     req.AuthType,
+		AuthKeyEnv:   req.AuthKeyEnv,
+		AuthTokenEnv: req.AuthTokenEnv,
+		AuthClientID: req.AuthClientID,
 	}
 	if len(req.Args) > 0 {
 		data, _ := json.Marshal(req.Args)
@@ -143,13 +160,17 @@ func (a *mcpServiceHTTPAdapter) UpdateMCPServer(ctx context.Context, name string
 	for _, s := range updated {
 		if s.ID == targetID {
 			resp := &deliveryhttp.MCPServerResponse{
-				ID:          s.ID,
-				Name:        s.Name,
-				Type:        s.Type,
-				Command:     s.Command,
-				URL:         s.URL,
-				IsWellKnown: s.IsWellKnown,
-				Agents:      []string{},
+				ID:           s.ID,
+				Name:         s.Name,
+				Type:         s.Type,
+				Command:      s.Command,
+				URL:          s.URL,
+				IsWellKnown:  s.IsWellKnown,
+				AuthType:     s.AuthType,
+				AuthKeyEnv:   s.AuthKeyEnv,
+				AuthTokenEnv: s.AuthTokenEnv,
+				AuthClientID: s.AuthClientID,
+				Agents:       []string{},
 			}
 			if s.Args != "" {
 				_ = json.Unmarshal([]byte(s.Args), &resp.Args)
@@ -234,8 +255,26 @@ func (a *triggerServiceHTTPAdapter) resolveAgentID(ctx context.Context, req *del
 	return nil
 }
 
+func (a *triggerServiceHTTPAdapter) isEntryAgent(ctx context.Context, agentID uint) error {
+	var agent models.AgentModel
+	if err := a.db.WithContext(ctx).First(&agent, agentID).Error; err != nil {
+		return pkgerrors.NotFound("agent not found")
+	}
+	var count int64
+	a.db.WithContext(ctx).Model(&models.EdgeModel{}).
+		Where("target_agent_name = ?", agent.Name).
+		Count(&count)
+	if count > 0 {
+		return pkgerrors.InvalidInput(fmt.Sprintf("agent %q has incoming edges and cannot be a trigger target", agent.Name))
+	}
+	return nil
+}
+
 func (a *triggerServiceHTTPAdapter) CreateTrigger(ctx context.Context, req deliveryhttp.CreateTriggerRequest) (*deliveryhttp.TriggerResponse, error) {
 	if err := a.resolveAgentID(ctx, &req); err != nil {
+		return nil, err
+	}
+	if err := a.isEntryAgent(ctx, req.AgentID); err != nil {
 		return nil, err
 	}
 	model := &models.TriggerModel{
@@ -358,8 +397,8 @@ type sessionServiceHTTPAdapter struct {
 	messageRepo *config_repo.GORMMessageRepository
 }
 
-func (a *sessionServiceHTTPAdapter) ListSessions(ctx context.Context, agentName, userID, status string, page, perPage int) ([]deliveryhttp.SessionResponse, int64, error) {
-	sessions, total, err := a.repo.List(ctx, agentName, userID, status, page, perPage)
+func (a *sessionServiceHTTPAdapter) ListSessions(ctx context.Context, agentName, userID, status, from, to string, page, perPage int) ([]deliveryhttp.SessionResponse, int64, error) {
+	sessions, total, err := a.repo.List(ctx, agentName, userID, status, from, to, page, perPage)
 	if err != nil {
 		return nil, 0, err
 	}

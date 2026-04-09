@@ -33,6 +33,9 @@ import type {
   Capability,
   CreateCapabilityRequest,
   UpdateCapabilityRequest,
+  KnowledgeFile,
+  KnowledgeStatus,
+  CircuitBreakerState,
 } from '../types';
 import {
   MOCK_HEALTH,
@@ -333,6 +336,8 @@ class APIClient {
     status?: string[];
     sort_by?: string;
     sort_dir?: 'asc' | 'desc';
+    from?: string;
+    to?: string;
   }): Promise<PaginatedSessions> {
     if (this.isPrototype) {
       const page = params?.page ?? 1;
@@ -362,6 +367,8 @@ class APIClient {
     if (params?.status) qs.set('status', params.status.join(','));
     if (params?.sort_by) qs.set('sort_by', params.sort_by);
     if (params?.sort_dir) qs.set('sort_dir', params.sort_dir);
+    if (params?.from) qs.set('from', params.from);
+    if (params?.to) qs.set('to', params.to);
     const q = qs.toString() ? '?' + qs.toString() : '';
     return this.request<PaginatedSessions>('GET', `/sessions${q}`);
   }
@@ -478,17 +485,17 @@ class APIClient {
         { id: 'mem_4', schema_id: schemaId, user_id: 'user_99', content: 'Reported bug with checkout flow — escalated to engineering', metadata: { source: 'conversation', priority: 'high' }, created_at: '2026-04-04T16:45:00Z' },
       ]);
     }
-    return this.request<MemoryEntry[]>('GET', `/schemas/${encodeURIComponent(schemaId)}/memories`);
+    return this.request<MemoryEntry[]>('GET', `/schemas/${encodeURIComponent(schemaId)}/memory`);
   }
 
   async clearMemories(schemaId: string): Promise<void> {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
-    return this.request<void>('DELETE', `/schemas/${encodeURIComponent(schemaId)}/memories`);
+    return this.request<void>('DELETE', `/schemas/${encodeURIComponent(schemaId)}/memory`);
   }
 
   async deleteMemory(schemaId: string, entryId: string): Promise<void> {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
-    return this.request<void>('DELETE', `/schemas/${encodeURIComponent(schemaId)}/memories/${encodeURIComponent(entryId)}`);
+    return this.request<void>('DELETE', `/schemas/${encodeURIComponent(schemaId)}/memory/${encodeURIComponent(entryId)}`);
   }
 
   // ─── MCP Catalog ───────────────────────────────────────────────────────────────
@@ -539,6 +546,82 @@ class APIClient {
   async removeCapability(agentName: string, capId: number): Promise<void> {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
     return this.request<void>('DELETE', `/agents/${encodeURIComponent(agentName)}/capabilities/${capId}`);
+  }
+
+  // ─── Knowledge ──────────────────────────────────────────────────────────────
+
+  async getKnowledgeStatus(agentName: string): Promise<KnowledgeStatus> {
+    if (this.isPrototype) return this.mock<KnowledgeStatus>({ agent_name: agentName, total_files: 2, indexed_files: 2, status: 'ready' });
+    return this.request<KnowledgeStatus>('GET', `/agents/${encodeURIComponent(agentName)}/knowledge/status`);
+  }
+
+  async listKnowledgeFiles(agentName: string): Promise<KnowledgeFile[]> {
+    if (this.isPrototype) return this.mock<KnowledgeFile[]>([]);
+    return this.request<KnowledgeFile[]>('GET', `/agents/${encodeURIComponent(agentName)}/knowledge/files`);
+  }
+
+  async deleteKnowledgeFile(agentName: string, filename: string): Promise<void> {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('DELETE', `/agents/${encodeURIComponent(agentName)}/knowledge/files/${encodeURIComponent(filename)}`);
+  }
+
+  async reindexKnowledge(agentName: string): Promise<void> {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('POST', `/agents/${encodeURIComponent(agentName)}/knowledge/reindex`);
+  }
+
+  async reindexKnowledgeFile(agentName: string, filename: string): Promise<void> {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('POST', `/agents/${encodeURIComponent(agentName)}/knowledge/files/${encodeURIComponent(filename)}/reindex`);
+  }
+
+  async uploadKnowledgeFile(agentName: string, file: File): Promise<KnowledgeFile> {
+    if (this.isPrototype) {
+      return this.mock<KnowledgeFile>({
+        name: file.name,
+        type: file.name.split('.').pop() ?? '',
+        size: `${(file.size / 1024).toFixed(1)} KB`,
+        status: 'ready',
+        uploaded_at: new Date().toISOString(),
+      });
+    }
+    const formData = new FormData();
+    formData.append('file', file);
+    const headers: Record<string, string> = {};
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+    const res = await fetch(`${BASE_URL}/agents/${encodeURIComponent(agentName)}/knowledge/upload`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (res.status === 401) {
+      this.clearToken();
+      window.location.href = import.meta.env.BASE_URL + 'login';
+      throw new Error('Unauthorized');
+    }
+    if (!res.ok) {
+      const text = await res.text();
+      let message = text;
+      try {
+        const json = JSON.parse(text) as { error?: string };
+        if (json.error) message = json.error;
+      } catch { /* use raw text */ }
+      throw new Error(message);
+    }
+    return (await res.json()) as KnowledgeFile;
+  }
+
+  // ─── Circuit Breakers ────────────────────────────────────────────────────────
+
+  async listCircuitBreakers(): Promise<CircuitBreakerState[]> {
+    if (this.isPrototype) return [];
+    const res = await fetch(`${BASE_URL}/admin/resilience/circuit-breakers`, {
+      headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+    });
+    if (!res.ok) return [];
+    return res.json();
   }
 
   // ─── AI Assistant ─────────────────────────────────────────────────────────────

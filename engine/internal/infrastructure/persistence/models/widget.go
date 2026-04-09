@@ -15,6 +15,7 @@ type WidgetModel struct {
 	Placeholder     string    `gorm:"type:varchar(255)"`
 	AvatarURL       string    `gorm:"type:varchar(500)"`
 	DomainWhitelist string    `gorm:"type:text"` // comma-separated
+	CustomHeaders   string    `gorm:"type:text"` // JSON map[string]string
 	Enabled         bool      `gorm:"not null;default:true"`
 	CreatedAt       time.Time `gorm:"autoCreateTime"`
 	UpdatedAt       time.Time `gorm:"autoUpdateTime"`

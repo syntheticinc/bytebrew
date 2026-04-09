@@ -40,8 +40,9 @@ type CircuitBreaker struct {
 	config        CircuitBreakerConfig
 	state         CircuitState
 	failures      []time.Time // timestamps of consecutive failures within window
-	lastFailure   time.Time
-	openedAt      time.Time
+	lastFailure          time.Time
+	openedAt             time.Time
+	failureCountAtOpen   int
 }
 
 // NewCircuitBreaker creates a new circuit breaker for the named resource.
@@ -110,6 +111,7 @@ func (cb *CircuitBreaker) RecordFailure() {
 		slog.Warn("[CircuitBreaker] half-open probe failed → open", "resource", cb.name)
 		cb.state = CircuitOpen
 		cb.openedAt = now
+		cb.failureCountAtOpen = 1
 		return
 	}
 
@@ -130,8 +132,27 @@ func (cb *CircuitBreaker) RecordFailure() {
 			"resource", cb.name, "failures", len(cb.failures))
 		cb.state = CircuitOpen
 		cb.openedAt = now
+		cb.failureCountAtOpen = len(cb.failures)
 		cb.failures = nil
 	}
+}
+
+// FailureCount returns the number of failures that triggered the circuit open.
+// Returns current in-window failures for CLOSED state, stored count for OPEN/HALF-OPEN.
+func (cb *CircuitBreaker) FailureCount() int {
+	cb.mu.RLock()
+	defer cb.mu.RUnlock()
+	if cb.state == CircuitOpen || cb.state == CircuitHalfOpen {
+		return cb.failureCountAtOpen
+	}
+	return len(cb.failures)
+}
+
+// LastFailure returns the timestamp of the most recent failure (zero if none).
+func (cb *CircuitBreaker) LastFailure() time.Time {
+	cb.mu.RLock()
+	defer cb.mu.RUnlock()
+	return cb.lastFailure
 }
 
 // currentState returns the effective state, checking for half-open transition.
@@ -193,4 +214,43 @@ func (r *CircuitBreakerRegistry) States() map[string]CircuitState {
 		states[name] = cb.State()
 	}
 	return states
+}
+
+// Reset removes a circuit breaker by name, forcing a fresh one on next Get().
+// Returns true if the breaker existed.
+func (r *CircuitBreakerRegistry) Reset(name string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	_, ok := r.breakers[name]
+	if ok {
+		delete(r.breakers, name)
+		slog.Info("[CircuitBreaker] reset", "resource", name)
+	}
+	return ok
+}
+
+// CircuitBreakerSnapshot is a point-in-time snapshot of a circuit breaker.
+type CircuitBreakerSnapshot struct {
+	Name         string       `json:"name"`
+	State        CircuitState `json:"state"`
+	FailureCount int          `json:"failure_count"`
+	LastFailure  time.Time    `json:"last_failure,omitempty"`
+}
+
+// Snapshots returns snapshots of all circuit breakers.
+func (r *CircuitBreakerRegistry) Snapshots() []CircuitBreakerSnapshot {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	out := make([]CircuitBreakerSnapshot, 0, len(r.breakers))
+	for _, cb := range r.breakers {
+		out = append(out, CircuitBreakerSnapshot{
+			Name:         cb.name,
+			State:        cb.State(),
+			FailureCount: cb.FailureCount(),
+			LastFailure:  cb.LastFailure(),
+		})
+	}
+	return out
 }

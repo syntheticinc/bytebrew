@@ -9,6 +9,8 @@ export interface AgentNodeData {
   confirmCount: number;
   lifecycle: string;
   state?: 'ready' | 'running' | 'blocked' | 'degraded' | 'finished';
+  isNew?: boolean;
+  isRunning?: boolean;
   onSelect: (name: string) => void;
   onDelete: (name: string) => void;
   [key: string]: unknown;
@@ -39,6 +41,8 @@ export default function AgentNode({ data, selected }: NodeProps) {
             ? 'border-brand-shade3/55 hover:border-brand-shade3/80'
             : 'border-brand-shade3/30 hover:border-brand-shade3/60'
         }
+        ${d.isNew ? 'animate-fade-in' : ''}
+        ${d.isRunning ? 'animate-pulse-glow' : ''}
       `}
       style={{ background: isSpawn ? '#1A1A1A' : '#1F1F1F' }}
     >

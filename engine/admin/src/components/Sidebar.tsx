@@ -111,6 +111,19 @@ const icons = {
       <line x1="12" y1="17" x2="12" y2="21" />
     </svg>
   ),
+  memory: (
+    <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <ellipse cx="12" cy="5" rx="9" ry="3" />
+      <path d="M3 5v14a9 3 0 0018 0V5" />
+      <path d="M3 12a9 3 0 0018 0" />
+    </svg>
+  ),
+  knowledge: (
+    <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" />
+      <path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" />
+    </svg>
+  ),
   logout: (
     <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
@@ -134,6 +147,8 @@ const sections: NavSection[] = [
       { to: '/agents', label: 'Agents', icon: icons.agents },
       { to: '/mcp', label: 'MCP Servers', icon: icons.mcp },
       { to: '/models', label: 'Models', icon: icons.models },
+      { to: '/memory', label: 'Memory', icon: icons.memory },
+      { to: '/knowledge', label: 'Knowledge', icon: icons.knowledge },
       { to: '/widget', label: 'Widgets', icon: icons.widget },
     ],
   },

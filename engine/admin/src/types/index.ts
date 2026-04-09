@@ -223,6 +223,17 @@ export interface CreateTokenResponse {
 }
 
 // ============================================================================
+// Circuit Breaker types
+// ============================================================================
+
+export interface CircuitBreakerState {
+  name: string;
+  state: 'closed' | 'open' | 'half_open';
+  failure_count: number;
+  last_failure?: string | null;
+}
+
+// ============================================================================
 // Health types
 // ============================================================================
 
@@ -443,6 +454,7 @@ export interface WidgetConfig {
   placeholder_text: string;
   avatar_url: string;
   domain_whitelist: string;
+  custom_headers?: Record<string, string>;
   created_at?: string;
 }
 
@@ -549,4 +561,12 @@ export interface KnowledgeFile {
   size: string;
   uploaded_at: string;
   status: KnowledgeFileStatus;
+  error?: string;
+}
+
+export interface KnowledgeStatus {
+  agent_name: string;
+  total_files: number;
+  indexed_files: number;
+  status: 'ready' | 'indexing' | 'empty';
 }

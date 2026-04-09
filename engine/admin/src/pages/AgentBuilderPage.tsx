@@ -113,6 +113,10 @@ function AgentBuilderInner() {
   const savedIndicatorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reactFlowRef = useRef<HTMLDivElement>(null);
 
+  // Track known agent names so we can detect newly created ones after refresh
+  const knownAgentNamesRef = useRef<Set<string>>(new Set());
+  const newNodeTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
   const refetchCanvas = useCallback(() => setRefreshKey((k) => k + 1), []);
 
   function showSavedIndicator(state: 'saved' | 'saving') {
@@ -291,6 +295,34 @@ function AgentBuilderInner() {
           savePositions(rawNodes);
         }
 
+        // Detect newly created agents and mark them with isNew for fade-in animation
+        const currentNames = new Set(details.map((a) => a.name));
+        if (knownAgentNamesRef.current.size > 0) {
+          for (const name of currentNames) {
+            if (!knownAgentNamesRef.current.has(name)) {
+              // Mark new node with isNew flag
+              rawNodes = rawNodes.map((n) =>
+                n.id === name
+                  ? { ...n, data: { ...n.data, isNew: true } }
+                  : n,
+              );
+              // Clear isNew after animation completes (1s)
+              const timer = setTimeout(() => {
+                setNodes((nds) =>
+                  nds.map((n) =>
+                    n.id === name
+                      ? { ...n, data: { ...n.data, isNew: false } }
+                      : n,
+                  ),
+                );
+                newNodeTimersRef.current.delete(name);
+              }, 1000);
+              newNodeTimersRef.current.set(name, timer);
+            }
+          }
+        }
+        knownAgentNamesRef.current = currentNames;
+
         setNodes(rawNodes);
         setEdges(rawEdges);
         setLoading(false);
@@ -302,7 +334,13 @@ function AgentBuilderInner() {
         }
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      // Cleanup new-node timers on unmount
+      for (const timer of newNodeTimersRef.current.values()) {
+        clearTimeout(timer);
+      }
+    };
   }, [handleSelect, handleDeleteRequest, refreshKey, isPrototype, protoSchema, selectedSchema]);
 
   // ── Side panel save callback ────────────────────────────────────────────────

@@ -19,7 +19,7 @@ func NewGORMSessionRepository(db *gorm.DB) *GORMSessionRepository {
 }
 
 // List returns paginated sessions sorted by updated_at desc with optional filters.
-func (r *GORMSessionRepository) List(ctx context.Context, agentName, userID, status string, page, perPage int) ([]models.SessionModel, int64, error) {
+func (r *GORMSessionRepository) List(ctx context.Context, agentName, userID, status, from, to string, page, perPage int) ([]models.SessionModel, int64, error) {
 	q := r.db.WithContext(ctx).Model(&models.SessionModel{})
 
 	if agentName != "" {
@@ -30,6 +30,12 @@ func (r *GORMSessionRepository) List(ctx context.Context, agentName, userID, sta
 	}
 	if status != "" {
 		q = q.Where("status = ?", status)
+	}
+	if from != "" {
+		q = q.Where("created_at >= ?", from)
+	}
+	if to != "" {
+		q = q.Where("created_at <= ?", to)
 	}
 
 	var total int64

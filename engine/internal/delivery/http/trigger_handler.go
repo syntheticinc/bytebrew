@@ -96,7 +96,7 @@ func (h *TriggerHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	trigger, err := h.service.CreateTrigger(r.Context(), req)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, trigger)

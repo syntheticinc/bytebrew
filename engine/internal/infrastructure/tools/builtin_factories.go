@@ -92,6 +92,20 @@ func RegisterAllBuiltins(store *BuiltinToolStore) {
 		return deps.WebFetchTool
 	})
 
+	// Memory capability tools (US-001: auto-injected by capability injector when agent has Memory)
+	store.Register("memory_recall", func(deps ToolDependencies) tool.InvokableTool {
+		if deps.MemoryRecaller == nil || deps.SchemaID == "" {
+			return nil // disabled when no storage or schema context
+		}
+		return NewMemoryRecallTool(deps.SchemaID, deps.UserID, deps.MemoryRecaller)
+	})
+	store.Register("memory_store", func(deps ToolDependencies) tool.InvokableTool {
+		if deps.MemoryStorer == nil || deps.SchemaID == "" {
+			return nil // disabled when no storage or schema context
+		}
+		return NewMemoryStoreTool(deps.SchemaID, deps.UserID, deps.MemoryStorer, deps.MemoryMaxEntries)
+	})
+
 	// spawn_code_agent — not registered here.
 	// Requires AgentPool which is created after tool store initialization.
 	// Register separately: store.Register("spawn_code_agent", ...)

@@ -41,6 +41,10 @@ type EngineTurnExecutorFactory struct {
 	webFetchTool   einotool.InvokableTool
 	// Getter for context reminders (from AgentService)
 	contextRemindersGetter func() []turn_executor.ContextReminderProvider
+	// Memory capability deps (injected via SetMemory — nil = disabled)
+	memoryRecaller  tools.MemoryRecaller
+	memoryStorer    tools.MemoryStorer
+	memoryMaxEntries int
 }
 
 // NewEngineTurnExecutorFactory creates a new factory for Engine-based TurnExecutors.
@@ -75,15 +79,41 @@ func NewEngineTurnExecutorFactory(
 	}
 }
 
+// SetMemory configures the memory storage for memory_recall/memory_store tools.
+// Call after factory creation to enable memory capability tools.
+func (f *EngineTurnExecutorFactory) SetMemory(recaller tools.MemoryRecaller, storer tools.MemoryStorer, maxEntries int) {
+	f.memoryRecaller = recaller
+	f.memoryStorer = storer
+	f.memoryMaxEntries = maxEntries
+}
+
+// userMemoryDepsProvider wraps DefaultToolDepsProvider and injects userID + memory refs per session.
+type userMemoryDepsProvider struct {
+	base            *tools.DefaultToolDepsProvider
+	userID          string
+	memoryRecaller  tools.MemoryRecaller
+	memoryStorer    tools.MemoryStorer
+	memoryMaxEntries int
+}
+
+func (p *userMemoryDepsProvider) GetDependencies(sessionID, projectKey string) tools.ToolDependencies {
+	deps := p.base.GetDependencies(sessionID, projectKey)
+	deps.UserID = p.userID
+	deps.MemoryRecaller = p.memoryRecaller
+	deps.MemoryStorer = p.memoryStorer
+	deps.MemoryMaxEntries = p.memoryMaxEntries
+	return deps
+}
+
 // CreateForSession creates a TurnExecutor for the given session.
 // Implements grpc.TurnExecutorFactory interface.
 func (f *EngineTurnExecutorFactory) CreateForSession(
 	proxy tools.ClientOperationsProxy,
 	sessionID, projectKey string,
-	projectRoot, platform, agentName string,
+	projectRoot, platform, agentName, userID string,
 ) orchestrator.TurnExecutor {
 	// Create per-session ToolDepsProvider with proxy for this session
-	toolDeps := tools.NewDefaultToolDepsProvider(
+	baseDeps := tools.NewDefaultToolDepsProvider(
 		proxy,
 		f.taskManager,
 		f.subtaskManager,
@@ -91,6 +121,14 @@ func (f *EngineTurnExecutorFactory) CreateForSession(
 		f.webSearchTool,
 		f.webFetchTool,
 	)
+	// Wrap with per-user memory deps (userID + memory recaller/storer)
+	toolDeps := &userMemoryDepsProvider{
+		base:             baseDeps,
+		userID:           userID,
+		memoryRecaller:   f.memoryRecaller,
+		memoryStorer:     f.memoryStorer,
+		memoryMaxEntries: f.memoryMaxEntries,
+	}
 
 	// Get context reminders from getter (if provided)
 	var contextReminders []turn_executor.ContextReminderProvider

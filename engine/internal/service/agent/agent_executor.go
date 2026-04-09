@@ -3,11 +3,14 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log/slog"
+
+	einotool "github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/components/model"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agents"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/engine"
-	einotool "github.com/cloudwego/eino/components/tool"
 )
 
 // runAgentWithEngine is the generic execution method for any agent type.
@@ -81,17 +84,19 @@ func (p *AgentPool) runAgentWithEngine(
 		compressor = engine.MessageCompressor(agents.NewContextRewriter(flow.MaxContextSize))
 	}
 
+	chatModel, modelName := p.resolveModel(ctx, string(flowType))
+
 	execCfg := engine.ExecutionConfig{
 		SessionID:         sessionID,
 		AgentID:           agentID,
 		Flow:              flow,
 		Tools:             baseTools,
 		Input:             input,
-		ChatModel:         p.modelSelector.Select(flowType),
+		ChatModel:         chatModel,
 		Streaming:         false,
 		EventCallback:     eventCb,
 		ContextReminders:  reminders,
-		ModelName:         p.modelSelector.ModelName(flowType),
+		ModelName:         modelName,
 		AgentConfig:       p.agentConfig,
 		ParentAgentID:     "supervisor",
 		SubtaskID:         subtaskID,
@@ -116,6 +121,31 @@ func (p *AgentPool) runCodeAgentWithEngine(
 ) (string, error) {
 	input := buildCodeAgentInput(subtask)
 	return p.runAgentWithEngine(ctx, sessionID, projectKey, agentID, domain.FlowType("coder"), subtask.ID, input)
+}
+
+// resolveModel returns the LLM client and model name for the given agent.
+// Tries per-agent DB model (via modelIDResolver + modelCache) first,
+// then falls back to the static ModelSelector.
+func (p *AgentPool) resolveModel(ctx context.Context, agentName string) (model.ToolCallingChatModel, string) {
+	p.mu.RLock()
+	resolver := p.modelIDResolver
+	cache := p.modelCache
+	p.mu.RUnlock()
+
+	if resolver != nil && cache != nil {
+		if modelID := resolver.ResolveModelID(agentName); modelID != nil {
+			client, name, err := cache.Get(ctx, *modelID)
+			if err != nil {
+				slog.ErrorContext(ctx, "failed to resolve model from cache, falling back to selector",
+					"agent", agentName, "model_id", *modelID, "error", err)
+			} else {
+				return client, name
+			}
+		}
+	}
+
+	flowType := domain.FlowType(agentName)
+	return p.modelSelector.Select(flowType), p.modelSelector.ModelName(flowType)
 }
 
 func buildCodeAgentInput(subtask *domain.Subtask) string {

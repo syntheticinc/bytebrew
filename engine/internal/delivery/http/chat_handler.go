@@ -33,10 +33,11 @@ func NewChatHandler(service ChatService, forwardHeadersFn func() []string) *Chat
 }
 
 type chatRequest struct {
-	Message   string `json:"message"`
-	UserID    string `json:"user_id"`
-	SessionID string `json:"session_id"`
-	Stream    *bool  `json:"stream,omitempty"` // default true
+	Message   string            `json:"message"`
+	UserID    string            `json:"user_id"`
+	SessionID string            `json:"session_id"`
+	Stream    *bool             `json:"stream,omitempty"` // default true
+	Headers   map[string]string `json:"headers,omitempty"` // optional headers forwarded to MCP tool calls
 }
 
 type nonStreamResponse struct {
@@ -73,6 +74,19 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := h.buildRequestContext(r)
+	if len(req.Headers) > 0 {
+		existing := domain.GetRequestContext(ctx)
+		merged := make(map[string]string, len(req.Headers))
+		if existing != nil {
+			for k, v := range existing.Headers {
+				merged[k] = v
+			}
+		}
+		for k, v := range req.Headers {
+			merged[k] = v
+		}
+		ctx = domain.WithRequestContext(ctx, &domain.RequestContext{Headers: merged})
+	}
 	events, err := h.service.Chat(ctx, agentName, req.Message, req.UserID, req.SessionID)
 	if err != nil {
 		writeDomainError(w, err)

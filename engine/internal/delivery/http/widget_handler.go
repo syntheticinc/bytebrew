@@ -20,8 +20,9 @@ type WidgetInfo struct {
 	WelcomeMessage  string   `json:"welcome_message"`
 	Placeholder     string   `json:"placeholder"`
 	AvatarURL       string   `json:"avatar_url,omitempty"`
-	DomainWhitelist []string `json:"domain_whitelist"`
-	Enabled         bool     `json:"enabled"`
+	DomainWhitelist []string          `json:"domain_whitelist"`
+	CustomHeaders   map[string]string `json:"custom_headers,omitempty"`
+	Enabled         bool              `json:"enabled"`
 }
 
 // CreateWidgetRequest is the body for POST /api/v1/widgets.
@@ -34,8 +35,9 @@ type CreateWidgetRequest struct {
 	WelcomeMessage  string   `json:"welcome_message,omitempty"`
 	Placeholder     string   `json:"placeholder,omitempty"`
 	AvatarURL       string   `json:"avatar_url,omitempty"`
-	DomainWhitelist []string `json:"domain_whitelist,omitempty"`
-	Enabled         *bool    `json:"enabled,omitempty"`
+	DomainWhitelist []string          `json:"domain_whitelist,omitempty"`
+	CustomHeaders   map[string]string `json:"custom_headers,omitempty"`
+	Enabled         *bool             `json:"enabled,omitempty"`
 }
 
 // WidgetService provides widget CRUD operations.

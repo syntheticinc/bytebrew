@@ -1,4 +1,3 @@
-import React from 'react';
 import type { ContextMenuState, NodeMenuState, EdgeMenuState } from '../../hooks/useCanvasInteraction';
 
 // ─── Canvas (pane) context menu ───────────────────────────────────────────────

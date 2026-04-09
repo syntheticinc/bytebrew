@@ -47,6 +47,7 @@ import (
 	mcpcatalog "github.com/syntheticinc/bytebrew/engine/internal/service/mcp"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/capability"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/eventstore"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/lifecycle"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/guardrail"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/policy"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/recovery"
@@ -449,9 +450,27 @@ func Run(sc ServerConfig) error {
 		components.AgentToolResolver.SetKnowledge(knowledgeRepo, embeddingsClient)
 	}
 
-	// Wire spawner into AgentToolResolver for HTTP chat path spawn support
-	if components.AgentToolResolver != nil && components.AgentPoolAdapter != nil {
-		components.AgentToolResolver.SetSpawner(components.AgentPoolAdapter, components.AgentPoolAdapter)
+	// Wire spawner into AgentToolResolver for HTTP chat path spawn support.
+	// CompositeAgentSpawner routes spawn requests based on agent lifecycle mode:
+	// "spawn" agents → pool (unchanged), "persistent" agents → lifecycle.Manager.
+	var lifecycleManager *lifecycle.Manager
+	var lifecycleDispatcher *lifecycle.Dispatcher
+	var agentLifecycleReader AgentLifecycleReader
+	if components.AgentPoolAdapter != nil && agentRegistry != nil {
+		agentLifecycleReader = newAgentRegistryLifecycleAdapter(agentRegistry)
+		poolRunner := &poolBasedRunner{pool: components.AgentPoolAdapter}
+		lifecycleManager = lifecycle.NewManager(poolRunner)
+		lifecycleDispatcher = lifecycle.NewDispatcher(lifecycleManager)
+
+		if components.AgentToolResolver != nil {
+			compositeSpawner := NewCompositeAgentSpawner(
+				components.AgentPoolAdapter,
+				lifecycleManager,
+				agentLifecycleReader,
+			)
+			components.AgentToolResolver.SetSpawner(compositeSpawner, components.AgentPoolAdapter)
+			slog.InfoContext(ctx, "CompositeAgentSpawner wired into AgentToolResolver")
+		}
 	}
 
 	// US-001: Wire capability injector into AgentToolResolver
@@ -478,7 +497,22 @@ func Run(sc ServerConfig) error {
 		cbRegistry = resilience.NewCircuitBreakerRegistry(resilience.DefaultCircuitBreakerConfig())
 		components.AgentToolResolver.SetCircuitBreakerRegistry(&circuitBreakerRegistryAdapter{registry: cbRegistry})
 		slog.InfoContext(ctx, "Circuit breaker registry wired into AgentToolResolver")
+
+		// Wire 30s default tool timeout into AgentToolResolver (AC-RESIL-05)
+		components.AgentToolResolver.SetToolTimeout(30_000) // 30 seconds in ms
+		slog.InfoContext(ctx, "Tool timeout wired into AgentToolResolver", "timeout_ms", 30000)
 	}
+
+	// Resilience: HeartbeatMonitor — detects stuck agents (AC-RESIL-01/02)
+	heartbeatMonitor := resilience.NewHeartbeatMonitor(resilience.DefaultHeartbeatConfig(), stubHeartbeatCallback)
+	heartbeatMonitor.Start(ctx)
+	slog.InfoContext(ctx, "Heartbeat monitor started")
+
+	// Resilience: DeadLetterQueue — tracks timed-out tasks (AC-RESIL-07/08)
+	deadLetterQueue := resilience.NewDeadLetterQueue(resilience.DefaultDeadLetterConfig(), func(t resilience.TrackedTask, elapsed time.Duration) {
+		slog.WarnContext(ctx, "task timed out, moved to dead letter",
+			"task_id", t.TaskID, "agent_id", t.AgentID, "elapsed", elapsed)
+	})
 
 	// US-005: Wire recovery executor into AgentToolResolver
 	if components.AgentToolResolver != nil {
@@ -596,6 +630,16 @@ func Run(sc ServerConfig) error {
 				r.Delete("/api/v1/agents/{name}", agentHandler.Delete)
 			})
 
+			// Agent Lifecycle
+			if lifecycleManager != nil && agentLifecycleReader != nil {
+				lifecycleProvider := newLifecycleHTTPAdapter(lifecycleManager, agentLifecycleReader)
+				lifecycleHandler := deliveryhttp.NewLifecycleHandler(lifecycleProvider)
+				r.Group(func(r chi.Router) {
+					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
+					r.Get("/api/v1/agents/{name}/lifecycle", lifecycleHandler.Status)
+				})
+			}
+
 			// Agent Capabilities
 			capRepo := config_repo.NewGORMCapabilityRepository(pgDB)
 			capHandler := deliveryhttp.NewCapabilityHandler(&capabilityServiceHTTPAdapter{repo: capRepo})
@@ -636,6 +680,16 @@ func Run(sc ServerConfig) error {
 				r.Delete("/api/v1/tasks/{id}", taskHandler.Cancel)
 				r.Post("/api/v1/tasks/{id}/input", taskHandler.ProvideInput)
 			})
+
+			// Dispatch Tasks (lifecycle dispatcher queries)
+			if lifecycleDispatcher != nil {
+				dispatchHandler := deliveryhttp.NewDispatchHandler(lifecycleDispatcher)
+				r.Group(func(r chi.Router) {
+					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeTasks))
+					r.Get("/api/v1/dispatch/tasks/{taskId}", dispatchHandler.Get)
+					r.Get("/api/v1/sessions/{sessionId}/dispatch-tasks", dispatchHandler.ListBySession)
+				})
+			}
 
 			// Config
 			configHandler := deliveryhttp.NewConfigHandler(
@@ -827,6 +881,20 @@ func Run(sc ServerConfig) error {
 			usageHandler := deliveryhttp.NewUsageHandler()
 			r.Get("/api/v1/usage", usageHandler.GetUsage)
 
+			// Resilience admin endpoints (AC-RESIL-08: dead letters visible, circuit breaker management)
+			resilienceHandler := deliveryhttp.NewResilienceHandler(
+				&circuitBreakerQuerierHTTPAdapter{registry: cbRegistry},
+				&deadLetterQuerierHTTPAdapter{queue: deadLetterQueue},
+				&heartbeatQuerierHTTPAdapter{monitor: heartbeatMonitor},
+			)
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireAdminSession)
+				r.Get("/api/v1/admin/resilience/circuit-breakers", resilienceHandler.ListCircuitBreakers)
+				r.Post("/api/v1/admin/resilience/circuit-breakers/{name}/reset", resilienceHandler.ResetCircuitBreaker)
+				r.Get("/api/v1/admin/resilience/dead-letters", resilienceHandler.ListDeadLetters)
+				r.Get("/api/v1/admin/resilience/heartbeats", resilienceHandler.ListHeartbeats)
+			})
+
 			// Builder Assistant (admin-only)
 			builderAssistant := assistant.NewBuilder(&assistantAdminOpsAdapter{db: pgDB, registry: agentRegistry})
 			assistantHandler := deliveryhttp.NewAssistantHandler(
@@ -977,14 +1045,19 @@ func Run(sc ServerConfig) error {
 		// Serve widget.js (static file) — external only (or both in single-port mode)
 		widgetPath := "/usr/share/bytebrew/widget/widget.js"
 		if _, statErr := os.Stat(widgetPath); statErr == nil {
-			widgetHandler := func(w http.ResponseWriter, req *http.Request) {
+			widgetFileHandler := func(w http.ResponseWriter, req *http.Request) {
 				w.Header().Set("Content-Type", "application/javascript")
 				w.Header().Set("Cache-Control", "public, max-age=3600")
 				http.ServeFile(w, req, widgetPath)
 			}
-			r.Get("/widget.js", widgetHandler)
+			r.Get("/widget.js", widgetFileHandler)
 			slog.InfoContext(ctx, "Widget served", "path", widgetPath)
 		}
+
+		// Serve dynamic widget embed script per widget ID (public, no auth)
+		widgetScriptRepo := config_repo.NewGORMWidgetRepository(pgDB)
+		widgetScriptHandler := deliveryhttp.NewWidgetScriptHandler(&widgetServiceHTTPAdapter{repo: widgetScriptRepo}, "")
+		r.Get("/widget/{id}.js", widgetScriptHandler.ServeScript)
 
 		// NOTE: HTTP server start is deferred until after SessionProcessor is created,
 		// so the chat endpoint can be wired with all required dependencies.
@@ -1061,6 +1134,13 @@ func Run(sc ServerConfig) error {
 	)
 	flowHandlerCfg.TurnExecutorFactory = factory
 
+	// Wire memory storage into factory for memory_recall/memory_store tools (US-001 Memory capability)
+	if pgDB != nil {
+		memStorage := persistence.NewMemoryStorage(pgDB)
+		factory.SetMemory(memStorage, memStorage, 0) // maxEntries=0 means unlimited
+		loggerInstance.InfoContext(ctx, "Memory storage wired into TurnExecutorFactory")
+	}
+
 	// Create shared SessionProcessor
 	sessProcessor := session_processor.New(sessionRegistry, factory, eventStore)
 	flowHandlerCfg.SessionProcessor = sessProcessor
@@ -1079,6 +1159,7 @@ func Run(sc ServerConfig) error {
 				components.Engine, agentRegistry,
 				components.AgentToolResolver, components.ToolDepsProvider,
 			)
+			components.AgentPool.SetModelResolver(agentRegistry, components.ModelCache)
 		}
 		loggerInstance.InfoContext(ctx, "Multi-agent mode enabled (Supervisor + Code Agents)")
 	} else {

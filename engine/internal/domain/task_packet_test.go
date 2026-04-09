@@ -6,7 +6,7 @@ import (
 )
 
 func TestNewTaskPacket_Valid(t *testing.T) {
-	tp, err := NewTaskPacket("task-1", "parent", "child", "do stuff", 30*time.Second)
+	tp, err := NewTaskPacket("task-1", "parent", "child", "session-1", "do stuff", 30*time.Second)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestNewTaskPacket_MissingFields(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewTaskPacket(tt.id, tt.parent, tt.child, tt.input, 0)
+			_, err := NewTaskPacket(tt.id, tt.parent, tt.child, "s", tt.input, 0)
 			if err == nil {
 				t.Fatal("expected error")
 			}
@@ -39,7 +39,7 @@ func TestNewTaskPacket_MissingFields(t *testing.T) {
 }
 
 func TestTaskPacket_Lifecycle(t *testing.T) {
-	tp, _ := NewTaskPacket("t1", "p", "c", "input", 0)
+	tp, _ := NewTaskPacket("t1", "p", "c", "s", "input", 0)
 
 	if err := tp.Start(); err != nil {
 		t.Fatalf("start: %v", err)
@@ -60,7 +60,7 @@ func TestTaskPacket_Lifecycle(t *testing.T) {
 }
 
 func TestTaskPacket_Fail(t *testing.T) {
-	tp, _ := NewTaskPacket("t1", "p", "c", "input", 0)
+	tp, _ := NewTaskPacket("t1", "p", "c", "s", "input", 0)
 	tp.Start()
 
 	if err := tp.Fail("broken"); err != nil {
@@ -75,7 +75,7 @@ func TestTaskPacket_Fail(t *testing.T) {
 }
 
 func TestTaskPacket_Timeout(t *testing.T) {
-	tp, _ := NewTaskPacket("t1", "p", "c", "input", 0)
+	tp, _ := NewTaskPacket("t1", "p", "c", "s", "input", 0)
 	tp.Start()
 
 	if err := tp.MarkTimeout(); err != nil {
@@ -108,7 +108,7 @@ func TestTaskPacket_IsTerminal(t *testing.T) {
 }
 
 func TestTaskPacket_IsExpired(t *testing.T) {
-	tp, _ := NewTaskPacket("t1", "p", "c", "input", 1*time.Millisecond)
+	tp, _ := NewTaskPacket("t1", "p", "c", "s", "input", 1*time.Millisecond)
 	tp.Start()
 	time.Sleep(5 * time.Millisecond)
 
@@ -118,7 +118,7 @@ func TestTaskPacket_IsExpired(t *testing.T) {
 }
 
 func TestTaskPacket_NotExpired_NoTimeout(t *testing.T) {
-	tp, _ := NewTaskPacket("t1", "p", "c", "input", 0)
+	tp, _ := NewTaskPacket("t1", "p", "c", "s", "input", 0)
 	tp.Start()
 	if tp.IsExpired() {
 		t.Error("expected not expired with 0 timeout")
@@ -126,7 +126,7 @@ func TestTaskPacket_NotExpired_NoTimeout(t *testing.T) {
 }
 
 func TestTaskPacket_InvalidTransitions(t *testing.T) {
-	tp, _ := NewTaskPacket("t1", "p", "c", "input", 0)
+	tp, _ := NewTaskPacket("t1", "p", "c", "s", "input", 0)
 
 	// Can't complete from pending
 	if err := tp.Complete("x"); err == nil {

@@ -29,7 +29,13 @@ type ToolDependencies struct {
 	WebFetchTool       tool.InvokableTool // pre-created
 	ChunkStore         *indexing.ChunkStore
 	Embedder           *indexing.EmbeddingsClient
-	MCPServers         []string           // MCP server names for legacy Resolve path
-	CanSpawn           []string           // target agent names this agent can spawn (legacy Resolve path)
+	MCPServers          []string           // MCP server names for legacy Resolve path
+	CanSpawn            []string           // target agent names this agent can spawn (legacy Resolve path)
+	// Memory capability deps (US-001: injected when agent has Memory capability)
+	SchemaID            string             // agent's schema ID for memory scoping
+	UserID              string             // end-user ID for memory scoping
+	MemoryRecaller      MemoryRecaller     // nil → memory_recall disabled
+	MemoryStorer        MemoryStorer       // nil → memory_store disabled
+	MemoryMaxEntries    int                // 0 → unlimited
 }
 

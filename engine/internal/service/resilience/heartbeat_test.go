@@ -99,3 +99,41 @@ func TestHeartbeatMonitor_MultipleAgents(t *testing.T) {
 	assert.Len(t, stuck, 1)
 	assert.Equal(t, "agent-2", stuck[0])
 }
+
+func TestHeartbeatMonitor_Snapshots(t *testing.T) {
+	cfg := HeartbeatConfig{Interval: 1 * time.Second}
+	monitor := NewHeartbeatMonitor(cfg, nil)
+
+	// Empty monitor
+	snaps := monitor.Snapshots()
+	assert.Empty(t, snaps)
+
+	// Register agents and record heartbeats
+	monitor.Register("agent-1", AgentTypeSpawn)
+	monitor.Register("agent-2", AgentTypePersistent)
+	monitor.RecordHeartbeat(HeartbeatEvent{
+		AgentID:     "agent-1",
+		Timestamp:   time.Now(),
+		CurrentStep: "reading file",
+	})
+
+	snaps = monitor.Snapshots()
+	assert.Len(t, snaps, 2)
+
+	// Find agent-1 snapshot and verify current step
+	var found bool
+	for _, s := range snaps {
+		if s.AgentID == "agent-1" {
+			found = true
+			assert.Equal(t, AgentTypeSpawn, s.AgentType)
+			assert.Equal(t, "reading file", s.CurrentStep)
+		}
+	}
+	assert.True(t, found, "agent-1 should be in snapshots")
+
+	// Unregister and verify
+	monitor.Unregister("agent-1")
+	snaps = monitor.Snapshots()
+	assert.Len(t, snaps, 1)
+	assert.Equal(t, "agent-2", snaps[0].AgentID)
+}

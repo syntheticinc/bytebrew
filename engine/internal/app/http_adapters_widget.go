@@ -63,6 +63,7 @@ func (a *widgetServiceHTTPAdapter) CreateWidget(ctx context.Context, req deliver
 		Placeholder:     defaultStr(req.Placeholder, "Type a message..."),
 		AvatarURL:       req.AvatarURL,
 		DomainWhitelist: req.DomainWhitelist,
+		CustomHeaders:   req.CustomHeaders,
 		Enabled:         enabled,
 	}
 	if len(record.DomainWhitelist) == 0 {
@@ -96,10 +97,14 @@ func (a *widgetServiceHTTPAdapter) UpdateWidget(ctx context.Context, id uint, re
 		Placeholder:     defaultStr(req.Placeholder, existing.Placeholder),
 		AvatarURL:       defaultStr(req.AvatarURL, existing.AvatarURL),
 		DomainWhitelist: existing.DomainWhitelist,
+		CustomHeaders:   existing.CustomHeaders,
 		Enabled:         existing.Enabled,
 	}
 	if len(req.DomainWhitelist) > 0 {
 		record.DomainWhitelist = req.DomainWhitelist
+	}
+	if req.CustomHeaders != nil {
+		record.CustomHeaders = req.CustomHeaders
 	}
 	if req.Enabled != nil {
 		record.Enabled = *req.Enabled
@@ -136,6 +141,7 @@ func toWidgetInfo(r config_repo.WidgetRecord) deliveryhttp.WidgetInfo {
 		Placeholder:     r.Placeholder,
 		AvatarURL:       r.AvatarURL,
 		DomainWhitelist: r.DomainWhitelist,
+		CustomHeaders:   r.CustomHeaders,
 		Enabled:         r.Enabled,
 	}
 }

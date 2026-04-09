@@ -35,7 +35,8 @@ type Widget struct {
 	WelcomeMessage  string
 	Placeholder     string
 	AvatarURL       string
-	DomainWhitelist []string // allowed origins, ["*"] = all
+	DomainWhitelist []string          // allowed origins, ["*"] = all
+	CustomHeaders   map[string]string // headers forwarded with every chat request
 	Enabled         bool
 	CreatedAt       time.Time
 	UpdatedAt       time.Time

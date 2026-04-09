@@ -27,11 +27,11 @@ func NewDispatcher(manager *Manager) *Dispatcher {
 
 // Dispatch creates a task, assigns it to a child agent, and executes it.
 // Returns the result when the child completes (blocking).
-func (d *Dispatcher) Dispatch(ctx context.Context, taskID, parentAgent, childAgent, input string,
+func (d *Dispatcher) Dispatch(ctx context.Context, taskID, parentAgent, childAgent, sessionID, input string,
 	childMode domain.LifecycleMode, maxContext int, timeout time.Duration,
 	eventStream domain.AgentEventStream) (*domain.TaskPacket, error) {
 
-	packet, err := domain.NewTaskPacket(taskID, parentAgent, childAgent, input, timeout)
+	packet, err := domain.NewTaskPacket(taskID, parentAgent, childAgent, sessionID, input, timeout)
 	if err != nil {
 		return nil, fmt.Errorf("create task packet: %w", err)
 	}
@@ -133,6 +133,20 @@ func (d *Dispatcher) ListTasks(parentAgent string) []*domain.TaskPacket {
 	var result []*domain.TaskPacket
 	for _, tp := range d.tasks {
 		if tp.ParentAgent == parentAgent {
+			result = append(result, tp)
+		}
+	}
+	return result
+}
+
+// ListTasksBySession returns all tasks for a given session.
+func (d *Dispatcher) ListTasksBySession(sessionID string) []*domain.TaskPacket {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	var result []*domain.TaskPacket
+	for _, tp := range d.tasks {
+		if tp.SessionID == sessionID {
 			result = append(result, tp)
 		}
 	}

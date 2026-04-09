@@ -88,6 +88,7 @@ type AgentToolResolver struct {
 	policyEvaluator   PolicyEvaluator
 	cbRegistry        CircuitBreakerRegistry
 	recoveryExecutor  RecoveryExecutor
+	toolTimeoutMs     int64 // 0 = disabled
 }
 
 // NewAgentToolResolver creates a new AgentToolResolver.
@@ -135,6 +136,11 @@ func (r *AgentToolResolver) SetCircuitBreakerRegistry(registry CircuitBreakerReg
 // SetRecoveryExecutor configures the recovery executor for MCP tool failure recovery.
 func (r *AgentToolResolver) SetRecoveryExecutor(executor RecoveryExecutor) {
 	r.recoveryExecutor = executor
+}
+
+// SetToolTimeout configures the per-MCP-tool-call timeout in milliseconds (AC-RESIL-05).
+func (r *AgentToolResolver) SetToolTimeout(timeoutMs int64) {
+	r.toolTimeoutMs = timeoutMs
 }
 
 // ResolveContext holds per-agent resolution context.
@@ -347,9 +353,14 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 					"server", serverName, "error", err)
 				continue
 			}
-			// US-006: Wrap MCP tools with circuit breaker
-			// US-005: Wrap MCP tools with recovery
+			// AC-RESIL-05: Timeout is innermost — fires first, feeds timeout error to CB
+			// US-006: Circuit breaker wraps timeout
+			// US-005: Recovery wraps circuit breaker
 			for i, mt := range mcpTools {
+				if r.toolTimeoutMs > 0 {
+					mcpTools[i] = NewTimeoutToolWrapper(mt, r.toolTimeoutMs)
+					mt = mcpTools[i]
+				}
 				if r.cbRegistry != nil {
 					mcpTools[i] = NewCircuitBreakerToolWrapper(mt, r.cbRegistry.Get(serverName))
 					mt = mcpTools[i]
@@ -413,8 +424,14 @@ func (r *AgentToolResolver) resolveMCPTools(rc ResolveContext) ([]tool.Invokable
 				"server", serverName, "agent", rc.Agent.Record.Name, "error", err)
 			continue
 		}
-		// Wrap each MCP tool with circuit breaker + recovery
+		// AC-RESIL-05: Timeout is innermost — fires first, feeds timeout error to CB
+		// US-006: Circuit breaker wraps timeout
+		// US-005: Recovery wraps circuit breaker
 		for i, mt := range mcpTools {
+			if r.toolTimeoutMs > 0 {
+				mcpTools[i] = NewTimeoutToolWrapper(mt, r.toolTimeoutMs)
+				mt = mcpTools[i]
+			}
 			if r.cbRegistry != nil {
 				mcpTools[i] = NewCircuitBreakerToolWrapper(mt, r.cbRegistry.Get(serverName))
 				mt = mcpTools[i]
