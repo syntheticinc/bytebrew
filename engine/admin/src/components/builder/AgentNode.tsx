@@ -8,6 +8,7 @@ export interface AgentNodeData {
   spawnCount: number;
   confirmCount: number;
   lifecycle: string;
+  isSystem?: boolean;
   state?: 'ready' | 'running' | 'blocked' | 'degraded' | 'finished';
   isNew?: boolean;
   isRunning?: boolean;
@@ -65,7 +66,12 @@ export default function AgentNode({ data, selected }: NodeProps) {
           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${stateClasses[d.state]}`} />
         )}
         <span className="text-sm font-semibold text-brand-light truncate">{d.name}</span>
-        {isSpawn && (
+        {d.isSystem && (
+          <span className="ml-auto px-1.5 py-0.5 rounded text-[10px] font-medium bg-brand-shade3/15 text-brand-shade3 whitespace-nowrap">
+            system
+          </span>
+        )}
+        {isSpawn && !d.isSystem && (
           <span className="ml-auto px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/15 text-blue-400 whitespace-nowrap">
             sub-agent
           </span>

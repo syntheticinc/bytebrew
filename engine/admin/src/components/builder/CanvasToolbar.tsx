@@ -8,6 +8,9 @@ interface CanvasToolbarProps {
   onRefetch: () => void;
   onAddAgent: () => void;
   onAddTrigger: () => void;
+  // Schema name for production mode (from URL param)
+  schemaName?: string;
+  onBack?: () => void;
   // Prototype schema props
   protoSchema: string;
   protoSchemas: string[];
@@ -22,6 +25,8 @@ export default function CanvasToolbar({
   onRefetch,
   onAddAgent,
   onAddTrigger,
+  schemaName,
+  onBack,
   protoSchema,
   protoSchemas,
   setProtoSchema,
@@ -31,7 +36,24 @@ export default function CanvasToolbar({
 
   return (
     <div className="flex items-center gap-3 px-4 h-12 border-b border-brand-shade3/15 bg-brand-dark-alt flex-shrink-0 flex-wrap">
-      <span className="text-sm font-semibold text-brand-light">Agent Builder</span>
+      {/* Back button + schema name in production mode */}
+      {!isPrototype && schemaName && onBack && (
+        <>
+          <button
+            onClick={onBack}
+            className="flex items-center gap-1 text-xs text-brand-shade3 hover:text-brand-light transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            Schemas
+          </button>
+          <div className="w-px h-4 bg-brand-shade3/20" />
+        </>
+      )}
+      <span className="text-sm font-semibold text-brand-light">
+        {!isPrototype && schemaName ? schemaName : 'Agent Builder'}
+      </span>
 
       {/* Prototype: schema switcher */}
       {isPrototype && (

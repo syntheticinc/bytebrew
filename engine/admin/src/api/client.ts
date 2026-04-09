@@ -327,6 +327,31 @@ class APIClient {
     return this.request<Schema[]>('GET', '/schemas');
   }
 
+  createSchema(data: { name: string; description?: string }) {
+    if (this.isPrototype) return this.mock({ id: Date.now(), name: data.name, description: data.description, agents_count: 0, created_at: new Date().toISOString() } as Schema);
+    return this.request<Schema>('POST', '/schemas', data);
+  }
+
+  deleteSchema(schemaId: number) {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('DELETE', `/schemas/${schemaId}`);
+  }
+
+  listSchemaAgents(schemaId: number) {
+    if (this.isPrototype) return this.mock<string[]>([]);
+    return this.request<string[]>('GET', `/schemas/${schemaId}/agents`);
+  }
+
+  addAgentToSchema(schemaId: number, agentName: string) {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('POST', `/schemas/${schemaId}/agents`, { agent_name: agentName });
+  }
+
+  removeAgentFromSchema(schemaId: number, agentName: string) {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('DELETE', `/schemas/${schemaId}/agents/${encodeURIComponent(agentName)}`);
+  }
+
   // ─── Sessions / Inspect ──────────────────────────────────────────────────────
 
   listSessions(params?: {
@@ -624,13 +649,11 @@ class APIClient {
     return res.json();
   }
 
-  // ─── AI Assistant ─────────────────────────────────────────────────────────────
+  // ─── Builder Assistant ───────────────────────────────────────────────────────
 
-  assistantChat(message: string, sessionId: string): Promise<{ response: string; session_id: string }> {
-    if (this.isPrototype) {
-      return this.mock({ response: 'This is a mock response from the AI assistant.', session_id: sessionId });
-    }
-    return this.request<{ response: string; session_id: string }>('POST', '/admin/assistant/chat', { message, session_id: sessionId });
+  async restoreBuilderAssistant(): Promise<void> {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    await this.request<void>('POST', '/admin/builder-assistant/restore', undefined);
   }
 
   /**

@@ -30,6 +30,8 @@ func (a *schemaServiceHTTPAdapter) ListSchemas(ctx context.Context) ([]deliveryh
 			Name:        r.Name,
 			Description: r.Description,
 			Agents:      r.AgentNames,
+			IsSystem:    r.IsSystem,
+			CreatedAt:   r.CreatedAt,
 		})
 	}
 	return result, nil
@@ -49,6 +51,8 @@ func (a *schemaServiceHTTPAdapter) GetSchema(ctx context.Context, id uint) (*del
 		Name:        record.Name,
 		Description: record.Description,
 		Agents:      record.AgentNames,
+		IsSystem:    record.IsSystem,
+		CreatedAt:   record.CreatedAt,
 	}, nil
 }
 
@@ -68,6 +72,7 @@ func (a *schemaServiceHTTPAdapter) CreateSchema(ctx context.Context, req deliver
 		ID:          record.ID,
 		Name:        record.Name,
 		Description: record.Description,
+		CreatedAt:   record.CreatedAt,
 	}, nil
 }
 

@@ -11,6 +11,7 @@ type Schema struct {
 	ID          string
 	Name        string
 	Description string
+	IsSystem    bool // system schemas (e.g. builder-schema) are managed by the engine
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -20,6 +21,21 @@ func NewSchema(name, description string) (*Schema, error) {
 	s := &Schema{
 		Name:        name,
 		Description: description,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	if err := s.Validate(); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// NewSystemSchema creates a new system-managed Schema with IsSystem=true.
+func NewSystemSchema(name, description string) (*Schema, error) {
+	s := &Schema{
+		Name:        name,
+		Description: description,
+		IsSystem:    true,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}

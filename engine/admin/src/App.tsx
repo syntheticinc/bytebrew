@@ -14,6 +14,7 @@ import AuditPage from './pages/AuditPage';
 import AgentBuilderPage from './pages/AgentBuilderPage';
 import AgentDrillInPage from './pages/AgentDrillInPage';
 import AgentsPage from './pages/AgentsPage';
+import SchemaListPage from './pages/SchemaListPage';
 import InspectPage from './pages/InspectPage';
 import WidgetConfigPage from './pages/WidgetConfigPage';
 import MemoryPage from './pages/MemoryPage';
@@ -41,7 +42,8 @@ export default function App() {
             }
           >
             <Route path="/health" element={<HealthPage />} />
-            <Route path="/builder" element={<AgentBuilderPage />} />
+            <Route path="/builder" element={<SchemaListPage />} />
+            <Route path="/builder/:schemaName" element={<AgentBuilderPage />} />
             <Route path="/builder/:schema/:agent" element={<AgentDrillInPage />} />
             <Route path="/builder/:schema/:agent/inspect/:session" element={<InspectPage />} />
             <Route path="/inspect" element={<InspectPage />} />
@@ -56,6 +58,7 @@ export default function App() {
             <Route path="/audit" element={<AuditPage />} />
             <Route path="/widget" element={<WidgetConfigPage />} />
             <Route path="/agents" element={<AgentsPage />} />
+            <Route path="/agents/:agent" element={<AgentDrillInPage />} />
             <Route path="/memory" element={<MemoryPage />} />
             <Route path="/knowledge" element={<KnowledgePage />} />
             <Route path="/" element={<Navigate to="/builder" replace />} />

@@ -7,6 +7,7 @@ type SchemaModel struct {
 	ID          uint      `gorm:"primaryKey"`
 	Name        string    `gorm:"uniqueIndex;not null;type:varchar(255)"`
 	Description string    `gorm:"type:text"`
+	IsSystem    bool      `gorm:"column:is_system;not null;default:false"`
 	CreatedAt   time.Time `gorm:"autoCreateTime"`
 	UpdatedAt   time.Time `gorm:"autoUpdateTime"`
 }

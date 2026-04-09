@@ -1044,6 +1044,7 @@ func (a *agentManagerHTTPAdapter) ListAgents(ctx context.Context) ([]deliveryhtt
 			ToolsCount:   len(rec.BuiltinTools) + len(rec.CustomTools),
 			Kit:          rec.Kit,
 			HasKnowledge: rec.KnowledgePath != "",
+			IsSystem:     rec.IsSystem,
 		}
 		if a.schemaRepo != nil {
 			schemaNames, _ := a.schemaRepo.ListSchemasForAgent(ctx, rec.Name)
@@ -1072,6 +1073,7 @@ func (a *agentManagerHTTPAdapter) GetAgent(ctx context.Context, name string) (*d
 			ToolsCount:   len(tools),
 			Kit:          rec.Kit,
 			HasKnowledge: rec.KnowledgePath != "",
+			IsSystem:     rec.IsSystem,
 		},
 		SystemPrompt:   rec.SystemPrompt,
 		KnowledgePath:  rec.KnowledgePath,
@@ -1130,6 +1132,20 @@ func (a *agentManagerHTTPAdapter) CreateAgent(ctx context.Context, req deliveryh
 
 func (a *agentManagerHTTPAdapter) UpdateAgent(ctx context.Context, name string, req deliveryhttp.CreateAgentRequest) (*deliveryhttp.AgentDetail, error) {
 	record := a.toAgentRecord(req)
+
+	// Preserve is_system from the existing record — it is not settable via HTTP.
+	// Also enforce admin_* tool gating: only system agents may carry admin_* tools.
+	if existing, err := a.repo.GetByName(ctx, name); err == nil && existing != nil {
+		record.IsSystem = existing.IsSystem
+		if !existing.IsSystem {
+			for _, toolName := range record.BuiltinTools {
+				if strings.HasPrefix(toolName, "admin_") {
+					return nil, pkgerrors.InvalidInput("admin tools are reserved for system agents")
+				}
+			}
+		}
+	}
+
 	if err := a.repo.Update(ctx, name, record); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, pkgerrors.NotFound(fmt.Sprintf("agent not found: %s", name))
@@ -1150,6 +1166,11 @@ func (a *agentManagerHTTPAdapter) UpdateAgent(ctx context.Context, name string, 
 }
 
 func (a *agentManagerHTTPAdapter) DeleteAgent(ctx context.Context, name string) error {
+	// System agents cannot be deleted via API.
+	if existing, err := a.repo.GetByName(ctx, name); err == nil && existing != nil && existing.IsSystem {
+		return pkgerrors.Forbidden(fmt.Sprintf("system agent %q cannot be deleted", name))
+	}
+
 	if err := a.repo.Delete(ctx, name); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return pkgerrors.NotFound(fmt.Sprintf("agent not found: %s", name))
@@ -1704,4 +1725,13 @@ func sseEventJSON(eventType string, data map[string]interface{}) *deliveryhttp.S
 		Type: eventType,
 		Data: string(jsonBytes),
 	}
+}
+
+// chatTriggerCheckerAdapter implements deliveryhttp.ChatTriggerChecker.
+type chatTriggerCheckerAdapter struct {
+	repo *config_repo.GORMTriggerRepository
+}
+
+func (a *chatTriggerCheckerAdapter) HasEnabledChatTrigger(ctx context.Context, agentName string) (bool, error) {
+	return a.repo.HasEnabledChatTrigger(ctx, agentName)
 }

@@ -35,15 +35,14 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/indexing"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/knowledge"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/kit"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/admin_mcp"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/mcp"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
+	admintools "github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools/admin"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm/registry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/portfile"
 	"github.com/syntheticinc/bytebrew/engine/internal/kits/developer"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/assistant"
 	mcpcatalog "github.com/syntheticinc/bytebrew/engine/internal/service/mcp"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/capability"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/eventstore"
@@ -401,43 +400,32 @@ func Run(sc ServerConfig) error {
 		components.AgentToolResolver.SetMCPProvider(mcpRegistry)
 	}
 
-	// Register admin-api MCP server (in-process) for builder-assistant and AI-powered config management.
+	// Seed builder-assistant agent and register admin tools.
 	if pgDB != nil && agentRegistry != nil {
-		adminMCPSrv := admin_mcp.NewServer(admin_mcp.ServerConfig{
-			AgentManager: &adminMCPAgentAdapter{
-				repo:     config_repo.NewGORMAgentRepository(pgDB),
-				registry: agentRegistry,
-				db:       pgDB,
-			},
-			ModelManager: &adminMCPModelAdapter{
-				repo:       config_repo.NewGORMLLMProviderRepository(pgDB),
-				modelCache: components.ModelCache,
-			},
-			TriggerManager: &adminMCPTriggerAdapter{
-				repo: config_repo.NewGORMTriggerRepository(pgDB),
-			},
-			MCPServerLister: &adminMCPServerListerAdapter{
-				repo: config_repo.NewGORMMCPServerRepository(pgDB),
-			},
-			ToolMetadataProvider: &adminMCPToolMetadataAdapter{},
-			ConfigExporter:       &adminMCPConfigAdapter{db: pgDB},
-			Reloader: &adminMCPReloaderAdapter{
-				registry:            agentRegistry,
-				mcpRegistry:         mcpRegistry,
-				db:                  pgDB,
-				forwardHeadersStore: &forwardHeadersStore,
-			},
-		})
-		adminTransport := mcp.NewInProcessTransport(adminMCPSrv.Handle)
-		adminClient := mcp.NewClient("admin-api", adminTransport)
-		if connErr := adminClient.Connect(ctx); connErr != nil {
-			slog.WarnContext(ctx, "failed to initialize admin-api MCP server", "error", connErr)
-		} else {
-			mcpRegistry.Register("admin-api", adminClient)
-			slog.InfoContext(ctx, "admin-api MCP server registered (in-process)")
-		}
-
 		seedBuilderAssistant(ctx, pgDB)
+		seedBuilderSchema(ctx, pgDB)
+
+		// Wire admin tools into builtin store for builder-assistant.
+		if components.AgentToolResolver != nil {
+			admintools.RegisterAdminTools(components.AgentToolResolver.BuiltinStore(), admintools.AdminToolDependencies{
+				AgentRepo:      newAdminAgentRepoAdapter(config_repo.NewGORMAgentRepository(pgDB)),
+				SchemaRepo:     newAdminSchemaRepoAdapter(config_repo.NewGORMSchemaRepository(pgDB)),
+				TriggerRepo:    newAdminTriggerRepoAdapter(config_repo.NewGORMTriggerRepository(pgDB), pgDB),
+				MCPServerRepo:  newAdminMCPServerRepoAdapter(config_repo.NewGORMMCPServerRepository(pgDB)),
+				ModelRepo:      newAdminModelRepoAdapter(config_repo.NewGORMLLMProviderRepository(pgDB)),
+				EdgeRepo:       newAdminEdgeRepoAdapter(config_repo.NewGORMEdgeRepository(pgDB)),
+				SessionRepo:    newAdminSessionRepoAdapter(config_repo.NewGORMSessionRepository(pgDB)),
+				CapabilityRepo: newAdminCapabilityRepoAdapter(config_repo.NewGORMCapabilityRepository(pgDB)),
+				Reloader: func() {
+					if agentRegistry != nil {
+						if err := agentRegistry.Load(context.Background()); err != nil {
+							slog.Warn("admin tools: failed to reload registry", "error", err)
+						}
+					}
+				},
+			})
+			slog.InfoContext(ctx, "admin tools registered into builtin store")
+		}
 
 		// Reload registry so the seeded builder-assistant is available at runtime.
 		if err := agentRegistry.Load(ctx); err != nil {
@@ -837,6 +825,13 @@ func Run(sc ServerConfig) error {
 				r.Put("/api/v1/settings/{key}", settingHandler.Update)
 			})
 
+			// Builder-assistant restore (admin-only)
+			baHandler := deliveryhttp.NewBuilderAssistantHandler(&builderAssistantRestorerAdapter{db: pgDB})
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireAdminSession)
+				r.Post("/api/v1/admin/builder-assistant/restore", baHandler.Restore)
+			})
+
 			// Sessions (admin-only)
 			sessionRepo := config_repo.NewGORMSessionRepository(pgDB)
 			messageRepo := config_repo.NewGORMMessageRepository(pgDB)
@@ -893,17 +888,6 @@ func Run(sc ServerConfig) error {
 				r.Post("/api/v1/admin/resilience/circuit-breakers/{name}/reset", resilienceHandler.ResetCircuitBreaker)
 				r.Get("/api/v1/admin/resilience/dead-letters", resilienceHandler.ListDeadLetters)
 				r.Get("/api/v1/admin/resilience/heartbeats", resilienceHandler.ListHeartbeats)
-			})
-
-			// Builder Assistant (admin-only)
-			builderAssistant := assistant.NewBuilder(&assistantAdminOpsAdapter{db: pgDB, registry: agentRegistry})
-			assistantHandler := deliveryhttp.NewAssistantHandler(
-				&assistantServiceHTTPAdapter{builder: builderAssistant},
-				&schemaCounterHTTPAdapter{repo: schemaRepo},
-			)
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireAdminSession)
-				r.Post("/api/v1/admin/assistant/chat", assistantHandler.Chat)
 			})
 
 			// Capability injector is wired into AgentToolResolver above (US-001).
@@ -1181,7 +1165,11 @@ func Run(sc ServerConfig) error {
 			agents:      agentRegistry,
 			chatEnabled: components.AgentService != nil || components.ModelCache != nil,
 		}
-		chatHandler := deliveryhttp.NewChatHandler(chatService, func() []string {
+		var triggerChecker deliveryhttp.ChatTriggerChecker
+		if pgDB != nil {
+			triggerChecker = &chatTriggerCheckerAdapter{repo: config_repo.NewGORMTriggerRepository(pgDB)}
+		}
+		chatHandler := deliveryhttp.NewChatHandler(chatService, triggerChecker, func() []string {
 			return forwardHeadersStore.Load().([]string)
 		})
 		respondHandler := deliveryhttp.NewRespondHandler(sessionRegistry)
@@ -1210,6 +1198,24 @@ func Run(sc ServerConfig) error {
 		// In two-port mode, also register on internal port (for /chat/ web client)
 		if internalHTTPServer != nil {
 			registerChatRoutes(internalHTTPServer.Router())
+		}
+
+		// Admin assistant — admin JWT required, no trigger gate.
+		adminAssistantHandler := deliveryhttp.NewAdminAssistantHandler(chatService, func() []string {
+			return forwardHeadersStore.Load().([]string)
+		})
+		registerAdminAssistantRoutes := func(router chi.Router) {
+			router.Group(func(r chi.Router) {
+				if httpAuthMW != nil {
+					r.Use(httpAuthMW.Authenticate)
+					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
+				}
+				r.Post("/api/v1/admin/assistant/chat", adminAssistantHandler.Chat)
+			})
+		}
+		registerAdminAssistantRoutes(httpServer.Router())
+		if internalHTTPServer != nil {
+			registerAdminAssistantRoutes(internalHTTPServer.Router())
 		}
 
 		// Agent list endpoint on external router (read-only, requires ScopeAgentsRead)

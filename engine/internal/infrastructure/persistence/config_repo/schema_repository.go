@@ -3,6 +3,7 @@ package config_repo
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"gorm.io/gorm"
@@ -13,7 +14,9 @@ type SchemaRecord struct {
 	ID          uint
 	Name        string
 	Description string
+	IsSystem    bool
 	AgentNames  []string // names of agents referenced by this schema
+	CreatedAt   time.Time
 }
 
 // GORMSchemaRepository implements schema CRUD using GORM.
@@ -43,7 +46,9 @@ func (r *GORMSchemaRepository) List(ctx context.Context) ([]SchemaRecord, error)
 			ID:          s.ID,
 			Name:        s.Name,
 			Description: s.Description,
+			IsSystem:    s.IsSystem,
 			AgentNames:  agentNames,
+			CreatedAt:   s.CreatedAt,
 		})
 	}
 	return records, nil
@@ -65,7 +70,9 @@ func (r *GORMSchemaRepository) GetByID(ctx context.Context, id uint) (*SchemaRec
 		ID:          schema.ID,
 		Name:        schema.Name,
 		Description: schema.Description,
+		IsSystem:    schema.IsSystem,
 		AgentNames:  agentNames,
+		CreatedAt:   schema.CreatedAt,
 	}, nil
 }
 
@@ -74,6 +81,7 @@ func (r *GORMSchemaRepository) Create(ctx context.Context, record *SchemaRecord)
 	model := models.SchemaModel{
 		Name:        record.Name,
 		Description: record.Description,
+		IsSystem:    record.IsSystem,
 	}
 	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
 		return fmt.Errorf("create schema %q: %w", record.Name, err)

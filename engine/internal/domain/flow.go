@@ -48,8 +48,8 @@ func (f *Flow) Validate() error {
 	if f.MaxSteps < 0 {
 		return fmt.Errorf("max_steps must be non-negative (0 = unlimited)")
 	}
-	if f.MaxContextSize <= 0 {
-		return fmt.Errorf("max_context_size must be positive")
+	if f.MaxContextSize < 0 {
+		return fmt.Errorf("max_context_size must be non-negative (0 = unlimited)")
 	}
 	return nil
 }

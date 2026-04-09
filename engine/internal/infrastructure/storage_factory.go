@@ -81,6 +81,7 @@ type engineComponents struct {
 	FlowManager       *agentservice.FlowManager
 	AgentToolResolver *tools.AgentToolResolver
 	ToolDepsProvider  *tools.DefaultToolDepsProvider
+	BuiltinStore      *tools.BuiltinToolStore
 }
 
 // createEngine creates Engine, FlowManager, ToolResolver and ToolDepsProvider.
@@ -144,6 +145,7 @@ func createEngine(
 		FlowManager:       flowManager,
 		AgentToolResolver: agentToolResolver,
 		ToolDepsProvider:  toolDepsProvider,
+		BuiltinStore:      builtinStore,
 	}, nil
 }
 

@@ -11,7 +11,7 @@ export default function SchemaSelector() {
   useEffect(() => {
     api.listSchemas()
       .then((list) => {
-        const mapped = list.map((s) => ({ id: String(s.id), name: s.name }));
+        const mapped = list.filter((s) => !s.is_system).map((s) => ({ id: String(s.id), name: s.name }));
         setSchemas(mapped);
         const first = mapped[0];
         if (!selectedSchema && first) {

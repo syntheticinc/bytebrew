@@ -8,7 +8,7 @@ interface ConfirmDialogProps {
   message: React.ReactNode;
   confirmLabel?: string;
   loading?: boolean;
-  variant?: 'danger' | 'default';
+  variant?: 'danger' | 'warning' | 'default';
 }
 
 export default function ConfirmDialog({
@@ -21,10 +21,17 @@ export default function ConfirmDialog({
   loading,
   variant = 'default',
 }: ConfirmDialogProps) {
-  const btnClass =
-    variant === 'danger'
-      ? 'bg-red-600 hover:bg-red-700 text-white'
-      : 'bg-brand-accent hover:bg-brand-accent-hover text-brand-light';
+  let btnClass: string;
+  switch (variant) {
+    case 'danger':
+      btnClass = 'bg-red-600 hover:bg-red-700 text-white';
+      break;
+    case 'warning':
+      btnClass = 'bg-amber-600 hover:bg-amber-700 text-white';
+      break;
+    default:
+      btnClass = 'bg-brand-accent hover:bg-brand-accent-hover text-brand-light';
+  }
 
   return (
     <Modal

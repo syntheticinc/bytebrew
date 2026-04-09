@@ -8,6 +8,7 @@ export interface AgentInfo {
   tools_count: number;
   kit?: string;
   has_knowledge: boolean;
+  is_system?: boolean;
 }
 
 export interface AgentDetail extends AgentInfo {
@@ -311,6 +312,7 @@ export interface Schema {
   description?: string;
   agents?: string[];
   agents_count: number;
+  is_system?: boolean;
   created_at: string;
 }
 

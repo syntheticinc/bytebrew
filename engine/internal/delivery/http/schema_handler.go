@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -14,10 +15,12 @@ import (
 
 // SchemaInfo is a summary of a schema returned in list responses.
 type SchemaInfo struct {
-	ID          uint     `json:"id"`
-	Name        string   `json:"name"`
-	Description string   `json:"description,omitempty"`
-	Agents      []string `json:"agents,omitempty"`
+	ID          uint      `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	Agents      []string  `json:"agents,omitempty"`
+	IsSystem    bool      `json:"is_system,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // CreateSchemaRequest is the body for POST /api/v1/schemas.

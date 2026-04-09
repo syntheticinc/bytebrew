@@ -16,6 +16,7 @@ type AgentModel struct {
 	MaxContextSize  int       `gorm:"not null;default:16000"`
 	MaxTurnDuration int       `gorm:"not null;default:120"` // seconds, max time for a single LLM stream turn
 	ConfirmBefore  string    `gorm:"type:text"`
+	IsSystem       bool      `gorm:"not null;default:false"`
 	CreatedAt      time.Time `gorm:"autoCreateTime"`
 	UpdatedAt      time.Time `gorm:"autoUpdateTime"`
 

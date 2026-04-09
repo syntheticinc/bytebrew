@@ -27,6 +27,15 @@ func (r *GORMMCPServerRepository) List(ctx context.Context) ([]models.MCPServerM
 	return servers, nil
 }
 
+// GetByID returns a single MCP server model by ID.
+func (r *GORMMCPServerRepository) GetByID(ctx context.Context, id uint) (*models.MCPServerModel, error) {
+	var server models.MCPServerModel
+	if err := r.db.WithContext(ctx).First(&server, id).Error; err != nil {
+		return nil, fmt.Errorf("get mcp server %d: %w", id, err)
+	}
+	return &server, nil
+}
+
 // Create inserts a new MCP server model.
 func (r *GORMMCPServerRepository) Create(ctx context.Context, model *models.MCPServerModel) error {
 	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {

@@ -56,6 +56,10 @@ export default {
           '0%': { opacity: '0', maxHeight: '0', transform: 'translateY(-4px)' },
           '100%': { opacity: '1', maxHeight: '500px', transform: 'translateY(0)' },
         },
+        'bounce-dots': {
+          '0%, 80%, 100%': { transform: 'scale(0)' },
+          '40%': { transform: 'scale(1)' },
+        },
       },
       animation: {
         'slide-in-right': 'slide-in-right 0.2s ease-out',
@@ -64,6 +68,9 @@ export default {
         'pulse-dot': 'pulse-dot 2s ease-in-out infinite',
         'pulse-glow': 'pulse-glow 1.5s ease-in-out infinite',
         'slide-down': 'slide-down 0.25s ease-out',
+        'bounce-dot-1': 'bounce-dots 1.4s infinite ease-in-out both',
+        'bounce-dot-2': 'bounce-dots 1.4s infinite ease-in-out both 0.16s',
+        'bounce-dot-3': 'bounce-dots 1.4s infinite ease-in-out both 0.32s',
       },
     },
   },

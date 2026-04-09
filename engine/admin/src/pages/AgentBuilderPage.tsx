@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   ReactFlow,
   Background,
@@ -19,8 +19,9 @@ import dagre from '@dagrejs/dagre';
 import { api } from '../api/client';
 import { usePrototype } from '../hooks/usePrototype';
 import { useBottomPanel } from '../hooks/useBottomPanel';
+import { useAdminRefresh } from '../hooks/useAdminRefresh';
 import { createMockSchemas, type SchemaName } from '../mocks/canvas';
-import type { AgentDetail, Model, Trigger } from '../types';
+import type { AgentDetail, Model, Trigger, Schema } from '../types';
 import AgentNode, { type AgentNodeData } from '../components/builder/AgentNode';
 import TriggerNode from '../components/builder/TriggerNode';
 import GateNode from '../components/builder/GateNode';
@@ -93,7 +94,9 @@ function AgentBuilderInner() {
   const { fitView } = useReactFlow();
   const { isPrototype } = usePrototype();
   const navigate = useNavigate();
-  const { selectedSchema } = useBottomPanel();
+  const { schemaName } = useParams<{ schemaName: string }>();
+  const { selectedSchema, setSelectedSchema } = useBottomPanel();
+  const [currentSchema, setCurrentSchema] = useState<Schema | null>(null);
   const [protoSchemas, setProtoSchemas] = useState<string[]>(['Support Schema', 'Dev Schema', 'Sales Schema']);
   const [protoSchema, setProtoSchema] = useState<SchemaName>('Support Schema');
 
@@ -118,6 +121,7 @@ function AgentBuilderInner() {
   const newNodeTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const refetchCanvas = useCallback(() => setRefreshKey((k) => k + 1), []);
+  useAdminRefresh(refetchCanvas);
 
   function showSavedIndicator(state: 'saved' | 'saving') {
     setSavedIndicator(state);
@@ -182,6 +186,7 @@ function AgentBuilderInner() {
     isPrototype,
     handleSelect,
     handleDeleteRequest,
+    currentSchemaId: currentSchema?.id ?? null,
   });
 
   const edgeOps = useCanvasEdges({
@@ -233,15 +238,44 @@ function AgentBuilderInner() {
     setLoading(true);
     setError('');
 
-    Promise.all([api.listAgents(), api.listModels(), api.listTriggers().catch(() => [] as Trigger[])])
-      .then(async ([agentList, models, triggers]) => {
+    // Resolve current schema first, then load its agents
+    const loadData = async (): Promise<{ details: AgentDetail[]; models: Model[]; triggers: Trigger[]; schema: Schema | null }> => {
+      const [allSchemas, models, triggers] = await Promise.all([
+        schemaName && !isPrototype ? api.listSchemas() : Promise.resolve([] as Schema[]),
+        api.listModels(),
+        api.listTriggers().catch(() => [] as Trigger[]),
+      ]);
+
+      let schema: Schema | null = null;
+      if (schemaName && !isPrototype) {
+        schema = allSchemas.find((s) => s.name === schemaName) ?? null;
+        if (!schema) {
+          throw new Error(`Schema "${schemaName}" not found`);
+        }
+      }
+
+      // Load agents: schema-scoped in production, all agents as fallback
+      let agentNames: string[];
+      if (schema) {
+        agentNames = await api.listSchemaAgents(schema.id);
+      } else {
+        const agentList = await api.listAgents();
+        agentNames = agentList.map((a) => a.name);
+      }
+
+      const details = await Promise.all(agentNames.map((name) => api.getAgent(name)));
+      return { details, models, triggers, schema };
+    };
+
+    loadData()
+      .then(({ details, models, triggers, schema }) => {
         if (cancelled) return;
         modelsRef.current = models;
+        setCurrentSchema(schema);
+        if (schema) {
+          setSelectedSchema(schema.name);
+        }
         const modelMap = new Map(models.map((m) => [m.id, m.name]));
-
-        // Fetch full details for all agents (need can_spawn for edges)
-        const details = await Promise.all(agentList.map((a) => api.getAgent(a.name)));
-        if (cancelled) return;
 
         const agentNames = new Set(details.map((a) => a.name));
         details.forEach((a) => agentsCache.current.set(a.name, a));
@@ -341,7 +375,7 @@ function AgentBuilderInner() {
         clearTimeout(timer);
       }
     };
-  }, [handleSelect, handleDeleteRequest, refreshKey, isPrototype, protoSchema, selectedSchema]);
+  }, [handleSelect, handleDeleteRequest, refreshKey, isPrototype, protoSchema, schemaName, setSelectedSchema]);
 
   // ── Side panel save callback ────────────────────────────────────────────────
 
@@ -429,6 +463,8 @@ function AgentBuilderInner() {
         onRefetch={refetchCanvas}
         onAddAgent={() => nodeOps.handleInstantAgentCreate()}
         onAddTrigger={() => nodeOps.handleInstantTriggerCreate()}
+        schemaName={schemaName}
+        onBack={() => navigate('/builder')}
         protoSchema={protoSchema}
         protoSchemas={protoSchemas}
         setProtoSchema={setProtoSchema}
@@ -599,15 +635,18 @@ function AgentBuilderInner() {
         open={nodeOps.deleteTarget !== null}
         onClose={() => { nodeOps.setDeleteTarget(null); nodeOps.setDeleteError(''); }}
         onConfirm={nodeOps.confirmDelete}
-        title="Delete Agent"
+        title={currentSchema ? 'Remove from Schema' : 'Delete Agent'}
         message={
           <>
-            Delete agent <strong className="text-brand-light">{nodeOps.deleteTarget}</strong>?
-            This will also remove all spawn connections to/from it.
+            {currentSchema ? (
+              <>Remove agent <strong className="text-brand-light">{nodeOps.deleteTarget}</strong> from schema <strong className="text-brand-light">{currentSchema.name}</strong>? The agent will remain in the system but will no longer appear on this canvas.</>
+            ) : (
+              <>Delete agent <strong className="text-brand-light">{nodeOps.deleteTarget}</strong>? This will also remove all spawn connections to/from it.</>
+            )}
             {nodeOps.deleteError && <p className="mt-2 text-red-400 text-xs">{nodeOps.deleteError}</p>}
           </>
         }
-        confirmLabel="Delete"
+        confirmLabel={currentSchema ? 'Remove' : 'Delete'}
         loading={nodeOps.deleting}
         variant="danger"
       />

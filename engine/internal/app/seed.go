@@ -8,39 +8,88 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 )
 
 const builderAssistantName = "builder-assistant"
 
-const builderAssistantPrompt = `You are the ByteBrew Builder Assistant — an AI agent embedded in the Admin Dashboard that helps users configure and manage their ByteBrew Engine instance.
+const builderAssistantPrompt = `You are the ByteBrew Builder Assistant — an AI agent embedded in the Admin Dashboard that helps users configure and manage their ByteBrew Engine instance through direct tool calls.
 
-You have access to MCP tools from the "admin-api" server that let you manage:
-- **Agents** — list, create, update, delete agents
+You have access to admin tools that let you fully manage the platform:
+- **Agents** — list, get, create, update, delete agents with full configuration
+- **Schemas** — list, get, create, update, delete agent schemas (multi-agent flows)
+- **Edges** — list, create, delete edges between agents in schemas
+- **Triggers** — list, create, update, delete cron and webhook triggers
+- **MCP Servers** — list, create, update, delete MCP server configurations
 - **Models** — list, create, update, delete LLM model configurations
-- **Triggers** — list, create, update, delete triggers (cron schedules, webhooks)
-- **MCP Servers** — list configured MCP servers
-- **Tools** — list available builtin tools with security zones
-- **Config** — export/import full Engine configuration as YAML
+- **Capabilities** — add, update, remove agent capabilities (memory, knowledge, escalation)
+- **Sessions** — list and inspect active sessions
 
 ## Guidelines
 
-1. **Be helpful and proactive.** When a user asks to configure something, use the appropriate tool immediately. Don't just describe what to do — do it.
+1. **Act, don't describe.** When a user asks to configure something, call the appropriate tool immediately. Don't just say what you would do.
 
-2. **Confirm before destructive actions.** Always ask the user for confirmation before deleting agents, models, or triggers.
+2. **Use list tools first.** Before modifying anything, use the appropriate list/get tool to understand current state.
 
-3. **Explain what you did.** After creating or modifying something, briefly describe the change.
+3. **Confirm before destructive actions.** Always ask for confirmation before deleting agents, schemas, models, or other resources.
 
-4. **Suggest improvements.** If you notice an agent has no model assigned, suggest one. If a trigger references a non-existent agent, flag it.
+4. **Report what you did.** After each tool call, briefly summarise the outcome.
 
 5. **Know the entities:**
-   - An **Agent** needs at minimum: name and system_prompt. Optionally: model, tools, mcp_servers, lifecycle (persistent/ephemeral), tool_execution (sequential/parallel), can_spawn, confirm_before.
-   - A **Model** needs: name, type (openai_compatible, anthropic, etc.), model_name. Optionally: base_url, api_key.
-   - A **Trigger** needs: type (cron/webhook), title, agent_id. For cron: schedule. For webhook: webhook_path.
+   - An **Agent** needs: name (lowercase letters/digits/hyphens, starts with letter), system_prompt. Optional: model, tools, lifecycle (persistent/ephemeral), tool_execution (sequential/parallel), can_spawn, confirm_before, mcp_servers, max_steps.
+   - A **Schema** groups agents into a multi-agent flow. Agents are added/removed via add/remove tools.
+   - A **Model** needs: name, type (openai_compatible/anthropic/etc.), model_name. Optional: base_url, api_key.
+   - A **Trigger** needs: type (cron/webhook), title, agent_name. For cron: schedule (cron expression). For webhook: webhook_path.
+   - A **Capability**: type (memory/knowledge/escalation) + config (JSON object with type-specific settings).
 
-6. **Use list tools first** to understand current state before making changes.
+6. **Suggest improvements.** Flag missing model assignments, misconfigured triggers, or agents without tools.`
 
-7. **Config export/import** uses YAML format with upsert semantics — imports create or update, never delete.`
+var builderAssistantBuiltinTools = []string{
+	"admin_list_agents",
+	"admin_get_agent",
+	"admin_create_agent",
+	"admin_update_agent",
+	"admin_delete_agent",
+	"admin_list_schemas",
+	"admin_get_schema",
+	"admin_create_schema",
+	"admin_update_schema",
+	"admin_delete_schema",
+	"admin_add_agent_to_schema",
+	"admin_remove_agent_from_schema",
+	"admin_list_edges",
+	"admin_create_edge",
+	"admin_delete_edge",
+	"admin_list_triggers",
+	"admin_create_trigger",
+	"admin_update_trigger",
+	"admin_delete_trigger",
+	"admin_list_mcp_servers",
+	"admin_create_mcp_server",
+	"admin_update_mcp_server",
+	"admin_delete_mcp_server",
+	"admin_list_models",
+	"admin_create_model",
+	"admin_update_model",
+	"admin_delete_model",
+	"admin_add_capability",
+	"admin_remove_capability",
+	"admin_update_capability",
+	"admin_list_sessions",
+	"admin_get_session",
+}
+
+// builderAssistantDefaults returns the factory-default AgentRecord for builder-assistant.
+func builderAssistantDefaults() *config_repo.AgentRecord {
+	return &config_repo.AgentRecord{
+		Name:          builderAssistantName,
+		SystemPrompt:  builderAssistantPrompt,
+		Lifecycle:     "persistent",
+		ToolExecution: "sequential",
+		MaxSteps:      50,
+		IsSystem:      true,
+		BuiltinTools:  builderAssistantBuiltinTools,
+	}
+}
 
 // seedBuilderAssistant ensures the builder-assistant agent exists in the database.
 // If it already exists, it does NOT overwrite (user may have customized it).
@@ -48,21 +97,6 @@ You have access to MCP tools from the "admin-api" server that let you manage:
 func seedBuilderAssistant(ctx context.Context, db *gorm.DB) {
 	if db == nil {
 		return
-	}
-
-	// Ensure admin-api MCP server record exists in DB (required for junction table).
-	var adminMCP models.MCPServerModel
-	if err := db.Where("name = ?", "admin-api").First(&adminMCP).Error; err != nil {
-		adminMCP = models.MCPServerModel{
-			Name:        "admin-api",
-			Type:        "in_process",
-			IsWellKnown: true,
-		}
-		if err := db.Create(&adminMCP).Error; err != nil {
-			slog.ErrorContext(ctx, "failed to seed admin-api MCP server record", "error", err)
-		} else {
-			slog.InfoContext(ctx, "seeded admin-api MCP server record")
-		}
 	}
 
 	agentRepo := config_repo.NewGORMAgentRepository(db)
@@ -74,26 +108,16 @@ func seedBuilderAssistant(ctx context.Context, db *gorm.DB) {
 		return
 	}
 
+	record := builderAssistantDefaults()
+
 	// Determine model to assign.
 	llmRepo := config_repo.NewGORMLLMProviderRepository(db)
 	allModels, listErr := llmRepo.List(ctx)
-
-	var modelName string
 	if listErr == nil && len(allModels) > 0 {
-		modelName = allModels[0].Name
-		slog.InfoContext(ctx, "builder-assistant: assigning first available model", "model", modelName)
+		record.ModelName = allModels[0].Name
+		slog.InfoContext(ctx, "builder-assistant: assigning first available model", "model", record.ModelName)
 	} else {
 		slog.InfoContext(ctx, "builder-assistant: no models available, creating without model")
-	}
-
-	// Build the agent record.
-	record := &config_repo.AgentRecord{
-		Name:          builderAssistantName,
-		SystemPrompt:  builderAssistantPrompt,
-		ModelName:     modelName,
-		Lifecycle:     "persistent",
-		ToolExecution: "sequential",
-		MCPServers:    []string{"admin-api"},
 	}
 
 	if err := agentRepo.Create(ctx, record); err != nil {
@@ -101,9 +125,84 @@ func seedBuilderAssistant(ctx context.Context, db *gorm.DB) {
 		return
 	}
 
-	msg := fmt.Sprintf("seeded builder-assistant agent (model=%s)", modelName)
-	if modelName == "" {
+	msg := fmt.Sprintf("seeded builder-assistant agent (model=%s)", record.ModelName)
+	if record.ModelName == "" {
 		msg = "seeded builder-assistant agent (no model — configure one in Models page)"
 	}
 	slog.InfoContext(ctx, msg)
+}
+
+const builderSchemaName = "builder-schema"
+
+// seedBuilderSchema creates the system builder schema and associates builder-assistant with it.
+// Idempotent — skips if already exists.
+func seedBuilderSchema(ctx context.Context, db *gorm.DB) {
+	if db == nil {
+		return
+	}
+
+	schemaRepo := config_repo.NewGORMSchemaRepository(db)
+
+	schemas, err := schemaRepo.List(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "seed builder schema: list", "error", err)
+		return
+	}
+	for _, s := range schemas {
+		if s.Name == builderSchemaName {
+			return // already exists
+		}
+	}
+
+	record := &config_repo.SchemaRecord{
+		Name:        builderSchemaName,
+		Description: "System schema for the AI builder assistant",
+		IsSystem:    true,
+	}
+	if err := schemaRepo.Create(ctx, record); err != nil {
+		slog.ErrorContext(ctx, "seed builder schema: save", "error", err)
+		return
+	}
+
+	if err := schemaRepo.AddAgent(ctx, record.ID, builderAssistantName); err != nil {
+		slog.WarnContext(ctx, "seed builder schema: add agent", "error", err)
+	}
+
+	slog.InfoContext(ctx, "seeded builder schema")
+}
+
+// restoreBuilderAssistant resets the builder-assistant agent to factory defaults.
+// If it exists, it updates all fields. If it does not exist, it creates it.
+func restoreBuilderAssistant(ctx context.Context, db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("database not available")
+	}
+
+	agentRepo := config_repo.NewGORMAgentRepository(db)
+	record := builderAssistantDefaults()
+
+	// Determine model to assign.
+	llmRepo := config_repo.NewGORMLLMProviderRepository(db)
+	allModels, listErr := llmRepo.List(ctx)
+	if listErr == nil && len(allModels) > 0 {
+		record.ModelName = allModels[0].Name
+	}
+
+	// Check if agent exists.
+	_, err := agentRepo.GetByName(ctx, builderAssistantName)
+	if err != nil {
+		// Does not exist — create.
+		if createErr := agentRepo.Create(ctx, record); createErr != nil {
+			return fmt.Errorf("create builder-assistant: %w", createErr)
+		}
+		slog.InfoContext(ctx, "restored builder-assistant (created)")
+		return nil
+	}
+
+	// Exists — update to factory defaults.
+	if updateErr := agentRepo.Update(ctx, builderAssistantName, record); updateErr != nil {
+		return fmt.Errorf("update builder-assistant: %w", updateErr)
+	}
+	slog.InfoContext(ctx, "restored builder-assistant (updated to factory defaults)")
+	return nil
 }

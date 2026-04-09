@@ -2,6 +2,7 @@ import { useState, useMemo, type FormEvent } from 'react';
 import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
 import { useModelRegistry } from '../hooks/useModelRegistry';
+import { useAdminRefresh } from '../hooks/useAdminRefresh';
 import DataTable from '../components/DataTable';
 import { emptyIcons } from '../components/EmptyState';
 import DetailPanel, { DetailRow, DetailSection } from '../components/DetailPanel';
@@ -44,6 +45,7 @@ const emptyForm: CreateModelRequest = {
 
 export default function ModelsPage() {
   const { data: models, loading, error, refetch } = useApi(() => api.listModels());
+  useAdminRefresh(refetch);
   const { registry, registryByModelName } = useModelRegistry();
 
   const [selected, setSelected] = useState<Model | null>(null);

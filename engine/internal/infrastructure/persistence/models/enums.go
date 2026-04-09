@@ -52,6 +52,7 @@ const (
 const (
 	TriggerTypeCron    = "cron"
 	TriggerTypeWebhook = "webhook"
+	TriggerTypeChat    = "chat"
 )
 
 // TaskSource — who created the task.

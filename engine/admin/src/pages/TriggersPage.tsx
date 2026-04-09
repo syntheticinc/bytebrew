@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
+import { useAdminRefresh } from '../hooks/useAdminRefresh';
 import DataTable from '../components/DataTable';
 import { emptyIcons } from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
@@ -24,6 +25,7 @@ const emptyForm: CreateTriggerRequest = {
 
 export default function TriggersPage() {
   const { data: triggers, loading, error, refetch } = useApi(() => api.listTriggers());
+  useAdminRefresh(refetch);
   const { data: agents } = useApi(() => api.listAgents());
 
   const [selected, setSelected] = useState<Trigger | null>(null);
@@ -261,6 +263,7 @@ export default function TriggersPage() {
           options={[
             { value: 'cron', label: 'Cron' },
             { value: 'webhook', label: 'Webhook' },
+            { value: 'chat', label: 'Chat' },
           ]}
         />
         <FormField

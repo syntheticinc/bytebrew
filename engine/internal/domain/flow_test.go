@@ -114,12 +114,26 @@ func TestFlow_Validate_ZeroMaxContextSize(t *testing.T) {
 		MaxContextSize: 0,
 	}
 
+	if err := flow.Validate(); err != nil {
+		t.Errorf("expected no error for zero max_context_size (0 = unlimited), got: %v", err)
+	}
+}
+
+func TestFlow_Validate_NegativeMaxContextSize(t *testing.T) {
+	flow := &Flow{
+		Type:           FlowType("coder"),
+		Name:           "test",
+		SystemPrompt:   "test",
+		MaxSteps:       10,
+		MaxContextSize: -1,
+	}
+
 	err := flow.Validate()
 	if err == nil {
-		t.Error("expected error for zero max_context_size, got nil")
+		t.Error("expected error for negative max_context_size, got nil")
 	}
-	if err.Error() != "max_context_size must be positive" {
-		t.Errorf("expected 'max_context_size must be positive', got: %v", err)
+	if err.Error() != "max_context_size must be non-negative (0 = unlimited)" {
+		t.Errorf("unexpected error message: %v", err)
 	}
 }
 

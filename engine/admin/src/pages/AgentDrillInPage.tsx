@@ -210,6 +210,27 @@ function AgentDrillInInner() {
   }
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+
+  async function handleRestore() {
+    setRestoring(true);
+    try {
+      await api.restoreBuilderAssistant();
+      addToast('Builder Assistant restored to factory defaults', 'success');
+      // Reload agent data
+      if (agentName && !isPrototype) {
+        const data = await api.getAgent(agentName);
+        setAgent(data);
+        setEnabledTools(data.tools ?? []);
+        setCanSpawn(data.can_spawn ?? []);
+      }
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Restore failed', 'error');
+    } finally {
+      setRestoring(false);
+    }
+  }
 
   async function handleDeleteConfirmed() {
     if (!agentName) return;
@@ -253,6 +274,11 @@ function AgentDrillInInner() {
           </button>
           <span className="text-brand-shade3/40 text-sm">/</span>
           <span className="text-brand-light text-sm font-mono font-semibold">{agentName}</span>
+          {agent?.is_system && (
+            <span className="text-[10px] text-brand-shade3 bg-brand-shade3/10 px-1.5 py-0.5 rounded border border-brand-shade3/20 font-mono">
+              System
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -270,6 +296,16 @@ function AgentDrillInInner() {
           >
             {saving ? 'Saving…' : 'Save'}
           </button>
+          {agentName === 'builder-assistant' && (
+            <button
+              type="button"
+              onClick={() => setShowRestoreConfirm(true)}
+              disabled={restoring}
+              className="px-4 py-1.5 border border-amber-500/40 text-amber-400 rounded-btn text-sm font-medium font-mono hover:bg-amber-500/10 disabled:opacity-50 transition-colors"
+            >
+              {restoring ? 'Restoring…' : 'Restore defaults'}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowDeleteConfirm(true)}
@@ -300,6 +336,17 @@ function AgentDrillInInner() {
         message="This action cannot be undone."
         confirmLabel="Delete"
         variant="danger"
+      />
+
+      {/* Restore confirmation */}
+      <ConfirmDialog
+        open={showRestoreConfirm}
+        onClose={() => setShowRestoreConfirm(false)}
+        onConfirm={() => { setShowRestoreConfirm(false); handleRestore(); }}
+        title="Restore to factory defaults?"
+        message="This will reset the agent's system prompt, tools, and configuration to factory defaults. Your customizations will be lost."
+        confirmLabel="Restore"
+        variant="warning"
       />
 
       {/* Scrollable body */}

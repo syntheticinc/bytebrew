@@ -27,6 +27,15 @@ func (r *GORMTriggerRepository) List(ctx context.Context) ([]models.TriggerModel
 	return triggers, nil
 }
 
+// GetByID returns a single trigger model by ID with agent preloaded.
+func (r *GORMTriggerRepository) GetByID(ctx context.Context, id uint) (*models.TriggerModel, error) {
+	var trigger models.TriggerModel
+	if err := r.db.WithContext(ctx).Preload("Agent").First(&trigger, id).Error; err != nil {
+		return nil, fmt.Errorf("get trigger %d: %w", id, err)
+	}
+	return &trigger, nil
+}
+
 // Create inserts a new trigger model.
 func (r *GORMTriggerRepository) Create(ctx context.Context, model *models.TriggerModel) error {
 	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
@@ -46,6 +55,20 @@ func (r *GORMTriggerRepository) Update(ctx context.Context, id uint, model *mode
 		return fmt.Errorf("trigger not found: %d", id)
 	}
 	return nil
+}
+
+// HasEnabledChatTrigger returns true if the agent has at least one enabled chat trigger.
+func (r *GORMTriggerRepository) HasEnabledChatTrigger(ctx context.Context, agentName string) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Table("triggers").
+		Joins("JOIN agents ON agents.id = triggers.agent_id").
+		Where("agents.name = ? AND triggers.type = ? AND triggers.enabled = ?", agentName, models.TriggerTypeChat, true).
+		Count(&count).Error
+	if err != nil {
+		return false, fmt.Errorf("check chat trigger for %q: %w", agentName, err)
+	}
+	return count > 0, nil
 }
 
 // Delete removes a trigger model by ID.

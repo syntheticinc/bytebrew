@@ -15,6 +15,7 @@ export interface UseSSEChatConfig {
   endpoint: string;
   agentName: string;
   getHeaders?: () => Record<string, string>;
+  onToolResult?: (tool: string, output: string) => void;
 }
 
 export interface UseSSEChatReturn {
@@ -29,7 +30,7 @@ export interface UseSSEChatReturn {
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
 export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
-  const { endpoint, agentName, getHeaders } = config;
+  const { endpoint, agentName, getHeaders, onToolResult } = config;
 
   const [messages, setMessages] = useState<SSEMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -172,6 +173,7 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
                   : tc,
               );
               updateAssistant({ toolCalls: currentToolCalls });
+              onToolResult?.(toolName, output);
               break;
             }
             case 'done': {

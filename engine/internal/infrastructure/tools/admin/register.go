@@ -1,0 +1,129 @@
+package admin
+
+import (
+	"github.com/cloudwego/eino/components/tool"
+
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
+)
+
+// RegisterAdminTools registers all admin tools into the builtin store using closure capture.
+// Admin deps (repos, reloader) are captured at registration time.
+// The ToolDependencies arg in each factory is intentionally ignored -- admin tools
+// do not need per-session deps.
+func RegisterAdminTools(store *tools.BuiltinToolStore, deps AdminToolDependencies) {
+	reloader := deps.Reloader
+
+	// Agent tools
+	store.Register("admin_list_agents", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminListAgentsTool(deps.AgentRepo)
+	})
+	store.Register("admin_get_agent", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminGetAgentTool(deps.AgentRepo)
+	})
+	store.Register("admin_create_agent", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminCreateAgentTool(deps.AgentRepo, reloader)
+	})
+	store.Register("admin_update_agent", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminUpdateAgentTool(deps.AgentRepo, reloader)
+	})
+	store.Register("admin_delete_agent", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminDeleteAgentTool(deps.AgentRepo, reloader)
+	})
+
+	// Schema tools
+	store.Register("admin_list_schemas", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminListSchemasTool(deps.SchemaRepo)
+	})
+	store.Register("admin_get_schema", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminGetSchemaTool(deps.SchemaRepo)
+	})
+	store.Register("admin_create_schema", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminCreateSchemaTool(deps.SchemaRepo, reloader)
+	})
+	store.Register("admin_update_schema", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminUpdateSchemaTool(deps.SchemaRepo, reloader)
+	})
+	store.Register("admin_delete_schema", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminDeleteSchemaTool(deps.SchemaRepo, reloader)
+	})
+
+	// Schema-agent wiring tools
+	store.Register("admin_add_agent_to_schema", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminAddAgentToSchemaTool(deps.SchemaRepo, reloader)
+	})
+	store.Register("admin_remove_agent_from_schema", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminRemoveAgentFromSchemaTool(deps.SchemaRepo, reloader)
+	})
+
+	// Edge tools
+	store.Register("admin_list_edges", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminListEdgesTool(deps.EdgeRepo)
+	})
+	store.Register("admin_create_edge", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminCreateEdgeTool(deps.EdgeRepo, reloader)
+	})
+	store.Register("admin_delete_edge", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminDeleteEdgeTool(deps.EdgeRepo, reloader)
+	})
+
+	// Trigger tools
+	store.Register("admin_list_triggers", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminListTriggersTool(deps.TriggerRepo)
+	})
+	store.Register("admin_create_trigger", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminCreateTriggerTool(deps.TriggerRepo, reloader)
+	})
+	store.Register("admin_update_trigger", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminUpdateTriggerTool(deps.TriggerRepo, reloader)
+	})
+	store.Register("admin_delete_trigger", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminDeleteTriggerTool(deps.TriggerRepo, reloader)
+	})
+
+	// MCP server tools
+	store.Register("admin_list_mcp_servers", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminListMCPServersTool(deps.MCPServerRepo)
+	})
+	store.Register("admin_create_mcp_server", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminCreateMCPServerTool(deps.MCPServerRepo, reloader)
+	})
+	store.Register("admin_update_mcp_server", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminUpdateMCPServerTool(deps.MCPServerRepo, reloader)
+	})
+	store.Register("admin_delete_mcp_server", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminDeleteMCPServerTool(deps.MCPServerRepo, reloader)
+	})
+
+	// Model tools
+	store.Register("admin_list_models", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminListModelsTool(deps.ModelRepo)
+	})
+	store.Register("admin_create_model", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminCreateModelTool(deps.ModelRepo, reloader)
+	})
+	store.Register("admin_update_model", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminUpdateModelTool(deps.ModelRepo, reloader)
+	})
+	store.Register("admin_delete_model", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminDeleteModelTool(deps.ModelRepo, reloader)
+	})
+
+	// Capability tools
+	store.Register("admin_add_capability", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminAddCapabilityTool(deps.CapabilityRepo, reloader)
+	})
+	store.Register("admin_remove_capability", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminRemoveCapabilityTool(deps.CapabilityRepo, reloader)
+	})
+	store.Register("admin_update_capability", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminUpdateCapabilityTool(deps.CapabilityRepo, reloader)
+	})
+
+	// Inspect tools
+	store.Register("admin_list_sessions", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminListSessionsTool(deps.SessionRepo)
+	})
+	store.Register("admin_get_session", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminGetSessionTool(deps.SessionRepo)
+	})
+}

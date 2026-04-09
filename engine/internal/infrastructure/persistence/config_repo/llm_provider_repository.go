@@ -27,6 +27,15 @@ func (r *GORMLLMProviderRepository) List(ctx context.Context) ([]models.LLMProvi
 	return providers, nil
 }
 
+// GetByID returns a single LLM provider model by ID.
+func (r *GORMLLMProviderRepository) GetByID(ctx context.Context, id uint) (*models.LLMProviderModel, error) {
+	var provider models.LLMProviderModel
+	if err := r.db.WithContext(ctx).First(&provider, id).Error; err != nil {
+		return nil, fmt.Errorf("get llm provider %d: %w", id, err)
+	}
+	return &provider, nil
+}
+
 // Create inserts a new LLM provider model.
 func (r *GORMLLMProviderRepository) Create(ctx context.Context, model *models.LLMProviderModel) error {
 	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {

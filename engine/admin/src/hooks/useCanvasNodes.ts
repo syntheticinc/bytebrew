@@ -95,6 +95,8 @@ interface UseCanvasNodesParams {
   isPrototype: boolean;
   handleSelect: (name: string) => void;
   handleDeleteRequest: (name: string) => void;
+  /** When set, delete = remove from schema (not delete agent). */
+  currentSchemaId?: number | null;
 }
 
 export function useCanvasNodes({
@@ -110,6 +112,7 @@ export function useCanvasNodes({
   isPrototype,
   handleSelect,
   handleDeleteRequest,
+  currentSchemaId,
 }: UseCanvasNodesParams) {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState('');
@@ -120,7 +123,13 @@ export function useCanvasNodes({
     setDeleting(true);
     setDeleteError('');
     try {
-      await api.deleteAgent(deleteTarget);
+      if (currentSchemaId != null) {
+        // Schema-scoped: remove agent from schema, don't delete the agent itself
+        await api.removeAgentFromSchema(currentSchemaId, deleteTarget);
+      } else {
+        // No schema context: delete agent globally
+        await api.deleteAgent(deleteTarget);
+      }
       agentsCache.current.delete(deleteTarget);
 
       setNodes((nds) => nds.filter((n) => n.id !== deleteTarget));
@@ -133,7 +142,7 @@ export function useCanvasNodes({
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, selectedAgent, setNodes, setEdges, agentsCache, setSelectedAgent]);
+  }, [deleteTarget, selectedAgent, setNodes, setEdges, agentsCache, setSelectedAgent, currentSchemaId]);
 
   const handleInstantAgentCreate = useCallback(async (canvasPosition?: { x: number; y: number }) => {
     const existingNames = nodes.filter((n) => n.type === 'agentNode').map((n) => n.id);
@@ -181,6 +190,12 @@ export function useCanvasNodes({
         mcp_servers: [],
         confirm_before: [],
       } as CreateAgentRequest);
+
+      // Auto-add to current schema if schema-scoped
+      if (currentSchemaId != null) {
+        await api.addAgentToSchema(currentSchemaId, created.name);
+      }
+
       agentsCache.current.set(created.name, created);
       agentsListRef.current = [...agentsListRef.current, created];
 
@@ -197,7 +212,7 @@ export function useCanvasNodes({
     } catch (err) {
       addToast(`Failed to create agent: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
     }
-  }, [nodes, isPrototype, setNodes, agentsCache, agentsListRef, modelsRef, addToast, handleSelect, handleDeleteRequest]);
+  }, [nodes, isPrototype, setNodes, agentsCache, agentsListRef, modelsRef, addToast, handleSelect, handleDeleteRequest, currentSchemaId]);
 
   const handleInstantTriggerCreate = useCallback(async (canvasPosition?: { x: number; y: number }) => {
     const existingNames = nodes.filter((n) => n.type === 'triggerNode').map((n) => (n.data as Record<string, unknown>).title as string);

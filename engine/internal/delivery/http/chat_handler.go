@@ -19,17 +19,23 @@ type ChatService interface {
 	Chat(ctx context.Context, agentName, message, userID, sessionID string) (<-chan SSEEvent, error)
 }
 
+// ChatTriggerChecker checks whether an agent has an enabled chat trigger.
+type ChatTriggerChecker interface {
+	HasEnabledChatTrigger(ctx context.Context, agentName string) (bool, error)
+}
+
 // ChatHandler serves POST /api/v1/agents/{name}/chat with SSE streaming.
 type ChatHandler struct {
-	service          ChatService
+	service        ChatService
+	triggerChecker ChatTriggerChecker // nil = gate disabled (e.g. no DB)
 	forwardHeadersFn func() []string // dynamic — returns current forward headers
 }
 
 // NewChatHandler creates a new ChatHandler.
 // forwardHeadersFn returns the current union of all forward_headers across MCP server configs.
 // It is called on every request so that config reloads take effect immediately.
-func NewChatHandler(service ChatService, forwardHeadersFn func() []string) *ChatHandler {
-	return &ChatHandler{service: service, forwardHeadersFn: forwardHeadersFn}
+func NewChatHandler(service ChatService, triggerChecker ChatTriggerChecker, forwardHeadersFn func() []string) *ChatHandler {
+	return &ChatHandler{service: service, triggerChecker: triggerChecker, forwardHeadersFn: forwardHeadersFn}
 }
 
 type chatRequest struct {
@@ -71,6 +77,19 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	if req.Message == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "message required"})
 		return
+	}
+
+	// Gate: agent must have an enabled chat trigger.
+	if h.triggerChecker != nil {
+		ok, err := h.triggerChecker.HasEnabledChatTrigger(r.Context(), agentName)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "trigger check failed"})
+			return
+		}
+		if !ok {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "agent has no enabled chat trigger"})
+			return
+		}
 	}
 
 	ctx := h.buildRequestContext(r)

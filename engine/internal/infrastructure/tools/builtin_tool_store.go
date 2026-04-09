@@ -96,6 +96,11 @@ func NewAgentToolResolver(builtins *BuiltinToolStore) *AgentToolResolver {
 	return &AgentToolResolver{builtins: builtins}
 }
 
+// BuiltinStore returns the underlying BuiltinToolStore.
+func (r *AgentToolResolver) BuiltinStore() *BuiltinToolStore {
+	return r.builtins
+}
+
 // SetKitProvider configures the kit provider for kit-based tool resolution.
 func (r *AgentToolResolver) SetKitProvider(kp KitProvider) {
 	r.kitProvider = kp

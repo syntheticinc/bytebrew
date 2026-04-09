@@ -4,15 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
-	"regexp"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 )
-
-// agentNameRe validates agent names: lowercase letters, digits, and hyphens; must start with a letter.
-var agentNameRe = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
 const agentNameMaxLen = 255
 
@@ -23,6 +20,7 @@ type AgentInfo struct {
 	ToolsCount     int      `json:"tools_count"`
 	Kit            string   `json:"kit,omitempty"`
 	HasKnowledge   bool     `json:"has_knowledge"`
+	IsSystem       bool     `json:"is_system,omitempty"`
 	UsedInSchemas  []string `json:"used_in_schemas,omitempty"`
 }
 
@@ -191,9 +189,12 @@ func (h *AgentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	// Log a warning for unrecognized tool names (they might be MCP tools loaded at runtime).
+	// Reject admin_* tools — reserved for system agents only.
 	for _, toolName := range req.Tools {
-		slog.WarnContext(r.Context(), "agent references tool that may not be registered", "agent", req.Name, "tool", toolName)
+		if strings.HasPrefix(toolName, "admin_") {
+			writeJSONError(w, http.StatusBadRequest, "admin tools are reserved for system agents")
+			return
+		}
 	}
 
 	agent, err := h.manager.CreateAgent(r.Context(), req)
@@ -226,6 +227,14 @@ func (h *AgentHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Ensure name from URL is used (body may omit it)
 	if req.Name == "" {
 		req.Name = name
+	}
+
+	// Reject admin_* tools — reserved for system agents only.
+	for _, toolName := range req.Tools {
+		if strings.HasPrefix(toolName, "admin_") {
+			writeJSONError(w, http.StatusBadRequest, "admin tools are reserved for system agents")
+			return
+		}
 	}
 
 	agent, err := h.manager.UpdateAgent(r.Context(), name, req)
@@ -261,8 +270,5 @@ func validateAgentName(name string) error {
 	if len(name) > agentNameMaxLen {
 		return fmt.Errorf("agent name must be at most %d characters", agentNameMaxLen)
 	}
-	if !agentNameRe.MatchString(name) {
-		return fmt.Errorf("agent name must match %s (lowercase letters, digits, hyphens; must start with a letter)", agentNameRe.String())
-	}
-	return nil
+	return domain.ValidateAgentName(name)
 }

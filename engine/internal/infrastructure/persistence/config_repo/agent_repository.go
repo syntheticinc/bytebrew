@@ -29,6 +29,7 @@ type AgentRecord struct {
 	MCPServers     []string
 	CanSpawn       []string
 	Escalation     *EscalationRecord
+	IsSystem       bool
 }
 
 // CustomToolRecord holds a custom tool name and its JSON config.
@@ -191,6 +192,7 @@ func (r *GORMAgentRepository) Update(ctx context.Context, name string, record *A
 			"max_context_size":  agent.MaxContextSize,
 			"max_turn_duration": agent.MaxTurnDuration,
 			"confirm_before":    agent.ConfirmBefore,
+			"is_system":         agent.IsSystem,
 		}
 		if err := tx.Model(&models.AgentModel{}).Where("id = ?", existing.ID).Updates(updates).Error; err != nil {
 			return fmt.Errorf("update agent %q: %w", name, err)
@@ -264,6 +266,7 @@ func toAgentRecord(a models.AgentModel) (AgentRecord, error) {
 		MaxSteps:        a.MaxSteps,
 		MaxContextSize:  a.MaxContextSize,
 		MaxTurnDuration: a.MaxTurnDuration,
+		IsSystem:        a.IsSystem,
 	}
 
 	// Model ID and name
@@ -335,6 +338,7 @@ func (r *GORMAgentRepository) toAgentModelWithDB(db *gorm.DB, rec *AgentRecord) 
 		MaxSteps:        rec.MaxSteps,
 		MaxContextSize:  rec.MaxContextSize,
 		MaxTurnDuration: rec.MaxTurnDuration,
+		IsSystem:        rec.IsSystem,
 	}
 
 	// Resolve model name -> ID
