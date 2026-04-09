@@ -24,9 +24,15 @@ func NewAdminAssistantHandler(service ChatService, forwardHeadersFn func() []str
 	return &AdminAssistantHandler{service: service, forwardHeadersFn: forwardHeadersFn}
 }
 
+// adminAssistantRequest extends chatRequest with an optional schema context.
+type adminAssistantRequest struct {
+	chatRequest
+	SchemaContext string `json:"schema_context,omitempty"`
+}
+
 // Chat handles admin assistant chat — same logic as ChatHandler.Chat but fixed to builder-assistant.
 func (h *AdminAssistantHandler) Chat(w http.ResponseWriter, r *http.Request) {
-	var req chatRequest
+	var req adminAssistantRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
@@ -35,6 +41,11 @@ func (h *AdminAssistantHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	if req.Message == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "message required"})
 		return
+	}
+
+	// Prepend schema context to the message so the assistant knows its working scope.
+	if req.SchemaContext != "" {
+		req.Message = "[Schema: " + req.SchemaContext + "]\n\n" + req.Message
 	}
 
 	ctx := h.buildRequestContext(r)

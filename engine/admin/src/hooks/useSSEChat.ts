@@ -14,6 +14,7 @@ export interface SSEMessage {
 export interface UseSSEChatConfig {
   endpoint: string;
   agentName: string;
+  schemaContext?: string;
   getHeaders?: () => Record<string, string>;
   onToolResult?: (tool: string, output: string) => void;
 }
@@ -30,7 +31,7 @@ export interface UseSSEChatReturn {
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
 export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
-  const { endpoint, agentName, getHeaders, onToolResult } = config;
+  const { endpoint, agentName, schemaContext, getHeaders, onToolResult } = config;
 
   const [messages, setMessages] = useState<SSEMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -100,6 +101,7 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
         body: JSON.stringify({
           message: text,
           session_id: sessionIdRef.current || undefined,
+          ...(schemaContext ? { schema_context: schemaContext } : {}),
         }),
         signal: abortRef.current.signal,
       });

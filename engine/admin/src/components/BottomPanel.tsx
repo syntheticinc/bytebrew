@@ -80,6 +80,7 @@ export default function BottomPanel() {
   const { messages, sendMessage, isStreaming } = useSSEChat({
     endpoint: `/api/v1/admin/assistant/chat`,
     agentName: ASSISTANT_AGENT,
+    schemaContext: lockedSchema ?? undefined,
     onToolResult: (tool) => {
       if (tool.startsWith('admin_')) {
         dispatchAdminChanged(tool);
