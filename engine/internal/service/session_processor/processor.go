@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -209,7 +210,18 @@ func (p *Processor) processMessage(ctx context.Context, sessionID, message strin
 			return "", ctx.Err()
 		}
 	}
-	proxy := tools.NewLocalClientOperationsProxy(projectRoot, tools.WithAskUserHandler(askUserHandler))
+	// SSEConfirmationRequester: deterministic HITL confirmation for confirm_before tools.
+	// Unlike the prompt-based approach (which depends on LLM compliance), this wraps
+	// the tool with ConfirmationWrapper that blocks until the user confirms/denies.
+	confirmRequester := &sseConfirmationRequester{
+		sessionID:  sessionID,
+		registry:   p.registry,
+		eventStream: eventStream,
+	}
+	proxy := tools.NewLocalClientOperationsProxy(projectRoot,
+		tools.WithAskUserHandler(askUserHandler),
+		tools.WithConfirmRequester(confirmRequester),
+	)
 	defer proxy.Dispose()
 
 	turnExecutor := p.factory.CreateForSession(proxy, sessionID, projectKey, projectRoot, platform, agentName)
@@ -258,4 +270,45 @@ func (p *Processor) processMessage(ctx context.Context, sessionID, message strin
 	}
 
 	eventStream.PublishProcessingStopped()
+}
+
+// sseConfirmationRequester implements tools.ConfirmationRequester for the SSE path.
+// It publishes a confirmation event to the client and blocks until the user responds.
+type sseConfirmationRequester struct {
+	sessionID   string
+	registry    SessionRegistry
+	eventStream *EventStream
+}
+
+// RequestConfirmation publishes a confirmation SSE event and blocks until the user responds.
+func (r *sseConfirmationRequester) RequestConfirmation(ctx context.Context, toolName string, args string) (bool, error) {
+	callID := fmt.Sprintf("confirm-%d", time.Now().UnixNano())
+	replyCh := r.registry.RegisterAskUser(r.sessionID, callID)
+	defer r.registry.UnregisterAskUser(r.sessionID, callID)
+
+	// Build confirmation question from tool name and args
+	question := fmt.Sprintf("Confirm execution of %s with arguments: %s", toolName, args)
+
+	r.eventStream.Send(&domain.AgentEvent{
+		Type:    domain.EventTypeUserQuestion,
+		Content: question,
+		Metadata: map[string]interface{}{
+			"call_id":   callID,
+			"tool_name": toolName,
+		},
+	})
+
+	askTimeout := 60 * time.Second
+	select {
+	case reply := <-replyCh:
+		// Parse reply: any non-empty reply that isn't explicitly negative = confirmed
+		lower := strings.ToLower(strings.TrimSpace(reply))
+		denied := lower == "cancel" || lower == "no" || lower == "deny" || lower == "reject" || lower == "cancelled"
+		return !denied, nil
+	case <-time.After(askTimeout):
+		slog.WarnContext(ctx, "[SSEConfirmationRequester] timed out", "session_id", r.sessionID, "tool", toolName)
+		return false, nil
+	case <-ctx.Done():
+		return false, ctx.Err()
+	}
 }

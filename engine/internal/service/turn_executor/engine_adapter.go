@@ -129,6 +129,12 @@ func (e *EngineAdapter) ExecuteTurn(
 	toolDeps.AgentName = flow.Name
 	toolDeps.KnowledgePath = flow.KnowledgePath
 	toolDeps.MCPServers = flow.MCPServers
+	toolDeps.ConfirmBefore = flow.ConfirmBefore
+
+	// Pull ConfirmRequester from proxy if available (set by processor for SSE path)
+	if cr, ok := toolDeps.Proxy.(interface{ ConfirmRequester() tools.ConfirmationRequester }); ok {
+		toolDeps.ConfirmRequester = cr.ConfirmRequester()
+	}
 
 	// Populate spawn targets from flow's SpawnPolicy
 	canSpawn := make([]string, len(flow.Spawn.AllowedFlows))

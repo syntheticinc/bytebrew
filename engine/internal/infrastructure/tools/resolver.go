@@ -29,7 +29,9 @@ type ToolDependencies struct {
 	WebFetchTool       tool.InvokableTool // pre-created
 	ChunkStore         *indexing.ChunkStore
 	Embedder           *indexing.EmbeddingsClient
-	MCPServers         []string           // MCP server names for legacy Resolve path
-	CanSpawn           []string           // target agent names this agent can spawn (legacy Resolve path)
+	MCPServers         []string              // MCP server names for legacy Resolve path
+	CanSpawn           []string              // target agent names this agent can spawn (legacy Resolve path)
+	ConfirmBefore      []string              // tools requiring user confirmation before execution
+	ConfirmRequester   ConfirmationRequester // confirmation handler for confirm_before tools (nil = no wrapping)
 }
 
