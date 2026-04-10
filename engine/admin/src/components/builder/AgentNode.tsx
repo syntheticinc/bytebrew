@@ -124,7 +124,7 @@ export default function AgentNode({ data, selected }: NodeProps) {
         <button
           onClick={() => d.onSelect(d.name)}
           className="flex-1 py-0.5 text-[11px] text-brand-shade2 hover:text-brand-accent hover:bg-brand-shade3/10 rounded transition-colors"
-          title="Open side panel"
+          title="Open full editor"
         >
           Details
         </button>

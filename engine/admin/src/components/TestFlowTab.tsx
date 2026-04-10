@@ -19,6 +19,23 @@ const MOCK_RESPONSES = [
   'Your test message has been routed through the schema flow. All tools executed correctly and the response was generated.',
 ];
 
+// ─── Friendly error mapping ─────────────────────────────────────────────────
+
+function friendlyError(raw: string): string {
+  if (raw.includes('resolve tool') && raw.includes('unknown builtin tool')) {
+    const toolMatch = raw.match(/resolve tool (\S+):/);
+    const toolName = toolMatch?.[1] ?? 'unknown';
+    return `Agent references tool "${toolName}" which is not available. Check agent configuration \u2192 Tools to fix this.`;
+  }
+  if (raw.includes('model not found') || raw.includes('no model configured')) {
+    return 'No model configured for this agent. Assign a model in agent settings before testing.';
+  }
+  if (raw.includes('connection refused') || raw.includes('ECONNREFUSED')) {
+    return 'Cannot connect to the model provider. Check model configuration and API keys.';
+  }
+  return raw;
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function TestFlowTab() {
@@ -26,7 +43,8 @@ export default function TestFlowTab() {
   const { selectedSchema } = useBottomPanel();
   const { isPrototype } = usePrototype();
 
-  const [agents, setAgents] = useState<string[]>([]);
+  const [allAgents, setAllAgents] = useState<string[]>([]);
+  const [schemaAgents, setSchemaAgents] = useState<string[]>([]);
   const [selectedAgent, setSelectedAgent] = useState('');
   const [headers, setHeaders] = useState<HeaderEntry[]>([]);
   const [message, setMessage] = useState('');
@@ -62,20 +80,44 @@ export default function TestFlowTab() {
   // Use either prototype or production messages
   const messages = isPrototype ? protoMessages : sseChat.messages;
   const isStreaming = isPrototype ? protoStreaming : sseChat.isStreaming;
-  const sessionId = isPrototype ? protoSessionId : (sseChat as unknown as Record<string, unknown>).sessionId as string | undefined;
+  const sessionId = isPrototype ? protoSessionId : sseChat.sessionId;
 
-  // Load agents
+  // Load agents (schema-scoped when a schema is selected)
   useEffect(() => {
-    api.listAgents()
-      .then((list) => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const list = await api.listAgents();
         const names = list.map((a) => a.name);
-        setAgents(names);
-        if (names.length > 0 && !selectedAgent) {
-          setSelectedAgent(names[0]!);
+        if (cancelled) return;
+        setAllAgents(names);
+
+        // If a schema is selected, fetch its agents to scope the dropdown
+        let schemaNames: string[] = [];
+        if (selectedSchema) {
+          const schemas = await api.listSchemas();
+          const match = schemas.find((s) => s.name === selectedSchema);
+          if (match && !cancelled) {
+            schemaNames = await api.listSchemaAgents(match.id);
+          }
         }
-      })
-      .catch(() => {});
-  }, [selectedAgent]);
+        if (cancelled) return;
+        setSchemaAgents(schemaNames);
+
+        // Auto-select first schema agent, or first agent overall
+        const preferred = schemaNames.length > 0 ? schemaNames : names;
+        if (preferred.length > 0 && !selectedAgent) {
+          setSelectedAgent(preferred[0]!);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    load();
+    return () => { cancelled = true; };
+  }, [selectedSchema, selectedAgent]);
 
   // Auto-scroll
   useEffect(() => {
@@ -190,10 +232,27 @@ export default function TestFlowTab() {
             onChange={(e) => { setSelectedAgent(e.target.value); handleReset(); }}
             className="flex-1 px-2 py-1 bg-brand-dark border border-brand-shade3/30 rounded text-xs text-brand-light focus:outline-none focus:border-brand-accent transition-colors"
           >
-            {agents.length === 0 && <option value="">No agents</option>}
-            {agents.map((a) => (
-              <option key={a} value={a}>{a}</option>
-            ))}
+            {allAgents.length === 0 && <option value="">No agents</option>}
+            {selectedSchema && schemaAgents.length > 0 ? (
+              <>
+                <optgroup label={`Schema: ${selectedSchema}`}>
+                  {schemaAgents.map((a) => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
+                </optgroup>
+                {allAgents.filter((a) => !schemaAgents.includes(a)).length > 0 && (
+                  <optgroup label="Other agents">
+                    {allAgents.filter((a) => !schemaAgents.includes(a)).map((a) => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </optgroup>
+                )}
+              </>
+            ) : (
+              allAgents.map((a) => (
+                <option key={a} value={a}>{a}</option>
+              ))
+            )}
           </select>
           {selectedSchema && (
             <span className="text-[10px] text-brand-shade3/60 shrink-0">Schema: {selectedSchema}</span>
@@ -235,7 +294,7 @@ export default function TestFlowTab() {
                 {/* Error */}
                 {hasError && msg.id === lastMsg?.id && (
                   <div className="px-2 py-1.5 bg-red-900/20 border border-red-500/20 rounded text-[11px] text-red-400">
-                    {msg.content.replace(/^Error:\s*/, '')}
+                    {friendlyError(msg.content.replace(/^Error:\s*/, ''))}
                   </div>
                 )}
 

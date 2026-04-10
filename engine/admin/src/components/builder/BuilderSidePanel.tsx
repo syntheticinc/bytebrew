@@ -768,6 +768,11 @@ export default function BuilderSidePanel({ agent, agents, onClose, onSaved, onDe
 
             {/* Escalation */}
             <Section title="Escalation" defaultOpen={false}>
+              {!form.escalation && (
+                <p className="text-[10px] text-brand-shade3/60 mb-2 italic">
+                  Not configured. Escalation lets agents hand off complex issues to human operators or specialized agents.
+                </p>
+              )}
               <div className="space-y-2">
                 <div>
                   <label className="block text-[9px] text-brand-shade3 mb-0.5">Action</label>

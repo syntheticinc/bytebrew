@@ -24,8 +24,18 @@ export interface UseSSEChatReturn {
   sendMessage: (text: string) => Promise<void>;
   isStreaming: boolean;
   error: string | null;
+  sessionId: string;
   resetSession: () => void;
   stopStreaming: () => void;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Strip <think>...</think> blocks from streamed LLM output. */
+function stripThinkTags(raw: string): string {
+  let cleaned = raw.replace(/<think>[\s\S]*?<\/think>/g, '');
+  cleaned = cleaned.replace(/<think>[\s\S]*$/, '');
+  return cleaned.replace(/^\s+/, '');
 }
 
 // ─── Hook ────────────────────────────────────────────────────────────────────
@@ -36,12 +46,14 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
   const [messages, setMessages] = useState<SSEMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState('');
 
   const sessionIdRef = useRef<string>('');
   const abortRef = useRef<AbortController | null>(null);
 
   const resetSession = useCallback(() => {
     sessionIdRef.current = '';
+    setSessionId('');
     setMessages([]);
     abortRef.current?.abort();
     setError(null);
@@ -109,6 +121,7 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
       if (!res.ok || !res.body) {
         const errText = await res.text().catch(() => 'Request failed');
         sessionIdRef.current = '';
+        setSessionId('');
         updateAssistant({ content: `Error: ${errText}`, streaming: false });
         setError(errText);
         return;
@@ -148,13 +161,13 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
             case 'message_delta': {
               const delta = (parsed.content as string) ?? '';
               currentContent += delta;
-              updateAssistant({ content: currentContent });
+              updateAssistant({ content: stripThinkTags(currentContent) });
               break;
             }
             case 'message': {
               const full = (parsed.content as string) ?? '';
               if (full) currentContent = full;
-              updateAssistant({ content: currentContent });
+              updateAssistant({ content: stripThinkTags(currentContent) });
               break;
             }
             case 'tool_call': {
@@ -180,13 +193,17 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
             }
             case 'done': {
               const sid = parsed.session_id as string;
-              if (sid) sessionIdRef.current = sid;
+              if (sid) {
+                sessionIdRef.current = sid;
+                setSessionId(sid);
+              }
               updateAssistant({ streaming: false });
               break;
             }
             case 'error': {
               const errContent = (parsed.content as string) || (parsed.message as string) || 'Unknown error';
               sessionIdRef.current = '';
+              setSessionId('');
               updateAssistant({ content: `Error: ${errContent}`, streaming: false });
               setError(errContent);
               break;
@@ -200,6 +217,7 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         sessionIdRef.current = '';
+        setSessionId('');
         updateAssistant({ content: 'Connection error', streaming: false });
         setError('Connection error');
       }
@@ -209,5 +227,5 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStreaming, endpoint, agentName, getHeaders]);
 
-  return { messages, sendMessage, isStreaming, error, resetSession, stopStreaming };
+  return { messages, sendMessage, isStreaming, error, sessionId, resetSession, stopStreaming };
 }

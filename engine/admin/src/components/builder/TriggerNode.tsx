@@ -57,7 +57,7 @@ export default function TriggerNode({ data, selected }: NodeProps) {
         <span className={isCron ? 'text-amber-400' : 'text-purple-400'}>
           {isCron ? <CronIcon /> : <WebhookIcon />}
         </span>
-        <span className="text-sm font-semibold text-brand-light truncate">{d.title}</span>
+        <span className="text-sm font-semibold text-brand-light truncate">{d.title.replace(/<[^>]*>/g, '')}</span>
       </div>
 
       {/* Details — apply opacity only to body when disabled */}

@@ -7,7 +7,6 @@ import {
 
   useNodesState,
   useEdgesState,
-  addEdge,
   useReactFlow,
   ReactFlowProvider,
   type Node,
@@ -22,12 +21,12 @@ import { useBottomPanel } from '../hooks/useBottomPanel';
 import { useAdminRefresh } from '../hooks/useAdminRefresh';
 import { createMockSchemas, type SchemaName } from '../mocks/canvas';
 import type { AgentDetail, Model, Trigger, Schema } from '../types';
-import AgentNode, { type AgentNodeData } from '../components/builder/AgentNode';
+import AgentNode from '../components/builder/AgentNode';
 import TriggerNode from '../components/builder/TriggerNode';
 import GateNode from '../components/builder/GateNode';
 import EdgeConfigPanel from '../components/builder/EdgeConfigPanel';
 import GateConfigPanel from '../components/builder/GateConfigPanel';
-import BuilderSidePanel from '../components/builder/BuilderSidePanel';
+// BuilderSidePanel removed — Details navigates to AgentDrillInPage
 import DriftNotification from '../components/builder/DriftNotification';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { ToastProvider, useToast } from '../components/builder/Toast';
@@ -102,6 +101,8 @@ function AgentBuilderInner() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  // Side panel removed — Details navigates to full editor (AgentDrillInPage).
+  // selectedAgent kept as null stub so hooks don't break (they check selectedAgent?.name).
   const [selectedAgent, setSelectedAgent] = useState<AgentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -152,19 +153,11 @@ function AgentBuilderInner() {
     };
   }, []);
 
-  // Stable callbacks — never change identity, so nodes don't re-render on them
-  const handleSelect = useCallback(async (name: string) => {
-    let agent = agentsCache.current.get(name);
-    if (!agent) {
-      try {
-        agent = await api.getAgent(name);
-        agentsCache.current.set(name, agent);
-      } catch {
-        return;
-      }
-    }
-    setSelectedAgent(agent);
-  }, []);
+  // Details → navigate to full editor page (AgentDrillInPage)
+  const handleSelect = useCallback((name: string) => {
+    const schema = schemaName ?? '';
+    navigate(`/builder/${encodeURIComponent(schema)}/${encodeURIComponent(name)}`);
+  }, [schemaName, navigate]);
 
   const handleDeleteRequest = useCallback((name: string) => {
     nodeOps.setDeleteTarget(name);
@@ -379,52 +372,8 @@ function AgentBuilderInner() {
     };
   }, [handleSelect, handleDeleteRequest, refreshKey, isPrototype, protoSchema, schemaName, setSelectedSchema]);
 
-  // ── Side panel save callback ────────────────────────────────────────────────
-
-  function handleSaved(updated: AgentDetail) {
-    const prev = agentsCache.current.get(updated.name);
-    agentsCache.current.set(updated.name, updated);
-    setSelectedAgent(updated);
-    showSavedIndicator('saved');
-
-    const modelMap = new Map(modelsRef.current.map((m) => [m.id, m.name]));
-    setNodes((nds) =>
-      nds.map((n) => {
-        if (n.id !== updated.name) return n;
-        const d = n.data as AgentNodeData;
-        return {
-          ...n,
-          data: {
-            ...d,
-            modelName: updated.model_id != null ? (modelMap.get(updated.model_id) ?? '') : '',
-            toolsCount: updated.tools?.length ?? 0,
-            spawnCount: updated.can_spawn?.length ?? 0,
-            confirmCount: updated.confirm_before?.length ?? 0,
-            lifecycle: updated.lifecycle,
-          },
-        };
-      }),
-    );
-
-    // Sync spawn edges with updated can_spawn
-    const oldSpawn = new Set(prev?.can_spawn ?? []);
-    const newSpawn = new Set(updated.can_spawn ?? []);
-    const added = [...newSpawn].filter((t) => !oldSpawn.has(t));
-    const removed = [...oldSpawn].filter((t) => !newSpawn.has(t));
-    if (added.length > 0 || removed.length > 0) {
-      setEdges((eds) => {
-        let result = eds.filter(
-          (e) => !(e.source === updated.name && removed.includes(e.target)),
-        );
-        for (const target of added) {
-          if (!result.some((e) => e.source === updated.name && e.target === target)) {
-            result = addEdge(makeEdge(updated.name, target), result);
-          }
-        }
-        return result;
-      });
-    }
-  }
+  // Side panel removed — agents are edited via AgentDrillInPage (full editor).
+  // Canvas auto-refreshes on return via useAdminRefresh.
 
   // ── Auto-layout ─────────────────────────────────────────────────────────────
 
@@ -547,14 +496,7 @@ function AgentBuilderInner() {
           )}
         </div>
 
-        {!isPrototype && selectedAgent && (
-          <BuilderSidePanel
-            agent={selectedAgent}
-            onClose={() => setSelectedAgent(null)}
-            onSaved={handleSaved}
-            onDelete={handleDeleteRequest}
-          />
-        )}
+        {/* Side panel removed — Details navigates to AgentDrillInPage */}
 
         {interaction.selectedEdge && (
           <EdgeConfigPanel
