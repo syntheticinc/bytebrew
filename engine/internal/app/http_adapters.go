@@ -1655,10 +1655,14 @@ func convertSessionEventToSSE(event *pb.SessionEvent, sessionID string) *deliver
 		})
 
 	case pb.SessionEventType_SESSION_EVENT_ASK_USER:
-		return sseEventJSON("confirmation", map[string]interface{}{
+		data := map[string]interface{}{
 			"content": event.GetContent(),
 			"call_id": event.GetCallId(),
-		})
+		}
+		if tn := event.GetToolName(); tn != "" {
+			data["tool"] = tn
+		}
+		return sseEventJSON("confirmation", data)
 
 	case pb.SessionEventType_SESSION_EVENT_PROCESSING_STOPPED:
 		return sseEventJSON("done", map[string]interface{}{

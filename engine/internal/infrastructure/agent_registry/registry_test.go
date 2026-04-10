@@ -242,6 +242,38 @@ func TestToFlow_SpawnTargets(t *testing.T) {
 	assert.False(t, flow.CanSpawn("unknown"))
 }
 
+func TestToFlow_ConfirmBeforeInjectsPromptInstruction(t *testing.T) {
+	rec := config_repo.AgentRecord{
+		Name:           "test",
+		SystemPrompt:   "Base prompt.",
+		Lifecycle:      "persistent",
+		ToolExecution:  "sequential",
+		MaxSteps:       10,
+		MaxContextSize: 1000,
+		ConfirmBefore:  []string{"delete_user", "execute_command"},
+	}
+
+	flow := toFlow(rec)
+	assert.Contains(t, flow.SystemPrompt, "## Confirmation required")
+	assert.Contains(t, flow.SystemPrompt, "delete_user, execute_command")
+	assert.Contains(t, flow.SystemPrompt, "tool_name parameter")
+	assert.True(t, len(flow.SystemPrompt) > len("Base prompt."))
+}
+
+func TestToFlow_NoConfirmBefore_PromptUnchanged(t *testing.T) {
+	rec := config_repo.AgentRecord{
+		Name:           "test",
+		SystemPrompt:   "Base prompt.",
+		Lifecycle:      "persistent",
+		ToolExecution:  "sequential",
+		MaxSteps:       10,
+		MaxContextSize: 1000,
+	}
+
+	flow := toFlow(rec)
+	assert.Equal(t, "Base prompt.", flow.SystemPrompt)
+}
+
 func TestEmptyDB_EmptyRegistry(t *testing.T) {
 	repo := &mockAgentReader{records: []config_repo.AgentRecord{}}
 	reg := New(repo)

@@ -39,6 +39,7 @@ type QuestionAnswer struct {
 // but we also accept a raw array for flexibility.
 type askUserRawArgs struct {
 	Questions json.RawMessage `json:"questions"`
+	ToolName  string          `json:"tool_name,omitempty"`
 }
 
 // UserAsker defines the interface for asking the user questions via proxy (consumer-side)
@@ -84,7 +85,8 @@ NEVER for implementation (decide yourself):
 
 Combine ALL product questions into ONE ask_user call with multiple questions.`,
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"questions": {Type: schema.String, Desc: `JSON array of questions. Example: [{"text":"What platform?","options":[{"label":"iOS"},{"label":"Android"}],"default":"iOS"}]`, Required: true},
+			"questions":  {Type: schema.String, Desc: `JSON array of questions. Example: [{"text":"What platform?","options":[{"label":"iOS"},{"label":"Android"}],"default":"iOS"}]`, Required: true},
+			"tool_name":  {Type: schema.String, Desc: `Tool name requiring confirmation (used with confirm_before). Include this when asking for user confirmation before executing a tool.`, Required: false},
 		}),
 	}, nil
 }
@@ -120,7 +122,7 @@ func (t *AskUserTool) InvokableRun(ctx context.Context, argumentsInJSON string, 
 		}
 	}
 
-	slog.InfoContext(ctx, "[ask_user] asking user questionnaire", "question_count", len(questions))
+	slog.InfoContext(ctx, "[ask_user] asking user questionnaire", "question_count", len(questions), "tool_name", raw.ToolName)
 
 	// Serialize questions to JSON for the proxy
 	questionsJSON, err := json.Marshal(questions)
@@ -128,7 +130,20 @@ func (t *AskUserTool) InvokableRun(ctx context.Context, argumentsInJSON string, 
 		return fmt.Sprintf("[ERROR] failed to serialize questions: %v", err), nil
 	}
 
-	answersJSON, err := t.asker.AskUserQuestionnaire(ctx, t.sessionID, string(questionsJSON))
+	// Wrap in envelope with tool_name metadata when present (for confirm_before flow).
+	// The askUserHandler in processor.go parses this envelope to extract tool_name.
+	payload := string(questionsJSON)
+	if raw.ToolName != "" {
+		envelope := map[string]interface{}{
+			"questions": json.RawMessage(questionsJSON),
+			"tool_name": raw.ToolName,
+		}
+		if data, err := json.Marshal(envelope); err == nil {
+			payload = string(data)
+		}
+	}
+
+	answersJSON, err := t.asker.AskUserQuestionnaire(ctx, t.sessionID, payload)
 	if err != nil {
 		slog.ErrorContext(ctx, "[ask_user] failed", "error", err)
 		if pkgerrors.Is(err, pkgerrors.CodeTimeout) {

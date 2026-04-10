@@ -77,6 +77,7 @@ func TestBuildSystemPrompt_WithConfirmBefore(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, result, "## Confirmation required")
 	assert.Contains(t, result, "create_order, delete_user")
+	assert.Contains(t, result, "tool_name parameter")
 }
 
 func TestBuildSystemPrompt_FullComposition(t *testing.T) {

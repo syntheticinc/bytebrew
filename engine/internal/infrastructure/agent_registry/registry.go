@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
@@ -175,10 +176,19 @@ func toFlow(rec config_repo.AgentRecord) *domain.Flow {
 		lifecycle.ReportTo = "parent_agent"
 	}
 
+	// Append confirm_before instruction to system prompt (mirrors prompt_builder.go logic).
+	// This ensures DB-configured confirm_before is applied in the SSE/HTTP path.
+	systemPrompt := rec.SystemPrompt
+	if len(rec.ConfirmBefore) > 0 {
+		systemPrompt += "\n\n## Confirmation required\nAsk user before calling: " +
+			strings.Join(rec.ConfirmBefore, ", ") +
+			"\nWhen asking for confirmation, include the tool_name parameter in the ask_user call."
+	}
+
 	return &domain.Flow{
 		Type:           domain.FlowType(rec.Name),
 		Name:           rec.Name,
-		SystemPrompt:   rec.SystemPrompt,
+		SystemPrompt:   systemPrompt,
 		ToolNames:      toolNames,
 		MaxSteps:       rec.MaxSteps,
 		MaxContextSize:  rec.MaxContextSize,
