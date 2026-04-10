@@ -91,7 +91,7 @@ export default function BuilderFlowTest({ agents, onClose }: BuilderFlowTestProp
   // ── Render ──────────────────────────────────────────────────────────────
 
   const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
-  const hasError = lastMsg?.role === 'assistant' && lastMsg.content.startsWith('Error:');
+  const hasError = lastMsg?.role === 'assistant' && lastMsg.content?.startsWith('Error:');
 
   return (
     <div className="w-96 border-l border-brand-shade3/15 bg-brand-dark-alt flex flex-col h-full flex-shrink-0">

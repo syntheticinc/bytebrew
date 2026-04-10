@@ -155,7 +155,7 @@ export default function TestFlowTab() {
   // Refresh session list when a new session is created (sessionId changes)
   useEffect(() => {
     if (!selectedAgent || isPrototype || !sseChat.sessionId) return;
-    if (sessions.some((s) => s.session_id === sseChat.sessionId)) return;
+    if (sessions?.some((s) => s.session_id === sseChat.sessionId)) return;
     api.listSessions({ agent_name: selectedAgent, per_page: 20 })
       .then((res) => setSessions(res.sessions))
       .catch(() => {});
@@ -293,7 +293,7 @@ export default function TestFlowTab() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
-  const hasError = lastMsg?.role === 'assistant' && lastMsg.content.startsWith('Error:');
+  const hasError = lastMsg?.role === 'assistant' && lastMsg.content?.startsWith('Error:');
   const showInspectLink = lastMsg?.role === 'assistant' && !lastMsg.streaming && !hasError && messages.length > 0;
 
   return (
@@ -488,7 +488,7 @@ export default function TestFlowTab() {
                 )}
 
                 {/* Reasoning (if present as a special content pattern) */}
-                {msg.content.includes('[thinking]') && (() => {
+                {msg.content?.includes('[thinking]') && (() => {
                   const thinkKey = `${msg.id}-think`;
                   const isExpanded = expandedItems[thinkKey] ?? false;
                   const thinkMatch = msg.content.match(/\[thinking\]([\s\S]*?)\[\/thinking\]/);

@@ -114,7 +114,7 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
           .map((m) => ({
             id: m.id || crypto.randomUUID(),
             role: m.role as 'user' | 'assistant',
-            content: m.content,
+            content: m.content ?? '',
             streaming: false,
           }));
         setMessages(mapped);
@@ -351,7 +351,7 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
         .map((m) => ({
           id: m.id || crypto.randomUUID(),
           role: m.role as 'user' | 'assistant',
-          content: m.content,
+          content: m.content ?? '',
           streaming: false,
         }));
       setMessages(mapped);

@@ -25,6 +25,7 @@ import type {
   RegistryProviderInfo,
   Schema,
   PaginatedSessions,
+  SessionSummary,
   SessionTrace,
   WidgetConfig,
   CreateWidgetRequest,
@@ -363,7 +364,7 @@ class APIClient {
 
   // ─── Sessions / Inspect ──────────────────────────────────────────────────────
 
-  listSessions(params?: {
+  async listSessions(params?: {
     page?: number;
     per_page?: number;
     search?: string;
@@ -409,7 +410,9 @@ class APIClient {
     if (params?.to) qs.set('to', params.to);
     if (params?.agent_name) qs.set('agent_name', params.agent_name);
     const q = qs.toString() ? '?' + qs.toString() : '';
-    return this.request<PaginatedSessions>('GET', `/sessions${q}`);
+    // Backend returns { data: [...], total, page, per_page } — map to PaginatedSessions
+    const raw = await this.request<{ data?: SessionSummary[]; sessions?: SessionSummary[]; total: number; page: number; per_page: number }>('GET', `/sessions${q}`);
+    return { sessions: raw.data ?? raw.sessions ?? [], total: raw.total, page: raw.page, per_page: raw.per_page };
   }
 
   deleteSession(sessionId: string): Promise<void> {
