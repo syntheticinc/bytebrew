@@ -197,9 +197,7 @@ type AgentPool struct {
 	engine             AgentEngine          // Engine for executing code agents
 	flowProvider       FlowProvider         // for getting coder flow
 	toolResolver       ToolResolver         // for resolving tool names
-	toolDeps           ToolDepsProvider     // for creating tool dependencies
-	modelCache         AgentModelCache      // for resolving DB-configured models
-	agentModelResolver AgentModelIDResolver // for resolving agent → model ID
+	toolDeps ToolDepsProvider // for creating tool dependencies
 	// Max concurrent agents (0 = no limit)
 	maxConcurrent int
 	// Interrupt mechanism for blocking spawns (delegated to InterruptManager)
@@ -268,14 +266,18 @@ func (p *AgentPool) SetContextReminders(reminders []react.ContextReminderProvide
 }
 
 // SetEngine sets the Engine and related dependencies for new execution path
-func (p *AgentPool) SetEngine(engine AgentEngine, flowProvider FlowProvider, toolResolver ToolResolver, toolDeps ToolDepsProvider, modelCache AgentModelCache, agentModelResolver AgentModelIDResolver) {
+func (p *AgentPool) SetEngine(engine AgentEngine, flowProvider FlowProvider, toolResolver ToolResolver, toolDeps ToolDepsProvider, modelCache AgentModelCacheProvider, modelIDResolver AgentModelIDResolver) {
 	p.mu.Lock()
 	p.engine = engine
 	p.flowProvider = flowProvider
 	p.toolResolver = toolResolver
 	p.toolDeps = toolDeps
-	p.modelCache = modelCache
-	p.agentModelResolver = agentModelResolver
+	if modelCache != nil {
+		p.modelCache = modelCache
+	}
+	if modelIDResolver != nil {
+		p.modelIDResolver = modelIDResolver
+	}
 	p.mu.Unlock()
 }
 
@@ -446,31 +448,7 @@ func (p *AgentPool) GetStatus(agentID string) (AgentSnapshot, bool) {
 	return agent.snapshot(), true
 }
 
-// WaitForAgent blocks until a specific agent reaches a terminal state, then returns its result.
-// Uses completionCh for efficient wait (no polling). Respects ctx cancellation.
-func (p *AgentPool) WaitForAgent(ctx context.Context, agentID string) (string, error) {
-	p.mu.RLock()
-	agent, ok := p.agents[agentID]
-	p.mu.RUnlock()
-	if !ok {
-		return "", fmt.Errorf("agent not found: %s", agentID)
-	}
 
-	select {
-	case <-ctx.Done():
-		return "", ctx.Err()
-	case <-agent.completionCh:
-	}
-
-	snap, ok := p.GetStatus(agentID)
-	if !ok {
-		return "", fmt.Errorf("agent %s has no status after completion", agentID)
-	}
-	if snap.Error != "" {
-		return "", fmt.Errorf("agent execution failed: %s", snap.Error)
-	}
-	return snap.Result, nil
-}
 
 // GetAllAgents returns immutable snapshots of all agents (safe to read without lock).
 func (p *AgentPool) GetAllAgents() []AgentSnapshot {

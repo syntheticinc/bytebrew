@@ -84,7 +84,7 @@ func NewProductionHarness(t *testing.T, scenario string) *ProductionHarness {
 	agentPoolAdapter := agentservice.NewAgentPoolAdapter(agentPool)
 
 	toolDepsProvider := tools.NewDefaultToolDepsProvider(nil, taskMgr, subtaskMgr, agentPoolAdapter, nil, nil)
-	agentPool.SetEngine(agentEngine, flowManager, toolResolver, toolDepsProvider)
+	agentPool.SetEngine(agentEngine, flowManager, toolResolver, toolDepsProvider, nil, nil)
 
 	// 6. TurnExecutorFactory
 	factory := infrastructure.NewEngineTurnExecutorFactory(

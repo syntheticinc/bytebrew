@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	einotool "github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/components/model"
-
 	"github.com/cloudwego/eino/components/model"
 	einotool "github.com/cloudwego/eino/components/tool"
 
@@ -15,32 +12,6 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agents"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/engine"
 )
-
-// AgentModelCache resolves a ChatModel by model DB ID (consumer-side interface).
-type AgentModelCache interface {
-	Get(ctx context.Context, modelID uint) (model.ToolCallingChatModel, string, error)
-}
-
-// AgentModelIDResolver resolves a model DB ID by agent name (consumer-side interface).
-type AgentModelIDResolver interface {
-	ResolveModelID(agentName string) *uint
-}
-
-// resolveModel returns a ChatModel and model name for the given agent.
-// Tries DB-configured model first via modelCache + agentModelResolver,
-// then falls back to the static ModelSelector (YAML-configured agents).
-func (p *AgentPool) resolveModel(ctx context.Context, agentName string) (model.ToolCallingChatModel, string) {
-	if p.agentModelResolver != nil && p.modelCache != nil {
-		if modelID := p.agentModelResolver.ResolveModelID(agentName); modelID != nil {
-			if chatModel, modelName, err := p.modelCache.Get(ctx, *modelID); err == nil {
-				return chatModel, modelName
-			}
-		}
-	}
-	// Fallback to static ModelSelector (YAML-configured agents)
-	flowType := domain.FlowType(agentName)
-	return p.modelSelector.Select(flowType), p.modelSelector.ModelName(flowType)
-}
 
 // runAgentWithEngine is the generic execution method for any agent type.
 // Used by both coder (via runCodeAgentWithEngine) and researcher/reviewer agents.

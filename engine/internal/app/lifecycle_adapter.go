@@ -69,6 +69,11 @@ func (c *CompositeAgentSpawner) SpawnAgent(ctx context.Context, params tools.Spa
 	return result, nil
 }
 
+// WaitForAgent delegates to the underlying pool.
+func (c *CompositeAgentSpawner) WaitForAgent(ctx context.Context, sessionID, agentID string) (tools.AgentCompletionInfo, error) {
+	return c.pool.WaitForAgent(ctx, sessionID, agentID)
+}
+
 // WaitForAllSessionAgents delegates to the underlying pool.
 func (c *CompositeAgentSpawner) WaitForAllSessionAgents(ctx context.Context, sessionID string) (tools.WaitResult, error) {
 	return c.pool.WaitForAllSessionAgents(ctx, sessionID)
@@ -93,7 +98,7 @@ func (c *CompositeAgentSpawner) StopAgent(agentID string) error {
 // spawn an agent and wait for its completion by agentID.
 type agentSpawnerWaiter interface {
 	SpawnAgent(ctx context.Context, params tools.SpawnParams) (string, error)
-	WaitForAgent(ctx context.Context, agentID string) (string, error)
+	WaitForAgent(ctx context.Context, sessionID, agentID string) (tools.AgentCompletionInfo, error)
 }
 
 // poolBasedRunner wraps an agentSpawnerWaiter to implement lifecycle.AgentRunner.
@@ -116,9 +121,9 @@ func (r *poolBasedRunner) RunAgent(ctx context.Context, agentName, input, sessio
 		return "", fmt.Errorf("spawn agent: %w", err)
 	}
 
-	result, err := r.pool.WaitForAgent(ctx, agentID)
+	info, err := r.pool.WaitForAgent(ctx, sessionID, agentID)
 	if err != nil {
 		return "", fmt.Errorf("wait for agent %s: %w", agentID, err)
 	}
-	return result, nil
+	return info.Result, nil
 }

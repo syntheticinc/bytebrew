@@ -82,7 +82,7 @@ func NewStreamingHarness(t *testing.T, scenario string) *StreamingHarness {
 	agentPoolAdapter := agentservice.NewAgentPoolAdapter(agentPool)
 
 	toolDepsProvider := tools.NewDefaultToolDepsProvider(nil, taskMgr, subtaskMgr, agentPoolAdapter, nil, nil)
-	agentPool.SetEngine(agentEngine, flowManager, toolResolver, toolDepsProvider)
+	agentPool.SetEngine(agentEngine, flowManager, toolResolver, toolDepsProvider, nil, nil)
 
 	factory := infrastructure.NewEngineTurnExecutorFactory(
 		agentEngine, flowManager, toolResolver, modelSelector, agentConfig,

@@ -92,11 +92,6 @@ func (a *AgentPoolAdapter) StopAgent(agentID string) error {
 	return a.pool.StopAgent(agentID)
 }
 
-// WaitForAgent blocks until the specific agent completes and returns its output.
-func (a *AgentPoolAdapter) WaitForAgent(ctx context.Context, agentID string) (string, error) {
-	return a.pool.WaitForAgent(ctx, agentID)
-}
-
 // SpawnAgent implements tools.GenericAgentSpawner by delegating to AgentPool.SpawnWithDescription.
 func (a *AgentPoolAdapter) SpawnAgent(ctx context.Context, params tools.SpawnParams) (string, error) {
 	return a.pool.SpawnWithDescription(

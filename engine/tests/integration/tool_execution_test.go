@@ -154,7 +154,7 @@ func createTurnExecutor(t *testing.T, scenario, projectRoot string) *turnExecuto
 	agentPoolAdapter := agentservice.NewAgentPoolAdapter(agentPool)
 
 	toolDepsProvider := tools.NewDefaultToolDepsProvider(nil, taskMgr, subtaskMgr, agentPoolAdapter, nil, nil)
-	agentPool.SetEngine(agentEngine, flowManager, toolResolver, toolDepsProvider)
+	agentPool.SetEngine(agentEngine, flowManager, toolResolver, toolDepsProvider, nil, nil)
 
 	proxy := tools.NewLocalClientOperationsProxy(projectRoot)
 
