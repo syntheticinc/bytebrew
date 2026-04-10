@@ -22,6 +22,7 @@ type ModelEventHandler struct {
 	extractor *agents.ReasoningExtractor
 	store     *agents.StepContentStore
 	chunkCb   func(chunk string) error
+	tokenAcc  *TokenAccumulator
 
 	// Text accumulation state for streaming
 	accumulatedReasoning string
@@ -45,13 +46,15 @@ func NewModelEventHandler(
 	extractor *agents.ReasoningExtractor,
 	store *agents.StepContentStore,
 	chunkCb func(chunk string) error,
+	tokenAcc *TokenAccumulator,
 ) *ModelEventHandler {
 	return &ModelEventHandler{
-		emitter:    emitter,
-		counter:    counter,
-		extractor:  extractor,
-		store:      store,
-		chunkCb:    chunkCb,
+		emitter:  emitter,
+		counter:  counter,
+		extractor: extractor,
+		store:    store,
+		chunkCb:  chunkCb,
+		tokenAcc: tokenAcc,
 	}
 }
 
@@ -60,6 +63,11 @@ func NewModelEventHandler(
 func (h *ModelEventHandler) OnModelEnd(ctx context.Context, info *callbacks.RunInfo, output *model.CallbackOutput) context.Context {
 	if output == nil || output.Message == nil {
 		return ctx
+	}
+
+	// Accumulate token usage from this model call
+	if output.TokenUsage != nil && h.tokenAcc != nil {
+		h.tokenAcc.Add(output.TokenUsage)
 	}
 
 	msg := output.Message
@@ -154,6 +162,11 @@ func (h *ModelEventHandler) OnModelEndWithStreamOutput(ctx context.Context, info
 			if frame == nil || frame.Message == nil {
 				slog.DebugContext(ctx, "[CALLBACK] received nil frame or message, skipping", "frame_count", frameCount)
 				continue
+			}
+
+			// Accumulate token usage from streaming frame (typically only the last frame has usage)
+			if frame.TokenUsage != nil && h.tokenAcc != nil {
+				h.tokenAcc.Add(frame.TokenUsage)
 			}
 
 			msg := frame.Message

@@ -1,12 +1,14 @@
 package callbacks
 
 import (
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agents"
+	"context"
+
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/flow/agent"
 	ucb "github.com/cloudwego/eino/utils/callbacks"
-	"context"
+
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agents"
 )
 
 // BuilderConfig holds configuration for constructing the callback builder.
@@ -26,6 +28,7 @@ type AgentCallbackBuilder struct {
 	emitter      *EventEmitter
 	modelHandler *ModelEventHandler
 	toolHandler  *ToolEventHandler
+	tokenAcc     *TokenAccumulator
 }
 
 // NewBuilder creates and wires all callback components.
@@ -38,8 +41,9 @@ func NewBuilder(cfg BuilderConfig) *AgentCallbackBuilder {
 	counter := NewStepCounter()
 	emitter := NewEventEmitter(cfg.EventCallback, agentID)
 	extractor := agents.NewReasoningExtractor()
+	tokenAcc := NewTokenAccumulator()
 
-	modelHandler := NewModelEventHandler(emitter, counter, extractor, cfg.Store, cfg.ChunkCallback)
+	modelHandler := NewModelEventHandler(emitter, counter, extractor, cfg.Store, cfg.ChunkCallback, tokenAcc)
 	toolHandler := NewToolEventHandler(emitter, counter, modelHandler, cfg.ToolCallRecorder, cfg.SessionID)
 
 	return &AgentCallbackBuilder{
@@ -47,6 +51,7 @@ func NewBuilder(cfg BuilderConfig) *AgentCallbackBuilder {
 		emitter:      emitter,
 		modelHandler: modelHandler,
 		toolHandler:  toolHandler,
+		tokenAcc:     tokenAcc,
 	}
 }
 
@@ -81,4 +86,26 @@ func (b *AgentCallbackBuilder) WaitStreamDone() {
 // FinalizeAccumulatedText emits EventTypeAnswer for any accumulated streamed text.
 func (b *AgentCallbackBuilder) FinalizeAccumulatedText(ctx context.Context) {
 	b.modelHandler.FinalizeAccumulatedText(ctx)
+}
+
+// EmitTokenUsage emits a token_usage event with accumulated totals from all model calls.
+// Called after agent execution completes, before ProcessingStopped.
+func (b *AgentCallbackBuilder) EmitTokenUsage(ctx context.Context) {
+	total := b.tokenAcc.TotalTokens()
+	if total == 0 {
+		return
+	}
+	b.emitter.Emit(ctx, &domain.AgentEvent{
+		Type: domain.EventTypeTokenUsage,
+		Metadata: map[string]interface{}{
+			"total_tokens":      b.tokenAcc.TotalTokens(),
+			"prompt_tokens":     b.tokenAcc.PromptTokens(),
+			"completion_tokens": b.tokenAcc.CompletionTokens(),
+		},
+	})
+}
+
+// GetTotalTokens returns accumulated total tokens across all model calls.
+func (b *AgentCallbackBuilder) GetTotalTokens() int {
+	return b.tokenAcc.TotalTokens()
 }

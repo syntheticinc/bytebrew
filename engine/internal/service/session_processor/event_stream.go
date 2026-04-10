@@ -27,9 +27,10 @@ type EventStore interface {
 // and publishes via EventPublisher.
 // Implements domain.AgentEventStream.
 type EventStream struct {
-	sessionID string
-	publisher EventPublisher
-	store     EventStore
+	sessionID   string
+	publisher   EventPublisher
+	store       EventStore
+	totalTokens int // accumulated from EventTypeTokenUsage, included in ProcessingStopped
 }
 
 // NewEventStream creates a new event stream that persists and publishes events.
@@ -44,6 +45,14 @@ func NewEventStream(sessionID string, publisher EventPublisher, store EventStore
 // Send converts a domain AgentEvent to a proto SessionEvent, persists it, and publishes.
 // SchemaVersion is injected here so all events carry it (AC-EVT-01).
 func (s *EventStream) Send(event *domain.AgentEvent) error {
+	// Capture token usage for inclusion in ProcessingStopped (not broadcast as separate event)
+	if event.Type == domain.EventTypeTokenUsage {
+		if tokens, ok := event.Metadata["total_tokens"].(int); ok {
+			s.totalTokens = tokens
+		}
+		return nil
+	}
+
 	// AC-EVT-01: ensure schema_version is set on every event
 	if event.SchemaVersion == "" {
 		event.SchemaVersion = domain.EventSchemaVersion
@@ -68,11 +77,16 @@ func (s *EventStream) PublishProcessingStarted() {
 }
 
 // PublishProcessingStopped sends a PROCESSING_STOPPED event.
+// If token usage was reported during the turn, it is included in the Content field.
 func (s *EventStream) PublishProcessingStopped() {
-	s.persistAndPublish(&pb.SessionEvent{
+	evt := &pb.SessionEvent{
 		SessionId: s.sessionID,
 		Type:      pb.SessionEventType_SESSION_EVENT_PROCESSING_STOPPED,
-	})
+	}
+	if s.totalTokens > 0 {
+		evt.Content = strconv.Itoa(s.totalTokens)
+	}
+	s.persistAndPublish(evt)
 }
 
 // PublishError sends an ERROR event.

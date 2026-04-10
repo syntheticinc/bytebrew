@@ -93,7 +93,7 @@ export default function BottomPanel() {
   const effectiveSchema = lockedSchema ?? selectedSchema ?? undefined;
 
   const assistantPersistenceKey = effectiveSchema ? `bb_assistant_${effectiveSchema}` : undefined;
-  const { messages, sendMessage, isStreaming, isRestoring, resetSession } = useSSEChat({
+  const { messages, sendMessage, isStreaming, isRestoring, resetSession, tokenUsage } = useSSEChat({
     endpoint: `/api/v1/admin/assistant/chat`,
     agentName: ASSISTANT_AGENT,
     schemaContext: effectiveSchema,
@@ -403,7 +403,7 @@ export default function BottomPanel() {
 
       {/* Context usage bar — assistant tab only */}
       {!collapsed && tab === 'assistant' && (
-        <ContextUsageBar maxContextTokens={maxContextTokens} />
+        <ContextUsageBar maxContextTokens={maxContextTokens} totalTokens={tokenUsage} />
       )}
 
       {/* Message input — assistant tab only (testflow has its own) */}

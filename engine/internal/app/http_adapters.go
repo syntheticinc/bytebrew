@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -1698,9 +1699,15 @@ func convertSessionEventToSSE(event *pb.SessionEvent, sessionID string) *deliver
 		return sseEventJSON("confirmation", data)
 
 	case pb.SessionEventType_SESSION_EVENT_PROCESSING_STOPPED:
-		return sseEventJSON("done", map[string]interface{}{
+		data := map[string]interface{}{
 			"session_id": sessionID,
-		})
+		}
+		if content := event.GetContent(); content != "" {
+			if tokens, err := strconv.Atoi(content); err == nil && tokens > 0 {
+				data["total_tokens"] = tokens
+			}
+		}
+		return sseEventJSON("done", data)
 
 	case pb.SessionEventType_SESSION_EVENT_ERROR:
 		data := map[string]interface{}{

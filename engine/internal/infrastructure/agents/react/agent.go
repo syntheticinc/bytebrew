@@ -394,6 +394,9 @@ func (a *Agent) RunWithCallbacks(ctx context.Context, input string, eventCallbac
 		})
 	}
 
+	// Emit cumulative token usage for this turn
+	cb.EmitTokenUsage(ctx)
+
 	if a.contextLogger != nil {
 		a.contextLogger.LogContextSummary(ctx, messages)
 	}
@@ -568,6 +571,9 @@ func (a *Agent) Stream(ctx context.Context, input string, callback func(chunk st
 
 	// Finalize any accumulated text that wasn't flushed by onToolStart
 	cb.FinalizeAccumulatedText(ctx)
+
+	// Emit cumulative token usage for this turn (consumed by EventStream for the done event)
+	cb.EmitTokenUsage(ctx)
 
 	if finalContent != "" {
 		messages = append(messages, &schema.Message{

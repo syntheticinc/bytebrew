@@ -47,6 +47,7 @@ const (
 	EventTypeUserQuestion     AgentEventType = "user_question"     // ask_user question to client
 	EventTypeStructuredOutput AgentEventType = "structured_output" // structured data display (tables, actions)
 	EventTypeStateChanged     AgentEventType = "state_changed"     // Agent lifecycle state transition (AC-STATE-02)
+	EventTypeTokenUsage       AgentEventType = "token_usage"       // Cumulative token usage for the turn (metadata: total_tokens, prompt_tokens, completion_tokens)
 )
 
 // AgentError represents error information for EventTypeError

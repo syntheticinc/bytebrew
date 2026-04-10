@@ -31,6 +31,7 @@ export interface UseSSEChatReturn {
   isRestoring: boolean;
   error: string | null;
   sessionId: string;
+  tokenUsage: number | null;
   resetSession: () => void;
   stopStreaming: () => void;
   loadSession: (sessionId: string) => Promise<void>;
@@ -72,6 +73,7 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
   const [sessionId, setSessionId] = useState(() =>
     persistenceKey ? (safeGetItem(persistenceKey) ?? '') : '',
   );
+  const [tokenUsage, setTokenUsage] = useState<number | null>(null);
 
   const sessionIdRef = useRef(sessionId);
   const abortRef = useRef<AbortController | null>(null);
@@ -144,6 +146,7 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
     abortRef.current?.abort();
     restoreAbortRef.current?.abort();
     setError(null);
+    setTokenUsage(null);
     if (persistenceKey) safeRemoveItem(persistenceKey);
   }, [persistenceKey]);
 
@@ -286,6 +289,10 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
                 setSessionId(sid);
                 if (persistenceKey) safeSetItem(persistenceKey, sid);
               }
+              const tokens = parsed.total_tokens as number | undefined;
+              if (tokens && tokens > 0) {
+                setTokenUsage(tokens);
+              }
               updateAssistant({ streaming: false });
               break;
             }
@@ -361,5 +368,5 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
     }
   }, [persistenceKey, fetchMessages]);
 
-  return { messages, sendMessage, isStreaming, isRestoring, error, sessionId, resetSession, stopStreaming, loadSession };
+  return { messages, sendMessage, isStreaming, isRestoring, error, sessionId, tokenUsage, resetSession, stopStreaming, loadSession };
 }

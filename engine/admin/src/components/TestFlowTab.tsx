@@ -565,7 +565,7 @@ export default function TestFlowTab() {
       </div>
 
       {/* Context usage bar */}
-      <ContextUsageBar maxContextTokens={agentDetail?.max_context_size ?? null} />
+      <ContextUsageBar maxContextTokens={agentDetail?.max_context_size ?? null} totalTokens={isPrototype ? null : sseChat.tokenUsage} />
 
       {/* Input area */}
       <div className="flex items-center gap-2 px-3 py-2 border-t border-brand-shade3/10 flex-shrink-0">
