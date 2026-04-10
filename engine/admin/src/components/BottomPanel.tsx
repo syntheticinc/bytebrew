@@ -5,6 +5,7 @@ import { useSSEChat } from '../hooks/useSSEChat';
 import { dispatchAdminChanged } from '../hooks/useAdminRefresh';
 import SchemaSelector from './SchemaSelector';
 import TestFlowTab from './TestFlowTab';
+import ContextUsageBar from './ContextUsageBar';
 import { api } from '../api/client';
 
 const CURSOR = <span className="inline-block w-1.5 h-3 bg-brand-accent ml-0.5 animate-pulse align-middle" />;
@@ -85,6 +86,7 @@ export default function BottomPanel() {
   const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
   const [assistantInput, setAssistantInput] = useState('');
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
+  const [maxContextTokens, setMaxContextTokens] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // M-01: Pass schema context on ALL pages — lockedSchema (canvas) or selectedSchema (other pages)
@@ -103,6 +105,12 @@ export default function BottomPanel() {
       }
     },
   });
+
+  useEffect(() => {
+    api.getAgent(ASSISTANT_AGENT)
+      .then((d) => setMaxContextTokens(d.max_context_size || null))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -391,6 +399,11 @@ export default function BottomPanel() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Context usage bar — assistant tab only */}
+      {!collapsed && tab === 'assistant' && (
+        <ContextUsageBar maxContextTokens={maxContextTokens} />
       )}
 
       {/* Message input — assistant tab only (testflow has its own) */}

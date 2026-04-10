@@ -33,6 +33,7 @@ export interface UseSSEChatReturn {
   sessionId: string;
   resetSession: () => void;
   stopStreaming: () => void;
+  loadSession: (sessionId: string) => Promise<void>;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -315,5 +316,50 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStreaming, endpoint, agentName, getHeaders, persistenceKey]);
 
-  return { messages, sendMessage, isStreaming, isRestoring, error, sessionId, resetSession, stopStreaming };
+  const loadSession = useCallback(async (targetSessionId: string) => {
+    abortRef.current?.abort();
+    setIsStreaming(false);
+    restoreAbortRef.current?.abort();
+
+    sessionIdRef.current = targetSessionId;
+    setSessionId(targetSessionId);
+    if (persistenceKey) safeSetItem(persistenceKey, targetSessionId);
+
+    if (!fetchMessages) {
+      setMessages([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    restoreAbortRef.current = controller;
+
+    setIsRestoring(true);
+    setMessages([]);
+
+    try {
+      const raw = await fetchMessages(targetSessionId);
+      if (controller.signal.aborted) return;
+      const mapped: SSEMessage[] = raw
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m) => ({
+          id: m.id || crypto.randomUUID(),
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          streaming: false,
+        }));
+      setMessages(mapped);
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      if ((err as Error).name !== 'AbortError') {
+        if (persistenceKey) safeRemoveItem(persistenceKey);
+        sessionIdRef.current = '';
+        setSessionId('');
+        setMessages([]);
+      }
+    } finally {
+      if (!controller.signal.aborted) setIsRestoring(false);
+    }
+  }, [persistenceKey, fetchMessages]);
+
+  return { messages, sendMessage, isStreaming, isRestoring, error, sessionId, resetSession, stopStreaming, loadSession };
 }

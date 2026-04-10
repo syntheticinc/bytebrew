@@ -4,7 +4,9 @@ import { useSSEChat, type SSEMessage } from '../hooks/useSSEChat';
 import { useBottomPanel } from '../hooks/useBottomPanel';
 import { usePrototype } from '../hooks/usePrototype';
 import { api } from '../api/client';
+import type { AgentDetail, SessionSummary } from '../types';
 import HeadersEditor, { type HeaderEntry } from './HeadersEditor';
+import ContextUsageBar from './ContextUsageBar';
 
 // ─── Mock streaming for prototype mode ──────────────────────────────────────
 
@@ -54,6 +56,12 @@ export default function TestFlowTab() {
   const [protoMessages, setProtoMessages] = useState<SSEMessage[]>([]);
   const [protoStreaming, setProtoStreaming] = useState(false);
   const [protoSessionId, setProtoSessionId] = useState('');
+
+  // Session management state (production only)
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [agentDetail, setAgentDetail] = useState<AgentDetail | null>(null);
+  const [sessionDropdownOpen, setSessionDropdownOpen] = useState(false);
+  const sessionDropdownRef = useRef<HTMLDivElement>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const headersRef = useRef(headers);
@@ -123,6 +131,48 @@ export default function TestFlowTab() {
     load();
     return () => { cancelled = true; };
   }, [selectedSchema, selectedAgent]);
+
+  // Fetch agent detail for context bar
+  useEffect(() => {
+    if (!selectedAgent) { setAgentDetail(null); return; }
+    let cancelled = false;
+    api.getAgent(selectedAgent)
+      .then((d) => { if (!cancelled) setAgentDetail(d); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [selectedAgent]);
+
+  // Fetch sessions for selected agent (production only)
+  useEffect(() => {
+    if (!selectedAgent || isPrototype) { setSessions([]); return; }
+    let cancelled = false;
+    api.listSessions({ agent_name: selectedAgent, per_page: 20 })
+      .then((res) => { if (!cancelled) setSessions(res.sessions); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [selectedAgent, isPrototype]);
+
+  // Refresh session list when a new session is created (sessionId changes)
+  useEffect(() => {
+    if (!selectedAgent || isPrototype || !sseChat.sessionId) return;
+    if (sessions.some((s) => s.session_id === sseChat.sessionId)) return;
+    api.listSessions({ agent_name: selectedAgent, per_page: 20 })
+      .then((res) => setSessions(res.sessions))
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sseChat.sessionId]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!sessionDropdownOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (sessionDropdownRef.current && !sessionDropdownRef.current.contains(e.target as Node)) {
+        setSessionDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [sessionDropdownOpen]);
 
   // Auto-scroll
   useEffect(() => {
@@ -219,6 +269,27 @@ export default function TestFlowTab() {
     }
   }
 
+  // ── Session management (production only) ─────────────────────────────────
+
+  async function handleSwitchSession(sid: string) {
+    setSessionDropdownOpen(false);
+    await sseChat.loadSession(sid);
+  }
+
+  async function handleDeleteSession(sid: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm('Delete this session?')) return;
+    try {
+      await api.deleteSession(sid);
+      setSessions((prev) => prev.filter((s) => s.session_id !== sid));
+      if (sseChat.sessionId === sid) {
+        sseChat.resetSession();
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
@@ -276,13 +347,72 @@ export default function TestFlowTab() {
           )}
         </div>
 
+        {/* Session selector (production only) */}
+        {!isPrototype && selectedAgent && (
+          <div className="flex items-center gap-2">
+            <label className="text-[10px] text-brand-shade3 uppercase tracking-wide shrink-0">Session:</label>
+            <div ref={sessionDropdownRef} className="relative flex-1">
+              <button
+                onClick={() => setSessionDropdownOpen((p) => !p)}
+                className="w-full px-2 py-1 bg-brand-dark border border-brand-shade3/30 rounded text-xs text-brand-light text-left flex items-center gap-1 hover:border-brand-shade3/50 transition-colors"
+              >
+                <span className="truncate flex-1">
+                  {sseChat.sessionId ? sseChat.sessionId.slice(0, 12) + '...' : 'New Session'}
+                </span>
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" className={`text-brand-shade3 transition-transform ${sessionDropdownOpen ? 'rotate-180' : ''}`}>
+                  <path d="M7 10l5 5 5-5H7z" />
+                </svg>
+              </button>
+              {sessionDropdownOpen && (
+                <div className="absolute top-full left-0 mt-1 w-full max-h-48 overflow-y-auto bg-brand-dark border border-brand-shade3/20 rounded shadow-lg z-50">
+                  <button
+                    onClick={() => { handleReset(); setSessionDropdownOpen(false); }}
+                    className="w-full px-2 py-1.5 text-left text-xs text-brand-accent hover:bg-brand-shade3/10 flex items-center gap-1.5 transition-colors"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    New Session
+                  </button>
+                  {sessions.map((s) => (
+                    <div
+                      key={s.session_id}
+                      onClick={() => handleSwitchSession(s.session_id)}
+                      className={`w-full px-2 py-1.5 text-left text-xs flex items-center gap-1.5 hover:bg-brand-shade3/10 cursor-pointer transition-colors ${sseChat.sessionId === s.session_id ? 'text-brand-accent' : 'text-brand-light'}`}
+                    >
+                      <span className="truncate flex-1">
+                        {s.session_id.slice(0, 10)}...
+                        <span className="text-brand-shade3 ml-1">
+                          {new Date(s.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </span>
+                      <button
+                        onClick={(e) => handleDeleteSession(s.session_id, e)}
+                        className="p-0.5 text-brand-shade3 hover:text-red-400 transition-colors shrink-0"
+                        title="Delete session"
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                  {sessions.length === 0 && (
+                    <div className="px-2 py-1.5 text-[10px] text-brand-shade3">No sessions yet</div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Headers editor */}
         <HeadersEditor headers={headers} onChange={setHeaders} />
       </div>
 
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto min-h-0 px-3 py-2 space-y-2">
-        {sseChat.isRestoring && messages.length === 0 ? (
+        {!isPrototype && sseChat.isRestoring && messages.length === 0 ? (
           <div className="flex items-center gap-2 text-[11px] text-brand-shade3 font-mono py-4 justify-center">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
               <path d="M21 12a9 9 0 11-6.219-8.56" />
@@ -433,6 +563,9 @@ export default function TestFlowTab() {
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Context usage bar */}
+      <ContextUsageBar maxContextTokens={agentDetail?.max_context_size ?? null} />
 
       {/* Input area */}
       <div className="flex items-center gap-2 px-3 py-2 border-t border-brand-shade3/10 flex-shrink-0">
