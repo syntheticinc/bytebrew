@@ -219,6 +219,14 @@ class APIClient {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
     return this.request<void>('DELETE', `/triggers/${id}`);
   }
+  setTriggerTarget(id: number, agentName: string) {
+    if (this.isPrototype) return this.mock({} as Trigger);
+    return this.request<Trigger>('PATCH', `/triggers/${id}/target`, { agent_name: agentName });
+  }
+  clearTriggerTarget(id: number) {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('DELETE', `/triggers/${id}/target`);
+  }
 
   // ---- Tasks ----
   listTasks(params?: Record<string, string>) {

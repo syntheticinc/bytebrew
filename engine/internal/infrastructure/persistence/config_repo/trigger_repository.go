@@ -71,6 +71,30 @@ func (r *GORMTriggerRepository) HasEnabledChatTrigger(ctx context.Context, agent
 	return count > 0, nil
 }
 
+// SetAgentID sets the target agent for a trigger (canvas edge → routing enabled).
+func (r *GORMTriggerRepository) SetAgentID(ctx context.Context, triggerID uint, agentID uint) error {
+	result := r.db.WithContext(ctx).Model(&models.TriggerModel{}).Where("id = ?", triggerID).Update("agent_id", agentID)
+	if result.Error != nil {
+		return fmt.Errorf("set trigger agent: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("trigger not found: %d", triggerID)
+	}
+	return nil
+}
+
+// ClearAgentID removes the target agent from a trigger (canvas edge deleted → routing disabled).
+func (r *GORMTriggerRepository) ClearAgentID(ctx context.Context, triggerID uint) error {
+	result := r.db.WithContext(ctx).Model(&models.TriggerModel{}).Where("id = ?", triggerID).Update("agent_id", nil)
+	if result.Error != nil {
+		return fmt.Errorf("clear trigger agent: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("trigger not found: %d", triggerID)
+	}
+	return nil
+}
+
 // Delete removes a trigger model by ID.
 func (r *GORMTriggerRepository) Delete(ctx context.Context, id uint) error {
 	result := r.db.WithContext(ctx).Delete(&models.TriggerModel{}, id)

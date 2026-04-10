@@ -42,6 +42,8 @@ type TriggerService interface {
 	CreateTrigger(ctx context.Context, req CreateTriggerRequest) (*TriggerResponse, error)
 	UpdateTrigger(ctx context.Context, id uint, req CreateTriggerRequest) (*TriggerResponse, error)
 	DeleteTrigger(ctx context.Context, id uint) error
+	SetTriggerTarget(ctx context.Context, id uint, agentName string) (*TriggerResponse, error)
+	ClearTriggerTarget(ctx context.Context, id uint) error
 }
 
 // TriggerHandler serves /api/v1/triggers endpoints.
@@ -61,6 +63,8 @@ func (h *TriggerHandler) Routes() http.Handler {
 	r.Post("/", h.Create)
 	r.Put("/{id}", h.Update)
 	r.Delete("/{id}", h.Delete)
+	r.Patch("/{id}/target", h.SetTarget)
+	r.Delete("/{id}/target", h.ClearTarget)
 	return r
 }
 
@@ -89,11 +93,6 @@ func (h *TriggerHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "title is required")
 		return
 	}
-	if req.AgentID == 0 {
-		writeJSONError(w, http.StatusBadRequest, "agent_id is required")
-		return
-	}
-
 	trigger, err := h.service.CreateTrigger(r.Context(), req)
 	if err != nil {
 		writeDomainError(w, err)
@@ -134,6 +133,51 @@ func (h *TriggerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.service.DeleteTrigger(r.Context(), id); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// SetTarget handles PATCH /api/v1/triggers/{id}/target.
+// Connects a trigger to an agent — enables canvas-driven routing.
+func (h *TriggerHandler) SetTarget(w http.ResponseWriter, r *http.Request) {
+	id, err := parseIDParam(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	var body struct {
+		AgentName string `json:"agent_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %s", err.Error()))
+		return
+	}
+	if body.AgentName == "" {
+		writeJSONError(w, http.StatusBadRequest, "agent_name is required")
+		return
+	}
+
+	result, err := h.service.SetTriggerTarget(r.Context(), id, body.AgentName)
+	if err != nil {
+		writeDomainError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+// ClearTarget handles DELETE /api/v1/triggers/{id}/target.
+// Disconnects a trigger from its agent — disables routing without deleting the trigger.
+func (h *TriggerHandler) ClearTarget(w http.ResponseWriter, r *http.Request) {
+	id, err := parseIDParam(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if err := h.service.ClearTriggerTarget(r.Context(), id); err != nil {
+		writeDomainError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

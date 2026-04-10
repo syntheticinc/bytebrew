@@ -77,9 +77,18 @@ export function useCanvasEdges({
         return;
       }
 
-      // Trigger nodes are read-only — cannot create edges from them manually
+      // Trigger → agent: set routing target via API (canvas edge = routing config)
       if (source.startsWith('trigger-')) {
-        addToast('Trigger connections are managed on the Triggers page', 'info');
+        const triggerId = parseInt(source.replace('trigger-', ''), 10);
+        showSavedIndicator('saving');
+        try {
+          await api.setTriggerTarget(triggerId, target);
+          setEdges((eds) => addEdge(makeTriggerEdge(source, target), eds));
+          showSavedIndicator('saved');
+        } catch (err) {
+          addToast(`Failed to connect trigger: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
+          setSavedIndicator(null);
+        }
         return;
       }
 
@@ -130,8 +139,20 @@ export function useCanvasEdges({
       if (isPrototype) return;
 
       for (const edge of deletedEdges) {
-        // Trigger edges are read-only — managed via Triggers page
-        if (edge.id.startsWith('trigger:')) continue;
+        // Trigger → agent edge: clear routing target via API
+        if (edge.id.startsWith('trigger:')) {
+          const triggerId = parseInt(edge.source.replace('trigger-', ''), 10);
+          showSavedIndicator('saving');
+          try {
+            await api.clearTriggerTarget(triggerId);
+            showSavedIndicator('saved');
+          } catch (err) {
+            setEdges((eds) => [...eds, edge]);
+            addToast(`Failed to disconnect trigger: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
+            setSavedIndicator(null);
+          }
+          continue;
+        }
 
         const sourceAgent = agentsCache.current.get(edge.source);
         if (!sourceAgent) continue;

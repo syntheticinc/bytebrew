@@ -114,8 +114,9 @@ func seedTestData(t *testing.T, db *gorm.DB) {
 	}).Error)
 
 	// Trigger
+	agentIDPtr := agent.ID
 	require.NoError(t, db.Create(&models.TriggerModel{
-		Type: "cron", Title: "Morning report", AgentID: agent.ID,
+		Type: "cron", Title: "Morning report", AgentID: &agentIDPtr,
 		Schedule: "0 9 * * *", Description: "Daily report", Enabled: true,
 	}).Error)
 }

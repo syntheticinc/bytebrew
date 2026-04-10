@@ -35,6 +35,14 @@ func (m *mockTriggerService) DeleteTrigger(_ context.Context, _ uint) error {
 	return nil
 }
 
+func (m *mockTriggerService) SetTriggerTarget(_ context.Context, _ uint, _ string) (*TriggerResponse, error) {
+	return nil, nil
+}
+
+func (m *mockTriggerService) ClearTriggerTarget(_ context.Context, _ uint) error {
+	return nil
+}
+
 // TestTriggerHandler_Create_RejectsNonEntryAgent verifies that creating a trigger
 // for a non-entry agent returns an error containing "entry agent".
 func TestTriggerHandler_Create_RejectsNonEntryAgent(t *testing.T) {

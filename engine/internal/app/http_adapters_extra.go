@@ -210,6 +210,22 @@ func (a *mcpServiceHTTPAdapter) DeleteMCPServer(ctx context.Context, name string
 	return fmt.Errorf("mcp server not found: %s", name)
 }
 
+// ptrUint converts a uint to *uint; returns nil when v == 0 (no agent).
+func ptrUint(v uint) *uint {
+	if v == 0 {
+		return nil
+	}
+	return &v
+}
+
+// derefUint dereferences a *uint; returns 0 when p is nil.
+func derefUint(p *uint) uint {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
 // triggerServiceHTTPAdapter bridges GORMTriggerRepository to the http.TriggerService interface.
 type triggerServiceHTTPAdapter struct {
 	repo *config_repo.GORMTriggerRepository
@@ -227,7 +243,7 @@ func (a *triggerServiceHTTPAdapter) ListTriggers(ctx context.Context) ([]deliver
 			ID:          t.ID,
 			Type:        t.Type,
 			Title:       t.Title,
-			AgentID:     t.AgentID,
+			AgentID:     derefUint(t.AgentID),
 			AgentName:   t.Agent.Name,
 			Schedule:    t.Schedule,
 			WebhookPath: t.WebhookPath,
@@ -274,13 +290,15 @@ func (a *triggerServiceHTTPAdapter) CreateTrigger(ctx context.Context, req deliv
 	if err := a.resolveAgentID(ctx, &req); err != nil {
 		return nil, err
 	}
-	if err := a.isEntryAgent(ctx, req.AgentID); err != nil {
-		return nil, err
+	if req.AgentID != 0 {
+		if err := a.isEntryAgent(ctx, req.AgentID); err != nil {
+			return nil, err
+		}
 	}
 	model := &models.TriggerModel{
 		Type:        req.Type,
 		Title:       req.Title,
-		AgentID:     req.AgentID,
+		AgentID:     ptrUint(req.AgentID),
 		Schedule:    req.Schedule,
 		WebhookPath: req.WebhookPath,
 		Description: req.Description,
@@ -296,7 +314,7 @@ func (a *triggerServiceHTTPAdapter) CreateTrigger(ctx context.Context, req deliv
 		ID:          model.ID,
 		Type:        model.Type,
 		Title:       model.Title,
-		AgentID:     model.AgentID,
+		AgentID:     derefUint(model.AgentID),
 		Schedule:    model.Schedule,
 		WebhookPath: model.WebhookPath,
 		Description: model.Description,
@@ -312,7 +330,7 @@ func (a *triggerServiceHTTPAdapter) UpdateTrigger(ctx context.Context, id uint, 
 	model := &models.TriggerModel{
 		Type:        req.Type,
 		Title:       req.Title,
-		AgentID:     req.AgentID,
+		AgentID:     ptrUint(req.AgentID),
 		Schedule:    req.Schedule,
 		WebhookPath: req.WebhookPath,
 		Description: req.Description,
@@ -334,7 +352,7 @@ func (a *triggerServiceHTTPAdapter) UpdateTrigger(ctx context.Context, id uint, 
 				ID:          t.ID,
 				Type:        t.Type,
 				Title:       t.Title,
-				AgentID:     t.AgentID,
+				AgentID:     derefUint(t.AgentID),
 				AgentName:   t.Agent.Name,
 				Schedule:    t.Schedule,
 				WebhookPath: t.WebhookPath,
@@ -349,6 +367,43 @@ func (a *triggerServiceHTTPAdapter) UpdateTrigger(ctx context.Context, id uint, 
 		}
 	}
 	return nil, fmt.Errorf("trigger not found after update: %d", id)
+}
+
+func (a *triggerServiceHTTPAdapter) SetTriggerTarget(ctx context.Context, id uint, agentName string) (*deliveryhttp.TriggerResponse, error) {
+	var agent models.AgentModel
+	if err := a.db.WithContext(ctx).Where("name = ?", agentName).First(&agent).Error; err != nil {
+		return nil, pkgerrors.NotFound(fmt.Sprintf("agent not found: %s", agentName))
+	}
+	if err := a.isEntryAgent(ctx, agent.ID); err != nil {
+		return nil, err
+	}
+	if err := a.repo.SetAgentID(ctx, id, agent.ID); err != nil {
+		return nil, err
+	}
+	t, err := a.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	resp := &deliveryhttp.TriggerResponse{
+		ID:          t.ID,
+		Type:        t.Type,
+		Title:       t.Title,
+		AgentID:     derefUint(t.AgentID),
+		AgentName:   t.Agent.Name,
+		Schedule:    t.Schedule,
+		WebhookPath: t.WebhookPath,
+		Description: t.Description,
+		Enabled:     t.Enabled,
+		CreatedAt:   t.CreatedAt.Format(time.RFC3339),
+	}
+	if t.LastFiredAt != nil {
+		resp.LastFiredAt = t.LastFiredAt.Format(time.RFC3339)
+	}
+	return resp, nil
+}
+
+func (a *triggerServiceHTTPAdapter) ClearTriggerTarget(ctx context.Context, id uint) error {
+	return a.repo.ClearAgentID(ctx, id)
 }
 
 func (a *triggerServiceHTTPAdapter) DeleteTrigger(ctx context.Context, id uint) error {

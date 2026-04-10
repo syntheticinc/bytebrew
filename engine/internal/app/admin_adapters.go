@@ -198,7 +198,7 @@ func (a *adminTriggerRepoAdapter) Create(ctx context.Context, record *admintools
 	m := &models.TriggerModel{
 		Type:        record.Type,
 		Title:       record.Title,
-		AgentID:     agentID,
+		AgentID:     ptrUint(agentID),
 		Schedule:    record.Schedule,
 		WebhookPath: record.WebhookPath,
 		Description: record.Description,
@@ -215,7 +215,7 @@ func (a *adminTriggerRepoAdapter) Update(ctx context.Context, id uint, record *a
 	m := &models.TriggerModel{
 		Type:        record.Type,
 		Title:       record.Title,
-		AgentID:     record.AgentID,
+		AgentID:     ptrUint(record.AgentID),
 		Schedule:    record.Schedule,
 		WebhookPath: record.WebhookPath,
 		Description: record.Description,
@@ -226,7 +226,7 @@ func (a *adminTriggerRepoAdapter) Update(ctx context.Context, id uint, record *a
 		if err != nil {
 			return fmt.Errorf("resolve agent for trigger update: %w", err)
 		}
-		m.AgentID = agentID
+		m.AgentID = ptrUint(agentID)
 	}
 	return a.repo.Update(ctx, id, m)
 }
@@ -245,7 +245,7 @@ func toAdminTriggerRecord(t models.TriggerModel) admintools.TriggerRecord {
 		Type:        t.Type,
 		Title:       t.Title,
 		AgentName:   agentName,
-		AgentID:     t.AgentID,
+		AgentID:     derefUint(t.AgentID),
 		Schedule:    t.Schedule,
 		WebhookPath: t.WebhookPath,
 		Description: t.Description,

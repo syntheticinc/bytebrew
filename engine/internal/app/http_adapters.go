@@ -916,7 +916,7 @@ func (a *configImportExportHTTPAdapter) importTriggers(tx *gorm.DB, items []trig
 		newTrigger := models.TriggerModel{
 			Type:        t.Type,
 			Title:       t.Title,
-			AgentID:     agent.ID,
+			AgentID:     ptrUint(agent.ID),
 			Schedule:    t.Schedule,
 			WebhookPath: t.WebhookPath,
 			Description: t.Description,

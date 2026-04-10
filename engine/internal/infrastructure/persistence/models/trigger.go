@@ -7,7 +7,7 @@ type TriggerModel struct {
 	ID                uint       `gorm:"primaryKey"`
 	Type              string     `gorm:"type:varchar(10);not null;index"`
 	Title             string     `gorm:"type:varchar(255);not null"`
-	AgentID           uint       `gorm:"not null;index"`
+	AgentID           *uint      `gorm:"index"`
 	Schedule          string     `gorm:"type:varchar(100)"`
 	WebhookPath       string     `gorm:"type:varchar(500)"`
 	Description       string     `gorm:"type:text"`

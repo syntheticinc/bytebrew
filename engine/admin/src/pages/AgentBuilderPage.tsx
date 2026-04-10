@@ -305,12 +305,9 @@ function AgentBuilderInner() {
         }
 
         // Build trigger nodes + edges.
-        // In schema mode, only show triggers whose target agent is in this schema —
-        // this prevents disconnected trigger nodes (trigger exists but agent not in schema).
+        // Always show all triggers on canvas — a trigger can exist without a connected agent.
+        // The canvas edge is the routing config: drawing it sets target, deleting it clears it.
         for (const trigger of triggers) {
-          if (schema && (!trigger.agent_name || !agentNames.has(trigger.agent_name))) {
-            continue;
-          }
           const nodeId = `trigger-${trigger.id}`;
           const triggerNode = makeTriggerNode(
             trigger,
