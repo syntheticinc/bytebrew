@@ -19,6 +19,9 @@ type mockGenericSpawner struct {
 	waitResult WaitResult
 	waitErr    error
 
+	waitForAgentResult AgentCompletionInfo
+	waitForAgentErr    error
+
 	stopErr     error
 	stoppedID   string
 	hasBlocking bool
@@ -27,6 +30,13 @@ type mockGenericSpawner struct {
 func (m *mockGenericSpawner) SpawnAgent(ctx context.Context, params SpawnParams) (string, error) {
 	m.spawnParams = params
 	return m.spawnResult, m.spawnErr
+}
+
+func (m *mockGenericSpawner) WaitForAgent(ctx context.Context, sessionID, agentID string) (AgentCompletionInfo, error) {
+	if m.waitForAgentErr != nil {
+		return AgentCompletionInfo{}, m.waitForAgentErr
+	}
+	return m.waitForAgentResult, nil
 }
 
 func (m *mockGenericSpawner) WaitForAllSessionAgents(ctx context.Context, sessionID string) (WaitResult, error) {
@@ -71,59 +81,87 @@ func TestSpawnTool_Info(t *testing.T) {
 }
 
 func TestSpawnTool_Spawn(t *testing.T) {
-	tests := []struct {
-		name        string
-		args        string
-		spawnResult string
-		spawnErr    error
-		wantResult  string
-		wantErr     bool
-		wantErrMsg  string
-	}{
-		{
-			name:        "successful spawn",
-			args:        `{"action":"spawn","description":"implement feature X"}`,
+	t.Run("successful spawn returns agent result", func(t *testing.T) {
+		spawner := &mockGenericSpawner{
 			spawnResult: "agent-123",
-			wantResult:  "Agent spawned with ID: agent-123",
-		},
-		{
-			name:       "spawn without description",
-			args:       `{"action":"spawn"}`,
-			wantErr:    true,
-			wantErrMsg: "description required",
-		},
-		{
-			name:       "spawn error from spawner",
-			args:       `{"action":"spawn","description":"do stuff"}`,
-			spawnErr:   fmt.Errorf("max agents reached"),
-			wantErr:    true,
-			wantErrMsg: "spawn agent",
-		},
-	}
+			waitForAgentResult: AgentCompletionInfo{
+				AgentID: "agent-123",
+				Status:  "completed",
+				Result:  "Feature X implemented",
+			},
+		}
+		inspector := &mockGenericInspector{}
+		st := NewSpawnTool("coder", "sess-1", spawner, inspector)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			spawner := &mockGenericSpawner{
-				spawnResult: tt.spawnResult,
-				spawnErr:    tt.spawnErr,
-			}
-			inspector := &mockGenericInspector{}
-			st := NewSpawnTool("coder", "sess-1", spawner, inspector)
+		result, err := st.InvokableRun(context.Background(), `{"action":"spawn","description":"implement feature X"}`)
+		require.NoError(t, err)
+		assert.Contains(t, result, "coder")
+		assert.Contains(t, result, "completed")
+		assert.Contains(t, result, "Feature X implemented")
+	})
 
-			result, err := st.InvokableRun(context.Background(), tt.args)
-			if tt.wantErr {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.wantErrMsg)
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, tt.wantResult, result)
-		})
-	}
+	t.Run("spawn without description", func(t *testing.T) {
+		spawner := &mockGenericSpawner{}
+		st := NewSpawnTool("coder", "sess-1", spawner, &mockGenericInspector{})
+
+		_, err := st.InvokableRun(context.Background(), `{"action":"spawn"}`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "description required")
+	})
+
+	t.Run("spawn error from spawner", func(t *testing.T) {
+		spawner := &mockGenericSpawner{
+			spawnErr: fmt.Errorf("max agents reached"),
+		}
+		st := NewSpawnTool("coder", "sess-1", spawner, &mockGenericInspector{})
+
+		_, err := st.InvokableRun(context.Background(), `{"action":"spawn","description":"do stuff"}`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "spawn agent")
+	})
+
+	t.Run("blocking spawn child fails", func(t *testing.T) {
+		spawner := &mockGenericSpawner{
+			spawnResult: "agent-456",
+			waitForAgentResult: AgentCompletionInfo{
+				AgentID: "agent-456",
+				Status:  "failed",
+				Error:   "out of memory",
+			},
+		}
+		st := NewSpawnTool("coder", "sess-1", spawner, &mockGenericInspector{})
+
+		result, err := st.InvokableRun(context.Background(), `{"action":"spawn","description":"do work"}`)
+		require.NoError(t, err)
+		assert.Contains(t, result, "failed")
+		assert.Contains(t, result, "out of memory")
+	})
+
+	t.Run("blocking spawn no output", func(t *testing.T) {
+		spawner := &mockGenericSpawner{
+			spawnResult: "agent-789",
+			waitForAgentResult: AgentCompletionInfo{
+				AgentID: "agent-789",
+				Status:  "completed",
+			},
+		}
+		st := NewSpawnTool("coder", "sess-1", spawner, &mockGenericInspector{})
+
+		result, err := st.InvokableRun(context.Background(), `{"action":"spawn","description":"do work"}`)
+		require.NoError(t, err)
+		assert.Contains(t, result, "completed (no output)")
+	})
 }
 
 func TestSpawnTool_SpawnPassesCorrectParams(t *testing.T) {
-	spawner := &mockGenericSpawner{spawnResult: "agent-1"}
+	spawner := &mockGenericSpawner{
+		spawnResult: "agent-1",
+		waitForAgentResult: AgentCompletionInfo{
+			AgentID: "agent-1",
+			Status:  "completed",
+			Result:  "done",
+		},
+	}
 	inspector := &mockGenericInspector{}
 	st := NewSpawnTool("reviewer", "sess-42", spawner, inspector)
 
@@ -137,11 +175,13 @@ func TestSpawnTool_SpawnPassesCorrectParams(t *testing.T) {
 }
 
 func TestSpawnTool_Wait(t *testing.T) {
-	summaries := []AgentSummary{
-		{AgentID: "a1", AgentName: "coder", Summary: "done", Status: "completed"},
-	}
 	spawner := &mockGenericSpawner{
-		waitResult: WaitResult{Summaries: summaries},
+		waitResult: WaitResult{
+			AllDone: true,
+			Results: map[string]AgentCompletionInfo{
+				"a1": {AgentID: "a1", Status: "completed", Result: "done"},
+			},
+		},
 	}
 	inspector := &mockGenericInspector{}
 	st := NewSpawnTool("coder", "sess-1", spawner, inspector)
@@ -153,6 +193,8 @@ func TestSpawnTool_Wait(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(result), &got))
 	assert.Len(t, got, 1)
 	assert.Equal(t, "a1", got[0].AgentID)
+	assert.Equal(t, "done", got[0].Summary)
+	assert.Equal(t, "completed", got[0].Status)
 }
 
 func TestSpawnTool_WaitError(t *testing.T) {

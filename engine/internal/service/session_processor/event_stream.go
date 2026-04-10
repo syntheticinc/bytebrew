@@ -211,11 +211,16 @@ func (s *EventStream) convertEvent(event *domain.AgentEvent) *pb.SessionEvent {
 		if id, ok := event.Metadata["call_id"].(string); ok {
 			callID = id
 		}
+		toolName := ""
+		if name, ok := event.Metadata["tool_name"].(string); ok {
+			toolName = name
+		}
 		return &pb.SessionEvent{
 			Type:     pb.SessionEventType_SESSION_EVENT_ASK_USER,
 			Content:  question,
 			Question: question,
 			CallId:   callID,
+			ToolName: toolName,
 			AgentId:  agentID,
 		}
 

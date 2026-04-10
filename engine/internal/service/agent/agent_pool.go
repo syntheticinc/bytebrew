@@ -88,6 +88,17 @@ func (a *RunningAgent) snapshot() AgentSnapshot {
 	}
 }
 
+// toCompletionInfo converts an AgentSnapshot to AgentCompletionInfo.
+func (s AgentSnapshot) toCompletionInfo() AgentCompletionInfo {
+	return AgentCompletionInfo{
+		AgentID:   s.ID,
+		SubtaskID: s.SubtaskID,
+		Status:    s.Status,
+		Result:    s.Result,
+		Error:     s.Error,
+	}
+}
+
 // signalCompletion signals that the agent has reached a terminal state.
 // Safe to call multiple times (uses sync.Once). Nil-safe if completionCh not initialized.
 func (a *RunningAgent) signalCompletion() {
@@ -183,10 +194,12 @@ type AgentPool struct {
 	sessionDirName        string                        // shared session dir from Supervisor for log co-location
 	contextReminders      []react.ContextReminderProvider
 	// Engine support (required for code agent execution)
-	engine       AgentEngine      // Engine for executing code agents
-	flowProvider FlowProvider     // for getting coder flow
-	toolResolver ToolResolver     // for resolving tool names
-	toolDeps     ToolDepsProvider // for creating tool dependencies
+	engine             AgentEngine          // Engine for executing code agents
+	flowProvider       FlowProvider         // for getting coder flow
+	toolResolver       ToolResolver         // for resolving tool names
+	toolDeps           ToolDepsProvider     // for creating tool dependencies
+	modelCache         AgentModelCache      // for resolving DB-configured models
+	agentModelResolver AgentModelIDResolver // for resolving agent → model ID
 	// Max concurrent agents (0 = no limit)
 	maxConcurrent int
 	// Interrupt mechanism for blocking spawns (delegated to InterruptManager)
@@ -255,12 +268,14 @@ func (p *AgentPool) SetContextReminders(reminders []react.ContextReminderProvide
 }
 
 // SetEngine sets the Engine and related dependencies for new execution path
-func (p *AgentPool) SetEngine(engine AgentEngine, flowProvider FlowProvider, toolResolver ToolResolver, toolDeps ToolDepsProvider) {
+func (p *AgentPool) SetEngine(engine AgentEngine, flowProvider FlowProvider, toolResolver ToolResolver, toolDeps ToolDepsProvider, modelCache AgentModelCache, agentModelResolver AgentModelIDResolver) {
 	p.mu.Lock()
 	p.engine = engine
 	p.flowProvider = flowProvider
 	p.toolResolver = toolResolver
 	p.toolDeps = toolDeps
+	p.modelCache = modelCache
+	p.agentModelResolver = agentModelResolver
 	p.mu.Unlock()
 }
 
@@ -813,6 +828,37 @@ func (p *AgentPool) buildResults(sessionID string) map[string]AgentCompletionInf
 		}
 	}
 	return results
+}
+
+// WaitForAgent waits for a specific agent to complete.
+// Returns immediately if agent not found (already completed or unknown).
+func (p *AgentPool) WaitForAgent(ctx context.Context, sessionID, agentID string) (AgentCompletionInfo, error) {
+	p.mu.RLock()
+	agent, ok := p.agents[agentID]
+	p.mu.RUnlock()
+
+	if !ok {
+		// Agent not found — could have completed and been cleaned up
+		results := p.buildResults(sessionID)
+		if info, found := results[agentID]; found {
+			return info, nil
+		}
+		return AgentCompletionInfo{AgentID: agentID, Status: "not_found"}, nil
+	}
+
+	ch := agent.completionCh
+	select {
+	case <-ch:
+		p.mu.RLock()
+		a, ok := p.agents[agentID]
+		p.mu.RUnlock()
+		if !ok {
+			return AgentCompletionInfo{AgentID: agentID, Status: "not_found"}, nil
+		}
+		return a.snapshot().toCompletionInfo(), nil
+	case <-ctx.Done():
+		return AgentCompletionInfo{}, ctx.Err()
+	}
 }
 
 // getRunningAgentIDs returns IDs of running agents in session

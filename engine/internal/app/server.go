@@ -1142,6 +1142,7 @@ func Run(sc ServerConfig) error {
 			components.AgentPool.SetEngine(
 				components.Engine, agentRegistry,
 				components.AgentToolResolver, components.ToolDepsProvider,
+				components.ModelCache, agentRegistry,
 			)
 			components.AgentPool.SetModelResolver(agentRegistry, components.ModelCache)
 		}
