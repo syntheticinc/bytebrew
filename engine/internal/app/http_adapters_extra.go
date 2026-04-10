@@ -232,6 +232,26 @@ type triggerServiceHTTPAdapter struct {
 	db   *gorm.DB
 }
 
+func triggerModelToResponse(t models.TriggerModel) deliveryhttp.TriggerResponse {
+	resp := deliveryhttp.TriggerResponse{
+		ID:          t.ID,
+		Type:        t.Type,
+		Title:       t.Title,
+		AgentID:     derefUint(t.AgentID),
+		AgentName:   t.Agent.Name,
+		SchemaID:    t.SchemaID,
+		Schedule:    t.Schedule,
+		WebhookPath: t.WebhookPath,
+		Description: t.Description,
+		Enabled:     t.Enabled,
+		CreatedAt:   t.CreatedAt.Format(time.RFC3339),
+	}
+	if t.LastFiredAt != nil {
+		resp.LastFiredAt = t.LastFiredAt.Format(time.RFC3339)
+	}
+	return resp
+}
+
 func (a *triggerServiceHTTPAdapter) ListTriggers(ctx context.Context) ([]deliveryhttp.TriggerResponse, error) {
 	triggers, err := a.repo.List(ctx)
 	if err != nil {
@@ -239,22 +259,19 @@ func (a *triggerServiceHTTPAdapter) ListTriggers(ctx context.Context) ([]deliver
 	}
 	result := make([]deliveryhttp.TriggerResponse, 0, len(triggers))
 	for _, t := range triggers {
-		resp := deliveryhttp.TriggerResponse{
-			ID:          t.ID,
-			Type:        t.Type,
-			Title:       t.Title,
-			AgentID:     derefUint(t.AgentID),
-			AgentName:   t.Agent.Name,
-			Schedule:    t.Schedule,
-			WebhookPath: t.WebhookPath,
-			Description: t.Description,
-			Enabled:     t.Enabled,
-			CreatedAt:   t.CreatedAt.Format(time.RFC3339),
-		}
-		if t.LastFiredAt != nil {
-			resp.LastFiredAt = t.LastFiredAt.Format(time.RFC3339)
-		}
-		result = append(result, resp)
+		result = append(result, triggerModelToResponse(t))
+	}
+	return result, nil
+}
+
+func (a *triggerServiceHTTPAdapter) ListTriggersBySchema(ctx context.Context, schemaID uint) ([]deliveryhttp.TriggerResponse, error) {
+	triggers, err := a.repo.ListBySchemaID(ctx, schemaID)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]deliveryhttp.TriggerResponse, 0, len(triggers))
+	for _, t := range triggers {
+		result = append(result, triggerModelToResponse(t))
 	}
 	return result, nil
 }
@@ -299,6 +316,7 @@ func (a *triggerServiceHTTPAdapter) CreateTrigger(ctx context.Context, req deliv
 		Type:        req.Type,
 		Title:       req.Title,
 		AgentID:     ptrUint(req.AgentID),
+		SchemaID:    req.SchemaID,
 		Schedule:    req.Schedule,
 		WebhookPath: req.WebhookPath,
 		Description: req.Description,
@@ -310,17 +328,8 @@ func (a *triggerServiceHTTPAdapter) CreateTrigger(ctx context.Context, req deliv
 	if err := a.repo.Create(ctx, model); err != nil {
 		return nil, err
 	}
-	return &deliveryhttp.TriggerResponse{
-		ID:          model.ID,
-		Type:        model.Type,
-		Title:       model.Title,
-		AgentID:     derefUint(model.AgentID),
-		Schedule:    model.Schedule,
-		WebhookPath: model.WebhookPath,
-		Description: model.Description,
-		Enabled:     model.Enabled,
-		CreatedAt:   model.CreatedAt.Format(time.RFC3339),
-	}, nil
+	resp := triggerModelToResponse(*model)
+	return &resp, nil
 }
 
 func (a *triggerServiceHTTPAdapter) UpdateTrigger(ctx context.Context, id uint, req deliveryhttp.CreateTriggerRequest) (*deliveryhttp.TriggerResponse, error) {
@@ -342,31 +351,12 @@ func (a *triggerServiceHTTPAdapter) UpdateTrigger(ctx context.Context, id uint, 
 		return nil, err
 	}
 
-	triggers, err := a.repo.List(ctx)
+	t, err := a.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	for _, t := range triggers {
-		if t.ID == id {
-			resp := &deliveryhttp.TriggerResponse{
-				ID:          t.ID,
-				Type:        t.Type,
-				Title:       t.Title,
-				AgentID:     derefUint(t.AgentID),
-				AgentName:   t.Agent.Name,
-				Schedule:    t.Schedule,
-				WebhookPath: t.WebhookPath,
-				Description: t.Description,
-				Enabled:     t.Enabled,
-				CreatedAt:   t.CreatedAt.Format(time.RFC3339),
-			}
-			if t.LastFiredAt != nil {
-				resp.LastFiredAt = t.LastFiredAt.Format(time.RFC3339)
-			}
-			return resp, nil
-		}
-	}
-	return nil, fmt.Errorf("trigger not found after update: %d", id)
+	resp := triggerModelToResponse(*t)
+	return &resp, nil
 }
 
 func (a *triggerServiceHTTPAdapter) SetTriggerTarget(ctx context.Context, id uint, agentName string) (*deliveryhttp.TriggerResponse, error) {
@@ -384,22 +374,8 @@ func (a *triggerServiceHTTPAdapter) SetTriggerTarget(ctx context.Context, id uin
 	if err != nil {
 		return nil, err
 	}
-	resp := &deliveryhttp.TriggerResponse{
-		ID:          t.ID,
-		Type:        t.Type,
-		Title:       t.Title,
-		AgentID:     derefUint(t.AgentID),
-		AgentName:   t.Agent.Name,
-		Schedule:    t.Schedule,
-		WebhookPath: t.WebhookPath,
-		Description: t.Description,
-		Enabled:     t.Enabled,
-		CreatedAt:   t.CreatedAt.Format(time.RFC3339),
-	}
-	if t.LastFiredAt != nil {
-		resp.LastFiredAt = t.LastFiredAt.Format(time.RFC3339)
-	}
-	return resp, nil
+	resp := triggerModelToResponse(*t)
+	return &resp, nil
 }
 
 func (a *triggerServiceHTTPAdapter) ClearTriggerTarget(ctx context.Context, id uint) error {

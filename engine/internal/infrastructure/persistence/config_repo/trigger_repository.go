@@ -27,6 +27,15 @@ func (r *GORMTriggerRepository) List(ctx context.Context) ([]models.TriggerModel
 	return triggers, nil
 }
 
+// ListBySchemaID returns triggers scoped to a specific schema.
+func (r *GORMTriggerRepository) ListBySchemaID(ctx context.Context, schemaID uint) ([]models.TriggerModel, error) {
+	var triggers []models.TriggerModel
+	if err := r.db.WithContext(ctx).Preload("Agent").Where("schema_id = ?", schemaID).Order("created_at DESC").Find(&triggers).Error; err != nil {
+		return nil, fmt.Errorf("list triggers by schema %d: %w", schemaID, err)
+	}
+	return triggers, nil
+}
+
 // GetByID returns a single trigger model by ID with agent preloaded.
 func (r *GORMTriggerRepository) GetByID(ctx context.Context, id uint) (*models.TriggerModel, error) {
 	var trigger models.TriggerModel
@@ -45,14 +54,28 @@ func (r *GORMTriggerRepository) Create(ctx context.Context, model *models.Trigge
 }
 
 // Update updates a trigger model by ID.
+// SchemaID and IsSystem are omitted — they must not change via normal update.
 func (r *GORMTriggerRepository) Update(ctx context.Context, id uint, model *models.TriggerModel) error {
 	// Select("*") ensures zero-value fields (e.g. Enabled=false) are persisted.
-	result := r.db.WithContext(ctx).Model(&models.TriggerModel{}).Where("id = ?", id).Select("*").Omit("id", "created_at").Updates(model)
+	// Omit schema_id so normal updates never overwrite schema scoping.
+	result := r.db.WithContext(ctx).Model(&models.TriggerModel{}).Where("id = ?", id).Select("*").Omit("id", "created_at", "schema_id").Updates(model)
 	if result.Error != nil {
 		return fmt.Errorf("update trigger: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
 		return fmt.Errorf("trigger not found: %d", id)
+	}
+	return nil
+}
+
+// SetSchemaID assigns a trigger to a specific schema. Used for explicit reassignment.
+func (r *GORMTriggerRepository) SetSchemaID(ctx context.Context, triggerID uint, schemaID *uint) error {
+	result := r.db.WithContext(ctx).Model(&models.TriggerModel{}).Where("id = ?", triggerID).Update("schema_id", schemaID)
+	if result.Error != nil {
+		return fmt.Errorf("set trigger schema: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("trigger not found: %d", triggerID)
 	}
 	return nil
 }

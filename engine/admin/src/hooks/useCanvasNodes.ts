@@ -238,6 +238,7 @@ export function useCanvasNodes({
         title,
         webhook_path: webhookPath,
         enabled: true,
+        ...(currentSchemaId ? { schema_id: currentSchemaId } : {}),
       } as CreateTriggerRequest);
       const newNode = makeTriggerNode(created, pos);
       setNodes((nds) => [...nds, newNode]);
@@ -245,7 +246,7 @@ export function useCanvasNodes({
     } catch (err) {
       addToast(`Failed to create trigger: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
     }
-  }, [nodes, isPrototype, setNodes, addToast]);
+  }, [nodes, isPrototype, setNodes, addToast, currentSchemaId]);
 
   return {
     handleInstantAgentCreate,

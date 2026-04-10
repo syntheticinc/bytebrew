@@ -173,10 +173,11 @@ export interface PaginatedTaskResponse {
 
 export interface Trigger {
   id: number;
-  type: 'cron' | 'webhook';
+  type: 'cron' | 'webhook' | 'chat';
   title: string;
   agent_id: number;
   agent_name?: string;
+  schema_id?: number;
   schedule?: string;
   webhook_path?: string;
   description?: string;

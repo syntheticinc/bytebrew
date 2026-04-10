@@ -191,7 +191,6 @@ func (t *adminUpdateTriggerTool) InvokableRun(ctx context.Context, argsJSON stri
 		}
 		return fmt.Sprintf("[ERROR] Failed to get trigger: %v", err), nil
 	}
-
 	record := &TriggerRecord{
 		Type:        coalesce(args.Type, existing.Type),
 		Title:       coalesce(args.Title, existing.Title),

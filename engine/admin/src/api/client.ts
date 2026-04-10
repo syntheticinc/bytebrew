@@ -205,9 +205,10 @@ class APIClient {
   }
 
   // ---- Triggers ----
-  listTriggers() {
+  listTriggers(schemaId?: number) {
     if (this.isPrototype) return this.mock(MOCK_TRIGGERS);
-    return this.request<Trigger[]>('GET', '/triggers');
+    const q = schemaId != null ? `?schema_id=${schemaId}` : '';
+    return this.request<Trigger[]>('GET', `/triggers${q}`);
   }
   createTrigger(data: CreateTriggerRequest) {
     if (this.isPrototype) return this.mock({ id: Date.now(), ...data, created_at: new Date().toISOString() } as Trigger);

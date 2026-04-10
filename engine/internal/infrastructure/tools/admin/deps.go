@@ -118,6 +118,7 @@ type TriggerRecord struct {
 	Title       string
 	AgentName   string
 	AgentID     uint
+	SchemaID    *uint
 	Schedule    string
 	WebhookPath string
 	Description string

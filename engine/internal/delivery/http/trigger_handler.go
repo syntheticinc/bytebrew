@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -16,6 +17,7 @@ type TriggerResponse struct {
 	Title       string `json:"title"`
 	AgentID     uint   `json:"agent_id"`
 	AgentName   string `json:"agent_name,omitempty"`
+	SchemaID    *uint  `json:"schema_id,omitempty"`
 	Schedule    string `json:"schedule,omitempty"`
 	WebhookPath string `json:"webhook_path,omitempty"`
 	Description string `json:"description,omitempty"`
@@ -30,6 +32,7 @@ type CreateTriggerRequest struct {
 	Title       string `json:"title"`
 	AgentID     uint   `json:"agent_id"`
 	AgentName   string `json:"agent_name,omitempty"`
+	SchemaID    *uint  `json:"schema_id,omitempty"`
 	Schedule    string `json:"schedule,omitempty"`
 	WebhookPath string `json:"webhook_path,omitempty"`
 	Description string `json:"description,omitempty"`
@@ -39,6 +42,7 @@ type CreateTriggerRequest struct {
 // TriggerService provides trigger CRUD operations.
 type TriggerService interface {
 	ListTriggers(ctx context.Context) ([]TriggerResponse, error)
+	ListTriggersBySchema(ctx context.Context, schemaID uint) ([]TriggerResponse, error)
 	CreateTrigger(ctx context.Context, req CreateTriggerRequest) (*TriggerResponse, error)
 	UpdateTrigger(ctx context.Context, id uint, req CreateTriggerRequest) (*TriggerResponse, error)
 	DeleteTrigger(ctx context.Context, id uint) error
@@ -69,7 +73,24 @@ func (h *TriggerHandler) Routes() http.Handler {
 }
 
 // List handles GET /api/v1/triggers.
+// Optional query param: ?schema_id=N to filter by schema.
 func (h *TriggerHandler) List(w http.ResponseWriter, r *http.Request) {
+	if raw := r.URL.Query().Get("schema_id"); raw != "" {
+		id64, err := strconv.ParseUint(raw, 10, 64)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid schema_id")
+			return
+		}
+		schemaID := uint(id64)
+		triggers, err := h.service.ListTriggersBySchema(r.Context(), schemaID)
+		if err != nil {
+			writeDomainError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, triggers)
+		return
+	}
+
 	triggers, err := h.service.ListTriggers(r.Context())
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
@@ -117,7 +138,7 @@ func (h *TriggerHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.service.UpdateTrigger(r.Context(), id, req)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -132,7 +153,7 @@ func (h *TriggerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.service.DeleteTrigger(r.Context(), id); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

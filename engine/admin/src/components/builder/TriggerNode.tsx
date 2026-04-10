@@ -4,7 +4,7 @@ import type { NodeProps } from '@xyflow/react';
 export interface TriggerNodeData {
   id: number;
   title: string;
-  type: 'cron' | 'webhook';
+  type: 'cron' | 'webhook' | 'chat';
   schedule?: string;
   webhook_path?: string;
   enabled: boolean;
@@ -31,11 +31,20 @@ function WebhookIcon() {
   );
 }
 
+function ChatIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+    </svg>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function TriggerNode({ data, selected }: NodeProps) {
   const d = data as TriggerNodeData;
   const isCron = d.type === 'cron';
+  const isChat = d.type === 'chat';
 
   return (
     <div
@@ -54,8 +63,8 @@ export default function TriggerNode({ data, selected }: NodeProps) {
           selected ? 'border-purple-500/30' : 'border-purple-500/15'
         }`}
       >
-        <span className={isCron ? 'text-amber-400' : 'text-purple-400'}>
-          {isCron ? <CronIcon /> : <WebhookIcon />}
+        <span className={isCron ? 'text-amber-400' : isChat ? 'text-emerald-400' : 'text-purple-400'}>
+          {isCron ? <CronIcon /> : isChat ? <ChatIcon /> : <WebhookIcon />}
         </span>
         <span className="text-sm font-semibold text-brand-light truncate">{d.title.replace(/<[^>]*>/g, '')}</span>
       </div>
@@ -68,7 +77,9 @@ export default function TriggerNode({ data, selected }: NodeProps) {
             className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
               isCron
                 ? 'bg-amber-500/15 text-amber-400'
-                : 'bg-purple-500/15 text-purple-400'
+                : isChat
+                  ? 'bg-emerald-500/15 text-emerald-400'
+                  : 'bg-purple-500/15 text-purple-400'
             }`}
           >
             {d.type}
@@ -101,7 +112,7 @@ export default function TriggerNode({ data, selected }: NodeProps) {
         type="source"
         position={Position.Bottom}
         className="!w-2.5 !h-2.5 !border-brand-dark transition-colors hover:!bg-brand-accent"
-        style={{ background: isCron ? '#F59E0B' : '#A855F7' }}
+        style={{ background: isCron ? '#F59E0B' : isChat ? '#10B981' : '#A855F7' }}
       />
     </div>
   );

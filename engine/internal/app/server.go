@@ -770,6 +770,8 @@ func Run(sc ServerConfig) error {
 				r.Post("/api/v1/triggers", triggerHandler.Create)
 				r.Put("/api/v1/triggers/{id}", triggerHandler.Update)
 				r.Delete("/api/v1/triggers/{id}", triggerHandler.Delete)
+				r.Patch("/api/v1/triggers/{id}/target", triggerHandler.SetTarget)
+				r.Delete("/api/v1/triggers/{id}/target", triggerHandler.ClearTarget)
 			})
 
 			// Schemas (with gates and edges) — schemaRepo already created above for agent cross-refs

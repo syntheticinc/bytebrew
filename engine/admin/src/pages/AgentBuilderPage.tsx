@@ -233,10 +233,9 @@ function AgentBuilderInner() {
 
     // Resolve current schema first, then load its agents
     const loadData = async (): Promise<{ details: AgentDetail[]; models: Model[]; triggers: Trigger[]; schema: Schema | null }> => {
-      const [allSchemas, models, triggers] = await Promise.all([
+      const [allSchemas, models] = await Promise.all([
         schemaName && !isPrototype ? api.listSchemas() : Promise.resolve([] as Schema[]),
         api.listModels(),
-        api.listTriggers().catch(() => [] as Trigger[]),
       ]);
 
       let schema: Schema | null = null;
@@ -246,6 +245,9 @@ function AgentBuilderInner() {
           throw new Error(`Schema "${schemaName}" not found`);
         }
       }
+
+      // Load triggers scoped to current schema (or all if no schema).
+      const triggers = await api.listTriggers(schema?.id).catch(() => [] as Trigger[]);
 
       // Load agents: schema-scoped in production, all agents as fallback
       let agentNames: string[];
@@ -297,8 +299,7 @@ function AgentBuilderInner() {
           }
         }
 
-        // Build trigger nodes + edges.
-        // Always show all triggers on canvas — a trigger can exist without a connected agent.
+        // Build trigger nodes + edges (scoped to current schema).
         // The canvas edge is the routing config: drawing it sets target, deleting it clears it.
         for (const trigger of triggers) {
           const nodeId = `trigger-${trigger.id}`;

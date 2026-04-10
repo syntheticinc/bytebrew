@@ -246,6 +246,7 @@ func toAdminTriggerRecord(t models.TriggerModel) admintools.TriggerRecord {
 		Title:       t.Title,
 		AgentName:   agentName,
 		AgentID:     derefUint(t.AgentID),
+		SchemaID:    t.SchemaID,
 		Schedule:    t.Schedule,
 		WebhookPath: t.WebhookPath,
 		Description: t.Description,
@@ -579,7 +580,7 @@ type builderAssistantRestorerAdapter struct {
 }
 
 func (a *builderAssistantRestorerAdapter) RestoreBuilderAssistant(ctx context.Context) error {
-	return restoreBuilderAssistant(ctx, a.db)
+	return restoreBuilderSchema(ctx, a.db)
 }
 
 // --- Helpers ---

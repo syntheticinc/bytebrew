@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 )
 
 const builderAssistantName = "builder-assistant"
@@ -191,7 +192,9 @@ func seedBuilderSchema(ctx context.Context, db *gorm.DB) {
 	}
 	for _, s := range schemas {
 		if s.Name == builderSchemaName {
-			return // already exists
+			// Schema exists — still ensure chat trigger is seeded (upgrade path).
+			seedBuilderChatTrigger(ctx, db, s.ID)
+			return
 		}
 	}
 
@@ -209,7 +212,43 @@ func seedBuilderSchema(ctx context.Context, db *gorm.DB) {
 		slog.WarnContext(ctx, "seed builder schema: add agent", "error", err)
 	}
 
+	seedBuilderChatTrigger(ctx, db, record.ID)
+
 	slog.InfoContext(ctx, "seeded builder schema")
+}
+
+// seedBuilderChatTrigger creates a system chat trigger for builder-assistant in builder-schema.
+// Idempotent — skips if a system chat trigger already exists for this agent.
+func seedBuilderChatTrigger(ctx context.Context, db *gorm.DB, schemaID uint) {
+	// Find builder-assistant agent ID.
+	var agent models.AgentModel
+	if err := db.WithContext(ctx).Where("name = ?", builderAssistantName).First(&agent).Error; err != nil {
+		slog.WarnContext(ctx, "seed builder chat trigger: agent not found", "error", err)
+		return
+	}
+
+	// Check if chat trigger already exists for this agent in this schema.
+	var count int64
+	db.WithContext(ctx).Model(&models.TriggerModel{}).
+		Where("agent_id = ? AND type = ? AND schema_id = ?", agent.ID, models.TriggerTypeChat, schemaID).
+		Count(&count)
+	if count > 0 {
+		return // already exists
+	}
+
+	trigger := &models.TriggerModel{
+		Type:     models.TriggerTypeChat,
+		Title:    "Builder Assistant Chat",
+		AgentID:  &agent.ID,
+		SchemaID: &schemaID,
+		Enabled:  true,
+	}
+	if err := db.WithContext(ctx).Create(trigger).Error; err != nil {
+		slog.ErrorContext(ctx, "seed builder chat trigger: create", "error", err)
+		return
+	}
+
+	slog.InfoContext(ctx, "seeded builder-assistant chat trigger", "trigger_id", trigger.ID)
 }
 
 // restoreBuilderAssistant resets the builder-assistant agent to factory defaults.
@@ -245,5 +284,60 @@ func restoreBuilderAssistant(ctx context.Context, db *gorm.DB) error {
 		return fmt.Errorf("update builder-assistant: %w", updateErr)
 	}
 	slog.InfoContext(ctx, "restored builder-assistant (updated to factory defaults)")
+	return nil
+}
+
+// restoreBuilderSchema resets the entire builder-schema to factory defaults:
+// agent (settings, tools, prompt), schema membership, chat trigger, edges.
+func restoreBuilderSchema(ctx context.Context, db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("database not available")
+	}
+
+	// 1. Restore builder-assistant agent to factory defaults.
+	if err := restoreBuilderAssistant(ctx, db); err != nil {
+		return fmt.Errorf("restore agent: %w", err)
+	}
+
+	schemaRepo := config_repo.NewGORMSchemaRepository(db)
+
+	// 2. Ensure builder-schema exists.
+	schemas, err := schemaRepo.List(ctx)
+	if err != nil {
+		return fmt.Errorf("list schemas: %w", err)
+	}
+	var schemaID uint
+	for _, s := range schemas {
+		if s.Name == builderSchemaName {
+			schemaID = s.ID
+			break
+		}
+	}
+	if schemaID == 0 {
+		record := &config_repo.SchemaRecord{
+			Name:        builderSchemaName,
+			Description: "System schema for the AI builder assistant",
+			IsSystem:    true,
+		}
+		if err := schemaRepo.Create(ctx, record); err != nil {
+			return fmt.Errorf("create schema: %w", err)
+		}
+		schemaID = record.ID
+	}
+
+	// 3. Ensure builder-assistant is in the schema.
+	if err := schemaRepo.AddAgent(ctx, schemaID, builderAssistantName); err != nil {
+		// Ignore "already exists" errors.
+		slog.DebugContext(ctx, "add agent to schema (may already exist)", "error", err)
+	}
+
+	// 4. Remove stale triggers for this schema and re-create the chat trigger.
+	db.WithContext(ctx).Where("schema_id = ?", schemaID).Delete(&models.TriggerModel{})
+	seedBuilderChatTrigger(ctx, db, schemaID)
+
+	// 5. Remove stale edges for this schema (builder-assistant has no spawn targets by default).
+	db.WithContext(ctx).Where("schema_id = ?", schemaID).Delete(&models.EdgeModel{})
+
+	slog.InfoContext(ctx, "restored builder-schema to factory defaults")
 	return nil
 }
