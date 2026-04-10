@@ -71,10 +71,15 @@ export default function TestFlowTab() {
     return result;
   }, []);
 
+  const testflowPersistenceKey = selectedAgent && selectedSchema
+    ? `bb_testflow_${selectedSchema}_${selectedAgent}`
+    : undefined;
   const sseChat = useSSEChat({
     endpoint: selectedAgent ? `/api/v1/agents/${encodeURIComponent(selectedAgent)}/chat` : '',
     agentName: selectedAgent,
     getHeaders,
+    persistenceKey: testflowPersistenceKey,
+    fetchMessages: (sid) => api.getSessionMessages(sid),
   });
 
   // Use either prototype or production messages
@@ -277,11 +282,18 @@ export default function TestFlowTab() {
 
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto min-h-0 px-3 py-2 space-y-2">
-        {messages.length === 0 && (
+        {sseChat.isRestoring && messages.length === 0 ? (
+          <div className="flex items-center gap-2 text-[11px] text-brand-shade3 font-mono py-4 justify-center">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+              <path d="M21 12a9 9 0 11-6.219-8.56" />
+            </svg>
+            Restoring session...
+          </div>
+        ) : messages.length === 0 ? (
           <p className="text-[11px] text-brand-shade3/50 text-center mt-4">
             Send a message to test the agent flow.
           </p>
-        )}
+        ) : null}
 
         {messages.map((msg) => (
           <div key={msg.id} className={msg.role === 'user' ? 'flex justify-end' : ''}>

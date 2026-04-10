@@ -5,6 +5,7 @@ import { useSSEChat } from '../hooks/useSSEChat';
 import { dispatchAdminChanged } from '../hooks/useAdminRefresh';
 import SchemaSelector from './SchemaSelector';
 import TestFlowTab from './TestFlowTab';
+import { api } from '../api/client';
 
 const CURSOR = <span className="inline-block w-1.5 h-3 bg-brand-accent ml-0.5 animate-pulse align-middle" />;
 
@@ -89,10 +90,13 @@ export default function BottomPanel() {
   // M-01: Pass schema context on ALL pages — lockedSchema (canvas) or selectedSchema (other pages)
   const effectiveSchema = lockedSchema ?? selectedSchema ?? undefined;
 
-  const { messages, sendMessage, isStreaming, resetSession } = useSSEChat({
+  const assistantPersistenceKey = effectiveSchema ? `bb_assistant_${effectiveSchema}` : undefined;
+  const { messages, sendMessage, isStreaming, isRestoring, resetSession } = useSSEChat({
     endpoint: `/api/v1/admin/assistant/chat`,
     agentName: ASSISTANT_AGENT,
     schemaContext: effectiveSchema,
+    persistenceKey: assistantPersistenceKey,
+    fetchMessages: (sid) => api.getSessionMessages(sid),
     onToolResult: (tool) => {
       if (tool.startsWith('admin_')) {
         dispatchAdminChanged(tool);
@@ -259,7 +263,14 @@ export default function BottomPanel() {
         <div className="flex-1 min-h-0 flex flex-col">
           {tab === 'assistant' && (
             <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-2">
-              {messages.length === 0 ? (
+              {isRestoring && messages.length === 0 ? (
+                <div className="flex items-center gap-2 text-xs text-brand-shade3 font-mono py-4 justify-center">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+                    <path d="M21 12a9 9 0 11-6.219-8.56" />
+                  </svg>
+                  Restoring session...
+                </div>
+              ) : messages.length === 0 ? (
                 <div className="flex flex-col gap-2 text-xs text-brand-shade2 font-mono">
                   {/* cos-01: Removed redundant "— {schema}" — schema shown in selector */}
                   <div className="flex items-center gap-2 text-brand-shade3">

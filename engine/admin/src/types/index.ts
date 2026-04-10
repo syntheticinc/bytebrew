@@ -572,3 +572,15 @@ export interface KnowledgeStatus {
   indexed_files: number;
   status: 'ready' | 'indexing' | 'empty';
 }
+
+// ============================================================================
+// Session message types (for chat history restore)
+// ============================================================================
+
+export interface MessageResponse {
+  id: string;
+  role: 'user' | 'assistant' | 'tool' | 'system';
+  content: string;
+  tool_name?: string;
+  created_at: string;
+}

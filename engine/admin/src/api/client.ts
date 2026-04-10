@@ -36,6 +36,7 @@ import type {
   KnowledgeFile,
   KnowledgeStatus,
   CircuitBreakerState,
+  MessageResponse,
 } from '../types';
 import {
   MOCK_HEALTH,
@@ -404,6 +405,11 @@ class APIClient {
     if (params?.to) qs.set('to', params.to);
     const q = qs.toString() ? '?' + qs.toString() : '';
     return this.request<PaginatedSessions>('GET', `/sessions${q}`);
+  }
+
+  getSessionMessages(sessionId: string): Promise<MessageResponse[]> {
+    if (this.isPrototype) return this.mock<MessageResponse[]>([]);
+    return this.request<MessageResponse[]>('GET', `/sessions/${sessionId}/messages`);
   }
 
   getSessionTrace(sessionId: string): Promise<SessionTrace> {

@@ -1,5 +1,6 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { parseSSELine, type ToolCall } from '../lib/sse';
+import type { MessageResponse } from '../types';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -17,12 +18,17 @@ export interface UseSSEChatConfig {
   schemaContext?: string;
   getHeaders?: () => Record<string, string>;
   onToolResult?: (tool: string, output: string) => void;
+  /** When set, sessionId is persisted to localStorage under this key. */
+  persistenceKey?: string;
+  /** Injected fetch function for session message restore (keeps hook api-import-free). */
+  fetchMessages?: (sessionId: string) => Promise<MessageResponse[]>;
 }
 
 export interface UseSSEChatReturn {
   messages: SSEMessage[];
   sendMessage: (text: string) => Promise<void>;
   isStreaming: boolean;
+  isRestoring: boolean;
   error: string | null;
   sessionId: string;
   resetSession: () => void;
@@ -38,26 +44,107 @@ function stripThinkTags(raw: string): string {
   return cleaned.replace(/^\s+/, '');
 }
 
+/** Safe localStorage get — returns null on SecurityError (Safari ITP / iframe). */
+function safeGetItem(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
+/** Safe localStorage set — no-op on SecurityError. */
+function safeSetItem(key: string, value: string): void {
+  try { localStorage.setItem(key, value); } catch { /* no-op */ }
+}
+
+/** Safe localStorage remove — no-op on SecurityError. */
+function safeRemoveItem(key: string): void {
+  try { localStorage.removeItem(key); } catch { /* no-op */ }
+}
+
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
 export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
-  const { endpoint, agentName, schemaContext, getHeaders, onToolResult } = config;
+  const { endpoint, agentName, schemaContext, getHeaders, onToolResult, persistenceKey, fetchMessages } = config;
 
   const [messages, setMessages] = useState<SSEMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sessionId, setSessionId] = useState('');
+  const [sessionId, setSessionId] = useState(() =>
+    persistenceKey ? (safeGetItem(persistenceKey) ?? '') : '',
+  );
 
-  const sessionIdRef = useRef<string>('');
+  const sessionIdRef = useRef(sessionId);
   const abortRef = useRef<AbortController | null>(null);
+  const restoreAbortRef = useRef<AbortController | null>(null);
+
+  // ── Restore session from backend on mount and persistenceKey change ──────
+  useEffect(() => {
+    if (!persistenceKey || !fetchMessages) return;
+
+    // Abort any active SSE stream on key change
+    abortRef.current?.abort();
+    setIsStreaming(false);
+
+    // Abort any previous restore fetch
+    restoreAbortRef.current?.abort();
+
+    const storedSid = safeGetItem(persistenceKey);
+    if (!storedSid) {
+      // No stored session — clear state, show empty
+      sessionIdRef.current = '';
+      setSessionId('');
+      setMessages([]);
+      return;
+    }
+
+    sessionIdRef.current = storedSid;
+    setSessionId(storedSid);
+
+    const controller = new AbortController();
+    restoreAbortRef.current = controller;
+
+    setIsRestoring(true);
+    fetchMessages(storedSid)
+      .then((raw) => {
+        if (controller.signal.aborted) return;
+        const mapped: SSEMessage[] = raw
+          .filter((m) => m.role === 'user' || m.role === 'assistant')
+          .map((m) => ({
+            id: m.id || crypto.randomUUID(),
+            role: m.role as 'user' | 'assistant',
+            content: m.content,
+            streaming: false,
+          }));
+        setMessages(mapped);
+      })
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        // Non-abort error: session expired/deleted — clear key, start fresh
+        if ((err as Error).name !== 'AbortError') {
+          safeRemoveItem(persistenceKey);
+          sessionIdRef.current = '';
+          setSessionId('');
+          setMessages([]);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setIsRestoring(false);
+      });
+
+    return () => {
+      controller.abort();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persistenceKey]);
 
   const resetSession = useCallback(() => {
     sessionIdRef.current = '';
     setSessionId('');
     setMessages([]);
     abortRef.current?.abort();
+    restoreAbortRef.current?.abort();
     setError(null);
-  }, []);
+    if (persistenceKey) safeRemoveItem(persistenceKey);
+  }, [persistenceKey]);
 
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort();
@@ -196,6 +283,7 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
               if (sid) {
                 sessionIdRef.current = sid;
                 setSessionId(sid);
+                if (persistenceKey) safeSetItem(persistenceKey, sid);
               }
               updateAssistant({ streaming: false });
               break;
@@ -225,7 +313,7 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
       setIsStreaming(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isStreaming, endpoint, agentName, getHeaders]);
+  }, [isStreaming, endpoint, agentName, getHeaders, persistenceKey]);
 
-  return { messages, sendMessage, isStreaming, error, sessionId, resetSession, stopStreaming };
+  return { messages, sendMessage, isStreaming, isRestoring, error, sessionId, resetSession, stopStreaming };
 }
