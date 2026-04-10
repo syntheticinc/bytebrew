@@ -30,7 +30,8 @@ type LocalClientOperationsProxy struct {
 	chunkStore     *indexing.ChunkStore
 	embedder       *indexing.EmbeddingsClient
 	lspService     *lsp.Service
-	askUserHandler AskUserHandler // if set, overrides auto-answer behavior
+	askUserHandler   AskUserHandler       // if set, overrides auto-answer behavior
+	confirmRequester ConfirmationRequester // confirmation handler for confirm_before tools
 }
 
 // LocalProxyOption configures optional dependencies for LocalClientOperationsProxy.
@@ -55,6 +56,16 @@ func WithLspService(svc *lsp.Service) LocalProxyOption {
 // that sends questions to the client and waits for responses.
 func WithAskUserHandler(h AskUserHandler) LocalProxyOption {
 	return func(p *LocalClientOperationsProxy) { p.askUserHandler = h }
+}
+
+// WithConfirmRequester sets the confirmation requester for confirm_before tools.
+func WithConfirmRequester(r ConfirmationRequester) LocalProxyOption {
+	return func(p *LocalClientOperationsProxy) { p.confirmRequester = r }
+}
+
+// ConfirmRequester returns the confirmation requester, if set.
+func (p *LocalClientOperationsProxy) ConfirmRequester() ConfirmationRequester {
+	return p.confirmRequester
 }
 
 // NewLocalClientOperationsProxy creates a proxy that operates on the local filesystem.

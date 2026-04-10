@@ -185,6 +185,13 @@ func (e *EngineAdapter) ExecuteTurn(
 	// Set schema scope for memory tools (0 = no explicit schema context)
 	toolDeps.SchemaID = strconv.FormatUint(uint64(e.schemaID), 10)
 
+	toolDeps.ConfirmBefore = flow.ConfirmBefore
+
+	// Pull ConfirmRequester from proxy if available (set by processor for SSE path)
+	if cr, ok := toolDeps.Proxy.(interface{ ConfirmRequester() tools.ConfirmationRequester }); ok {
+		toolDeps.ConfirmRequester = cr.ConfirmRequester()
+	}
+
 	// Populate spawn targets from flow's SpawnPolicy
 	canSpawn := make([]string, len(flow.Spawn.AllowedFlows))
 	for i, ft := range flow.Spawn.AllowedFlows {

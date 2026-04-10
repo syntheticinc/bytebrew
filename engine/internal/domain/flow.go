@@ -32,6 +32,7 @@ type Flow struct {
 	Spawn          SpawnPolicy
 	KnowledgePath  string   // path to knowledge folder for RAG
 	MCPServers     []string // MCP server names configured for this agent
+	ConfirmBefore  []string // tools requiring user confirmation before execution
 }
 
 // Validate validates the Flow configuration

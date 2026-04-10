@@ -328,6 +328,12 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 		riskLevel := GetContentRiskLevel(name)
 		t = NewSafeToolWrapper(t, name, riskLevel)
 		t = NewCancellableToolWrapper(t)
+
+		// Wrap confirm_before tools with ConfirmationWrapper (deterministic HITL confirmation)
+		if deps.ConfirmRequester != nil && hasToolInList(deps.ConfirmBefore, name) {
+			t = NewConfirmationWrapper(t, deps.ConfirmRequester)
+		}
+
 		resolved = append(resolved, t)
 	}
 

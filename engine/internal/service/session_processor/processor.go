@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -209,7 +210,15 @@ func (p *Processor) processMessage(ctx context.Context, sessionID, message strin
 			return "", ctx.Err()
 		}
 	}
-	proxy := tools.NewLocalClientOperationsProxy(projectRoot, tools.WithAskUserHandler(askUserHandler))
+	confirmRequester := &sseConfirmationRequester{
+		sessionID:   sessionID,
+		registry:    p.registry,
+		eventStream: eventStream,
+	}
+	proxy := tools.NewLocalClientOperationsProxy(projectRoot,
+		tools.WithAskUserHandler(askUserHandler),
+		tools.WithConfirmRequester(confirmRequester),
+	)
 	defer proxy.Dispose()
 
 	turnExecutor := p.factory.CreateForSession(proxy, sessionID, projectKey, projectRoot, platform, agentName, userID)
@@ -258,4 +267,42 @@ func (p *Processor) processMessage(ctx context.Context, sessionID, message strin
 	}
 
 	eventStream.PublishProcessingStopped()
+}
+
+// sseConfirmationRequester implements tools.ConfirmationRequester for the SSE path.
+// It sends a confirmation event to the client and waits for user response.
+type sseConfirmationRequester struct {
+	sessionID   string
+	registry    SessionRegistry
+	eventStream *EventStream
+}
+
+func (r *sseConfirmationRequester) RequestConfirmation(ctx context.Context, toolName string, args string) (bool, error) {
+	callID := fmt.Sprintf("confirm-%d", time.Now().UnixNano())
+	replyCh := r.registry.RegisterAskUser(r.sessionID, callID)
+	defer r.registry.UnregisterAskUser(r.sessionID, callID)
+
+	question := fmt.Sprintf("Confirm execution of %s with arguments: %s", toolName, args)
+
+	r.eventStream.Send(&domain.AgentEvent{
+		Type:    domain.EventTypeUserQuestion,
+		Content: question,
+		Metadata: map[string]interface{}{
+			"call_id":   callID,
+			"tool_name": toolName,
+		},
+	})
+
+	askTimeout := 60 * time.Second
+	select {
+	case reply := <-replyCh:
+		lower := strings.ToLower(strings.TrimSpace(reply))
+		denied := lower == "cancel" || lower == "no" || lower == "deny" || lower == "reject" || lower == "cancelled"
+		return !denied, nil
+	case <-time.After(askTimeout):
+		slog.WarnContext(ctx, "[SSEConfirmationRequester] timed out", "session_id", r.sessionID, "tool", toolName)
+		return false, nil
+	case <-ctx.Done():
+		return false, ctx.Err()
+	}
 }
