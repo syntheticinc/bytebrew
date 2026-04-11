@@ -155,7 +155,6 @@ const sections: NavSection[] = [
   {
     label: 'Automation',
     items: [
-      { to: '/triggers', label: 'Triggers', icon: icons.triggers },
       { to: '/tasks', label: 'Tasks', icon: icons.tasks },
     ],
   },

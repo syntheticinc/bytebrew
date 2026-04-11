@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ExportButton, ImportButton } from './BuilderExportImport';
+import ConfirmDialog from '../ConfirmDialog';
 
 interface CanvasToolbarProps {
   isPrototype: boolean;
@@ -7,10 +8,12 @@ interface CanvasToolbarProps {
   onAutoLayout: () => void;
   onRefetch: () => void;
   onAddAgent: () => void;
-  onAddTrigger: () => void;
+  onAddTrigger: (type: 'webhook' | 'cron' | 'chat') => void;
   // Schema name for production mode (from URL param)
   schemaName?: string;
   onBack?: () => void;
+  isSystemSchema?: boolean;
+  onRestoreDefaults?: () => Promise<void>;
   // Prototype schema props
   protoSchema: string;
   protoSchemas: string[];
@@ -27,12 +30,17 @@ export default function CanvasToolbar({
   onAddTrigger,
   schemaName,
   onBack,
+  isSystemSchema,
+  onRestoreDefaults,
   protoSchema,
   protoSchemas,
   setProtoSchema,
   setProtoSchemas,
 }: CanvasToolbarProps) {
   const [protoSchemaDropdown, setProtoSchemaDropdown] = useState(false);
+  const [triggerDropdown, setTriggerDropdown] = useState(false);
+  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   return (
     <div className="flex items-center gap-3 px-4 h-12 border-b border-brand-shade3/15 bg-brand-dark-alt flex-shrink-0 flex-wrap">
@@ -148,18 +156,64 @@ export default function CanvasToolbar({
       </button>
       {!isPrototype && <ExportButton />}
       {!isPrototype && <ImportButton onImported={onRefetch} />}
-      <button
-        onClick={onAddTrigger}
-        className="px-3 py-1.5 text-xs text-brand-shade2 border border-brand-shade3/30 rounded-btn hover:text-brand-light hover:border-brand-shade3 transition-colors"
-      >
-        + Add Trigger
-      </button>
+      {isSystemSchema && onRestoreDefaults && (
+        <button
+          onClick={() => setShowRestoreConfirm(true)}
+          className="px-3 py-1.5 text-xs text-amber-400 border border-amber-500/30 rounded-btn hover:bg-amber-500/10 hover:border-amber-500/50 transition-colors"
+        >
+          Restore Defaults
+        </button>
+      )}
+      <div className="relative">
+        <button
+          onClick={() => setTriggerDropdown((v) => !v)}
+          className="px-3 py-1.5 text-xs text-brand-shade2 border border-brand-shade3/30 rounded-btn hover:text-brand-light hover:border-brand-shade3 transition-colors"
+        >
+          + Add Trigger <span className="text-[10px]">&#9662;</span>
+        </button>
+        {triggerDropdown && (
+          <div
+            className="absolute top-full right-0 mt-1 bg-brand-dark-alt border border-brand-shade3/20 rounded-card z-50 min-w-[140px] shadow-lg py-1"
+            onMouseLeave={() => setTriggerDropdown(false)}
+          >
+            {(['webhook', 'cron', 'chat'] as const).map((t) => (
+              <button
+                key={t}
+                className="w-full px-3 py-1.5 text-left text-xs text-brand-light hover:bg-brand-accent/10 transition-colors capitalize"
+                onClick={() => { onAddTrigger(t); setTriggerDropdown(false); }}
+              >
+                {t === 'webhook' ? 'Webhook' : t === 'cron' ? 'Cron Schedule' : 'Chat'}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       <button
         onClick={onAddAgent}
         className="px-3 py-1.5 text-xs bg-brand-accent text-brand-light rounded-btn hover:bg-brand-accent-hover transition-colors"
       >
         + Add Agent
       </button>
+
+      <ConfirmDialog
+        open={showRestoreConfirm}
+        onClose={() => setShowRestoreConfirm(false)}
+        onConfirm={async () => {
+          if (!onRestoreDefaults) return;
+          setRestoring(true);
+          try {
+            await onRestoreDefaults();
+          } finally {
+            setRestoring(false);
+            setShowRestoreConfirm(false);
+          }
+        }}
+        title="Restore Defaults"
+        message="Reset builder-schema to factory defaults? This will restore the original agent settings, triggers, and connections."
+        confirmLabel="Restore"
+        loading={restoring}
+        variant="warning"
+      />
     </div>
   );
 }

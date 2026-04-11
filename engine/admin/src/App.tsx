@@ -5,7 +5,6 @@ import LoginPage from './pages/LoginPage';
 import HealthPage from './pages/HealthPage';
 import MCPPage from './pages/MCPPage';
 import ModelsPage from './pages/ModelsPage';
-import TriggersPage from './pages/TriggersPage';
 import TasksPage from './pages/TasksPage';
 import SettingsPage from './pages/SettingsPage';
 import APIKeysPage from './pages/APIKeysPage';
@@ -50,7 +49,6 @@ export default function App() {
             <Route path="/inspect/:session" element={<InspectPage />} />
             <Route path="/mcp" element={<MCPPage />} />
             <Route path="/models" element={<ModelsPage />} />
-            <Route path="/triggers" element={<TriggersPage />} />
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/api-keys" element={<APIKeysPage />} />

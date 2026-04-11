@@ -66,10 +66,9 @@ interface NodeContextMenuProps {
   onClose: () => void;
   onDetails: (nodeId: string) => void;
   onDelete: (nodeId: string) => void;
-  addToast: (message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
-export function NodeContextMenu({ menu, onClose, onDetails, onDelete, addToast }: NodeContextMenuProps) {
+export function NodeContextMenu({ menu, onClose, onDetails, onDelete }: NodeContextMenuProps) {
   return (
     <div
       className="fixed z-50 bg-brand-dark-alt border border-brand-shade3/20 rounded-card shadow-xl py-1 min-w-[180px] animate-modal-in"
@@ -77,15 +76,26 @@ export function NodeContextMenu({ menu, onClose, onDetails, onDelete, addToast }
       onMouseLeave={onClose}
     >
       {menu.nodeType === 'triggerNode' ? (
-        <button
-          className="w-full px-4 py-2 text-left text-xs text-brand-shade2 hover:bg-brand-accent/10 hover:text-brand-light transition-colors"
-          onClick={() => {
-            onClose();
-            addToast('Trigger connections are managed on the Triggers page', 'info');
-          }}
-        >
-          Manage on Triggers page
-        </button>
+        <>
+          <button
+            className="w-full px-4 py-2 text-left text-xs text-brand-shade2 hover:bg-brand-accent/10 hover:text-brand-light transition-colors"
+            onClick={() => {
+              onClose();
+              onDetails(menu.nodeId);
+            }}
+          >
+            Configure
+          </button>
+          <button
+            className="w-full px-4 py-2 text-left text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+            onClick={() => {
+              onClose();
+              onDelete(menu.nodeId);
+            }}
+          >
+            Delete
+          </button>
+        </>
       ) : (
         <>
           <button

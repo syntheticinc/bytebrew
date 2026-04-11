@@ -214,16 +214,18 @@ export function useCanvasNodes({
     }
   }, [nodes, isPrototype, setNodes, agentsCache, agentsListRef, modelsRef, addToast, handleSelect, handleDeleteRequest, currentSchemaId]);
 
-  const handleInstantTriggerCreate = useCallback(async (canvasPosition?: { x: number; y: number }) => {
+  const handleInstantTriggerCreate = useCallback(async (canvasPosition?: { x: number; y: number }, triggerType: 'webhook' | 'cron' | 'chat' = 'webhook') => {
     const existingNames = nodes.filter((n) => n.type === 'triggerNode').map((n) => (n.data as Record<string, unknown>).title as string);
-    const title = generateTriggerName(existingNames);
-    const webhookPath = `/webhook/${generateShortId()}`;
+    const defaultTitles: Record<string, string> = { webhook: 'Webhook Trigger', cron: 'Cron Trigger', chat: 'Chat Trigger' };
+    const baseTitle = defaultTitles[triggerType] || 'Trigger';
+    const title = existingNames.includes(baseTitle) ? generateTriggerName(existingNames) : baseTitle;
+    const webhookPath = triggerType === 'webhook' ? `/webhook/${generateShortId()}` : '';
     const pos = canvasPosition ?? { x: Math.random() * 200 + 50, y: Math.random() * 200 + 50 };
 
     if (isPrototype) {
       const mockId = Date.now();
       const newNode = makeTriggerNode(
-        { id: mockId, type: 'webhook', title, webhook_path: webhookPath, enabled: true, agent_name: '', schedule: '', description: '', created_at: new Date().toISOString() } as Trigger,
+        { id: mockId, type: triggerType, title, webhook_path: webhookPath, enabled: true, agent_name: '', schedule: '', description: '', created_at: new Date().toISOString() } as Trigger,
         pos,
       );
       setNodes((nds) => [...nds, newNode]);
@@ -233,13 +235,14 @@ export function useCanvasNodes({
 
     // Production mode: create via API
     try {
-      const created = await api.createTrigger({
-        type: 'webhook',
+      const data: CreateTriggerRequest = {
+        type: triggerType,
         title,
-        webhook_path: webhookPath,
         enabled: true,
+        ...(triggerType === 'webhook' ? { webhook_path: webhookPath } : {}),
         ...(currentSchemaId ? { schema_id: currentSchemaId } : {}),
-      } as CreateTriggerRequest);
+      };
+      const created = await api.createTrigger(data);
       const newNode = makeTriggerNode(created, pos);
       setNodes((nds) => [...nds, newNode]);
       addToast(`Trigger "${created.title}" created — click to configure`, 'success');

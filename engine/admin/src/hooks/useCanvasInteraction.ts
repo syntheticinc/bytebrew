@@ -96,10 +96,11 @@ export function useCanvasInteraction({
       return;
     }
 
-    // Production mode
+    // Production mode — trigger node → open config panel
     if (node.type === 'triggerNode' || node.id.startsWith('trigger-')) {
-      const data = node.data as Record<string, unknown>;
-      addToast(`Trigger "${data.title as string}" — manage on the Triggers page`, 'info');
+      setSelectedTrigger(node.data as Record<string, unknown>);
+      setSelectedGate(null);
+      setSelectedEdge(null);
       return;
     }
     // Agent node — navigate to drill-in

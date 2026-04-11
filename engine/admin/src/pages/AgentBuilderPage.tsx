@@ -414,7 +414,13 @@ function AgentBuilderInner() {
         onAutoLayout={runAutoLayout}
         onRefetch={refetchCanvas}
         onAddAgent={() => nodeOps.handleInstantAgentCreate()}
-        onAddTrigger={() => nodeOps.handleInstantTriggerCreate()}
+        onAddTrigger={(type) => nodeOps.handleInstantTriggerCreate(undefined, type)}
+        isSystemSchema={currentSchema?.is_system === true}
+        onRestoreDefaults={async () => {
+          await api.restoreBuilderAssistant();
+          addToast('Builder schema restored to factory defaults', 'success');
+          refetchCanvas();
+        }}
         schemaName={schemaName}
         onBack={() => navigate('/builder')}
         protoSchema={protoSchema}
@@ -526,12 +532,15 @@ function AgentBuilderInner() {
           />
         )}
 
-        {/* Prototype: Trigger config panel */}
-        {isPrototype && interaction.selectedTrigger && (
+        {/* Trigger config panel */}
+        {interaction.selectedTrigger && (
           <TriggerConfigPanel
             trigger={interaction.selectedTrigger}
             setTrigger={interaction.setSelectedTrigger}
             setNodes={setNodes}
+            setEdges={setEdges}
+            isPrototype={isPrototype}
+            addToast={addToast}
           />
         )}
       </div>
@@ -556,7 +565,6 @@ function AgentBuilderInner() {
           onClose={() => interaction.setNodeMenu(null)}
           onDetails={handleSelect}
           onDelete={handleDeleteRequest}
-          addToast={addToast}
         />
       )}
 
