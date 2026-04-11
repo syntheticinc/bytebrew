@@ -1,3 +1,5 @@
+import { memo } from 'react';
+
 function formatTokens(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}K`;
   return String(n);
@@ -16,7 +18,7 @@ interface ContextUsageBarProps {
   baselineTokens?: number | null;
 }
 
-export default function ContextUsageBar({ maxContextTokens, totalTokens, contextTokens, baselineTokens }: ContextUsageBarProps) {
+export default memo(function ContextUsageBar({ maxContextTokens, totalTokens, contextTokens, baselineTokens }: ContextUsageBarProps) {
   if (!maxContextTokens) return null;
 
   // Priority: contextTokens (real) > totalTokens (cumulative fallback) > baselineTokens (system prompt estimate)
@@ -28,7 +30,7 @@ export default function ContextUsageBar({ maxContextTokens, totalTokens, context
       <div className="flex-1 h-1 bg-brand-shade3/10 rounded-full overflow-hidden">
         {pct > 0 && (
           <div
-            className={`h-full rounded-full transition-all duration-300 ${usageColor(pct)}`}
+            className={`h-full rounded-full ${usageColor(pct)}`}
             style={{ width: `${pct}%` }}
           />
         )}
@@ -38,4 +40,4 @@ export default function ContextUsageBar({ maxContextTokens, totalTokens, context
       </span>
     </div>
   );
-}
+});

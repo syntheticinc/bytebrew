@@ -408,10 +408,11 @@ export default function BottomPanel() {
                                 if (seg.type === 'text') {
                                   const stripped = stripThinkTagsForRender(seg.content);
                                   if (!stripped) return null;
+                                  const isLastSeg = si === msg.segments!.length - 1;
                                   return (
                                     <div key={si} className="flex justify-start">
                                       <div className="max-w-[80%] px-3 py-2 rounded-card text-xs font-mono break-words bg-brand-dark border border-brand-shade3/20 text-brand-shade2">
-                                        {renderMarkdown(stripped, !!msg.streaming && si === msg.segments!.length - 1)}
+                                        {renderMarkdown(stripped, !!msg.streaming && isLastSeg)}
                                       </div>
                                     </div>
                                   );

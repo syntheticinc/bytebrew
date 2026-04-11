@@ -159,7 +159,11 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
     persistenceKey ? (safeGetItem(persistenceKey) ?? '') : '',
   );
   const [tokenUsage, setTokenUsage] = useState<number | null>(null);
-  const [contextTokens, setContextTokens] = useState<number | null>(null);
+  const [contextTokens, setContextTokens] = useState<number | null>(() => {
+    if (!persistenceKey) return null;
+    const stored = safeGetItem(persistenceKey + '_ctx');
+    return stored ? Number(stored) : null;
+  });
 
   const sessionIdRef = useRef(sessionId);
   const abortRef = useRef<AbortController | null>(null);
@@ -226,7 +230,10 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
     setError(null);
     setTokenUsage(null);
     setContextTokens(null);
-    if (persistenceKey) safeRemoveItem(persistenceKey);
+    if (persistenceKey) {
+      safeRemoveItem(persistenceKey);
+      safeRemoveItem(persistenceKey + '_ctx');
+    }
   }, [persistenceKey]);
 
   const stopStreaming = useCallback(() => {
@@ -261,10 +268,35 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
 
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
 
+    // Throttled state updates: accumulate patches, flush at most every 250ms.
+    // This prevents re-rendering the entire message list + markdown on every SSE chunk.
+    const THROTTLE_MS = 250;
+    let pendingPatch: Partial<SSEMessage> | null = null;
+    let throttleTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const flushUpdate = () => {
+      throttleTimer = null;
+      if (pendingPatch) {
+        const patch = pendingPatch;
+        pendingPatch = null;
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantMsgId ? { ...m, ...patch } : m)),
+        );
+      }
+    };
+
     const updateAssistant = (patch: Partial<SSEMessage>) => {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === assistantMsgId ? { ...m, ...patch } : m)),
-      );
+      pendingPatch = pendingPatch ? { ...pendingPatch, ...patch } : patch;
+      if (throttleTimer === null) {
+        throttleTimer = setTimeout(flushUpdate, THROTTLE_MS);
+      }
+    };
+
+    // Immediate update (bypass throttle — for done/error/tool events)
+    const updateAssistantNow = (patch: Partial<SSEMessage>) => {
+      if (throttleTimer !== null) { clearTimeout(throttleTimer); throttleTimer = null; }
+      pendingPatch = pendingPatch ? { ...pendingPatch, ...patch } : patch;
+      flushUpdate();
     };
 
     try {
@@ -292,7 +324,7 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
         const errText = await res.text().catch(() => 'Request failed');
         sessionIdRef.current = '';
         setSessionId('');
-        updateAssistant({ content: `Error: ${errText}`, streaming: false });
+        updateAssistantNow({ content: `Error: ${errText}`, streaming: false });
         setError(errText);
         return;
       }
@@ -366,7 +398,7 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
               currentToolCalls = [...currentToolCalls, tc];
               currentSegments = [...currentSegments, { type: 'tool_call', toolCall: tc }];
               lastSegmentIsText = false;
-              updateAssistant({ toolCalls: currentToolCalls, segments: currentSegments });
+              updateAssistantNow({ toolCalls: currentToolCalls, segments: currentSegments });
               break;
             }
             case 'tool_result': {
@@ -383,7 +415,7 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
                   ? { ...seg, toolCall: { ...seg.toolCall, output } }
                   : seg,
               );
-              updateAssistant({ toolCalls: currentToolCalls, segments: currentSegments });
+              updateAssistantNow({ toolCalls: currentToolCalls, segments: currentSegments });
               onToolResult?.(toolName, output);
               break;
             }
@@ -401,15 +433,16 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
               const ctxTokens = parsed.context_tokens as number | undefined;
               if (ctxTokens && ctxTokens > 0) {
                 setContextTokens(ctxTokens);
+                if (persistenceKey) safeSetItem(persistenceKey + '_ctx', String(ctxTokens));
               }
-              updateAssistant({ streaming: false });
+              updateAssistantNow({ streaming: false });
               break;
             }
             case 'error': {
               const errContent = (parsed.content as string) || (parsed.message as string) || 'Unknown error';
               sessionIdRef.current = '';
               setSessionId('');
-              updateAssistant({ content: `Error: ${errContent}`, streaming: false });
+              updateAssistantNow({ content: `Error: ${errContent}`, streaming: false });
               setError(errContent);
               break;
             }
@@ -418,12 +451,12 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
         }
       }
 
-      updateAssistant({ streaming: false });
+      updateAssistantNow({ streaming: false });
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         sessionIdRef.current = '';
         setSessionId('');
-        updateAssistant({ content: 'Connection error', streaming: false });
+        updateAssistantNow({ content: 'Connection error', streaming: false });
         setError('Connection error');
       }
     } finally {
