@@ -41,7 +41,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&RuntimeDeviceModel{},
 		&RuntimeConfigKV{},
 		&RuntimeSessionEventModel{},
-		&RuntimeMessageModel{},
+		&RuntimeEventModel{},
 		&RuntimeAgentContextModel{},
 
 		// Knowledge / RAG tables (2)

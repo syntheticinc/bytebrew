@@ -69,9 +69,9 @@ func (mc *MessageCollector) CollectUserMessage(ctx context.Context, content stri
 		Content: content,
 	})
 
-	histMsg, err := domain.NewMessage(mc.sessionID, "user", "user", content)
+	histMsg, err := domain.NewUserMessageEvent(mc.sessionID, content)
 	if err != nil {
-		slog.ErrorContext(ctx, "failed to create user message", "error", err)
+		slog.ErrorContext(ctx, "failed to create user event", "error", err)
 		return
 	}
 	histMsg.AgentID = mc.agentID
@@ -99,6 +99,8 @@ func (mc *MessageCollector) handleEvent(event *domain.AgentEvent) {
 		mc.handleToolResult(ctx, event)
 	case domain.EventTypeAnswer:
 		mc.handleAnswer(ctx, event)
+	case domain.EventTypeReasoning:
+		mc.handleReasoning(ctx, event)
 	}
 }
 
@@ -148,23 +150,29 @@ func (mc *MessageCollector) handleToolCall(ctx context.Context, event *domain.Ag
 
 	mc.messages = append(mc.messages, msg)
 
-	// Save to history
-	domainToolCalls := []domain.ToolCallInfo{{
-		ID:        toolCallID,
-		Name:      toolName,
-		Arguments: argsMap,
-	}}
+	// Save assistant text if present (as separate event before tool call)
+	if assistantContent != "" {
+		if aMsg, err := domain.NewAssistantEvent(mc.sessionID, assistantContent); err == nil {
+			aMsg.AgentID = mc.agentID
+			if mc.historyRepo != nil {
+				if err := mc.historyRepo.Create(ctx, aMsg); err != nil {
+					slog.ErrorContext(ctx, "failed to save assistant event", "error", err)
+				}
+			}
+		}
+	}
 
-	histMsg, err := domain.NewAssistantMessageWithToolCalls(mc.sessionID, assistantContent, domainToolCalls)
+	// Save tool call event
+	histMsg, err := domain.NewToolCallEvent(mc.sessionID, toolCallID, toolName, argsMap)
 	if err != nil {
-		slog.ErrorContext(ctx, "failed to create assistant message", "error", err)
+		slog.ErrorContext(ctx, "failed to create tool call event", "error", err)
 		return
 	}
 	histMsg.AgentID = mc.agentID
 
 	if mc.historyRepo != nil {
 		if err := mc.historyRepo.Create(ctx, histMsg); err != nil {
-			slog.ErrorContext(ctx, "failed to save tool call message", "error", err)
+			slog.ErrorContext(ctx, "failed to save tool call event", "error", err)
 		}
 	}
 
@@ -217,19 +225,18 @@ func (mc *MessageCollector) handleToolResult(ctx context.Context, event *domain.
 
 	mc.messages = append(mc.messages, msg)
 
-	// Save to history — strip internal prompt injection markers before persisting.
-	// Markers are added by SafeToolWrapper for LLM context only, not for storage.
+	// Save tool result event — strip internal prompt injection markers before persisting.
 	cleanContent := stripToolOutputMarkers(content)
-	histMsg, err := domain.NewToolMessage(mc.sessionID, toolCallID, toolName, cleanContent)
+	histMsg, err := domain.NewToolResultEvent(mc.sessionID, toolCallID, toolName, cleanContent)
 	if err != nil {
-		slog.ErrorContext(ctx, "failed to create tool message", "error", err)
+		slog.ErrorContext(ctx, "failed to create tool result event", "error", err)
 		return
 	}
 	histMsg.AgentID = mc.agentID
 
 	if mc.historyRepo != nil {
 		if err := mc.historyRepo.Create(ctx, histMsg); err != nil {
-			slog.ErrorContext(ctx, "failed to save tool result message", "error", err)
+			slog.ErrorContext(ctx, "failed to save tool result event", "error", err)
 		}
 	}
 
@@ -254,21 +261,44 @@ func (mc *MessageCollector) handleAnswer(ctx context.Context, event *domain.Agen
 
 	mc.messages = append(mc.messages, msg)
 
-	// Save to history
-	histMsg, err := domain.NewMessage(mc.sessionID, domain.MessageTypeAgent, "assistant", event.Content)
+	// Save assistant message event
+	histMsg, err := domain.NewAssistantEvent(mc.sessionID, event.Content)
 	if err != nil {
-		slog.ErrorContext(ctx, "failed to create answer message", "error", err)
+		slog.ErrorContext(ctx, "failed to create assistant event", "error", err)
 		return
 	}
 	histMsg.AgentID = mc.agentID
 
 	if mc.historyRepo != nil {
 		if err := mc.historyRepo.Create(ctx, histMsg); err != nil {
-			slog.ErrorContext(ctx, "failed to save answer message", "error", err)
+			slog.ErrorContext(ctx, "failed to save assistant event", "error", err)
 		}
 	}
 
-	slog.InfoContext(ctx, "collected answer message",
+	slog.InfoContext(ctx, "collected answer event",
+		"length", len(event.Content), "agent_id", mc.agentID)
+}
+
+// handleReasoning creates reasoning event (previously not persisted)
+func (mc *MessageCollector) handleReasoning(ctx context.Context, event *domain.AgentEvent) {
+	if event.Content == "" {
+		return
+	}
+
+	histMsg, err := domain.NewReasoningEvent(mc.sessionID, event.Content)
+	if err != nil {
+		slog.ErrorContext(ctx, "failed to create reasoning event", "error", err)
+		return
+	}
+	histMsg.AgentID = mc.agentID
+
+	if mc.historyRepo != nil {
+		if err := mc.historyRepo.Create(ctx, histMsg); err != nil {
+			slog.ErrorContext(ctx, "failed to save reasoning event", "error", err)
+		}
+	}
+
+	slog.InfoContext(ctx, "collected reasoning event",
 		"length", len(event.Content), "agent_id", mc.agentID)
 }
 

@@ -838,7 +838,7 @@ func Run(sc ServerConfig) error {
 			sessionRepo := config_repo.NewGORMSessionRepository(pgDB)
 			messageRepo := config_repo.NewGORMMessageRepository(pgDB)
 			sessionHandler := deliveryhttp.NewSessionHandler(&sessionServiceHTTPAdapter{repo: sessionRepo, messageRepo: messageRepo})
-			sessionHandler.SetMessageService(&messageServiceHTTPAdapter{repo: messageRepo})
+			sessionHandler.SetEventService(&eventServiceHTTPAdapter{repo: messageRepo})
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireAdminSession)
 				r.Mount("/api/v1/sessions", sessionHandler.Routes())

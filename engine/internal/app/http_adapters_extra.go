@@ -517,49 +517,26 @@ func (a *sessionServiceHTTPAdapter) DeleteSession(ctx context.Context, id string
 	return a.repo.Delete(ctx, id)
 }
 
-// messageServiceHTTPAdapter bridges GORMMessageRepository to the http.MessageService interface.
-type messageServiceHTTPAdapter struct {
+// eventServiceHTTPAdapter bridges GORMMessageRepository to the http.EventService interface.
+type eventServiceHTTPAdapter struct {
 	repo *config_repo.GORMMessageRepository
 }
 
-func (a *messageServiceHTTPAdapter) ListMessages(ctx context.Context, sessionID string) ([]deliveryhttp.MessageResponse, error) {
-	messages, err := a.repo.ListBySession(ctx, sessionID)
+func (a *eventServiceHTTPAdapter) ListEvents(ctx context.Context, sessionID string) ([]deliveryhttp.EventResponse, error) {
+	events, err := a.repo.ListBySession(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
-	result := make([]deliveryhttp.MessageResponse, 0, len(messages))
-	seen := make(map[string]bool)
-	for _, m := range messages {
-		if m.Content == "" {
-			continue
-		}
-
-		role := m.MessageType
-		if role == "agent" {
-			role = "assistant"
-		}
-
-		dedup := role + ":" + m.Content
-		if seen[dedup] {
-			continue
-		}
-		seen[dedup] = true
-
-		resp := deliveryhttp.MessageResponse{
-			ID:        m.ID,
-			Role:      role,
-			Content:   m.Content,
-			CreatedAt: m.CreatedAt.Format(time.RFC3339),
-		}
-		if m.Metadata != "" {
-			var meta struct {
-				ToolName string `json:"tool_name"`
-			}
-			if json.Unmarshal([]byte(m.Metadata), &meta) == nil && meta.ToolName != "" {
-				resp.ToolName = meta.ToolName
-			}
-		}
-		result = append(result, resp)
+	result := make([]deliveryhttp.EventResponse, 0, len(events))
+	for _, ev := range events {
+		result = append(result, deliveryhttp.EventResponse{
+			ID:        ev.ID,
+			EventType: ev.EventType,
+			AgentID:   ev.AgentID,
+			CallID:    ev.CallID,
+			Payload:   ev.Payload,
+			CreatedAt: ev.CreatedAt.Format(time.RFC3339),
+		})
 	}
 	return result, nil
 }

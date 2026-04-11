@@ -98,7 +98,7 @@ export default function BottomPanel() {
     agentName: ASSISTANT_AGENT,
     schemaContext: effectiveSchema,
     persistenceKey: assistantPersistenceKey,
-    fetchMessages: (sid) => api.getSessionMessages(sid),
+    fetchMessages: (sid) => api.getSessionEvents(sid),
     onToolResult: (tool) => {
       if (tool.startsWith('admin_')) {
         dispatchAdminChanged(tool);

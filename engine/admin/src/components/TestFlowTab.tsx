@@ -87,7 +87,7 @@ export default function TestFlowTab() {
     agentName: selectedAgent,
     getHeaders,
     persistenceKey: testflowPersistenceKey,
-    fetchMessages: (sid) => api.getSessionMessages(sid),
+    fetchMessages: (sid) => api.getSessionEvents(sid),
   });
 
   // Use either prototype or production messages

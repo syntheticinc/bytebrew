@@ -326,8 +326,9 @@ func TestEngine_MessageCollection(t *testing.T) {
 	assert.Equal(t, schema.Tool, messages[1].Role)
 	assert.Equal(t, schema.Assistant, messages[2].Role)
 
-	// Check history repo received messages
-	assert.Len(t, historyRepo.messages, 3)
+	// Check history repo received events
+	// 4 events: assistant_message (from tool call's assistant_content) + tool_call + tool_result + assistant_message (answer)
+	assert.Len(t, historyRepo.messages, 4)
 }
 
 // Test 6: Lossless round-trip

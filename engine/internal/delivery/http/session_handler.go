@@ -53,24 +53,25 @@ type SessionService interface {
 	DeleteSession(ctx context.Context, id string) error
 }
 
-// MessageResponse is the API representation of a chat message.
-type MessageResponse struct {
-	ID        string `json:"id"`
-	Role      string `json:"role"`
-	Content   string `json:"content"`
-	ToolName  string `json:"tool_name,omitempty"`
-	CreatedAt string `json:"created_at"`
+// EventResponse is the API representation of a session event (message, tool call, reasoning, etc.).
+type EventResponse struct {
+	ID        string          `json:"id"`
+	EventType string          `json:"event_type"`
+	AgentID   string          `json:"agent_id,omitempty"`
+	CallID    string          `json:"call_id,omitempty"`
+	Payload   json.RawMessage `json:"payload"`
+	CreatedAt string          `json:"created_at"`
 }
 
-// MessageService provides message query operations for a session.
-type MessageService interface {
-	ListMessages(ctx context.Context, sessionID string) ([]MessageResponse, error)
+// EventService provides event query operations for a session.
+type EventService interface {
+	ListEvents(ctx context.Context, sessionID string) ([]EventResponse, error)
 }
 
 // SessionHandler serves /api/v1/sessions endpoints.
 type SessionHandler struct {
 	service    SessionService
-	messageSvc MessageService
+	eventSvc EventService
 }
 
 // NewSessionHandler creates a SessionHandler.
@@ -78,9 +79,9 @@ func NewSessionHandler(service SessionService) *SessionHandler {
 	return &SessionHandler{service: service}
 }
 
-// SetMessageService sets the optional MessageService for listing chat history.
-func (h *SessionHandler) SetMessageService(svc MessageService) {
-	h.messageSvc = svc
+// SetEventService sets the optional EventService for listing chat history.
+func (h *SessionHandler) SetEventService(svc EventService) {
+	h.eventSvc = svc
 }
 
 // Routes returns a chi router with session endpoints mounted.
@@ -226,6 +227,7 @@ func (h *SessionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListMessages handles GET /api/v1/sessions/{id}/messages.
+// Returns session events (messages, tool calls, reasoning) in chronological order.
 func (h *SessionHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
@@ -233,16 +235,16 @@ func (h *SessionHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.messageSvc == nil {
-		writeJSON(w, http.StatusOK, []MessageResponse{})
+	if h.eventSvc == nil {
+		writeJSON(w, http.StatusOK, []EventResponse{})
 		return
 	}
 
-	messages, err := h.messageSvc.ListMessages(r.Context(), id)
+	events, err := h.eventSvc.ListEvents(r.Context(), id)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	writeJSON(w, http.StatusOK, messages)
+	writeJSON(w, http.StatusOK, events)
 }

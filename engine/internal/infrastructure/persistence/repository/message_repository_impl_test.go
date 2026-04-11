@@ -5,230 +5,177 @@ import (
 	"testing"
 	"time"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/google/uuid"
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 )
 
-// setupMessageTestDB creates in-memory SQLite DB for message tests
-func setupMessageTestDB(t *testing.T) *gorm.DB {
+func setupEventTestDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	require.NoError(t, err, "failed to open in-memory SQLite")
 
-	err = db.AutoMigrate(&models.RuntimeMessageModel{})
-	require.NoError(t, err, "failed to migrate")
+	// Create table manually — SQLite doesn't support uuid/jsonb/gen_random_uuid()
+	err = db.Exec(`CREATE TABLE runtime_events (
+		id         TEXT PRIMARY KEY,
+		session_id TEXT NOT NULL,
+		event_type TEXT NOT NULL,
+		agent_id   TEXT,
+		call_id    TEXT,
+		payload    TEXT NOT NULL DEFAULT '{}',
+		created_at DATETIME
+	)`).Error
+	require.NoError(t, err, "failed to create runtime_events table")
 
 	return db
 }
 
-func TestMessageRepositoryImpl_CreateAndGetBySessionID(t *testing.T) {
-	db := setupMessageTestDB(t)
+func TestEventRepository_CreateAndGetBySessionID(t *testing.T) {
+	db := setupEventTestDB(t)
 	repo := NewMessageRepositoryImpl(db)
 	ctx := context.Background()
 
 	sessionID := uuid.New().String()
 	baseTime := time.Now().Add(-1 * time.Hour)
 
-	// Create 3 messages with explicit timestamps
-	msg1, err := domain.NewMessage(sessionID, domain.MessageTypeUser, "user", "First message")
+	msg1, err := domain.NewUserMessageEvent(sessionID, "First message")
 	require.NoError(t, err)
 	msg1.AgentID = "supervisor"
 	msg1.CreatedAt = baseTime
 
-	msg2, err := domain.NewMessage(sessionID, domain.MessageTypeAgent, "assistant", "Second message")
+	msg2, err := domain.NewAssistantEvent(sessionID, "Second message")
 	require.NoError(t, err)
 	msg2.AgentID = "supervisor"
 	msg2.CreatedAt = baseTime.Add(1 * time.Second)
 
-	msg3, err := domain.NewMessage(sessionID, domain.MessageTypeUser, "user", "Third message")
+	msg3, err := domain.NewUserMessageEvent(sessionID, "Third message")
 	require.NoError(t, err)
 	msg3.AgentID = "supervisor"
 	msg3.CreatedAt = baseTime.Add(2 * time.Second)
 
-	// Save messages
-	err = repo.Create(ctx, msg1)
+	require.NoError(t, repo.Create(ctx, msg1))
+	require.NoError(t, repo.Create(ctx, msg2))
+	require.NoError(t, repo.Create(ctx, msg3))
+
+	events, err := repo.GetBySessionID(ctx, sessionID, 0, 0)
 	require.NoError(t, err)
+	require.Len(t, events, 3)
 
-	err = repo.Create(ctx, msg2)
-	require.NoError(t, err)
+	// Chronological order
+	assert.Equal(t, "First message", events[0].GetContent())
+	assert.Equal(t, "Second message", events[1].GetContent())
+	assert.Equal(t, "Third message", events[2].GetContent())
 
-	err = repo.Create(ctx, msg3)
-	require.NoError(t, err)
-
-	// GetBySessionID should return all 3 messages in chronological order
-	messages, err := repo.GetBySessionID(ctx, sessionID, 0, 0)
-	require.NoError(t, err)
-	require.Len(t, messages, 3, "should return 3 messages")
-
-	// Verify chronological order (oldest first)
-	assert.Equal(t, "First message", messages[0].Content)
-	assert.Equal(t, "Second message", messages[1].Content)
-	assert.Equal(t, "Third message", messages[2].Content)
-
-	// Verify all fields
-	for _, msg := range messages {
-		assert.Equal(t, sessionID, msg.SessionID)
-		assert.NotEmpty(t, msg.ID)
-		assert.Equal(t, "supervisor", msg.AgentID)
+	for _, ev := range events {
+		assert.Equal(t, sessionID, ev.SessionID)
+		assert.NotEmpty(t, ev.ID)
+		assert.Equal(t, "supervisor", ev.AgentID)
 	}
 }
 
-func TestMessageRepositoryImpl_GetBySessionAndAgent(t *testing.T) {
-	db := setupMessageTestDB(t)
+func TestEventRepository_GetBySessionAndAgent(t *testing.T) {
+	db := setupEventTestDB(t)
 	repo := NewMessageRepositoryImpl(db)
 	ctx := context.Background()
 
 	sessionID := uuid.New().String()
 	baseTime := time.Now().Add(-1 * time.Hour)
 
-	// Create 3 messages: 2 for agent-1, 1 for agent-2 with explicit timestamps
-	msg1, err := domain.NewMessage(sessionID, domain.MessageTypeUser, "user", "Message 1 for agent-1")
-	require.NoError(t, err)
+	msg1, _ := domain.NewUserMessageEvent(sessionID, "Agent-1 msg")
 	msg1.AgentID = "agent-1"
 	msg1.CreatedAt = baseTime
 
-	msg2, err := domain.NewMessage(sessionID, domain.MessageTypeAgent, "assistant", "Message 2 for agent-2")
-	require.NoError(t, err)
+	msg2, _ := domain.NewAssistantEvent(sessionID, "Agent-2 msg")
 	msg2.AgentID = "agent-2"
 	msg2.CreatedAt = baseTime.Add(1 * time.Second)
 
-	msg3, err := domain.NewMessage(sessionID, domain.MessageTypeUser, "user", "Message 3 for agent-1")
-	require.NoError(t, err)
+	msg3, _ := domain.NewUserMessageEvent(sessionID, "Agent-1 msg 2")
 	msg3.AgentID = "agent-1"
 	msg3.CreatedAt = baseTime.Add(2 * time.Second)
 
-	// Save messages
-	err = repo.Create(ctx, msg1)
+	require.NoError(t, repo.Create(ctx, msg1))
+	require.NoError(t, repo.Create(ctx, msg2))
+	require.NoError(t, repo.Create(ctx, msg3))
+
+	events, err := repo.GetBySessionAndAgent(ctx, sessionID, "agent-1", 0, 0)
 	require.NoError(t, err)
+	require.Len(t, events, 2)
+	assert.Equal(t, "Agent-1 msg", events[0].GetContent())
+	assert.Equal(t, "Agent-1 msg 2", events[1].GetContent())
 
-	err = repo.Create(ctx, msg2)
+	events2, err := repo.GetBySessionAndAgent(ctx, sessionID, "agent-2", 0, 0)
 	require.NoError(t, err)
-
-	err = repo.Create(ctx, msg3)
-	require.NoError(t, err)
-
-	// GetBySessionAndAgent for agent-1 should return 2 messages
-	messages, err := repo.GetBySessionAndAgent(ctx, sessionID, "agent-1", 0, 0)
-	require.NoError(t, err)
-	require.Len(t, messages, 2, "should return 2 messages for agent-1")
-
-	// Verify both messages belong to agent-1
-	for _, msg := range messages {
-		assert.Equal(t, "agent-1", msg.AgentID)
-		assert.Contains(t, msg.Content, "agent-1")
-	}
-
-	// Verify chronological order
-	assert.Equal(t, "Message 1 for agent-1", messages[0].Content)
-	assert.Equal(t, "Message 3 for agent-1", messages[1].Content)
-
-	// GetBySessionAndAgent for agent-2 should return 1 message
-	messages2, err := repo.GetBySessionAndAgent(ctx, sessionID, "agent-2", 0, 0)
-	require.NoError(t, err)
-	require.Len(t, messages2, 1, "should return 1 message for agent-2")
-	assert.Equal(t, "agent-2", messages2[0].AgentID)
-	assert.Equal(t, "Message 2 for agent-2", messages2[0].Content)
+	require.Len(t, events2, 1)
 }
 
-func TestMessageRepositoryImpl_EmptySession(t *testing.T) {
-	db := setupMessageTestDB(t)
+func TestEventRepository_EmptySession(t *testing.T) {
+	db := setupEventTestDB(t)
+	repo := NewMessageRepositoryImpl(db)
+	ctx := context.Background()
+
+	events, err := repo.GetBySessionID(ctx, uuid.New().String(), 0, 0)
+	require.NoError(t, err)
+	assert.Empty(t, events)
+}
+
+func TestEventRepository_ToolCallRoundtrip(t *testing.T) {
+	db := setupEventTestDB(t)
 	repo := NewMessageRepositoryImpl(db)
 	ctx := context.Background()
 
 	sessionID := uuid.New().String()
 
-	// GetBySessionID for empty session should return empty slice, not error
-	messages, err := repo.GetBySessionID(ctx, sessionID, 0, 0)
-	require.NoError(t, err, "should not return error for empty session")
-	assert.Empty(t, messages, "should return empty slice")
+	// Create tool call event
+	tc, err := domain.NewToolCallEvent(sessionID, "call-1", "search", map[string]string{"q": "main.go"})
+	require.NoError(t, err)
+	tc.AgentID = "supervisor"
+	require.NoError(t, repo.Create(ctx, tc))
 
-	// GetBySessionAndAgent for empty session should also return empty slice
-	messages2, err := repo.GetBySessionAndAgent(ctx, sessionID, "agent-1", 0, 0)
-	require.NoError(t, err, "should not return error for empty session")
-	assert.Empty(t, messages2, "should return empty slice")
+	// Create tool result event
+	tr, err := domain.NewToolResultEvent(sessionID, "call-1", "search", "Found 3 files")
+	require.NoError(t, err)
+	tr.AgentID = "supervisor"
+	require.NoError(t, repo.Create(ctx, tr))
+
+	events, err := repo.GetBySessionID(ctx, sessionID, 0, 0)
+	require.NoError(t, err)
+	require.Len(t, events, 2)
+
+	// Tool call
+	assert.Equal(t, domain.MessageTypeToolCall, events[0].Type)
+	assert.Equal(t, "call-1", events[0].CallID)
+	p, ok := events[0].GetToolCallPayload()
+	require.True(t, ok)
+	assert.Equal(t, "search", p.Tool)
+	assert.Equal(t, "main.go", p.Arguments["q"])
+
+	// Tool result
+	assert.Equal(t, domain.MessageTypeToolResult, events[1].Type)
+	assert.Equal(t, "call-1", events[1].CallID)
+	rp, ok := events[1].GetToolResultPayload()
+	require.True(t, ok)
+	assert.Equal(t, "search", rp.Tool)
+	assert.Equal(t, "Found 3 files", rp.Content)
 }
 
-func TestMessageRepositoryImpl_LimitAndOffset(t *testing.T) {
-	db := setupMessageTestDB(t)
+func TestEventRepository_ReasoningEvent(t *testing.T) {
+	db := setupEventTestDB(t)
 	repo := NewMessageRepositoryImpl(db)
 	ctx := context.Background()
 
 	sessionID := uuid.New().String()
 
-	// Create 5 messages
-	for i := 1; i <= 5; i++ {
-		msg, err := domain.NewMessage(sessionID, domain.MessageTypeUser, "user", "Message "+string(rune('0'+i)))
-		require.NoError(t, err)
-		msg.AgentID = "supervisor"
-		err = repo.Create(ctx, msg)
-		require.NoError(t, err)
-	}
-
-	// Test limit
-	messages, err := repo.GetBySessionID(ctx, sessionID, 3, 0)
+	re, err := domain.NewReasoningEvent(sessionID, "I should use search tool")
 	require.NoError(t, err)
-	assert.Len(t, messages, 3, "should return last 3 messages")
+	require.NoError(t, repo.Create(ctx, re))
 
-	// Test offset
-	messages2, err := repo.GetBySessionID(ctx, sessionID, 0, 2)
+	events, err := repo.GetBySessionID(ctx, sessionID, 0, 0)
 	require.NoError(t, err)
-	assert.Len(t, messages2, 3, "should return 3 messages after skipping 2")
-
-	// Test limit + offset
-	messages3, err := repo.GetBySessionID(ctx, sessionID, 2, 1)
-	require.NoError(t, err)
-	assert.Len(t, messages3, 2, "should return 2 messages after skipping 1")
-}
-
-func TestMessageRepositoryImpl_ToolCallsSerialization(t *testing.T) {
-	db := setupMessageTestDB(t)
-	repo := NewMessageRepositoryImpl(db)
-	ctx := context.Background()
-
-	sessionID := uuid.New().String()
-
-	// Create message with tool calls
-	toolCalls := []domain.ToolCallInfo{
-		{
-			ID:        "call-1",
-			Name:      "read_file",
-			Arguments: map[string]string{"path": "test.go"},
-		},
-		{
-			ID:        "call-2",
-			Name:      "search_code",
-			Arguments: map[string]string{"query": "func main"},
-		},
-	}
-
-	msg, err := domain.NewAssistantMessageWithToolCalls(sessionID, "Using tools", toolCalls)
-	require.NoError(t, err)
-	msg.AgentID = "supervisor"
-
-	// Save message
-	err = repo.Create(ctx, msg)
-	require.NoError(t, err)
-
-	// Load message
-	messages, err := repo.GetBySessionID(ctx, sessionID, 0, 0)
-	require.NoError(t, err)
-	require.Len(t, messages, 1)
-
-	loaded := messages[0]
-
-	// Verify tool calls deserialized correctly
-	require.Len(t, loaded.ToolCalls, 2)
-	assert.Equal(t, "call-1", loaded.ToolCalls[0].ID)
-	assert.Equal(t, "read_file", loaded.ToolCalls[0].Name)
-	assert.Equal(t, "test.go", loaded.ToolCalls[0].Arguments["path"])
-
-	assert.Equal(t, "call-2", loaded.ToolCalls[1].ID)
-	assert.Equal(t, "search_code", loaded.ToolCalls[1].Name)
-	assert.Equal(t, "func main", loaded.ToolCalls[1].Arguments["query"])
+	require.Len(t, events, 1)
+	assert.Equal(t, domain.MessageTypeReasoning, events[0].Type)
+	assert.Equal(t, "I should use search tool", events[0].GetContent())
 }

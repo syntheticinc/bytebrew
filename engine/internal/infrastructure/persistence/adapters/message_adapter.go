@@ -9,81 +9,65 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 )
 
-// messageMetadata represents the full metadata stored in the database
-type messageMetadata struct {
-	UserMetadata map[string]string     `json:"user_metadata,omitempty"`
-	ToolCalls    []domain.ToolCallInfo `json:"tool_calls,omitempty"`
-	ToolCallID   string                `json:"tool_call_id,omitempty"`
-	ToolName     string                `json:"tool_name,omitempty"`
-}
-
-// MessageToModel converts domain Message to RuntimeMessageModel
-func MessageToModel(message *domain.Message) (*models.RuntimeMessageModel, error) {
-	if message == nil {
+// EventToModel converts a domain Message (event) to RuntimeEventModel.
+func EventToModel(event *domain.Message) (*models.RuntimeEventModel, error) {
+	if event == nil {
 		return nil, nil
 	}
 
-	id := message.ID
+	id := event.ID
 	if id == "" {
 		id = uuid.New().String()
 	}
 
-	// Serialize metadata including ToolCalls
-	meta := messageMetadata{
-		UserMetadata: message.Metadata,
-		ToolCalls:    message.ToolCalls,
-		ToolCallID:   message.ToolCallID,
-		ToolName:     message.ToolName,
+	payload := event.Payload
+	if payload == nil {
+		payload = json.RawMessage("{}")
 	}
 
-	metadataJSON, err := json.Marshal(meta)
-	if err != nil {
-		slog.Error("failed to marshal message metadata", "message_id", message.ID, "error", err)
-		metadataJSON = []byte("{}")
-	}
-
-	return &models.RuntimeMessageModel{
-		ID:          id,
-		SessionID:   message.SessionID,
-		MessageType: string(message.Type),
-		Sender:      message.Sender,
-		AgentID:     message.AgentID,
-		Content:     message.Content,
-		Metadata:    string(metadataJSON),
-		CreatedAt:   message.CreatedAt,
-		UpdatedAt:   message.CreatedAt,
+	return &models.RuntimeEventModel{
+		ID:        id,
+		SessionID: event.SessionID,
+		EventType: string(event.Type),
+		AgentID:   event.AgentID,
+		CallID:    event.CallID,
+		Payload:   payload,
+		CreatedAt: event.CreatedAt,
 	}, nil
 }
 
-// MessageFromModel converts RuntimeMessageModel to domain Message
-func MessageFromModel(model *models.RuntimeMessageModel) (*domain.Message, error) {
+// EventFromModel converts a RuntimeEventModel to a domain Message (event).
+func EventFromModel(model *models.RuntimeEventModel) (*domain.Message, error) {
 	if model == nil {
 		return nil, nil
 	}
 
-	message := &domain.Message{
+	payload := model.Payload
+	if payload == nil {
+		payload = json.RawMessage("{}")
+	}
+
+	return &domain.Message{
 		ID:        model.ID,
 		SessionID: model.SessionID,
-		Type:      domain.MessageType(model.MessageType),
-		Sender:    model.Sender,
+		Type:      domain.MessageType(model.EventType),
 		AgentID:   model.AgentID,
-		Content:   model.Content,
-		Metadata:  make(map[string]string),
+		CallID:    model.CallID,
+		Payload:   payload,
 		CreatedAt: model.CreatedAt,
-	}
+	}, nil
+}
 
-	// Deserialize metadata if present
-	if model.Metadata != "" {
-		var meta messageMetadata
-		if err := json.Unmarshal([]byte(model.Metadata), &meta); err == nil {
-			if meta.UserMetadata != nil {
-				message.Metadata = meta.UserMetadata
-			}
-			message.ToolCalls = meta.ToolCalls
-			message.ToolCallID = meta.ToolCallID
-			message.ToolName = meta.ToolName
-		}
-	}
+// Legacy aliases for transition period (used by code that still references old names).
 
-	return message, nil
+// MessageToModel wraps EventToModel for backward compatibility during refactor.
+func MessageToModel(message *domain.Message) (*models.RuntimeEventModel, error) {
+	slog.Warn("MessageToModel is deprecated, use EventToModel")
+	return EventToModel(message)
+}
+
+// MessageFromModel wraps EventFromModel for backward compatibility during refactor.
+func MessageFromModel(model *models.RuntimeEventModel) (*domain.Message, error) {
+	slog.Warn("MessageFromModel is deprecated, use EventFromModel")
+	return EventFromModel(model)
 }

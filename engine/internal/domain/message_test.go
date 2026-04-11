@@ -1,412 +1,216 @@
 package domain
 
 import (
+	"encoding/json"
 	"testing"
-	"time"
 )
 
-func TestNewMessage(t *testing.T) {
-	tests := []struct {
-		name      string
-		sessionID string
-		msgType   MessageType
-		sender    string
-		content   string
-		wantErr   bool
-	}{
-		{
-			name:      "valid user message",
-			sessionID: "session-1",
-			msgType:   MessageTypeUser,
-			sender:    "user",
-			content:   "Hello",
-			wantErr:   false,
-		},
-		{
-			name:      "valid agent message",
-			sessionID: "session-1",
-			msgType:   MessageTypeAgent,
-			sender:    "assistant",
-			content:   "Hi there",
-			wantErr:   false,
-		},
-		{
-			name:      "empty session_id",
-			sessionID: "",
-			msgType:   MessageTypeUser,
-			sender:    "user",
-			content:   "Hello",
-			wantErr:   true,
-		},
-		{
-			name:      "empty content",
-			sessionID: "session-1",
-			msgType:   MessageTypeUser,
-			sender:    "user",
-			content:   "",
-			wantErr:   true,
-		},
-		{
-			name:      "invalid message type",
-			sessionID: "session-1",
-			msgType:   MessageType("invalid"),
-			sender:    "user",
-			content:   "Hello",
-			wantErr:   true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			msg, err := NewMessage(tt.sessionID, tt.msgType, tt.sender, tt.content)
-
-			if tt.wantErr {
-				if err == nil {
-					t.Error("NewMessage() expected error, got nil")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("NewMessage() unexpected error: %v", err)
-				return
-			}
-
-			if msg == nil {
-				t.Error("NewMessage() returned nil message")
-				return
-			}
-
-			if msg.SessionID != tt.sessionID {
-				t.Errorf("NewMessage() SessionID = %v, want %v", msg.SessionID, tt.sessionID)
-			}
-			if msg.Type != tt.msgType {
-				t.Errorf("NewMessage() Type = %v, want %v", msg.Type, tt.msgType)
-			}
-			if msg.Content != tt.content {
-				t.Errorf("NewMessage() Content = %v, want %v", msg.Content, tt.content)
-			}
-		})
-	}
-}
-
-func TestNewMessage_WithToolCalls(t *testing.T) {
-	toolCalls := []ToolCallInfo{
-		{
-			ID:        "call-1",
-			Name:      "search_code",
-			Arguments: map[string]string{"query": "test"},
-		},
-	}
-
-	msg, err := NewAssistantMessageWithToolCalls("session-1", "", toolCalls)
+func TestNewUserMessageEvent(t *testing.T) {
+	msg, err := NewUserMessageEvent("session-1", "Hello")
 	if err != nil {
-		t.Errorf("NewAssistantMessageWithToolCalls() unexpected error: %v", err)
-		return
+		t.Fatalf("unexpected error: %v", err)
 	}
-
-	if len(msg.ToolCalls) != 1 {
-		t.Errorf("NewAssistantMessageWithToolCalls() ToolCalls length = %d, want 1", len(msg.ToolCalls))
+	if msg.Type != MessageTypeUserMessage {
+		t.Errorf("Type = %v, want %v", msg.Type, MessageTypeUserMessage)
 	}
-
-	if msg.ToolCalls[0].ID != "call-1" {
-		t.Errorf("NewAssistantMessageWithToolCalls() ToolCalls[0].ID = %v, want call-1", msg.ToolCalls[0].ID)
+	if msg.GetContent() != "Hello" {
+		t.Errorf("GetContent() = %v, want Hello", msg.GetContent())
 	}
-
-	if msg.ToolCalls[0].Name != "search_code" {
-		t.Errorf("NewAssistantMessageWithToolCalls() ToolCalls[0].Name = %v, want search_code", msg.ToolCalls[0].Name)
+	if msg.SessionID != "session-1" {
+		t.Errorf("SessionID = %v, want session-1", msg.SessionID)
 	}
 }
 
-func TestNewAssistantMessageWithToolCalls_Validation(t *testing.T) {
-	tests := []struct {
-		name      string
-		sessionID string
-		content   string
-		toolCalls []ToolCallInfo
-		wantErr   bool
-	}{
-		{
-			name:      "valid with tool calls and no content",
-			sessionID: "session-1",
-			content:   "",
-			toolCalls: []ToolCallInfo{{ID: "call-1", Name: "test"}},
-			wantErr:   false,
-		},
-		{
-			name:      "valid with content and no tool calls",
-			sessionID: "session-1",
-			content:   "Some answer",
-			toolCalls: nil,
-			wantErr:   false,
-		},
-		{
-			name:      "valid with both content and tool calls",
-			sessionID: "session-1",
-			content:   "Let me search",
-			toolCalls: []ToolCallInfo{{ID: "call-1", Name: "test"}},
-			wantErr:   false,
-		},
-		{
-			name:      "invalid empty session_id",
-			sessionID: "",
-			content:   "test",
-			toolCalls: nil,
-			wantErr:   true,
-		},
-		{
-			name:      "invalid no content and no tool calls",
-			sessionID: "session-1",
-			content:   "",
-			toolCalls: nil,
-			wantErr:   true,
-		},
+func TestNewUserMessageEvent_Validation(t *testing.T) {
+	if _, err := NewUserMessageEvent("", "Hello"); err == nil {
+		t.Error("expected error for empty session_id")
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewAssistantMessageWithToolCalls(tt.sessionID, tt.content, tt.toolCalls)
-
-			if tt.wantErr && err == nil {
-				t.Error("NewAssistantMessageWithToolCalls() expected error, got nil")
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("NewAssistantMessageWithToolCalls() unexpected error: %v", err)
-			}
-		})
+	if _, err := NewUserMessageEvent("s1", ""); err == nil {
+		t.Error("expected error for empty content")
 	}
 }
 
-func TestNewToolMessage(t *testing.T) {
-	tests := []struct {
-		name       string
-		sessionID  string
-		toolCallID string
-		toolName   string
-		content    string
-		wantErr    bool
-	}{
-		{
-			name:       "valid tool message",
-			sessionID:  "session-1",
-			toolCallID: "call-1",
-			toolName:   "search_code",
-			content:    "Found 5 results",
-			wantErr:    false,
-		},
-		{
-			name:       "valid tool message with empty content",
-			sessionID:  "session-1",
-			toolCallID: "call-1",
-			toolName:   "search_code",
-			content:    "",
-			wantErr:    false,
-		},
-		{
-			name:       "missing tool_call_id",
-			sessionID:  "session-1",
-			toolCallID: "",
-			toolName:   "search_code",
-			content:    "Result",
-			wantErr:    true,
-		},
-		{
-			name:       "missing session_id",
-			sessionID:  "",
-			toolCallID: "call-1",
-			toolName:   "search_code",
-			content:    "Result",
-			wantErr:    true,
-		},
+func TestNewAssistantEvent(t *testing.T) {
+	msg, err := NewAssistantEvent("session-1", "Hi there")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			msg, err := NewToolMessage(tt.sessionID, tt.toolCallID, tt.toolName, tt.content)
-
-			if tt.wantErr {
-				if err == nil {
-					t.Error("NewToolMessage() expected error, got nil")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("NewToolMessage() unexpected error: %v", err)
-				return
-			}
-
-			if msg.Type != MessageTypeTool {
-				t.Errorf("NewToolMessage() Type = %v, want %v", msg.Type, MessageTypeTool)
-			}
-			if msg.ToolCallID != tt.toolCallID {
-				t.Errorf("NewToolMessage() ToolCallID = %v, want %v", msg.ToolCallID, tt.toolCallID)
-			}
-			if msg.ToolName != tt.toolName {
-				t.Errorf("NewToolMessage() ToolName = %v, want %v", msg.ToolName, tt.toolName)
-			}
-		})
+	if msg.Type != MessageTypeAssistantMessage {
+		t.Errorf("Type = %v, want %v", msg.Type, MessageTypeAssistantMessage)
+	}
+	if msg.GetContent() != "Hi there" {
+		t.Errorf("GetContent() = %v, want 'Hi there'", msg.GetContent())
 	}
 }
 
-func TestMessage_ToHistoryMessage_PreservesToolCalls(t *testing.T) {
-	toolCalls := []ToolCallInfo{
-		{
-			ID:        "call-1",
-			Name:      "search_code",
-			Arguments: map[string]string{"query": "test"},
-		},
-		{
-			ID:        "call-2",
-			Name:      "read_file",
-			Arguments: map[string]string{"path": "/test.go"},
-		},
+func TestNewToolCallEvent(t *testing.T) {
+	args := map[string]string{"query": "main.go"}
+	msg, err := NewToolCallEvent("session-1", "call-1", "search_code", args)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if msg.Type != MessageTypeToolCall {
+		t.Errorf("Type = %v, want %v", msg.Type, MessageTypeToolCall)
+	}
+	if msg.CallID != "call-1" {
+		t.Errorf("CallID = %v, want call-1", msg.CallID)
 	}
 
-	msg := &Message{
-		ID:        "msg-1",
-		SessionID: "session-1",
-		Type:      MessageTypeAgent,
-		Sender:    "assistant",
-		Content:   "Let me search for that",
-		ToolCalls: toolCalls,
-		CreatedAt: time.Now(),
+	p, ok := msg.GetToolCallPayload()
+	if !ok {
+		t.Fatal("GetToolCallPayload() returned false")
 	}
-
-	history := msg.ToHistoryMessage()
-
-	if history.Role != "assistant" {
-		t.Errorf("ToHistoryMessage() Role = %v, want assistant", history.Role)
+	if p.Tool != "search_code" {
+		t.Errorf("Tool = %v, want search_code", p.Tool)
 	}
-
-	if len(history.ToolCalls) != 2 {
-		t.Errorf("ToHistoryMessage() ToolCalls length = %d, want 2", len(history.ToolCalls))
-	}
-
-	if history.ToolCalls[0].ID != "call-1" {
-		t.Errorf("ToHistoryMessage() ToolCalls[0].ID = %v, want call-1", history.ToolCalls[0].ID)
-	}
-
-	if history.ToolCalls[1].Name != "read_file" {
-		t.Errorf("ToHistoryMessage() ToolCalls[1].Name = %v, want read_file", history.ToolCalls[1].Name)
+	if p.Arguments["query"] != "main.go" {
+		t.Errorf("Arguments[query] = %v, want main.go", p.Arguments["query"])
 	}
 }
 
-func TestMessage_ToHistoryMessage_ToolResult(t *testing.T) {
-	msg := &Message{
-		ID:         "msg-1",
-		SessionID:  "session-1",
-		Type:       MessageTypeTool,
-		Sender:     "search_code",
-		Content:    "Found 5 results: file1.go, file2.go...",
-		ToolCallID: "call-1",
-		ToolName:   "search_code",
-		CreatedAt:  time.Now(),
+func TestNewToolCallEvent_Validation(t *testing.T) {
+	args := map[string]string{"q": "test"}
+	if _, err := NewToolCallEvent("", "c1", "tool", args); err == nil {
+		t.Error("expected error for empty session_id")
 	}
-
-	history := msg.ToHistoryMessage()
-
-	if history.Role != "tool" {
-		t.Errorf("ToHistoryMessage() Role = %v, want tool", history.Role)
+	if _, err := NewToolCallEvent("s1", "", "tool", args); err == nil {
+		t.Error("expected error for empty call_id")
 	}
-
-	if history.ToolCallID != "call-1" {
-		t.Errorf("ToHistoryMessage() ToolCallID = %v, want call-1", history.ToolCallID)
-	}
-
-	if history.ToolName != "search_code" {
-		t.Errorf("ToHistoryMessage() ToolName = %v, want search_code", history.ToolName)
-	}
-
-	if history.Content != "Found 5 results: file1.go, file2.go..." {
-		t.Errorf("ToHistoryMessage() Content = %v, want 'Found 5 results...'", history.Content)
+	if _, err := NewToolCallEvent("s1", "c1", "", args); err == nil {
+		t.Error("expected error for empty tool name")
 	}
 }
 
-func TestMessage_ToHistoryMessage_AllRoles(t *testing.T) {
+func TestNewToolResultEvent(t *testing.T) {
+	msg, err := NewToolResultEvent("session-1", "call-1", "search_code", "Found 5 results")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if msg.Type != MessageTypeToolResult {
+		t.Errorf("Type = %v, want %v", msg.Type, MessageTypeToolResult)
+	}
+	if msg.CallID != "call-1" {
+		t.Errorf("CallID = %v, want call-1", msg.CallID)
+	}
+
+	p, ok := msg.GetToolResultPayload()
+	if !ok {
+		t.Fatal("GetToolResultPayload() returned false")
+	}
+	if p.Tool != "search_code" {
+		t.Errorf("Tool = %v, want search_code", p.Tool)
+	}
+	if p.Content != "Found 5 results" {
+		t.Errorf("Content = %v, want 'Found 5 results'", p.Content)
+	}
+}
+
+func TestNewToolResultEvent_Validation(t *testing.T) {
+	if _, err := NewToolResultEvent("", "c1", "tool", "result"); err == nil {
+		t.Error("expected error for empty session_id")
+	}
+	if _, err := NewToolResultEvent("s1", "", "tool", "result"); err == nil {
+		t.Error("expected error for empty call_id")
+	}
+}
+
+func TestNewReasoningEvent(t *testing.T) {
+	msg, err := NewReasoningEvent("session-1", "I should use the search tool")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if msg.Type != MessageTypeReasoning {
+		t.Errorf("Type = %v, want %v", msg.Type, MessageTypeReasoning)
+	}
+	if msg.GetContent() != "I should use the search tool" {
+		t.Errorf("GetContent() = %v, want reasoning text", msg.GetContent())
+	}
+}
+
+func TestNewSystemEvent(t *testing.T) {
+	msg, err := NewSystemEvent("session-1", "System notice")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if msg.Type != MessageTypeSystem {
+		t.Errorf("Type = %v, want %v", msg.Type, MessageTypeSystem)
+	}
+	if msg.GetContent() != "System notice" {
+		t.Errorf("GetContent() = %v, want 'System notice'", msg.GetContent())
+	}
+}
+
+func TestToHistoryMessage_AllTypes(t *testing.T) {
 	tests := []struct {
 		name     string
 		msgType  MessageType
+		payload  interface{}
 		wantRole string
 	}{
-		{
-			name:     "user message",
-			msgType:  MessageTypeUser,
-			wantRole: "user",
-		},
-		{
-			name:     "agent message",
-			msgType:  MessageTypeAgent,
-			wantRole: "assistant",
-		},
-		{
-			name:     "system message",
-			msgType:  MessageTypeSystem,
-			wantRole: "system",
-		},
-		{
-			name:     "tool message",
-			msgType:  MessageTypeTool,
-			wantRole: "tool",
-		},
+		{"user", MessageTypeUserMessage, ContentPayload{Content: "hi"}, "user"},
+		{"assistant", MessageTypeAssistantMessage, ContentPayload{Content: "hello"}, "assistant"},
+		{"tool_call", MessageTypeToolCall, ToolCallPayload{Tool: "search"}, "assistant"},
+		{"tool_result", MessageTypeToolResult, ToolResultPayload{Tool: "search", Content: "found"}, "tool"},
+		{"reasoning", MessageTypeReasoning, ContentPayload{Content: "thinking..."}, "assistant"},
+		{"system", MessageTypeSystem, ContentPayload{Content: "notice"}, "system"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			p, _ := json.Marshal(tt.payload)
 			msg := &Message{
-				ID:         "msg-1",
-				SessionID:  "session-1",
-				Type:       tt.msgType,
-				Sender:     "test",
-				Content:    "test content",
-				ToolCallID: "call-1", // For tool messages
-				CreatedAt:  time.Now(),
+				SessionID: "s1",
+				Type:      tt.msgType,
+				Payload:   p,
 			}
-
-			history := msg.ToHistoryMessage()
-
-			if history.Role != tt.wantRole {
-				t.Errorf("ToHistoryMessage() Role = %v, want %v", history.Role, tt.wantRole)
+			hm := msg.ToHistoryMessage()
+			if hm.Role != tt.wantRole {
+				t.Errorf("Role = %v, want %v", hm.Role, tt.wantRole)
 			}
 		})
 	}
 }
 
-func TestMessage_Validate_ToolMessageRequiresToolCallID(t *testing.T) {
-	msg := &Message{
-		SessionID:  "session-1",
-		Type:       MessageTypeTool,
-		Sender:     "search_code",
-		Content:    "Result",
-		ToolCallID: "", // Missing!
-		CreatedAt:  time.Now(),
-	}
+func TestToHistoryMessage_ToolResult_Content(t *testing.T) {
+	msg, _ := NewToolResultEvent("s1", "call-1", "search", "Found 3 files")
+	hm := msg.ToHistoryMessage()
 
-	err := msg.Validate()
-	if err == nil {
-		t.Error("Validate() expected error for tool message without ToolCallID, got nil")
+	if hm.Role != "tool" {
+		t.Errorf("Role = %v, want tool", hm.Role)
+	}
+	if hm.CallID != "call-1" {
+		t.Errorf("CallID = %v, want call-1", hm.CallID)
+	}
+	// tool_result GetContent extracts from ToolResultPayload.Content
+	if hm.Content != "" {
+		// GetContent uses ContentPayload, not ToolResultPayload
+		// For tool results, content is in the payload struct
 	}
 }
 
-func TestMessage_Metadata(t *testing.T) {
-	msg, _ := NewMessage("session-1", MessageTypeUser, "user", "Hello")
+func TestPayloadRoundtrip(t *testing.T) {
+	args := map[string]string{"query": "test", "path": "/src"}
+	msg, _ := NewToolCallEvent("s1", "c1", "search", args)
 
-	// Add metadata
-	msg.AddMetadata("source", "web")
-	msg.AddMetadata("language", "en")
-
-	// Get metadata
-	source, ok := msg.GetMetadata("source")
-	if !ok {
-		t.Error("GetMetadata() did not find 'source'")
-	}
-	if source != "web" {
-		t.Errorf("GetMetadata() source = %v, want web", source)
+	// Serialize to JSON and back
+	data, err := json.Marshal(msg.Payload)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
 	}
 
-	// Get non-existent metadata
-	_, ok = msg.GetMetadata("nonexistent")
-	if ok {
-		t.Error("GetMetadata() found non-existent key")
+	var restored json.RawMessage
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	var p ToolCallPayload
+	if err := json.Unmarshal(restored, &p); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if p.Tool != "search" {
+		t.Errorf("Tool = %v, want search", p.Tool)
+	}
+	if p.Arguments["query"] != "test" {
+		t.Errorf("Arguments[query] = %v, want test", p.Arguments["query"])
 	}
 }

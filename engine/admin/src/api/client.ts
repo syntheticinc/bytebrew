@@ -38,6 +38,7 @@ import type {
   KnowledgeStatus,
   CircuitBreakerState,
   MessageResponse,
+  EventResponse,
 } from '../types';
 import {
   MOCK_HEALTH,
@@ -424,6 +425,11 @@ class APIClient {
   getSessionMessages(sessionId: string): Promise<MessageResponse[]> {
     if (this.isPrototype) return this.mock<MessageResponse[]>([]);
     return this.request<MessageResponse[]>('GET', `/sessions/${sessionId}/messages`);
+  }
+
+  getSessionEvents(sessionId: string): Promise<EventResponse[]> {
+    if (this.isPrototype) return this.mock<EventResponse[]>([]);
+    return this.request<EventResponse[]>('GET', `/sessions/${sessionId}/messages`);
   }
 
   getSessionTrace(sessionId: string): Promise<SessionTrace> {

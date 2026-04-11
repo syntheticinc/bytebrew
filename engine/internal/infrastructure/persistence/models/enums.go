@@ -95,3 +95,13 @@ const (
 	AuditActorSystem   = "system"
 	AuditActorCron     = "cron"
 )
+
+// RuntimeEventType — type of runtime event in the session timeline.
+const (
+	RuntimeEventUserMessage      = "user_message"
+	RuntimeEventAssistantMessage = "assistant_message"
+	RuntimeEventToolCall         = "tool_call"
+	RuntimeEventToolResult       = "tool_result"
+	RuntimeEventReasoning        = "reasoning"
+	RuntimeEventSystem           = "system"
+)

@@ -579,10 +579,21 @@ export interface KnowledgeStatus {
 // Session message types (for chat history restore)
 // ============================================================================
 
+/** @deprecated Use EventResponse instead */
 export interface MessageResponse {
   id: string;
   role: 'user' | 'assistant' | 'tool' | 'system';
   content: string;
   tool_name?: string;
+  created_at: string;
+}
+
+// EventResponse represents a runtime event from the session timeline.
+export interface EventResponse {
+  id: string;
+  event_type: 'user_message' | 'assistant_message' | 'tool_call' | 'tool_result' | 'reasoning' | 'system';
+  agent_id?: string;
+  call_id?: string;
+  payload: Record<string, unknown>;
   created_at: string;
 }

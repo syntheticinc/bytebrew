@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { parseSSELine, type ToolCall } from '../lib/sse';
-import type { MessageResponse } from '../types';
+import type { EventResponse } from '../types';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -20,8 +20,8 @@ export interface UseSSEChatConfig {
   onToolResult?: (tool: string, output: string) => void;
   /** When set, sessionId is persisted to localStorage under this key. */
   persistenceKey?: string;
-  /** Injected fetch function for session message restore (keeps hook api-import-free). */
-  fetchMessages?: (sessionId: string) => Promise<MessageResponse[]>;
+  /** Injected fetch function for session event restore (keeps hook api-import-free). */
+  fetchMessages?: (sessionId: string) => Promise<EventResponse[]>;
 }
 
 export interface UseSSEChatReturn {
@@ -59,6 +59,85 @@ function safeSetItem(key: string, value: string): void {
 /** Safe localStorage remove — no-op on SecurityError. */
 function safeRemoveItem(key: string): void {
   try { localStorage.removeItem(key); } catch { /* no-op */ }
+}
+
+// ─── Events → SSEMessages mapper ─────────────────────────────────────────────
+
+/** Convert EventResponse[] from backend into SSEMessage[] for rendering.
+ *  Groups consecutive assistant events + tool calls into one SSEMessage,
+ *  preserving chronological tool call order. */
+function mapEventsToMessages(events: EventResponse[]): SSEMessage[] {
+  const messages: SSEMessage[] = [];
+  let currentAssistant: SSEMessage | null = null;
+
+  const flushAssistant = () => {
+    if (currentAssistant) {
+      messages.push(currentAssistant);
+      currentAssistant = null;
+    }
+  };
+
+  for (const ev of events) {
+    const payload = ev.payload ?? {};
+    switch (ev.event_type) {
+      case 'user_message':
+        flushAssistant();
+        messages.push({
+          id: ev.id,
+          role: 'user',
+          content: (payload.content as string) ?? '',
+          streaming: false,
+        });
+        break;
+
+      case 'assistant_message':
+        if (!currentAssistant) {
+          currentAssistant = { id: ev.id, role: 'assistant', content: '', toolCalls: [], streaming: false };
+        }
+        currentAssistant.content += (payload.content as string) ?? '';
+        break;
+
+      case 'tool_call': {
+        if (!currentAssistant) {
+          currentAssistant = { id: ev.id, role: 'assistant', content: '', toolCalls: [], streaming: false };
+        }
+        const args = payload.arguments as Record<string, string> | undefined;
+        currentAssistant.toolCalls = [...(currentAssistant.toolCalls ?? []), {
+          tool: (payload.tool as string) ?? '',
+          input: args ? JSON.stringify(args) : '',
+        }];
+        break;
+      }
+
+      case 'tool_result': {
+        if (currentAssistant?.toolCalls) {
+          const toolName = (payload.tool as string) ?? '';
+          const output = (payload.content as string) ?? '';
+          currentAssistant.toolCalls = currentAssistant.toolCalls.map((tc) =>
+            tc.tool === toolName && !tc.output ? { ...tc, output, status: 'done' as const } : tc,
+          );
+        }
+        break;
+      }
+
+      case 'reasoning':
+        // Reasoning events are informational — skip for now in chat history
+        break;
+
+      case 'system':
+        flushAssistant();
+        messages.push({
+          id: ev.id,
+          role: 'assistant',
+          content: (payload.content as string) ?? '',
+          streaming: false,
+        });
+        break;
+    }
+  }
+
+  flushAssistant();
+  return messages;
 }
 
 // ─── Hook ────────────────────────────────────────────────────────────────────
@@ -109,15 +188,7 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
     fetchMessages(storedSid)
       .then((raw) => {
         if (controller.signal.aborted) return;
-        const mapped: SSEMessage[] = raw
-          .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .map((m) => ({
-            id: m.id || crypto.randomUUID(),
-            role: m.role as 'user' | 'assistant',
-            content: m.content ?? '',
-            streaming: false,
-          }));
-        setMessages(mapped);
+        setMessages(mapEventsToMessages(raw));
       })
       .catch((err) => {
         if (controller.signal.aborted) return;
@@ -346,15 +417,7 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
     try {
       const raw = await fetchMessages(targetSessionId);
       if (controller.signal.aborted) return;
-      const mapped: SSEMessage[] = raw
-        .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .map((m) => ({
-          id: m.id || crypto.randomUUID(),
-          role: m.role as 'user' | 'assistant',
-          content: m.content ?? '',
-          streaming: false,
-        }));
-      setMessages(mapped);
+      setMessages(mapEventsToMessages(raw));
     } catch (err) {
       if (controller.signal.aborted) return;
       if ((err as Error).name !== 'AbortError') {
