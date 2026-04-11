@@ -67,6 +67,7 @@ export default function TestFlowTab() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const headersRef = useRef(headers);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { headersRef.current = headers; }, [headers]);
 
   // Build headers getter for SSE hook
@@ -237,6 +238,7 @@ export default function TestFlowTab() {
     const text = message.trim();
     if (!text || !selectedAgent || isStreaming) return;
     setMessage('');
+    if (inputRef.current) inputRef.current.style.height = 'auto';
 
     if (isPrototype) {
       protoSend(text);
@@ -453,53 +455,6 @@ export default function TestFlowTab() {
                   );
                 })()}
 
-                {/* Tool calls */}
-                {msg.toolCalls && msg.toolCalls.length > 0 && (
-                  <div className="space-y-1">
-                    {msg.toolCalls.map((tc, i) => {
-                      const key = `${msg.id}-tc-${i}`;
-                      const isExpanded = expandedItems[key] ?? false;
-                      return (
-                        <button
-                          key={i}
-                          onClick={() => toggleItem(key)}
-                          className="w-full text-left px-2 py-1 bg-brand-dark border border-brand-shade3/15 rounded text-[11px] font-mono hover:border-brand-shade3/30 transition-colors"
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-blue-400">
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="inline">
-                                <circle cx="12" cy="12" r="3" />
-                                <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
-                              </svg>
-                            </span>
-                            <span className="text-blue-400 font-medium">{tc.tool}</span>
-                            <svg
-                              width="8" height="8" viewBox="0 0 24 24" fill="currentColor"
-                              className={`text-brand-shade3 transition-transform ml-auto ${isExpanded ? 'rotate-90' : ''}`}
-                            >
-                              <path d="M8 5l10 7-10 7V5z" />
-                            </svg>
-                          </div>
-                          {isExpanded && (
-                            <div className="mt-1 space-y-1 text-[10px]">
-                              {tc.input && (
-                                <div className="text-brand-shade3 whitespace-pre-wrap break-all">
-                                  <span className="text-brand-shade3/60">Input: </span>{tc.input}
-                                </div>
-                              )}
-                              {tc.output !== undefined && (
-                                <div className="text-emerald-400/80 whitespace-pre-wrap break-all">
-                                  <span className="text-emerald-400/50">Output: </span>{tc.output}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
                 {/* Reasoning (if present as a special content pattern) */}
                 {msg.content?.includes('[thinking]') && (() => {
                   const thinkKey = `${msg.id}-think`;
@@ -536,6 +491,56 @@ export default function TestFlowTab() {
                     {msg.streaming && (
                       <span className="inline-block w-1.5 h-3 bg-brand-accent ml-0.5 animate-pulse" />
                     )}
+                  </div>
+                )}
+
+                {/* Tool calls rendered AFTER text */}
+                {msg.toolCalls && msg.toolCalls.length > 0 && (
+                  <div className="space-y-1">
+                    {msg.toolCalls.map((tc, i) => {
+                      const key = `${msg.id}-tc-${i}`;
+                      const isExpanded = expandedItems[key] ?? false;
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => toggleItem(key)}
+                          className="w-full text-left px-2 py-1 bg-brand-dark border border-brand-shade3/15 rounded text-[11px] font-mono hover:border-brand-shade3/30 transition-colors"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-blue-400">
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="inline">
+                                <circle cx="12" cy="12" r="3" />
+                                <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+                              </svg>
+                            </span>
+                            <span className="text-blue-400 font-medium">{tc.tool}</span>
+                            {tc.output !== undefined && (
+                              <span className="text-emerald-400/60 ml-1">done</span>
+                            )}
+                            <svg
+                              width="8" height="8" viewBox="0 0 24 24" fill="currentColor"
+                              className={`text-brand-shade3 transition-transform ml-auto ${isExpanded ? 'rotate-90' : ''}`}
+                            >
+                              <path d="M8 5l10 7-10 7V5z" />
+                            </svg>
+                          </div>
+                          {isExpanded && (
+                            <div className="mt-1 space-y-1 text-[10px]">
+                              {tc.input && (
+                                <div className="text-brand-shade3 whitespace-pre-wrap break-all">
+                                  <span className="text-brand-shade3/60">Input: </span>{tc.input}
+                                </div>
+                              )}
+                              {tc.output !== undefined && (
+                                <div className="text-emerald-400/80 whitespace-pre-wrap break-all">
+                                  <span className="text-emerald-400/50">Output: </span>{tc.output}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -583,12 +588,18 @@ export default function TestFlowTab() {
       {/* Input area */}
       <div className="flex items-center gap-2 px-3 py-2 border-t border-brand-shade3/10 flex-shrink-0">
         <textarea
+          ref={inputRef}
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={(e) => {
+            setMessage(e.target.value);
+            e.target.style.height = 'auto';
+            e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+          }}
           onKeyDown={handleKeyDown}
           placeholder="Send test message to entry agent..."
           rows={1}
           className="flex-1 px-2.5 py-1.5 bg-brand-dark-alt border border-brand-shade3/20 rounded-card text-xs text-brand-light placeholder-brand-shade3 font-mono focus:outline-none focus:border-brand-accent resize-none transition-colors"
+          style={{ maxHeight: '120px', overflowY: 'auto' }}
         />
         {isStreaming ? (
           <button

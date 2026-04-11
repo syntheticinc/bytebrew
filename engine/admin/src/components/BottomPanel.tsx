@@ -109,6 +109,7 @@ export default function BottomPanel() {
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
   const [maxContextTokens, setMaxContextTokens] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const assistantInputRef = useRef<HTMLTextAreaElement>(null);
 
   // M-01: Pass schema context on ALL pages — lockedSchema (canvas) or selectedSchema (other pages)
   const effectiveSchema = lockedSchema ?? selectedSchema ?? undefined;
@@ -175,6 +176,7 @@ export default function BottomPanel() {
     const msg = (text ?? assistantInput).trim();
     if (!msg || isStreaming) return;
     setAssistantInput('');
+    if (assistantInputRef.current) assistantInputRef.current.style.height = 'auto';
     await sendMessage(msg);
   };
 
@@ -332,7 +334,21 @@ export default function BottomPanel() {
                     if (msg.role === 'assistant' && msg.streaming && msg.content === '' && (!msg.toolCalls || msg.toolCalls.length === 0)) return null;
                     return (
                       <div key={msg.id}>
-                        {/* C-01: Tool calls rendered BEFORE text (chronological order: agent calls tools first, then responds) */}
+                        {/* Text content */}
+                        {msg.content && (
+                          <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[80%] px-3 py-2 rounded-card text-xs font-mono break-words ${
+                              msg.role === 'user'
+                                ? 'bg-brand-accent/20 text-brand-light'
+                                : 'bg-brand-dark border border-brand-shade3/20 text-brand-shade2'
+                            }`}>
+                              {msg.role === 'assistant'
+                                ? renderMarkdown(msg.content, !!msg.streaming && msg.content !== '')
+                                : msg.content}
+                            </div>
+                          </div>
+                        )}
+                        {/* Tool calls rendered AFTER text */}
                         {msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0 && (
                           <div className="space-y-1 mt-1 ml-0">
                             {msg.toolCalls.map((tc, i) => {
@@ -379,20 +395,6 @@ export default function BottomPanel() {
                             })}
                           </div>
                         )}
-                        {/* Text content rendered AFTER tool calls (chronological order) */}
-                        {msg.content && (
-                          <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${msg.role === 'assistant' && msg.toolCalls?.length ? 'mt-1' : ''}`}>
-                            <div className={`max-w-[80%] px-3 py-2 rounded-card text-xs font-mono break-words ${
-                              msg.role === 'user'
-                                ? 'bg-brand-accent/20 text-brand-light'
-                                : 'bg-brand-dark border border-brand-shade3/20 text-brand-shade2'
-                            }`}>
-                              {msg.role === 'assistant'
-                                ? renderMarkdown(msg.content, !!msg.streaming && msg.content !== '')
-                                : msg.content}
-                            </div>
-                          </div>
-                        )}
                       </div>
                     );
                   })}
@@ -429,18 +431,27 @@ export default function BottomPanel() {
 
       {/* Message input — assistant tab only (testflow has its own) */}
       {!collapsed && tab === 'assistant' && (
-        <div className="flex items-center gap-2 px-3 py-2 border-t border-brand-shade3/10 flex-shrink-0">
-          <input
-            type="text"
+        <div className="flex items-end gap-2 px-3 py-2 border-t border-brand-shade3/10 flex-shrink-0">
+          <textarea
+            ref={assistantInputRef}
             value={assistantInput}
-            onChange={(e) => setAssistantInput(e.target.value)}
+            onChange={(e) => {
+              setAssistantInput(e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+            }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') handleSendAssistant();
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendAssistant();
+              }
             }}
             placeholder={isStreaming ? 'Assistant is working...' : 'Ask AI to configure agents...'}
             disabled={isStreaming}
+            rows={1}
             aria-label="Assistant message input"
-            className="flex-1 bg-brand-dark-alt border border-brand-shade3/20 rounded-card text-brand-light text-xs px-2.5 py-1.5 outline-none font-mono focus:border-brand-accent transition-colors disabled:opacity-50"
+            className="flex-1 bg-brand-dark-alt border border-brand-shade3/20 rounded-card text-brand-light text-xs px-2.5 py-1.5 outline-none font-mono focus:border-brand-accent transition-colors disabled:opacity-50 resize-none"
+            style={{ maxHeight: '120px', overflowY: 'auto' }}
           />
           <button
             type="button"
