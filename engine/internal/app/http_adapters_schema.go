@@ -131,6 +131,9 @@ func (a *schemaServiceHTTPAdapter) ListSchemaAgents(ctx context.Context, schemaI
 	if err != nil {
 		return nil, fmt.Errorf("list schema agents: %w", err)
 	}
+	if names == nil {
+		return []string{}, nil
+	}
 	return names, nil
 }
 

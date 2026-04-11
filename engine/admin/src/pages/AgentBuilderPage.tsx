@@ -252,7 +252,7 @@ function AgentBuilderInner() {
       // Load agents: schema-scoped in production, all agents as fallback
       let agentNames: string[];
       if (schema) {
-        agentNames = await api.listSchemaAgents(schema.id);
+        agentNames = (await api.listSchemaAgents(schema.id)) ?? [];
       } else {
         const agentList = await api.listAgents();
         agentNames = agentList.map((a) => a.name);
