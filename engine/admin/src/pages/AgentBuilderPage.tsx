@@ -109,6 +109,7 @@ function AgentBuilderInner() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [savedIndicator, setSavedIndicator] = useState<'saved' | 'saving' | null>(null);
   const [availableAgents, setAvailableAgents] = useState<string[]>([]);
+  const [emptyCanvasDropdown, setEmptyCanvasDropdown] = useState(false);
 
   const { addToast } = useToast();
 
@@ -147,6 +148,13 @@ function AgentBuilderInner() {
       savedIndicatorTimer.current = setTimeout(() => setSavedIndicator(null), 2500);
     }
   }
+
+  // Pre-load available agents for empty canvas state
+  useEffect(() => {
+    if (nodes.length === 0 && !loading && currentSchema && !isPrototype) {
+      loadAvailableAgents();
+    }
+  }, [nodes.length, loading, currentSchema, isPrototype, loadAvailableAgents]);
 
   // Close side panel on Escape
   useEffect(() => {
@@ -531,12 +539,50 @@ function AgentBuilderInner() {
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <p className="text-brand-shade2 text-sm mb-2">No agents yet</p>
               <p className="text-brand-shade3/60 text-xs mb-4">Add an agent to get started</p>
-              <button
-                onClick={() => nodeOps.handleInstantAgentCreate({ x: 200, y: 100 })}
-                className="px-4 py-2 bg-brand-accent text-brand-light rounded-btn text-xs hover:bg-brand-accent-hover transition-colors"
-              >
-                Add Agent
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => nodeOps.handleInstantAgentCreate({ x: 200, y: 100 })}
+                  className="px-4 py-2 bg-brand-accent text-brand-light rounded-btn text-xs hover:bg-brand-accent-hover transition-colors"
+                >
+                  Create New Agent
+                </button>
+                {currentSchema && availableAgents.length > 0 && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setEmptyCanvasDropdown((v) => !v)}
+                      className="px-4 py-2 border border-brand-shade3/30 text-brand-shade2 rounded-btn text-xs hover:text-brand-light hover:border-brand-shade3 transition-colors"
+                    >
+                      Add Existing <span className="text-[10px]">&#9662;</span>
+                    </button>
+                    {emptyCanvasDropdown && (
+                      <div
+                        className="absolute top-full left-0 mt-1 bg-brand-dark-alt border border-brand-shade3/20 rounded-card z-50 min-w-[180px] shadow-lg py-1 max-h-[300px] overflow-y-auto"
+                        onMouseLeave={() => setEmptyCanvasDropdown(false)}
+                      >
+                        {availableAgents.map((name) => (
+                          <button
+                            key={name}
+                            className="w-full px-3 py-1.5 text-left text-xs text-brand-shade2 hover:bg-brand-accent/10 hover:text-brand-light transition-colors font-mono truncate"
+                            onClick={async () => {
+                              setEmptyCanvasDropdown(false);
+                              if (!currentSchema) return;
+                              try {
+                                await api.addAgentToSchema(currentSchema.id, name);
+                                refetchCanvas();
+                                addToast(`Agent "${name}" added to schema`, 'success');
+                              } catch (err) {
+                                addToast(`Failed to add agent: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
+                              }
+                            }}
+                          >
+                            {name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
