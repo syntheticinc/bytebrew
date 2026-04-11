@@ -36,18 +36,18 @@ func (m *mockAgentRunner) RunAgent(_ context.Context, agentName, input, sessionI
 }
 
 type mockEdgeReader struct {
-	edges map[uint][]EdgeRecord
+	edges map[string][]EdgeRecord
 }
 
-func (m *mockEdgeReader) ListEdges(_ context.Context, schemaID uint) ([]EdgeRecord, error) {
+func (m *mockEdgeReader) ListEdges(_ context.Context, schemaID string) ([]EdgeRecord, error) {
 	return m.edges[schemaID], nil
 }
 
 type mockGateReader struct {
-	gates map[uint][]GateRecord
+	gates map[string][]GateRecord
 }
 
-func (m *mockGateReader) GetGateByID(_ context.Context, id uint) (*GateRecord, error) {
+func (m *mockGateReader) GetGateByID(_ context.Context, id string) (*GateRecord, error) {
 	for _, gates := range m.gates {
 		for _, g := range gates {
 			if g.ID == id {
@@ -55,10 +55,10 @@ func (m *mockGateReader) GetGateByID(_ context.Context, id uint) (*GateRecord, e
 			}
 		}
 	}
-	return nil, fmt.Errorf("gate %d not found", id)
+	return nil, fmt.Errorf("gate %s not found", id)
 }
 
-func (m *mockGateReader) ListGates(_ context.Context, schemaID uint) ([]GateRecord, error) {
+func (m *mockGateReader) ListGates(_ context.Context, schemaID string) ([]GateRecord, error) {
 	return m.gates[schemaID], nil
 }
 
@@ -83,20 +83,20 @@ func TestExecutor_LinearPipeline(t *testing.T) {
 		},
 	}
 	edgeReader := &mockEdgeReader{
-		edges: map[uint][]EdgeRecord{
-			1: {
-				{ID: 1, SchemaID: 1, SourceAgentName: "agent-a", TargetAgentName: "agent-b", Type: "flow"},
-				{ID: 2, SchemaID: 1, SourceAgentName: "agent-b", TargetAgentName: "agent-c", Type: "flow"},
+		edges: map[string][]EdgeRecord{
+			"1": {
+				{ID: "1", SchemaID: "1", SourceAgentName: "agent-a", TargetAgentName: "agent-b", Type: "flow"},
+				{ID: "2", SchemaID: "1", SourceAgentName: "agent-b", TargetAgentName: "agent-c", Type: "flow"},
 			},
 		},
 	}
-	gateReader := &mockGateReader{gates: map[uint][]GateRecord{}}
+	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 	eventStream := &mockEventStream{}
 
 	executor := NewExecutor(runner, edgeReader, gateReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
-		SchemaID:    1,
+		SchemaID:    "1",
 		SessionID:   "session-1",
 		EventStream: eventStream,
 	}, "agent-a", "user input")
@@ -144,19 +144,19 @@ func TestExecutor_TransferEdge(t *testing.T) {
 		},
 	}
 	edgeReader := &mockEdgeReader{
-		edges: map[uint][]EdgeRecord{
-			1: {
-				{ID: 1, SchemaID: 1, SourceAgentName: "agent-a", TargetAgentName: "agent-b", Type: "transfer"},
-				{ID: 2, SchemaID: 1, SourceAgentName: "agent-b", TargetAgentName: "agent-c", Type: "flow"},
+		edges: map[string][]EdgeRecord{
+			"1": {
+				{ID: "1", SchemaID: "1", SourceAgentName: "agent-a", TargetAgentName: "agent-b", Type: "transfer"},
+				{ID: "2", SchemaID: "1", SourceAgentName: "agent-b", TargetAgentName: "agent-c", Type: "flow"},
 			},
 		},
 	}
-	gateReader := &mockGateReader{gates: map[uint][]GateRecord{}}
+	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 
 	executor := NewExecutor(runner, edgeReader, gateReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
-		SchemaID:  1,
+		SchemaID:  "1",
 		SessionID: "session-1",
 	}, "agent-a", "input")
 
@@ -182,19 +182,19 @@ func TestExecutor_ForkJoin(t *testing.T) {
 		},
 	}
 	edgeReader := &mockEdgeReader{
-		edges: map[uint][]EdgeRecord{
-			1: {
-				{ID: 1, SchemaID: 1, SourceAgentName: "agent-a", TargetAgentName: "agent-b", Type: "flow"},
-				{ID: 2, SchemaID: 1, SourceAgentName: "agent-a", TargetAgentName: "agent-c", Type: "flow"},
+		edges: map[string][]EdgeRecord{
+			"1": {
+				{ID: "1", SchemaID: "1", SourceAgentName: "agent-a", TargetAgentName: "agent-b", Type: "flow"},
+				{ID: "2", SchemaID: "1", SourceAgentName: "agent-a", TargetAgentName: "agent-c", Type: "flow"},
 			},
 		},
 	}
-	gateReader := &mockGateReader{gates: map[uint][]GateRecord{}}
+	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 
 	executor := NewExecutor(runner, edgeReader, gateReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
-		SchemaID:  1,
+		SchemaID:  "1",
 		SessionID: "session-1",
 	}, "agent-a", "input")
 
@@ -220,17 +220,17 @@ func TestExecutor_GatePass(t *testing.T) {
 		},
 	}
 	edgeReader := &mockEdgeReader{
-		edges: map[uint][]EdgeRecord{
-			1: {
-				{ID: 1, SchemaID: 1, SourceAgentName: "agent-a", TargetAgentName: "gate-1", Type: "gate"},
-				{ID: 2, SchemaID: 1, SourceAgentName: "gate-1", TargetAgentName: "agent-b", Type: "flow"},
+		edges: map[string][]EdgeRecord{
+			"1": {
+				{ID: "1", SchemaID: "1", SourceAgentName: "agent-a", TargetAgentName: "gate-1", Type: "gate"},
+				{ID: "2", SchemaID: "1", SourceAgentName: "gate-1", TargetAgentName: "agent-b", Type: "flow"},
 			},
 		},
 	}
 	gateReader := &mockGateReader{
-		gates: map[uint][]GateRecord{
-			1: {
-				{ID: 1, SchemaID: 1, Name: "gate-1", ConditionType: "all",
+		gates: map[string][]GateRecord{
+			"1": {
+				{ID: "1", SchemaID: "1", Name: "gate-1", ConditionType: "all",
 					Config: map[string]interface{}{"condition": "contains", "text": "SUCCESS"}},
 			},
 		},
@@ -240,7 +240,7 @@ func TestExecutor_GatePass(t *testing.T) {
 	executor := NewExecutor(runner, edgeReader, gateReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
-		SchemaID:    1,
+		SchemaID:    "1",
 		SessionID:   "session-1",
 		EventStream: eventStream,
 	}, "agent-a", "input")
@@ -276,17 +276,17 @@ func TestExecutor_GateFail_Block(t *testing.T) {
 		},
 	}
 	edgeReader := &mockEdgeReader{
-		edges: map[uint][]EdgeRecord{
-			1: {
-				{ID: 1, SchemaID: 1, SourceAgentName: "agent-a", TargetAgentName: "gate-1", Type: "gate"},
-				{ID: 2, SchemaID: 1, SourceAgentName: "gate-1", TargetAgentName: "agent-b", Type: "flow"},
+		edges: map[string][]EdgeRecord{
+			"1": {
+				{ID: "1", SchemaID: "1", SourceAgentName: "agent-a", TargetAgentName: "gate-1", Type: "gate"},
+				{ID: "2", SchemaID: "1", SourceAgentName: "gate-1", TargetAgentName: "agent-b", Type: "flow"},
 			},
 		},
 	}
 	gateReader := &mockGateReader{
-		gates: map[uint][]GateRecord{
-			1: {
-				{ID: 1, SchemaID: 1, Name: "gate-1", ConditionType: "all",
+		gates: map[string][]GateRecord{
+			"1": {
+				{ID: "1", SchemaID: "1", Name: "gate-1", ConditionType: "all",
 					Config: map[string]interface{}{
 						"condition":  "contains",
 						"text":       "SUCCESS",
@@ -299,7 +299,7 @@ func TestExecutor_GateFail_Block(t *testing.T) {
 	executor := NewExecutor(runner, edgeReader, gateReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
-		SchemaID:  1,
+		SchemaID:  "1",
 		SessionID: "session-1",
 	}, "agent-a", "input")
 
@@ -324,17 +324,17 @@ func TestExecutor_GateFail_Skip(t *testing.T) {
 		},
 	}
 	edgeReader := &mockEdgeReader{
-		edges: map[uint][]EdgeRecord{
-			1: {
-				{ID: 1, SchemaID: 1, SourceAgentName: "agent-a", TargetAgentName: "gate-1", Type: "gate"},
-				{ID: 2, SchemaID: 1, SourceAgentName: "gate-1", TargetAgentName: "agent-b", Type: "flow"},
+		edges: map[string][]EdgeRecord{
+			"1": {
+				{ID: "1", SchemaID: "1", SourceAgentName: "agent-a", TargetAgentName: "gate-1", Type: "gate"},
+				{ID: "2", SchemaID: "1", SourceAgentName: "gate-1", TargetAgentName: "agent-b", Type: "flow"},
 			},
 		},
 	}
 	gateReader := &mockGateReader{
-		gates: map[uint][]GateRecord{
-			1: {
-				{ID: 1, SchemaID: 1, Name: "gate-1", ConditionType: "all",
+		gates: map[string][]GateRecord{
+			"1": {
+				{ID: "1", SchemaID: "1", Name: "gate-1", ConditionType: "all",
 					Config: map[string]interface{}{
 						"condition":  "contains",
 						"text":       "MATCH",
@@ -347,7 +347,7 @@ func TestExecutor_GateFail_Skip(t *testing.T) {
 	executor := NewExecutor(runner, edgeReader, gateReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
-		SchemaID:  1,
+		SchemaID:  "1",
 		SessionID: "session-1",
 	}, "agent-a", "input")
 
@@ -367,13 +367,13 @@ func TestExecutor_SingleAgent_NoEdges(t *testing.T) {
 	runner := &mockAgentRunner{
 		outputs: map[string]string{"agent-a": "done"},
 	}
-	edgeReader := &mockEdgeReader{edges: map[uint][]EdgeRecord{}}
-	gateReader := &mockGateReader{gates: map[uint][]GateRecord{}}
+	edgeReader := &mockEdgeReader{edges: map[string][]EdgeRecord{}}
+	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 
 	executor := NewExecutor(runner, edgeReader, gateReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
-		SchemaID:  1,
+		SchemaID:  "1",
 		SessionID: "session-1",
 	}, "agent-a", "input")
 
@@ -390,13 +390,13 @@ func TestExecutor_SingleAgent_NoEdges(t *testing.T) {
 
 func TestExecutor_AgentFailure(t *testing.T) {
 	runner := &mockAgentRunner{err: fmt.Errorf("LLM error")}
-	edgeReader := &mockEdgeReader{edges: map[uint][]EdgeRecord{}}
-	gateReader := &mockGateReader{gates: map[uint][]GateRecord{}}
+	edgeReader := &mockEdgeReader{edges: map[string][]EdgeRecord{}}
+	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 
 	executor := NewExecutor(runner, edgeReader, gateReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
-		SchemaID:  1,
+		SchemaID:  "1",
 		SessionID: "session-1",
 	}, "agent-a", "input")
 
@@ -416,9 +416,9 @@ func TestExecutor_EdgeRouting_FieldMapping(t *testing.T) {
 		},
 	}
 	edgeReader := &mockEdgeReader{
-		edges: map[uint][]EdgeRecord{
-			1: {
-				{ID: 1, SchemaID: 1, SourceAgentName: "agent-a", TargetAgentName: "agent-b", Type: "flow",
+		edges: map[string][]EdgeRecord{
+			"1": {
+				{ID: "1", SchemaID: "1", SourceAgentName: "agent-a", TargetAgentName: "agent-b", Type: "flow",
 					Config: map[string]interface{}{
 						"mode": "field_mapping",
 						"mappings": []interface{}{
@@ -428,12 +428,12 @@ func TestExecutor_EdgeRouting_FieldMapping(t *testing.T) {
 			},
 		},
 	}
-	gateReader := &mockGateReader{gates: map[uint][]GateRecord{}}
+	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 
 	executor := NewExecutor(runner, edgeReader, gateReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
-		SchemaID:  1,
+		SchemaID:  "1",
 		SessionID: "session-1",
 	}, "agent-a", "input")
 
@@ -447,17 +447,17 @@ func TestExecutor_EdgeRouting_FieldMapping(t *testing.T) {
 
 func TestExecutor_HasOutgoingEdges(t *testing.T) {
 	edgeReader := &mockEdgeReader{
-		edges: map[uint][]EdgeRecord{
-			1: {
-				{ID: 1, SchemaID: 1, SourceAgentName: "agent-a", TargetAgentName: "agent-b", Type: "flow"},
+		edges: map[string][]EdgeRecord{
+			"1": {
+				{ID: "1", SchemaID: "1", SourceAgentName: "agent-a", TargetAgentName: "agent-b", Type: "flow"},
 			},
 		},
 	}
-	gateReader := &mockGateReader{gates: map[uint][]GateRecord{}}
+	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 
 	executor := NewExecutor(nil, edgeReader, gateReader)
 
-	has, err := executor.HasOutgoingEdges(context.Background(), 1, "agent-a")
+	has, err := executor.HasOutgoingEdges(context.Background(), "1", "agent-a")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -465,7 +465,7 @@ func TestExecutor_HasOutgoingEdges(t *testing.T) {
 		t.Error("expected agent-a to have outgoing edges")
 	}
 
-	has, err = executor.HasOutgoingEdges(context.Background(), 1, "agent-b")
+	has, err = executor.HasOutgoingEdges(context.Background(), "1", "agent-b")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -73,7 +73,7 @@ func (h *SchemaHandler) SetAgentDetailer(detailer SchemaAgentDetailer) {
 // ExportSchema handles GET /api/v1/schemas/{id}/export.
 // It returns the full schema as a YAML file.
 func (h *SchemaHandler) ExportSchema(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUintParam(r, "id")
+	id, err := parseStringParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return

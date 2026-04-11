@@ -10,6 +10,24 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// parseStringIDParam extracts and validates a non-empty string "id" URL parameter.
+func parseStringIDParam(r *http.Request) (string, error) {
+	raw := chi.URLParam(r, "id")
+	if raw == "" {
+		return "", fmt.Errorf("id parameter is required")
+	}
+	return raw, nil
+}
+
+// parseStringParam extracts and validates a non-empty string URL parameter by name.
+func parseStringParam(r *http.Request, param string) (string, error) {
+	s := chi.URLParam(r, param)
+	if s == "" {
+		return "", fmt.Errorf("%s is required", param)
+	}
+	return s, nil
+}
+
 // CreateTaskRequest is the body for POST /api/v1/tasks.
 type CreateTaskRequest struct {
 	Title       string `json:"title"`
@@ -30,7 +48,7 @@ type TaskListFilter struct {
 
 // TaskResponse is a summary of a task for list responses.
 type TaskResponse struct {
-	ID        uint   `json:"id"`
+	ID        string `json:"id"`
 	Title     string `json:"title"`
 	AgentName string `json:"agent_name"`
 	Status    string `json:"status"`
@@ -65,12 +83,12 @@ type ProvideInputRequest struct {
 
 // TaskService provides task CRUD operations.
 type TaskService interface {
-	CreateTask(ctx context.Context, params CreateTaskRequest) (uint, error)
+	CreateTask(ctx context.Context, params CreateTaskRequest) (string, error)
 	ListTasks(ctx context.Context, filter TaskListFilter) ([]TaskResponse, error)
 	CountTasks(ctx context.Context, filter TaskListFilter) (int64, error)
-	GetTask(ctx context.Context, id uint) (*TaskDetailResponse, error)
-	CancelTask(ctx context.Context, id uint) error
-	ProvideInput(ctx context.Context, id uint, input string) error
+	GetTask(ctx context.Context, id string) (*TaskDetailResponse, error)
+	CancelTask(ctx context.Context, id string) error
+	ProvideInput(ctx context.Context, id string, input string) error
 }
 
 // TaskHandler serves /api/v1/tasks endpoints.
@@ -193,7 +211,7 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Get handles GET /api/v1/tasks/{id}.
 func (h *TaskHandler) Get(w http.ResponseWriter, r *http.Request) {
-	id, err := parseIDParam(r)
+	id, err := parseStringIDParam(r)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -205,7 +223,7 @@ func (h *TaskHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if task == nil {
-		writeJSONError(w, http.StatusNotFound, fmt.Sprintf("task not found: %d", id))
+		writeJSONError(w, http.StatusNotFound, fmt.Sprintf("task not found: %s", id))
 		return
 	}
 
@@ -214,7 +232,7 @@ func (h *TaskHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 // Cancel handles DELETE /api/v1/tasks/{id}.
 func (h *TaskHandler) Cancel(w http.ResponseWriter, r *http.Request) {
-	id, err := parseIDParam(r)
+	id, err := parseStringIDParam(r)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -230,7 +248,7 @@ func (h *TaskHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 
 // ProvideInput handles POST /api/v1/tasks/{id}/input.
 func (h *TaskHandler) ProvideInput(w http.ResponseWriter, r *http.Request) {
-	id, err := parseIDParam(r)
+	id, err := parseStringIDParam(r)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -252,17 +270,4 @@ func (h *TaskHandler) ProvideInput(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-}
-
-// parseIDParam extracts and validates the "id" URL parameter.
-func parseIDParam(r *http.Request) (uint, error) {
-	raw := chi.URLParam(r, "id")
-	if raw == "" {
-		return 0, fmt.Errorf("id parameter is required")
-	}
-	id, err := strconv.ParseUint(raw, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("invalid id: %s", raw)
-	}
-	return uint(id), nil
 }

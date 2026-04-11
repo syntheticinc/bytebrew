@@ -20,6 +20,10 @@ func (m *mockTriggerService) ListTriggers(_ context.Context) ([]TriggerResponse,
 	return nil, nil
 }
 
+func (m *mockTriggerService) ListTriggersBySchema(_ context.Context, _ string) ([]TriggerResponse, error) {
+	return nil, nil
+}
+
 func (m *mockTriggerService) CreateTrigger(_ context.Context, _ CreateTriggerRequest) (*TriggerResponse, error) {
 	if m.createErr != nil {
 		return nil, m.createErr
@@ -27,19 +31,19 @@ func (m *mockTriggerService) CreateTrigger(_ context.Context, _ CreateTriggerReq
 	return m.createResult, nil
 }
 
-func (m *mockTriggerService) UpdateTrigger(_ context.Context, _ uint, _ CreateTriggerRequest) (*TriggerResponse, error) {
+func (m *mockTriggerService) UpdateTrigger(_ context.Context, _ string, _ CreateTriggerRequest) (*TriggerResponse, error) {
 	return nil, nil
 }
 
-func (m *mockTriggerService) DeleteTrigger(_ context.Context, _ uint) error {
+func (m *mockTriggerService) DeleteTrigger(_ context.Context, _ string) error {
 	return nil
 }
 
-func (m *mockTriggerService) SetTriggerTarget(_ context.Context, _ uint, _ string) (*TriggerResponse, error) {
+func (m *mockTriggerService) SetTriggerTarget(_ context.Context, _ string, _ string) (*TriggerResponse, error) {
 	return nil, nil
 }
 
-func (m *mockTriggerService) ClearTriggerTarget(_ context.Context, _ uint) error {
+func (m *mockTriggerService) ClearTriggerTarget(_ context.Context, _ string) error {
 	return nil
 }
 
@@ -54,7 +58,7 @@ func TestTriggerHandler_Create_RejectsNonEntryAgent(t *testing.T) {
 	body, _ := json.Marshal(CreateTriggerRequest{
 		Type:    "schedule",
 		Title:   "daily sync",
-		AgentID: 1,
+		AgentID: "agent-1",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -84,10 +88,10 @@ func TestTriggerHandler_Create_RejectsNonEntryAgent(t *testing.T) {
 func TestTriggerHandler_Create_AcceptsEntryAgent(t *testing.T) {
 	service := &mockTriggerService{
 		createResult: &TriggerResponse{
-			ID:        1,
+			ID:        "trigger-1",
 			Type:      "schedule",
 			Title:     "daily sync",
-			AgentID:   1,
+			AgentID:   "agent-1",
 			Enabled:   true,
 			CreatedAt: "2026-04-08T00:00:00Z",
 		},
@@ -97,7 +101,7 @@ func TestTriggerHandler_Create_AcceptsEntryAgent(t *testing.T) {
 	body, _ := json.Marshal(CreateTriggerRequest{
 		Type:    "schedule",
 		Title:   "daily sync",
-		AgentID: 1,
+		AgentID: "agent-1",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

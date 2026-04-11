@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
@@ -21,7 +20,7 @@ import (
 type SessionRegistry interface {
 	CreateSession(sessionID, projectKey, userID, projectRoot, platform, agentName string)
 	Subscribe(sessionID string) (ch <-chan *pb.SessionEvent, cleanup func())
-	ReplayEvents(sessionID string, lastEventID int64) []*pb.SessionEvent
+	ReplayEvents(sessionID string, lastEventID string) []*pb.SessionEvent
 	EnqueueMessage(sessionID, content string) error
 	DrainMessages(sessionID string)
 	SendAskUserReply(sessionID, callID, reply string)
@@ -376,8 +375,7 @@ func (h *ConnectionHandler) handleSubscribe(writer *wsWriter, msg *WsMessage, st
 	}()
 
 	// 3. THEN replay from SQLite (client dedup handles overlap with live events).
-	lastEventID, _ := strconv.ParseInt(lastEventIDStr, 10, 64)
-	missed := h.sessionRegistry.ReplayEvents(sessionID, lastEventID)
+	missed := h.sessionRegistry.ReplayEvents(sessionID, lastEventIDStr)
 	for _, evt := range missed {
 		h.sendSessionEvent(writer, sessionID, evt)
 	}

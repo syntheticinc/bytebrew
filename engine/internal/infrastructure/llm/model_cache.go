@@ -20,7 +20,7 @@ import (
 // Clients are created lazily on first access and cached until explicitly invalidated.
 type ModelCache struct {
 	mu      sync.RWMutex
-	clients map[uint]*cachedModel
+	clients map[string]*cachedModel
 	db      *gorm.DB
 }
 
@@ -33,14 +33,14 @@ type cachedModel struct {
 // NewModelCache creates a new ModelCache backed by the given database.
 func NewModelCache(db *gorm.DB) *ModelCache {
 	return &ModelCache{
-		clients: make(map[uint]*cachedModel),
+		clients: make(map[string]*cachedModel),
 		db:      db,
 	}
 }
 
 // Get returns a cached model client or creates one from the database.
 // Returns the client, the model display name, and any error.
-func (c *ModelCache) Get(ctx context.Context, modelID uint) (model.ToolCallingChatModel, string, error) {
+func (c *ModelCache) Get(ctx context.Context, modelID string) (model.ToolCallingChatModel, string, error) {
 	c.mu.RLock()
 	if cached, ok := c.clients[modelID]; ok {
 		c.mu.RUnlock()
@@ -49,8 +49,8 @@ func (c *ModelCache) Get(ctx context.Context, modelID uint) (model.ToolCallingCh
 	c.mu.RUnlock()
 
 	var dbModel models.LLMProviderModel
-	if err := c.db.WithContext(ctx).First(&dbModel, modelID).Error; err != nil {
-		return nil, "", fmt.Errorf("model ID %d not found: %w", modelID, err)
+	if err := c.db.WithContext(ctx).First(&dbModel, "id = ?", modelID).Error; err != nil {
+		return nil, "", fmt.Errorf("model ID %s not found: %w", modelID, err)
 	}
 
 	client, err := CreateClientFromDBModel(dbModel)
@@ -73,7 +73,7 @@ func (c *ModelCache) Get(ctx context.Context, modelID uint) (model.ToolCallingCh
 }
 
 // Invalidate removes a cached model client, forcing re-creation on next access.
-func (c *ModelCache) Invalidate(modelID uint) {
+func (c *ModelCache) Invalidate(modelID string) {
 	c.mu.Lock()
 	delete(c.clients, modelID)
 	c.mu.Unlock()
@@ -84,7 +84,7 @@ func (c *ModelCache) Invalidate(modelID uint) {
 // InvalidateAll clears the entire cache.
 func (c *ModelCache) InvalidateAll() {
 	c.mu.Lock()
-	c.clients = make(map[uint]*cachedModel)
+	c.clients = make(map[string]*cachedModel)
 	c.mu.Unlock()
 
 	slog.Info("model cache fully invalidated")

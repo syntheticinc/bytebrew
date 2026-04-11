@@ -26,7 +26,7 @@ const (
 
 // EventStoreReader reads persisted events for replay on reconnect (consumer-side interface).
 type EventStoreReader interface {
-	GetAfter(sessionID string, lastEventID int64) ([]eventstore.StoredEvent, error)
+	GetAfter(sessionID string, afterCreatedAt time.Time) ([]eventstore.StoredEvent, error)
 	GetAll(sessionID string) ([]eventstore.StoredEvent, error)
 }
 
@@ -188,31 +188,49 @@ func (r *SessionRegistry) PublishEvent(sessionID string, event *pb.SessionEvent)
 }
 
 // ReplayEvents returns events after the given lastEventID for reconnect.
-// Uses SQLite event store when available; returns nil otherwise.
-func (r *SessionRegistry) ReplayEvents(sessionID string, lastEventID int64) []*pb.SessionEvent {
+// If lastEventID is empty, all events are returned.
+// Uses event store when available; returns nil otherwise.
+func (r *SessionRegistry) ReplayEvents(sessionID string, lastEventID string) []*pb.SessionEvent {
 	if r.store == nil {
 		return nil
 	}
 
-	var events []eventstore.StoredEvent
-	var err error
-
-	if lastEventID == 0 {
-		events, err = r.store.GetAll(sessionID)
-	} else {
-		events, err = r.store.GetAfter(sessionID, lastEventID)
-	}
-
+	all, err := r.store.GetAll(sessionID)
 	if err != nil {
 		slog.Error("replay events failed", "session_id", sessionID, "error", err)
 		return nil
 	}
 
-	protos := make([]*pb.SessionEvent, len(events))
-	for i, e := range events {
-		protos[i] = e.Proto
+	if lastEventID == "" {
+		protos := make([]*pb.SessionEvent, len(all))
+		for i, e := range all {
+			protos[i] = e.Proto
+		}
+		return protos
 	}
-	return protos
+
+	// Find the last seen event and return everything after it.
+	var result []*pb.SessionEvent
+	found := false
+	for _, e := range all {
+		if found {
+			result = append(result, e.Proto)
+		}
+		if e.ID == lastEventID {
+			found = true
+		}
+	}
+
+	if !found {
+		// Unknown lastEventID — return all events (safe fallback).
+		protos := make([]*pb.SessionEvent, len(all))
+		for i, e := range all {
+			protos[i] = e.Proto
+		}
+		return protos
+	}
+
+	return result
 }
 
 // EnqueueMessage puts a user message into the session's message channel.

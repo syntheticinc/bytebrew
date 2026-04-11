@@ -4,7 +4,7 @@ import "time"
 
 // TaskModel maps to the "tasks" table.
 type TaskModel struct {
-	ID           uint       `gorm:"primaryKey"`
+	ID           string     `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	Title        string     `gorm:"type:varchar(500);not null"`
 	Description  string     `gorm:"type:text"`
 	AgentName    string     `gorm:"type:varchar(255);not null;index"`
@@ -12,7 +12,7 @@ type TaskModel struct {
 	SourceID     string     `gorm:"type:varchar(255);index:idx_source_composite"`
 	UserID       string     `gorm:"type:varchar(255);index"`
 	SessionID    *string    `gorm:"type:varchar(36);index"`
-	ParentTaskID *uint      `gorm:"index"`
+	ParentTaskID *string    `gorm:"type:uuid;index"`
 	Depth        int        `gorm:"not null;default:0"`
 	Status       string     `gorm:"type:varchar(20);not null;default:pending;index"`
 	Mode         string     `gorm:"type:varchar(20);not null;default:interactive"`

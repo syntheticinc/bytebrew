@@ -79,7 +79,7 @@ export function useCanvasEdges({
 
       // Trigger → agent: set routing target via API (canvas edge = routing config)
       if (source.startsWith('trigger-')) {
-        const triggerId = parseInt(source.replace('trigger-', ''), 10);
+        const triggerId = source.replace('trigger-', '');
         showSavedIndicator('saving');
         try {
           await api.setTriggerTarget(triggerId, target);
@@ -141,7 +141,7 @@ export function useCanvasEdges({
       for (const edge of deletedEdges) {
         // Trigger → agent edge: clear routing target via API
         if (edge.id.startsWith('trigger:')) {
-          const triggerId = parseInt(edge.source.replace('trigger-', ''), 10);
+          const triggerId = edge.source.replace('trigger-', '');
           showSavedIndicator('saving');
           try {
             await api.clearTriggerTarget(triggerId);

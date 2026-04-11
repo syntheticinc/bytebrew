@@ -87,7 +87,7 @@ func (t *adminAddCapabilityTool) InvokableRun(ctx context.Context, argsJSON stri
 	}
 
 	slog.InfoContext(ctx, "[AdminAddCapability] added", "agent", args.AgentName, "type", args.CapabilityType)
-	return fmt.Sprintf("Capability %q added to agent %q (id=%d).", args.CapabilityType, args.AgentName, record.ID), nil
+	return fmt.Sprintf("Capability %q added to agent %q (id=%s).", args.CapabilityType, args.AgentName, record.ID), nil
 }
 
 // --- admin_remove_capability ---
@@ -106,13 +106,13 @@ func (t *adminRemoveCapabilityTool) Info(_ context.Context) (*schema.ToolInfo, e
 		Name: "admin_remove_capability",
 		Desc: "Removes a capability from an agent by capability ID.",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"capability_id": {Type: schema.Integer, Desc: "Capability ID to remove", Required: true},
+			"capability_id": {Type: schema.String, Desc: "Capability ID to remove", Required: true},
 		}),
 	}, nil
 }
 
 type removeCapabilityArgs struct {
-	CapabilityID uint `json:"capability_id"`
+	CapabilityID string `json:"capability_id"`
 }
 
 func (t *adminRemoveCapabilityTool) InvokableRun(ctx context.Context, argsJSON string, _ ...tool.Option) (string, error) {
@@ -124,13 +124,13 @@ func (t *adminRemoveCapabilityTool) InvokableRun(ctx context.Context, argsJSON s
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return fmt.Sprintf("[ERROR] Invalid arguments: %v", err), nil
 	}
-	if args.CapabilityID == 0 {
+	if args.CapabilityID == "" {
 		return "[ERROR] capability_id is required", nil
 	}
 
 	if err := t.repo.Delete(ctx, args.CapabilityID); err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return fmt.Sprintf("Capability not found: %d", args.CapabilityID), nil
+			return fmt.Sprintf("Capability not found: %s", args.CapabilityID), nil
 		}
 		return fmt.Sprintf("[ERROR] Failed to remove capability: %v", err), nil
 	}
@@ -140,7 +140,7 @@ func (t *adminRemoveCapabilityTool) InvokableRun(ctx context.Context, argsJSON s
 	}
 
 	slog.InfoContext(ctx, "[AdminRemoveCapability] removed", "id", args.CapabilityID)
-	return fmt.Sprintf("Capability %d removed successfully.", args.CapabilityID), nil
+	return fmt.Sprintf("Capability %s removed successfully.", args.CapabilityID), nil
 }
 
 // --- admin_update_capability ---
@@ -159,7 +159,7 @@ func (t *adminUpdateCapabilityTool) Info(_ context.Context) (*schema.ToolInfo, e
 		Name: "admin_update_capability",
 		Desc: "Updates a capability's config or enabled state by ID.",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"capability_id": {Type: schema.Integer, Desc: "Capability ID to update", Required: true},
+			"capability_id": {Type: schema.String, Desc: "Capability ID to update", Required: true},
 			"config_json":   {Type: schema.String, Desc: "New JSON config string", Required: false},
 			"enabled":       {Type: schema.Boolean, Desc: "Enable or disable the capability", Required: false},
 		}),
@@ -167,7 +167,7 @@ func (t *adminUpdateCapabilityTool) Info(_ context.Context) (*schema.ToolInfo, e
 }
 
 type updateCapabilityArgs struct {
-	CapabilityID uint  `json:"capability_id"`
+	CapabilityID string `json:"capability_id"`
 	ConfigJSON   string `json:"config_json"`
 	Enabled      *bool  `json:"enabled"`
 }
@@ -181,7 +181,7 @@ func (t *adminUpdateCapabilityTool) InvokableRun(ctx context.Context, argsJSON s
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return fmt.Sprintf("[ERROR] Invalid arguments: %v", err), nil
 	}
-	if args.CapabilityID == 0 {
+	if args.CapabilityID == "" {
 		return "[ERROR] capability_id is required", nil
 	}
 
@@ -204,7 +204,7 @@ func (t *adminUpdateCapabilityTool) InvokableRun(ctx context.Context, argsJSON s
 
 	if err := t.repo.Update(ctx, args.CapabilityID, record); err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return fmt.Sprintf("Capability not found: %d", args.CapabilityID), nil
+			return fmt.Sprintf("Capability not found: %s", args.CapabilityID), nil
 		}
 		return fmt.Sprintf("[ERROR] Failed to update capability: %v", err), nil
 	}
@@ -214,5 +214,5 @@ func (t *adminUpdateCapabilityTool) InvokableRun(ctx context.Context, argsJSON s
 	}
 
 	slog.InfoContext(ctx, "[AdminUpdateCapability] updated", "id", args.CapabilityID)
-	return fmt.Sprintf("Capability %d updated successfully.", args.CapabilityID), nil
+	return fmt.Sprintf("Capability %s updated successfully.", args.CapabilityID), nil
 }

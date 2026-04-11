@@ -10,7 +10,7 @@ import (
 
 // TenantRecord is an intermediate struct for DB <-> domain mapping.
 type TenantRecord struct {
-	ID        uint
+	ID        string
 	TenantUID string
 	Email     string
 	PlanType  string

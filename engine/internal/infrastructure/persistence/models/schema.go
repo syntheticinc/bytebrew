@@ -4,7 +4,7 @@ import "time"
 
 // SchemaModel maps to the "schemas" table.
 type SchemaModel struct {
-	ID          uint      `gorm:"primaryKey"`
+	ID          string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	Name        string    `gorm:"uniqueIndex;not null;type:varchar(255)"`
 	Description string    `gorm:"type:text"`
 	IsSystem    bool      `gorm:"column:is_system;not null;default:false"`
@@ -16,9 +16,9 @@ func (SchemaModel) TableName() string { return "schemas" }
 
 // SchemaAgentModel maps to the "schema_agents" join table (many-to-many: schema <-> agent).
 type SchemaAgentModel struct {
-	ID       uint   `gorm:"primaryKey"`
-	SchemaID uint   `gorm:"not null;uniqueIndex:idx_schema_agent"`
-	AgentID  uint   `gorm:"not null;uniqueIndex:idx_schema_agent"`
+	ID       string `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
+	SchemaID string `gorm:"type:uuid;not null;uniqueIndex:idx_schema_agent"`
+	AgentID  string `gorm:"type:uuid;not null;uniqueIndex:idx_schema_agent"`
 	Position int    `gorm:"not null;default:0"` // ordering on canvas
 }
 

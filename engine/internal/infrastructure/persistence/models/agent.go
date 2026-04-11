@@ -4,9 +4,9 @@ import "time"
 
 // AgentModel maps to the "agents" table.
 type AgentModel struct {
-	ID             uint      `gorm:"primaryKey"`
+	ID             string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	Name           string    `gorm:"uniqueIndex;not null"`
-	ModelID        *uint     `gorm:"index"`
+	ModelID        *string   `gorm:"type:uuid;index"`
 	SystemPrompt   string    `gorm:"type:text;not null"`
 	Kit            string    `gorm:"type:varchar(255)"`
 	KnowledgePath  string    `gorm:"type:varchar(500)"`

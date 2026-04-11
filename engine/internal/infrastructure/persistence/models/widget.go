@@ -4,10 +4,10 @@ import "time"
 
 // WidgetModel maps to the "widgets" table.
 type WidgetModel struct {
-	ID              uint      `gorm:"primaryKey"`
+	ID              string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	TenantID        string    `gorm:"type:varchar(255);index"`
 	Name            string    `gorm:"type:varchar(255);not null"`
-	SchemaID        uint      `gorm:"not null;index"`
+	SchemaID        string    `gorm:"type:uuid;not null;index"`
 	PrimaryColor    string    `gorm:"type:varchar(20);not null;default:#6366f1"`
 	Position        string    `gorm:"type:varchar(20);not null;default:bottom-right"`
 	Size            string    `gorm:"type:varchar(20);not null;default:standard"`

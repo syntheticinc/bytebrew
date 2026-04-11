@@ -12,7 +12,7 @@ export interface AgentInfo {
 }
 
 export interface AgentDetail extends AgentInfo {
-  model_id?: number;
+  model_id?: string;
   system_prompt: string;
   tools: string[];
   can_spawn: string[];
@@ -53,7 +53,7 @@ export type EscalationConditionType =
 
 export interface CreateAgentRequest {
   name: string;
-  model_id?: number;
+  model_id?: string;
   system_prompt: string;
   kit?: string;
   lifecycle?: string;
@@ -73,7 +73,7 @@ export interface CreateAgentRequest {
 // ============================================================================
 
 export interface Model {
-  id: number;
+  id: string;
   name: string;
   type: string;
   base_url?: string;
@@ -97,7 +97,7 @@ export interface CreateModelRequest {
 // ============================================================================
 
 export interface MCPServer {
-  id: number;
+  id: string;
   name: string;
   type: 'stdio' | 'http' | 'sse' | 'streamable-http';
   command?: string;
@@ -142,7 +142,7 @@ export interface CreateMCPServerRequest {
 // ============================================================================
 
 export interface TaskResponse {
-  id: number;
+  id: string;
   title: string;
   agent_name: string;
   status: string;
@@ -172,12 +172,12 @@ export interface PaginatedTaskResponse {
 // ============================================================================
 
 export interface Trigger {
-  id: number;
+  id: string;
   type: 'cron' | 'webhook' | 'chat';
   title: string;
-  agent_id: number;
+  agent_id: string;
   agent_name?: string;
-  schema_id?: number;
+  schema_id?: string;
   schedule?: string;
   webhook_path?: string;
   description?: string;
@@ -191,9 +191,9 @@ export interface Trigger {
 export interface CreateTriggerRequest {
   type: string;
   title: string;
-  agent_id?: number;
+  agent_id?: string;
   agent_name?: string;
-  schema_id?: number;
+  schema_id?: string;
   schedule?: string;
   webhook_path?: string;
   description?: string;
@@ -207,7 +207,7 @@ export interface CreateTriggerRequest {
 // ============================================================================
 
 export interface APIToken {
-  id: number;
+  id: string;
   name: string;
   scopes_mask: number;
   created_at: string;
@@ -220,7 +220,7 @@ export interface CreateTokenRequest {
 }
 
 export interface CreateTokenResponse {
-  id: number;
+  id: string;
   name: string;
   token: string;
 }
@@ -263,7 +263,7 @@ export interface Setting {
 // ============================================================================
 
 export interface AuditEntry {
-  id: number;
+  id: string;
   timestamp: string;
   actor_type: string;
   actor_id: string;
@@ -309,7 +309,7 @@ export interface ToolMetadata {
 // ============================================================================
 
 export interface Schema {
-  id: number;
+  id: string;
   name: string;
   description?: string;
   agents?: string[];
@@ -332,7 +332,7 @@ export type CapabilityType =
   | 'policies';
 
 export interface CapabilityConfig {
-  id?: number;
+  id?: string;
   agent_name?: string;
   type: CapabilityType;
   enabled: boolean;
@@ -344,7 +344,7 @@ export interface CapabilityConfig {
 // ============================================================================
 
 export interface Capability {
-  id: number;
+  id: string;
   agent_name: string;
   type: string;
   config: Record<string, unknown>;
@@ -404,7 +404,7 @@ export type InspectStepKind =
 export type SessionStatus = 'running' | 'completed' | 'failed' | 'blocked' | 'timeout';
 
 export interface InspectStep {
-  id: number;
+  id: string;
   kind: InspectStepKind;
   label: string;
   input?: string;

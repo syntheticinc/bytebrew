@@ -47,7 +47,7 @@ export default function TasksPage() {
     }
   }
 
-  async function handleCancel(id: number) {
+  async function handleCancel(id: string) {
     try {
       await api.cancelTask(id);
       setSelectedTask(null);

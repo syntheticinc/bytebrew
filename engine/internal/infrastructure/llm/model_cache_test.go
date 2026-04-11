@@ -18,15 +18,26 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 
-	err = db.AutoMigrate(&models.LLMProviderModel{})
+	err = db.Exec(`CREATE TABLE models (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL UNIQUE,
+		type VARCHAR(30) NOT NULL,
+		base_url VARCHAR(500),
+		model_name VARCHAR(255) NOT NULL,
+		api_key_encrypted VARCHAR(1000),
+		api_version VARCHAR(30) DEFAULT '',
+		created_at DATETIME,
+		updated_at DATETIME
+	)`).Error
 	require.NoError(t, err)
 
 	return db
 }
 
-func seedModel(t *testing.T, db *gorm.DB, name, providerType, baseURL, modelName, apiKey string) uint {
+func seedModel(t *testing.T, db *gorm.DB, name, providerType, baseURL, modelName, apiKey string) string {
 	t.Helper()
 	m := &models.LLMProviderModel{
+		ID:              "test-" + name,
 		Name:            name,
 		Type:            providerType,
 		BaseURL:         baseURL,
@@ -42,17 +53,17 @@ func TestModelCache_Get_NotFound(t *testing.T) {
 	db := setupTestDB(t)
 	cache := NewModelCache(db)
 
-	_, _, err := cache.Get(context.Background(), 999)
+	_, _, err := cache.Get(context.Background(), "nonexistent-999")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "model ID 999 not found")
+	assert.Contains(t, err.Error(), "model ID nonexistent-999 not found")
 }
 
 func TestModelCache_Get_UnsupportedType(t *testing.T) {
 	db := setupTestDB(t)
-	seedModel(t, db, "bad-model", "unknown_provider", "http://localhost", "test", "")
+	id := seedModel(t, db, "bad-model", "unknown_provider", "http://localhost", "test", "")
 
 	cache := NewModelCache(db)
-	_, _, err := cache.Get(context.Background(), 1)
+	_, _, err := cache.Get(context.Background(), id)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported provider type")
 }
@@ -64,21 +75,21 @@ func TestModelCache_Invalidate(t *testing.T) {
 	// Pre-populate cache manually to avoid needing a real LLM server.
 	mockClient := &mockChatModel{id: "cached"}
 	cache.mu.Lock()
-	cache.clients[42] = &cachedModel{client: mockClient, name: "test-model"}
+	cache.clients["test-42"] = &cachedModel{client: mockClient, name: "test-model"}
 	cache.mu.Unlock()
 
 	// Verify it's cached.
 	cache.mu.RLock()
-	_, exists := cache.clients[42]
+	_, exists := cache.clients["test-42"]
 	cache.mu.RUnlock()
 	assert.True(t, exists)
 
 	// Invalidate.
-	cache.Invalidate(42)
+	cache.Invalidate("test-42")
 
 	// Verify removed.
 	cache.mu.RLock()
-	_, exists = cache.clients[42]
+	_, exists = cache.clients["test-42"]
 	cache.mu.RUnlock()
 	assert.False(t, exists)
 }
@@ -87,8 +98,8 @@ func TestModelCache_InvalidateAll(t *testing.T) {
 	cache := NewModelCache(nil)
 
 	cache.mu.Lock()
-	cache.clients[1] = &cachedModel{client: &mockChatModel{id: "a"}, name: "a"}
-	cache.clients[2] = &cachedModel{client: &mockChatModel{id: "b"}, name: "b"}
+	cache.clients["1"] = &cachedModel{client: &mockChatModel{id: "a"}, name: "a"}
+	cache.clients["2"] = &cachedModel{client: &mockChatModel{id: "b"}, name: "b"}
 	cache.mu.Unlock()
 
 	cache.InvalidateAll()
@@ -103,10 +114,10 @@ func TestModelCache_Get_CacheHit(t *testing.T) {
 	mockClient := &mockChatModel{id: "cached-model"}
 
 	cache.mu.Lock()
-	cache.clients[10] = &cachedModel{client: mockClient, name: "gpt-4"}
+	cache.clients["10"] = &cachedModel{client: mockClient, name: "gpt-4"}
 	cache.mu.Unlock()
 
-	client, name, err := cache.Get(context.Background(), 10)
+	client, name, err := cache.Get(context.Background(), "10")
 	require.NoError(t, err)
 	assert.Equal(t, mockClient, client)
 	assert.Equal(t, "gpt-4", name)
@@ -117,7 +128,7 @@ func TestModelCache_ConcurrentAccess(t *testing.T) {
 	mockClient := &mockChatModel{id: "concurrent"}
 
 	cache.mu.Lock()
-	cache.clients[1] = &cachedModel{client: mockClient, name: "test"}
+	cache.clients["1"] = &cachedModel{client: mockClient, name: "test"}
 	cache.mu.Unlock()
 
 	var wg sync.WaitGroup
@@ -125,7 +136,7 @@ func TestModelCache_ConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			client, name, err := cache.Get(context.Background(), 1)
+			client, name, err := cache.Get(context.Background(), "1")
 			assert.NoError(t, err)
 			assert.NotNil(t, client)
 			assert.Equal(t, "test", name)
@@ -137,7 +148,7 @@ func TestModelCache_ConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			cache.Invalidate(999) // non-existent, but should not panic
+			cache.Invalidate("999") // non-existent, but should not panic
 		}()
 	}
 

@@ -116,14 +116,14 @@ func (a *mcpServiceHTTPAdapter) UpdateMCPServer(ctx context.Context, name string
 	if err != nil {
 		return nil, err
 	}
-	var targetID uint
+	var targetID string
 	for _, s := range servers {
 		if s.Name == name {
 			targetID = s.ID
 			break
 		}
 	}
-	if targetID == 0 {
+	if targetID == "" {
 		return nil, fmt.Errorf("mcp server not found: %s", name)
 	}
 
@@ -210,18 +210,18 @@ func (a *mcpServiceHTTPAdapter) DeleteMCPServer(ctx context.Context, name string
 	return fmt.Errorf("mcp server not found: %s", name)
 }
 
-// ptrUint converts a uint to *uint; returns nil when v == 0 (no agent).
-func ptrUint(v uint) *uint {
-	if v == 0 {
+// ptrString converts a string to *string; returns nil when v == "" (no reference).
+func ptrString(v string) *string {
+	if v == "" {
 		return nil
 	}
 	return &v
 }
 
-// derefUint dereferences a *uint; returns 0 when p is nil.
-func derefUint(p *uint) uint {
+// derefString dereferences a *string; returns "" when p is nil.
+func derefString(p *string) string {
 	if p == nil {
-		return 0
+		return ""
 	}
 	return *p
 }
@@ -237,7 +237,7 @@ func triggerModelToResponse(t models.TriggerModel) deliveryhttp.TriggerResponse 
 		ID:          t.ID,
 		Type:        t.Type,
 		Title:       t.Title,
-		AgentID:     derefUint(t.AgentID),
+		AgentID:     derefString(t.AgentID),
 		AgentName:   t.Agent.Name,
 		SchemaID:    t.SchemaID,
 		Schedule:    t.Schedule,
@@ -264,7 +264,7 @@ func (a *triggerServiceHTTPAdapter) ListTriggers(ctx context.Context) ([]deliver
 	return result, nil
 }
 
-func (a *triggerServiceHTTPAdapter) ListTriggersBySchema(ctx context.Context, schemaID uint) ([]deliveryhttp.TriggerResponse, error) {
+func (a *triggerServiceHTTPAdapter) ListTriggersBySchema(ctx context.Context, schemaID string) ([]deliveryhttp.TriggerResponse, error) {
 	triggers, err := a.repo.ListBySchemaID(ctx, schemaID)
 	if err != nil {
 		return nil, err
@@ -277,7 +277,7 @@ func (a *triggerServiceHTTPAdapter) ListTriggersBySchema(ctx context.Context, sc
 }
 
 func (a *triggerServiceHTTPAdapter) resolveAgentID(ctx context.Context, req *deliveryhttp.CreateTriggerRequest) error {
-	if req.AgentID != 0 || req.AgentName == "" {
+	if req.AgentID != "" || req.AgentName == "" {
 		return nil
 	}
 	var agent models.AgentModel
@@ -288,9 +288,9 @@ func (a *triggerServiceHTTPAdapter) resolveAgentID(ctx context.Context, req *del
 	return nil
 }
 
-func (a *triggerServiceHTTPAdapter) isEntryAgent(ctx context.Context, agentID uint) error {
+func (a *triggerServiceHTTPAdapter) isEntryAgent(ctx context.Context, agentID string) error {
 	var agent models.AgentModel
-	if err := a.db.WithContext(ctx).First(&agent, agentID).Error; err != nil {
+	if err := a.db.WithContext(ctx).Where("id = ?", agentID).First(&agent).Error; err != nil {
 		return pkgerrors.NotFound("agent not found")
 	}
 	var count int64
@@ -307,7 +307,7 @@ func (a *triggerServiceHTTPAdapter) CreateTrigger(ctx context.Context, req deliv
 	if err := a.resolveAgentID(ctx, &req); err != nil {
 		return nil, err
 	}
-	if req.AgentID != 0 {
+	if req.AgentID != "" {
 		if err := a.isEntryAgent(ctx, req.AgentID); err != nil {
 			return nil, err
 		}
@@ -315,7 +315,7 @@ func (a *triggerServiceHTTPAdapter) CreateTrigger(ctx context.Context, req deliv
 	model := &models.TriggerModel{
 		Type:        req.Type,
 		Title:       req.Title,
-		AgentID:     ptrUint(req.AgentID),
+		AgentID:     ptrString(req.AgentID),
 		SchemaID:    req.SchemaID,
 		Schedule:    req.Schedule,
 		WebhookPath: req.WebhookPath,
@@ -332,14 +332,14 @@ func (a *triggerServiceHTTPAdapter) CreateTrigger(ctx context.Context, req deliv
 	return &resp, nil
 }
 
-func (a *triggerServiceHTTPAdapter) UpdateTrigger(ctx context.Context, id uint, req deliveryhttp.CreateTriggerRequest) (*deliveryhttp.TriggerResponse, error) {
+func (a *triggerServiceHTTPAdapter) UpdateTrigger(ctx context.Context, id string, req deliveryhttp.CreateTriggerRequest) (*deliveryhttp.TriggerResponse, error) {
 	if err := a.resolveAgentID(ctx, &req); err != nil {
 		return nil, err
 	}
 	model := &models.TriggerModel{
 		Type:        req.Type,
 		Title:       req.Title,
-		AgentID:     ptrUint(req.AgentID),
+		AgentID:     ptrString(req.AgentID),
 		Schedule:    req.Schedule,
 		WebhookPath: req.WebhookPath,
 		Description: req.Description,
@@ -359,7 +359,7 @@ func (a *triggerServiceHTTPAdapter) UpdateTrigger(ctx context.Context, id uint, 
 	return &resp, nil
 }
 
-func (a *triggerServiceHTTPAdapter) SetTriggerTarget(ctx context.Context, id uint, agentName string) (*deliveryhttp.TriggerResponse, error) {
+func (a *triggerServiceHTTPAdapter) SetTriggerTarget(ctx context.Context, id string, agentName string) (*deliveryhttp.TriggerResponse, error) {
 	var agent models.AgentModel
 	if err := a.db.WithContext(ctx).Where("name = ?", agentName).First(&agent).Error; err != nil {
 		return nil, pkgerrors.NotFound(fmt.Sprintf("agent not found: %s", agentName))
@@ -378,11 +378,11 @@ func (a *triggerServiceHTTPAdapter) SetTriggerTarget(ctx context.Context, id uin
 	return &resp, nil
 }
 
-func (a *triggerServiceHTTPAdapter) ClearTriggerTarget(ctx context.Context, id uint) error {
+func (a *triggerServiceHTTPAdapter) ClearTriggerTarget(ctx context.Context, id string) error {
 	return a.repo.ClearAgentID(ctx, id)
 }
 
-func (a *triggerServiceHTTPAdapter) DeleteTrigger(ctx context.Context, id uint) error {
+func (a *triggerServiceHTTPAdapter) DeleteTrigger(ctx context.Context, id string) error {
 	return a.repo.Delete(ctx, id)
 }
 
@@ -560,7 +560,7 @@ func (a *toolMetadataHTTPAdapter) GetAllToolMetadata() []deliveryhttp.ToolMetada
 
 // triggerRow holds a trigger record loaded from DB.
 type triggerRow struct {
-	ID          uint
+	ID          string
 	Type        string
 	Schedule    string
 	Title       string
@@ -596,7 +596,7 @@ type cronTaskCreatorHTTPAdapter struct {
 	repo *config_repo.GORMTaskRepository
 }
 
-func (a *cronTaskCreatorHTTPAdapter) CreateFromTrigger(ctx context.Context, params task.TriggerTaskParams) (uint, error) {
+func (a *cronTaskCreatorHTTPAdapter) CreateFromTrigger(ctx context.Context, params task.TriggerTaskParams) (string, error) {
 	t := &domain.EngineTask{
 		Title:       params.Title,
 		Description: params.Description,
@@ -607,7 +607,7 @@ func (a *cronTaskCreatorHTTPAdapter) CreateFromTrigger(ctx context.Context, para
 		Mode:        domain.TaskModeBackground,
 	}
 	if err := a.repo.Create(ctx, t); err != nil {
-		return 0, err
+		return "", err
 	}
 	return t.ID, nil
 }

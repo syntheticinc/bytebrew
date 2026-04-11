@@ -35,7 +35,7 @@ export default function APIKeysPage() {
   const [saving, setSaving] = useState(false);
   const [createdToken, setCreatedToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   function toggleScope(bit: number) {
     setScopesMask((prev) => prev ^ bit);

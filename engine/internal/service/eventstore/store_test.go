@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"sort"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -58,17 +58,17 @@ func TestStore_AppendAndGetAll(t *testing.T) {
 
 	id, err := store.Append("sess-1", "answer", event, jsonData)
 	require.NoError(t, err)
-	assert.Equal(t, int64(1), id)
+	assert.NotEmpty(t, id)
 
 	events, err := store.GetAll("sess-1")
 	require.NoError(t, err)
 	require.Len(t, events, 1)
 
-	assert.Equal(t, int64(1), events[0].ID)
+	assert.NotEmpty(t, events[0].ID)
 	assert.Equal(t, "sess-1", events[0].SessionID)
 	assert.Equal(t, "answer", events[0].EventType)
 	assert.Equal(t, "Hello", events[0].Proto.GetContent())
-	assert.Equal(t, "1", events[0].Proto.GetEventId()) // Set from auto-increment ID
+	assert.Equal(t, events[0].ID, events[0].Proto.GetEventId()) // Set from UUID
 	assert.Equal(t, "MessageCompleted", events[0].JSON["type"])
 }
 
@@ -77,47 +77,35 @@ func TestStore_GetAfter(t *testing.T) {
 	store, err := New(db)
 	require.NoError(t, err)
 
+	// Record a timestamp before inserting any events
+	beforeInsert := time.Now().Add(-1 * time.Second)
+
 	// Insert 3 events
 	for i := 0; i < 3; i++ {
 		_, err := store.Append("sess-1", "answer", &pb.SessionEvent{
 			Type:    pb.SessionEventType_SESSION_EVENT_ANSWER,
-			Content: "msg",
+			Content: fmt.Sprintf("msg-%d", i+1),
 		}, map[string]interface{}{"type": "MessageCompleted"})
 		require.NoError(t, err)
 	}
 
-	// GetAfter(0) returns all
-	events, err := store.GetAfter("sess-1", 0)
+	// GetAfter(zero time) returns all
+	events, err := store.GetAfter("sess-1", time.Time{})
 	require.NoError(t, err)
 	assert.Len(t, events, 3)
 
-	// GetAfter(1) returns events 2 and 3
-	events, err = store.GetAfter("sess-1", 1)
+	// GetAfter(before any insert) returns all events
+	events, err = store.GetAfter("sess-1", beforeInsert)
 	require.NoError(t, err)
-	assert.Len(t, events, 2)
-	assert.Equal(t, int64(2), events[0].ID)
-	assert.Equal(t, int64(3), events[1].ID)
+	assert.Len(t, events, 3)
+	assert.Equal(t, "msg-1", events[0].Proto.GetContent())
+	assert.Equal(t, "msg-2", events[1].Proto.GetContent())
+	assert.Equal(t, "msg-3", events[2].Proto.GetContent())
 
-	// GetAfter(3) returns nothing (no events after last)
-	events, err = store.GetAfter("sess-1", 3)
+	// GetAfter(future time) returns nothing
+	events, err = store.GetAfter("sess-1", time.Now().Add(1*time.Hour))
 	require.NoError(t, err)
 	assert.Len(t, events, 0)
-}
-
-func TestStore_GetAfterUnknownID(t *testing.T) {
-	db := newTestGormDB(t)
-	store, err := New(db)
-	require.NoError(t, err)
-
-	_, err = store.Append("sess-1", "answer", &pb.SessionEvent{
-		Type: pb.SessionEventType_SESSION_EVENT_ANSWER,
-	}, map[string]interface{}{"type": "MessageCompleted"})
-	require.NoError(t, err)
-
-	// Unknown lastEventID — returns all events (safe fallback)
-	events, err := store.GetAfter("sess-1", 999)
-	require.NoError(t, err)
-	assert.Len(t, events, 1)
 }
 
 func TestStore_GetAllEmptySession(t *testing.T) {
@@ -172,7 +160,7 @@ func TestStore_CleanupSession(t *testing.T) {
 	assert.Len(t, events2, 1)
 }
 
-func TestStore_MonotonicIDs(t *testing.T) {
+func TestStore_UniqueIDs(t *testing.T) {
 	db := newTestGormDB(t)
 	store, err := New(db)
 	require.NoError(t, err)
@@ -184,12 +172,16 @@ func TestStore_MonotonicIDs(t *testing.T) {
 	id3, err := store.Append("s", "a", &pb.SessionEvent{Type: pb.SessionEventType_SESSION_EVENT_ANSWER}, map[string]interface{}{})
 	require.NoError(t, err)
 
-	assert.True(t, id1 < id2)
-	assert.True(t, id2 < id3)
+	assert.NotEmpty(t, id1)
+	assert.NotEmpty(t, id2)
+	assert.NotEmpty(t, id3)
+	assert.NotEqual(t, id1, id2)
+	assert.NotEqual(t, id2, id3)
+	assert.NotEqual(t, id1, id3)
 }
 
 // TC-ES-07: Concurrent Append + GetAfter — 10 goroutines append simultaneously,
-// all events persisted with monotonically increasing IDs.
+// all events persisted with unique IDs.
 func TestStore_ConcurrentAppend(t *testing.T) {
 	// Use file-based DB for concurrent access (in-memory can have issues with pool).
 	tmpDir := t.TempDir()
@@ -208,7 +200,7 @@ func TestStore_ConcurrentAppend(t *testing.T) {
 
 	const numGoroutines = 10
 	var wg sync.WaitGroup
-	ids := make([]int64, numGoroutines)
+	ids := make([]string, numGoroutines)
 	errs := make([]error, numGoroutines)
 
 	for i := 0; i < numGoroutines; i++ {
@@ -235,10 +227,12 @@ func TestStore_ConcurrentAppend(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, events, numGoroutines)
 
-	// IDs should be monotonically increasing
-	sort.Slice(ids, func(a, b int) bool { return ids[a] < ids[b] })
-	for i := 1; i < len(ids); i++ {
-		assert.True(t, ids[i-1] < ids[i], "IDs should be strictly increasing: %d < %d", ids[i-1], ids[i])
+	// All IDs should be unique
+	idSet := make(map[string]bool)
+	for _, id := range ids {
+		assert.NotEmpty(t, id)
+		assert.False(t, idSet[id], "IDs should be unique, got duplicate: %s", id)
+		idSet[id] = true
 	}
 }
 
@@ -253,7 +247,7 @@ func TestStore_PersistenceAcrossReopen(t *testing.T) {
 	store1, err := New(db1)
 	require.NoError(t, err)
 
-	var originalIDs [3]int64
+	var originalIDs [3]string
 	for i := 0; i < 3; i++ {
 		id, appendErr := store1.Append("sess-persist", "answer", &pb.SessionEvent{
 			Type:    pb.SessionEventType_SESSION_EVENT_ANSWER,
@@ -338,7 +332,7 @@ func TestStore_SessionIsolationWithGetAfter(t *testing.T) {
 	require.NoError(t, err)
 
 	// Append 2 events to session-A
-	idA1, err := store.Append("session-A", "answer", &pb.SessionEvent{
+	_, err = store.Append("session-A", "answer", &pb.SessionEvent{
 		Type: pb.SessionEventType_SESSION_EVENT_ANSWER, Content: "A1",
 	}, map[string]interface{}{"type": "MessageCompleted", "content": "A1"})
 	require.NoError(t, err)
@@ -365,17 +359,13 @@ func TestStore_SessionIsolationWithGetAfter(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, eventsB, 3)
 
-	// GetAfter for session-A after first event returns only the second
-	afterA, err := store.GetAfter("session-A", idA1)
+	// GetAfter for session-A before any events returns all
+	beforeInsert := time.Now().Add(-1 * time.Second)
+	afterA, err := store.GetAfter("session-A", beforeInsert)
 	require.NoError(t, err)
-	require.Len(t, afterA, 1)
-	assert.Equal(t, "A2", afterA[0].Proto.GetContent())
-
-	// GetAfter for session-B with session-A's ID should not return session-A events.
-	// Since idA1 doesn't exist in session-B, GetAfter falls back to GetAll for session-B.
-	afterBWithAID, err := store.GetAfter("session-B", idA1)
-	require.NoError(t, err)
-	assert.Len(t, afterBWithAID, 3, "unknown ID for session-B should return all session-B events")
+	require.Len(t, afterA, 2)
+	assert.Equal(t, "A1", afterA[0].Proto.GetContent())
+	assert.Equal(t, "A2", afterA[1].Proto.GetContent())
 
 	// Verify no cross-contamination in content
 	for _, evt := range eventsA {

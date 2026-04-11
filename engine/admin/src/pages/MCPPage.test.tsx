@@ -8,6 +8,7 @@ vi.mock('../api/client', () => ({
   api: {
     listMCPServers: vi.fn(),
     getWellKnownMCP: vi.fn(),
+    listCircuitBreakers: vi.fn().mockResolvedValue([]),
     createMCPServer: vi.fn(),
     updateMCPServer: vi.fn(),
     deleteMCPServer: vi.fn(),
@@ -41,7 +42,7 @@ describe('MCPPage', () => {
   it('renders MCP servers list', async () => {
     mockApi.listMCPServers.mockResolvedValue([
       {
-        id: 1,
+        id: '1',
         name: 'playwright',
         type: 'stdio' as const,
         command: 'npx',

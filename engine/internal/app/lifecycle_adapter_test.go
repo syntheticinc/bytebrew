@@ -34,8 +34,8 @@ func (m *mockAgentSpawner) SpawnAgent(_ context.Context, params tools.SpawnParam
 	return m.spawnID, nil
 }
 
-func (m *mockAgentSpawner) WaitForAgent(_ context.Context, _ string) (string, error) {
-	return m.waitResult, m.waitErr
+func (m *mockAgentSpawner) WaitForAgent(_ context.Context, _, _ string) (tools.AgentCompletionInfo, error) {
+	return tools.AgentCompletionInfo{Result: m.waitResult}, m.waitErr
 }
 
 func (m *mockAgentSpawner) WaitForAllSessionAgents(_ context.Context, _ string) (tools.WaitResult, error) {

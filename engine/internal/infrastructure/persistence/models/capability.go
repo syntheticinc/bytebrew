@@ -4,8 +4,8 @@ import "time"
 
 // CapabilityModel maps to the "capabilities" table.
 type CapabilityModel struct {
-	ID        uint      `gorm:"primaryKey"`
-	AgentID   uint      `gorm:"not null;index"`
+	ID        string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
+	AgentID   string    `gorm:"type:uuid;not null;index"`
 	Type      string    `gorm:"type:varchar(50);not null"`
 	Config    string    `gorm:"type:text"` // JSON
 	Enabled   bool      `gorm:"not null;default:true"`

@@ -40,7 +40,7 @@ const (
 // EngineTask is the universal unit of work in ByteBrew Engine.
 // Created by agents, cron triggers, webhooks, API, or dashboard.
 type EngineTask struct {
-	ID           uint
+	ID           string
 	Title        string
 	Description  string
 	AgentName    string
@@ -48,7 +48,7 @@ type EngineTask struct {
 	SourceID     string
 	UserID       string
 	SessionID    string
-	ParentTaskID *uint
+	ParentTaskID *string
 	Depth        int
 	Status       EngineTaskStatus
 	Mode         TaskMode

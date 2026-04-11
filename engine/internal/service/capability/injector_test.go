@@ -21,7 +21,7 @@ func TestInjectedTools_Memory(t *testing.T) {
 	reader := &mockCapReader{
 		caps: map[string][]CapabilityRecord{
 			"agent-a": {
-				{ID: 1, AgentName: "agent-a", Type: "memory", Enabled: true},
+				{ID: "1", AgentName: "agent-a", Type: "memory", Enabled: true},
 			},
 		},
 	}
@@ -43,9 +43,9 @@ func TestInjectedTools_Multiple(t *testing.T) {
 	reader := &mockCapReader{
 		caps: map[string][]CapabilityRecord{
 			"agent-a": {
-				{ID: 1, AgentName: "agent-a", Type: "memory", Enabled: true},
-				{ID: 2, AgentName: "agent-a", Type: "knowledge", Enabled: true},
-				{ID: 3, AgentName: "agent-a", Type: "escalation", Enabled: true},
+				{ID: "1", AgentName: "agent-a", Type: "memory", Enabled: true},
+				{ID: "2", AgentName: "agent-a", Type: "knowledge", Enabled: true},
+				{ID: "3", AgentName: "agent-a", Type: "escalation", Enabled: true},
 			},
 		},
 	}
@@ -65,8 +65,8 @@ func TestInjectedTools_NoDuplicates(t *testing.T) {
 	reader := &mockCapReader{
 		caps: map[string][]CapabilityRecord{
 			"agent-a": {
-				{ID: 1, AgentName: "agent-a", Type: "memory", Enabled: true},
-				{ID: 2, AgentName: "agent-a", Type: "memory", Enabled: true}, // duplicate type
+				{ID: "1", AgentName: "agent-a", Type: "memory", Enabled: true},
+				{ID: "2", AgentName: "agent-a", Type: "memory", Enabled: true}, // duplicate type
 			},
 		},
 	}
@@ -98,9 +98,9 @@ func TestInjectedTools_GuardrailNoTools(t *testing.T) {
 	reader := &mockCapReader{
 		caps: map[string][]CapabilityRecord{
 			"agent-a": {
-				{ID: 1, AgentName: "agent-a", Type: "guardrail", Enabled: true},
-				{ID: 2, AgentName: "agent-a", Type: "output_schema", Enabled: true},
-				{ID: 3, AgentName: "agent-a", Type: "policies", Enabled: true},
+				{ID: "1", AgentName: "agent-a", Type: "guardrail", Enabled: true},
+				{ID: "2", AgentName: "agent-a", Type: "output_schema", Enabled: true},
+				{ID: "3", AgentName: "agent-a", Type: "policies", Enabled: true},
 			},
 		},
 	}

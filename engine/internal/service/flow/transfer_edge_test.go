@@ -17,19 +17,19 @@ func TestTransferEdge_AgentA_HandsOff_To_AgentB(t *testing.T) {
 		},
 	}
 	edgeReader := &mockEdgeReader{
-		edges: map[uint][]EdgeRecord{
-			1: {
-				{ID: 1, SchemaID: 1, SourceAgentName: "agent-a", TargetAgentName: "agent-b", Type: "transfer"},
+		edges: map[string][]EdgeRecord{
+			"1": {
+				{ID: "1", SchemaID: "1", SourceAgentName: "agent-a", TargetAgentName: "agent-b", Type: "transfer"},
 			},
 		},
 	}
-	gateReader := &mockGateReader{gates: map[uint][]GateRecord{}}
+	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 	eventStream := &mockEventStream{}
 
 	executor := NewExecutor(runner, edgeReader, gateReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
-		SchemaID:    1,
+		SchemaID:    "1",
 		SessionID:   "session-transfer",
 		EventStream: eventStream,
 	}, "agent-a", "user input")

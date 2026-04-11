@@ -977,7 +977,7 @@ func Run(sc ServerConfig) error {
 				return
 			}
 			w.WriteHeader(http.StatusCreated)
-			w.Write([]byte(fmt.Sprintf(`{"task_id":%d}`, t.ID)))
+			w.Write([]byte(fmt.Sprintf(`{"task_id":"%s"}`, t.ID)))
 		})
 
 		// Serve Admin Dashboard SPA (static files) — internal only
@@ -1265,7 +1265,7 @@ func Run(sc ServerConfig) error {
 		if trigErr == nil {
 			for _, t := range triggers {
 				if t.Type == "cron" && t.Schedule != "" {
-					if err := cronScheduler.AddTrigger(t.Schedule, t.Title, t.Description, t.AgentName, fmt.Sprintf("trigger-%d", t.ID)); err != nil {
+					if err := cronScheduler.AddTrigger(t.Schedule, t.Title, t.Description, t.AgentName, fmt.Sprintf("trigger-%s", t.ID)); err != nil {
 						slog.Warn("Failed to add cron trigger", "id", t.ID, "error", err)
 					}
 				}

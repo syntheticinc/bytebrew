@@ -11,7 +11,7 @@ import (
 
 // SchemaRecord is an intermediate struct for DB <-> domain mapping.
 type SchemaRecord struct {
-	ID          uint
+	ID          string
 	Name        string
 	Description string
 	IsSystem    bool
@@ -55,15 +55,15 @@ func (r *GORMSchemaRepository) List(ctx context.Context) ([]SchemaRecord, error)
 }
 
 // GetByID returns a single schema by ID.
-func (r *GORMSchemaRepository) GetByID(ctx context.Context, id uint) (*SchemaRecord, error) {
+func (r *GORMSchemaRepository) GetByID(ctx context.Context, id string) (*SchemaRecord, error) {
 	var schema models.SchemaModel
-	if err := r.db.WithContext(ctx).First(&schema, id).Error; err != nil {
-		return nil, fmt.Errorf("get schema %d: %w", id, err)
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&schema).Error; err != nil {
+		return nil, fmt.Errorf("get schema %s: %w", id, err)
 	}
 
 	agentNames, err := r.loadAgentNames(ctx, schema.ID)
 	if err != nil {
-		return nil, fmt.Errorf("load agents for schema %d: %w", id, err)
+		return nil, fmt.Errorf("load agents for schema %s: %w", id, err)
 	}
 
 	return &SchemaRecord{
@@ -91,13 +91,13 @@ func (r *GORMSchemaRepository) Create(ctx context.Context, record *SchemaRecord)
 }
 
 // Update updates an existing schema by ID.
-func (r *GORMSchemaRepository) Update(ctx context.Context, id uint, record *SchemaRecord) error {
+func (r *GORMSchemaRepository) Update(ctx context.Context, id string, record *SchemaRecord) error {
 	result := r.db.WithContext(ctx).Model(&models.SchemaModel{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"name":        record.Name,
 		"description": record.Description,
 	})
 	if result.Error != nil {
-		return fmt.Errorf("update schema %d: %w", id, result.Error)
+		return fmt.Errorf("update schema %s: %w", id, result.Error)
 	}
 	if result.RowsAffected == 0 {
 		return gorm.ErrRecordNotFound
@@ -106,7 +106,7 @@ func (r *GORMSchemaRepository) Update(ctx context.Context, id uint, record *Sche
 }
 
 // Delete removes a schema and all its associations by ID.
-func (r *GORMSchemaRepository) Delete(ctx context.Context, id uint) error {
+func (r *GORMSchemaRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Delete schema-agent refs
 		if err := tx.Where("schema_id = ?", id).Delete(&models.SchemaAgentModel{}).Error; err != nil {
@@ -121,9 +121,9 @@ func (r *GORMSchemaRepository) Delete(ctx context.Context, id uint) error {
 			return fmt.Errorf("delete schema gates: %w", err)
 		}
 		// Delete schema itself
-		result := tx.Delete(&models.SchemaModel{}, id)
+		result := tx.Delete(&models.SchemaModel{}, "id = ?", id)
 		if result.Error != nil {
-			return fmt.Errorf("delete schema %d: %w", id, result.Error)
+			return fmt.Errorf("delete schema %s: %w", id, result.Error)
 		}
 		if result.RowsAffected == 0 {
 			return gorm.ErrRecordNotFound
@@ -133,7 +133,7 @@ func (r *GORMSchemaRepository) Delete(ctx context.Context, id uint) error {
 }
 
 // AddAgent adds an agent reference to a schema.
-func (r *GORMSchemaRepository) AddAgent(ctx context.Context, schemaID uint, agentName string) error {
+func (r *GORMSchemaRepository) AddAgent(ctx context.Context, schemaID string, agentName string) error {
 	// Resolve agent ID by name
 	var agent models.AgentModel
 	if err := r.db.WithContext(ctx).Where("name = ?", agentName).First(&agent).Error; err != nil {
@@ -145,13 +145,13 @@ func (r *GORMSchemaRepository) AddAgent(ctx context.Context, schemaID uint, agen
 		AgentID:  agent.ID,
 	}
 	if err := r.db.WithContext(ctx).Create(&ref).Error; err != nil {
-		return fmt.Errorf("add agent %q to schema %d: %w", agentName, schemaID, err)
+		return fmt.Errorf("add agent %q to schema %s: %w", agentName, schemaID, err)
 	}
 	return nil
 }
 
 // RemoveAgent removes an agent reference from a schema.
-func (r *GORMSchemaRepository) RemoveAgent(ctx context.Context, schemaID uint, agentName string) error {
+func (r *GORMSchemaRepository) RemoveAgent(ctx context.Context, schemaID string, agentName string) error {
 	// Resolve agent ID by name
 	var agent models.AgentModel
 	if err := r.db.WithContext(ctx).Where("name = ?", agentName).First(&agent).Error; err != nil {
@@ -162,7 +162,7 @@ func (r *GORMSchemaRepository) RemoveAgent(ctx context.Context, schemaID uint, a
 		Where("schema_id = ? AND agent_id = ?", schemaID, agent.ID).
 		Delete(&models.SchemaAgentModel{})
 	if result.Error != nil {
-		return fmt.Errorf("remove agent %q from schema %d: %w", agentName, schemaID, result.Error)
+		return fmt.Errorf("remove agent %q from schema %s: %w", agentName, schemaID, result.Error)
 	}
 	if result.RowsAffected == 0 {
 		return gorm.ErrRecordNotFound
@@ -171,7 +171,7 @@ func (r *GORMSchemaRepository) RemoveAgent(ctx context.Context, schemaID uint, a
 }
 
 // ListAgents returns agent names for a schema.
-func (r *GORMSchemaRepository) ListAgents(ctx context.Context, schemaID uint) ([]string, error) {
+func (r *GORMSchemaRepository) ListAgents(ctx context.Context, schemaID string) ([]string, error) {
 	return r.loadAgentNames(ctx, schemaID)
 }
 
@@ -191,7 +191,7 @@ func (r *GORMSchemaRepository) ListSchemasForAgent(ctx context.Context, agentNam
 		return nil, nil
 	}
 
-	schemaIDs := make([]uint, 0, len(refs))
+	schemaIDs := make([]string, 0, len(refs))
 	for _, ref := range refs {
 		schemaIDs = append(schemaIDs, ref.SchemaID)
 	}
@@ -208,7 +208,7 @@ func (r *GORMSchemaRepository) ListSchemasForAgent(ctx context.Context, agentNam
 	return names, nil
 }
 
-func (r *GORMSchemaRepository) loadAgentNames(ctx context.Context, schemaID uint) ([]string, error) {
+func (r *GORMSchemaRepository) loadAgentNames(ctx context.Context, schemaID string) ([]string, error) {
 	var refs []models.SchemaAgentModel
 	if err := r.db.WithContext(ctx).Where("schema_id = ?", schemaID).Order("position ASC").Find(&refs).Error; err != nil {
 		return nil, err
@@ -218,7 +218,7 @@ func (r *GORMSchemaRepository) loadAgentNames(ctx context.Context, schemaID uint
 		return nil, nil
 	}
 
-	agentIDs := make([]uint, 0, len(refs))
+	agentIDs := make([]string, 0, len(refs))
 	for _, ref := range refs {
 		agentIDs = append(agentIDs, ref.AgentID)
 	}
@@ -229,7 +229,7 @@ func (r *GORMSchemaRepository) loadAgentNames(ctx context.Context, schemaID uint
 	}
 
 	// Build ID->name map and return in position order
-	nameByID := make(map[uint]string, len(agents))
+	nameByID := make(map[string]string, len(agents))
 	for _, a := range agents {
 		nameByID[a.ID] = a.Name
 	}

@@ -16,7 +16,7 @@ type TaskFilter struct {
 	Status       *domain.EngineTaskStatus
 	UserID       *string
 	SessionID    *string
-	ParentTaskID *uint
+	ParentTaskID *string
 	Limit        int
 	Offset       int
 }
@@ -42,13 +42,13 @@ func (r *GORMTaskRepository) Create(ctx context.Context, task *domain.EngineTask
 }
 
 // GetByID returns a single task by its primary key.
-func (r *GORMTaskRepository) GetByID(ctx context.Context, id uint) (*domain.EngineTask, error) {
+func (r *GORMTaskRepository) GetByID(ctx context.Context, id string) (*domain.EngineTask, error) {
 	var m models.TaskModel
-	if err := r.db.WithContext(ctx).First(&m, id).Error; err != nil {
+	if err := r.db.WithContext(ctx).First(&m, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, domain.ErrEngineTaskNotFound
 		}
-		return nil, fmt.Errorf("get task %d: %w", id, err)
+		return nil, fmt.Errorf("get task %s: %w", id, err)
 	}
 	return toEngineTask(&m), nil
 }
@@ -90,13 +90,13 @@ func (r *GORMTaskRepository) Count(ctx context.Context, filter TaskFilter) (int6
 }
 
 // UpdateStatus transitions a task to a new status and optionally sets a result string.
-func (r *GORMTaskRepository) UpdateStatus(ctx context.Context, id uint, status domain.EngineTaskStatus, result string) error {
+func (r *GORMTaskRepository) UpdateStatus(ctx context.Context, id string, status domain.EngineTaskStatus, result string) error {
 	var m models.TaskModel
-	if err := r.db.WithContext(ctx).First(&m, id).Error; err != nil {
+	if err := r.db.WithContext(ctx).First(&m, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return domain.ErrEngineTaskNotFound
 		}
-		return fmt.Errorf("get task %d for status update: %w", id, err)
+		return fmt.Errorf("get task %s for status update: %w", id, err)
 	}
 
 	task := toEngineTask(&m)
@@ -107,7 +107,7 @@ func (r *GORMTaskRepository) UpdateStatus(ctx context.Context, id uint, status d
 
 	updated := toTaskModel(task)
 	if err := r.db.WithContext(ctx).Save(&updated).Error; err != nil {
-		return fmt.Errorf("update task %d status: %w", id, err)
+		return fmt.Errorf("update task %s status: %w", id, err)
 	}
 	return nil
 }
@@ -116,16 +116,16 @@ func (r *GORMTaskRepository) UpdateStatus(ctx context.Context, id uint, status d
 func (r *GORMTaskRepository) Update(ctx context.Context, task *domain.EngineTask) error {
 	m := toTaskModel(task)
 	if err := r.db.WithContext(ctx).Save(&m).Error; err != nil {
-		return fmt.Errorf("update task %d: %w", task.ID, err)
+		return fmt.Errorf("update task %s: %w", task.ID, err)
 	}
 	return nil
 }
 
 // GetSubTasks returns all direct children of the given parent task.
-func (r *GORMTaskRepository) GetSubTasks(ctx context.Context, parentID uint) ([]domain.EngineTask, error) {
+func (r *GORMTaskRepository) GetSubTasks(ctx context.Context, parentID string) ([]domain.EngineTask, error) {
 	var rows []models.TaskModel
 	if err := r.db.WithContext(ctx).Where("parent_task_id = ?", parentID).Order("created_at ASC").Find(&rows).Error; err != nil {
-		return nil, fmt.Errorf("get subtasks for %d: %w", parentID, err)
+		return nil, fmt.Errorf("get subtasks for %s: %w", parentID, err)
 	}
 
 	tasks := make([]domain.EngineTask, 0, len(rows))
@@ -153,20 +153,20 @@ func (r *GORMTaskRepository) GetPendingBySession(ctx context.Context, sessionID 
 }
 
 // Cancel cancels a task and all its non-terminal subtasks (cascading).
-func (r *GORMTaskRepository) Cancel(ctx context.Context, id uint) error {
+func (r *GORMTaskRepository) Cancel(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return cancelRecursive(tx, id)
 	})
 }
 
 // cancelRecursive cancels a task and recursively cancels all non-terminal subtasks.
-func cancelRecursive(tx *gorm.DB, id uint) error {
+func cancelRecursive(tx *gorm.DB, id string) error {
 	var m models.TaskModel
-	if err := tx.First(&m, id).Error; err != nil {
+	if err := tx.First(&m, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return domain.ErrEngineTaskNotFound
 		}
-		return fmt.Errorf("get task %d for cancel: %w", id, err)
+		return fmt.Errorf("get task %s for cancel: %w", id, err)
 	}
 
 	task := toEngineTask(&m)
@@ -175,18 +175,18 @@ func cancelRecursive(tx *gorm.DB, id uint) error {
 	}
 
 	if err := task.Transition(domain.EngineTaskStatusCancelled); err != nil {
-		return fmt.Errorf("transition task %d to cancelled: %w", id, err)
+		return fmt.Errorf("transition task %s to cancelled: %w", id, err)
 	}
 
 	if err := tx.Exec("UPDATE tasks SET status = $1, completed_at = NOW() WHERE id = $2",
 		string(domain.EngineTaskStatusCancelled), id).Error; err != nil {
-		return fmt.Errorf("save cancelled task %d: %w", id, err)
+		return fmt.Errorf("save cancelled task %s: %w", id, err)
 	}
 
 	// Cancel subtasks
 	var subtasks []models.TaskModel
 	if err := tx.Where("parent_task_id = ?", id).Find(&subtasks).Error; err != nil {
-		return fmt.Errorf("get subtasks for cancel %d: %w", id, err)
+		return fmt.Errorf("get subtasks for cancel %s: %w", id, err)
 	}
 
 	for _, sub := range subtasks {

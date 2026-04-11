@@ -13,7 +13,7 @@ import (
 // Contains all agent config from DB (agent + tools + spawn + escalation + MCP).
 type AgentRecord struct {
 	Name           string
-	ModelID        *uint
+	ModelID        *string
 	ModelName      string
 	SystemPrompt   string
 	Kit            string
@@ -396,11 +396,11 @@ func (r *GORMAgentRepository) toAgentModelWithDB(db *gorm.DB, rec *AgentRecord) 
 }
 
 // createSpawnTargets resolves target agent names to IDs and inserts spawn target rows.
-func (r *GORMAgentRepository) createSpawnTargets(ctx context.Context, agentID uint, targets []string) error {
+func (r *GORMAgentRepository) createSpawnTargets(ctx context.Context, agentID string, targets []string) error {
 	return r.createSpawnTargetsWithTx(r.db.WithContext(ctx), agentID, targets)
 }
 
-func (r *GORMAgentRepository) createSpawnTargetsWithTx(tx *gorm.DB, agentID uint, targets []string) error {
+func (r *GORMAgentRepository) createSpawnTargetsWithTx(tx *gorm.DB, agentID string, targets []string) error {
 	if len(targets) == 0 {
 		return nil
 	}
@@ -410,7 +410,7 @@ func (r *GORMAgentRepository) createSpawnTargetsWithTx(tx *gorm.DB, agentID uint
 		return fmt.Errorf("resolve spawn targets: %w", err)
 	}
 
-	nameToID := make(map[string]uint, len(targetAgents))
+	nameToID := make(map[string]string, len(targetAgents))
 	for _, a := range targetAgents {
 		nameToID[a.Name] = a.ID
 	}
@@ -432,11 +432,11 @@ func (r *GORMAgentRepository) createSpawnTargetsWithTx(tx *gorm.DB, agentID uint
 }
 
 // createMCPAssociations links agent to MCP servers via join table.
-func (r *GORMAgentRepository) createMCPAssociations(ctx context.Context, agentID uint, serverNames []string) error {
+func (r *GORMAgentRepository) createMCPAssociations(ctx context.Context, agentID string, serverNames []string) error {
 	return r.createMCPAssociationsWithTx(r.db.WithContext(ctx), agentID, serverNames)
 }
 
-func (r *GORMAgentRepository) createMCPAssociationsWithTx(tx *gorm.DB, agentID uint, serverNames []string) error {
+func (r *GORMAgentRepository) createMCPAssociationsWithTx(tx *gorm.DB, agentID string, serverNames []string) error {
 	if len(serverNames) == 0 {
 		return nil
 	}
@@ -458,13 +458,13 @@ func (r *GORMAgentRepository) createMCPAssociationsWithTx(tx *gorm.DB, agentID u
 }
 
 // loadAllAgentMCPServers loads MCP server names for all agents in a single query.
-func (r *GORMAgentRepository) loadAllAgentMCPServers(ctx context.Context) (map[uint][]string, error) {
+func (r *GORMAgentRepository) loadAllAgentMCPServers(ctx context.Context) (map[string][]string, error) {
 	var joins []models.AgentMCPServer
 	if err := r.db.WithContext(ctx).Preload("MCPServer").Find(&joins).Error; err != nil {
 		return nil, fmt.Errorf("load agent mcp servers: %w", err)
 	}
 
-	result := make(map[uint][]string)
+	result := make(map[string][]string)
 	for _, j := range joins {
 		result[j.AgentID] = append(result[j.AgentID], j.MCPServer.Name)
 	}
@@ -472,7 +472,7 @@ func (r *GORMAgentRepository) loadAllAgentMCPServers(ctx context.Context) (map[u
 }
 
 // loadMCPServersForAgent loads MCP server names for a single agent.
-func (r *GORMAgentRepository) loadMCPServersForAgent(ctx context.Context, agentID uint) ([]string, error) {
+func (r *GORMAgentRepository) loadMCPServersForAgent(ctx context.Context, agentID string) ([]string, error) {
 	var joins []models.AgentMCPServer
 	if err := r.db.WithContext(ctx).Preload("MCPServer").Where("agent_id = ?", agentID).Find(&joins).Error; err != nil {
 		return nil, fmt.Errorf("load mcp servers: %w", err)
@@ -486,7 +486,7 @@ func (r *GORMAgentRepository) loadMCPServersForAgent(ctx context.Context, agentI
 }
 
 // deleteEscalation removes escalation and its triggers for an agent.
-func (r *GORMAgentRepository) deleteEscalation(tx *gorm.DB, agentID uint) error {
+func (r *GORMAgentRepository) deleteEscalation(tx *gorm.DB, agentID string) error {
 	var esc models.AgentEscalation
 	err := tx.Where("agent_id = ?", agentID).First(&esc).Error
 	if err != nil {

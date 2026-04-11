@@ -10,11 +10,11 @@ import (
 func TestEngineTask_IsTopLevel(t *testing.T) {
 	tests := []struct {
 		name         string
-		parentTaskID *uint
+		parentTaskID *string
 		want         bool
 	}{
 		{"nil parent is top level", nil, true},
-		{"non-nil parent is not top level", ptrUint(1), false},
+		{"non-nil parent is not top level", ptrString("1"), false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -159,6 +159,6 @@ func TestEngineTask_Transition_InvalidReturnsError(t *testing.T) {
 	assert.Equal(t, EngineTaskStatusCompleted, task.Status, "status should not change on invalid transition")
 }
 
-func ptrUint(v uint) *uint {
+func ptrString(v string) *string {
 	return &v
 }

@@ -28,10 +28,10 @@ func (r *GORMLLMProviderRepository) List(ctx context.Context) ([]models.LLMProvi
 }
 
 // GetByID returns a single LLM provider model by ID.
-func (r *GORMLLMProviderRepository) GetByID(ctx context.Context, id uint) (*models.LLMProviderModel, error) {
+func (r *GORMLLMProviderRepository) GetByID(ctx context.Context, id string) (*models.LLMProviderModel, error) {
 	var provider models.LLMProviderModel
-	if err := r.db.WithContext(ctx).First(&provider, id).Error; err != nil {
-		return nil, fmt.Errorf("get llm provider %d: %w", id, err)
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&provider).Error; err != nil {
+		return nil, fmt.Errorf("get llm provider %s: %w", id, err)
 	}
 	return &provider, nil
 }
@@ -45,25 +45,25 @@ func (r *GORMLLMProviderRepository) Create(ctx context.Context, model *models.LL
 }
 
 // Update updates an LLM provider model by ID.
-func (r *GORMLLMProviderRepository) Update(ctx context.Context, id uint, model *models.LLMProviderModel) error {
+func (r *GORMLLMProviderRepository) Update(ctx context.Context, id string, model *models.LLMProviderModel) error {
 	result := r.db.WithContext(ctx).Model(&models.LLMProviderModel{}).Where("id = ?", id).Updates(model)
 	if result.Error != nil {
 		return fmt.Errorf("update llm provider: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("llm provider not found: %d", id)
+		return fmt.Errorf("llm provider not found: %s", id)
 	}
 	return nil
 }
 
 // Delete removes an LLM provider model by ID.
-func (r *GORMLLMProviderRepository) Delete(ctx context.Context, id uint) error {
-	result := r.db.WithContext(ctx).Delete(&models.LLMProviderModel{}, id)
+func (r *GORMLLMProviderRepository) Delete(ctx context.Context, id string) error {
+	result := r.db.WithContext(ctx).Delete(&models.LLMProviderModel{}, "id = ?", id)
 	if result.Error != nil {
 		return fmt.Errorf("delete llm provider: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("llm provider not found: %d", id)
+		return fmt.Errorf("llm provider not found: %s", id)
 	}
 	return nil
 }

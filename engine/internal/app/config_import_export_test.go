@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -19,19 +20,121 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	// Migrate only tables needed for config import/export
-	// (full AutoMigrate uses PostgreSQL-specific syntax like DEFAULT now()).
-	require.NoError(t, db.AutoMigrate(
-		&models.LLMProviderModel{},
-		&models.MCPServerModel{},
-		&models.AgentModel{},
-		&models.AgentToolModel{},
-		&models.AgentSpawnTarget{},
-		&models.AgentEscalation{},
-		&models.AgentEscalationTrigger{},
-		&models.AgentMCPServer{},
-		&models.TriggerModel{},
-	))
+
+	// Register callback to auto-generate UUIDs for empty string IDs (SQLite has no gen_random_uuid()).
+	db.Callback().Create().Before("gorm:create").Register("test:uuid", func(tx *gorm.DB) {
+		if tx.Statement.Schema == nil {
+			return
+		}
+		for _, field := range tx.Statement.Schema.PrimaryFields {
+			if field.DBName == "id" {
+				val, isZero := field.ValueOf(tx.Statement.Context, tx.Statement.ReflectValue)
+				if isZero || val == nil || val == "" {
+					_ = field.Set(tx.Statement.Context, tx.Statement.ReflectValue, uuid.New().String())
+				}
+			}
+		}
+	})
+
+	// Manual CREATE TABLE because GORM tags use PostgreSQL-specific uuid/gen_random_uuid().
+	for _, ddl := range []string{
+		`CREATE TABLE models (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL UNIQUE,
+			type VARCHAR(30) NOT NULL,
+			base_url VARCHAR(500),
+			model_name VARCHAR(255) NOT NULL,
+			api_key_encrypted VARCHAR(1000),
+			api_version VARCHAR(30) DEFAULT '',
+			created_at DATETIME,
+			updated_at DATETIME
+		)`,
+		`CREATE TABLE mcp_servers (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL UNIQUE,
+			type VARCHAR(20) NOT NULL,
+			command VARCHAR(500),
+			args TEXT,
+			url VARCHAR(500),
+			env_vars TEXT,
+			forward_headers TEXT,
+			is_well_known BOOLEAN NOT NULL DEFAULT 0,
+			auth_type VARCHAR(30) NOT NULL DEFAULT 'none',
+			auth_key_env VARCHAR(255),
+			auth_token_env VARCHAR(255),
+			auth_client_id VARCHAR(255),
+			catalog_name VARCHAR(255),
+			created_at DATETIME,
+			updated_at DATETIME
+		)`,
+		`CREATE TABLE agents (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL UNIQUE,
+			model_id TEXT REFERENCES models(id),
+			system_prompt TEXT NOT NULL,
+			kit VARCHAR(255),
+			knowledge_path VARCHAR(500),
+			lifecycle VARCHAR(20) NOT NULL DEFAULT 'persistent',
+			tool_execution VARCHAR(20) NOT NULL DEFAULT 'sequential',
+			max_steps INTEGER NOT NULL DEFAULT 0,
+			max_context_size INTEGER NOT NULL DEFAULT 16000,
+			max_turn_duration INTEGER NOT NULL DEFAULT 120,
+			confirm_before TEXT,
+			is_system BOOLEAN NOT NULL DEFAULT 0,
+			created_at DATETIME,
+			updated_at DATETIME
+		)`,
+		`CREATE TABLE agent_tools (
+			id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL REFERENCES agents(id),
+			tool_type VARCHAR(20) NOT NULL,
+			tool_name VARCHAR(255) NOT NULL,
+			config TEXT,
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			UNIQUE(agent_id, tool_type, tool_name)
+		)`,
+		`CREATE TABLE agent_spawn_targets (
+			id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL REFERENCES agents(id),
+			target_agent_id TEXT NOT NULL REFERENCES agents(id),
+			UNIQUE(agent_id, target_agent_id)
+		)`,
+		`CREATE TABLE agent_escalation (
+			id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL UNIQUE REFERENCES agents(id),
+			action VARCHAR(30) NOT NULL DEFAULT 'transfer_to_human',
+			webhook_url VARCHAR(500)
+		)`,
+		`CREATE TABLE agent_escalation_triggers (
+			id TEXT PRIMARY KEY,
+			escalation_id TEXT NOT NULL REFERENCES agent_escalation(id),
+			keyword VARCHAR(255) NOT NULL,
+			UNIQUE(escalation_id, keyword)
+		)`,
+		`CREATE TABLE agent_mcp_servers (
+			agent_id TEXT NOT NULL REFERENCES agents(id),
+			mcp_server_id TEXT NOT NULL REFERENCES mcp_servers(id),
+			PRIMARY KEY (agent_id, mcp_server_id)
+		)`,
+		`CREATE TABLE triggers (
+			id TEXT PRIMARY KEY,
+			type VARCHAR(10) NOT NULL,
+			title VARCHAR(255) NOT NULL,
+			agent_id TEXT REFERENCES agents(id),
+			schema_id TEXT,
+			schedule VARCHAR(100),
+			webhook_path VARCHAR(500),
+			description TEXT,
+			enabled BOOLEAN NOT NULL DEFAULT 1,
+			on_complete_url VARCHAR(2000),
+			on_complete_headers TEXT,
+			last_fired_at DATETIME,
+			created_at DATETIME,
+			updated_at DATETIME
+		)`,
+	} {
+		require.NoError(t, db.Exec(ddl).Error)
+	}
 	return db
 }
 
@@ -240,7 +343,8 @@ triggers:
 	require.NoError(t, db.Find(&triggers).Error)
 	require.Len(t, triggers, 1)
 	assert.Equal(t, "Hourly check", triggers[0].Title)
-	assert.Equal(t, agents[0].ID, triggers[0].AgentID)
+	require.NotNil(t, triggers[0].AgentID)
+	assert.Equal(t, agents[0].ID, *triggers[0].AgentID)
 }
 
 func TestImportYAML_UpdateExisting(t *testing.T) {

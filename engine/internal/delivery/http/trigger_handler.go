@@ -5,49 +5,48 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 )
 
 // TriggerResponse is the API representation of a trigger.
 type TriggerResponse struct {
-	ID          uint   `json:"id"`
-	Type        string `json:"type"`
-	Title       string `json:"title"`
-	AgentID     uint   `json:"agent_id"`
-	AgentName   string `json:"agent_name,omitempty"`
-	SchemaID    *uint  `json:"schema_id,omitempty"`
-	Schedule    string `json:"schedule,omitempty"`
-	WebhookPath string `json:"webhook_path,omitempty"`
-	Description string `json:"description,omitempty"`
-	Enabled     bool   `json:"enabled"`
-	LastFiredAt string `json:"last_fired_at,omitempty"`
-	CreatedAt   string `json:"created_at"`
+	ID          string  `json:"id"`
+	Type        string  `json:"type"`
+	Title       string  `json:"title"`
+	AgentID     string  `json:"agent_id"`
+	AgentName   string  `json:"agent_name,omitempty"`
+	SchemaID    *string `json:"schema_id,omitempty"`
+	Schedule    string  `json:"schedule,omitempty"`
+	WebhookPath string  `json:"webhook_path,omitempty"`
+	Description string  `json:"description,omitempty"`
+	Enabled     bool    `json:"enabled"`
+	LastFiredAt string  `json:"last_fired_at,omitempty"`
+	CreatedAt   string  `json:"created_at"`
 }
 
 // CreateTriggerRequest is the body for POST /api/v1/triggers.
 type CreateTriggerRequest struct {
-	Type        string `json:"type"`
-	Title       string `json:"title"`
-	AgentID     uint   `json:"agent_id"`
-	AgentName   string `json:"agent_name,omitempty"`
-	SchemaID    *uint  `json:"schema_id,omitempty"`
-	Schedule    string `json:"schedule,omitempty"`
-	WebhookPath string `json:"webhook_path,omitempty"`
-	Description string `json:"description,omitempty"`
-	Enabled     *bool  `json:"enabled,omitempty"`
+	Type        string  `json:"type"`
+	Title       string  `json:"title"`
+	AgentID     string  `json:"agent_id"`
+	AgentName   string  `json:"agent_name,omitempty"`
+	SchemaID    *string `json:"schema_id,omitempty"`
+	Schedule    string  `json:"schedule,omitempty"`
+	WebhookPath string  `json:"webhook_path,omitempty"`
+	Description string  `json:"description,omitempty"`
+	Enabled     *bool   `json:"enabled,omitempty"`
 }
 
 // TriggerService provides trigger CRUD operations.
 type TriggerService interface {
 	ListTriggers(ctx context.Context) ([]TriggerResponse, error)
-	ListTriggersBySchema(ctx context.Context, schemaID uint) ([]TriggerResponse, error)
+	ListTriggersBySchema(ctx context.Context, schemaID string) ([]TriggerResponse, error)
 	CreateTrigger(ctx context.Context, req CreateTriggerRequest) (*TriggerResponse, error)
-	UpdateTrigger(ctx context.Context, id uint, req CreateTriggerRequest) (*TriggerResponse, error)
-	DeleteTrigger(ctx context.Context, id uint) error
-	SetTriggerTarget(ctx context.Context, id uint, agentName string) (*TriggerResponse, error)
-	ClearTriggerTarget(ctx context.Context, id uint) error
+	UpdateTrigger(ctx context.Context, id string, req CreateTriggerRequest) (*TriggerResponse, error)
+	DeleteTrigger(ctx context.Context, id string) error
+	SetTriggerTarget(ctx context.Context, id string, agentName string) (*TriggerResponse, error)
+	ClearTriggerTarget(ctx context.Context, id string) error
 }
 
 // TriggerHandler serves /api/v1/triggers endpoints.
@@ -73,15 +72,9 @@ func (h *TriggerHandler) Routes() http.Handler {
 }
 
 // List handles GET /api/v1/triggers.
-// Optional query param: ?schema_id=N to filter by schema.
+// Optional query param: ?schema_id=UUID to filter by schema.
 func (h *TriggerHandler) List(w http.ResponseWriter, r *http.Request) {
-	if raw := r.URL.Query().Get("schema_id"); raw != "" {
-		id64, err := strconv.ParseUint(raw, 10, 64)
-		if err != nil {
-			writeJSONError(w, http.StatusBadRequest, "invalid schema_id")
-			return
-		}
-		schemaID := uint(id64)
+	if schemaID := r.URL.Query().Get("schema_id"); schemaID != "" {
 		triggers, err := h.service.ListTriggersBySchema(r.Context(), schemaID)
 		if err != nil {
 			writeDomainError(w, err)
@@ -124,7 +117,7 @@ func (h *TriggerHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /api/v1/triggers/{id}.
 func (h *TriggerHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, err := parseIDParam(r)
+	id, err := parseStringIDParam(r)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -146,7 +139,7 @@ func (h *TriggerHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /api/v1/triggers/{id}.
 func (h *TriggerHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, err := parseIDParam(r)
+	id, err := parseStringIDParam(r)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -162,7 +155,7 @@ func (h *TriggerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // SetTarget handles PATCH /api/v1/triggers/{id}/target.
 // Connects a trigger to an agent — enables canvas-driven routing.
 func (h *TriggerHandler) SetTarget(w http.ResponseWriter, r *http.Request) {
-	id, err := parseIDParam(r)
+	id, err := parseStringIDParam(r)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -191,7 +184,7 @@ func (h *TriggerHandler) SetTarget(w http.ResponseWriter, r *http.Request) {
 // ClearTarget handles DELETE /api/v1/triggers/{id}/target.
 // Disconnects a trigger from its agent — disables routing without deleting the trigger.
 func (h *TriggerHandler) ClearTarget(w http.ResponseWriter, r *http.Request) {
-	id, err := parseIDParam(r)
+	id, err := parseStringIDParam(r)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return

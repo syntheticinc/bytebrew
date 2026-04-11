@@ -219,7 +219,7 @@ func seedBuilderSchema(ctx context.Context, db *gorm.DB) {
 
 // seedBuilderChatTrigger creates a system chat trigger for builder-assistant in builder-schema.
 // Idempotent — skips if a system chat trigger already exists for this agent.
-func seedBuilderChatTrigger(ctx context.Context, db *gorm.DB, schemaID uint) {
+func seedBuilderChatTrigger(ctx context.Context, db *gorm.DB, schemaID string) {
 	// Find builder-assistant agent ID.
 	var agent models.AgentModel
 	if err := db.WithContext(ctx).Where("name = ?", builderAssistantName).First(&agent).Error; err != nil {
@@ -306,14 +306,14 @@ func restoreBuilderSchema(ctx context.Context, db *gorm.DB) error {
 	if err != nil {
 		return fmt.Errorf("list schemas: %w", err)
 	}
-	var schemaID uint
+	var schemaID string
 	for _, s := range schemas {
 		if s.Name == builderSchemaName {
 			schemaID = s.ID
 			break
 		}
 	}
-	if schemaID == 0 {
+	if schemaID == "" {
 		record := &config_repo.SchemaRecord{
 			Name:        builderSchemaName,
 			Description: "System schema for the AI builder assistant",

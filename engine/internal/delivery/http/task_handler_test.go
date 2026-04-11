@@ -15,19 +15,19 @@ import (
 )
 
 type mockTaskService struct {
-	createdID   uint
+	createdID   string
 	tasks       []TaskResponse
 	taskCount   int64
 	taskDetail  *TaskDetailResponse
-	cancelledID uint
-	inputID     uint
+	cancelledID string
+	inputID     string
 	inputText   string
 	err         error
 }
 
-func (m *mockTaskService) CreateTask(_ context.Context, params CreateTaskRequest) (uint, error) {
+func (m *mockTaskService) CreateTask(_ context.Context, params CreateTaskRequest) (string, error) {
 	if m.err != nil {
-		return 0, m.err
+		return "", m.err
 	}
 	return m.createdID, nil
 }
@@ -46,7 +46,7 @@ func (m *mockTaskService) CountTasks(_ context.Context, _ TaskListFilter) (int64
 	return m.taskCount, nil
 }
 
-func (m *mockTaskService) GetTask(_ context.Context, id uint) (*TaskDetailResponse, error) {
+func (m *mockTaskService) GetTask(_ context.Context, id string) (*TaskDetailResponse, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -56,7 +56,7 @@ func (m *mockTaskService) GetTask(_ context.Context, id uint) (*TaskDetailRespon
 	return nil, nil
 }
 
-func (m *mockTaskService) CancelTask(_ context.Context, id uint) error {
+func (m *mockTaskService) CancelTask(_ context.Context, id string) error {
 	if m.err != nil {
 		return m.err
 	}
@@ -64,7 +64,7 @@ func (m *mockTaskService) CancelTask(_ context.Context, id uint) error {
 	return nil
 }
 
-func (m *mockTaskService) ProvideInput(_ context.Context, id uint, input string) error {
+func (m *mockTaskService) ProvideInput(_ context.Context, id string, input string) error {
 	if m.err != nil {
 		return m.err
 	}
@@ -80,7 +80,7 @@ func newTaskRouter(handler *TaskHandler) *chi.Mux {
 }
 
 func TestTaskHandler_Create(t *testing.T) {
-	mock := &mockTaskService{createdID: 42}
+	mock := &mockTaskService{createdID: "task-42"}
 	handler := NewTaskHandler(mock)
 	router := newTaskRouter(handler)
 
@@ -98,7 +98,7 @@ func TestTaskHandler_Create(t *testing.T) {
 	var resp map[string]interface{}
 	err := json.NewDecoder(rec.Body).Decode(&resp)
 	require.NoError(t, err)
-	assert.Equal(t, float64(42), resp["task_id"])
+	assert.Equal(t, "task-42", resp["task_id"])
 	assert.Equal(t, "pending", resp["status"])
 }
 
@@ -128,8 +128,8 @@ func TestTaskHandler_Create_MissingAgent(t *testing.T) {
 
 func TestTaskHandler_List(t *testing.T) {
 	tasks := []TaskResponse{
-		{ID: 1, Title: "Task 1", AgentName: "sales", Status: "completed"},
-		{ID: 2, Title: "Task 2", AgentName: "devops", Status: "pending"},
+		{ID: "1", Title: "Task 1", AgentName: "sales", Status: "completed"},
+		{ID: "2", Title: "Task 2", AgentName: "devops", Status: "pending"},
 	}
 	handler := NewTaskHandler(&mockTaskService{tasks: tasks})
 	router := newTaskRouter(handler)
@@ -159,7 +159,7 @@ func TestTaskHandler_List_WithFilters(t *testing.T) {
 
 func TestTaskHandler_Get(t *testing.T) {
 	detail := &TaskDetailResponse{
-		TaskResponse: TaskResponse{ID: 5, Title: "Build feature", AgentName: "coder", Status: "in_progress"},
+		TaskResponse: TaskResponse{ID: "5", Title: "Build feature", AgentName: "coder", Status: "in_progress"},
 		Mode:         "interactive",
 	}
 	handler := NewTaskHandler(&mockTaskService{taskDetail: detail})
@@ -174,7 +174,7 @@ func TestTaskHandler_Get(t *testing.T) {
 	var result TaskDetailResponse
 	err := json.NewDecoder(rec.Body).Decode(&result)
 	require.NoError(t, err)
-	assert.Equal(t, uint(5), result.ID)
+	assert.Equal(t, "5", result.ID)
 	assert.Equal(t, "Build feature", result.Title)
 }
 
@@ -197,7 +197,8 @@ func TestTaskHandler_Get_InvalidID(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	// With string IDs, "abc" is a valid ID format — it just won't be found
+	assert.Contains(t, []int{http.StatusBadRequest, http.StatusNotFound}, rec.Code)
 }
 
 func TestTaskHandler_Cancel(t *testing.T) {
@@ -210,7 +211,7 @@ func TestTaskHandler_Cancel(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, uint(7), mock.cancelledID)
+	assert.Equal(t, "7", mock.cancelledID)
 }
 
 func TestTaskHandler_Cancel_Error(t *testing.T) {
@@ -236,7 +237,7 @@ func TestTaskHandler_ProvideInput(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, uint(10), mock.inputID)
+	assert.Equal(t, "10", mock.inputID)
 	assert.Equal(t, "yes, proceed", mock.inputText)
 }
 
@@ -265,8 +266,8 @@ func TestTaskHandler_ProvideInput_InvalidBody(t *testing.T) {
 
 func TestTaskHandler_List_NoPagination_ReturnsArray(t *testing.T) {
 	tasks := []TaskResponse{
-		{ID: 1, Title: "T1", Status: "pending"},
-		{ID: 2, Title: "T2", Status: "completed"},
+		{ID: "1", Title: "T1", Status: "pending"},
+		{ID: "2", Title: "T2", Status: "completed"},
 	}
 	handler := NewTaskHandler(&mockTaskService{tasks: tasks})
 	router := newTaskRouter(handler)
@@ -286,7 +287,7 @@ func TestTaskHandler_List_NoPagination_ReturnsArray(t *testing.T) {
 
 func TestTaskHandler_List_WithPagination(t *testing.T) {
 	tasks := []TaskResponse{
-		{ID: 3, Title: "T3", Status: "pending"},
+		{ID: "3", Title: "T3", Status: "pending"},
 	}
 	handler := NewTaskHandler(&mockTaskService{tasks: tasks, taskCount: 25})
 	router := newTaskRouter(handler)

@@ -11,7 +11,7 @@ import (
 
 // MCPServerResponse is the API representation of an MCP server.
 type MCPServerResponse struct {
-	ID             uint              `json:"id"`
+	ID             string            `json:"id"`
 	Name           string            `json:"name"`
 	Type           string            `json:"type"`
 	Command        string            `json:"command,omitempty"`

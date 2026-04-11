@@ -33,46 +33,46 @@ type AgentRepository interface {
 // SchemaRepository provides schema CRUD for admin tools.
 type SchemaRepository interface {
 	List(ctx context.Context) ([]SchemaRecord, error)
-	GetByID(ctx context.Context, id uint) (*SchemaRecord, error)
+	GetByID(ctx context.Context, id string) (*SchemaRecord, error)
 	Create(ctx context.Context, record *SchemaRecord) error
-	Update(ctx context.Context, id uint, record *SchemaRecord) error
-	Delete(ctx context.Context, id uint) error
-	AddAgent(ctx context.Context, schemaID uint, agentName string) error
-	RemoveAgent(ctx context.Context, schemaID uint, agentName string) error
+	Update(ctx context.Context, id string, record *SchemaRecord) error
+	Delete(ctx context.Context, id string) error
+	AddAgent(ctx context.Context, schemaID string, agentName string) error
+	RemoveAgent(ctx context.Context, schemaID string, agentName string) error
 }
 
 // TriggerRepository provides trigger CRUD for admin tools.
 type TriggerRepository interface {
 	List(ctx context.Context) ([]TriggerRecord, error)
-	GetByID(ctx context.Context, id uint) (*TriggerRecord, error)
+	GetByID(ctx context.Context, id string) (*TriggerRecord, error)
 	Create(ctx context.Context, record *TriggerRecord) error
-	Update(ctx context.Context, id uint, record *TriggerRecord) error
-	Delete(ctx context.Context, id uint) error
+	Update(ctx context.Context, id string, record *TriggerRecord) error
+	Delete(ctx context.Context, id string) error
 }
 
 // MCPServerRepository provides MCP server CRUD for admin tools.
 type MCPServerRepository interface {
 	List(ctx context.Context) ([]MCPServerRecord, error)
-	GetByID(ctx context.Context, id uint) (*MCPServerRecord, error)
+	GetByID(ctx context.Context, id string) (*MCPServerRecord, error)
 	Create(ctx context.Context, record *MCPServerRecord) error
-	Update(ctx context.Context, id uint, record *MCPServerRecord) error
-	Delete(ctx context.Context, id uint) error
+	Update(ctx context.Context, id string, record *MCPServerRecord) error
+	Delete(ctx context.Context, id string) error
 }
 
 // ModelRepository provides model CRUD for admin tools.
 type ModelRepository interface {
 	List(ctx context.Context) ([]ModelRecord, error)
-	GetByID(ctx context.Context, id uint) (*ModelRecord, error)
+	GetByID(ctx context.Context, id string) (*ModelRecord, error)
 	Create(ctx context.Context, record *ModelRecord) error
-	Update(ctx context.Context, id uint, record *ModelRecord) error
-	Delete(ctx context.Context, id uint) error
+	Update(ctx context.Context, id string, record *ModelRecord) error
+	Delete(ctx context.Context, id string) error
 }
 
 // EdgeRepository provides edge CRUD for admin tools.
 type EdgeRepository interface {
-	List(ctx context.Context, schemaID uint) ([]EdgeRecord, error)
+	List(ctx context.Context, schemaID string) ([]EdgeRecord, error)
 	Create(ctx context.Context, record *EdgeRecord) error
-	Delete(ctx context.Context, id uint) error
+	Delete(ctx context.Context, id string) error
 }
 
 // SessionRepository provides read-only session access for admin tools.
@@ -85,8 +85,8 @@ type SessionRepository interface {
 type CapabilityRepository interface {
 	ListByAgent(ctx context.Context, agentName string) ([]CapabilityRecord, error)
 	Create(ctx context.Context, record *CapabilityRecord) error
-	Update(ctx context.Context, id uint, record *CapabilityRecord) error
-	Delete(ctx context.Context, id uint) error
+	Update(ctx context.Context, id string, record *CapabilityRecord) error
+	Delete(ctx context.Context, id string) error
 }
 
 // AgentRecord mirrors config_repo.AgentRecord fields needed by admin tools.
@@ -105,7 +105,7 @@ type AgentRecord struct {
 
 // SchemaRecord represents a schema for admin tools.
 type SchemaRecord struct {
-	ID          uint
+	ID          string
 	Name        string
 	Description string
 	AgentNames  []string
@@ -113,12 +113,12 @@ type SchemaRecord struct {
 
 // TriggerRecord represents a trigger for admin tools.
 type TriggerRecord struct {
-	ID          uint
+	ID          string
 	Type        string
 	Title       string
 	AgentName   string
-	AgentID     uint
-	SchemaID    *uint
+	AgentID     string
+	SchemaID    *string
 	Schedule    string
 	WebhookPath string
 	Description string
@@ -127,7 +127,7 @@ type TriggerRecord struct {
 
 // MCPServerRecord represents an MCP server for admin tools.
 type MCPServerRecord struct {
-	ID      uint
+	ID      string
 	Name    string
 	Type    string
 	Command string
@@ -138,7 +138,7 @@ type MCPServerRecord struct {
 
 // ModelRecord represents an LLM model configuration for admin tools.
 type ModelRecord struct {
-	ID        uint
+	ID        string
 	Name      string
 	Type      string
 	BaseURL   string
@@ -148,8 +148,8 @@ type ModelRecord struct {
 
 // EdgeRecord represents an edge between agents in a schema.
 type EdgeRecord struct {
-	ID        uint
-	SchemaID  uint
+	ID        string
+	SchemaID  string
 	FromAgent string
 	ToAgent   string
 	Type      string // flow, transfer, loop, spawn
@@ -167,7 +167,7 @@ type SessionRecord struct {
 
 // CapabilityRecord represents an agent capability for admin tools.
 type CapabilityRecord struct {
-	ID        uint
+	ID        string
 	AgentName string
 	Type      string
 	Config    map[string]interface{}

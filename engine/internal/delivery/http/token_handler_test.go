@@ -17,7 +17,7 @@ import (
 
 type mockTokenRepository struct {
 	tokens    []TokenInfo
-	nextID    uint
+	nextID    int
 	createErr error
 	deleteErr error
 }
@@ -26,11 +26,11 @@ func newMockTokenRepository() *mockTokenRepository {
 	return &mockTokenRepository{nextID: 1}
 }
 
-func (m *mockTokenRepository) Create(_ context.Context, name, tokenHash string, scopesMask int) (uint, error) {
+func (m *mockTokenRepository) Create(_ context.Context, name, tokenHash string, scopesMask int) (string, error) {
 	if m.createErr != nil {
-		return 0, m.createErr
+		return "", m.createErr
 	}
-	id := m.nextID
+	id := fmt.Sprintf("%d", m.nextID)
 	m.nextID++
 	m.tokens = append(m.tokens, TokenInfo{
 		ID:         id,
@@ -50,7 +50,7 @@ func (m *mockTokenRepository) Delete(_ context.Context, id string) error {
 		return m.deleteErr
 	}
 	for i, t := range m.tokens {
-		if fmt.Sprintf("%d", t.ID) == id {
+		if t.ID == id {
 			m.tokens = append(m.tokens[:i], m.tokens[i+1:]...)
 			return nil
 		}
@@ -74,7 +74,7 @@ func TestTokenHandler_CreateToken(t *testing.T) {
 	var resp createTokenResponse
 	err := json.NewDecoder(rec.Body).Decode(&resp)
 	require.NoError(t, err)
-	assert.Equal(t, uint(1), resp.ID)
+	assert.Equal(t, "1", resp.ID)
 	assert.Equal(t, "my-token", resp.Name)
 	assert.True(t, strings.HasPrefix(resp.Token, "bb_"))
 	assert.Len(t, resp.Token, 3+64) // "bb_" + 32 bytes hex
@@ -116,8 +116,8 @@ func TestTokenHandler_CreateToken_DuplicateName(t *testing.T) {
 func TestTokenHandler_ListTokens(t *testing.T) {
 	repo := newMockTokenRepository()
 	repo.tokens = []TokenInfo{
-		{ID: 1, Name: "token-1", ScopesMask: 1, CreatedAt: time.Now()},
-		{ID: 2, Name: "token-2", ScopesMask: 3, CreatedAt: time.Now()},
+		{ID: "1", Name: "token-1", ScopesMask: 1, CreatedAt: time.Now()},
+		{ID: "2", Name: "token-2", ScopesMask: 3, CreatedAt: time.Now()},
 	}
 	h := NewTokenHandler(repo)
 
@@ -139,7 +139,7 @@ func TestTokenHandler_ListTokens(t *testing.T) {
 func TestTokenHandler_DeleteToken(t *testing.T) {
 	repo := newMockTokenRepository()
 	repo.tokens = []TokenInfo{
-		{ID: 1, Name: "to-delete", ScopesMask: 1, CreatedAt: time.Now()},
+		{ID: "1", Name: "to-delete", ScopesMask: 1, CreatedAt: time.Now()},
 	}
 	h := NewTokenHandler(repo)
 

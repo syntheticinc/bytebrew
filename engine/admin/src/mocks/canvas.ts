@@ -18,7 +18,7 @@ export function createMockSchemas(
           type: 'triggerNode',
           position: { x: 80, y: 100 },
           data: {
-            id: 1,
+            id: '1',
             title: 'user-message',
             type: 'webhook',
             webhook_path: '/webhook/support',
@@ -31,7 +31,7 @@ export function createMockSchemas(
           type: 'triggerNode',
           position: { x: 80, y: 220 },
           data: {
-            id: 2,
+            id: '2',
             title: 'daily-digest',
             type: 'cron',
             schedule: '0 9 * * *',
@@ -125,7 +125,7 @@ export function createMockSchemas(
           type: 'triggerNode',
           position: { x: 80, y: 80 },
           data: {
-            id: 4,
+            id: '4',
             title: 'code-request',
             type: 'webhook',
             webhook_path: '/webhook/code',
@@ -138,7 +138,7 @@ export function createMockSchemas(
           type: 'triggerNode',
           position: { x: 80, y: 200 },
           data: {
-            id: 5,
+            id: '5',
             title: 'nightly-review',
             type: 'cron',
             schedule: '0 2 * * *',
@@ -232,7 +232,7 @@ export function createMockSchemas(
           type: 'triggerNode',
           position: { x: 80, y: 60 },
           data: {
-            id: 6,
+            id: '6',
             title: 'lead-event',
             type: 'webhook',
             webhook_path: '/webhook/leads',
@@ -245,7 +245,7 @@ export function createMockSchemas(
           type: 'triggerNode',
           position: { x: 80, y: 180 },
           data: {
-            id: 7,
+            id: '7',
             title: 'scoring-batch',
             type: 'cron',
             schedule: '0 */6 * * *',

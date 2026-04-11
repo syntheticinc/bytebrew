@@ -101,7 +101,7 @@ type tokenRepoHTTPAdapter struct {
 	repo *config_repo.GORMAPITokenRepository
 }
 
-func (a *tokenRepoHTTPAdapter) Create(ctx context.Context, name, tokenHash string, scopesMask int) (uint, error) {
+func (a *tokenRepoHTTPAdapter) Create(ctx context.Context, name, tokenHash string, scopesMask int) (string, error) {
 	return a.repo.Create(ctx, name, tokenHash, scopesMask)
 }
 
@@ -458,7 +458,7 @@ func (a *configImportExportHTTPAdapter) exportAgents(_ context.Context) ([]agent
 	if err := a.db.Preload("MCPServer").Find(&agentMCPs).Error; err != nil {
 		return nil, fmt.Errorf("query agent mcp servers: %w", err)
 	}
-	mcpByAgent := make(map[uint][]string)
+	mcpByAgent := make(map[string][]string)
 	for _, am := range agentMCPs {
 		mcpByAgent[am.AgentID] = append(mcpByAgent[am.AgentID], am.MCPServer.Name)
 	}
@@ -741,10 +741,10 @@ func applyAgentImportDefaults(ag *agentYAML) {
 
 func (a *configImportExportHTTPAdapter) importAgents(tx *gorm.DB, items []agentYAML) error {
 	// Pass 1: create/update all agent records (without spawn targets that reference other agents).
-	agentIDs := make(map[string]uint, len(items))
+	agentIDs := make(map[string]string, len(items))
 	for _, ag := range items {
 		applyAgentImportDefaults(&ag)
-		var modelID *uint
+		var modelID *string
 		if ag.ModelName != "" {
 			var llm models.LLMProviderModel
 			if err := tx.Where("name = ?", ag.ModelName).First(&llm).Error; err != nil {
@@ -813,7 +813,7 @@ func (a *configImportExportHTTPAdapter) importAgents(tx *gorm.DB, items []agentY
 	return nil
 }
 
-func (a *configImportExportHTTPAdapter) syncAgentRelations(tx *gorm.DB, agentID uint, ag agentYAML) error {
+func (a *configImportExportHTTPAdapter) syncAgentRelations(tx *gorm.DB, agentID string, ag agentYAML) error {
 	// Tools: delete old, insert new.
 	if err := tx.Where("agent_id = ?", agentID).Delete(&models.AgentToolModel{}).Error; err != nil {
 		return fmt.Errorf("delete old tools: %w", err)
@@ -917,7 +917,7 @@ func (a *configImportExportHTTPAdapter) importTriggers(tx *gorm.DB, items []trig
 		newTrigger := models.TriggerModel{
 			Type:        t.Type,
 			Title:       t.Title,
-			AgentID:     ptrUint(agent.ID),
+			AgentID:     ptrString(agent.ID),
 			Schedule:    t.Schedule,
 			WebhookPath: t.WebhookPath,
 			Description: t.Description,
@@ -1259,7 +1259,7 @@ func (a *agentManagerHTTPAdapter) loadMCPServersForAgent(_ context.Context, name
 	return names, nil
 }
 
-func (a *agentManagerHTTPAdapter) resolveModelID(_ context.Context, modelName string) *uint {
+func (a *agentManagerHTTPAdapter) resolveModelID(_ context.Context, modelName string) *string {
 	if modelName == "" {
 		return nil
 	}
@@ -1272,7 +1272,7 @@ func (a *agentManagerHTTPAdapter) resolveModelID(_ context.Context, modelName st
 
 // ModelCacheInvalidator allows invalidating cached model clients when models are modified.
 type ModelCacheInvalidator interface {
-	Invalidate(modelID uint)
+	Invalidate(modelID string)
 }
 
 // modelServiceHTTPAdapter bridges GORMLLMProviderRepository to the http.ModelService interface.
@@ -1464,8 +1464,8 @@ type taskServiceHTTPAdapter struct {
 	repo *config_repo.GORMTaskRepository
 }
 
-func (a *taskServiceHTTPAdapter) CreateTask(_ context.Context, _ deliveryhttp.CreateTaskRequest) (uint, error) {
-	return 0, nil
+func (a *taskServiceHTTPAdapter) CreateTask(_ context.Context, _ deliveryhttp.CreateTaskRequest) (string, error) {
+	return "", nil
 }
 
 func (a *taskServiceHTTPAdapter) buildRepoFilter(filter deliveryhttp.TaskListFilter) config_repo.TaskFilter {
@@ -1510,7 +1510,7 @@ func (a *taskServiceHTTPAdapter) CountTasks(ctx context.Context, filter delivery
 	return a.repo.Count(ctx, a.buildRepoFilter(filter))
 }
 
-func (a *taskServiceHTTPAdapter) GetTask(ctx context.Context, id uint) (*deliveryhttp.TaskDetailResponse, error) {
+func (a *taskServiceHTTPAdapter) GetTask(ctx context.Context, id string) (*deliveryhttp.TaskDetailResponse, error) {
 	t, err := a.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -1538,11 +1538,11 @@ func (a *taskServiceHTTPAdapter) GetTask(ctx context.Context, id uint) (*deliver
 	return resp, nil
 }
 
-func (a *taskServiceHTTPAdapter) CancelTask(ctx context.Context, id uint) error {
+func (a *taskServiceHTTPAdapter) CancelTask(ctx context.Context, id string) error {
 	return a.repo.Cancel(ctx, id)
 }
 
-func (a *taskServiceHTTPAdapter) ProvideInput(_ context.Context, _ uint, _ string) error {
+func (a *taskServiceHTTPAdapter) ProvideInput(_ context.Context, _ string, _ string) error {
 	return nil
 }
 

@@ -4,9 +4,9 @@ import "time"
 
 // SessionEventModel maps to the "session_events" table.
 type SessionEventModel struct {
-	ID        uint      `gorm:"primaryKey"`
+	ID        string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	SessionID string    `gorm:"type:varchar(36);not null;index:idx_session_event_id"`
-	TaskID    *uint     `gorm:"index"`
+	TaskID    *string   `gorm:"type:uuid;index"`
 	EventType string    `gorm:"type:varchar(50);not null"`
 	Payload   string    `gorm:"type:text;not null"`
 	CreatedAt time.Time `gorm:"autoCreateTime"`

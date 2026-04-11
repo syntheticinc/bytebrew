@@ -275,7 +275,7 @@ func TestModelHandler_Create_OpenRouterPreset(t *testing.T) {
 				createFunc: func(ctx context.Context, req CreateModelRequest) (*ModelResponse, error) {
 					capturedReq = req
 					return &ModelResponse{
-						ID:        1,
+						ID:        "1",
 						Name:      req.Name,
 						Type:      req.Type,
 						BaseURL:   req.BaseURL,

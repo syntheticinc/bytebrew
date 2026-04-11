@@ -64,12 +64,12 @@ func (a *capabilityServiceHTTPAdapter) AddCapability(ctx context.Context, agentN
 	}, nil
 }
 
-func (a *capabilityServiceHTTPAdapter) UpdateCapability(ctx context.Context, id uint, req deliveryhttp.UpdateCapabilityRequest) error {
+func (a *capabilityServiceHTTPAdapter) UpdateCapability(ctx context.Context, id string, req deliveryhttp.UpdateCapabilityRequest) error {
 	// First read the existing record to use as default values
 	existing, err := a.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pkgerrors.NotFound(fmt.Sprintf("capability not found: %d", id))
+			return pkgerrors.NotFound(fmt.Sprintf("capability not found: %s", id))
 		}
 		return fmt.Errorf("get capability: %w", err)
 	}
@@ -96,17 +96,17 @@ func (a *capabilityServiceHTTPAdapter) UpdateCapability(ctx context.Context, id 
 	}
 	if err := a.repo.Update(ctx, id, record); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pkgerrors.NotFound(fmt.Sprintf("capability not found: %d", id))
+			return pkgerrors.NotFound(fmt.Sprintf("capability not found: %s", id))
 		}
 		return fmt.Errorf("update capability: %w", err)
 	}
 	return nil
 }
 
-func (a *capabilityServiceHTTPAdapter) RemoveCapability(ctx context.Context, id uint) error {
+func (a *capabilityServiceHTTPAdapter) RemoveCapability(ctx context.Context, id string) error {
 	if err := a.repo.Delete(ctx, id); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pkgerrors.NotFound(fmt.Sprintf("capability not found: %d", id))
+			return pkgerrors.NotFound(fmt.Sprintf("capability not found: %s", id))
 		}
 		return fmt.Errorf("remove capability: %w", err)
 	}

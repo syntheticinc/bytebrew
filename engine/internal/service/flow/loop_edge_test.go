@@ -18,18 +18,18 @@ func TestLoopEdge_MaxIterations_Respected(t *testing.T) {
 		},
 	}
 	edgeReader := &mockEdgeReader{
-		edges: map[uint][]EdgeRecord{
-			1: {
-				{ID: 1, SchemaID: 1, SourceAgentName: "agent-a", TargetAgentName: "agent-a", Type: "loop"},
+		edges: map[string][]EdgeRecord{
+			"1": {
+				{ID: "1", SchemaID: "1", SourceAgentName: "agent-a", TargetAgentName: "agent-a", Type: "loop"},
 			},
 		},
 	}
 	gateReader := &mockGateReader{
-		gates: map[uint][]GateRecord{
-			1: {
+		gates: map[string][]GateRecord{
+			"1": {
 				{
-					ID:            1,
-					SchemaID:      1,
+					ID:            "1",
+					SchemaID:      "1",
 					Name:          "loop-gate",
 					ConditionType: "all",
 					MaxIterations: 3,
@@ -46,7 +46,7 @@ func TestLoopEdge_MaxIterations_Respected(t *testing.T) {
 	executor := NewExecutor(runner, edgeReader, gateReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
-		SchemaID:    1,
+		SchemaID:    "1",
 		SessionID:   "session-loop",
 		EventStream: eventStream,
 	}, "agent-a", "start")

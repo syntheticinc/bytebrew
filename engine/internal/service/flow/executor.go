@@ -17,19 +17,19 @@ type AgentRunner interface {
 
 // SchemaEdgeReader reads edges for a schema.
 type SchemaEdgeReader interface {
-	ListEdges(ctx context.Context, schemaID uint) ([]EdgeRecord, error)
+	ListEdges(ctx context.Context, schemaID string) ([]EdgeRecord, error)
 }
 
 // SchemaGateReader reads gates for a schema.
 type SchemaGateReader interface {
-	GetGateByID(ctx context.Context, id uint) (*GateRecord, error)
-	ListGates(ctx context.Context, schemaID uint) ([]GateRecord, error)
+	GetGateByID(ctx context.Context, id string) (*GateRecord, error)
+	ListGates(ctx context.Context, schemaID string) ([]GateRecord, error)
 }
 
 // EdgeRecord is a simplified edge for the service boundary.
 type EdgeRecord struct {
-	ID              uint
-	SchemaID        uint
+	ID              string
+	SchemaID        string
 	SourceAgentName string
 	TargetAgentName string
 	Type            string
@@ -38,8 +38,8 @@ type EdgeRecord struct {
 
 // GateRecord is a simplified gate for the service boundary.
 type GateRecord struct {
-	ID            uint
-	SchemaID      uint
+	ID            string
+	SchemaID      string
 	Name          string
 	ConditionType string
 	Config        map[string]interface{}
@@ -49,7 +49,7 @@ type GateRecord struct {
 
 // ExecutorConfig holds configuration for the flow executor.
 type ExecutorConfig struct {
-	SchemaID    uint
+	SchemaID    string
 	SessionID   string
 	EventStream domain.AgentEventStream
 }
@@ -81,7 +81,7 @@ func (e *Executor) Execute(ctx context.Context, cfg ExecutorConfig, entryAgent, 
 		return nil, fmt.Errorf("load schema edges: %w", err)
 	}
 
-	execution := domain.NewFlowExecution(fmt.Sprintf("%d", cfg.SchemaID), cfg.SessionID)
+	execution := domain.NewFlowExecution(cfg.SchemaID, cfg.SessionID)
 	if err := execution.Start(); err != nil {
 		return nil, err
 	}
@@ -102,7 +102,7 @@ func (e *Executor) Execute(ctx context.Context, cfg ExecutorConfig, entryAgent, 
 }
 
 // HasOutgoingEdges returns true if the agent has outgoing edges in the schema.
-func (e *Executor) HasOutgoingEdges(ctx context.Context, schemaID uint, agentName string) (bool, error) {
+func (e *Executor) HasOutgoingEdges(ctx context.Context, schemaID string, agentName string) (bool, error) {
 	edges, err := e.edgeReader.ListEdges(ctx, schemaID)
 	if err != nil {
 		return false, fmt.Errorf("load schema edges: %w", err)
@@ -239,7 +239,7 @@ func (e *Executor) executeFork(ctx context.Context, cfg ExecutorConfig, executio
 			}
 			// Each branch gets its own isolated sub-execution to avoid concurrent
 			// writes to the shared execution's Steps slice.
-			sub := domain.NewFlowExecution(fmt.Sprintf("%d", cfg.SchemaID), cfg.SessionID)
+			sub := domain.NewFlowExecution(cfg.SchemaID, cfg.SessionID)
 			if startErr := sub.Start(); startErr != nil {
 				results[idx] = result{agentName: e2.TargetAgentName, err: startErr}
 				return
@@ -293,7 +293,7 @@ func (e *Executor) executeGate(ctx context.Context, cfg ExecutorConfig, executio
 	}
 
 	domainGate := &domain.Gate{
-		ID:            fmt.Sprintf("%d", gate.ID),
+		ID:            gate.ID,
 		Name:          gate.Name,
 		ConditionType: domain.GateConditionType(gate.ConditionType),
 		Config:        gate.Config,
@@ -388,7 +388,7 @@ func (e *Executor) executeLoop(ctx context.Context, cfg ExecutorConfig, executio
 	return lastOutput, fmt.Errorf("loop max iterations (%d) exceeded for agent %q", maxIter, sourceAgent)
 }
 
-func (e *Executor) isGateNode(ctx context.Context, schemaID uint, nodeName string) bool {
+func (e *Executor) isGateNode(ctx context.Context, schemaID string, nodeName string) bool {
 	gates, err := e.gateReader.ListGates(ctx, schemaID)
 	if err != nil {
 		return false

@@ -37,7 +37,7 @@ export const MOCK_TRACE: SessionTrace = {
   created_at: '2026-04-05T12:00:00Z',
   steps: [
     {
-      id: 1,
+      id: '1',
       kind: 'reasoning',
       label:
         'User asks about changing subscription plan. Need to check current plan and interaction history.',
@@ -45,7 +45,7 @@ export const MOCK_TRACE: SessionTrace = {
       tokens: 450,
     },
     {
-      id: 2,
+      id: '2',
       kind: 'tool_call',
       label: 'search_knowledge',
       input: JSON.stringify({ query: 'change subscription plan', top_k: 5 }, null, 2),
@@ -61,7 +61,7 @@ export const MOCK_TRACE: SessionTrace = {
       tokens: 320,
     },
     {
-      id: 3,
+      id: '3',
       kind: 'memory_recall',
       label: 'Previous interaction context',
       output: JSON.stringify(
@@ -73,7 +73,7 @@ export const MOCK_TRACE: SessionTrace = {
       tokens: 150,
     },
     {
-      id: 4,
+      id: '4',
       kind: 'knowledge_search',
       label: 'Search knowledge base',
       input: JSON.stringify({ query: 'refund policy' }, null, 2),
@@ -86,7 +86,7 @@ export const MOCK_TRACE: SessionTrace = {
       tokens: 50,
     },
     {
-      id: 5,
+      id: '5',
       kind: 'tool_call',
       label: 'check_account',
       input: JSON.stringify({ user_id: 'u_4f3a' }, null, 2),
@@ -99,7 +99,7 @@ export const MOCK_TRACE: SessionTrace = {
       tokens: 280,
     },
     {
-      id: 6,
+      id: '6',
       kind: 'reasoning',
       label:
         'Customer has prior interaction history. Forming personalized response with account context.',
@@ -107,7 +107,7 @@ export const MOCK_TRACE: SessionTrace = {
       tokens: 220,
     },
     {
-      id: 7,
+      id: '7',
       kind: 'guardrail_check',
       label: 'Output validation (JSON Schema)',
       input: JSON.stringify({ schema: { type: 'object', required: ['answer'] } }, null, 2),
@@ -116,7 +116,7 @@ export const MOCK_TRACE: SessionTrace = {
       tokens: 100,
     },
     {
-      id: 8,
+      id: '8',
       kind: 'final_answer',
       label:
         'Hello! I see you have previously contacted us. Happy to help with upgrading to the Team plan.',
@@ -136,14 +136,14 @@ export const MOCK_TRACE_ERROR: SessionTrace = {
   created_at: '2026-04-05T11:30:00Z',
   steps: [
     {
-      id: 1,
+      id: '1',
       kind: 'reasoning',
       label: 'User wants to deploy a new service. Checking infrastructure status.',
       duration_ms: 500,
       tokens: 300,
     },
     {
-      id: 2,
+      id: '2',
       kind: 'task_dispatch',
       label: 'Dispatched sub-task: check_infra_status',
       input: JSON.stringify({ task: 'check_infra_status', target: 'k8s-cluster-1' }, null, 2),
@@ -151,14 +151,14 @@ export const MOCK_TRACE_ERROR: SessionTrace = {
       tokens: 100,
     },
     {
-      id: 3,
+      id: '3',
       kind: 'task_timeout',
       label: 'Sub-task check_infra_status timed out after 30s',
       duration_ms: 30000,
       tokens: 0,
     },
     {
-      id: 4,
+      id: '4',
       kind: 'escalation',
       label: 'Escalated to human operator: infrastructure unreachable',
       output: JSON.stringify({ reason: 'k8s-cluster-1 not responding', handler: 'ops-team' }, null, 2),
@@ -166,7 +166,7 @@ export const MOCK_TRACE_ERROR: SessionTrace = {
       tokens: 50,
     },
     {
-      id: 5,
+      id: '5',
       kind: 'error',
       label: 'Pipeline halted: escalation triggered, awaiting human resolution',
       output: JSON.stringify({ error: 'ESCALATION_PENDING', recoverable: true }, null, 2),

@@ -10,9 +10,9 @@ import (
 
 // CancelTaskRepository defines the data access needed for task cancellation (consumer-side).
 type CancelTaskRepository interface {
-	GetByID(ctx context.Context, id uint) (*domain.EngineTask, error)
-	UpdateStatus(ctx context.Context, id uint, status domain.EngineTaskStatus) error
-	GetSubTasks(ctx context.Context, parentID uint) ([]domain.EngineTask, error)
+	GetByID(ctx context.Context, id string) (*domain.EngineTask, error)
+	UpdateStatus(ctx context.Context, id string, status domain.EngineTaskStatus) error
+	GetSubTasks(ctx context.Context, parentID string) ([]domain.EngineTask, error)
 }
 
 // TaskCanceller cancels a task and its sub-tasks recursively.
@@ -27,10 +27,10 @@ func NewTaskCanceller(repo CancelTaskRepository) *TaskCanceller {
 
 // Cancel cancels a task and all its non-terminal sub-tasks.
 // Terminal tasks are left unchanged (idempotent).
-func (c *TaskCanceller) Cancel(ctx context.Context, taskID uint) error {
+func (c *TaskCanceller) Cancel(ctx context.Context, taskID string) error {
 	task, err := c.repo.GetByID(ctx, taskID)
 	if err != nil {
-		return fmt.Errorf("get task %d: %w", taskID, err)
+		return fmt.Errorf("get task %s: %w", taskID, err)
 	}
 
 	if task.IsTerminal() {
@@ -48,7 +48,7 @@ func (c *TaskCanceller) Cancel(ctx context.Context, taskID uint) error {
 	}
 
 	if err := c.repo.UpdateStatus(ctx, taskID, domain.EngineTaskStatusCancelled); err != nil {
-		return fmt.Errorf("cancel task %d: %w", taskID, err)
+		return fmt.Errorf("cancel task %s: %w", taskID, err)
 	}
 
 	slog.InfoContext(ctx, "task cancelled", "task_id", taskID)

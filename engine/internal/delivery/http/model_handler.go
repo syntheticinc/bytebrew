@@ -11,7 +11,7 @@ import (
 
 // ModelResponse is the API representation of an LLM provider model.
 type ModelResponse struct {
-	ID         uint   `json:"id"`
+	ID         string `json:"id"`
 	Name       string `json:"name"`
 	Type       string `json:"type"`
 	BaseURL    string `json:"base_url,omitempty"`

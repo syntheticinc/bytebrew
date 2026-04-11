@@ -512,7 +512,7 @@ export default function BuilderSidePanel({ agent, agents, onClose, onSaved, onDe
             <Section title="Model" defaultOpen={true}>
               <select
                 value={form.model_id ?? ''}
-                onChange={(e) => updateField('model_id', e.target.value ? Number(e.target.value) : undefined)}
+                onChange={(e) => updateField('model_id', e.target.value || undefined)}
                 className="w-full px-2 py-1.5 bg-brand-dark border border-brand-shade3/30 rounded-card text-xs text-brand-light focus:outline-none focus:border-brand-accent transition-colors"
               >
                 <option value="">Default model</option>

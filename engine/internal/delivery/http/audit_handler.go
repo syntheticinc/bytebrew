@@ -9,7 +9,7 @@ import (
 
 // AuditResponse is the API representation of an audit log entry.
 type AuditResponse struct {
-	ID        uint   `json:"id"`
+	ID        string `json:"id"`
 	Timestamp string `json:"timestamp"`
 	ActorType string `json:"actor_type"`
 	ActorID   string `json:"actor_id"`

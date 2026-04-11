@@ -35,9 +35,9 @@ func (p *TaskReminderProvider) GetReminder(ctx context.Context, sessionID string
 	sb.WriteString("## Current Tasks\n\n")
 
 	for _, t := range tasks {
-		sb.WriteString(fmt.Sprintf("[%s] Task %d: %q", string(t.Status), t.ID, t.Title))
+		sb.WriteString(fmt.Sprintf("[%s] Task %s: %q", string(t.Status), t.ID, t.Title))
 		if t.ParentTaskID != nil {
-			sb.WriteString(fmt.Sprintf(" (sub-task of %d)", *t.ParentTaskID))
+			sb.WriteString(fmt.Sprintf(" (sub-task of %s)", *t.ParentTaskID))
 		}
 		sb.WriteString("\n")
 	}

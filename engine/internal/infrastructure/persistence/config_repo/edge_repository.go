@@ -11,8 +11,8 @@ import (
 
 // EdgeRecord is an intermediate struct for DB <-> domain mapping.
 type EdgeRecord struct {
-	ID              uint
-	SchemaID        uint
+	ID              string
+	SchemaID        string
 	SourceAgentName string
 	TargetAgentName string
 	Type            string
@@ -30,7 +30,7 @@ func NewGORMEdgeRepository(db *gorm.DB) *GORMEdgeRepository {
 }
 
 // List returns all edges for a schema.
-func (r *GORMEdgeRepository) List(ctx context.Context, schemaID uint) ([]EdgeRecord, error) {
+func (r *GORMEdgeRepository) List(ctx context.Context, schemaID string) ([]EdgeRecord, error) {
 	var edges []models.EdgeModel
 	if err := r.db.WithContext(ctx).Where("schema_id = ?", schemaID).Find(&edges).Error; err != nil {
 		return nil, fmt.Errorf("list edges: %w", err)
@@ -40,7 +40,7 @@ func (r *GORMEdgeRepository) List(ctx context.Context, schemaID uint) ([]EdgeRec
 	for _, e := range edges {
 		rec, err := toEdgeRecord(e)
 		if err != nil {
-			return nil, fmt.Errorf("convert edge %d: %w", e.ID, err)
+			return nil, fmt.Errorf("convert edge %s: %w", e.ID, err)
 		}
 		records = append(records, rec)
 	}
@@ -48,10 +48,10 @@ func (r *GORMEdgeRepository) List(ctx context.Context, schemaID uint) ([]EdgeRec
 }
 
 // GetByID returns a single edge by ID.
-func (r *GORMEdgeRepository) GetByID(ctx context.Context, id uint) (*EdgeRecord, error) {
+func (r *GORMEdgeRepository) GetByID(ctx context.Context, id string) (*EdgeRecord, error) {
 	var edge models.EdgeModel
-	if err := r.db.WithContext(ctx).First(&edge, id).Error; err != nil {
-		return nil, fmt.Errorf("get edge %d: %w", id, err)
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&edge).Error; err != nil {
+		return nil, fmt.Errorf("get edge %s: %w", id, err)
 	}
 	rec, err := toEdgeRecord(edge)
 	if err != nil {
@@ -82,7 +82,7 @@ func (r *GORMEdgeRepository) Create(ctx context.Context, record *EdgeRecord) err
 }
 
 // Update updates an existing edge by ID.
-func (r *GORMEdgeRepository) Update(ctx context.Context, id uint, record *EdgeRecord) error {
+func (r *GORMEdgeRepository) Update(ctx context.Context, id string, record *EdgeRecord) error {
 	configJSON, err := json.Marshal(record.Config)
 	if err != nil {
 		return fmt.Errorf("marshal edge config: %w", err)
@@ -95,7 +95,7 @@ func (r *GORMEdgeRepository) Update(ctx context.Context, id uint, record *EdgeRe
 		"config":            string(configJSON),
 	})
 	if result.Error != nil {
-		return fmt.Errorf("update edge %d: %w", id, result.Error)
+		return fmt.Errorf("update edge %s: %w", id, result.Error)
 	}
 	if result.RowsAffected == 0 {
 		return gorm.ErrRecordNotFound
@@ -104,10 +104,10 @@ func (r *GORMEdgeRepository) Update(ctx context.Context, id uint, record *EdgeRe
 }
 
 // Delete removes an edge by ID.
-func (r *GORMEdgeRepository) Delete(ctx context.Context, id uint) error {
-	result := r.db.WithContext(ctx).Delete(&models.EdgeModel{}, id)
+func (r *GORMEdgeRepository) Delete(ctx context.Context, id string) error {
+	result := r.db.WithContext(ctx).Delete(&models.EdgeModel{}, "id = ?", id)
 	if result.Error != nil {
-		return fmt.Errorf("delete edge %d: %w", id, result.Error)
+		return fmt.Errorf("delete edge %s: %w", id, result.Error)
 	}
 	if result.RowsAffected == 0 {
 		return gorm.ErrRecordNotFound

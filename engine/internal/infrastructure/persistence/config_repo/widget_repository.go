@@ -12,10 +12,10 @@ import (
 
 // WidgetRecord is an intermediate struct for DB <-> domain mapping.
 type WidgetRecord struct {
-	ID              uint
+	ID              string
 	TenantID        string
 	Name            string
-	SchemaID        uint
+	SchemaID        string
 	PrimaryColor    string
 	Position        string
 	Size            string
@@ -57,10 +57,10 @@ func (r *GORMWidgetRepository) List(ctx context.Context, tenantID string) ([]Wid
 }
 
 // GetByID returns a single widget by ID.
-func (r *GORMWidgetRepository) GetByID(ctx context.Context, id uint) (*WidgetRecord, error) {
+func (r *GORMWidgetRepository) GetByID(ctx context.Context, id string) (*WidgetRecord, error) {
 	var widget models.WidgetModel
-	if err := r.db.WithContext(ctx).First(&widget, id).Error; err != nil {
-		return nil, fmt.Errorf("get widget %d: %w", id, err)
+	if err := r.db.WithContext(ctx).First(&widget, "id = ?", id).Error; err != nil {
+		return nil, fmt.Errorf("get widget %s: %w", id, err)
 	}
 	rec := toWidgetRecord(widget)
 	return &rec, nil
@@ -77,7 +77,7 @@ func (r *GORMWidgetRepository) Create(ctx context.Context, record *WidgetRecord)
 }
 
 // Update updates an existing widget by ID.
-func (r *GORMWidgetRepository) Update(ctx context.Context, id uint, record *WidgetRecord) error {
+func (r *GORMWidgetRepository) Update(ctx context.Context, id string, record *WidgetRecord) error {
 	customHeadersJSON := ""
 	if len(record.CustomHeaders) > 0 {
 		b, err := json.Marshal(record.CustomHeaders)
@@ -101,7 +101,7 @@ func (r *GORMWidgetRepository) Update(ctx context.Context, id uint, record *Widg
 		"enabled":          record.Enabled,
 	})
 	if result.Error != nil {
-		return fmt.Errorf("update widget %d: %w", id, result.Error)
+		return fmt.Errorf("update widget %s: %w", id, result.Error)
 	}
 	if result.RowsAffected == 0 {
 		return gorm.ErrRecordNotFound
@@ -110,10 +110,10 @@ func (r *GORMWidgetRepository) Update(ctx context.Context, id uint, record *Widg
 }
 
 // Delete removes a widget by ID.
-func (r *GORMWidgetRepository) Delete(ctx context.Context, id uint) error {
-	result := r.db.WithContext(ctx).Delete(&models.WidgetModel{}, id)
+func (r *GORMWidgetRepository) Delete(ctx context.Context, id string) error {
+	result := r.db.WithContext(ctx).Delete(&models.WidgetModel{}, "id = ?", id)
 	if result.Error != nil {
-		return fmt.Errorf("delete widget %d: %w", id, result.Error)
+		return fmt.Errorf("delete widget %s: %w", id, result.Error)
 	}
 	if result.RowsAffected == 0 {
 		return gorm.ErrRecordNotFound

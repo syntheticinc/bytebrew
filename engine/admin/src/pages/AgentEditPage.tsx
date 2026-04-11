@@ -275,7 +275,7 @@ export default function AgentEditPage() {
           <label className="block text-sm font-medium text-brand-light mb-1">Model</label>
           <select
             value={form.model_id ?? ''}
-            onChange={(e) => updateField('model_id', e.target.value ? Number(e.target.value) : undefined)}
+            onChange={(e) => updateField('model_id', e.target.value || undefined)}
             className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
           >
             <option value="">Default model</option>

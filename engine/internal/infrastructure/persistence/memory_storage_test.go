@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"gorm.io/gorm"
 )
 
@@ -17,7 +16,15 @@ func setupMemoryDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&models.MemoryModel{}))
+	require.NoError(t, db.Exec(`CREATE TABLE memories (
+		id TEXT PRIMARY KEY,
+		schema_id TEXT NOT NULL,
+		user_id TEXT NOT NULL,
+		content TEXT NOT NULL,
+		metadata TEXT,
+		created_at DATETIME,
+		updated_at DATETIME
+	)`).Error)
 	return db
 }
 

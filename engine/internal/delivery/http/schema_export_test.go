@@ -17,17 +17,17 @@ import (
 // --- mock services ---
 
 type mockSchemaService struct {
-	schemas     map[uint]*SchemaInfo
-	agents      map[uint][]string
-	nextID      uint
+	schemas     map[string]*SchemaInfo
+	agents      map[string][]string
+	nextID      int
 	createErr   error
 	addAgentErr error
 }
 
 func newMockSchemaService() *mockSchemaService {
 	return &mockSchemaService{
-		schemas: make(map[uint]*SchemaInfo),
-		agents:  make(map[uint][]string),
+		schemas: make(map[string]*SchemaInfo),
+		agents:  make(map[string][]string),
 		nextID:  1,
 	}
 }
@@ -40,10 +40,10 @@ func (m *mockSchemaService) ListSchemas(_ context.Context) ([]SchemaInfo, error)
 	return result, nil
 }
 
-func (m *mockSchemaService) GetSchema(_ context.Context, id uint) (*SchemaInfo, error) {
+func (m *mockSchemaService) GetSchema(_ context.Context, id string) (*SchemaInfo, error) {
 	s, ok := m.schemas[id]
 	if !ok {
-		return nil, fmt.Errorf("schema not found: %d", id)
+		return nil, fmt.Errorf("schema not found: %s", id)
 	}
 	s.Agents = m.agents[id]
 	return s, nil
@@ -53,7 +53,7 @@ func (m *mockSchemaService) CreateSchema(_ context.Context, req CreateSchemaRequ
 	if m.createErr != nil {
 		return nil, m.createErr
 	}
-	id := m.nextID
+	id := fmt.Sprintf("%d", m.nextID)
 	m.nextID++
 	s := &SchemaInfo{
 		ID:          id,
@@ -64,15 +64,15 @@ func (m *mockSchemaService) CreateSchema(_ context.Context, req CreateSchemaRequ
 	return s, nil
 }
 
-func (m *mockSchemaService) UpdateSchema(_ context.Context, _ uint, _ UpdateSchemaRequest) error {
+func (m *mockSchemaService) UpdateSchema(_ context.Context, _ string, _ UpdateSchemaRequest) error {
 	return nil
 }
 
-func (m *mockSchemaService) DeleteSchema(_ context.Context, _ uint) error {
+func (m *mockSchemaService) DeleteSchema(_ context.Context, _ string) error {
 	return nil
 }
 
-func (m *mockSchemaService) AddSchemaAgent(_ context.Context, schemaID uint, agentName string) error {
+func (m *mockSchemaService) AddSchemaAgent(_ context.Context, schemaID string, agentName string) error {
 	if m.addAgentErr != nil {
 		return m.addAgentErr
 	}
@@ -80,36 +80,36 @@ func (m *mockSchemaService) AddSchemaAgent(_ context.Context, schemaID uint, age
 	return nil
 }
 
-func (m *mockSchemaService) RemoveSchemaAgent(_ context.Context, _ uint, _ string) error {
+func (m *mockSchemaService) RemoveSchemaAgent(_ context.Context, _ string, _ string) error {
 	return nil
 }
 
-func (m *mockSchemaService) ListSchemaAgents(_ context.Context, schemaID uint) ([]string, error) {
+func (m *mockSchemaService) ListSchemaAgents(_ context.Context, schemaID string) ([]string, error) {
 	return m.agents[schemaID], nil
 }
 
 type mockGateService struct {
-	gates  map[uint][]GateInfo
-	nextID uint
+	gates  map[string][]GateInfo
+	nextID int
 }
 
 func newMockGateService() *mockGateService {
 	return &mockGateService{
-		gates:  make(map[uint][]GateInfo),
+		gates:  make(map[string][]GateInfo),
 		nextID: 1,
 	}
 }
 
-func (m *mockGateService) ListGates(_ context.Context, schemaID uint) ([]GateInfo, error) {
+func (m *mockGateService) ListGates(_ context.Context, schemaID string) ([]GateInfo, error) {
 	return m.gates[schemaID], nil
 }
 
-func (m *mockGateService) GetGate(_ context.Context, _ uint) (*GateInfo, error) {
+func (m *mockGateService) GetGate(_ context.Context, _ string) (*GateInfo, error) {
 	return nil, nil
 }
 
-func (m *mockGateService) CreateGate(_ context.Context, schemaID uint, req CreateGateRequest) (*GateInfo, error) {
-	id := m.nextID
+func (m *mockGateService) CreateGate(_ context.Context, schemaID string, req CreateGateRequest) (*GateInfo, error) {
+	id := fmt.Sprintf("%d", m.nextID)
 	m.nextID++
 	g := GateInfo{
 		ID:            id,
@@ -124,36 +124,36 @@ func (m *mockGateService) CreateGate(_ context.Context, schemaID uint, req Creat
 	return &g, nil
 }
 
-func (m *mockGateService) UpdateGate(_ context.Context, _ uint, _ CreateGateRequest) error {
+func (m *mockGateService) UpdateGate(_ context.Context, _ string, _ CreateGateRequest) error {
 	return nil
 }
 
-func (m *mockGateService) DeleteGate(_ context.Context, _ uint) error {
+func (m *mockGateService) DeleteGate(_ context.Context, _ string) error {
 	return nil
 }
 
 type mockEdgeService struct {
-	edges  map[uint][]EdgeInfo
-	nextID uint
+	edges  map[string][]EdgeInfo
+	nextID int
 }
 
 func newMockEdgeService() *mockEdgeService {
 	return &mockEdgeService{
-		edges:  make(map[uint][]EdgeInfo),
+		edges:  make(map[string][]EdgeInfo),
 		nextID: 1,
 	}
 }
 
-func (m *mockEdgeService) ListEdges(_ context.Context, schemaID uint) ([]EdgeInfo, error) {
+func (m *mockEdgeService) ListEdges(_ context.Context, schemaID string) ([]EdgeInfo, error) {
 	return m.edges[schemaID], nil
 }
 
-func (m *mockEdgeService) GetEdge(_ context.Context, _ uint) (*EdgeInfo, error) {
+func (m *mockEdgeService) GetEdge(_ context.Context, _ string) (*EdgeInfo, error) {
 	return nil, nil
 }
 
-func (m *mockEdgeService) CreateEdge(_ context.Context, schemaID uint, req CreateEdgeRequest) (*EdgeInfo, error) {
-	id := m.nextID
+func (m *mockEdgeService) CreateEdge(_ context.Context, schemaID string, req CreateEdgeRequest) (*EdgeInfo, error) {
+	id := fmt.Sprintf("%d", m.nextID)
 	m.nextID++
 	e := EdgeInfo{
 		ID:              id,
@@ -167,11 +167,11 @@ func (m *mockEdgeService) CreateEdge(_ context.Context, schemaID uint, req Creat
 	return &e, nil
 }
 
-func (m *mockEdgeService) UpdateEdge(_ context.Context, _ uint, _ CreateEdgeRequest) error {
+func (m *mockEdgeService) UpdateEdge(_ context.Context, _ string, _ CreateEdgeRequest) error {
 	return nil
 }
 
-func (m *mockEdgeService) DeleteEdge(_ context.Context, _ uint) error {
+func (m *mockEdgeService) DeleteEdge(_ context.Context, _ string) error {
 	return nil
 }
 
@@ -233,17 +233,17 @@ func TestExportSchema_Basic(t *testing.T) {
 	}
 
 	gateSvc.gates[schema.ID] = []GateInfo{
-		{ID: 1, SchemaID: schema.ID, Name: "quality-check", ConditionType: "all", MaxIterations: 3},
+		{ID: "1", SchemaID: schema.ID, Name: "quality-check", ConditionType: "all", MaxIterations: 3},
 	}
 	edgeSvc.edges[schema.ID] = []EdgeInfo{
-		{ID: 1, SchemaID: schema.ID, SourceAgentName: "classifier", TargetAgentName: "support-agent", Type: "flow"},
+		{ID: "1", SchemaID: schema.ID, SourceAgentName: "classifier", TargetAgentName: "support-agent", Type: "flow"},
 	}
 
 	handler := NewSchemaHandler(schemaSvc, gateSvc, edgeSvc)
 	handler.SetAgentDetailer(agentDetailer)
 	router := setupExportImportRouter(handler)
 
-	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/schemas/%d/export", schema.ID), nil)
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/schemas/%s/export", schema.ID), nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -293,7 +293,7 @@ func TestExportSchema_WithoutAgentDetailer(t *testing.T) {
 	// Do NOT set agent detailer
 	router := setupExportImportRouter(handler)
 
-	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/schemas/%d/export", schema.ID), nil)
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/schemas/%s/export", schema.ID), nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -417,17 +417,17 @@ func TestRoundTrip_ExportImport(t *testing.T) {
 	srcSchemaSvc.AddSchemaAgent(context.Background(), schema.ID, "agent-x")
 	srcSchemaSvc.AddSchemaAgent(context.Background(), schema.ID, "agent-y")
 	srcEdgeSvc.edges[schema.ID] = []EdgeInfo{
-		{ID: 1, SchemaID: schema.ID, SourceAgentName: "agent-x", TargetAgentName: "agent-y", Type: "transfer"},
+		{ID: "1", SchemaID: schema.ID, SourceAgentName: "agent-x", TargetAgentName: "agent-y", Type: "transfer"},
 	}
 	srcGateSvc.gates[schema.ID] = []GateInfo{
-		{ID: 1, SchemaID: schema.ID, Name: "check", ConditionType: "any", MaxIterations: 2, Timeout: 30},
+		{ID: "1", SchemaID: schema.ID, Name: "check", ConditionType: "any", MaxIterations: 2, Timeout: 30},
 	}
 
 	srcHandler := NewSchemaHandler(srcSchemaSvc, srcGateSvc, srcEdgeSvc)
 	srcRouter := setupExportImportRouter(srcHandler)
 
 	// Export
-	exportReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/schemas/%d/export", schema.ID), nil)
+	exportReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/schemas/%s/export", schema.ID), nil)
 	exportRec := httptest.NewRecorder()
 	srcRouter.ServeHTTP(exportRec, exportReq)
 	require.Equal(t, http.StatusOK, exportRec.Code)

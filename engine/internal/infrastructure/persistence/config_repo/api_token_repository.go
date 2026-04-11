@@ -20,14 +20,14 @@ func NewGORMAPITokenRepository(db *gorm.DB) *GORMAPITokenRepository {
 }
 
 // Create inserts a new API token and returns its ID.
-func (r *GORMAPITokenRepository) Create(ctx context.Context, name, tokenHash string, scopesMask int) (uint, error) {
+func (r *GORMAPITokenRepository) Create(ctx context.Context, name, tokenHash string, scopesMask int) (string, error) {
 	m := models.APITokenModel{
 		Name:       name,
 		TokenHash:  tokenHash,
 		ScopesMask: scopesMask,
 	}
 	if err := r.db.WithContext(ctx).Create(&m).Error; err != nil {
-		return 0, fmt.Errorf("create api token: %w", err)
+		return "", fmt.Errorf("create api token: %w", err)
 	}
 	return m.ID, nil
 }
@@ -84,7 +84,7 @@ func (r *GORMAPITokenRepository) VerifyToken(ctx context.Context, tokenHash stri
 
 // APITokenInfo is a token record returned by List (no raw token value).
 type APITokenInfo struct {
-	ID         uint       `json:"id"`
+	ID         string     `json:"id"`
 	Name       string     `json:"name"`
 	ScopesMask int        `json:"scopes_mask"`
 	CreatedAt  time.Time  `json:"created_at"`

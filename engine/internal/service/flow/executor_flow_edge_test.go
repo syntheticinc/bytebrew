@@ -17,19 +17,19 @@ func TestFlowEdge_AgentA_to_AgentB(t *testing.T) {
 		},
 	}
 	edgeReader := &mockEdgeReader{
-		edges: map[uint][]EdgeRecord{
-			1: {
-				{ID: 1, SchemaID: 1, SourceAgentName: "agentA", TargetAgentName: "agentB", Type: "flow"},
+		edges: map[string][]EdgeRecord{
+			"1": {
+				{ID: "1", SchemaID: "1", SourceAgentName: "agentA", TargetAgentName: "agentB", Type: "flow"},
 			},
 		},
 	}
-	gateReader := &mockGateReader{gates: map[uint][]GateRecord{}}
+	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 	eventStream := &mockEventStream{}
 
 	executor := NewExecutor(runner, edgeReader, gateReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
-		SchemaID:    1,
+		SchemaID:    "1",
 		SessionID:   "test",
 		EventStream: eventStream,
 	}, "agentA", "hello")
@@ -96,19 +96,19 @@ func TestFlowEdge_EventStream(t *testing.T) {
 		},
 	}
 	edgeReader := &mockEdgeReader{
-		edges: map[uint][]EdgeRecord{
-			1: {
-				{ID: 1, SchemaID: 1, SourceAgentName: "agentA", TargetAgentName: "agentB", Type: "flow"},
+		edges: map[string][]EdgeRecord{
+			"1": {
+				{ID: "1", SchemaID: "1", SourceAgentName: "agentA", TargetAgentName: "agentB", Type: "flow"},
 			},
 		},
 	}
-	gateReader := &mockGateReader{gates: map[uint][]GateRecord{}}
+	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 	eventStream := &mockEventStream{}
 
 	executor := NewExecutor(runner, edgeReader, gateReader)
 
 	_, err := executor.Execute(context.Background(), ExecutorConfig{
-		SchemaID:    1,
+		SchemaID:    "1",
 		SessionID:   "test",
 		EventStream: eventStream,
 	}, "agentA", "hello")

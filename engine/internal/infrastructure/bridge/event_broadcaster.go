@@ -2,8 +2,8 @@ package bridge
 
 import (
 	"log/slog"
-	"strconv"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
@@ -25,7 +25,7 @@ type MessageSender interface {
 
 // EventStoreReader reads persisted events for backfill on reconnect (consumer-side interface).
 type EventStoreReader interface {
-	GetAfter(sessionID string, lastEventID int64) ([]eventstore.StoredEvent, error)
+	GetAfter(sessionID string, afterCreatedAt time.Time) ([]eventstore.StoredEvent, error)
 	GetAll(sessionID string) ([]eventstore.StoredEvent, error)
 }
 
@@ -64,22 +64,34 @@ func (b *EventBroadcaster) Subscribe(deviceID, sessionID, lastEventID string) {
 	slog.Info("device subscribed to session", "device_id", deviceID, "session_id", sessionID, "last_event_id", lastEventID)
 
 	// Backfill missed events from event store.
-	lastID, _ := strconv.ParseInt(lastEventID, 10, 64)
-
-	var missed []eventstore.StoredEvent
-	var err error
-	if lastID == 0 {
-		missed, err = b.store.GetAll(sessionID)
-	} else {
-		missed, err = b.store.GetAfter(sessionID, lastID)
-	}
-
+	// If lastEventID is empty, get all events; otherwise get all and skip up to the last seen ID.
+	all, err := b.store.GetAll(sessionID)
 	if err != nil {
 		slog.Error("backfill from event store failed", "device_id", deviceID, "session_id", sessionID, "error", err)
 	}
 
+	var missed []eventstore.StoredEvent
+	if lastEventID == "" {
+		missed = all
+	} else {
+		// Find the last seen event and return everything after it.
+		found := false
+		for _, evt := range all {
+			if found {
+				missed = append(missed, evt)
+			}
+			if evt.ID == lastEventID {
+				found = true
+			}
+		}
+		if !found {
+			// Unknown lastEventID — return all events (safe fallback).
+			missed = all
+		}
+	}
+
 	for _, evt := range missed {
-		b.sendToDevice(deviceID, sessionID, evt.JSON, strconv.FormatInt(evt.ID, 10))
+		b.sendToDevice(deviceID, sessionID, evt.JSON, evt.ID)
 	}
 
 	// BackfillComplete marker so the client knows backfill is done.

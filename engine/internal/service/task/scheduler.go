@@ -9,7 +9,7 @@ import (
 
 // TaskCreator creates tasks from trigger events (cron, webhook).
 type TaskCreator interface {
-	CreateFromTrigger(ctx context.Context, params TriggerTaskParams) (uint, error)
+	CreateFromTrigger(ctx context.Context, params TriggerTaskParams) (string, error)
 }
 
 // TriggerTaskParams holds parameters for creating a task from a trigger.

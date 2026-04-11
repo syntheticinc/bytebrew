@@ -6,7 +6,7 @@ export const MOCK_AGENTS: Record<string, AgentDetail> = {
     description: 'Routes incoming requests to appropriate agent',
     tools_count: 3,
     has_knowledge: true,
-    model_id: 1,
+    model_id: '1',
     system_prompt:
       'You are a classifier agent. Route incoming support requests to the appropriate specialist agent based on the query topic and complexity.',
     tools: ['ask_user', 'show_structured_output', 'manage_tasks', 'manage_subtasks', 'wait'],
@@ -29,7 +29,7 @@ export const MOCK_AGENTS: Record<string, AgentDetail> = {
     tools_count: 8,
     has_knowledge: true,
     kit: 'support',
-    model_id: 2,
+    model_id: '2',
     system_prompt:
       'You are a helpful support agent for ByteBrew. Your role is to assist users with billing, account, and subscription questions. Always be professional and empathetic. Use available tools to look up account information before responding.',
     tools: ['ask_user', 'show_structured_output', 'manage_tasks', 'manage_subtasks', 'wait'],
@@ -58,7 +58,7 @@ export const MOCK_AGENTS: Record<string, AgentDetail> = {
     description: 'Handles complex escalated issues',
     tools_count: 5,
     has_knowledge: true,
-    model_id: 3,
+    model_id: '3',
     system_prompt:
       'You handle escalated support cases that require deeper analysis. You have access to admin tools and can make account changes.',
     tools: ['ask_user', 'show_structured_output', 'manage_tasks', 'manage_subtasks', 'wait'],
@@ -78,7 +78,7 @@ export const MOCK_AGENTS: Record<string, AgentDetail> = {
 };
 
 export const MOCK_MODELS = [
-  { id: 1, name: 'claude-haiku-3', model_name: 'claude-3-haiku-20240307' },
-  { id: 2, name: 'claude-sonnet-3.7', model_name: 'claude-3-5-sonnet-20241022' },
-  { id: 3, name: 'claude-opus-4', model_name: 'claude-opus-4-20260414' },
+  { id: '1', name: 'claude-haiku-3', model_name: 'claude-3-haiku-20240307' },
+  { id: '2', name: 'claude-sonnet-3.7', model_name: 'claude-3-5-sonnet-20241022' },
+  { id: '3', name: 'claude-opus-4', model_name: 'claude-opus-4-20260414' },
 ];

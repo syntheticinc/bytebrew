@@ -158,12 +158,12 @@ type AgentModelSelector interface {
 // AgentModelIDResolver resolves the model ID configured for a named agent (consumer-side).
 // Returns nil when no per-agent model is configured.
 type AgentModelIDResolver interface {
-	ResolveModelID(agentName string) *uint
+	ResolveModelID(agentName string) *string
 }
 
 // AgentModelCacheProvider fetches a cached LLM client by model ID (consumer-side).
 type AgentModelCacheProvider interface {
-	Get(ctx context.Context, modelID uint) (model.ToolCallingChatModel, string, error)
+	Get(ctx context.Context, modelID string) (model.ToolCallingChatModel, string, error)
 }
 
 // AgentPoolConfig holds configuration for creating an AgentPool

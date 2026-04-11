@@ -46,7 +46,7 @@ func (t *adminListModelsTool) InvokableRun(ctx context.Context, _ string, _ ...t
 		if m.APIKey != "" {
 			hasKey = "yes"
 		}
-		sb.WriteString(fmt.Sprintf("- id=%d **%s** (type=%s, model=%s, base_url=%s, has_api_key=%s)\n",
+		sb.WriteString(fmt.Sprintf("- id=%s **%s** (type=%s, model=%s, base_url=%s, has_api_key=%s)\n",
 			m.ID, m.Name, m.Type, m.ModelName, coalesce(m.BaseURL, "default"), hasKey))
 	}
 	return sb.String(), nil
@@ -120,7 +120,7 @@ func (t *adminCreateModelTool) InvokableRun(ctx context.Context, argsJSON string
 	}
 
 	slog.InfoContext(ctx, "[AdminCreateModel] created", "name", args.Name, "type", args.Type, "model", args.ModelName)
-	return fmt.Sprintf("Model %q created (id=%d, type=%s, model=%s).", args.Name, record.ID, args.Type, args.ModelName), nil
+	return fmt.Sprintf("Model %q created (id=%s, type=%s, model=%s).", args.Name, record.ID, args.Type, args.ModelName), nil
 }
 
 // --- admin_update_model ---
@@ -139,7 +139,7 @@ func (t *adminUpdateModelTool) Info(_ context.Context) (*schema.ToolInfo, error)
 		Name: "admin_update_model",
 		Desc: "Updates an LLM model configuration by ID. Provide only fields to change. API key is only updated if provided.",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"model_id":   {Type: schema.Integer, Desc: "Model config ID to update", Required: true},
+			"model_id":   {Type: schema.String, Desc: "Model config ID to update", Required: true},
 			"name":       {Type: schema.String, Desc: "New name", Required: false},
 			"type":       {Type: schema.String, Desc: "New type", Required: false},
 			"model_name": {Type: schema.String, Desc: "New model identifier", Required: false},
@@ -150,7 +150,7 @@ func (t *adminUpdateModelTool) Info(_ context.Context) (*schema.ToolInfo, error)
 }
 
 type updateModelArgs struct {
-	ModelID   uint   `json:"model_id"`
+	ModelID   string `json:"model_id"`
 	Name      string `json:"name"`
 	Type      string `json:"type"`
 	ModelName string `json:"model_name"`
@@ -163,14 +163,14 @@ func (t *adminUpdateModelTool) InvokableRun(ctx context.Context, argsJSON string
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return fmt.Sprintf("[ERROR] Invalid arguments: %v", err), nil
 	}
-	if args.ModelID == 0 {
+	if args.ModelID == "" {
 		return "[ERROR] model_id is required", nil
 	}
 
 	existing, err := t.repo.GetByID(ctx, args.ModelID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return fmt.Sprintf("Model not found: %d", args.ModelID), nil
+			return fmt.Sprintf("Model not found: %s", args.ModelID), nil
 		}
 		return fmt.Sprintf("[ERROR] Failed to get model: %v", err), nil
 	}
@@ -192,7 +192,7 @@ func (t *adminUpdateModelTool) InvokableRun(ctx context.Context, argsJSON string
 	}
 
 	slog.InfoContext(ctx, "[AdminUpdateModel] updated", "id", args.ModelID)
-	return fmt.Sprintf("Model %d updated successfully.", args.ModelID), nil
+	return fmt.Sprintf("Model %s updated successfully.", args.ModelID), nil
 }
 
 // --- admin_delete_model ---
@@ -211,13 +211,13 @@ func (t *adminDeleteModelTool) Info(_ context.Context) (*schema.ToolInfo, error)
 		Name: "admin_delete_model",
 		Desc: "Deletes an LLM model configuration by ID. Agents using this model will need reassignment.",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"model_id": {Type: schema.Integer, Desc: "Model config ID to delete", Required: true},
+			"model_id": {Type: schema.String, Desc: "Model config ID to delete", Required: true},
 		}),
 	}, nil
 }
 
 type deleteModelArgs struct {
-	ModelID uint `json:"model_id"`
+	ModelID string `json:"model_id"`
 }
 
 func (t *adminDeleteModelTool) InvokableRun(ctx context.Context, argsJSON string, _ ...tool.Option) (string, error) {
@@ -225,13 +225,13 @@ func (t *adminDeleteModelTool) InvokableRun(ctx context.Context, argsJSON string
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return fmt.Sprintf("[ERROR] Invalid arguments: %v", err), nil
 	}
-	if args.ModelID == 0 {
+	if args.ModelID == "" {
 		return "[ERROR] model_id is required", nil
 	}
 
 	if err := t.repo.Delete(ctx, args.ModelID); err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return fmt.Sprintf("Model not found: %d", args.ModelID), nil
+			return fmt.Sprintf("Model not found: %s", args.ModelID), nil
 		}
 		return fmt.Sprintf("[ERROR] Failed to delete model: %v", err), nil
 	}
@@ -241,5 +241,5 @@ func (t *adminDeleteModelTool) InvokableRun(ctx context.Context, argsJSON string
 	}
 
 	slog.InfoContext(ctx, "[AdminDeleteModel] deleted", "id", args.ModelID)
-	return fmt.Sprintf("Model %d deleted successfully.", args.ModelID), nil
+	return fmt.Sprintf("Model %s deleted successfully.", args.ModelID), nil
 }

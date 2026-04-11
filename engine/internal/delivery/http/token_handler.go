@@ -13,14 +13,14 @@ import (
 
 // TokenRepository manages API tokens in the database.
 type TokenRepository interface {
-	Create(ctx context.Context, name, tokenHash string, scopesMask int) (id uint, err error)
+	Create(ctx context.Context, name, tokenHash string, scopesMask int) (id string, err error)
 	List(ctx context.Context) ([]TokenInfo, error)
 	Delete(ctx context.Context, id string) error
 }
 
 // TokenInfo is a token record returned by List (no raw token value).
 type TokenInfo struct {
-	ID         uint       `json:"id"`
+	ID         string     `json:"id"`
 	Name       string     `json:"name"`
 	ScopesMask int        `json:"scopes_mask"`
 	CreatedAt  time.Time  `json:"created_at"`
@@ -43,7 +43,7 @@ type createTokenRequest struct {
 }
 
 type createTokenResponse struct {
-	ID    uint   `json:"id"`
+	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Token string `json:"token"`
 }

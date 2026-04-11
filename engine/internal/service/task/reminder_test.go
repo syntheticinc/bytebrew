@@ -24,7 +24,7 @@ func (m *mockTaskLister) GetBySession(_ context.Context, sessionID string) ([]do
 }
 
 func TestTaskReminderProvider_GetReminder(t *testing.T) {
-	parentID := uint(1)
+	parentID := "1"
 
 	tests := []struct {
 		name      string
@@ -51,7 +51,7 @@ func TestTaskReminderProvider_GetReminder(t *testing.T) {
 			sessionID: "sess-1",
 			tasks: map[string][]domain.EngineTask{
 				"sess-1": {
-					{ID: 1, Title: "Deploy", Status: domain.EngineTaskStatusInProgress},
+					{ID: "1", Title: "Deploy", Status: domain.EngineTaskStatusInProgress},
 				},
 			},
 			contains: []string{
@@ -65,7 +65,7 @@ func TestTaskReminderProvider_GetReminder(t *testing.T) {
 			sessionID: "sess-1",
 			tasks: map[string][]domain.EngineTask{
 				"sess-1": {
-					{ID: 1, Title: "Deploy", Status: domain.EngineTaskStatusCompleted},
+					{ID: "1", Title: "Deploy", Status: domain.EngineTaskStatusCompleted},
 				},
 			},
 			contains: []string{
@@ -78,8 +78,8 @@ func TestTaskReminderProvider_GetReminder(t *testing.T) {
 			sessionID: "sess-1",
 			tasks: map[string][]domain.EngineTask{
 				"sess-1": {
-					{ID: 1, Title: "Deploy", Status: domain.EngineTaskStatusInProgress},
-					{ID: 2, Title: "Build", Status: domain.EngineTaskStatusPending, ParentTaskID: &parentID},
+					{ID: "1", Title: "Deploy", Status: domain.EngineTaskStatusInProgress},
+					{ID: "2", Title: "Build", Status: domain.EngineTaskStatusPending, ParentTaskID: &parentID},
 				},
 			},
 			contains: []string{
@@ -93,9 +93,9 @@ func TestTaskReminderProvider_GetReminder(t *testing.T) {
 			sessionID: "sess-1",
 			tasks: map[string][]domain.EngineTask{
 				"sess-1": {
-					{ID: 1, Title: "Task A", Status: domain.EngineTaskStatusCompleted},
-					{ID: 2, Title: "Task B", Status: domain.EngineTaskStatusInProgress},
-					{ID: 3, Title: "Task C", Status: domain.EngineTaskStatusPending},
+					{ID: "1", Title: "Task A", Status: domain.EngineTaskStatusCompleted},
+					{ID: "2", Title: "Task B", Status: domain.EngineTaskStatusInProgress},
+					{ID: "3", Title: "Task C", Status: domain.EngineTaskStatusPending},
 				},
 			},
 			contains: []string{
@@ -107,7 +107,7 @@ func TestTaskReminderProvider_GetReminder(t *testing.T) {
 			sessionID: "sess-other",
 			tasks: map[string][]domain.EngineTask{
 				"sess-1": {
-					{ID: 1, Title: "Deploy", Status: domain.EngineTaskStatusPending},
+					{ID: "1", Title: "Deploy", Status: domain.EngineTaskStatusPending},
 				},
 			},
 			wantEmpty: true,

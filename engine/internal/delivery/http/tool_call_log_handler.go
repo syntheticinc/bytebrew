@@ -20,7 +20,7 @@ type ToolCallFilters struct {
 
 // ToolCallEntry represents a single tool call in the audit log response.
 type ToolCallEntry struct {
-	ID         uint      `json:"id"`
+	ID         string    `json:"id"`
 	SessionID  string    `json:"session_id"`
 	AgentName  string    `json:"agent_name"`
 	ToolName   string    `json:"tool_name"`

@@ -51,7 +51,7 @@ func (t *adminListTriggersTool) InvokableRun(ctx context.Context, _ string, _ ..
 		default:
 			detail = tr.Type
 		}
-		sb.WriteString(fmt.Sprintf("- id=%d **%s** (type=%s, %s, agent=%s, enabled=%v)\n",
+		sb.WriteString(fmt.Sprintf("- id=%s **%s** (type=%s, %s, agent=%s, enabled=%v)\n",
 			tr.ID, tr.Title, tr.Type, detail, tr.AgentName, tr.Enabled))
 	}
 	return sb.String(), nil
@@ -133,7 +133,7 @@ func (t *adminCreateTriggerTool) InvokableRun(ctx context.Context, argsJSON stri
 	}
 
 	slog.InfoContext(ctx, "[AdminCreateTrigger] created", "title", args.Title, "type", args.Type, "agent", args.AgentName)
-	return fmt.Sprintf("Trigger %q created (id=%d, type=%s, agent=%s).", args.Title, record.ID, args.Type, args.AgentName), nil
+	return fmt.Sprintf("Trigger %q created (id=%s, type=%s, agent=%s).", args.Title, record.ID, args.Type, args.AgentName), nil
 }
 
 // --- admin_update_trigger ---
@@ -152,7 +152,7 @@ func (t *adminUpdateTriggerTool) Info(_ context.Context) (*schema.ToolInfo, erro
 		Name: "admin_update_trigger",
 		Desc: "Updates an existing trigger by ID.",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"trigger_id":   {Type: schema.Integer, Desc: "Trigger ID to update", Required: true},
+			"trigger_id":   {Type: schema.String, Desc: "Trigger ID to update", Required: true},
 			"type":         {Type: schema.String, Desc: "New type", Required: false},
 			"title":        {Type: schema.String, Desc: "New title", Required: false},
 			"agent_name":   {Type: schema.String, Desc: "New agent name", Required: false},
@@ -165,7 +165,7 @@ func (t *adminUpdateTriggerTool) Info(_ context.Context) (*schema.ToolInfo, erro
 }
 
 type updateTriggerArgs struct {
-	TriggerID   uint   `json:"trigger_id"`
+	TriggerID   string `json:"trigger_id"`
 	Type        string `json:"type"`
 	Title       string `json:"title"`
 	AgentName   string `json:"agent_name"`
@@ -180,14 +180,14 @@ func (t *adminUpdateTriggerTool) InvokableRun(ctx context.Context, argsJSON stri
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return fmt.Sprintf("[ERROR] Invalid arguments: %v", err), nil
 	}
-	if args.TriggerID == 0 {
+	if args.TriggerID == "" {
 		return "[ERROR] trigger_id is required", nil
 	}
 
 	existing, err := t.repo.GetByID(ctx, args.TriggerID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return fmt.Sprintf("Trigger not found: %d", args.TriggerID), nil
+			return fmt.Sprintf("Trigger not found: %s", args.TriggerID), nil
 		}
 		return fmt.Sprintf("[ERROR] Failed to get trigger: %v", err), nil
 	}
@@ -214,7 +214,7 @@ func (t *adminUpdateTriggerTool) InvokableRun(ctx context.Context, argsJSON stri
 	}
 
 	slog.InfoContext(ctx, "[AdminUpdateTrigger] updated", "id", args.TriggerID)
-	return fmt.Sprintf("Trigger %d updated successfully.", args.TriggerID), nil
+	return fmt.Sprintf("Trigger %s updated successfully.", args.TriggerID), nil
 }
 
 // --- admin_delete_trigger ---
@@ -233,13 +233,13 @@ func (t *adminDeleteTriggerTool) Info(_ context.Context) (*schema.ToolInfo, erro
 		Name: "admin_delete_trigger",
 		Desc: "Deletes a trigger by ID.",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"trigger_id": {Type: schema.Integer, Desc: "Trigger ID to delete", Required: true},
+			"trigger_id": {Type: schema.String, Desc: "Trigger ID to delete", Required: true},
 		}),
 	}, nil
 }
 
 type deleteTriggerArgs struct {
-	TriggerID uint `json:"trigger_id"`
+	TriggerID string `json:"trigger_id"`
 }
 
 func (t *adminDeleteTriggerTool) InvokableRun(ctx context.Context, argsJSON string, _ ...tool.Option) (string, error) {
@@ -247,13 +247,13 @@ func (t *adminDeleteTriggerTool) InvokableRun(ctx context.Context, argsJSON stri
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return fmt.Sprintf("[ERROR] Invalid arguments: %v", err), nil
 	}
-	if args.TriggerID == 0 {
+	if args.TriggerID == "" {
 		return "[ERROR] trigger_id is required", nil
 	}
 
 	if err := t.repo.Delete(ctx, args.TriggerID); err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return fmt.Sprintf("Trigger not found: %d", args.TriggerID), nil
+			return fmt.Sprintf("Trigger not found: %s", args.TriggerID), nil
 		}
 		return fmt.Sprintf("[ERROR] Failed to delete trigger: %v", err), nil
 	}
@@ -263,5 +263,5 @@ func (t *adminDeleteTriggerTool) InvokableRun(ctx context.Context, argsJSON stri
 	}
 
 	slog.InfoContext(ctx, "[AdminDeleteTrigger] deleted", "id", args.TriggerID)
-	return fmt.Sprintf("Trigger %d deleted successfully.", args.TriggerID), nil
+	return fmt.Sprintf("Trigger %s deleted successfully.", args.TriggerID), nil
 }

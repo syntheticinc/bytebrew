@@ -6,7 +6,7 @@ interface CapabilityBlockProps {
   capability: CapabilityConfig;
   onChange: (updated: CapabilityConfig) => void;
   onRemove: () => void;
-  models?: { id: number; name: string; model_name: string }[];
+  models?: { id: string; name: string; model_name: string }[];
 }
 
 const inputCls =
@@ -89,7 +89,7 @@ function getKey<T>(cap: CapabilityConfig, key: string, fallback: T): T {
 // Per-type config panels
 // ---------------------------------------------------------------------------
 
-type PanelProps = { cap: CapabilityConfig; onChange: (u: CapabilityConfig) => void; models?: { id: number; name: string; model_name: string }[] };
+type PanelProps = { cap: CapabilityConfig; onChange: (u: CapabilityConfig) => void; models?: { id: string; name: string; model_name: string }[] };
 
 function MemoryConfig({ cap, onChange }: PanelProps) {
   const unlimitedRetention = getKey(cap, 'unlimited_retention', false) as boolean;

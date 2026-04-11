@@ -127,7 +127,7 @@ func TestSessionRegistry_ReplayEvents(t *testing.T) {
 	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	// Append 3 events via store (simulating what EventStream does)
-	var ids [3]int64
+	var ids [3]string
 	for i := 0; i < 3; i++ {
 		id, err := store.Append("s1", "answer", &pb.SessionEvent{
 			Content: fmt.Sprintf("msg-%d", i+1),
@@ -140,15 +140,15 @@ func TestSessionRegistry_ReplayEvents(t *testing.T) {
 	// Replay after first event should return 2nd and 3rd
 	replayed := reg.ReplayEvents("s1", ids[0])
 	require.Len(t, replayed, 2)
-	assert.Equal(t, fmt.Sprintf("msg-%d", 2), replayed[0].Content)
-	assert.Equal(t, fmt.Sprintf("msg-%d", 3), replayed[1].Content)
+	assert.Equal(t, "msg-2", replayed[0].Content)
+	assert.Equal(t, "msg-3", replayed[1].Content)
 
 	// Replay after last event should return nothing
 	replayed = reg.ReplayEvents("s1", ids[2])
 	assert.Empty(t, replayed)
 
-	// Replay with 0 should return full history
-	replayed = reg.ReplayEvents("s1", 0)
+	// Replay with empty string should return full history
+	replayed = reg.ReplayEvents("s1", "")
 	require.Len(t, replayed, 3)
 	assert.Equal(t, "msg-1", replayed[0].Content)
 	assert.Equal(t, "msg-2", replayed[1].Content)
@@ -483,7 +483,7 @@ func TestSessionRegistry_ReconnectReplay_WithSubscriber(t *testing.T) {
 	reg.CreateSession("s1", "proj", "user", "/root", "linux", "")
 
 	// Append 3 events via store (no subscribers yet)
-	var ids [3]int64
+	var ids [3]string
 	for i := 0; i < 3; i++ {
 		id, err := store.Append("s1", "answer", &pb.SessionEvent{
 			Content: fmt.Sprintf("msg-%d", i+1),

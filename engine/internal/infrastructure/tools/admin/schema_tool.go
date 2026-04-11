@@ -46,7 +46,7 @@ func (t *adminListSchemasTool) InvokableRun(ctx context.Context, _ string, _ ...
 		if len(s.AgentNames) > 0 {
 			agents = strings.Join(s.AgentNames, ", ")
 		}
-		sb.WriteString(fmt.Sprintf("- **%s** (id=%d, agents=[%s]) — %s\n", s.Name, s.ID, agents, s.Description))
+		sb.WriteString(fmt.Sprintf("- **%s** (id=%s, agents=[%s]) — %s\n", s.Name, s.ID, agents, s.Description))
 	}
 	return sb.String(), nil
 }
@@ -66,13 +66,13 @@ func (t *adminGetSchemaTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 		Name: "admin_get_schema",
 		Desc: "Returns full details of a schema by ID, including assigned agents.",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"schema_id": {Type: schema.Integer, Desc: "Schema ID", Required: true},
+			"schema_id": {Type: schema.String, Desc: "Schema ID", Required: true},
 		}),
 	}, nil
 }
 
 type getSchemaArgs struct {
-	SchemaID uint `json:"schema_id"`
+	SchemaID string `json:"schema_id"`
 }
 
 func (t *adminGetSchemaTool) InvokableRun(ctx context.Context, argsJSON string, _ ...tool.Option) (string, error) {
@@ -80,14 +80,14 @@ func (t *adminGetSchemaTool) InvokableRun(ctx context.Context, argsJSON string, 
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return fmt.Sprintf("[ERROR] Invalid arguments: %v", err), nil
 	}
-	if args.SchemaID == 0 {
+	if args.SchemaID == "" {
 		return "[ERROR] schema_id is required", nil
 	}
 
 	s, err := t.repo.GetByID(ctx, args.SchemaID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return fmt.Sprintf("Schema not found: %d", args.SchemaID), nil
+			return fmt.Sprintf("Schema not found: %s", args.SchemaID), nil
 		}
 		return fmt.Sprintf("[ERROR] Failed to get schema: %v", err), nil
 	}
@@ -152,7 +152,7 @@ func (t *adminCreateSchemaTool) InvokableRun(ctx context.Context, argsJSON strin
 	}
 
 	slog.InfoContext(ctx, "[AdminCreateSchema] created schema", "name", args.Name, "id", record.ID)
-	return fmt.Sprintf("Schema %q created (id=%d).", args.Name, record.ID), nil
+	return fmt.Sprintf("Schema %q created (id=%s).", args.Name, record.ID), nil
 }
 
 // --- admin_update_schema ---
@@ -171,7 +171,7 @@ func (t *adminUpdateSchemaTool) Info(_ context.Context) (*schema.ToolInfo, error
 		Name: "admin_update_schema",
 		Desc: "Updates an existing schema by ID.",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"schema_id":   {Type: schema.Integer, Desc: "Schema ID to update", Required: true},
+			"schema_id":   {Type: schema.String, Desc: "Schema ID to update", Required: true},
 			"name":        {Type: schema.String, Desc: "New name", Required: false},
 			"description": {Type: schema.String, Desc: "New description", Required: false},
 		}),
@@ -179,7 +179,7 @@ func (t *adminUpdateSchemaTool) Info(_ context.Context) (*schema.ToolInfo, error
 }
 
 type updateSchemaArgs struct {
-	SchemaID    uint   `json:"schema_id"`
+	SchemaID    string `json:"schema_id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
 }
@@ -189,7 +189,7 @@ func (t *adminUpdateSchemaTool) InvokableRun(ctx context.Context, argsJSON strin
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return fmt.Sprintf("[ERROR] Invalid arguments: %v", err), nil
 	}
-	if args.SchemaID == 0 {
+	if args.SchemaID == "" {
 		return "[ERROR] schema_id is required", nil
 	}
 
@@ -200,7 +200,7 @@ func (t *adminUpdateSchemaTool) InvokableRun(ctx context.Context, argsJSON strin
 
 	if err := t.repo.Update(ctx, args.SchemaID, record); err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return fmt.Sprintf("Schema not found: %d", args.SchemaID), nil
+			return fmt.Sprintf("Schema not found: %s", args.SchemaID), nil
 		}
 		return fmt.Sprintf("[ERROR] Failed to update schema: %v", err), nil
 	}
@@ -210,7 +210,7 @@ func (t *adminUpdateSchemaTool) InvokableRun(ctx context.Context, argsJSON strin
 	}
 
 	slog.InfoContext(ctx, "[AdminUpdateSchema] updated schema", "id", args.SchemaID)
-	return fmt.Sprintf("Schema %d updated successfully.", args.SchemaID), nil
+	return fmt.Sprintf("Schema %s updated successfully.", args.SchemaID), nil
 }
 
 // --- admin_delete_schema ---
@@ -229,13 +229,13 @@ func (t *adminDeleteSchemaTool) Info(_ context.Context) (*schema.ToolInfo, error
 		Name: "admin_delete_schema",
 		Desc: "Deletes a schema by ID. WARNING: This removes all edges and agent associations in the schema.",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"schema_id": {Type: schema.Integer, Desc: "Schema ID to delete", Required: true},
+			"schema_id": {Type: schema.String, Desc: "Schema ID to delete", Required: true},
 		}),
 	}, nil
 }
 
 type deleteSchemaArgs struct {
-	SchemaID uint `json:"schema_id"`
+	SchemaID string `json:"schema_id"`
 }
 
 func (t *adminDeleteSchemaTool) InvokableRun(ctx context.Context, argsJSON string, _ ...tool.Option) (string, error) {
@@ -243,13 +243,13 @@ func (t *adminDeleteSchemaTool) InvokableRun(ctx context.Context, argsJSON strin
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return fmt.Sprintf("[ERROR] Invalid arguments: %v", err), nil
 	}
-	if args.SchemaID == 0 {
+	if args.SchemaID == "" {
 		return "[ERROR] schema_id is required", nil
 	}
 
 	if err := t.repo.Delete(ctx, args.SchemaID); err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return fmt.Sprintf("Schema not found: %d", args.SchemaID), nil
+			return fmt.Sprintf("Schema not found: %s", args.SchemaID), nil
 		}
 		return fmt.Sprintf("[ERROR] Failed to delete schema: %v", err), nil
 	}
@@ -259,5 +259,5 @@ func (t *adminDeleteSchemaTool) InvokableRun(ctx context.Context, argsJSON strin
 	}
 
 	slog.InfoContext(ctx, "[AdminDeleteSchema] deleted schema", "id", args.SchemaID)
-	return fmt.Sprintf("Schema %d deleted successfully.", args.SchemaID), nil
+	return fmt.Sprintf("Schema %s deleted successfully.", args.SchemaID), nil
 }

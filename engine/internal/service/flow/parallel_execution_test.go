@@ -20,21 +20,21 @@ func TestParallelExecution_Fork_ThreeAgents(t *testing.T) {
 		},
 	}
 	edgeReader := &mockEdgeReader{
-		edges: map[uint][]EdgeRecord{
-			1: {
-				{ID: 1, SchemaID: 1, SourceAgentName: "agent-a", TargetAgentName: "agent-b", Type: "flow"},
-				{ID: 2, SchemaID: 1, SourceAgentName: "agent-a", TargetAgentName: "agent-c", Type: "flow"},
-				{ID: 3, SchemaID: 1, SourceAgentName: "agent-a", TargetAgentName: "agent-d", Type: "flow"},
+		edges: map[string][]EdgeRecord{
+			"1": {
+				{ID: "1", SchemaID: "1", SourceAgentName: "agent-a", TargetAgentName: "agent-b", Type: "flow"},
+				{ID: "2", SchemaID: "1", SourceAgentName: "agent-a", TargetAgentName: "agent-c", Type: "flow"},
+				{ID: "3", SchemaID: "1", SourceAgentName: "agent-a", TargetAgentName: "agent-d", Type: "flow"},
 			},
 		},
 	}
-	gateReader := &mockGateReader{gates: map[uint][]GateRecord{}}
+	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 	eventStream := &mockEventStream{}
 
 	executor := NewExecutor(runner, edgeReader, gateReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
-		SchemaID:    1,
+		SchemaID:    "1",
 		SessionID:   "session-fork",
 		EventStream: eventStream,
 	}, "agent-a", "input")

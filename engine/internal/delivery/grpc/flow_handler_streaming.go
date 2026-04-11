@@ -3,7 +3,6 @@ package grpc
 import (
 	"context"
 	"log/slog"
-	"strconv"
 
 	"github.com/google/uuid"
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
@@ -18,7 +17,7 @@ type SessionRegistryForHandler interface {
 	GetSessionContext(sessionID string) (projectRoot, platform, projectKey, userID, agentName string, ok bool)
 	Subscribe(sessionID string) (ch <-chan *pb.SessionEvent, cleanup func())
 	PublishEvent(sessionID string, event *pb.SessionEvent)
-	ReplayEvents(sessionID string, lastEventID int64) []*pb.SessionEvent
+	ReplayEvents(sessionID string, lastEventID string) []*pb.SessionEvent
 	EnqueueMessage(sessionID, content string) error
 	DrainMessages(sessionID string)
 	SendAskUserReply(sessionID, callID, reply string)
@@ -139,8 +138,7 @@ func (h *FlowHandler) SubscribeSession(req *pb.SubscribeSessionRequest, stream p
 	}
 
 	// Replay missed events on reconnect
-	lastEventID, _ := strconv.ParseInt(req.LastEventId, 10, 64)
-	missed := h.sessionRegistry.ReplayEvents(sessionID, lastEventID)
+	missed := h.sessionRegistry.ReplayEvents(sessionID, req.LastEventId)
 	for _, ev := range missed {
 		if err := stream.Send(ev); err != nil {
 			return err

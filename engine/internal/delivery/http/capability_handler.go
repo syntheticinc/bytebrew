@@ -11,7 +11,7 @@ import (
 
 // CapabilityInfo is a capability returned in API responses.
 type CapabilityInfo struct {
-	ID      uint                   `json:"id"`
+	ID      string                 `json:"id"`
 	Type    string                 `json:"type"`
 	Config  map[string]interface{} `json:"config,omitempty"`
 	Enabled bool                   `json:"enabled"`
@@ -35,8 +35,8 @@ type UpdateCapabilityRequest struct {
 type CapabilityService interface {
 	ListCapabilities(ctx context.Context, agentName string) ([]CapabilityInfo, error)
 	AddCapability(ctx context.Context, agentName string, req CreateCapabilityRequest) (*CapabilityInfo, error)
-	UpdateCapability(ctx context.Context, id uint, req UpdateCapabilityRequest) error
-	RemoveCapability(ctx context.Context, id uint) error
+	UpdateCapability(ctx context.Context, id string, req UpdateCapabilityRequest) error
+	RemoveCapability(ctx context.Context, id string) error
 }
 
 // CapabilityHandler serves /api/v1/agents/{name}/capabilities endpoints.
@@ -93,7 +93,7 @@ func (h *CapabilityHandler) Add(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /api/v1/agents/{name}/capabilities/{id}.
 func (h *CapabilityHandler) Update(w http.ResponseWriter, r *http.Request) {
-	capID, err := parseUintParam(r, "capId")
+	capID, err := parseStringParam(r, "capId")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -114,7 +114,7 @@ func (h *CapabilityHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Remove handles DELETE /api/v1/agents/{name}/capabilities/{id}.
 func (h *CapabilityHandler) Remove(w http.ResponseWriter, r *http.Request) {
-	capID, err := parseUintParam(r, "capId")
+	capID, err := parseStringParam(r, "capId")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return

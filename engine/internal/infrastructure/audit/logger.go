@@ -31,7 +31,7 @@ type Entry struct {
 	Resource  string
 	Details   map[string]interface{}
 	SessionID string
-	TaskID    *uint
+	TaskID    *string
 }
 
 // Log persists an audit entry to the database.

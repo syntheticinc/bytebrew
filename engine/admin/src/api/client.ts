@@ -171,7 +171,7 @@ class APIClient {
     return this.request<Model[]>('GET', '/models');
   }
   createModel(data: CreateModelRequest) {
-    if (this.isPrototype) return this.mock({ id: Date.now(), ...data, has_api_key: !!data.api_key, created_at: new Date().toISOString() } as Model);
+    if (this.isPrototype) return this.mock({ id: crypto.randomUUID(), ...data, has_api_key: !!data.api_key, created_at: new Date().toISOString() } as Model);
     return this.request<Model>('POST', '/models', data);
   }
   updateModel(name: string, data: CreateModelRequest) {
@@ -193,11 +193,11 @@ class APIClient {
     return this.request<WellKnownMCP[]>('GET', '/mcp/well-known');
   }
   createMCPServer(data: CreateMCPServerRequest) {
-    if (this.isPrototype) return this.mock({ id: Date.now(), ...data, status: { status: 'connected', tools_count: 0 }, is_well_known: false, agents: [] } as MCPServer);
+    if (this.isPrototype) return this.mock({ id: crypto.randomUUID(), ...data, status: { status: 'connected', tools_count: 0 }, is_well_known: false, agents: [] } as MCPServer);
     return this.request<MCPServer>('POST', '/mcp-servers', data);
   }
   updateMCPServer(name: string, data: CreateMCPServerRequest) {
-    if (this.isPrototype) return this.mock({ id: 0, ...data, name, is_well_known: false, agents: [] } as MCPServer);
+    if (this.isPrototype) return this.mock({ id: '', ...data, name, is_well_known: false, agents: [] } as MCPServer);
     return this.request<MCPServer>('PUT', `/mcp-servers/${encodeURIComponent(name)}`, data);
   }
   deleteMCPServer(name: string) {
@@ -206,28 +206,28 @@ class APIClient {
   }
 
   // ---- Triggers ----
-  listTriggers(schemaId?: number) {
+  listTriggers(schemaId?: string) {
     if (this.isPrototype) return this.mock(MOCK_TRIGGERS);
     const q = schemaId != null ? `?schema_id=${schemaId}` : '';
     return this.request<Trigger[]>('GET', `/triggers${q}`);
   }
   createTrigger(data: CreateTriggerRequest) {
-    if (this.isPrototype) return this.mock({ id: Date.now(), ...data, created_at: new Date().toISOString() } as Trigger);
+    if (this.isPrototype) return this.mock({ id: crypto.randomUUID(), ...data, created_at: new Date().toISOString() } as Trigger);
     return this.request<Trigger>('POST', '/triggers', data);
   }
-  updateTrigger(id: number, data: CreateTriggerRequest) {
+  updateTrigger(id: string, data: CreateTriggerRequest) {
     if (this.isPrototype) return this.mock({ id, ...data } as Trigger);
     return this.request<Trigger>('PUT', `/triggers/${id}`, data);
   }
-  deleteTrigger(id: number) {
+  deleteTrigger(id: string) {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
     return this.request<void>('DELETE', `/triggers/${id}`);
   }
-  setTriggerTarget(id: number, agentName: string) {
+  setTriggerTarget(id: string, agentName: string) {
     if (this.isPrototype) return this.mock({} as Trigger);
     return this.request<Trigger>('PATCH', `/triggers/${id}/target`, { agent_name: agentName });
   }
-  clearTriggerTarget(id: number) {
+  clearTriggerTarget(id: string) {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
     return this.request<void>('DELETE', `/triggers/${id}/target`);
   }
@@ -243,11 +243,11 @@ class APIClient {
     const qs = '?' + new URLSearchParams(params).toString();
     return this.request<PaginatedTaskResponse>('GET', `/tasks${qs}`);
   }
-  getTask(id: number) {
+  getTask(id: string) {
     if (this.isPrototype) return this.mock({ id, title: 'Mock Task', agent_name: 'assistant', status: 'completed', source: 'api', created_at: new Date().toISOString(), mode: 'chat' } as TaskDetailResponse);
     return this.request<TaskDetailResponse>('GET', `/tasks/${id}`);
   }
-  cancelTask(id: number) {
+  cancelTask(id: string) {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
     return this.request<void>('DELETE', `/tasks/${id}`);
   }
@@ -264,10 +264,10 @@ class APIClient {
     return this.request<APIToken[]>('GET', '/auth/tokens');
   }
   createToken(data: CreateTokenRequest) {
-    if (this.isPrototype) return this.mock({ id: Date.now(), name: data.name, token: 'bb_proto_' + Math.random().toString(36).slice(2) } as CreateTokenResponse);
+    if (this.isPrototype) return this.mock({ id: crypto.randomUUID(), name: data.name, token: 'bb_proto_' + Math.random().toString(36).slice(2) } as CreateTokenResponse);
     return this.request<CreateTokenResponse>('POST', '/auth/tokens', data);
   }
-  deleteToken(id: number) {
+  deleteToken(id: string) {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
     return this.request<void>('DELETE', `/auth/tokens/${id}`);
   }
@@ -329,7 +329,7 @@ class APIClient {
     if (this.isPrototype) {
       return this.mock<Schema[]>(
         SCHEMA_NAMES.map((name, i) => ({
-          id: i + 1,
+          id: String(i + 1),
           name,
           agents_count: 3,
           created_at: new Date().toISOString(),
@@ -340,26 +340,26 @@ class APIClient {
   }
 
   createSchema(data: { name: string; description?: string }) {
-    if (this.isPrototype) return this.mock({ id: Date.now(), name: data.name, description: data.description, agents_count: 0, created_at: new Date().toISOString() } as Schema);
+    if (this.isPrototype) return this.mock({ id: String(Date.now()), name: data.name, description: data.description, agents_count: 0, created_at: new Date().toISOString() } as Schema);
     return this.request<Schema>('POST', '/schemas', data);
   }
 
-  deleteSchema(schemaId: number) {
+  deleteSchema(schemaId: string) {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
     return this.request<void>('DELETE', `/schemas/${schemaId}`);
   }
 
-  listSchemaAgents(schemaId: number) {
+  listSchemaAgents(schemaId: string) {
     if (this.isPrototype) return this.mock<string[]>([]);
     return this.request<string[]>('GET', `/schemas/${schemaId}/agents`);
   }
 
-  addAgentToSchema(schemaId: number, agentName: string) {
+  addAgentToSchema(schemaId: string, agentName: string) {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
     return this.request<void>('POST', `/schemas/${schemaId}/agents`, { agent_name: agentName });
   }
 
-  removeAgentFromSchema(schemaId: number, agentName: string) {
+  removeAgentFromSchema(schemaId: string, agentName: string) {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
     return this.request<void>('DELETE', `/schemas/${schemaId}/agents/${encodeURIComponent(agentName)}`);
   }
@@ -581,8 +581,8 @@ class APIClient {
   async listCapabilities(agentName: string): Promise<Capability[]> {
     if (this.isPrototype) {
       return this.mock<Capability[]>([
-        { id: 1, agent_name: agentName, type: 'memory', config: { unlimited_retention: true, max_entries: 500 }, enabled: true },
-        { id: 2, agent_name: agentName, type: 'knowledge', config: { sources: ['support-docs.pdf'], top_k: 5 }, enabled: true },
+        { id: '1', agent_name: agentName, type: 'memory', config: { unlimited_retention: true, max_entries: 500 }, enabled: true },
+        { id: '2', agent_name: agentName, type: 'knowledge', config: { sources: ['support-docs.pdf'], top_k: 5 }, enabled: true },
       ]);
     }
     return this.request<Capability[]>('GET', `/agents/${encodeURIComponent(agentName)}/capabilities`);
@@ -590,19 +590,19 @@ class APIClient {
 
   async addCapability(agentName: string, data: CreateCapabilityRequest): Promise<Capability> {
     if (this.isPrototype) {
-      return this.mock<Capability>({ id: Date.now(), agent_name: agentName, ...data });
+      return this.mock<Capability>({ id: String(Date.now()), agent_name: agentName, ...data });
     }
     return this.request<Capability>('POST', `/agents/${encodeURIComponent(agentName)}/capabilities`, data);
   }
 
-  async updateCapability(agentName: string, capId: number, data: UpdateCapabilityRequest): Promise<Capability> {
+  async updateCapability(agentName: string, capId: string, data: UpdateCapabilityRequest): Promise<Capability> {
     if (this.isPrototype) {
       return this.mock<Capability>({ id: capId, agent_name: agentName, type: 'memory', config: {}, enabled: true, ...data });
     }
     return this.request<Capability>('PUT', `/agents/${encodeURIComponent(agentName)}/capabilities/${capId}`, data);
   }
 
-  async removeCapability(agentName: string, capId: number): Promise<void> {
+  async removeCapability(agentName: string, capId: string): Promise<void> {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
     return this.request<void>('DELETE', `/agents/${encodeURIComponent(agentName)}/capabilities/${capId}`);
   }

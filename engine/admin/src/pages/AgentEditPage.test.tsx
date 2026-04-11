@@ -91,7 +91,7 @@ describe('AgentEditPage', () => {
   it('shows warning when orchestrator agent uses low-tier model', async () => {
     mockApi.listModels.mockResolvedValue([
       {
-        id: 1,
+        id: '1',
         name: 'sub-model',
         type: 'openrouter',
         base_url: 'https://openrouter.ai/api/v1',
@@ -117,7 +117,7 @@ describe('AgentEditPage', () => {
 
     mockApi.getAgent.mockResolvedValue({
       name: 'orchestrator',
-      model_id: 1,
+      model_id: '1',
       system_prompt: 'You are an orchestrator.',
       tools: [],
       can_spawn: ['worker-agent'],
@@ -146,7 +146,7 @@ describe('AgentEditPage', () => {
   it('shows info message when model is not in registry', async () => {
     mockApi.listModels.mockResolvedValue([
       {
-        id: 1,
+        id: '1',
         name: 'custom-local',
         type: 'ollama',
         base_url: 'http://localhost:11434',
@@ -159,7 +159,7 @@ describe('AgentEditPage', () => {
 
     mockApi.getAgent.mockResolvedValue({
       name: 'test-agent',
-      model_id: 1,
+      model_id: '1',
       system_prompt: 'Test agent.',
       tools: [],
       can_spawn: [],

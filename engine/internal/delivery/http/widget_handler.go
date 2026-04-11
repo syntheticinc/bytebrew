@@ -11,9 +11,9 @@ import (
 
 // WidgetInfo is a widget returned in API responses.
 type WidgetInfo struct {
-	ID              uint     `json:"id"`
+	ID              string   `json:"id"`
 	Name            string   `json:"name"`
-	SchemaID        uint     `json:"schema_id"`
+	SchemaID        string   `json:"schema_id"`
 	PrimaryColor    string   `json:"primary_color"`
 	Position        string   `json:"position"`
 	Size            string   `json:"size"`
@@ -28,7 +28,7 @@ type WidgetInfo struct {
 // CreateWidgetRequest is the body for POST /api/v1/widgets.
 type CreateWidgetRequest struct {
 	Name            string   `json:"name"`
-	SchemaID        uint     `json:"schema_id"`
+	SchemaID        string   `json:"schema_id"`
 	PrimaryColor    string   `json:"primary_color,omitempty"`
 	Position        string   `json:"position,omitempty"`
 	Size            string   `json:"size,omitempty"`
@@ -43,10 +43,10 @@ type CreateWidgetRequest struct {
 // WidgetService provides widget CRUD operations.
 type WidgetService interface {
 	ListWidgets(ctx context.Context) ([]WidgetInfo, error)
-	GetWidget(ctx context.Context, id uint) (*WidgetInfo, error)
+	GetWidget(ctx context.Context, id string) (*WidgetInfo, error)
 	CreateWidget(ctx context.Context, req CreateWidgetRequest) (*WidgetInfo, error)
-	UpdateWidget(ctx context.Context, id uint, req CreateWidgetRequest) error
-	DeleteWidget(ctx context.Context, id uint) error
+	UpdateWidget(ctx context.Context, id string, req CreateWidgetRequest) error
+	DeleteWidget(ctx context.Context, id string) error
 }
 
 // WidgetHandler serves /api/v1/widgets endpoints.
@@ -82,7 +82,7 @@ func (h *WidgetHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Get handles GET /api/v1/widgets/{id}.
 func (h *WidgetHandler) Get(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUintParam(r, "id")
+	id, err := parseStringParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -107,7 +107,7 @@ func (h *WidgetHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "name is required")
 		return
 	}
-	if req.SchemaID == 0 {
+	if req.SchemaID == "" {
 		writeJSONError(w, http.StatusBadRequest, "schema_id is required")
 		return
 	}
@@ -122,7 +122,7 @@ func (h *WidgetHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /api/v1/widgets/{id}.
 func (h *WidgetHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUintParam(r, "id")
+	id, err := parseStringParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -143,7 +143,7 @@ func (h *WidgetHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /api/v1/widgets/{id}.
 func (h *WidgetHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUintParam(r, "id")
+	id, err := parseStringParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -169,7 +169,7 @@ func NewWidgetScriptHandler(service WidgetService, baseURL string) *WidgetScript
 
 // ServeScript handles GET /widget/{id}.js.
 func (h *WidgetScriptHandler) ServeScript(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUintParam(r, "id")
+	id, err := parseStringParam(r, "id")
 	if err != nil {
 		http.Error(w, "invalid widget id", http.StatusBadRequest)
 		return
@@ -200,8 +200,8 @@ func (h *WidgetScriptHandler) ServeScript(w http.ResponseWriter, r *http.Request
 	// Generate lightweight embed script
 	script := fmt.Sprintf(`(function(){
   var w=document.createElement('div');
-  w.id='bytebrew-widget-%d';
-  w.innerHTML='<iframe src="%s/widget/%d/frame" style="border:none;position:fixed;%s;bottom:20px;width:400px;height:600px;z-index:999999;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.15);" allow="microphone"></iframe>';
+  w.id='bytebrew-widget-%s';
+  w.innerHTML='<iframe src="%s/widget/%s/frame" style="border:none;position:fixed;%s;bottom:20px;width:400px;height:600px;z-index:999999;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.15);" allow="microphone"></iframe>';
   document.body.appendChild(w);
 })();`, id, h.baseURL, id, positionCSS(widget.Position))
 

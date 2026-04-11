@@ -31,11 +31,11 @@ func (a *widgetServiceHTTPAdapter) ListWidgets(ctx context.Context) ([]deliveryh
 	return result, nil
 }
 
-func (a *widgetServiceHTTPAdapter) GetWidget(ctx context.Context, id uint) (*deliveryhttp.WidgetInfo, error) {
+func (a *widgetServiceHTTPAdapter) GetWidget(ctx context.Context, id string) (*deliveryhttp.WidgetInfo, error) {
 	record, err := a.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, pkgerrors.NotFound(fmt.Sprintf("widget not found: %d", id))
+			return nil, pkgerrors.NotFound(fmt.Sprintf("widget not found: %s", id))
 		}
 		return nil, fmt.Errorf("get widget: %w", err)
 	}
@@ -78,18 +78,18 @@ func (a *widgetServiceHTTPAdapter) CreateWidget(ctx context.Context, req deliver
 	return &info, nil
 }
 
-func (a *widgetServiceHTTPAdapter) UpdateWidget(ctx context.Context, id uint, req deliveryhttp.CreateWidgetRequest) error {
+func (a *widgetServiceHTTPAdapter) UpdateWidget(ctx context.Context, id string, req deliveryhttp.CreateWidgetRequest) error {
 	existing, err := a.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pkgerrors.NotFound(fmt.Sprintf("widget not found: %d", id))
+			return pkgerrors.NotFound(fmt.Sprintf("widget not found: %s", id))
 		}
 		return fmt.Errorf("get widget: %w", err)
 	}
 
 	record := &config_repo.WidgetRecord{
 		Name:            defaultStr(req.Name, existing.Name),
-		SchemaID:        defaultUint(req.SchemaID, existing.SchemaID),
+		SchemaID:        defaultStr(req.SchemaID, existing.SchemaID),
 		PrimaryColor:    defaultStr(req.PrimaryColor, existing.PrimaryColor),
 		Position:        defaultStr(req.Position, existing.Position),
 		Size:            defaultStr(req.Size, existing.Size),
@@ -112,17 +112,17 @@ func (a *widgetServiceHTTPAdapter) UpdateWidget(ctx context.Context, id uint, re
 
 	if err := a.repo.Update(ctx, id, record); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pkgerrors.NotFound(fmt.Sprintf("widget not found: %d", id))
+			return pkgerrors.NotFound(fmt.Sprintf("widget not found: %s", id))
 		}
 		return fmt.Errorf("update widget: %w", err)
 	}
 	return nil
 }
 
-func (a *widgetServiceHTTPAdapter) DeleteWidget(ctx context.Context, id uint) error {
+func (a *widgetServiceHTTPAdapter) DeleteWidget(ctx context.Context, id string) error {
 	if err := a.repo.Delete(ctx, id); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pkgerrors.NotFound(fmt.Sprintf("widget not found: %d", id))
+			return pkgerrors.NotFound(fmt.Sprintf("widget not found: %s", id))
 		}
 		return fmt.Errorf("delete widget: %w", err)
 	}
@@ -153,9 +153,3 @@ func defaultStr(val, def string) string {
 	return val
 }
 
-func defaultUint(val, def uint) uint {
-	if val == 0 {
-		return def
-	}
-	return val
-}

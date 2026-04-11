@@ -82,7 +82,7 @@ const MOCK_REGISTRY = [
 
 const MOCK_MODELS = [
   {
-    id: 1,
+    id: '1',
     name: 'main-model',
     type: 'openrouter',
     base_url: 'https://openrouter.ai/api/v1',
@@ -91,7 +91,7 @@ const MOCK_MODELS = [
     created_at: '2026-01-01T00:00:00Z',
   },
   {
-    id: 2,
+    id: '2',
     name: 'custom-model',
     type: 'ollama',
     base_url: 'http://localhost:11434',

@@ -37,11 +37,11 @@ func (a *schemaServiceHTTPAdapter) ListSchemas(ctx context.Context) ([]deliveryh
 	return result, nil
 }
 
-func (a *schemaServiceHTTPAdapter) GetSchema(ctx context.Context, id uint) (*deliveryhttp.SchemaInfo, error) {
+func (a *schemaServiceHTTPAdapter) GetSchema(ctx context.Context, id string) (*deliveryhttp.SchemaInfo, error) {
 	record, err := a.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, pkgerrors.NotFound(fmt.Sprintf("schema not found: %d", id))
+			return nil, pkgerrors.NotFound(fmt.Sprintf("schema not found: %s", id))
 		}
 		return nil, fmt.Errorf("get schema: %w", err)
 	}
@@ -76,14 +76,14 @@ func (a *schemaServiceHTTPAdapter) CreateSchema(ctx context.Context, req deliver
 	}, nil
 }
 
-func (a *schemaServiceHTTPAdapter) UpdateSchema(ctx context.Context, id uint, req deliveryhttp.UpdateSchemaRequest) error {
+func (a *schemaServiceHTTPAdapter) UpdateSchema(ctx context.Context, id string, req deliveryhttp.UpdateSchemaRequest) error {
 	record := &config_repo.SchemaRecord{
 		Name:        req.Name,
 		Description: req.Description,
 	}
 	if err := a.repo.Update(ctx, id, record); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pkgerrors.NotFound(fmt.Sprintf("schema not found: %d", id))
+			return pkgerrors.NotFound(fmt.Sprintf("schema not found: %s", id))
 		}
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "UNIQUE constraint") {
 			return pkgerrors.AlreadyExists(fmt.Sprintf("schema with name %q already exists", req.Name))
@@ -93,17 +93,17 @@ func (a *schemaServiceHTTPAdapter) UpdateSchema(ctx context.Context, id uint, re
 	return nil
 }
 
-func (a *schemaServiceHTTPAdapter) DeleteSchema(ctx context.Context, id uint) error {
+func (a *schemaServiceHTTPAdapter) DeleteSchema(ctx context.Context, id string) error {
 	if err := a.repo.Delete(ctx, id); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pkgerrors.NotFound(fmt.Sprintf("schema not found: %d", id))
+			return pkgerrors.NotFound(fmt.Sprintf("schema not found: %s", id))
 		}
 		return fmt.Errorf("delete schema: %w", err)
 	}
 	return nil
 }
 
-func (a *schemaServiceHTTPAdapter) AddSchemaAgent(ctx context.Context, schemaID uint, agentName string) error {
+func (a *schemaServiceHTTPAdapter) AddSchemaAgent(ctx context.Context, schemaID string, agentName string) error {
 	if err := a.repo.AddAgent(ctx, schemaID, agentName); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return pkgerrors.NotFound(fmt.Sprintf("agent not found: %s", agentName))
@@ -116,17 +116,17 @@ func (a *schemaServiceHTTPAdapter) AddSchemaAgent(ctx context.Context, schemaID 
 	return nil
 }
 
-func (a *schemaServiceHTTPAdapter) RemoveSchemaAgent(ctx context.Context, schemaID uint, agentName string) error {
+func (a *schemaServiceHTTPAdapter) RemoveSchemaAgent(ctx context.Context, schemaID string, agentName string) error {
 	if err := a.repo.RemoveAgent(ctx, schemaID, agentName); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pkgerrors.NotFound(fmt.Sprintf("agent %q not in schema %d", agentName, schemaID))
+			return pkgerrors.NotFound(fmt.Sprintf("agent %q not in schema %s", agentName, schemaID))
 		}
 		return fmt.Errorf("remove agent from schema: %w", err)
 	}
 	return nil
 }
 
-func (a *schemaServiceHTTPAdapter) ListSchemaAgents(ctx context.Context, schemaID uint) ([]string, error) {
+func (a *schemaServiceHTTPAdapter) ListSchemaAgents(ctx context.Context, schemaID string) ([]string, error) {
 	names, err := a.repo.ListAgents(ctx, schemaID)
 	if err != nil {
 		return nil, fmt.Errorf("list schema agents: %w", err)
@@ -142,7 +142,7 @@ type gateServiceHTTPAdapter struct {
 	repo *config_repo.GORMGateRepository
 }
 
-func (a *gateServiceHTTPAdapter) ListGates(ctx context.Context, schemaID uint) ([]deliveryhttp.GateInfo, error) {
+func (a *gateServiceHTTPAdapter) ListGates(ctx context.Context, schemaID string) ([]deliveryhttp.GateInfo, error) {
 	records, err := a.repo.List(ctx, schemaID)
 	if err != nil {
 		return nil, fmt.Errorf("list gates: %w", err)
@@ -163,11 +163,11 @@ func (a *gateServiceHTTPAdapter) ListGates(ctx context.Context, schemaID uint) (
 	return result, nil
 }
 
-func (a *gateServiceHTTPAdapter) GetGate(ctx context.Context, id uint) (*deliveryhttp.GateInfo, error) {
+func (a *gateServiceHTTPAdapter) GetGate(ctx context.Context, id string) (*deliveryhttp.GateInfo, error) {
 	record, err := a.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, pkgerrors.NotFound(fmt.Sprintf("gate not found: %d", id))
+			return nil, pkgerrors.NotFound(fmt.Sprintf("gate not found: %s", id))
 		}
 		return nil, fmt.Errorf("get gate: %w", err)
 	}
@@ -183,7 +183,7 @@ func (a *gateServiceHTTPAdapter) GetGate(ctx context.Context, id uint) (*deliver
 	}, nil
 }
 
-func (a *gateServiceHTTPAdapter) CreateGate(ctx context.Context, schemaID uint, req deliveryhttp.CreateGateRequest) (*deliveryhttp.GateInfo, error) {
+func (a *gateServiceHTTPAdapter) CreateGate(ctx context.Context, schemaID string, req deliveryhttp.CreateGateRequest) (*deliveryhttp.GateInfo, error) {
 	condType := req.ConditionType
 	if condType == "" {
 		condType = "all"
@@ -212,7 +212,7 @@ func (a *gateServiceHTTPAdapter) CreateGate(ctx context.Context, schemaID uint, 
 	}, nil
 }
 
-func (a *gateServiceHTTPAdapter) UpdateGate(ctx context.Context, id uint, req deliveryhttp.CreateGateRequest) error {
+func (a *gateServiceHTTPAdapter) UpdateGate(ctx context.Context, id string, req deliveryhttp.CreateGateRequest) error {
 	record := &config_repo.GateRecord{
 		Name:          req.Name,
 		ConditionType: req.ConditionType,
@@ -222,17 +222,17 @@ func (a *gateServiceHTTPAdapter) UpdateGate(ctx context.Context, id uint, req de
 	}
 	if err := a.repo.Update(ctx, id, record); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pkgerrors.NotFound(fmt.Sprintf("gate not found: %d", id))
+			return pkgerrors.NotFound(fmt.Sprintf("gate not found: %s", id))
 		}
 		return fmt.Errorf("update gate: %w", err)
 	}
 	return nil
 }
 
-func (a *gateServiceHTTPAdapter) DeleteGate(ctx context.Context, id uint) error {
+func (a *gateServiceHTTPAdapter) DeleteGate(ctx context.Context, id string) error {
 	if err := a.repo.Delete(ctx, id); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pkgerrors.NotFound(fmt.Sprintf("gate not found: %d", id))
+			return pkgerrors.NotFound(fmt.Sprintf("gate not found: %s", id))
 		}
 		return fmt.Errorf("delete gate: %w", err)
 	}
@@ -244,7 +244,7 @@ type edgeServiceHTTPAdapter struct {
 	repo *config_repo.GORMEdgeRepository
 }
 
-func (a *edgeServiceHTTPAdapter) ListEdges(ctx context.Context, schemaID uint) ([]deliveryhttp.EdgeInfo, error) {
+func (a *edgeServiceHTTPAdapter) ListEdges(ctx context.Context, schemaID string) ([]deliveryhttp.EdgeInfo, error) {
 	records, err := a.repo.List(ctx, schemaID)
 	if err != nil {
 		return nil, fmt.Errorf("list edges: %w", err)
@@ -264,11 +264,11 @@ func (a *edgeServiceHTTPAdapter) ListEdges(ctx context.Context, schemaID uint) (
 	return result, nil
 }
 
-func (a *edgeServiceHTTPAdapter) GetEdge(ctx context.Context, id uint) (*deliveryhttp.EdgeInfo, error) {
+func (a *edgeServiceHTTPAdapter) GetEdge(ctx context.Context, id string) (*deliveryhttp.EdgeInfo, error) {
 	record, err := a.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, pkgerrors.NotFound(fmt.Sprintf("edge not found: %d", id))
+			return nil, pkgerrors.NotFound(fmt.Sprintf("edge not found: %s", id))
 		}
 		return nil, fmt.Errorf("get edge: %w", err)
 	}
@@ -283,7 +283,7 @@ func (a *edgeServiceHTTPAdapter) GetEdge(ctx context.Context, id uint) (*deliver
 	}, nil
 }
 
-func (a *edgeServiceHTTPAdapter) CreateEdge(ctx context.Context, schemaID uint, req deliveryhttp.CreateEdgeRequest) (*deliveryhttp.EdgeInfo, error) {
+func (a *edgeServiceHTTPAdapter) CreateEdge(ctx context.Context, schemaID string, req deliveryhttp.CreateEdgeRequest) (*deliveryhttp.EdgeInfo, error) {
 	edgeType := req.Type
 	if edgeType == "" {
 		edgeType = "flow"
@@ -310,7 +310,7 @@ func (a *edgeServiceHTTPAdapter) CreateEdge(ctx context.Context, schemaID uint, 
 	}, nil
 }
 
-func (a *edgeServiceHTTPAdapter) UpdateEdge(ctx context.Context, id uint, req deliveryhttp.CreateEdgeRequest) error {
+func (a *edgeServiceHTTPAdapter) UpdateEdge(ctx context.Context, id string, req deliveryhttp.CreateEdgeRequest) error {
 	record := &config_repo.EdgeRecord{
 		SourceAgentName: req.Source,
 		TargetAgentName: req.Target,
@@ -319,17 +319,17 @@ func (a *edgeServiceHTTPAdapter) UpdateEdge(ctx context.Context, id uint, req de
 	}
 	if err := a.repo.Update(ctx, id, record); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pkgerrors.NotFound(fmt.Sprintf("edge not found: %d", id))
+			return pkgerrors.NotFound(fmt.Sprintf("edge not found: %s", id))
 		}
 		return fmt.Errorf("update edge: %w", err)
 	}
 	return nil
 }
 
-func (a *edgeServiceHTTPAdapter) DeleteEdge(ctx context.Context, id uint) error {
+func (a *edgeServiceHTTPAdapter) DeleteEdge(ctx context.Context, id string) error {
 	if err := a.repo.Delete(ctx, id); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pkgerrors.NotFound(fmt.Sprintf("edge not found: %d", id))
+			return pkgerrors.NotFound(fmt.Sprintf("edge not found: %s", id))
 		}
 		return fmt.Errorf("delete edge: %w", err)
 	}

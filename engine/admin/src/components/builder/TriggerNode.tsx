@@ -2,7 +2,7 @@ import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 
 export interface TriggerNodeData {
-  id: number;
+  id: string;
   title: string;
   type: 'cron' | 'webhook' | 'chat';
   schedule?: string;

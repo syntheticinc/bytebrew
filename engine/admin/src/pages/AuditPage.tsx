@@ -13,7 +13,7 @@ const PER_PAGE = 25;
 export default function AuditPage() {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [page, setPage] = useState(1);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { data: paginatedData, loading, error, refetch } = useApi(
     () => {

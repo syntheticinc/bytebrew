@@ -2,8 +2,8 @@ package models
 
 // AgentToolModel maps to the "agent_tools" table.
 type AgentToolModel struct {
-	ID        uint   `gorm:"primaryKey"`
-	AgentID   uint   `gorm:"not null;uniqueIndex:idx_agent_tool_type_name"`
+	ID        string `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
+	AgentID   string `gorm:"type:uuid;not null;uniqueIndex:idx_agent_tool_type_name"`
 	ToolType  string `gorm:"type:varchar(20);not null;uniqueIndex:idx_agent_tool_type_name"`
 	ToolName  string `gorm:"type:varchar(255);not null;uniqueIndex:idx_agent_tool_type_name"`
 	Config    string `gorm:"type:text"`

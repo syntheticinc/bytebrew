@@ -101,7 +101,7 @@ type flowExecutorAdapter struct {
 	executor *flow.Executor
 }
 
-func (a *flowExecutorAdapter) HasOutgoingEdges(ctx context.Context, schemaID uint, agentName string) (bool, error) {
+func (a *flowExecutorAdapter) HasOutgoingEdges(ctx context.Context, schemaID string, agentName string) (bool, error) {
 	return a.executor.HasOutgoingEdges(ctx, schemaID, agentName)
 }
 

@@ -4,11 +4,11 @@ import "time"
 
 // TriggerModel maps to the "triggers" table.
 type TriggerModel struct {
-	ID                uint       `gorm:"primaryKey"`
+	ID                string     `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	Type              string     `gorm:"type:varchar(10);not null;index"`
 	Title             string     `gorm:"type:varchar(255);not null"`
-	AgentID           *uint      `gorm:"index"`
-	SchemaID          *uint      `gorm:"index;constraint:OnDelete:SET NULL"`
+	AgentID           *string    `gorm:"type:uuid;index"`
+	SchemaID          *string    `gorm:"type:uuid;index;constraint:OnDelete:SET NULL"`
 	Schedule          string     `gorm:"type:varchar(100)"`
 	WebhookPath       string     `gorm:"type:varchar(500)"`
 	Description       string     `gorm:"type:text"`

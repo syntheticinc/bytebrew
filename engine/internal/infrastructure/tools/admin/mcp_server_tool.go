@@ -44,7 +44,7 @@ func (t *adminListMCPServersTool) InvokableRun(ctx context.Context, _ string, _ 
 	for _, s := range servers {
 		// Mask env var values for security.
 		envCount := len(s.EnvVars)
-		sb.WriteString(fmt.Sprintf("- id=%d **%s** (type=%s, env_vars=%d)\n", s.ID, s.Name, s.Type, envCount))
+		sb.WriteString(fmt.Sprintf("- id=%s **%s** (type=%s, env_vars=%d)\n", s.ID, s.Name, s.Type, envCount))
 	}
 	return sb.String(), nil
 }
@@ -117,7 +117,7 @@ func (t *adminCreateMCPServerTool) InvokableRun(ctx context.Context, argsJSON st
 	}
 
 	slog.InfoContext(ctx, "[AdminCreateMCPServer] created", "name", args.Name, "type", args.Type)
-	return fmt.Sprintf("MCP server %q created (id=%d, type=%s).", args.Name, record.ID, args.Type), nil
+	return fmt.Sprintf("MCP server %q created (id=%s, type=%s).", args.Name, record.ID, args.Type), nil
 }
 
 // --- admin_update_mcp_server ---
@@ -136,7 +136,7 @@ func (t *adminUpdateMCPServerTool) Info(_ context.Context) (*schema.ToolInfo, er
 		Name: "admin_update_mcp_server",
 		Desc: "Updates an MCP server by ID.",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"server_id": {Type: schema.Integer, Desc: "MCP server ID to update", Required: true},
+			"server_id": {Type: schema.String, Desc: "MCP server ID to update", Required: true},
 			"name":      {Type: schema.String, Desc: "New name", Required: false},
 			"type":      {Type: schema.String, Desc: "New type", Required: false},
 			"command":   {Type: schema.String, Desc: "New command", Required: false},
@@ -148,7 +148,7 @@ func (t *adminUpdateMCPServerTool) Info(_ context.Context) (*schema.ToolInfo, er
 }
 
 type updateMCPServerArgs struct {
-	ServerID uint              `json:"server_id"`
+	ServerID string            `json:"server_id"`
 	Name     string            `json:"name"`
 	Type     string            `json:"type"`
 	Command  string            `json:"command"`
@@ -162,14 +162,14 @@ func (t *adminUpdateMCPServerTool) InvokableRun(ctx context.Context, argsJSON st
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return fmt.Sprintf("[ERROR] Invalid arguments: %v", err), nil
 	}
-	if args.ServerID == 0 {
+	if args.ServerID == "" {
 		return "[ERROR] server_id is required", nil
 	}
 
 	existing, err := t.repo.GetByID(ctx, args.ServerID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return fmt.Sprintf("MCP server not found: %d", args.ServerID), nil
+			return fmt.Sprintf("MCP server not found: %s", args.ServerID), nil
 		}
 		return fmt.Sprintf("[ERROR] Failed to get MCP server: %v", err), nil
 	}
@@ -198,7 +198,7 @@ func (t *adminUpdateMCPServerTool) InvokableRun(ctx context.Context, argsJSON st
 	}
 
 	slog.InfoContext(ctx, "[AdminUpdateMCPServer] updated", "id", args.ServerID)
-	return fmt.Sprintf("MCP server %d updated successfully.", args.ServerID), nil
+	return fmt.Sprintf("MCP server %s updated successfully.", args.ServerID), nil
 }
 
 // --- admin_delete_mcp_server ---
@@ -217,13 +217,13 @@ func (t *adminDeleteMCPServerTool) Info(_ context.Context) (*schema.ToolInfo, er
 		Name: "admin_delete_mcp_server",
 		Desc: "Deletes an MCP server by ID.",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"server_id": {Type: schema.Integer, Desc: "MCP server ID to delete", Required: true},
+			"server_id": {Type: schema.String, Desc: "MCP server ID to delete", Required: true},
 		}),
 	}, nil
 }
 
 type deleteMCPServerArgs struct {
-	ServerID uint `json:"server_id"`
+	ServerID string `json:"server_id"`
 }
 
 func (t *adminDeleteMCPServerTool) InvokableRun(ctx context.Context, argsJSON string, _ ...tool.Option) (string, error) {
@@ -231,13 +231,13 @@ func (t *adminDeleteMCPServerTool) InvokableRun(ctx context.Context, argsJSON st
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return fmt.Sprintf("[ERROR] Invalid arguments: %v", err), nil
 	}
-	if args.ServerID == 0 {
+	if args.ServerID == "" {
 		return "[ERROR] server_id is required", nil
 	}
 
 	if err := t.repo.Delete(ctx, args.ServerID); err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return fmt.Sprintf("MCP server not found: %d", args.ServerID), nil
+			return fmt.Sprintf("MCP server not found: %s", args.ServerID), nil
 		}
 		return fmt.Sprintf("[ERROR] Failed to delete MCP server: %v", err), nil
 	}
@@ -247,5 +247,5 @@ func (t *adminDeleteMCPServerTool) InvokableRun(ctx context.Context, argsJSON st
 	}
 
 	slog.InfoContext(ctx, "[AdminDeleteMCPServer] deleted", "id", args.ServerID)
-	return fmt.Sprintf("MCP server %d deleted successfully.", args.ServerID), nil
+	return fmt.Sprintf("MCP server %s deleted successfully.", args.ServerID), nil
 }

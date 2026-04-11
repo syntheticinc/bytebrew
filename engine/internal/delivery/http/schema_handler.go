@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -15,7 +14,7 @@ import (
 
 // SchemaInfo is a summary of a schema returned in list responses.
 type SchemaInfo struct {
-	ID          uint      `json:"id"`
+	ID          string    `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description,omitempty"`
 	Agents      []string  `json:"agents,omitempty"`
@@ -44,8 +43,8 @@ type AddSchemaAgentRequest struct {
 
 // GateInfo is a gate returned in API responses.
 type GateInfo struct {
-	ID            uint                   `json:"id"`
-	SchemaID      uint                   `json:"schema_id"`
+	ID            string                 `json:"id"`
+	SchemaID      string                 `json:"schema_id"`
 	Name          string                 `json:"name"`
 	ConditionType string                 `json:"condition_type"`
 	Config        map[string]interface{} `json:"config,omitempty"`
@@ -66,8 +65,8 @@ type CreateGateRequest struct {
 
 // EdgeInfo is an edge returned in API responses.
 type EdgeInfo struct {
-	ID              uint                   `json:"id"`
-	SchemaID        uint                   `json:"schema_id"`
+	ID              string                 `json:"id"`
+	SchemaID        string                 `json:"schema_id"`
 	SourceAgentName string                 `json:"source"`
 	TargetAgentName string                 `json:"target"`
 	Type            string                 `json:"type"`
@@ -87,31 +86,31 @@ type CreateEdgeRequest struct {
 // SchemaService provides schema CRUD operations.
 type SchemaService interface {
 	ListSchemas(ctx context.Context) ([]SchemaInfo, error)
-	GetSchema(ctx context.Context, id uint) (*SchemaInfo, error)
+	GetSchema(ctx context.Context, id string) (*SchemaInfo, error)
 	CreateSchema(ctx context.Context, req CreateSchemaRequest) (*SchemaInfo, error)
-	UpdateSchema(ctx context.Context, id uint, req UpdateSchemaRequest) error
-	DeleteSchema(ctx context.Context, id uint) error
-	AddSchemaAgent(ctx context.Context, schemaID uint, agentName string) error
-	RemoveSchemaAgent(ctx context.Context, schemaID uint, agentName string) error
-	ListSchemaAgents(ctx context.Context, schemaID uint) ([]string, error)
+	UpdateSchema(ctx context.Context, id string, req UpdateSchemaRequest) error
+	DeleteSchema(ctx context.Context, id string) error
+	AddSchemaAgent(ctx context.Context, schemaID string, agentName string) error
+	RemoveSchemaAgent(ctx context.Context, schemaID string, agentName string) error
+	ListSchemaAgents(ctx context.Context, schemaID string) ([]string, error)
 }
 
 // GateService provides gate CRUD operations.
 type GateService interface {
-	ListGates(ctx context.Context, schemaID uint) ([]GateInfo, error)
-	GetGate(ctx context.Context, id uint) (*GateInfo, error)
-	CreateGate(ctx context.Context, schemaID uint, req CreateGateRequest) (*GateInfo, error)
-	UpdateGate(ctx context.Context, id uint, req CreateGateRequest) error
-	DeleteGate(ctx context.Context, id uint) error
+	ListGates(ctx context.Context, schemaID string) ([]GateInfo, error)
+	GetGate(ctx context.Context, id string) (*GateInfo, error)
+	CreateGate(ctx context.Context, schemaID string, req CreateGateRequest) (*GateInfo, error)
+	UpdateGate(ctx context.Context, id string, req CreateGateRequest) error
+	DeleteGate(ctx context.Context, id string) error
 }
 
 // EdgeService provides edge CRUD operations.
 type EdgeService interface {
-	ListEdges(ctx context.Context, schemaID uint) ([]EdgeInfo, error)
-	GetEdge(ctx context.Context, id uint) (*EdgeInfo, error)
-	CreateEdge(ctx context.Context, schemaID uint, req CreateEdgeRequest) (*EdgeInfo, error)
-	UpdateEdge(ctx context.Context, id uint, req CreateEdgeRequest) error
-	DeleteEdge(ctx context.Context, id uint) error
+	ListEdges(ctx context.Context, schemaID string) ([]EdgeInfo, error)
+	GetEdge(ctx context.Context, id string) (*EdgeInfo, error)
+	CreateEdge(ctx context.Context, schemaID string, req CreateEdgeRequest) (*EdgeInfo, error)
+	UpdateEdge(ctx context.Context, id string, req CreateEdgeRequest) error
+	DeleteEdge(ctx context.Context, id string) error
 }
 
 // AgentSchemaLister provides the ability to list schemas that reference an agent.
@@ -179,7 +178,7 @@ func (h *SchemaHandler) ListSchemas(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SchemaHandler) GetSchema(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUintParam(r, "id")
+	id, err := parseStringParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -213,7 +212,7 @@ func (h *SchemaHandler) CreateSchema(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SchemaHandler) UpdateSchema(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUintParam(r, "id")
+	id, err := parseStringParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -233,7 +232,7 @@ func (h *SchemaHandler) UpdateSchema(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SchemaHandler) DeleteSchema(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUintParam(r, "id")
+	id, err := parseStringParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -249,7 +248,7 @@ func (h *SchemaHandler) DeleteSchema(w http.ResponseWriter, r *http.Request) {
 // --- Schema-Agent ref endpoints ---
 
 func (h *SchemaHandler) ListSchemaAgents(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUintParam(r, "id")
+	id, err := parseStringParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -264,7 +263,7 @@ func (h *SchemaHandler) ListSchemaAgents(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *SchemaHandler) AddSchemaAgent(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUintParam(r, "id")
+	id, err := parseStringParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -288,7 +287,7 @@ func (h *SchemaHandler) AddSchemaAgent(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SchemaHandler) RemoveSchemaAgent(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUintParam(r, "id")
+	id, err := parseStringParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -310,7 +309,7 @@ func (h *SchemaHandler) RemoveSchemaAgent(w http.ResponseWriter, r *http.Request
 // --- Gate endpoints ---
 
 func (h *SchemaHandler) ListGates(w http.ResponseWriter, r *http.Request) {
-	schemaID, err := parseUintParam(r, "id")
+	schemaID, err := parseStringParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -325,7 +324,7 @@ func (h *SchemaHandler) ListGates(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SchemaHandler) GetGate(w http.ResponseWriter, r *http.Request) {
-	gateID, err := parseUintParam(r, "gateId")
+	gateID, err := parseStringParam(r, "gateId")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -340,7 +339,7 @@ func (h *SchemaHandler) GetGate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SchemaHandler) CreateGate(w http.ResponseWriter, r *http.Request) {
-	schemaID, err := parseUintParam(r, "id")
+	schemaID, err := parseStringParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -365,7 +364,7 @@ func (h *SchemaHandler) CreateGate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SchemaHandler) UpdateGate(w http.ResponseWriter, r *http.Request) {
-	gateID, err := parseUintParam(r, "gateId")
+	gateID, err := parseStringParam(r, "gateId")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -385,7 +384,7 @@ func (h *SchemaHandler) UpdateGate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SchemaHandler) DeleteGate(w http.ResponseWriter, r *http.Request) {
-	gateID, err := parseUintParam(r, "gateId")
+	gateID, err := parseStringParam(r, "gateId")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -401,7 +400,7 @@ func (h *SchemaHandler) DeleteGate(w http.ResponseWriter, r *http.Request) {
 // --- Edge endpoints ---
 
 func (h *SchemaHandler) ListEdges(w http.ResponseWriter, r *http.Request) {
-	schemaID, err := parseUintParam(r, "id")
+	schemaID, err := parseStringParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -416,7 +415,7 @@ func (h *SchemaHandler) ListEdges(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SchemaHandler) GetEdge(w http.ResponseWriter, r *http.Request) {
-	edgeID, err := parseUintParam(r, "edgeId")
+	edgeID, err := parseStringParam(r, "edgeId")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -431,7 +430,7 @@ func (h *SchemaHandler) GetEdge(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SchemaHandler) CreateEdge(w http.ResponseWriter, r *http.Request) {
-	schemaID, err := parseUintParam(r, "id")
+	schemaID, err := parseStringParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -456,7 +455,7 @@ func (h *SchemaHandler) CreateEdge(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SchemaHandler) UpdateEdge(w http.ResponseWriter, r *http.Request) {
-	edgeID, err := parseUintParam(r, "edgeId")
+	edgeID, err := parseStringParam(r, "edgeId")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -476,7 +475,7 @@ func (h *SchemaHandler) UpdateEdge(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SchemaHandler) DeleteEdge(w http.ResponseWriter, r *http.Request) {
-	edgeID, err := parseUintParam(r, "edgeId")
+	edgeID, err := parseStringParam(r, "edgeId")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -490,15 +489,4 @@ func (h *SchemaHandler) DeleteEdge(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- Helpers ---
-
-func parseUintParam(r *http.Request, param string) (uint, error) {
-	s := chi.URLParam(r, param)
-	if s == "" {
-		return 0, fmt.Errorf("%s is required", param)
-	}
-	val, err := strconv.ParseUint(s, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("invalid %s: %s", param, s)
-	}
-	return uint(val), nil
-}
+// parseStringParam and parseStringIDParam are defined in task_handler.go

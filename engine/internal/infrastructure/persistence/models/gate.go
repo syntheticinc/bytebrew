@@ -4,8 +4,8 @@ import "time"
 
 // GateModel maps to the "gates" table.
 type GateModel struct {
-	ID            uint      `gorm:"primaryKey"`
-	SchemaID      uint      `gorm:"not null;index"`
+	ID            string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
+	SchemaID      string    `gorm:"type:uuid;not null;index"`
 	Name          string    `gorm:"type:varchar(255);not null"`
 	ConditionType string    `gorm:"type:varchar(50);not null;default:all"`
 	Config        string    `gorm:"type:text"`       // JSON

@@ -3,6 +3,7 @@ package bridge
 import (
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,11 +46,14 @@ func newMockEventStoreReader() *mockEventStoreReader {
 	return &mockEventStoreReader{events: make(map[string][]eventstore.StoredEvent)}
 }
 
-func (m *mockEventStoreReader) GetAfter(sessionID string, lastEventID int64) ([]eventstore.StoredEvent, error) {
+func (m *mockEventStoreReader) GetAfter(sessionID string, afterCreatedAt time.Time) ([]eventstore.StoredEvent, error) {
 	all := m.events[sessionID]
+	if afterCreatedAt.IsZero() {
+		return all, nil
+	}
 	var result []eventstore.StoredEvent
 	for _, e := range all {
-		if e.ID > lastEventID {
+		if e.CreatedAt.After(afterCreatedAt) {
 			result = append(result, e)
 		}
 	}
@@ -436,9 +440,9 @@ func TestEventBroadcaster_BackfillsAllOnEmptyLastEventID(t *testing.T) {
 	sender := newMockMessageSender()
 	store := newMockEventStoreReader()
 	store.events["sess-1"] = []eventstore.StoredEvent{
-		{ID: 1, SessionID: "sess-1", JSON: map[string]interface{}{"type": "ProcessingStarted", "state": "processing"}},
-		{ID: 2, SessionID: "sess-1", JSON: map[string]interface{}{"type": "MessageCompleted", "content": "hello", "role": "assistant", "agent_id": "supervisor"}},
-		{ID: 3, SessionID: "sess-1", JSON: map[string]interface{}{"type": "ProcessingStopped", "state": "idle"}},
+		{ID: "evt-1", SessionID: "sess-1", JSON: map[string]interface{}{"type": "ProcessingStarted", "state": "processing"}},
+		{ID: "evt-2", SessionID: "sess-1", JSON: map[string]interface{}{"type": "MessageCompleted", "content": "hello", "role": "assistant", "agent_id": "supervisor"}},
+		{ID: "evt-3", SessionID: "sess-1", JSON: map[string]interface{}{"type": "ProcessingStopped", "state": "idle"}},
 	}
 	broadcaster := NewEventBroadcaster(sender, store)
 
@@ -450,15 +454,15 @@ func TestEventBroadcaster_BackfillsAllOnEmptyLastEventID(t *testing.T) {
 
 	evt0 := msgs[0].Payload["event"].(map[string]interface{})
 	assert.Equal(t, "ProcessingStarted", evt0["type"])
-	assert.Equal(t, "1", msgs[0].Payload["event_id"])
+	assert.Equal(t, "evt-1", msgs[0].Payload["event_id"])
 
 	evt1 := msgs[1].Payload["event"].(map[string]interface{})
 	assert.Equal(t, "MessageCompleted", evt1["type"])
-	assert.Equal(t, "2", msgs[1].Payload["event_id"])
+	assert.Equal(t, "evt-2", msgs[1].Payload["event_id"])
 
 	evt2 := msgs[2].Payload["event"].(map[string]interface{})
 	assert.Equal(t, "ProcessingStopped", evt2["type"])
-	assert.Equal(t, "3", msgs[2].Payload["event_id"])
+	assert.Equal(t, "evt-3", msgs[2].Payload["event_id"])
 }
 
 // Subscribe with empty lastEventID only backfills events for the subscribed session.
@@ -467,10 +471,10 @@ func TestEventBroadcaster_BackfillAllFiltersBySession(t *testing.T) {
 	store := newMockEventStoreReader()
 	// Only sess-1 events in the store; sess-2 events are in a different key.
 	store.events["sess-1"] = []eventstore.StoredEvent{
-		{ID: 1, SessionID: "sess-1", JSON: map[string]interface{}{"type": "MessageCompleted", "content": "for sess-1", "role": "assistant", "agent_id": "supervisor"}},
+		{ID: "evt-1", SessionID: "sess-1", JSON: map[string]interface{}{"type": "MessageCompleted", "content": "for sess-1", "role": "assistant", "agent_id": "supervisor"}},
 	}
 	store.events["sess-2"] = []eventstore.StoredEvent{
-		{ID: 2, SessionID: "sess-2", JSON: map[string]interface{}{"type": "MessageCompleted", "content": "for sess-2", "role": "assistant", "agent_id": "supervisor"}},
+		{ID: "evt-2", SessionID: "sess-2", JSON: map[string]interface{}{"type": "MessageCompleted", "content": "for sess-2", "role": "assistant", "agent_id": "supervisor"}},
 	}
 	broadcaster := NewEventBroadcaster(sender, store)
 
@@ -488,58 +492,58 @@ func TestEventBroadcaster_BackfillAllFiltersBySession(t *testing.T) {
 func TestEventBroadcaster_BackfillOnReconnect(t *testing.T) {
 	sender := newMockMessageSender()
 	store := newMockEventStoreReader()
-	// Simulate 3 persisted events; device saw event 1, should receive 2 and 3.
+	// Simulate 3 persisted events; device saw event evt-1, should receive evt-2 and evt-3.
 	store.events["sess-1"] = []eventstore.StoredEvent{
-		{ID: 1, SessionID: "sess-1", JSON: map[string]interface{}{"type": "ProcessingStarted", "state": "processing"}},
-		{ID: 2, SessionID: "sess-1", JSON: map[string]interface{}{"type": "ReasoningChunk", "content": "thinking...", "agent_id": "supervisor"}},
-		{ID: 3, SessionID: "sess-1", JSON: map[string]interface{}{"type": "MessageCompleted", "content": "result", "role": "assistant", "agent_id": "supervisor"}},
+		{ID: "evt-1", SessionID: "sess-1", JSON: map[string]interface{}{"type": "ProcessingStarted", "state": "processing"}},
+		{ID: "evt-2", SessionID: "sess-1", JSON: map[string]interface{}{"type": "ReasoningChunk", "content": "thinking...", "agent_id": "supervisor"}},
+		{ID: "evt-3", SessionID: "sess-1", JSON: map[string]interface{}{"type": "MessageCompleted", "content": "result", "role": "assistant", "agent_id": "supervisor"}},
 	}
 	broadcaster := NewEventBroadcaster(sender, store)
 
 	// No subscribers → no messages sent yet.
 	assert.Empty(t, sender.getMessages("dev-1"))
 
-	// Device subscribes with last_event_id = "1" (saw only event 1).
-	// Should receive events 2 and 3 as backfill + BackfillComplete.
-	broadcaster.Subscribe("dev-1", "sess-1", "1")
+	// Device subscribes with last_event_id = "evt-1" (saw only event evt-1).
+	// Should receive events evt-2 and evt-3 as backfill + BackfillComplete.
+	broadcaster.Subscribe("dev-1", "sess-1", "evt-1")
 
 	msgs := filterOutBackfillComplete(sender.getMessages("dev-1"))
-	require.Len(t, msgs, 2, "should backfill 2 missed events after event 1")
+	require.Len(t, msgs, 2, "should backfill 2 missed events after evt-1")
 
 	// Verify backfilled events.
 	evt0 := msgs[0].Payload["event"].(map[string]interface{})
 	assert.Equal(t, "ReasoningChunk", evt0["type"])
-	assert.Equal(t, "2", msgs[0].Payload["event_id"])
+	assert.Equal(t, "evt-2", msgs[0].Payload["event_id"])
 
 	evt1 := msgs[1].Payload["event"].(map[string]interface{})
 	assert.Equal(t, "MessageCompleted", evt1["type"])
-	assert.Equal(t, "3", msgs[1].Payload["event_id"])
+	assert.Equal(t, "evt-3", msgs[1].Payload["event_id"])
 }
 
 // TC-B-13: Backfill reconnect — subscribe with last_event_id filters by session via event store.
 func TestEventBroadcaster_BackfillFiltersBySession(t *testing.T) {
 	sender := newMockMessageSender()
 	store := newMockEventStoreReader()
-	// sess-1 has events 1 and 3; sess-2 has event 2. GetAfter for sess-1 with lastID=1 returns event 3.
+	// sess-1 has events evt-1 and evt-3; sess-2 has event evt-2.
 	store.events["sess-1"] = []eventstore.StoredEvent{
-		{ID: 1, SessionID: "sess-1", JSON: map[string]interface{}{"type": "MessageCompleted", "content": "event-1-sess-1", "role": "assistant", "agent_id": "supervisor"}},
-		{ID: 3, SessionID: "sess-1", JSON: map[string]interface{}{"type": "MessageCompleted", "content": "event-3-sess-1", "role": "assistant", "agent_id": "supervisor"}},
+		{ID: "evt-1", SessionID: "sess-1", JSON: map[string]interface{}{"type": "MessageCompleted", "content": "event-1-sess-1", "role": "assistant", "agent_id": "supervisor"}},
+		{ID: "evt-3", SessionID: "sess-1", JSON: map[string]interface{}{"type": "MessageCompleted", "content": "event-3-sess-1", "role": "assistant", "agent_id": "supervisor"}},
 	}
 	store.events["sess-2"] = []eventstore.StoredEvent{
-		{ID: 2, SessionID: "sess-2", JSON: map[string]interface{}{"type": "MessageCompleted", "content": "event-2-sess-2", "role": "assistant", "agent_id": "supervisor"}},
+		{ID: "evt-2", SessionID: "sess-2", JSON: map[string]interface{}{"type": "MessageCompleted", "content": "event-2-sess-2", "role": "assistant", "agent_id": "supervisor"}},
 	}
 	broadcaster := NewEventBroadcaster(sender, store)
 
-	// Subscribe to sess-1 with last_event_id = "1" (saw only event 1).
-	// Should receive only event 3 (sess-1), not event 2 (sess-2).
-	broadcaster.Subscribe("dev-1", "sess-1", "1")
+	// Subscribe to sess-1 with last_event_id = "evt-1" (saw only event evt-1).
+	// Should receive only event evt-3 (sess-1), not event evt-2 (sess-2).
+	broadcaster.Subscribe("dev-1", "sess-1", "evt-1")
 
 	msgs := filterOutBackfillComplete(sender.getMessages("dev-1"))
 	require.Len(t, msgs, 1, "should backfill only sess-1 events")
 
 	evt := msgs[0].Payload["event"].(map[string]interface{})
 	assert.Equal(t, "event-3-sess-1", evt["content"])
-	assert.Equal(t, "3", msgs[0].Payload["event_id"])
+	assert.Equal(t, "evt-3", msgs[0].Payload["event_id"])
 }
 
 // SendSessionStatus sends ProcessingStopped when not processing.

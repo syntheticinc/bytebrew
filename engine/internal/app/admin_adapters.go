@@ -113,7 +113,7 @@ func (a *adminSchemaRepoAdapter) List(ctx context.Context) ([]admintools.SchemaR
 	return out, nil
 }
 
-func (a *adminSchemaRepoAdapter) GetByID(ctx context.Context, id uint) (*admintools.SchemaRecord, error) {
+func (a *adminSchemaRepoAdapter) GetByID(ctx context.Context, id string) (*admintools.SchemaRecord, error) {
 	rec, err := a.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -138,7 +138,7 @@ func (a *adminSchemaRepoAdapter) Create(ctx context.Context, record *admintools.
 	return nil
 }
 
-func (a *adminSchemaRepoAdapter) Update(ctx context.Context, id uint, record *admintools.SchemaRecord) error {
+func (a *adminSchemaRepoAdapter) Update(ctx context.Context, id string, record *admintools.SchemaRecord) error {
 	cr := &config_repo.SchemaRecord{
 		Name:        record.Name,
 		Description: record.Description,
@@ -146,15 +146,15 @@ func (a *adminSchemaRepoAdapter) Update(ctx context.Context, id uint, record *ad
 	return a.repo.Update(ctx, id, cr)
 }
 
-func (a *adminSchemaRepoAdapter) Delete(ctx context.Context, id uint) error {
+func (a *adminSchemaRepoAdapter) Delete(ctx context.Context, id string) error {
 	return a.repo.Delete(ctx, id)
 }
 
-func (a *adminSchemaRepoAdapter) AddAgent(ctx context.Context, schemaID uint, agentName string) error {
+func (a *adminSchemaRepoAdapter) AddAgent(ctx context.Context, schemaID string, agentName string) error {
 	return a.repo.AddAgent(ctx, schemaID, agentName)
 }
 
-func (a *adminSchemaRepoAdapter) RemoveAgent(ctx context.Context, schemaID uint, agentName string) error {
+func (a *adminSchemaRepoAdapter) RemoveAgent(ctx context.Context, schemaID string, agentName string) error {
 	return a.repo.RemoveAgent(ctx, schemaID, agentName)
 }
 
@@ -181,7 +181,7 @@ func (a *adminTriggerRepoAdapter) List(ctx context.Context) ([]admintools.Trigge
 	return out, nil
 }
 
-func (a *adminTriggerRepoAdapter) GetByID(ctx context.Context, id uint) (*admintools.TriggerRecord, error) {
+func (a *adminTriggerRepoAdapter) GetByID(ctx context.Context, id string) (*admintools.TriggerRecord, error) {
 	t, err := a.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -198,7 +198,7 @@ func (a *adminTriggerRepoAdapter) Create(ctx context.Context, record *admintools
 	m := &models.TriggerModel{
 		Type:        record.Type,
 		Title:       record.Title,
-		AgentID:     ptrUint(agentID),
+		AgentID:     ptrString(agentID),
 		Schedule:    record.Schedule,
 		WebhookPath: record.WebhookPath,
 		Description: record.Description,
@@ -211,11 +211,11 @@ func (a *adminTriggerRepoAdapter) Create(ctx context.Context, record *admintools
 	return nil
 }
 
-func (a *adminTriggerRepoAdapter) Update(ctx context.Context, id uint, record *admintools.TriggerRecord) error {
+func (a *adminTriggerRepoAdapter) Update(ctx context.Context, id string, record *admintools.TriggerRecord) error {
 	m := &models.TriggerModel{
 		Type:        record.Type,
 		Title:       record.Title,
-		AgentID:     ptrUint(record.AgentID),
+		AgentID:     ptrString(record.AgentID),
 		Schedule:    record.Schedule,
 		WebhookPath: record.WebhookPath,
 		Description: record.Description,
@@ -226,12 +226,12 @@ func (a *adminTriggerRepoAdapter) Update(ctx context.Context, id uint, record *a
 		if err != nil {
 			return fmt.Errorf("resolve agent for trigger update: %w", err)
 		}
-		m.AgentID = ptrUint(agentID)
+		m.AgentID = ptrString(agentID)
 	}
 	return a.repo.Update(ctx, id, m)
 }
 
-func (a *adminTriggerRepoAdapter) Delete(ctx context.Context, id uint) error {
+func (a *adminTriggerRepoAdapter) Delete(ctx context.Context, id string) error {
 	return a.repo.Delete(ctx, id)
 }
 
@@ -245,7 +245,7 @@ func toAdminTriggerRecord(t models.TriggerModel) admintools.TriggerRecord {
 		Type:        t.Type,
 		Title:       t.Title,
 		AgentName:   agentName,
-		AgentID:     derefUint(t.AgentID),
+		AgentID:     derefString(t.AgentID),
 		SchemaID:    t.SchemaID,
 		Schedule:    t.Schedule,
 		WebhookPath: t.WebhookPath,
@@ -276,7 +276,7 @@ func (a *adminMCPServerRepoAdapter) List(ctx context.Context) ([]admintools.MCPS
 	return out, nil
 }
 
-func (a *adminMCPServerRepoAdapter) GetByID(ctx context.Context, id uint) (*admintools.MCPServerRecord, error) {
+func (a *adminMCPServerRepoAdapter) GetByID(ctx context.Context, id string) (*admintools.MCPServerRecord, error) {
 	s, err := a.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -303,7 +303,7 @@ func (a *adminMCPServerRepoAdapter) Create(ctx context.Context, record *admintoo
 	return nil
 }
 
-func (a *adminMCPServerRepoAdapter) Update(ctx context.Context, id uint, record *admintools.MCPServerRecord) error {
+func (a *adminMCPServerRepoAdapter) Update(ctx context.Context, id string, record *admintools.MCPServerRecord) error {
 	argsJSON, _ := json.Marshal(record.Args)
 	envJSON, _ := json.Marshal(record.EnvVars)
 	m := &models.MCPServerModel{
@@ -317,7 +317,7 @@ func (a *adminMCPServerRepoAdapter) Update(ctx context.Context, id uint, record 
 	return a.repo.Update(ctx, id, m)
 }
 
-func (a *adminMCPServerRepoAdapter) Delete(ctx context.Context, id uint) error {
+func (a *adminMCPServerRepoAdapter) Delete(ctx context.Context, id string) error {
 	return a.repo.Delete(ctx, id)
 }
 
@@ -363,7 +363,7 @@ func (a *adminModelRepoAdapter) List(ctx context.Context) ([]admintools.ModelRec
 	return out, nil
 }
 
-func (a *adminModelRepoAdapter) GetByID(ctx context.Context, id uint) (*admintools.ModelRecord, error) {
+func (a *adminModelRepoAdapter) GetByID(ctx context.Context, id string) (*admintools.ModelRecord, error) {
 	p, err := a.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -387,7 +387,7 @@ func (a *adminModelRepoAdapter) Create(ctx context.Context, record *admintools.M
 	return nil
 }
 
-func (a *adminModelRepoAdapter) Update(ctx context.Context, id uint, record *admintools.ModelRecord) error {
+func (a *adminModelRepoAdapter) Update(ctx context.Context, id string, record *admintools.ModelRecord) error {
 	m := &models.LLMProviderModel{
 		Name:      record.Name,
 		Type:      record.Type,
@@ -400,7 +400,7 @@ func (a *adminModelRepoAdapter) Update(ctx context.Context, id uint, record *adm
 	return a.repo.Update(ctx, id, m)
 }
 
-func (a *adminModelRepoAdapter) Delete(ctx context.Context, id uint) error {
+func (a *adminModelRepoAdapter) Delete(ctx context.Context, id string) error {
 	return a.repo.Delete(ctx, id)
 }
 
@@ -429,7 +429,7 @@ func newAdminEdgeRepoAdapter(repo *config_repo.GORMEdgeRepository) *adminEdgeRep
 	return &adminEdgeRepoAdapter{repo: repo}
 }
 
-func (a *adminEdgeRepoAdapter) List(ctx context.Context, schemaID uint) ([]admintools.EdgeRecord, error) {
+func (a *adminEdgeRepoAdapter) List(ctx context.Context, schemaID string) ([]admintools.EdgeRecord, error) {
 	records, err := a.repo.List(ctx, schemaID)
 	if err != nil {
 		return nil, err
@@ -468,7 +468,7 @@ func (a *adminEdgeRepoAdapter) Create(ctx context.Context, record *admintools.Ed
 	return nil
 }
 
-func (a *adminEdgeRepoAdapter) Delete(ctx context.Context, id uint) error {
+func (a *adminEdgeRepoAdapter) Delete(ctx context.Context, id string) error {
 	return a.repo.Delete(ctx, id)
 }
 
@@ -559,7 +559,7 @@ func (a *adminCapabilityRepoAdapter) Create(ctx context.Context, record *adminto
 	return nil
 }
 
-func (a *adminCapabilityRepoAdapter) Update(ctx context.Context, id uint, record *admintools.CapabilityRecord) error {
+func (a *adminCapabilityRepoAdapter) Update(ctx context.Context, id string, record *admintools.CapabilityRecord) error {
 	cr := &config_repo.CapabilityRecord{
 		AgentName: record.AgentName,
 		Type:      record.Type,
@@ -569,7 +569,7 @@ func (a *adminCapabilityRepoAdapter) Update(ctx context.Context, id uint, record
 	return a.repo.Update(ctx, id, cr)
 }
 
-func (a *adminCapabilityRepoAdapter) Delete(ctx context.Context, id uint) error {
+func (a *adminCapabilityRepoAdapter) Delete(ctx context.Context, id string) error {
 	return a.repo.Delete(ctx, id)
 }
 
@@ -585,10 +585,10 @@ func (a *builderAssistantRestorerAdapter) RestoreBuilderAssistant(ctx context.Co
 
 // --- Helpers ---
 
-func resolveAgentID(ctx context.Context, db *gorm.DB, agentName string) (uint, error) {
+func resolveAgentID(ctx context.Context, db *gorm.DB, agentName string) (string, error) {
 	var agent models.AgentModel
 	if err := db.WithContext(ctx).Where("name = ?", agentName).First(&agent).Error; err != nil {
-		return 0, fmt.Errorf("find agent %q: %w", agentName, err)
+		return "", fmt.Errorf("find agent %q: %w", agentName, err)
 	}
 	return agent.ID, nil
 }

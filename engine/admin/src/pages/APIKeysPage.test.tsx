@@ -39,7 +39,7 @@ describe('APIKeysPage', () => {
   it('renders tokens table', async () => {
     mockApi.listTokens.mockResolvedValue([
       {
-        id: 1,
+        id: '1',
         name: 'ci-pipeline',
         scopes_mask: 3,
         created_at: '2026-03-17T10:00:00Z',

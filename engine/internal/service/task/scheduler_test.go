@@ -2,6 +2,7 @@ package task
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -13,19 +14,19 @@ import (
 type mockTaskCreator struct {
 	mu     sync.Mutex
 	calls  []TriggerTaskParams
-	nextID uint
+	nextID int
 	err    error
 }
 
-func (m *mockTaskCreator) CreateFromTrigger(_ context.Context, params TriggerTaskParams) (uint, error) {
+func (m *mockTaskCreator) CreateFromTrigger(_ context.Context, params TriggerTaskParams) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.err != nil {
-		return 0, m.err
+		return "", m.err
 	}
 	m.nextID++
 	m.calls = append(m.calls, params)
-	return m.nextID, nil
+	return fmt.Sprintf("%d", m.nextID), nil
 }
 
 func (m *mockTaskCreator) getCalls() []TriggerTaskParams {

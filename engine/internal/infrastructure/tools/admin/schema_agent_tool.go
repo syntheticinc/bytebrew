@@ -27,14 +27,14 @@ func (t *adminAddAgentToSchemaTool) Info(_ context.Context) (*schema.ToolInfo, e
 		Name: "admin_add_agent_to_schema",
 		Desc: "Adds an agent to a schema. The agent must exist. After adding, create edges to connect agents.",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"schema_id":  {Type: schema.Integer, Desc: "Schema ID", Required: true},
+			"schema_id":  {Type: schema.String, Desc: "Schema ID", Required: true},
 			"agent_name": {Type: schema.String, Desc: "Agent name to add", Required: true},
 		}),
 	}, nil
 }
 
 type schemaAgentArgs struct {
-	SchemaID  uint   `json:"schema_id"`
+	SchemaID  string `json:"schema_id"`
 	AgentName string `json:"agent_name"`
 }
 
@@ -43,7 +43,7 @@ func (t *adminAddAgentToSchemaTool) InvokableRun(ctx context.Context, argsJSON s
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return fmt.Sprintf("[ERROR] Invalid arguments: %v", err), nil
 	}
-	if args.SchemaID == 0 {
+	if args.SchemaID == "" {
 		return "[ERROR] schema_id is required", nil
 	}
 	if args.AgentName == "" {
@@ -52,10 +52,10 @@ func (t *adminAddAgentToSchemaTool) InvokableRun(ctx context.Context, argsJSON s
 
 	if err := t.repo.AddAgent(ctx, args.SchemaID, args.AgentName); err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return fmt.Sprintf("Schema or agent not found (schema_id=%d, agent=%s).", args.SchemaID, args.AgentName), nil
+			return fmt.Sprintf("Schema or agent not found (schema_id=%s, agent=%s).", args.SchemaID, args.AgentName), nil
 		}
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "UNIQUE") {
-			return fmt.Sprintf("Agent %q is already in schema %d.", args.AgentName, args.SchemaID), nil
+			return fmt.Sprintf("Agent %q is already in schema %s.", args.AgentName, args.SchemaID), nil
 		}
 		return fmt.Sprintf("[ERROR] Failed to add agent to schema: %v", err), nil
 	}
@@ -65,7 +65,7 @@ func (t *adminAddAgentToSchemaTool) InvokableRun(ctx context.Context, argsJSON s
 	}
 
 	slog.InfoContext(ctx, "[AdminAddAgentToSchema] added", "schema_id", args.SchemaID, "agent", args.AgentName)
-	return fmt.Sprintf("Agent %q added to schema %d.", args.AgentName, args.SchemaID), nil
+	return fmt.Sprintf("Agent %q added to schema %s.", args.AgentName, args.SchemaID), nil
 }
 
 // --- admin_remove_agent_from_schema ---
@@ -84,7 +84,7 @@ func (t *adminRemoveAgentFromSchemaTool) Info(_ context.Context) (*schema.ToolIn
 		Name: "admin_remove_agent_from_schema",
 		Desc: "Removes an agent from a schema. Does not delete the agent itself.",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"schema_id":  {Type: schema.Integer, Desc: "Schema ID", Required: true},
+			"schema_id":  {Type: schema.String, Desc: "Schema ID", Required: true},
 			"agent_name": {Type: schema.String, Desc: "Agent name to remove", Required: true},
 		}),
 	}, nil
@@ -95,7 +95,7 @@ func (t *adminRemoveAgentFromSchemaTool) InvokableRun(ctx context.Context, argsJ
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return fmt.Sprintf("[ERROR] Invalid arguments: %v", err), nil
 	}
-	if args.SchemaID == 0 {
+	if args.SchemaID == "" {
 		return "[ERROR] schema_id is required", nil
 	}
 	if args.AgentName == "" {
@@ -104,7 +104,7 @@ func (t *adminRemoveAgentFromSchemaTool) InvokableRun(ctx context.Context, argsJ
 
 	if err := t.repo.RemoveAgent(ctx, args.SchemaID, args.AgentName); err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return fmt.Sprintf("Agent %q not found in schema %d.", args.AgentName, args.SchemaID), nil
+			return fmt.Sprintf("Agent %q not found in schema %s.", args.AgentName, args.SchemaID), nil
 		}
 		return fmt.Sprintf("[ERROR] Failed to remove agent from schema: %v", err), nil
 	}
@@ -114,5 +114,5 @@ func (t *adminRemoveAgentFromSchemaTool) InvokableRun(ctx context.Context, argsJ
 	}
 
 	slog.InfoContext(ctx, "[AdminRemoveAgentFromSchema] removed", "schema_id", args.SchemaID, "agent", args.AgentName)
-	return fmt.Sprintf("Agent %q removed from schema %d.", args.AgentName, args.SchemaID), nil
+	return fmt.Sprintf("Agent %q removed from schema %s.", args.AgentName, args.SchemaID), nil
 }

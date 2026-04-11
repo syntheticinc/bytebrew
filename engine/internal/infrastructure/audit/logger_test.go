@@ -31,7 +31,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		resource VARCHAR(500),
 		details TEXT,
 		session_id VARCHAR(36),
-		task_id INTEGER
+		task_id TEXT
 	)`).Error
 	require.NoError(t, err)
 
@@ -92,7 +92,7 @@ func TestLogger_Log_WithTaskID(t *testing.T) {
 	db := setupTestDB(t)
 	logger := NewLogger(db)
 
-	taskID := uint(42)
+	taskID := "task-uuid-42"
 	err := logger.Log(context.Background(), Entry{
 		ActorType: "api_token",
 		ActorID:   "bot-token",
@@ -105,7 +105,7 @@ func TestLogger_Log_WithTaskID(t *testing.T) {
 	var result models.AuditLogModel
 	require.NoError(t, db.First(&result).Error)
 	require.NotNil(t, result.TaskID)
-	assert.Equal(t, uint(42), *result.TaskID)
+	assert.Equal(t, "task-uuid-42", *result.TaskID)
 }
 
 func TestLogger_Log_ZeroTimestamp(t *testing.T) {

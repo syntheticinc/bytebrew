@@ -28,10 +28,10 @@ func (r *GORMMCPServerRepository) List(ctx context.Context) ([]models.MCPServerM
 }
 
 // GetByID returns a single MCP server model by ID.
-func (r *GORMMCPServerRepository) GetByID(ctx context.Context, id uint) (*models.MCPServerModel, error) {
+func (r *GORMMCPServerRepository) GetByID(ctx context.Context, id string) (*models.MCPServerModel, error) {
 	var server models.MCPServerModel
-	if err := r.db.WithContext(ctx).First(&server, id).Error; err != nil {
-		return nil, fmt.Errorf("get mcp server %d: %w", id, err)
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&server).Error; err != nil {
+		return nil, fmt.Errorf("get mcp server %s: %w", id, err)
 	}
 	return &server, nil
 }
@@ -45,25 +45,25 @@ func (r *GORMMCPServerRepository) Create(ctx context.Context, model *models.MCPS
 }
 
 // Update updates an MCP server model by ID.
-func (r *GORMMCPServerRepository) Update(ctx context.Context, id uint, model *models.MCPServerModel) error {
+func (r *GORMMCPServerRepository) Update(ctx context.Context, id string, model *models.MCPServerModel) error {
 	result := r.db.WithContext(ctx).Model(&models.MCPServerModel{}).Where("id = ?", id).Updates(model)
 	if result.Error != nil {
 		return fmt.Errorf("update mcp server: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("mcp server not found: %d", id)
+		return fmt.Errorf("mcp server not found: %s", id)
 	}
 	return nil
 }
 
 // Delete removes an MCP server model by ID.
-func (r *GORMMCPServerRepository) Delete(ctx context.Context, id uint) error {
-	result := r.db.WithContext(ctx).Delete(&models.MCPServerModel{}, id)
+func (r *GORMMCPServerRepository) Delete(ctx context.Context, id string) error {
+	result := r.db.WithContext(ctx).Delete(&models.MCPServerModel{}, "id = ?", id)
 	if result.Error != nil {
 		return fmt.Errorf("delete mcp server: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("mcp server not found: %d", id)
+		return fmt.Errorf("mcp server not found: %s", id)
 	}
 	return nil
 }

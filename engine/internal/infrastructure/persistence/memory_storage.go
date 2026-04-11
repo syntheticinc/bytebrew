@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strconv"
 
+	"github.com/google/uuid"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"gorm.io/gorm"
@@ -32,11 +32,14 @@ func (s *MemoryStorage) Store(ctx context.Context, mem *domain.Memory, maxEntrie
 	}
 
 	m := memoryToModel(mem)
+	if m.ID == "" {
+		m.ID = uuid.New().String()
+	}
 	if err := s.db.WithContext(ctx).Create(&m).Error; err != nil {
 		return fmt.Errorf("insert memory: %w", err)
 	}
 
-	mem.ID = strconv.FormatUint(uint64(m.ID), 10)
+	mem.ID = m.ID
 	slog.DebugContext(ctx, "memory stored", "id", mem.ID, "schema_id", mem.SchemaID, "user_id", mem.UserID)
 	return nil
 }
@@ -130,12 +133,12 @@ func (s *MemoryStorage) evictIfNeeded(ctx context.Context, schemaID, userID stri
 		return fmt.Errorf("find oldest memories: %w", err)
 	}
 
-	ids := make([]uint, len(oldest))
+	ids := make([]string, len(oldest))
 	for i, m := range oldest {
 		ids[i] = m.ID
 	}
 
-	if err := s.db.WithContext(ctx).Delete(&models.MemoryModel{}, ids).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("id IN ?", ids).Delete(&models.MemoryModel{}).Error; err != nil {
 		return fmt.Errorf("delete oldest memories: %w", err)
 	}
 
@@ -151,10 +154,8 @@ func memoryToModel(mem *domain.Memory) models.MemoryModel {
 		}
 	}
 
-	schemaID, _ := strconv.ParseUint(mem.SchemaID, 10, 64)
-
 	return models.MemoryModel{
-		SchemaID: uint(schemaID),
+		SchemaID: mem.SchemaID,
 		UserID:   mem.UserID,
 		Content:  mem.Content,
 		Metadata: metaJSON,
@@ -168,8 +169,8 @@ func modelToMemory(m *models.MemoryModel) *domain.Memory {
 	}
 
 	return &domain.Memory{
-		ID:        strconv.FormatUint(uint64(m.ID), 10),
-		SchemaID:  strconv.FormatUint(uint64(m.SchemaID), 10),
+		ID:        m.ID,
+		SchemaID:  m.SchemaID,
 		UserID:    m.UserID,
 		Content:   m.Content,
 		Metadata:  metadata,

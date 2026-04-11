@@ -81,13 +81,13 @@ func (m *mockAgentRepo) Delete(_ context.Context, name string) error {
 }
 
 type mockSchemaRepo struct {
-	schemas map[uint]*SchemaRecord
-	nextID  uint
+	schemas map[string]*SchemaRecord
+	nextID  int
 	err     error
 }
 
 func newMockSchemaRepo() *mockSchemaRepo {
-	return &mockSchemaRepo{schemas: make(map[uint]*SchemaRecord), nextID: 1}
+	return &mockSchemaRepo{schemas: make(map[string]*SchemaRecord), nextID: 1}
 }
 
 func (m *mockSchemaRepo) List(_ context.Context) ([]SchemaRecord, error) {
@@ -101,13 +101,13 @@ func (m *mockSchemaRepo) List(_ context.Context) ([]SchemaRecord, error) {
 	return result, nil
 }
 
-func (m *mockSchemaRepo) GetByID(_ context.Context, id uint) (*SchemaRecord, error) {
+func (m *mockSchemaRepo) GetByID(_ context.Context, id string) (*SchemaRecord, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
 	s, ok := m.schemas[id]
 	if !ok {
-		return nil, fmt.Errorf("schema not found: %d", id)
+		return nil, fmt.Errorf("schema not found: %s", id)
 	}
 	return s, nil
 }
@@ -116,54 +116,54 @@ func (m *mockSchemaRepo) Create(_ context.Context, record *SchemaRecord) error {
 	if m.err != nil {
 		return m.err
 	}
-	record.ID = m.nextID
+	record.ID = fmt.Sprintf("schema-%d", m.nextID)
 	m.nextID++
 	m.schemas[record.ID] = record
 	return nil
 }
 
-func (m *mockSchemaRepo) Update(_ context.Context, id uint, record *SchemaRecord) error {
+func (m *mockSchemaRepo) Update(_ context.Context, id string, record *SchemaRecord) error {
 	if m.err != nil {
 		return m.err
 	}
 	if _, ok := m.schemas[id]; !ok {
-		return fmt.Errorf("schema not found: %d", id)
+		return fmt.Errorf("schema not found: %s", id)
 	}
 	record.ID = id
 	m.schemas[id] = record
 	return nil
 }
 
-func (m *mockSchemaRepo) Delete(_ context.Context, id uint) error {
+func (m *mockSchemaRepo) Delete(_ context.Context, id string) error {
 	if m.err != nil {
 		return m.err
 	}
 	if _, ok := m.schemas[id]; !ok {
-		return fmt.Errorf("schema not found: %d", id)
+		return fmt.Errorf("schema not found: %s", id)
 	}
 	delete(m.schemas, id)
 	return nil
 }
 
-func (m *mockSchemaRepo) AddAgent(_ context.Context, schemaID uint, agentName string) error {
+func (m *mockSchemaRepo) AddAgent(_ context.Context, schemaID string, agentName string) error {
 	if m.err != nil {
 		return m.err
 	}
 	s, ok := m.schemas[schemaID]
 	if !ok {
-		return fmt.Errorf("schema not found: %d", schemaID)
+		return fmt.Errorf("schema not found: %s", schemaID)
 	}
 	s.AgentNames = append(s.AgentNames, agentName)
 	return nil
 }
 
-func (m *mockSchemaRepo) RemoveAgent(_ context.Context, schemaID uint, agentName string) error {
+func (m *mockSchemaRepo) RemoveAgent(_ context.Context, schemaID string, agentName string) error {
 	if m.err != nil {
 		return m.err
 	}
 	s, ok := m.schemas[schemaID]
 	if !ok {
-		return fmt.Errorf("schema not found: %d", schemaID)
+		return fmt.Errorf("schema not found: %s", schemaID)
 	}
 	for i, n := range s.AgentNames {
 		if n == agentName {
@@ -175,16 +175,16 @@ func (m *mockSchemaRepo) RemoveAgent(_ context.Context, schemaID uint, agentName
 }
 
 type mockEdgeRepo struct {
-	edges  map[uint]*EdgeRecord
-	nextID uint
+	edges  map[string]*EdgeRecord
+	nextID int
 	err    error
 }
 
 func newMockEdgeRepo() *mockEdgeRepo {
-	return &mockEdgeRepo{edges: make(map[uint]*EdgeRecord), nextID: 1}
+	return &mockEdgeRepo{edges: make(map[string]*EdgeRecord), nextID: 1}
 }
 
-func (m *mockEdgeRepo) List(_ context.Context, schemaID uint) ([]EdgeRecord, error) {
+func (m *mockEdgeRepo) List(_ context.Context, schemaID string) ([]EdgeRecord, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -201,31 +201,31 @@ func (m *mockEdgeRepo) Create(_ context.Context, record *EdgeRecord) error {
 	if m.err != nil {
 		return m.err
 	}
-	record.ID = m.nextID
+	record.ID = fmt.Sprintf("edge-%d", m.nextID)
 	m.nextID++
 	m.edges[record.ID] = record
 	return nil
 }
 
-func (m *mockEdgeRepo) Delete(_ context.Context, id uint) error {
+func (m *mockEdgeRepo) Delete(_ context.Context, id string) error {
 	if m.err != nil {
 		return m.err
 	}
 	if _, ok := m.edges[id]; !ok {
-		return fmt.Errorf("edge not found: %d", id)
+		return fmt.Errorf("edge not found: %s", id)
 	}
 	delete(m.edges, id)
 	return nil
 }
 
 type mockModelRepo struct {
-	models map[uint]*ModelRecord
-	nextID uint
+	models map[string]*ModelRecord
+	nextID int
 	err    error
 }
 
 func newMockModelRepo() *mockModelRepo {
-	return &mockModelRepo{models: make(map[uint]*ModelRecord), nextID: 1}
+	return &mockModelRepo{models: make(map[string]*ModelRecord), nextID: 1}
 }
 
 func (m *mockModelRepo) List(_ context.Context) ([]ModelRecord, error) {
@@ -239,13 +239,13 @@ func (m *mockModelRepo) List(_ context.Context) ([]ModelRecord, error) {
 	return result, nil
 }
 
-func (m *mockModelRepo) GetByID(_ context.Context, id uint) (*ModelRecord, error) {
+func (m *mockModelRepo) GetByID(_ context.Context, id string) (*ModelRecord, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
 	r, ok := m.models[id]
 	if !ok {
-		return nil, fmt.Errorf("model not found: %d", id)
+		return nil, fmt.Errorf("model not found: %s", id)
 	}
 	return r, nil
 }
@@ -254,43 +254,43 @@ func (m *mockModelRepo) Create(_ context.Context, record *ModelRecord) error {
 	if m.err != nil {
 		return m.err
 	}
-	record.ID = m.nextID
+	record.ID = fmt.Sprintf("model-%d", m.nextID)
 	m.nextID++
 	m.models[record.ID] = record
 	return nil
 }
 
-func (m *mockModelRepo) Update(_ context.Context, id uint, record *ModelRecord) error {
+func (m *mockModelRepo) Update(_ context.Context, id string, record *ModelRecord) error {
 	if m.err != nil {
 		return m.err
 	}
 	if _, ok := m.models[id]; !ok {
-		return fmt.Errorf("model not found: %d", id)
+		return fmt.Errorf("model not found: %s", id)
 	}
 	record.ID = id
 	m.models[id] = record
 	return nil
 }
 
-func (m *mockModelRepo) Delete(_ context.Context, id uint) error {
+func (m *mockModelRepo) Delete(_ context.Context, id string) error {
 	if m.err != nil {
 		return m.err
 	}
 	if _, ok := m.models[id]; !ok {
-		return fmt.Errorf("model not found: %d", id)
+		return fmt.Errorf("model not found: %s", id)
 	}
 	delete(m.models, id)
 	return nil
 }
 
 type mockTriggerRepo struct {
-	triggers map[uint]*TriggerRecord
-	nextID   uint
+	triggers map[string]*TriggerRecord
+	nextID   int
 	err      error
 }
 
 func newMockTriggerRepo() *mockTriggerRepo {
-	return &mockTriggerRepo{triggers: make(map[uint]*TriggerRecord), nextID: 1}
+	return &mockTriggerRepo{triggers: make(map[string]*TriggerRecord), nextID: 1}
 }
 
 func (m *mockTriggerRepo) List(_ context.Context) ([]TriggerRecord, error) {
@@ -304,13 +304,13 @@ func (m *mockTriggerRepo) List(_ context.Context) ([]TriggerRecord, error) {
 	return result, nil
 }
 
-func (m *mockTriggerRepo) GetByID(_ context.Context, id uint) (*TriggerRecord, error) {
+func (m *mockTriggerRepo) GetByID(_ context.Context, id string) (*TriggerRecord, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
 	t, ok := m.triggers[id]
 	if !ok {
-		return nil, fmt.Errorf("trigger not found: %d", id)
+		return nil, fmt.Errorf("trigger not found: %s", id)
 	}
 	return t, nil
 }
@@ -319,43 +319,43 @@ func (m *mockTriggerRepo) Create(_ context.Context, record *TriggerRecord) error
 	if m.err != nil {
 		return m.err
 	}
-	record.ID = m.nextID
+	record.ID = fmt.Sprintf("trigger-%d", m.nextID)
 	m.nextID++
 	m.triggers[record.ID] = record
 	return nil
 }
 
-func (m *mockTriggerRepo) Update(_ context.Context, id uint, record *TriggerRecord) error {
+func (m *mockTriggerRepo) Update(_ context.Context, id string, record *TriggerRecord) error {
 	if m.err != nil {
 		return m.err
 	}
 	if _, ok := m.triggers[id]; !ok {
-		return fmt.Errorf("trigger not found: %d", id)
+		return fmt.Errorf("trigger not found: %s", id)
 	}
 	record.ID = id
 	m.triggers[id] = record
 	return nil
 }
 
-func (m *mockTriggerRepo) Delete(_ context.Context, id uint) error {
+func (m *mockTriggerRepo) Delete(_ context.Context, id string) error {
 	if m.err != nil {
 		return m.err
 	}
 	if _, ok := m.triggers[id]; !ok {
-		return fmt.Errorf("trigger not found: %d", id)
+		return fmt.Errorf("trigger not found: %s", id)
 	}
 	delete(m.triggers, id)
 	return nil
 }
 
 type mockCapabilityRepo struct {
-	caps   map[uint]*CapabilityRecord
-	nextID uint
+	caps   map[string]*CapabilityRecord
+	nextID int
 	err    error
 }
 
 func newMockCapabilityRepo() *mockCapabilityRepo {
-	return &mockCapabilityRepo{caps: make(map[uint]*CapabilityRecord), nextID: 1}
+	return &mockCapabilityRepo{caps: make(map[string]*CapabilityRecord), nextID: 1}
 }
 
 func (m *mockCapabilityRepo) ListByAgent(_ context.Context, agentName string) ([]CapabilityRecord, error) {
@@ -375,30 +375,30 @@ func (m *mockCapabilityRepo) Create(_ context.Context, record *CapabilityRecord)
 	if m.err != nil {
 		return m.err
 	}
-	record.ID = m.nextID
+	record.ID = fmt.Sprintf("cap-%d", m.nextID)
 	m.nextID++
 	m.caps[record.ID] = record
 	return nil
 }
 
-func (m *mockCapabilityRepo) Update(_ context.Context, id uint, record *CapabilityRecord) error {
+func (m *mockCapabilityRepo) Update(_ context.Context, id string, record *CapabilityRecord) error {
 	if m.err != nil {
 		return m.err
 	}
 	if _, ok := m.caps[id]; !ok {
-		return fmt.Errorf("capability not found: %d", id)
+		return fmt.Errorf("capability not found: %s", id)
 	}
 	record.ID = id
 	m.caps[id] = record
 	return nil
 }
 
-func (m *mockCapabilityRepo) Delete(_ context.Context, id uint) error {
+func (m *mockCapabilityRepo) Delete(_ context.Context, id string) error {
 	if m.err != nil {
 		return m.err
 	}
 	if _, ok := m.caps[id]; !ok {
-		return fmt.Errorf("capability not found: %d", id)
+		return fmt.Errorf("capability not found: %s", id)
 	}
 	delete(m.caps, id)
 	return nil
@@ -552,7 +552,7 @@ func TestAdminCreateSchema_Success(t *testing.T) {
 func TestAdminDeleteSchema_NotFound(t *testing.T) {
 	repo := newMockSchemaRepo()
 	tool := NewAdminDeleteSchemaTool(repo, nil)
-	args, _ := json.Marshal(deleteSchemaArgs{SchemaID: 999})
+	args, _ := json.Marshal(deleteSchemaArgs{SchemaID: "nonexistent"})
 	result, err := tool.InvokableRun(context.Background(), string(args))
 	require.NoError(t, err)
 	assert.Contains(t, result, "not found")
@@ -562,22 +562,22 @@ func TestAdminDeleteSchema_NotFound(t *testing.T) {
 
 func TestAdminAddAgentToSchema_Success(t *testing.T) {
 	repo := newMockSchemaRepo()
-	repo.schemas[1] = &SchemaRecord{ID: 1, Name: "test"}
+	repo.schemas["schema-1"] = &SchemaRecord{ID: "schema-1", Name: "test"}
 	reloader, count := newReloaderCounter()
 	tool := NewAdminAddAgentToSchemaTool(repo, reloader)
-	args, _ := json.Marshal(schemaAgentArgs{SchemaID: 1, AgentName: "my-agent"})
+	args, _ := json.Marshal(schemaAgentArgs{SchemaID: "schema-1", AgentName: "my-agent"})
 	result, err := tool.InvokableRun(context.Background(), string(args))
 	require.NoError(t, err)
 	assert.Contains(t, result, "added")
 	assert.Equal(t, int32(1), count.Load())
-	assert.Contains(t, repo.schemas[1].AgentNames, "my-agent")
+	assert.Contains(t, repo.schemas["schema-1"].AgentNames, "my-agent")
 }
 
 func TestAdminRemoveAgentFromSchema_NotFound(t *testing.T) {
 	repo := newMockSchemaRepo()
-	repo.schemas[1] = &SchemaRecord{ID: 1, Name: "test"}
+	repo.schemas["schema-1"] = &SchemaRecord{ID: "schema-1", Name: "test"}
 	tool := NewAdminRemoveAgentFromSchemaTool(repo, nil)
-	args, _ := json.Marshal(schemaAgentArgs{SchemaID: 1, AgentName: "nonexistent"})
+	args, _ := json.Marshal(schemaAgentArgs{SchemaID: "schema-1", AgentName: "nonexistent"})
 	result, err := tool.InvokableRun(context.Background(), string(args))
 	require.NoError(t, err)
 	assert.Contains(t, result, "not found")
@@ -589,7 +589,7 @@ func TestAdminCreateEdge_Success(t *testing.T) {
 	repo := newMockEdgeRepo()
 	reloader, count := newReloaderCounter()
 	tool := NewAdminCreateEdgeTool(repo, reloader)
-	args, _ := json.Marshal(createEdgeArgs{SchemaID: 1, FromAgent: "a", ToAgent: "b", Type: "flow"})
+	args, _ := json.Marshal(createEdgeArgs{SchemaID: "schema-1", FromAgent: "a", ToAgent: "b", Type: "flow"})
 	result, err := tool.InvokableRun(context.Background(), string(args))
 	require.NoError(t, err)
 	assert.Contains(t, result, "Edge created")
@@ -599,7 +599,7 @@ func TestAdminCreateEdge_Success(t *testing.T) {
 func TestAdminCreateEdge_InvalidType(t *testing.T) {
 	repo := newMockEdgeRepo()
 	tool := NewAdminCreateEdgeTool(repo, nil)
-	args, _ := json.Marshal(createEdgeArgs{SchemaID: 1, FromAgent: "a", ToAgent: "b", Type: "invalid"})
+	args, _ := json.Marshal(createEdgeArgs{SchemaID: "schema-1", FromAgent: "a", ToAgent: "b", Type: "invalid"})
 	result, err := tool.InvokableRun(context.Background(), string(args))
 	require.NoError(t, err)
 	assert.Contains(t, result, "Invalid edge type")
@@ -608,7 +608,7 @@ func TestAdminCreateEdge_InvalidType(t *testing.T) {
 func TestAdminListEdges_Empty(t *testing.T) {
 	repo := newMockEdgeRepo()
 	tool := NewAdminListEdgesTool(repo)
-	args, _ := json.Marshal(listEdgesArgs{SchemaID: 1})
+	args, _ := json.Marshal(listEdgesArgs{SchemaID: "schema-1"})
 	result, err := tool.InvokableRun(context.Background(), string(args))
 	require.NoError(t, err)
 	assert.Contains(t, result, "No edges")
@@ -638,7 +638,7 @@ func TestAdminCreateModel_MissingFields(t *testing.T) {
 
 func TestAdminListModels_MaskedAPIKey(t *testing.T) {
 	repo := newMockModelRepo()
-	repo.models[1] = &ModelRecord{ID: 1, Name: "test", Type: "openai", ModelName: "gpt-4", APIKey: "sk-secret123"}
+	repo.models["model-1"] = &ModelRecord{ID: "model-1", Name: "test", Type: "openai", ModelName: "gpt-4", APIKey: "sk-secret123"}
 	tool := NewAdminListModelsTool(repo)
 	result, err := tool.InvokableRun(context.Background(), "")
 	require.NoError(t, err)
@@ -662,7 +662,7 @@ func TestAdminCreateTrigger_Success(t *testing.T) {
 func TestAdminDeleteTrigger_NotFound(t *testing.T) {
 	repo := newMockTriggerRepo()
 	tool := NewAdminDeleteTriggerTool(repo, nil)
-	args, _ := json.Marshal(deleteTriggerArgs{TriggerID: 999})
+	args, _ := json.Marshal(deleteTriggerArgs{TriggerID: "nonexistent"})
 	result, err := tool.InvokableRun(context.Background(), string(args))
 	require.NoError(t, err)
 	assert.Contains(t, result, "not found")
@@ -780,10 +780,10 @@ func TestAllToolInfos_HaveNames(t *testing.T) {
 type mockMCPServerRepo struct{}
 
 func (m *mockMCPServerRepo) List(_ context.Context) ([]MCPServerRecord, error)              { return nil, nil }
-func (m *mockMCPServerRepo) GetByID(_ context.Context, _ uint) (*MCPServerRecord, error)    { return &MCPServerRecord{}, nil }
-func (m *mockMCPServerRepo) Create(_ context.Context, _ *MCPServerRecord) error             { return nil }
-func (m *mockMCPServerRepo) Update(_ context.Context, _ uint, _ *MCPServerRecord) error     { return nil }
-func (m *mockMCPServerRepo) Delete(_ context.Context, _ uint) error                         { return nil }
+func (m *mockMCPServerRepo) GetByID(_ context.Context, _ string) (*MCPServerRecord, error)   { return &MCPServerRecord{}, nil }
+func (m *mockMCPServerRepo) Create(_ context.Context, _ *MCPServerRecord) error              { return nil }
+func (m *mockMCPServerRepo) Update(_ context.Context, _ string, _ *MCPServerRecord) error    { return nil }
+func (m *mockMCPServerRepo) Delete(_ context.Context, _ string) error                        { return nil }
 
 // --- Workflow integration test ---
 
@@ -815,25 +815,25 @@ func TestWorkflow_CreateSchemaWithAgentsAndEdges(t *testing.T) {
 
 	// Step 3: Add agents to schema.
 	addAgent := NewAdminAddAgentToSchemaTool(schemaRepo, reloader)
-	args, _ = json.Marshal(schemaAgentArgs{SchemaID: 1, AgentName: "router"})
+	args, _ = json.Marshal(schemaAgentArgs{SchemaID: "schema-1", AgentName: "router"})
 	_, err = addAgent.InvokableRun(ctx, string(args))
 	require.NoError(t, err)
 
-	args, _ = json.Marshal(schemaAgentArgs{SchemaID: 1, AgentName: "worker"})
+	args, _ = json.Marshal(schemaAgentArgs{SchemaID: "schema-1", AgentName: "worker"})
 	_, err = addAgent.InvokableRun(ctx, string(args))
 	require.NoError(t, err)
 
 	// Step 4: Create edge.
 	createEdge := NewAdminCreateEdgeTool(edgeRepo, reloader)
-	args, _ = json.Marshal(createEdgeArgs{SchemaID: 1, FromAgent: "router", ToAgent: "worker", Type: "flow"})
+	args, _ = json.Marshal(createEdgeArgs{SchemaID: "schema-1", FromAgent: "router", ToAgent: "worker", Type: "flow"})
 	result, err = createEdge.InvokableRun(ctx, string(args))
 	require.NoError(t, err)
 	assert.Contains(t, result, "Edge created")
 
 	// Verify: 2 agents, 1 schema with 2 agents, 1 edge, reloader called 6 times.
 	assert.Len(t, agentRepo.agents, 2)
-	assert.Contains(t, schemaRepo.schemas[1].AgentNames, "router")
-	assert.Contains(t, schemaRepo.schemas[1].AgentNames, "worker")
+	assert.Contains(t, schemaRepo.schemas["schema-1"].AgentNames, "router")
+	assert.Contains(t, schemaRepo.schemas["schema-1"].AgentNames, "worker")
 	assert.Len(t, edgeRepo.edges, 1)
 	assert.Equal(t, int32(6), reloadCount.Load())
 }

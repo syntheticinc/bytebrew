@@ -40,8 +40,8 @@ describe('TasksPage', () => {
   it('renders tasks table', async () => {
     mockApi.listTasksPaginated.mockResolvedValue({
       data: [
-        { id: 1, title: 'Deploy API', agent_name: 'developer', status: 'completed', source: 'api', created_at: '2026-03-17T10:00:00Z' },
-        { id: 2, title: 'Run tests', agent_name: 'developer', status: 'in_progress', source: 'dashboard', created_at: '2026-03-17T11:00:00Z' },
+        { id: '1', title: 'Deploy API', agent_name: 'developer', status: 'completed', source: 'api', created_at: '2026-03-17T10:00:00Z' },
+        { id: '2', title: 'Run tests', agent_name: 'developer', status: 'in_progress', source: 'dashboard', created_at: '2026-03-17T11:00:00Z' },
       ],
       total: 2, page: 1, per_page: 20, total_pages: 1,
     });

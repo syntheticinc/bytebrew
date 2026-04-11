@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"time"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
@@ -75,13 +74,13 @@ type GuardrailCheckResult struct {
 
 // FlowExecutor executes multi-agent flow pipelines (consumer-side interface).
 type FlowExecutor interface {
-	HasOutgoingEdges(ctx context.Context, schemaID uint, agentName string) (bool, error)
+	HasOutgoingEdges(ctx context.Context, schemaID string, agentName string) (bool, error)
 	Execute(ctx context.Context, cfg FlowExecConfig, entryAgent, input string) error
 }
 
 // FlowExecConfig holds flow execution configuration.
 type FlowExecConfig struct {
-	SchemaID    uint
+	SchemaID    string
 	SessionID   string
 	EventStream domain.AgentEventStream
 }
@@ -102,7 +101,7 @@ type EngineAdapter struct {
 	toolCallRecorder ToolCallRecorder
 	// US-002: Flow executor for multi-agent pipelines
 	flowExecutor FlowExecutor
-	schemaID     uint
+	schemaID     string
 	// US-003: Guardrail pipeline
 	guardrail       GuardrailChecker
 	guardrailConfig *GuardrailCheckConfig
@@ -122,7 +121,7 @@ type Config struct {
 	ToolCallRecorder ToolCallRecorder
 	// US-002: Flow executor (nil = no flow execution)
 	FlowExecutor FlowExecutor
-	SchemaID     uint
+	SchemaID     string
 	// US-003: Guardrail pipeline (nil = no guardrails)
 	Guardrail       GuardrailChecker
 	GuardrailConfig *GuardrailCheckConfig
@@ -183,7 +182,7 @@ func (e *EngineAdapter) ExecuteTurn(
 	toolDeps.KnowledgePath = flow.KnowledgePath
 	toolDeps.MCPServers = flow.MCPServers
 	// Set schema scope for memory tools (0 = no explicit schema context)
-	toolDeps.SchemaID = strconv.FormatUint(uint64(e.schemaID), 10)
+	toolDeps.SchemaID = e.schemaID
 
 	toolDeps.ConfirmBefore = flow.ConfirmBefore
 
@@ -281,7 +280,7 @@ func (e *EngineAdapter) ExecuteTurn(
 	}
 
 	// US-002: Execute flow pipeline if agent has outgoing edges
-	if e.flowExecutor != nil && e.schemaID > 0 {
+	if e.flowExecutor != nil && e.schemaID != "" {
 		hasEdges, edgeErr := e.flowExecutor.HasOutgoingEdges(ctx, e.schemaID, e.agentName)
 		if edgeErr != nil {
 			slog.WarnContext(ctx, "[EngineAdapter] failed to check outgoing edges",

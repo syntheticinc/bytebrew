@@ -20,7 +20,7 @@ type EventPublisher interface {
 
 // EventStore persists session events for reliable replay (consumer-side interface).
 type EventStore interface {
-	Append(sessionID, eventType string, proto *pb.SessionEvent, jsonData map[string]interface{}) (int64, error)
+	Append(sessionID, eventType string, proto *pb.SessionEvent, jsonData map[string]interface{}) (string, error)
 }
 
 // EventStream converts domain.AgentEvent to pb.SessionEvent, persists via EventStore,
@@ -132,8 +132,8 @@ func (s *EventStream) persistAndPublish(event *pb.SessionEvent) {
 		if err != nil {
 			slog.Error("failed to persist event", "session_id", s.sessionID, "event_type", eventType, "error", err)
 		}
-		if id > 0 {
-			event.EventId = strconv.FormatInt(id, 10)
+		if id != "" {
+			event.EventId = id
 		}
 	}
 

@@ -4,7 +4,7 @@ import "time"
 
 // LLMProviderModel maps to the "models" table (LLM provider configuration).
 type LLMProviderModel struct {
-	ID              uint      `gorm:"primaryKey"`
+	ID              string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	Name            string    `gorm:"uniqueIndex;not null"`
 	Type            string    `gorm:"type:varchar(30);not null"`
 	BaseURL         string    `gorm:"type:varchar(500)"`

@@ -11,8 +11,8 @@ import (
 
 // GateRecord is an intermediate struct for DB <-> domain mapping.
 type GateRecord struct {
-	ID            uint
-	SchemaID      uint
+	ID            string
+	SchemaID      string
 	Name          string
 	ConditionType string
 	Config        map[string]interface{}
@@ -31,7 +31,7 @@ func NewGORMGateRepository(db *gorm.DB) *GORMGateRepository {
 }
 
 // List returns all gates for a schema.
-func (r *GORMGateRepository) List(ctx context.Context, schemaID uint) ([]GateRecord, error) {
+func (r *GORMGateRepository) List(ctx context.Context, schemaID string) ([]GateRecord, error) {
 	var gates []models.GateModel
 	if err := r.db.WithContext(ctx).Where("schema_id = ?", schemaID).Find(&gates).Error; err != nil {
 		return nil, fmt.Errorf("list gates: %w", err)
@@ -41,7 +41,7 @@ func (r *GORMGateRepository) List(ctx context.Context, schemaID uint) ([]GateRec
 	for _, g := range gates {
 		rec, err := toGateRecord(g)
 		if err != nil {
-			return nil, fmt.Errorf("convert gate %d: %w", g.ID, err)
+			return nil, fmt.Errorf("convert gate %s: %w", g.ID, err)
 		}
 		records = append(records, rec)
 	}
@@ -49,10 +49,10 @@ func (r *GORMGateRepository) List(ctx context.Context, schemaID uint) ([]GateRec
 }
 
 // GetByID returns a single gate by ID.
-func (r *GORMGateRepository) GetByID(ctx context.Context, id uint) (*GateRecord, error) {
+func (r *GORMGateRepository) GetByID(ctx context.Context, id string) (*GateRecord, error) {
 	var gate models.GateModel
-	if err := r.db.WithContext(ctx).First(&gate, id).Error; err != nil {
-		return nil, fmt.Errorf("get gate %d: %w", id, err)
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&gate).Error; err != nil {
+		return nil, fmt.Errorf("get gate %s: %w", id, err)
 	}
 	rec, err := toGateRecord(gate)
 	if err != nil {
@@ -84,7 +84,7 @@ func (r *GORMGateRepository) Create(ctx context.Context, record *GateRecord) err
 }
 
 // Update updates an existing gate by ID.
-func (r *GORMGateRepository) Update(ctx context.Context, id uint, record *GateRecord) error {
+func (r *GORMGateRepository) Update(ctx context.Context, id string, record *GateRecord) error {
 	configJSON, err := json.Marshal(record.Config)
 	if err != nil {
 		return fmt.Errorf("marshal gate config: %w", err)
@@ -98,7 +98,7 @@ func (r *GORMGateRepository) Update(ctx context.Context, id uint, record *GateRe
 		"timeout":        record.Timeout,
 	})
 	if result.Error != nil {
-		return fmt.Errorf("update gate %d: %w", id, result.Error)
+		return fmt.Errorf("update gate %s: %w", id, result.Error)
 	}
 	if result.RowsAffected == 0 {
 		return gorm.ErrRecordNotFound
@@ -107,10 +107,10 @@ func (r *GORMGateRepository) Update(ctx context.Context, id uint, record *GateRe
 }
 
 // Delete removes a gate by ID.
-func (r *GORMGateRepository) Delete(ctx context.Context, id uint) error {
-	result := r.db.WithContext(ctx).Delete(&models.GateModel{}, id)
+func (r *GORMGateRepository) Delete(ctx context.Context, id string) error {
+	result := r.db.WithContext(ctx).Delete(&models.GateModel{}, "id = ?", id)
 	if result.Error != nil {
-		return fmt.Errorf("delete gate %d: %w", id, result.Error)
+		return fmt.Errorf("delete gate %s: %w", id, result.Error)
 	}
 	if result.RowsAffected == 0 {
 		return gorm.ErrRecordNotFound

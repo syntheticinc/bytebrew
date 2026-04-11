@@ -28,19 +28,19 @@ func (r *GORMTriggerRepository) List(ctx context.Context) ([]models.TriggerModel
 }
 
 // ListBySchemaID returns triggers scoped to a specific schema.
-func (r *GORMTriggerRepository) ListBySchemaID(ctx context.Context, schemaID uint) ([]models.TriggerModel, error) {
+func (r *GORMTriggerRepository) ListBySchemaID(ctx context.Context, schemaID string) ([]models.TriggerModel, error) {
 	var triggers []models.TriggerModel
 	if err := r.db.WithContext(ctx).Preload("Agent").Where("schema_id = ?", schemaID).Order("created_at DESC").Find(&triggers).Error; err != nil {
-		return nil, fmt.Errorf("list triggers by schema %d: %w", schemaID, err)
+		return nil, fmt.Errorf("list triggers by schema %s: %w", schemaID, err)
 	}
 	return triggers, nil
 }
 
 // GetByID returns a single trigger model by ID with agent preloaded.
-func (r *GORMTriggerRepository) GetByID(ctx context.Context, id uint) (*models.TriggerModel, error) {
+func (r *GORMTriggerRepository) GetByID(ctx context.Context, id string) (*models.TriggerModel, error) {
 	var trigger models.TriggerModel
-	if err := r.db.WithContext(ctx).Preload("Agent").First(&trigger, id).Error; err != nil {
-		return nil, fmt.Errorf("get trigger %d: %w", id, err)
+	if err := r.db.WithContext(ctx).Preload("Agent").Where("id = ?", id).First(&trigger).Error; err != nil {
+		return nil, fmt.Errorf("get trigger %s: %w", id, err)
 	}
 	return &trigger, nil
 }
@@ -55,7 +55,7 @@ func (r *GORMTriggerRepository) Create(ctx context.Context, model *models.Trigge
 
 // Update updates a trigger model by ID.
 // SchemaID and IsSystem are omitted — they must not change via normal update.
-func (r *GORMTriggerRepository) Update(ctx context.Context, id uint, model *models.TriggerModel) error {
+func (r *GORMTriggerRepository) Update(ctx context.Context, id string, model *models.TriggerModel) error {
 	// Select("*") ensures zero-value fields (e.g. Enabled=false) are persisted.
 	// Omit schema_id so normal updates never overwrite schema scoping.
 	result := r.db.WithContext(ctx).Model(&models.TriggerModel{}).Where("id = ?", id).Select("*").Omit("id", "created_at", "schema_id").Updates(model)
@@ -63,19 +63,19 @@ func (r *GORMTriggerRepository) Update(ctx context.Context, id uint, model *mode
 		return fmt.Errorf("update trigger: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("trigger not found: %d", id)
+		return fmt.Errorf("trigger not found: %s", id)
 	}
 	return nil
 }
 
 // SetSchemaID assigns a trigger to a specific schema. Used for explicit reassignment.
-func (r *GORMTriggerRepository) SetSchemaID(ctx context.Context, triggerID uint, schemaID *uint) error {
+func (r *GORMTriggerRepository) SetSchemaID(ctx context.Context, triggerID string, schemaID *string) error {
 	result := r.db.WithContext(ctx).Model(&models.TriggerModel{}).Where("id = ?", triggerID).Update("schema_id", schemaID)
 	if result.Error != nil {
 		return fmt.Errorf("set trigger schema: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("trigger not found: %d", triggerID)
+		return fmt.Errorf("trigger not found: %s", triggerID)
 	}
 	return nil
 }
@@ -95,37 +95,37 @@ func (r *GORMTriggerRepository) HasEnabledChatTrigger(ctx context.Context, agent
 }
 
 // SetAgentID sets the target agent for a trigger (canvas edge → routing enabled).
-func (r *GORMTriggerRepository) SetAgentID(ctx context.Context, triggerID uint, agentID uint) error {
+func (r *GORMTriggerRepository) SetAgentID(ctx context.Context, triggerID string, agentID string) error {
 	result := r.db.WithContext(ctx).Model(&models.TriggerModel{}).Where("id = ?", triggerID).Update("agent_id", agentID)
 	if result.Error != nil {
 		return fmt.Errorf("set trigger agent: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("trigger not found: %d", triggerID)
+		return fmt.Errorf("trigger not found: %s", triggerID)
 	}
 	return nil
 }
 
 // ClearAgentID removes the target agent from a trigger (canvas edge deleted → routing disabled).
-func (r *GORMTriggerRepository) ClearAgentID(ctx context.Context, triggerID uint) error {
+func (r *GORMTriggerRepository) ClearAgentID(ctx context.Context, triggerID string) error {
 	result := r.db.WithContext(ctx).Model(&models.TriggerModel{}).Where("id = ?", triggerID).Update("agent_id", nil)
 	if result.Error != nil {
 		return fmt.Errorf("clear trigger agent: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("trigger not found: %d", triggerID)
+		return fmt.Errorf("trigger not found: %s", triggerID)
 	}
 	return nil
 }
 
 // Delete removes a trigger model by ID.
-func (r *GORMTriggerRepository) Delete(ctx context.Context, id uint) error {
-	result := r.db.WithContext(ctx).Delete(&models.TriggerModel{}, id)
+func (r *GORMTriggerRepository) Delete(ctx context.Context, id string) error {
+	result := r.db.WithContext(ctx).Delete(&models.TriggerModel{}, "id = ?", id)
 	if result.Error != nil {
 		return fmt.Errorf("delete trigger: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("trigger not found: %d", id)
+		return fmt.Errorf("trigger not found: %s", id)
 	}
 	return nil
 }

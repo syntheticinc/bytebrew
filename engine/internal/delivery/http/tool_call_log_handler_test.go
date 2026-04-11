@@ -45,7 +45,7 @@ func TestToolCallLogHandler_List_WithEELicense(t *testing.T) {
 	svc := &mockToolCallQuerier{
 		entries: []ToolCallEntry{
 			{
-				ID:         1,
+				ID:         "1",
 				SessionID:  "sess-1",
 				AgentName:  "supervisor",
 				ToolName:   "read_file",
@@ -56,7 +56,7 @@ func TestToolCallLogHandler_List_WithEELicense(t *testing.T) {
 				CreatedAt:  now,
 			},
 			{
-				ID:         2,
+				ID:         "2",
 				SessionID:  "sess-1",
 				AgentName:  "code-agent-abc",
 				ToolName:   "execute_command",
@@ -86,7 +86,7 @@ func TestToolCallLogHandler_List_WithEELicense(t *testing.T) {
 	assert.Equal(t, 50, resp.PerPage)
 	assert.Equal(t, 1, resp.TotalPages)
 	assert.Len(t, resp.Data, 2)
-	assert.Equal(t, uint(1), resp.Data[0].ID)
+	assert.Equal(t, "1", resp.Data[0].ID)
 	assert.Equal(t, "read_file", resp.Data[0].ToolName)
 	assert.Equal(t, "supervisor", resp.Data[0].AgentName)
 	assert.Equal(t, "completed", resp.Data[0].Status)
@@ -97,7 +97,7 @@ func TestToolCallLogHandler_List_WithEELicense(t *testing.T) {
 func TestToolCallLogHandler_List_Filters(t *testing.T) {
 	svc := &mockToolCallQuerier{
 		entries: []ToolCallEntry{
-			{ID: 10, SessionID: "sess-42", ToolName: "search_code", Status: "completed"},
+			{ID: "10", SessionID: "sess-42", ToolName: "search_code", Status: "completed"},
 		},
 		total: 1,
 	}

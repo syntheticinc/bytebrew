@@ -4,7 +4,7 @@ import "time"
 
 // MCPServerModel maps to the "mcp_servers" table.
 type MCPServerModel struct {
-	ID             uint      `gorm:"primaryKey"`
+	ID             string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	Name           string    `gorm:"uniqueIndex;not null"`
 	Type           string    `gorm:"type:varchar(20);not null"`
 	Command        string    `gorm:"type:varchar(500)"`
@@ -28,7 +28,7 @@ func (MCPServerModel) TableName() string { return "mcp_servers" }
 
 // MCPServerRuntimeModel maps to the "mcp_server_runtime" table (1:1 with mcp_servers).
 type MCPServerRuntimeModel struct {
-	MCPServerID   uint       `gorm:"primaryKey"`
+	MCPServerID   string     `gorm:"primaryKey;type:uuid"`
 	Status        string     `gorm:"type:varchar(20);not null;default:disconnected"`
 	StatusMessage string     `gorm:"type:varchar(500)"`
 	ToolsCount    int        `gorm:"not null;default:0"`

@@ -26,13 +26,13 @@ func (t *adminListEdgesTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 		Name: "admin_list_edges",
 		Desc: "Lists all edges in a schema. Edges connect agents: flow (sequential), transfer (hand-off), loop (cycle), spawn (parallel).",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"schema_id": {Type: schema.Integer, Desc: "Schema ID", Required: true},
+			"schema_id": {Type: schema.String, Desc: "Schema ID", Required: true},
 		}),
 	}, nil
 }
 
 type listEdgesArgs struct {
-	SchemaID uint `json:"schema_id"`
+	SchemaID string `json:"schema_id"`
 }
 
 func (t *adminListEdgesTool) InvokableRun(ctx context.Context, argsJSON string, _ ...tool.Option) (string, error) {
@@ -40,7 +40,7 @@ func (t *adminListEdgesTool) InvokableRun(ctx context.Context, argsJSON string, 
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return fmt.Sprintf("[ERROR] Invalid arguments: %v", err), nil
 	}
-	if args.SchemaID == 0 {
+	if args.SchemaID == "" {
 		return "[ERROR] schema_id is required", nil
 	}
 
@@ -50,17 +50,17 @@ func (t *adminListEdgesTool) InvokableRun(ctx context.Context, argsJSON string, 
 	}
 
 	if len(edges) == 0 {
-		return fmt.Sprintf("No edges in schema %d.", args.SchemaID), nil
+		return fmt.Sprintf("No edges in schema %s.", args.SchemaID), nil
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("## %d edges in schema %d\n\n", len(edges), args.SchemaID))
+	sb.WriteString(fmt.Sprintf("## %d edges in schema %s\n\n", len(edges), args.SchemaID))
 	for _, e := range edges {
 		label := ""
 		if e.Label != "" {
 			label = fmt.Sprintf(" [%s]", e.Label)
 		}
-		sb.WriteString(fmt.Sprintf("- id=%d: %s --%s--> %s%s\n", e.ID, e.FromAgent, e.Type, e.ToAgent, label))
+		sb.WriteString(fmt.Sprintf("- id=%s: %s --%s--> %s%s\n", e.ID, e.FromAgent, e.Type, e.ToAgent, label))
 	}
 	return sb.String(), nil
 }
@@ -81,7 +81,7 @@ func (t *adminCreateEdgeTool) Info(_ context.Context) (*schema.ToolInfo, error) 
 		Name: "admin_create_edge",
 		Desc: "Creates an edge between two agents in a schema. Types: flow (sequential), transfer (hand-off), loop (cycle back), spawn (parallel execution).",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"schema_id":  {Type: schema.Integer, Desc: "Schema ID", Required: true},
+			"schema_id":  {Type: schema.String, Desc: "Schema ID", Required: true},
 			"from_agent": {Type: schema.String, Desc: "Source agent name", Required: true},
 			"to_agent":   {Type: schema.String, Desc: "Target agent name", Required: true},
 			"type":       {Type: schema.String, Desc: "Edge type: flow, transfer, loop, or spawn", Required: true},
@@ -91,7 +91,7 @@ func (t *adminCreateEdgeTool) Info(_ context.Context) (*schema.ToolInfo, error) 
 }
 
 type createEdgeArgs struct {
-	SchemaID  uint   `json:"schema_id"`
+	SchemaID  string `json:"schema_id"`
 	FromAgent string `json:"from_agent"`
 	ToAgent   string `json:"to_agent"`
 	Type      string `json:"type"`
@@ -103,7 +103,7 @@ func (t *adminCreateEdgeTool) InvokableRun(ctx context.Context, argsJSON string,
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return fmt.Sprintf("[ERROR] Invalid arguments: %v", err), nil
 	}
-	if args.SchemaID == 0 {
+	if args.SchemaID == "" {
 		return "[ERROR] schema_id is required", nil
 	}
 	if args.FromAgent == "" {
@@ -138,7 +138,7 @@ func (t *adminCreateEdgeTool) InvokableRun(ctx context.Context, argsJSON string,
 	}
 
 	slog.InfoContext(ctx, "[AdminCreateEdge] created", "schema_id", args.SchemaID, "from", args.FromAgent, "to", args.ToAgent, "type", args.Type)
-	return fmt.Sprintf("Edge created (id=%d): %s --%s--> %s in schema %d.", record.ID, args.FromAgent, args.Type, args.ToAgent, args.SchemaID), nil
+	return fmt.Sprintf("Edge created (id=%s): %s --%s--> %s in schema %s.", record.ID, args.FromAgent, args.Type, args.ToAgent, args.SchemaID), nil
 }
 
 // --- admin_delete_edge ---
@@ -157,13 +157,13 @@ func (t *adminDeleteEdgeTool) Info(_ context.Context) (*schema.ToolInfo, error) 
 		Name: "admin_delete_edge",
 		Desc: "Deletes an edge by ID.",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"edge_id": {Type: schema.Integer, Desc: "Edge ID to delete", Required: true},
+			"edge_id": {Type: schema.String, Desc: "Edge ID to delete", Required: true},
 		}),
 	}, nil
 }
 
 type deleteEdgeArgs struct {
-	EdgeID uint `json:"edge_id"`
+	EdgeID string `json:"edge_id"`
 }
 
 func (t *adminDeleteEdgeTool) InvokableRun(ctx context.Context, argsJSON string, _ ...tool.Option) (string, error) {
@@ -171,13 +171,13 @@ func (t *adminDeleteEdgeTool) InvokableRun(ctx context.Context, argsJSON string,
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return fmt.Sprintf("[ERROR] Invalid arguments: %v", err), nil
 	}
-	if args.EdgeID == 0 {
+	if args.EdgeID == "" {
 		return "[ERROR] edge_id is required", nil
 	}
 
 	if err := t.repo.Delete(ctx, args.EdgeID); err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return fmt.Sprintf("Edge not found: %d", args.EdgeID), nil
+			return fmt.Sprintf("Edge not found: %s", args.EdgeID), nil
 		}
 		return fmt.Sprintf("[ERROR] Failed to delete edge: %v", err), nil
 	}
@@ -187,5 +187,5 @@ func (t *adminDeleteEdgeTool) InvokableRun(ctx context.Context, argsJSON string,
 	}
 
 	slog.InfoContext(ctx, "[AdminDeleteEdge] deleted", "edge_id", args.EdgeID)
-	return fmt.Sprintf("Edge %d deleted successfully.", args.EdgeID), nil
+	return fmt.Sprintf("Edge %s deleted successfully.", args.EdgeID), nil
 }

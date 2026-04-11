@@ -51,8 +51,8 @@ func newAuditRouter(handler *AuditHandler) *chi.Mux {
 func TestAuditHandler_List(t *testing.T) {
 	svc := &mockAuditService{
 		logs: []AuditResponse{
-			{ID: 1, Timestamp: "2026-03-19T10:00:00Z", ActorType: "admin", ActorID: "admin@test.com", Action: "create", Resource: "agent", Details: "created agent foo"},
-			{ID: 2, Timestamp: "2026-03-19T09:00:00Z", ActorType: "api_token", ActorID: "tok-123", Action: "delete", Resource: "trigger", Details: "deleted trigger bar"},
+			{ID: "1", Timestamp: "2026-03-19T10:00:00Z", ActorType: "admin", ActorID: "admin@test.com", Action: "create", Resource: "agent", Details: "created agent foo"},
+			{ID: "2", Timestamp: "2026-03-19T09:00:00Z", ActorType: "api_token", ActorID: "tok-123", Action: "delete", Resource: "trigger", Details: "deleted trigger bar"},
 		},
 		total: 2,
 	}
@@ -73,7 +73,7 @@ func TestAuditHandler_List(t *testing.T) {
 	assert.Equal(t, 50, resp.PerPage)
 	assert.Equal(t, 1, resp.TotalPages)
 	assert.Len(t, resp.Data, 2)
-	assert.Equal(t, uint(1), resp.Data[0].ID)
+	assert.Equal(t, "1", resp.Data[0].ID)
 	assert.Equal(t, "admin", resp.Data[0].ActorType)
 
 	// Verify defaults passed to service
@@ -88,7 +88,7 @@ func TestAuditHandler_List(t *testing.T) {
 
 func TestAuditHandler_List_WithFilters(t *testing.T) {
 	svc := &mockAuditService{
-		logs:  []AuditResponse{{ID: 5, Timestamp: "2026-03-15T12:00:00Z", ActorType: "admin", ActorID: "admin", Action: "create", Resource: "agent"}},
+		logs:  []AuditResponse{{ID: "5", Timestamp: "2026-03-15T12:00:00Z", ActorType: "admin", ActorID: "admin", Action: "create", Resource: "agent"}},
 		total: 1,
 	}
 	handler := NewAuditHandler(svc)

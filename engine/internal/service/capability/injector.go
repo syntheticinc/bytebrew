@@ -15,7 +15,7 @@ type CapabilityReader interface {
 
 // CapabilityRecord mirrors the repository record for the service boundary.
 type CapabilityRecord struct {
-	ID        uint
+	ID        string
 	AgentName string
 	Type      string
 	Config    map[string]interface{}

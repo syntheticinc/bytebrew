@@ -20,7 +20,7 @@ import (
 // AgentModelResolver looks up the ModelID associated with a named agent.
 // Returns nil when the agent has no per-agent model configured.
 type AgentModelResolver interface {
-	ResolveModelID(agentName string) *uint
+	ResolveModelID(agentName string) *string
 }
 
 // EngineTurnExecutorFactory creates EngineAdapter-based TurnExecutors for Supervisor mode.

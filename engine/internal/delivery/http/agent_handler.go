@@ -27,7 +27,7 @@ type AgentInfo struct {
 // AgentDetail is the full agent information returned by the detail endpoint.
 type AgentDetail struct {
 	AgentInfo
-	ModelID        *uint            `json:"model_id,omitempty"`
+	ModelID        *string          `json:"model_id,omitempty"`
 	SystemPrompt   string           `json:"system_prompt"`
 	KnowledgePath  string           `json:"knowledge_path,omitempty"`
 	Tools          []string         `json:"tools"`
@@ -54,7 +54,7 @@ type AgentEscalation struct {
 type CreateAgentRequest struct {
 	Name           string           `json:"name"`
 	Model          string           `json:"model,omitempty"`
-	ModelID        *uint            `json:"model_id,omitempty"`
+	ModelID        *string          `json:"model_id,omitempty"`
 	SystemPrompt   string           `json:"system_prompt"`
 	Kit            string           `json:"kit,omitempty"`
 	KnowledgePath  string           `json:"knowledge_path,omitempty"`

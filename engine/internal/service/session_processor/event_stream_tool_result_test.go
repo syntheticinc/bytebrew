@@ -19,8 +19,8 @@ func (m *mockPublisher) PublishEvent(_ string, event *pb.SessionEvent) {
 
 type mockStore struct{}
 
-func (m *mockStore) Append(_, _ string, _ *pb.SessionEvent, _ map[string]interface{}) (int64, error) {
-	return 1, nil
+func (m *mockStore) Append(_, _ string, _ *pb.SessionEvent, _ map[string]interface{}) (string, error) {
+	return "mock-event-id", nil
 }
 
 func TestSend_ToolResult_UsesFullResultFromMetadata(t *testing.T) {

@@ -33,7 +33,7 @@ function generateShortId(): string {
 
 export function makeNode(
   agent: AgentDetail,
-  modelMap: Map<number, string>,
+  modelMap: Map<string, string>,
   position: { x: number; y: number },
   onSelect: (name: string) => void,
   onDelete: (name: string) => void,
@@ -96,7 +96,7 @@ interface UseCanvasNodesParams {
   handleSelect: (name: string) => void;
   handleDeleteRequest: (name: string) => void;
   /** When set, delete = remove from schema (not delete agent). */
-  currentSchemaId?: number | null;
+  currentSchemaId?: string | null;
 }
 
 export function useCanvasNodes({
@@ -236,7 +236,7 @@ export function useCanvasNodes({
     const pos = canvasPosition ?? { x: Math.random() * 200 + 50, y: Math.random() * 200 + 50 };
 
     if (isPrototype) {
-      const mockId = Date.now();
+      const mockId = String(Date.now());
       const newNode = makeTriggerNode(
         { id: mockId, type: triggerType, title, webhook_path: webhookPath, enabled: true, agent_name: '', schedule: '', description: '', created_at: new Date().toISOString() } as Trigger,
         pos,

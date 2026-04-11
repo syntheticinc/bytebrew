@@ -18,7 +18,7 @@ export default function TriggerConfigPanel({ trigger, setTrigger, setNodes, setE
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const triggerId = trigger.id as number;
+  const triggerId = trigger.id as string;
   const triggerNodeId = `trigger-${triggerId}`;
 
   function updateField(field: string, value: unknown) {

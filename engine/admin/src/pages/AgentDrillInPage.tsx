@@ -363,7 +363,7 @@ function AgentDrillInInner() {
               <label className="block text-sm font-medium text-brand-light mb-1">Model</label>
               <select
                 value={agent?.model_id ?? ''}
-                onChange={(e) => updateAgentField('model_id', e.target.value ? Number(e.target.value) : undefined)}
+                onChange={(e) => updateAgentField('model_id', e.target.value || undefined)}
                 className="w-full px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light font-mono focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
               >
                 <option value="">Select model...</option>
@@ -545,7 +545,7 @@ function AgentDrillInInner() {
                     capability={cap}
                     onChange={(updated) => updateCapability(i, updated)}
                     onRemove={() => removeCapability(i)}
-                    models={models as { id: number; name: string; model_name: string }[]}
+                    models={models as { id: string; name: string; model_name: string }[]}
                   />
                 </div>
               ))}
