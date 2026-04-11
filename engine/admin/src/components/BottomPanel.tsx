@@ -2,6 +2,7 @@ import React, { useRef, useCallback, useEffect, useState } from 'react';
 import { useLocation, matchPath } from 'react-router-dom';
 import { useBottomPanel } from '../hooks/useBottomPanel';
 import { useSSEChat } from '../hooks/useSSEChat';
+import type { ToolCall } from '../lib/sse';
 import { dispatchAdminChanged } from '../hooks/useAdminRefresh';
 import SchemaSelector from './SchemaSelector';
 import TestFlowTab from './TestFlowTab';
@@ -87,6 +88,13 @@ function BrewingSpinner() {
 }
 
 /* ── Example prompts for empty state (m-01) ────────────────────────────────── */
+/** Strip <think>...</think> blocks from LLM output for display. */
+function stripThinkTagsForRender(raw: string): string {
+  let cleaned = raw.replace(/<think>[\s\S]*?<\/think>/g, '');
+  cleaned = cleaned.replace(/<think>[\s\S]*$/, '');
+  return cleaned.replace(/^\s+/, '');
+}
+
 const EXAMPLE_PROMPTS = [
   'Create a support agent with escalation',
   'List all agents in this schema',
@@ -108,6 +116,7 @@ export default function BottomPanel() {
   const [assistantInput, setAssistantInput] = useState('');
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
   const [maxContextTokens, setMaxContextTokens] = useState<number | null>(null);
+  const [baselineTokens, setBaselineTokens] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const assistantInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -115,10 +124,10 @@ export default function BottomPanel() {
   const effectiveSchema = lockedSchema ?? selectedSchema ?? undefined;
 
   const assistantPersistenceKey = effectiveSchema ? `bb_assistant_${effectiveSchema}` : undefined;
-  const { messages, sendMessage, isStreaming, isRestoring, resetSession, tokenUsage } = useSSEChat({
+  const { messages, sendMessage, isStreaming, isRestoring, resetSession, tokenUsage, contextTokens } = useSSEChat({
     endpoint: `/api/v1/admin/assistant/chat`,
     agentName: ASSISTANT_AGENT,
-    schemaContext: effectiveSchema,
+    schemaContext: effectiveSchema === 'builder-schema' ? undefined : effectiveSchema,
     persistenceKey: assistantPersistenceKey,
     fetchMessages: (sid) => api.getSessionEvents(sid),
     onToolResult: (tool) => {
@@ -130,7 +139,13 @@ export default function BottomPanel() {
 
   useEffect(() => {
     api.getAgent(ASSISTANT_AGENT)
-      .then((d) => setMaxContextTokens(d.max_context_size || null))
+      .then((d) => {
+        setMaxContextTokens(d.max_context_size || null);
+        // Estimate baseline context: system prompt ~4 chars/token
+        if (d.system_prompt) {
+          setBaselineTokens(Math.ceil(d.system_prompt.length / 4));
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -182,6 +197,49 @@ export default function BottomPanel() {
 
   const toggleTool = (key: string) => {
     setExpandedTools((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const renderToolCall = (msgId: string, tc: ToolCall, i: number) => {
+    const key = `${msgId}-tc-${i}`;
+    const isExpanded = expandedTools[key] ?? false;
+    return (
+      <button
+        key={i}
+        onClick={() => toggleTool(key)}
+        className="w-full text-left px-2 py-1 bg-brand-dark border border-brand-shade3/15 rounded text-[11px] font-mono hover:border-brand-shade3/30 transition-colors"
+      >
+        <div className="flex items-center gap-1.5">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-400 flex-shrink-0">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+          </svg>
+          <span className="text-blue-400 font-medium">{tc.tool}</span>
+          {tc.output !== undefined && (
+            <span className="text-emerald-400/60 ml-1">done</span>
+          )}
+          <svg
+            width="8" height="8" viewBox="0 0 24 24" fill="currentColor"
+            className={`text-brand-shade3 transition-transform ml-auto ${isExpanded ? 'rotate-90' : ''}`}
+          >
+            <path d="M8 5l10 7-10 7V5z" />
+          </svg>
+        </div>
+        {isExpanded && (
+          <div className="mt-1 space-y-1 text-[10px]">
+            {tc.input && (
+              <div className="text-brand-shade3 whitespace-pre-wrap break-all">
+                <span className="text-brand-shade3/60">Input: </span>{tc.input}
+              </div>
+            )}
+            {tc.output !== undefined && (
+              <div className="text-emerald-400/80 whitespace-pre-wrap break-all">
+                <span className="text-emerald-400/50">Output: </span>{tc.output}
+              </div>
+            )}
+          </div>
+        )}
+      </button>
+    );
   };
 
   return (
@@ -334,65 +392,50 @@ export default function BottomPanel() {
                     if (msg.role === 'assistant' && msg.streaming && msg.content === '' && (!msg.toolCalls || msg.toolCalls.length === 0)) return null;
                     return (
                       <div key={msg.id}>
-                        {/* Text content */}
-                        {msg.content && (
-                          <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[80%] px-3 py-2 rounded-card text-xs font-mono break-words ${
-                              msg.role === 'user'
-                                ? 'bg-brand-accent/20 text-brand-light'
-                                : 'bg-brand-dark border border-brand-shade3/20 text-brand-shade2'
-                            }`}>
-                              {msg.role === 'assistant'
-                                ? renderMarkdown(msg.content, !!msg.streaming && msg.content !== '')
-                                : msg.content}
+                        {msg.role === 'user' ? (
+                          /* User message */
+                          <div className="flex justify-end">
+                            <div className="max-w-[80%] px-3 py-2 rounded-card text-xs font-mono break-words bg-brand-accent/20 text-brand-light">
+                              {msg.content}
                             </div>
                           </div>
-                        )}
-                        {/* Tool calls rendered AFTER text */}
-                        {msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0 && (
-                          <div className="space-y-1 mt-1 ml-0">
-                            {msg.toolCalls.map((tc, i) => {
-                              const key = `${msg.id}-tc-${i}`;
-                              const isExpanded = expandedTools[key] ?? false;
-                              return (
-                                <button
-                                  key={i}
-                                  onClick={() => toggleTool(key)}
-                                  className="w-full text-left px-2 py-1 bg-brand-dark border border-brand-shade3/15 rounded text-[11px] font-mono hover:border-brand-shade3/30 transition-colors"
-                                >
-                                  <div className="flex items-center gap-1.5">
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-400 flex-shrink-0">
-                                      <circle cx="12" cy="12" r="3" />
-                                      <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
-                                    </svg>
-                                    <span className="text-blue-400 font-medium">{tc.tool}</span>
-                                    {tc.output !== undefined && (
-                                      <span className="text-emerald-400/60 ml-1">done</span>
-                                    )}
-                                    <svg
-                                      width="8" height="8" viewBox="0 0 24 24" fill="currentColor"
-                                      className={`text-brand-shade3 transition-transform ml-auto ${isExpanded ? 'rotate-90' : ''}`}
-                                    >
-                                      <path d="M8 5l10 7-10 7V5z" />
-                                    </svg>
-                                  </div>
-                                  {isExpanded && (
-                                    <div className="mt-1 space-y-1 text-[10px]">
-                                      {tc.input && (
-                                        <div className="text-brand-shade3 whitespace-pre-wrap break-all">
-                                          <span className="text-brand-shade3/60">Input: </span>{tc.input}
-                                        </div>
-                                      )}
-                                      {tc.output !== undefined && (
-                                        <div className="text-emerald-400/80 whitespace-pre-wrap break-all">
-                                          <span className="text-emerald-400/50">Output: </span>{tc.output}
-                                        </div>
-                                      )}
+                        ) : msg.segments && msg.segments.length > 0 ? (
+                          /* Assistant: render interleaved segments in historical order */
+                          <div className="space-y-1">
+                            {(() => {
+                              let toolIdx = 0;
+                              return msg.segments!.map((seg, si) => {
+                                if (seg.type === 'text') {
+                                  const stripped = stripThinkTagsForRender(seg.content);
+                                  if (!stripped) return null;
+                                  return (
+                                    <div key={si} className="flex justify-start">
+                                      <div className="max-w-[80%] px-3 py-2 rounded-card text-xs font-mono break-words bg-brand-dark border border-brand-shade3/20 text-brand-shade2">
+                                        {renderMarkdown(stripped, !!msg.streaming && si === msg.segments!.length - 1)}
+                                      </div>
                                     </div>
-                                  )}
-                                </button>
-                              );
-                            })}
+                                  );
+                                }
+                                const idx = toolIdx++;
+                                return <div key={si}>{renderToolCall(msg.id, seg.toolCall, idx)}</div>;
+                              });
+                            })()}
+                          </div>
+                        ) : (
+                          /* Fallback: legacy rendering (restored messages without segments) */
+                          <div>
+                            {msg.content && (
+                              <div className="flex justify-start">
+                                <div className="max-w-[80%] px-3 py-2 rounded-card text-xs font-mono break-words bg-brand-dark border border-brand-shade3/20 text-brand-shade2">
+                                  {renderMarkdown(msg.content, !!msg.streaming && msg.content !== '')}
+                                </div>
+                              </div>
+                            )}
+                            {msg.toolCalls && msg.toolCalls.length > 0 && (
+                              <div className="space-y-1 mt-1 ml-0">
+                                {msg.toolCalls.map((tc, i) => renderToolCall(msg.id, tc, i))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -426,7 +469,7 @@ export default function BottomPanel() {
 
       {/* Context usage bar — assistant tab only */}
       {!collapsed && tab === 'assistant' && (
-        <ContextUsageBar maxContextTokens={maxContextTokens} totalTokens={tokenUsage} />
+        <ContextUsageBar maxContextTokens={maxContextTokens} totalTokens={tokenUsage} contextTokens={contextTokens} baselineTokens={baselineTokens} />
       )}
 
       {/* Message input — assistant tab only (testflow has its own) */}

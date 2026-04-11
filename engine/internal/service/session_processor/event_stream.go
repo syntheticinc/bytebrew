@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -27,10 +26,11 @@ type EventStore interface {
 // and publishes via EventPublisher.
 // Implements domain.AgentEventStream.
 type EventStream struct {
-	sessionID   string
-	publisher   EventPublisher
-	store       EventStore
-	totalTokens int // accumulated from EventTypeTokenUsage, included in ProcessingStopped
+	sessionID     string
+	publisher     EventPublisher
+	store         EventStore
+	totalTokens   int // accumulated from EventTypeTokenUsage, included in ProcessingStopped
+	contextTokens int // actual context window size at last model call (from ContextRewriter)
 }
 
 // NewEventStream creates a new event stream that persists and publishes events.
@@ -49,6 +49,9 @@ func (s *EventStream) Send(event *domain.AgentEvent) error {
 	if event.Type == domain.EventTypeTokenUsage {
 		if tokens, ok := event.Metadata["total_tokens"].(int); ok {
 			s.totalTokens = tokens
+		}
+		if ctx, ok := event.Metadata["context_tokens"].(int); ok {
+			s.contextTokens = ctx
 		}
 		return nil
 	}
@@ -77,14 +80,20 @@ func (s *EventStream) PublishProcessingStarted() {
 }
 
 // PublishProcessingStopped sends a PROCESSING_STOPPED event.
-// If token usage was reported during the turn, it is included in the Content field.
+// If token usage was reported during the turn, it is included in the Content field as JSON.
 func (s *EventStream) PublishProcessingStopped() {
 	evt := &pb.SessionEvent{
 		SessionId: s.sessionID,
 		Type:      pb.SessionEventType_SESSION_EVENT_PROCESSING_STOPPED,
 	}
 	if s.totalTokens > 0 {
-		evt.Content = strconv.Itoa(s.totalTokens)
+		data := map[string]int{"total_tokens": s.totalTokens}
+		if s.contextTokens > 0 {
+			data["context_tokens"] = s.contextTokens
+		}
+		if encoded, err := json.Marshal(data); err == nil {
+			evt.Content = string(encoded)
+		}
 	}
 	s.persistAndPublish(evt)
 }

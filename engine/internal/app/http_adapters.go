@@ -1708,8 +1708,20 @@ func convertSessionEventToSSE(event *pb.SessionEvent, sessionID string) *deliver
 			"session_id": sessionID,
 		}
 		if content := event.GetContent(); content != "" {
-			if tokens, err := strconv.Atoi(content); err == nil && tokens > 0 {
-				data["total_tokens"] = tokens
+			// Try JSON first (new format: {"total_tokens":N,"context_tokens":N})
+			var tokenData map[string]int
+			if err := json.Unmarshal([]byte(content), &tokenData); err == nil {
+				if t, ok := tokenData["total_tokens"]; ok && t > 0 {
+					data["total_tokens"] = t
+				}
+				if c, ok := tokenData["context_tokens"]; ok && c > 0 {
+					data["context_tokens"] = c
+				}
+			} else {
+				// Legacy fallback: plain int format
+				if tokens, err := strconv.Atoi(content); err == nil && tokens > 0 {
+					data["total_tokens"] = tokens
+				}
 			}
 		}
 		return sseEventJSON("done", data)

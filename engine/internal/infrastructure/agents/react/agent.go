@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
@@ -31,6 +32,7 @@ type Agent struct {
 	messageModifier   *MessageModifier
 	toolCallRecorder  ToolCallRecorder
 	maxTurnDuration   int // seconds, max time for a single LLM stream turn (0 = default 120s)
+	contextTokens     *atomic.Int64 // last context size reported by ContextRewriter (agent-scoped, survives across turns)
 }
 
 
@@ -139,6 +141,9 @@ func NewAgent(ctx context.Context, config AgentConfig) (*Agent, error) {
 
 	// modifier is declared outside the if block so it's accessible in the return statement
 	var modifier *MessageModifier
+	// contextTokensCounter is agent-scoped: created before react.NewAgent(), captured by
+	// ContextRewriter closure, stored in our Agent struct. Survives across turns and retries.
+	var contextTokensCounter *atomic.Int64
 
 	// Add AgentConfig if provided
 	if config.AgentConfig != nil {
@@ -184,9 +189,20 @@ func NewAgent(ctx context.Context, config AgentConfig) (*Agent, error) {
 
 		// Add MessageRewriter (ContextRewriter) if max context size is set
 		if config.AgentConfig.MaxContextSize > 0 {
+			// Agent-scoped counter: created before react.NewAgent(), captured by rewriter closure,
+			// stored in our Agent struct. Survives across per-turn NewBuilder calls and error-retries.
+			contextTokensCounter = &atomic.Int64{}
+			// Eino's MessageRewriter receives conversation messages WITHOUT system prompt
+			// (system prompt is injected separately by MessageModifier).
+			// Estimate system prompt tokens so context_tokens reflects the full context window usage.
+			systemPromptTokens := 0
+			if config.AgentConfig.Prompts != nil {
+				systemPromptTokens = len(config.AgentConfig.Prompts.SystemPrompt) / 4 // ~4 chars/token
+			}
 			agentConfig.MessageRewriter = agents.NewContextRewriterWithLogging(
 				config.AgentConfig.MaxContextSize,
 				contextLogger,
+				func(n int) { contextTokensCounter.Store(int64(n + systemPromptTokens)) },
 			)
 		}
 
@@ -229,7 +245,17 @@ func NewAgent(ctx context.Context, config AgentConfig) (*Agent, error) {
 		messageModifier:   modifier,
 		toolCallRecorder:  config.ToolCallRecorder,
 		maxTurnDuration:   maxTurnDuration,
+		contextTokens:     contextTokensCounter,
 	}, nil
+}
+
+// lastContextTokens returns the last context size reported by the ContextRewriter.
+// Returns 0 if no rewriter is configured or it hasn't fired yet.
+func (a *Agent) lastContextTokens() int {
+	if a.contextTokens == nil {
+		return 0
+	}
+	return int(a.contextTokens.Load())
 }
 
 // GetSessionDirName returns the session directory name from the context logger
@@ -394,8 +420,8 @@ func (a *Agent) RunWithCallbacks(ctx context.Context, input string, eventCallbac
 		})
 	}
 
-	// Emit cumulative token usage for this turn
-	cb.EmitTokenUsage(ctx)
+	// Emit cumulative token usage for this turn (with context window size from rewriter)
+	cb.EmitTokenUsage(ctx, a.lastContextTokens())
 
 	if a.contextLogger != nil {
 		a.contextLogger.LogContextSummary(ctx, messages)
@@ -573,7 +599,7 @@ func (a *Agent) Stream(ctx context.Context, input string, callback func(chunk st
 	cb.FinalizeAccumulatedText(ctx)
 
 	// Emit cumulative token usage for this turn (consumed by EventStream for the done event)
-	cb.EmitTokenUsage(ctx)
+	cb.EmitTokenUsage(ctx, a.lastContextTokens())
 
 	if finalContent != "" {
 		messages = append(messages, &schema.Message{

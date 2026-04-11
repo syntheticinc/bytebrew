@@ -12,12 +12,16 @@ function usageColor(pct: number): string {
 interface ContextUsageBarProps {
   maxContextTokens: number | null;
   totalTokens?: number | null;
+  contextTokens?: number | null;
+  baselineTokens?: number | null;
 }
 
-export default function ContextUsageBar({ maxContextTokens, totalTokens }: ContextUsageBarProps) {
+export default function ContextUsageBar({ maxContextTokens, totalTokens, contextTokens, baselineTokens }: ContextUsageBarProps) {
   if (!maxContextTokens) return null;
 
-  const pct = totalTokens ? Math.min(100, (totalTokens / maxContextTokens) * 100) : 0;
+  // Priority: contextTokens (real) > totalTokens (cumulative fallback) > baselineTokens (system prompt estimate)
+  const displayTokens = contextTokens ?? totalTokens ?? baselineTokens;
+  const pct = displayTokens ? Math.min(100, (displayTokens / maxContextTokens) * 100) : 0;
 
   return (
     <div className="px-3 py-1 flex items-center gap-2 border-t border-brand-shade3/10 flex-shrink-0">
@@ -30,7 +34,7 @@ export default function ContextUsageBar({ maxContextTokens, totalTokens }: Conte
         )}
       </div>
       <span className="text-[10px] text-brand-shade3 whitespace-nowrap">
-        {totalTokens ? formatTokens(totalTokens) : '\u2014'} / {formatTokens(maxContextTokens)} tokens
+        {displayTokens ? formatTokens(displayTokens) : '\u2014'} / {formatTokens(maxContextTokens)} context
       </span>
     </div>
   );

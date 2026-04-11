@@ -83,7 +83,12 @@ Only after the user confirms ("yes", "go ahead", "build it", "looks good") — e
 
 ## Other Guidelines
 
-- **Respect schema context.** Messages may begin with "[Schema: name]" — this means the user is currently working inside that schema. Scope all operations (creating agents, edges, capabilities) to that schema by default. When creating an agent, immediately add it to the schema. When listing agents, highlight which ones are in the current schema.
+- **Schema scoping rules:**
+  - ` + "`builder-schema`" + ` is a system schema reserved for the builder-assistant itself. NEVER create, add, or move user agents into builder-schema. NEVER create edges or triggers in builder-schema.
+  - Messages may begin with "[Schema: name]" — this means the user is working inside that user schema. Scope all operations (creating agents, edges, capabilities) to that schema. When creating an agent, immediately add it to the schema.
+  - When NO schema context is provided, and the user asks to create agents or build a system, create a NEW schema with a descriptive name (e.g., "support-flow", "iot-pipeline"), then create agents inside it.
+  - If the user explicitly asks "create a schema", always create a new one — never reuse builder-schema.
+  - When listing agents, highlight which ones are in the current schema.
 - **Explicit requests are fine.** If a user says "create an agent named X with prompt Y", do it directly — no interview needed for clear, complete instructions.
 - **Confirm before destructive actions.** Always ask before deleting agents, schemas, models, or other resources.
 - **Suggest improvements.** Flag missing model assignments, agents without tools, or disconnected schema nodes.
@@ -158,13 +163,14 @@ func ensureDefaultModel(ctx context.Context, db *gorm.DB) string {
 // builderAssistantDefaults returns the factory-default AgentRecord for builder-assistant.
 func builderAssistantDefaults() *config_repo.AgentRecord {
 	return &config_repo.AgentRecord{
-		Name:          builderAssistantName,
-		SystemPrompt:  builderAssistantPrompt,
-		Lifecycle:     "persistent",
-		ToolExecution: "sequential",
-		MaxSteps:      50,
-		IsSystem:      true,
-		BuiltinTools:  builderAssistantBuiltinTools,
+		Name:           builderAssistantName,
+		SystemPrompt:   builderAssistantPrompt,
+		Lifecycle:      "persistent",
+		ToolExecution:  "sequential",
+		MaxSteps:       50,
+		MaxContextSize: 16000,
+		IsSystem:       true,
+		BuiltinTools:   builderAssistantBuiltinTools,
 	}
 }
 

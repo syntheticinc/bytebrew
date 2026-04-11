@@ -647,7 +647,7 @@ function PoliciesConfig({ cap, onChange }: PanelProps) {
 // ---------------------------------------------------------------------------
 
 function getSummary(cap: CapabilityConfig): string {
-  const c = cap.config;
+  const c = cap.config ?? {} as Record<string, unknown>;
   switch (cap.type) {
     case 'memory': {
       const parts: string[] = ['Per-schema'];

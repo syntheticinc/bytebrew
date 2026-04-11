@@ -4,11 +4,16 @@ import type { EventResponse } from '../types';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+export type MessageSegment =
+  | { type: 'text'; content: string }
+  | { type: 'tool_call'; toolCall: ToolCall };
+
 export interface SSEMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   toolCalls?: ToolCall[];
+  segments?: MessageSegment[];
   streaming?: boolean;
 }
 
@@ -32,6 +37,7 @@ export interface UseSSEChatReturn {
   error: string | null;
   sessionId: string;
   tokenUsage: number | null;
+  contextTokens: number | null;
   resetSession: () => void;
   stopStreaming: () => void;
   loadSession: (sessionId: string) => Promise<void>;
@@ -153,6 +159,7 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
     persistenceKey ? (safeGetItem(persistenceKey) ?? '') : '',
   );
   const [tokenUsage, setTokenUsage] = useState<number | null>(null);
+  const [contextTokens, setContextTokens] = useState<number | null>(null);
 
   const sessionIdRef = useRef(sessionId);
   const abortRef = useRef<AbortController | null>(null);
@@ -218,6 +225,7 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
     restoreAbortRef.current?.abort();
     setError(null);
     setTokenUsage(null);
+    setContextTokens(null);
     if (persistenceKey) safeRemoveItem(persistenceKey);
   }, [persistenceKey]);
 
@@ -295,6 +303,9 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
       let currentEvent = '';
       let currentContent = '';
       let currentToolCalls: ToolCall[] = [];
+      let currentSegments: MessageSegment[] = [];
+      // Track whether last segment was text (for interleaving)
+      let lastSegmentIsText = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -323,13 +334,28 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
             case 'message_delta': {
               const delta = (parsed.content as string) ?? '';
               currentContent += delta;
-              updateAssistant({ content: stripThinkTags(currentContent) });
+              // Append to last text segment or create new one
+              if (lastSegmentIsText && currentSegments.length > 0) {
+                const last = currentSegments[currentSegments.length - 1]!;
+                if (last.type === 'text') {
+                  currentSegments = [...currentSegments.slice(0, -1), { type: 'text' as const, content: last.content + delta }];
+                }
+              } else {
+                currentSegments = [...currentSegments, { type: 'text', content: delta }];
+                lastSegmentIsText = true;
+              }
+              updateAssistant({ content: stripThinkTags(currentContent), segments: currentSegments });
               break;
             }
             case 'message': {
               const full = (parsed.content as string) ?? '';
               if (full) currentContent = full;
-              updateAssistant({ content: stripThinkTags(currentContent) });
+              // Full message replaces — rebuild segments as single text
+              if (full) {
+                currentSegments = [{ type: 'text', content: full }];
+                lastSegmentIsText = true;
+              }
+              updateAssistant({ content: stripThinkTags(currentContent), segments: currentSegments });
               break;
             }
             case 'tool_call': {
@@ -338,7 +364,9 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
                 input: (parsed.content as string) ?? '',
               };
               currentToolCalls = [...currentToolCalls, tc];
-              updateAssistant({ toolCalls: currentToolCalls });
+              currentSegments = [...currentSegments, { type: 'tool_call', toolCall: tc }];
+              lastSegmentIsText = false;
+              updateAssistant({ toolCalls: currentToolCalls, segments: currentSegments });
               break;
             }
             case 'tool_result': {
@@ -349,7 +377,13 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
                   ? { ...tc, output }
                   : tc,
               );
-              updateAssistant({ toolCalls: currentToolCalls });
+              // Update matching tool_call segment
+              currentSegments = currentSegments.map((seg) =>
+                seg.type === 'tool_call' && seg.toolCall.tool === toolName && seg.toolCall.output === undefined
+                  ? { ...seg, toolCall: { ...seg.toolCall, output } }
+                  : seg,
+              );
+              updateAssistant({ toolCalls: currentToolCalls, segments: currentSegments });
               onToolResult?.(toolName, output);
               break;
             }
@@ -363,6 +397,10 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
               const tokens = parsed.total_tokens as number | undefined;
               if (tokens && tokens > 0) {
                 setTokenUsage(tokens);
+              }
+              const ctxTokens = parsed.context_tokens as number | undefined;
+              if (ctxTokens && ctxTokens > 0) {
+                setContextTokens(ctxTokens);
               }
               updateAssistant({ streaming: false });
               break;
@@ -431,5 +469,5 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
     }
   }, [persistenceKey, fetchMessages]);
 
-  return { messages, sendMessage, isStreaming, isRestoring, error, sessionId, tokenUsage, resetSession, stopStreaming, loadSession };
+  return { messages, sendMessage, isStreaming, isRestoring, error, sessionId, tokenUsage, contextTokens, resetSession, stopStreaming, loadSession };
 }

@@ -43,9 +43,11 @@ func messageChars(msg *schema.Message) int {
 	return total
 }
 
-// NewContextRewriterWithLogging creates a context rewriter with logging
-// maxContextTokens is the maximum context size in TOKENS (not characters)
-func NewContextRewriterWithLogging(maxContextTokens int, contextLogger *ContextLogger) react.MessageModifier {
+// NewContextRewriterWithLogging creates a context rewriter with logging.
+// maxContextTokens is the maximum context size in TOKENS (not characters).
+// onContextSize is an optional callback invoked with the actual context size (in tokens)
+// after each rewriter pass — both when within limit and after compression.
+func NewContextRewriterWithLogging(maxContextTokens int, contextLogger *ContextLogger, onContextSize func(int)) react.MessageModifier {
 	// Convert token limit to character limit for internal calculations
 	maxContextChars := tokensToChars(maxContextTokens)
 
@@ -69,6 +71,9 @@ func NewContextRewriterWithLogging(maxContextTokens int, contextLogger *ContextL
 		if totalChars <= maxContextChars {
 			slog.DebugContext(ctx, "context within limit, no compression needed",
 				"tokens", totalTokens, "limit_tokens", maxContextTokens)
+			if onContextSize != nil {
+				onContextSize(totalTokens)
+			}
 			return input
 		}
 
@@ -248,6 +253,15 @@ func NewContextRewriterWithLogging(maxContextTokens int, contextLogger *ContextL
 
 		afterCount := len(result)
 
+		// Report post-compression context size
+		if onContextSize != nil {
+			postChars := 0
+			for _, msg := range result {
+				postChars += messageChars(msg)
+			}
+			onContextSize(charsToTokens(postChars))
+		}
+
 		slog.DebugContext(ctx, "context compressed",
 			"before", beforeCount,
 			"after", afterCount,
@@ -271,7 +285,7 @@ func NewContextRewriterWithLogging(maxContextTokens int, contextLogger *ContextL
 // NewContextRewriter creates a context rewriter that compresses context when it exceeds maxContextTokens
 // maxContextTokens is the maximum context size in TOKENS (not characters)
 func NewContextRewriter(maxContextTokens int) react.MessageModifier {
-	return NewContextRewriterWithLogging(maxContextTokens, nil)
+	return NewContextRewriterWithLogging(maxContextTokens, nil, nil)
 }
 
 

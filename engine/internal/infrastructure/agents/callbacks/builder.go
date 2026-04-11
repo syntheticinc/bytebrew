@@ -89,19 +89,25 @@ func (b *AgentCallbackBuilder) FinalizeAccumulatedText(ctx context.Context) {
 }
 
 // EmitTokenUsage emits a token_usage event with accumulated totals from all model calls.
+// contextTokens is the actual context window size (in tokens) at the last model call,
+// reported by the ContextRewriter via an agent-scoped atomic counter.
 // Called after agent execution completes, before ProcessingStopped.
-func (b *AgentCallbackBuilder) EmitTokenUsage(ctx context.Context) {
+func (b *AgentCallbackBuilder) EmitTokenUsage(ctx context.Context, contextTokens int) {
 	total := b.tokenAcc.TotalTokens()
 	if total == 0 {
 		return
 	}
+	metadata := map[string]interface{}{
+		"total_tokens":      b.tokenAcc.TotalTokens(),
+		"prompt_tokens":     b.tokenAcc.PromptTokens(),
+		"completion_tokens": b.tokenAcc.CompletionTokens(),
+	}
+	if contextTokens > 0 {
+		metadata["context_tokens"] = contextTokens
+	}
 	b.emitter.Emit(ctx, &domain.AgentEvent{
-		Type: domain.EventTypeTokenUsage,
-		Metadata: map[string]interface{}{
-			"total_tokens":      b.tokenAcc.TotalTokens(),
-			"prompt_tokens":     b.tokenAcc.PromptTokens(),
-			"completion_tokens": b.tokenAcc.CompletionTokens(),
-		},
+		Type:     domain.EventTypeTokenUsage,
+		Metadata: metadata,
 	})
 }
 
