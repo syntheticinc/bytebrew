@@ -13,6 +13,12 @@ import (
 
 const builderAssistantName = "builder-assistant"
 
+// ByteBrew docs MCP server — public, no API key required.
+const (
+	bytebrewDocsMCPName = "bytebrew-docs"
+	bytebrewDocsMCPURL  = "https://mcp.bytebrew.ai/sse"
+)
+
 // Default model seeded when no models exist — free tier, strong tool calling.
 const (
 	defaultModelName     = "default"
@@ -89,6 +95,7 @@ Only after the user confirms ("yes", "go ahead", "build it", "looks good") — e
   - When NO schema context is provided, and the user asks to create agents or build a system, create a NEW schema with a descriptive name (e.g., "support-flow", "iot-pipeline"), then create agents inside it.
   - If the user explicitly asks "create a schema", always create a new one — never reuse builder-schema.
   - When listing agents, highlight which ones are in the current schema.
+- **Search documentation first.** You have access to the ByteBrew documentation via the **search_docs** tool (from the bytebrew-docs MCP server). When users ask about platform features, configuration options, deployment, widgets, triggers, capabilities, or anything about how ByteBrew works — search the docs first to give accurate, up-to-date answers. Do not guess about platform capabilities; verify via docs search.
 - **Explicit requests are fine.** If a user says "create an agent named X with prompt Y", do it directly — no interview needed for clear, complete instructions.
 - **Confirm before destructive actions.** Always ask before deleting agents, schemas, models, or other resources.
 - **Suggest improvements.** Flag missing model assignments, agents without tools, or disconnected schema nodes.
@@ -171,7 +178,38 @@ func builderAssistantDefaults() *config_repo.AgentRecord {
 		MaxContextSize: 16000,
 		IsSystem:       true,
 		BuiltinTools:   builderAssistantBuiltinTools,
+		MCPServers:     []string{bytebrewDocsMCPName},
 	}
+}
+
+// seedByteBrewDocsMCP ensures the bytebrew-docs MCP server exists in the database.
+// Idempotent — skips if a server with the same name already exists.
+func seedByteBrewDocsMCP(ctx context.Context, db *gorm.DB) {
+	if db == nil {
+		return
+	}
+	mcpRepo := config_repo.NewGORMMCPServerRepository(db)
+	servers, err := mcpRepo.List(ctx)
+	if err != nil {
+		slog.WarnContext(ctx, "seed bytebrew-docs MCP: failed to list", "error", err)
+		return
+	}
+	for _, s := range servers {
+		if s.Name == bytebrewDocsMCPName {
+			slog.InfoContext(ctx, "bytebrew-docs MCP server already exists, skipping seed")
+			return
+		}
+	}
+	server := &models.MCPServerModel{
+		Name: bytebrewDocsMCPName,
+		Type: models.MCPServerTypeSSE,
+		URL:  bytebrewDocsMCPURL,
+	}
+	if err := mcpRepo.Create(ctx, server); err != nil {
+		slog.ErrorContext(ctx, "failed to seed bytebrew-docs MCP server", "error", err)
+		return
+	}
+	slog.InfoContext(ctx, "seeded bytebrew-docs MCP server", "url", bytebrewDocsMCPURL)
 }
 
 // seedBuilderAssistant ensures the builder-assistant agent exists in the database.
@@ -323,6 +361,9 @@ func restoreBuilderSchema(ctx context.Context, db *gorm.DB) error {
 	if db == nil {
 		return fmt.Errorf("database not available")
 	}
+
+	// 0. Ensure bytebrew-docs MCP server exists (may have been deleted by user).
+	seedByteBrewDocsMCP(ctx, db)
 
 	// 1. Restore builder-assistant agent to factory defaults.
 	if err := restoreBuilderAssistant(ctx, db); err != nil {

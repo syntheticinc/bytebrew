@@ -384,6 +384,15 @@ func Run(sc ServerConfig) error {
 	mcpRegistry := mcp.NewClientRegistry()
 	var forwardHeadersStore atomic.Value // shared with configReloaderHTTPAdapter for dynamic updates
 	forwardHeadersStore.Store([]string(nil))
+
+	// Seed builder-assistant and its MCP server BEFORE connectMCPServers,
+	// so the seeded bytebrew-docs MCP server is included in the first connect pass.
+	if pgDB != nil {
+		seedByteBrewDocsMCP(ctx, pgDB)
+		seedBuilderAssistant(ctx, pgDB)
+		seedBuilderSchema(ctx, pgDB)
+	}
+
 	if pgDB != nil {
 		mcpServerRepo := config_repo.NewGORMMCPServerRepository(pgDB)
 		mcpServers, mcpErr := mcpServerRepo.List(ctx)
@@ -400,10 +409,8 @@ func Run(sc ServerConfig) error {
 		components.AgentToolResolver.SetMCPProvider(mcpRegistry)
 	}
 
-	// Seed builder-assistant agent and register admin tools.
+	// Register admin tools and reload registry.
 	if pgDB != nil && agentRegistry != nil {
-		seedBuilderAssistant(ctx, pgDB)
-		seedBuilderSchema(ctx, pgDB)
 
 		// Wire admin tools into builtin store for builder-assistant.
 		if components.AgentToolResolver != nil {
