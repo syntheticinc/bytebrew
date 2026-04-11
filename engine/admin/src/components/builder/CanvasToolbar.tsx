@@ -7,7 +7,10 @@ interface CanvasToolbarProps {
   savedIndicator: 'saved' | 'saving' | null;
   onAutoLayout: () => void;
   onRefetch: () => void;
-  onAddAgent: () => void;
+  onCreateAgent: () => void;
+  onAddExisting?: () => void;
+  availableAgents?: string[];
+  onSelectExistingAgent?: (name: string) => void;
   onAddTrigger: (type: 'webhook' | 'cron' | 'chat') => void;
   // Schema name for production mode (from URL param)
   schemaName?: string;
@@ -26,7 +29,10 @@ export default function CanvasToolbar({
   savedIndicator,
   onAutoLayout,
   onRefetch,
-  onAddAgent,
+  onCreateAgent,
+  onAddExisting,
+  availableAgents,
+  onSelectExistingAgent,
   onAddTrigger,
   schemaName,
   onBack,
@@ -39,6 +45,7 @@ export default function CanvasToolbar({
 }: CanvasToolbarProps) {
   const [protoSchemaDropdown, setProtoSchemaDropdown] = useState(false);
   const [triggerDropdown, setTriggerDropdown] = useState(false);
+  const [agentDropdown, setAgentDropdown] = useState(false);
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
@@ -188,12 +195,47 @@ export default function CanvasToolbar({
           </div>
         )}
       </div>
-      <button
-        onClick={onAddAgent}
-        className="px-3 py-1.5 text-xs bg-brand-accent text-brand-light rounded-btn hover:bg-brand-accent-hover transition-colors"
-      >
-        + Add Agent
-      </button>
+      {onAddExisting && availableAgents && availableAgents.length > 0 ? (
+        <div className="relative">
+          <button
+            onClick={() => { setAgentDropdown((v) => !v); onAddExisting(); }}
+            className="px-3 py-1.5 text-xs bg-brand-accent text-brand-light rounded-btn hover:bg-brand-accent-hover transition-colors"
+          >
+            + Add Agent <span className="text-[10px]">&#9662;</span>
+          </button>
+          {agentDropdown && (
+            <div
+              className="absolute top-full right-0 mt-1 bg-brand-dark-alt border border-brand-shade3/20 rounded-card z-50 min-w-[180px] shadow-lg py-1 max-h-[300px] overflow-y-auto"
+              onMouseLeave={() => setAgentDropdown(false)}
+            >
+              <button
+                className="w-full px-3 py-1.5 text-left text-xs text-brand-light hover:bg-brand-accent/10 transition-colors font-medium"
+                onClick={() => { onCreateAgent(); setAgentDropdown(false); }}
+              >
+                Create New Agent
+              </button>
+              <div className="border-t border-brand-shade3/10 my-1" />
+              <div className="px-3 py-1 text-[10px] text-brand-shade3 uppercase tracking-wide">Existing Agents</div>
+              {availableAgents.map((name) => (
+                <button
+                  key={name}
+                  className="w-full px-3 py-1.5 text-left text-xs text-brand-shade2 hover:bg-brand-accent/10 hover:text-brand-light transition-colors font-mono truncate"
+                  onClick={() => { onSelectExistingAgent?.(name); setAgentDropdown(false); }}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <button
+          onClick={onCreateAgent}
+          className="px-3 py-1.5 text-xs bg-brand-accent text-brand-light rounded-btn hover:bg-brand-accent-hover transition-colors"
+        >
+          + Add Agent
+        </button>
+      )}
 
       <ConfirmDialog
         open={showRestoreConfirm}

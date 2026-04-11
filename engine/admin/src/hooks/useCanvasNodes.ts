@@ -124,13 +124,13 @@ export function useCanvasNodes({
     setDeleteError('');
     try {
       if (currentSchemaId != null) {
-        // Schema-scoped: remove agent from schema, don't delete the agent itself
+        // Schema-scoped: remove agent from schema only (agent stays in DB)
         await api.removeAgentFromSchema(currentSchemaId, deleteTarget);
       } else {
         // No schema context: delete agent globally
         await api.deleteAgent(deleteTarget);
+        agentsCache.current.delete(deleteTarget);
       }
-      agentsCache.current.delete(deleteTarget);
 
       setNodes((nds) => nds.filter((n) => n.id !== deleteTarget));
       setEdges((eds) => eds.filter((e) => e.source !== deleteTarget && e.target !== deleteTarget));
@@ -145,8 +145,11 @@ export function useCanvasNodes({
   }, [deleteTarget, selectedAgent, setNodes, setEdges, agentsCache, setSelectedAgent, currentSchemaId]);
 
   const handleInstantAgentCreate = useCallback(async (canvasPosition?: { x: number; y: number }) => {
-    const existingNames = nodes.filter((n) => n.type === 'agentNode').map((n) => n.id);
-    const name = generateAgentName(existingNames);
+    // Use both canvas names and cached DB names for better uniqueness
+    const canvasNames = nodes.filter((n) => n.type === 'agentNode').map((n) => n.id);
+    const dbNames = agentsListRef.current.map((a) => a.name);
+    const allKnownNames = [...new Set([...canvasNames, ...dbNames])];
+    let name = generateAgentName(allKnownNames);
     const pos = canvasPosition ?? { x: Math.random() * 400 + 100, y: Math.random() * 200 + 50 };
 
     if (isPrototype) {
@@ -167,7 +170,6 @@ export function useCanvasNodes({
         } satisfies AgentNodeData,
       };
       setNodes((nds) => [...nds, newNode]);
-      // Clear isNew after animation plays
       setTimeout(() => {
         setNodes((nds) => nds.map((n) => n.id === name ? { ...n, data: { ...n.data, isNew: false } } : n));
       }, 1000);
@@ -175,43 +177,54 @@ export function useCanvasNodes({
       return;
     }
 
-    // Production mode: create via API
-    try {
-      const created = await api.createAgent({
-        name,
-        system_prompt: '',
-        lifecycle: 'spawn',
-        tool_execution: 'sequential',
-        max_steps: 25,
-        max_context_size: 16000,
-        max_turn_duration: 120,
-        tools: [],
-        can_spawn: [],
-        mcp_servers: [],
-        confirm_before: [],
-      } as CreateAgentRequest);
+    // Production mode: create via API with retry on name collision
+    const maxAttempts = 10;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const created = await api.createAgent({
+          name,
+          system_prompt: '',
+          lifecycle: 'spawn',
+          tool_execution: 'sequential',
+          max_steps: 25,
+          max_context_size: 16000,
+          max_turn_duration: 120,
+          tools: [],
+          can_spawn: [],
+          mcp_servers: [],
+          confirm_before: [],
+        } as CreateAgentRequest);
 
-      // Auto-add to current schema if schema-scoped
-      if (currentSchemaId != null) {
-        await api.addAgentToSchema(currentSchemaId, created.name);
+        if (currentSchemaId != null) {
+          await api.addAgentToSchema(currentSchemaId, created.name);
+        }
+
+        agentsCache.current.set(created.name, created);
+        agentsListRef.current = [...agentsListRef.current, created];
+
+        const modelMap = new Map(modelsRef.current.map((m) => [m.id, m.name]));
+        const newNode = makeNode(created, modelMap, pos, handleSelect, handleDeleteRequest);
+        newNode.data = { ...newNode.data, isNew: true };
+        setNodes((nds) => [...nds, newNode]);
+        setTimeout(() => {
+          setNodes((nds) => nds.map((n) => n.id === created.name ? { ...n, data: { ...n.data, isNew: false } } : n));
+        }, 1000);
+        addToast(`Agent "${created.name}" created — click to configure`, 'success');
+        return; // success — exit loop
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : '';
+        if (msg.toLowerCase().includes('already_exists') || msg.toLowerCase().includes('already exists')) {
+          // Name collision — increment and retry
+          allKnownNames.push(name);
+          name = generateAgentName(allKnownNames);
+          continue;
+        }
+        // Non-collision error — stop immediately
+        addToast(`Failed to create agent: ${msg || 'Unknown error'}`, 'error');
+        return;
       }
-
-      agentsCache.current.set(created.name, created);
-      agentsListRef.current = [...agentsListRef.current, created];
-
-      const modelMap = new Map(modelsRef.current.map((m) => [m.id, m.name]));
-      const newNode = makeNode(created, modelMap, pos, handleSelect, handleDeleteRequest);
-      // Mark as new for fade-in animation
-      newNode.data = { ...newNode.data, isNew: true };
-      setNodes((nds) => [...nds, newNode]);
-      // Clear isNew after animation plays
-      setTimeout(() => {
-        setNodes((nds) => nds.map((n) => n.id === created.name ? { ...n, data: { ...n.data, isNew: false } } : n));
-      }, 1000);
-      addToast(`Agent "${created.name}" created — click to configure`, 'success');
-    } catch (err) {
-      addToast(`Failed to create agent: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
     }
+    addToast('Failed to create agent: too many name collisions', 'error');
   }, [nodes, isPrototype, setNodes, agentsCache, agentsListRef, modelsRef, addToast, handleSelect, handleDeleteRequest, currentSchemaId]);
 
   const handleInstantTriggerCreate = useCallback(async (canvasPosition?: { x: number; y: number }, triggerType: 'webhook' | 'cron' | 'chat' = 'webhook') => {

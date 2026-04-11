@@ -108,6 +108,7 @@ function AgentBuilderInner() {
   const [error, setError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [savedIndicator, setSavedIndicator] = useState<'saved' | 'saving' | null>(null);
+  const [availableAgents, setAvailableAgents] = useState<string[]>([]);
 
   const { addToast } = useToast();
 
@@ -123,6 +124,21 @@ function AgentBuilderInner() {
 
   const refetchCanvas = useCallback(() => setRefreshKey((k) => k + 1), []);
   useAdminRefresh(refetchCanvas);
+
+  // Load agents not in the current schema for "Add Existing" dropdown
+  const loadAvailableAgents = useCallback(async () => {
+    if (!currentSchema || isPrototype) { setAvailableAgents([]); return; }
+    try {
+      const [allAgents, schemaAgents] = await Promise.all([
+        api.listAgents(),
+        api.listSchemaAgents(currentSchema.id),
+      ]);
+      const inSchema = new Set(schemaAgents ?? []);
+      setAvailableAgents(allAgents.map((a) => a.name).filter((n) => !inSchema.has(n)));
+    } catch {
+      setAvailableAgents([]);
+    }
+  }, [currentSchema, isPrototype]);
 
   function showSavedIndicator(state: 'saved' | 'saving') {
     setSavedIndicator(state);
@@ -356,6 +372,16 @@ function AgentBuilderInner() {
         setNodes(rawNodes);
         setEdges(rawEdges);
         setLoading(false);
+
+        // Compute available agents for "Add Existing" dropdown
+        if (schema && !isPrototype) {
+          const schemaAgentSet = new Set(details.map((a) => a.name));
+          api.listAgents().then((all) => {
+            if (!cancelled) {
+              setAvailableAgents(all.map((a) => a.name).filter((n) => !schemaAgentSet.has(n)));
+            }
+          }).catch(() => {});
+        }
       })
       .catch((err: Error) => {
         if (!cancelled) {
@@ -413,7 +439,19 @@ function AgentBuilderInner() {
         savedIndicator={savedIndicator}
         onAutoLayout={runAutoLayout}
         onRefetch={refetchCanvas}
-        onAddAgent={() => nodeOps.handleInstantAgentCreate()}
+        onCreateAgent={() => nodeOps.handleInstantAgentCreate()}
+        onAddExisting={currentSchema ? loadAvailableAgents : undefined}
+        availableAgents={availableAgents}
+        onSelectExistingAgent={async (name) => {
+          if (!currentSchema) return;
+          try {
+            await api.addAgentToSchema(currentSchema.id, name);
+            refetchCanvas();
+            addToast(`Agent "${name}" added to schema`, 'success');
+          } catch (err) {
+            addToast(`Failed to add agent: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
+          }
+        }}
         onAddTrigger={(type) => nodeOps.handleInstantTriggerCreate(undefined, type)}
         isSystemSchema={currentSchema?.is_system === true}
         onRestoreDefaults={async () => {
@@ -492,12 +530,12 @@ function AgentBuilderInner() {
           {nodes.length === 0 && !loading && !error && (
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <p className="text-brand-shade2 text-sm mb-2">No agents yet</p>
-              <p className="text-brand-shade3/60 text-xs mb-4">Create your first agent to get started</p>
+              <p className="text-brand-shade3/60 text-xs mb-4">Add an agent to get started</p>
               <button
                 onClick={() => nodeOps.handleInstantAgentCreate({ x: 200, y: 100 })}
                 className="px-4 py-2 bg-brand-accent text-brand-light rounded-btn text-xs hover:bg-brand-accent-hover transition-colors"
               >
-                Create your first agent
+                Add Agent
               </button>
             </div>
           )}
@@ -601,7 +639,7 @@ function AgentBuilderInner() {
         }
         confirmLabel={currentSchema ? 'Remove' : 'Delete'}
         loading={nodeOps.deleting}
-        variant="danger"
+        variant={currentSchema ? 'warning' : 'danger'}
       />
     </div>
   );
