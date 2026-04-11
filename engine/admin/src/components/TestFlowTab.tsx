@@ -23,19 +23,21 @@ const MOCK_RESPONSES = [
 
 // ─── Friendly error mapping ─────────────────────────────────────────────────
 
-function friendlyError(raw: string): string {
+type FriendlyResult = { text: string; agentLink?: string };
+
+function friendlyError(raw: string, agentName?: string): FriendlyResult {
   if (raw.includes('resolve tool') && raw.includes('unknown builtin tool')) {
     const toolMatch = raw.match(/resolve tool (\S+):/);
     const toolName = toolMatch?.[1] ?? 'unknown';
-    return `Agent references tool "${toolName}" which is not available. Check agent configuration \u2192 Tools to fix this.`;
+    return { text: `Agent references tool "${toolName}" which is not available. Check agent configuration \u2192 Tools to fix this.`, agentLink: agentName };
   }
-  if (raw.includes('model not found') || raw.includes('no model configured')) {
-    return 'No model configured for this agent. Assign a model in agent settings before testing.';
+  if (raw.includes('model not found') || raw.includes('no model configured') || raw.includes('no model available')) {
+    return { text: 'No model configured for this agent. Assign a model in agent settings.', agentLink: agentName };
   }
   if (raw.includes('connection refused') || raw.includes('ECONNREFUSED')) {
-    return 'Cannot connect to the model provider. Check model configuration and API keys.';
+    return { text: 'Cannot connect to the model provider. Check model configuration and API keys.', agentLink: agentName };
   }
-  return raw;
+  return { text: raw };
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -434,11 +436,22 @@ export default function TestFlowTab() {
             ) : (
               <div className="space-y-1">
                 {/* Error */}
-                {hasError && msg.id === lastMsg?.id && (
-                  <div className="px-2 py-1.5 bg-red-900/20 border border-red-500/20 rounded text-[11px] text-red-400">
-                    {friendlyError(msg.content.replace(/^Error:\s*/, ''))}
-                  </div>
-                )}
+                {hasError && msg.id === lastMsg?.id && (() => {
+                  const err = friendlyError(msg.content.replace(/^Error:\s*/, ''), selectedAgent);
+                  return (
+                    <div className="px-2 py-1.5 bg-red-900/20 border border-red-500/20 rounded text-[11px] text-red-400">
+                      {err.text}
+                      {err.agentLink && (
+                        <button
+                          onClick={() => navigate(`/agents/${encodeURIComponent(err.agentLink!)}`)}
+                          className="ml-1.5 text-brand-accent hover:text-brand-accent-hover underline transition-colors"
+                        >
+                          Configure agent &rarr;
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Tool calls */}
                 {msg.toolCalls && msg.toolCalls.length > 0 && (

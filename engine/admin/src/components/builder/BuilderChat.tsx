@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { parseSSELine, type ToolCall } from '../../lib/sse';
 
 // Simple markdown renderer: fenced code blocks, inline code, bold, bullet lists
@@ -54,6 +55,7 @@ interface BuilderChatProps {
 }
 
 export default function BuilderChat({ agentName }: BuilderChatProps) {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
@@ -294,8 +296,31 @@ export default function BuilderChat({ agentName }: BuilderChatProps) {
                   </div>
                 )}
 
+                {/* Error with configure link */}
+                {msg.content?.startsWith('Error:') && !msg.streaming && (() => {
+                  const raw = msg.content.replace(/^Error:\s*/, '');
+                  const isModelError = raw.includes('no model available') || raw.includes('model not found') || raw.includes('no model configured');
+                  const isToolError = raw.includes('resolve tool') && raw.includes('unknown builtin tool');
+                  const showLink = isModelError || isToolError;
+                  return (
+                    <div className="px-2.5 py-2 bg-red-900/20 border border-red-500/20 rounded text-xs text-red-400">
+                      {isModelError
+                        ? 'No model configured for this agent. Assign a model in agent settings.'
+                        : raw}
+                      {showLink && (
+                        <button
+                          onClick={() => navigate(`/agents/${encodeURIComponent(agentName)}`)}
+                          className="ml-1.5 text-brand-accent hover:text-brand-accent-hover underline transition-colors"
+                        >
+                          Configure agent &rarr;
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Message content */}
-                {(msg.content || msg.streaming) && (
+                {(msg.content || msg.streaming) && !msg.content?.startsWith('Error:') && (
                   <div className="text-sm text-brand-light leading-relaxed">
                     {msg.streaming ? msg.content : renderMarkdown(msg.content)}
                     {msg.streaming && (
