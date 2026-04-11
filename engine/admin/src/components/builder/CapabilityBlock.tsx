@@ -113,12 +113,12 @@ function MemoryConfig({ cap, onChange }: PanelProps) {
       <div>
         <label className={labelCls}>Retention</label>
         <label className="flex items-center gap-2 text-sm text-brand-shade2 cursor-pointer select-none mb-2">
-          <input type="checkbox" className="accent-brand-accent" checked={unlimitedRetention} onChange={(e) => onChange(setKey(cap, 'unlimited_retention', e.target.checked))} />
+          <input type="checkbox" className="accent-brand-accent" data-testid="memory-unlimited-retention" checked={unlimitedRetention} onChange={(e) => onChange(setKey(cap, 'unlimited_retention', e.target.checked))} />
           Unlimited
         </label>
         {!unlimitedRetention && (
           <div className="flex items-center gap-2">
-            <input type="number" className={inputCls} min={1} max={365} value={getKey(cap, 'retention_days', 30) as number} onChange={(e) => onChange(setKey(cap, 'retention_days', Number(e.target.value)))} />
+            <input type="number" className={inputCls} data-testid="memory-retention-days" min={1} max={365} value={getKey(cap, 'retention_days', 30) as number} onChange={(e) => onChange(setKey(cap, 'retention_days', Number(e.target.value)))} />
             <span className="text-xs text-brand-shade3 shrink-0">days</span>
           </div>
         )}
@@ -127,11 +127,11 @@ function MemoryConfig({ cap, onChange }: PanelProps) {
       <div>
         <label className={labelCls}>Max entries</label>
         <label className="flex items-center gap-2 text-sm text-brand-shade2 cursor-pointer select-none mb-2">
-          <input type="checkbox" className="accent-brand-accent" checked={unlimitedEntries} onChange={(e) => onChange(setKey(cap, 'unlimited_entries', e.target.checked))} />
+          <input type="checkbox" className="accent-brand-accent" data-testid="memory-unlimited-entries" checked={unlimitedEntries} onChange={(e) => onChange(setKey(cap, 'unlimited_entries', e.target.checked))} />
           Unlimited
         </label>
         {!unlimitedEntries && (
-          <input type="number" className={inputCls} min={1} value={getKey(cap, 'max_entries', 500) as number} onChange={(e) => onChange(setKey(cap, 'max_entries', Number(e.target.value)))} />
+          <input type="number" className={inputCls} data-testid="memory-max-entries" min={1} value={getKey(cap, 'max_entries', 500) as number} onChange={(e) => onChange(setKey(cap, 'max_entries', Number(e.target.value)))} />
         )}
         <p className={hintCls}>{unlimitedEntries ? 'No limit on stored entries (bounded by schema storage quota)' : 'Oldest entries removed first (FIFO) when limit reached'}</p>
       </div>
@@ -163,7 +163,7 @@ function KnowledgeConfig({ cap, onChange }: PanelProps) {
       <div className="bg-brand-dark rounded-card px-3 py-2 space-y-1">
         <span className="text-[11px] text-brand-shade2 font-mono">Auto-included tools:</span>
         <div className="flex gap-2 mt-1">
-          <span className="text-[10px] px-2 py-0.5 bg-brand-dark-alt border border-brand-shade3/20 rounded-card text-brand-shade2">search_knowledge</span>
+          <span className="text-[10px] px-2 py-0.5 bg-brand-dark-alt border border-brand-shade3/20 rounded-card text-brand-shade2">knowledge_search</span>
         </div>
         <p className={hintCls}>Automatically available to agent when Knowledge is enabled</p>
       </div>
@@ -238,12 +238,12 @@ function KnowledgeConfig({ cap, onChange }: PanelProps) {
       )}
       <div>
         <label className={labelCls}>Top-K</label>
-        <input type="number" className={inputCls} min={1} max={20} value={getKey(cap, 'top_k', 5) as number} onChange={(e) => onChange(setKey(cap, 'top_k', Number(e.target.value)))} />
+        <input type="number" className={inputCls} data-testid="knowledge-top-k" min={1} max={20} value={getKey(cap, 'top_k', 5) as number} onChange={(e) => onChange(setKey(cap, 'top_k', Number(e.target.value)))} />
         <p className={hintCls}>Number of most relevant document chunks retrieved per query</p>
       </div>
       <div>
         <label className={labelCls}>Similarity threshold</label>
-        <input type="number" className={inputCls} min={0} max={1} step={0.05} value={getKey(cap, 'similarity_threshold', 0.75) as number} onChange={(e) => onChange(setKey(cap, 'similarity_threshold', Number(e.target.value)))} />
+        <input type="number" className={inputCls} data-testid="knowledge-threshold" min={0} max={1} step={0.05} value={getKey(cap, 'similarity_threshold', 0.75) as number} onChange={(e) => onChange(setKey(cap, 'similarity_threshold', Number(e.target.value)))} />
         <p className={hintCls}>0 = return all chunks, 1 = exact match only. Recommended: 0.7-0.85</p>
       </div>
     </div>
@@ -272,7 +272,7 @@ function GuardrailConfig({ cap, onChange }: PanelProps) {
       <p className={descCls}>Validates agent output before sending to user</p>
       <div>
         <label className={labelCls}>Mode</label>
-        <select className={selectCls} value={mode} onChange={(e) => onChange(setKey(cap, 'mode', e.target.value))}>
+        <select className={selectCls} data-testid="guardrail-mode" value={mode} onChange={(e) => onChange(setKey(cap, 'mode', e.target.value))}>
           <option value="json_schema">JSON Schema</option>
           <option value="llm_check">LLM Check</option>
           <option value="webhook">Webhook</option>
@@ -281,7 +281,7 @@ function GuardrailConfig({ cap, onChange }: PanelProps) {
       </div>
       <div>
         <label className={labelCls}>{configLabels[mode] ?? 'Config'}</label>
-        <textarea className={`${inputCls} font-mono resize-y`} rows={4} placeholder={placeholders[mode]} value={getKey(cap, 'config_text', '') as string} onChange={(e) => onChange(setKey(cap, 'config_text', e.target.value))} />
+        <textarea className={`${inputCls} font-mono resize-y`} data-testid="guardrail-config" rows={4} placeholder={placeholders[mode]} value={getKey(cap, 'config_text', '') as string} onChange={(e) => onChange(setKey(cap, 'config_text', e.target.value))} />
       </div>
       {mode === 'webhook' && (
         <>
@@ -305,7 +305,7 @@ Response: { pass: boolean, reason?: string }`}
       )}
       <div>
         <label className={labelCls}>On failure</label>
-        <select className={selectCls} value={getKey(cap, 'on_failure', 'retry_max_3') as string} onChange={(e) => onChange(setKey(cap, 'on_failure', e.target.value))}>
+        <select className={selectCls} data-testid="guardrail-on-failure" value={getKey(cap, 'on_failure', 'retry_max_3') as string} onChange={(e) => onChange(setKey(cap, 'on_failure', e.target.value))}>
           <option value="retry_max_3">Retry (agent regenerates response, max 3 attempts)</option>
           <option value="error">Error (return validation error to user, no response)</option>
           <option value="fallback">Fallback (use simpler prompt for safe response)</option>
@@ -328,14 +328,14 @@ function OutputSchemaConfig({ cap, onChange }: PanelProps) {
       <p className={descCls}>Enforces structured JSON output format from agent</p>
       <div>
         <label className={labelCls}>Format</label>
-        <select className={selectCls} value={fmt} onChange={(e) => onChange(setKey(cap, 'format', e.target.value))}>
+        <select className={selectCls} data-testid="schema-format" value={fmt} onChange={(e) => onChange(setKey(cap, 'format', e.target.value))}>
           <option value="json_schema">JSON Schema</option>
           <option value="plain_text">Plain Text</option>
         </select>
         <p className={hintCls}>JSON Schema: agent must output valid JSON matching the schema. Plain Text: validates basic format rules (length, no code blocks) without JSON</p>
       </div>
       <label className="flex items-center gap-2 text-sm text-brand-shade2 cursor-pointer select-none">
-        <input type="checkbox" className="accent-brand-accent" checked={getKey(cap, 'enforce', false) as boolean} onChange={(e) => onChange(setKey(cap, 'enforce', e.target.checked))} />
+        <input type="checkbox" className="accent-brand-accent" data-testid="schema-enforce" checked={getKey(cap, 'enforce', false) as boolean} onChange={(e) => onChange(setKey(cap, 'enforce', e.target.checked))} />
         Enforce
       </label>
       <p className="text-[11px] text-brand-shade3/70 ml-6">When enabled, response is rejected and error shown to user if output doesn't conform</p>
@@ -382,7 +382,7 @@ function EscalationConfig({ cap, onChange }: PanelProps) {
       </div>
       <div>
         <label className={labelCls}>Action</label>
-        <select className={selectCls} value={action} onChange={(e) => onChange(setKey(cap, 'action', e.target.value))}>
+        <select className={selectCls} data-testid="escalation-action" value={action} onChange={(e) => onChange(setKey(cap, 'action', e.target.value))}>
           <option value="transfer_to_user">Transfer to User</option>
           <option value="notify">Notify</option>
         </select>

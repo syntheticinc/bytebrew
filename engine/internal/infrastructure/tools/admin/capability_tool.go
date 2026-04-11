@@ -25,7 +25,7 @@ func NewAdminAddCapabilityTool(repo CapabilityRepository, reloader func()) tool.
 func (t *adminAddCapabilityTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "admin_add_capability",
-		Desc: "Adds a capability to an agent. Types: memory (recall/store past interactions), knowledge (search knowledge base), escalation (hand off to human). Each capability auto-injects tools at runtime.",
+		Desc: "Adds a capability to an agent. Types: memory, knowledge, escalation, guardrail, output_schema, recovery, policies. Memory/knowledge/escalation auto-inject tools at runtime.",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"agent_name":      {Type: schema.String, Desc: "Agent name", Required: true},
 			"capability_type": {Type: schema.String, Desc: "Type: memory, knowledge, or escalation", Required: true},
@@ -56,9 +56,9 @@ func (t *adminAddCapabilityTool) InvokableRun(ctx context.Context, argsJSON stri
 		return "[ERROR] capability_type is required", nil
 	}
 
-	validTypes := map[string]bool{"memory": true, "knowledge": true, "escalation": true}
+	validTypes := map[string]bool{"memory": true, "knowledge": true, "escalation": true, "guardrail": true, "output_schema": true, "recovery": true, "policies": true}
 	if !validTypes[args.CapabilityType] {
-		return fmt.Sprintf("[ERROR] Invalid capability type %q. Must be: memory, knowledge, or escalation.", args.CapabilityType), nil
+		return fmt.Sprintf("[ERROR] Invalid capability type %q. Must be one of: memory, knowledge, escalation, guardrail, output_schema, recovery, policies.", args.CapabilityType), nil
 	}
 
 	var config map[string]interface{}

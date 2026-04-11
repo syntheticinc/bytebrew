@@ -84,7 +84,7 @@ export const MOCK_AUDIT_LOGS: PaginatedResponse<AuditEntry> = {
     { id: '1', timestamp: '2026-04-05T14:30:00Z', actor_type: 'user', actor_id: 'admin', action: 'agent.create', resource: 'support-agent', details: 'Created agent with model claude-sonnet-3.7' },
     { id: '2', timestamp: '2026-04-05T14:25:00Z', actor_type: 'user', actor_id: 'admin', action: 'model.create', resource: 'claude-opus-4', details: 'Added new model' },
     { id: '3', timestamp: '2026-04-05T14:20:00Z', actor_type: 'system', actor_id: 'engine', action: 'trigger.fired', resource: 'daily-report', details: 'Cron trigger executed' },
-    { id: '4', timestamp: '2026-04-05T14:15:00Z', actor_type: 'agent', actor_id: 'support-agent', action: 'tool.called', resource: 'search_knowledge', details: 'Query: billing FAQ' },
+    { id: '4', timestamp: '2026-04-05T14:15:00Z', actor_type: 'agent', actor_id: 'support-agent', action: 'tool.called', resource: 'knowledge_search', details: 'Query: billing FAQ' },
     { id: '5', timestamp: '2026-04-05T14:10:00Z', actor_type: 'user', actor_id: 'admin', action: 'mcp.connect', resource: 'google-sheets', details: 'MCP server connected' },
   ],
   total: 5,

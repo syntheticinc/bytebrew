@@ -12,7 +12,7 @@ import ContextUsageBar from './ContextUsageBar';
 
 const MOCK_TOOL_CALLS = [
   { tool: 'memory_recall', input: '{"query": "previous interactions"}', output: '{"memories": []}' },
-  { tool: 'search_knowledge', input: '{"query": "product FAQ"}', output: '{"results": [{"title": "FAQ", "content": "..."}]}' },
+  { tool: 'knowledge_search', input: '{"query": "product FAQ"}', output: '{"results": [{"title": "FAQ", "content": "..."}]}' },
 ];
 
 const MOCK_RESPONSES = [

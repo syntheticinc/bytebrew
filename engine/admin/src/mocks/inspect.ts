@@ -47,7 +47,7 @@ export const MOCK_TRACE: SessionTrace = {
     {
       id: '2',
       kind: 'tool_call',
-      label: 'search_knowledge',
+      label: 'knowledge_search',
       input: JSON.stringify({ query: 'change subscription plan', top_k: 5 }, null, 2),
       output: JSON.stringify(
         [
