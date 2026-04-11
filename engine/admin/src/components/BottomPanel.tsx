@@ -11,38 +11,59 @@ import { api } from '../api/client';
 const CURSOR = <span className="inline-block w-1.5 h-3 bg-brand-accent ml-0.5 animate-pulse align-middle" />;
 
 function renderMarkdown(text: string, showCursor = false): React.ReactNode {
-  const lines = text.split('\n');
-  const lastIdx = lines.length - 1;
+  // Split on fenced code blocks first
+  const blocks = text.split(/(```[\s\S]*?```)/g);
+  const cursor = showCursor ? CURSOR : null;
+
   return (
-    <div className="space-y-1">
-      {lines.map((line, i) => {
-        const isLast = i === lastIdx;
-        const cursor = showCursor && isLast ? CURSOR : null;
-        if (line.startsWith('### ')) {
-          return <p key={i} className="font-semibold text-brand-light mt-2 first:mt-0">{renderInline(line.slice(4))}{cursor}</p>;
+    <div className="space-y-1 select-text">
+      {blocks.map((block, bi) => {
+        if (block.startsWith('```')) {
+          const inner = block.replace(/^```\w*\n?/, '').replace(/\n?```$/, '');
+          return (
+            <pre key={bi} className="bg-brand-dark border border-brand-shade3/20 rounded p-2 my-1 text-[10px] overflow-x-auto whitespace-pre">
+              {inner}
+            </pre>
+          );
         }
-        if (line.startsWith('## ')) {
-          return <p key={i} className="font-semibold text-brand-light mt-2 first:mt-0">{renderInline(line.slice(3))}{cursor}</p>;
-        }
-        if (line.startsWith('- ') || line.startsWith('* ')) {
-          return <p key={i} className="pl-3 before:content-['·'] before:mr-1.5 before:text-brand-shade3">{renderInline(line.slice(2))}{cursor}</p>;
-        }
-        if (line === '---' || line === '') {
-          return <span key={i}>{cursor}</span>;
-        }
-        return <p key={i}>{renderInline(line)}{cursor}</p>;
+        // Render lines within non-code blocks
+        const lines = block.split('\n');
+        return lines.map((line, i) => {
+          const key = `${bi}-${i}`;
+          const isLastBlock = bi === blocks.length - 1;
+          const isLastLine = i === lines.length - 1;
+          const lineCursor = isLastBlock && isLastLine ? cursor : null;
+          if (line.startsWith('### ')) {
+            return <p key={key} className="font-semibold text-brand-light mt-2 first:mt-0">{renderInline(line.slice(4))}{lineCursor}</p>;
+          }
+          if (line.startsWith('## ')) {
+            return <p key={key} className="font-semibold text-brand-light mt-2 first:mt-0">{renderInline(line.slice(3))}{lineCursor}</p>;
+          }
+          if (line.startsWith('- ') || line.startsWith('* ')) {
+            return <p key={key} className="pl-3 before:content-['·'] before:mr-1.5 before:text-brand-shade3">{renderInline(line.slice(2))}{lineCursor}</p>;
+          }
+          if (line === '---' || line === '') {
+            return <span key={key}>{lineCursor}</span>;
+          }
+          return <p key={key}>{renderInline(line)}{lineCursor}</p>;
+        });
       })}
     </div>
   );
 }
 
 function renderInline(text: string): React.ReactNode {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((part, i) =>
-    part.startsWith('**') && part.endsWith('**')
-      ? <strong key={i} className="text-brand-light font-semibold">{part.slice(2, -2)}</strong>
-      : part
-  );
+  // Handle both inline code and bold
+  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return <code key={i} className="bg-brand-dark border border-brand-shade3/20 rounded px-1 text-[10px] text-status-active">{part.slice(1, -1)}</code>;
+    }
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i} className="text-brand-light font-semibold">{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
 }
 
 const BREW_PHRASES = ['Grinding beans...', 'Brewing...', 'Pulling a shot...', 'Steaming...', 'Almost ready...'];
@@ -163,7 +184,7 @@ export default function BottomPanel() {
 
   return (
     <div
-      className="flex flex-col bg-brand-dark-surface border-t border-brand-shade3/10 font-mono select-none overflow-hidden flex-shrink-0"
+      className="flex flex-col bg-brand-dark-surface border-t border-brand-shade3/10 font-mono overflow-hidden flex-shrink-0"
       style={{ height: collapsed ? COLLAPSED_HEIGHT : height }}
     >
       {/* Drag handle */}

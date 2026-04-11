@@ -199,6 +199,7 @@ func (e *EngineAdapter) ExecuteTurn(
 	toolDeps.CanSpawn = canSpawn
 
 	// 3. Resolve tools from flow.ToolNames
+	slog.InfoContext(ctx, "[EngineAdapter] resolving tools", "agent", e.agentName, "flow_tool_names_count", len(flow.ToolNames), "flow_tool_names", flow.ToolNames)
 	resolvedTools, err := e.toolResolver.Resolve(ctx, flow.ToolNames, toolDeps)
 	if err != nil {
 		return fmt.Errorf("resolve tools: %w", err)

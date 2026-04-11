@@ -828,7 +828,7 @@ func Run(sc ServerConfig) error {
 			})
 
 			// Builder-assistant restore (admin-only)
-			baHandler := deliveryhttp.NewBuilderAssistantHandler(&builderAssistantRestorerAdapter{db: pgDB})
+			baHandler := deliveryhttp.NewBuilderAssistantHandler(&builderAssistantRestorerAdapter{db: pgDB, registry: agentRegistry})
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireAdminSession)
 				r.Post("/api/v1/admin/builder-assistant/restore", baHandler.Restore)

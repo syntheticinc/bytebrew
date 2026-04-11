@@ -13,6 +13,15 @@ import (
 
 const builderAssistantName = "builder-assistant"
 
+// Default model seeded when no models exist — free tier, strong tool calling.
+const (
+	defaultModelName     = "default"
+	defaultModelType     = "openai_compatible"
+	defaultModelProvider = "openrouter"
+	defaultModelLLM      = "z-ai/glm-4.7"
+	defaultModelBaseURL  = "https://openrouter.ai/api/v1"
+)
+
 const builderAssistantPrompt = `You are the ByteBrew Builder Assistant — an AI architect embedded in the Admin Dashboard. Your role is to help users design, configure, and manage their ByteBrew multi-agent systems.
 
 ## CRITICAL RULES (never violate)
@@ -120,6 +129,32 @@ var builderAssistantBuiltinTools = []string{
 	"admin_get_session",
 }
 
+// ensureDefaultModel returns the name of a model to assign to builder-assistant.
+// If models already exist, returns the first one. Otherwise creates a default
+// free-tier model (OpenRouter qwen3.6-plus:free) and returns its name.
+func ensureDefaultModel(ctx context.Context, db *gorm.DB) string {
+	llmRepo := config_repo.NewGORMLLMProviderRepository(db)
+	allModels, listErr := llmRepo.List(ctx)
+	if listErr == nil && len(allModels) > 0 {
+		slog.InfoContext(ctx, "builder-assistant: using existing model", "model", allModels[0].Name)
+		return allModels[0].Name
+	}
+
+	// No models — create a default one.
+	m := &models.LLMProviderModel{
+		Name:      defaultModelName,
+		Type:      defaultModelType,
+		BaseURL:   defaultModelBaseURL,
+		ModelName: defaultModelLLM,
+	}
+	if err := llmRepo.Create(ctx, m); err != nil {
+		slog.WarnContext(ctx, "failed to seed default model", "error", err)
+		return ""
+	}
+	slog.InfoContext(ctx, "seeded default model", "name", defaultModelName, "llm", defaultModelLLM)
+	return defaultModelName
+}
+
 // builderAssistantDefaults returns the factory-default AgentRecord for builder-assistant.
 func builderAssistantDefaults() *config_repo.AgentRecord {
 	return &config_repo.AgentRecord{
@@ -153,14 +188,7 @@ func seedBuilderAssistant(ctx context.Context, db *gorm.DB) {
 	record := builderAssistantDefaults()
 
 	// Determine model to assign.
-	llmRepo := config_repo.NewGORMLLMProviderRepository(db)
-	allModels, listErr := llmRepo.List(ctx)
-	if listErr == nil && len(allModels) > 0 {
-		record.ModelName = allModels[0].Name
-		slog.InfoContext(ctx, "builder-assistant: assigning first available model", "model", record.ModelName)
-	} else {
-		slog.InfoContext(ctx, "builder-assistant: no models available, creating without model")
-	}
+	record.ModelName = ensureDefaultModel(ctx, db)
 
 	if err := agentRepo.Create(ctx, record); err != nil {
 		slog.ErrorContext(ctx, "failed to seed builder-assistant agent", "error", err)
@@ -262,11 +290,7 @@ func restoreBuilderAssistant(ctx context.Context, db *gorm.DB) error {
 	record := builderAssistantDefaults()
 
 	// Determine model to assign.
-	llmRepo := config_repo.NewGORMLLMProviderRepository(db)
-	allModels, listErr := llmRepo.List(ctx)
-	if listErr == nil && len(allModels) > 0 {
-		record.ModelName = allModels[0].Name
-	}
+	record.ModelName = ensureDefaultModel(ctx, db)
 
 	// Check if agent exists.
 	_, err := agentRepo.GetByName(ctx, builderAssistantName)

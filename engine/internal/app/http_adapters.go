@@ -1134,10 +1134,15 @@ func (a *agentManagerHTTPAdapter) CreateAgent(ctx context.Context, req deliveryh
 func (a *agentManagerHTTPAdapter) UpdateAgent(ctx context.Context, name string, req deliveryhttp.CreateAgentRequest) (*deliveryhttp.AgentDetail, error) {
 	record := a.toAgentRecord(req)
 
-	// Preserve is_system from the existing record — it is not settable via HTTP.
-	// Also enforce admin_* tool gating: only system agents may carry admin_* tools.
+	// Preserve is_system and builtin tools from the existing record.
+	// is_system is not settable via HTTP.
+	// For system agents: if the request doesn't specify tools, preserve existing builtin tools
+	// to prevent accidental tool erasure during model/prompt updates.
 	if existing, err := a.repo.GetByName(ctx, name); err == nil && existing != nil {
 		record.IsSystem = existing.IsSystem
+		if existing.IsSystem && len(record.BuiltinTools) == 0 && len(existing.BuiltinTools) > 0 {
+			record.BuiltinTools = existing.BuiltinTools
+		}
 		if !existing.IsSystem {
 			for _, toolName := range record.BuiltinTools {
 				if strings.HasPrefix(toolName, "admin_") {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
@@ -576,11 +577,21 @@ func (a *adminCapabilityRepoAdapter) Delete(ctx context.Context, id string) erro
 // --- Builder-assistant restorer adapter ---
 
 type builderAssistantRestorerAdapter struct {
-	db *gorm.DB
+	db       *gorm.DB
+	registry interface{ Reload(ctx context.Context) error }
 }
 
 func (a *builderAssistantRestorerAdapter) RestoreBuilderAssistant(ctx context.Context) error {
-	return restoreBuilderSchema(ctx, a.db)
+	if err := restoreBuilderSchema(ctx, a.db); err != nil {
+		return err
+	}
+	// Reload in-memory agent registry so restored tools are available at runtime.
+	if a.registry != nil {
+		if err := a.registry.Reload(ctx); err != nil {
+			slog.WarnContext(ctx, "failed to reload registry after restore", "error", err)
+		}
+	}
+	return nil
 }
 
 // --- Helpers ---
