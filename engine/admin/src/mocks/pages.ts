@@ -8,7 +8,7 @@ import type {
   Setting,
   AuditEntry,
   PaginatedResponse,
-  WellKnownMCP,
+  MCPCatalogEntry,
 } from '../types';
 
 export const MOCK_HEALTH: HealthResponse = {
@@ -31,19 +31,97 @@ export const MOCK_MCP_SERVERS: MCPServer[] = [
   { id: '3', name: 'slack-notifications', type: 'http', url: 'https://mcp.example.com/slack', is_well_known: false, status: { status: 'disconnected', status_message: 'Auth expired', tools_count: 5 }, agents: [] },
 ];
 
-export const MOCK_WELL_KNOWN: WellKnownMCP[] = [
-  { name: 'tavily-search', display: 'Tavily Search', command: 'npx', args: ['-y', 'tavily-mcp'], env: ['TAVILY_API_KEY'], category: 'search', auth_types: ['api_key'] },
-  { name: 'brave-search', display: 'Brave Search', command: 'npx', args: ['-y', '@anthropic/brave-search-mcp'], env: ['BRAVE_API_KEY'], category: 'search', auth_types: ['api_key'] },
-  { name: 'exa-search', display: 'Exa Search', command: 'npx', args: ['-y', 'exa-mcp'], env: ['EXA_API_KEY'], category: 'search', auth_types: ['api_key'] },
-  { name: 'google-sheets', display: 'Google Sheets', command: 'npx', args: ['-y', 'google-sheets-mcp'], env: ['GOOGLE_API_KEY'], category: 'data', auth_types: ['api_key', 'oauth2'] },
-  { name: 'postgresql', display: 'PostgreSQL', command: 'npx', args: ['-y', 'postgres-mcp'], env: ['DATABASE_URL'], category: 'data', auth_types: ['none'] },
-  { name: 'slack', display: 'Slack', command: 'npx', args: ['-y', 'slack-mcp'], env: ['SLACK_BOT_TOKEN'], category: 'communication', auth_types: ['api_key'] },
-  { name: 'resend-email', display: 'Email (Resend)', command: 'npx', args: ['-y', 'resend-mcp'], env: ['RESEND_API_KEY'], category: 'communication', auth_types: ['api_key'] },
-  { name: 'github', display: 'GitHub', command: 'npx', args: ['-y', '@anthropic/github-mcp'], env: ['GITHUB_TOKEN'], category: 'dev_tools', auth_types: ['api_key'] },
-  { name: 'linear', display: 'Linear', command: 'npx', args: ['-y', 'linear-mcp'], env: ['LINEAR_API_KEY'], category: 'dev_tools', auth_types: ['api_key'] },
-  { name: 'stripe', display: 'Stripe', command: 'npx', args: ['-y', 'stripe-mcp'], env: ['STRIPE_API_KEY'], category: 'productivity', auth_types: ['api_key'] },
-  { name: 'notion', display: 'Notion', command: 'npx', args: ['-y', 'notion-mcp'], env: ['NOTION_TOKEN'], category: 'productivity', auth_types: ['api_key', 'oauth2'] },
-  { name: 'http-webhook', display: 'HTTP / Webhook', command: 'npx', args: ['-y', 'http-mcp'], env: [], category: 'generic', auth_types: ['none', 'api_key', 'forward_headers'] },
+export const MOCK_CATALOG: MCPCatalogEntry[] = [
+  {
+    name: 'tavily-search',
+    display: 'Tavily Web Search',
+    description: 'AI-optimized web search with relevance scoring',
+    category: 'search',
+    verified: true,
+    packages: [{
+      type: 'stdio',
+      command: 'npx',
+      args: ['-y', 'tavily-mcp'],
+      env_vars: [{ name: 'TAVILY_API_KEY', description: 'Tavily API key', required: true, secret: true }],
+    }],
+    provided_tools: [{ name: 'tavily_search', description: 'Search the web using Tavily' }],
+  },
+  {
+    name: 'brave-search',
+    display: 'Brave Search',
+    description: 'Privacy-focused web search via Brave API',
+    category: 'search',
+    verified: true,
+    packages: [{
+      type: 'stdio',
+      command: 'npx',
+      args: ['-y', '@anthropic/brave-search-mcp'],
+      env_vars: [{ name: 'BRAVE_API_KEY', description: 'Brave Search API key', required: true, secret: true }],
+    }],
+    provided_tools: [{ name: 'brave_search', description: 'Search the web using Brave' }],
+  },
+  {
+    name: 'github',
+    display: 'GitHub',
+    description: 'GitHub API integration for repos, issues, PRs',
+    category: 'dev-tools',
+    verified: true,
+    packages: [{
+      type: 'stdio',
+      command: 'npx',
+      args: ['-y', '@anthropic/github-mcp'],
+      env_vars: [{ name: 'GITHUB_TOKEN', description: 'GitHub personal access token', required: true, secret: true }],
+    }],
+    provided_tools: [
+      { name: 'github_list_repos', description: 'List repositories' },
+      { name: 'github_create_issue', description: 'Create an issue' },
+    ],
+  },
+  {
+    name: 'stripe',
+    display: 'Stripe',
+    description: 'Stripe payments API for charges, customers, subscriptions',
+    category: 'payments',
+    verified: true,
+    packages: [{
+      type: 'stdio',
+      command: 'npx',
+      args: ['-y', 'stripe-mcp'],
+      env_vars: [{ name: 'STRIPE_API_KEY', description: 'Stripe secret key', required: true, secret: true }],
+    }],
+    provided_tools: [{ name: 'stripe_create_charge', description: 'Create a payment charge' }],
+  },
+  {
+    name: 'remote-analytics',
+    display: 'Analytics Dashboard',
+    description: 'Remote analytics MCP server via streamable HTTP',
+    category: 'data',
+    verified: false,
+    packages: [{
+      type: 'remote',
+      transport: 'streamable-http',
+      url_template: 'https://analytics.example.com/mcp',
+      env_vars: [{ name: 'ANALYTICS_TOKEN', description: 'API token', required: true, secret: true }],
+    }],
+    provided_tools: [{ name: 'query_metrics', description: 'Query analytics metrics' }],
+  },
+  {
+    name: 'slack',
+    display: 'Slack',
+    description: 'Send messages and manage Slack channels',
+    category: 'communication',
+    verified: true,
+    packages: [{
+      type: 'stdio',
+      command: 'npx',
+      args: ['-y', 'slack-mcp'],
+      env_vars: [{ name: 'SLACK_BOT_TOKEN', description: 'Slack bot OAuth token', required: true, secret: true }],
+    }],
+    provided_tools: [
+      { name: 'slack_send_message', description: 'Send a message to a channel' },
+      { name: 'slack_list_channels', description: 'List Slack channels' },
+    ],
+  },
 ];
 
 export const MOCK_TRIGGERS: Trigger[] = [
@@ -55,7 +133,7 @@ export const MOCK_TRIGGERS: Trigger[] = [
 export const MOCK_TASKS_PAGINATED: PaginatedTaskResponse = {
   data: [
     { id: '1', title: 'Process support ticket #4521', agent_name: 'support-agent', status: 'completed', source: 'webhook', created_at: '2026-04-05T14:30:00Z' },
-    { id: '2', title: 'Analyze lead score batch', agent_name: 'lead-scorer', status: 'running', source: 'cron', created_at: '2026-04-05T14:00:00Z' },
+    { id: '2', title: 'Analyze lead score batch', agent_name: 'lead-scorer', status: 'in_progress', source: 'cron', created_at: '2026-04-05T14:00:00Z' },
     { id: '3', title: 'Code review PR #89', agent_name: 'review-agent', status: 'failed', source: 'webhook', created_at: '2026-04-05T13:15:00Z' },
     { id: '4', title: 'Outreach to prospect', agent_name: 'outreach-agent', status: 'completed', source: 'cron', created_at: '2026-04-05T12:00:00Z' },
   ],

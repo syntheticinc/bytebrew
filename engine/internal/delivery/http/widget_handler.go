@@ -5,39 +5,41 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
 
 // WidgetInfo is a widget returned in API responses.
 type WidgetInfo struct {
-	ID              string   `json:"id"`
-	Name            string   `json:"name"`
-	SchemaID        string   `json:"schema_id"`
-	PrimaryColor    string   `json:"primary_color"`
-	Position        string   `json:"position"`
-	Size            string   `json:"size"`
-	WelcomeMessage  string   `json:"welcome_message"`
-	Placeholder     string   `json:"placeholder"`
-	AvatarURL       string   `json:"avatar_url,omitempty"`
-	DomainWhitelist []string          `json:"domain_whitelist"`
+	ID              string            `json:"id"`
+	Name            string            `json:"name"`
+	Schema          string            `json:"schema"`
+	Status          string            `json:"status"` // active, disabled
+	PrimaryColor    string            `json:"primary_color"`
+	Position        string            `json:"position"`
+	Size            string            `json:"size"`
+	WelcomeMessage  string            `json:"welcome_message"`
+	PlaceholderText string            `json:"placeholder_text"`
+	AvatarURL       string            `json:"avatar_url,omitempty"`
+	DomainWhitelist string            `json:"domain_whitelist"`
 	CustomHeaders   map[string]string `json:"custom_headers,omitempty"`
-	Enabled         bool              `json:"enabled"`
+	CreatedAt       string            `json:"created_at,omitempty"`
 }
 
-// CreateWidgetRequest is the body for POST /api/v1/widgets.
+// CreateWidgetRequest is the body for POST/PUT /api/v1/widgets.
 type CreateWidgetRequest struct {
-	Name            string   `json:"name"`
-	SchemaID        string   `json:"schema_id"`
-	PrimaryColor    string   `json:"primary_color,omitempty"`
-	Position        string   `json:"position,omitempty"`
-	Size            string   `json:"size,omitempty"`
-	WelcomeMessage  string   `json:"welcome_message,omitempty"`
-	Placeholder     string   `json:"placeholder,omitempty"`
-	AvatarURL       string   `json:"avatar_url,omitempty"`
-	DomainWhitelist []string          `json:"domain_whitelist,omitempty"`
+	Name            string            `json:"name"`
+	Schema          string            `json:"schema"`
+	Status          string            `json:"status,omitempty"` // active, disabled
+	PrimaryColor    string            `json:"primary_color,omitempty"`
+	Position        string            `json:"position,omitempty"`
+	Size            string            `json:"size,omitempty"`
+	WelcomeMessage  string            `json:"welcome_message,omitempty"`
+	PlaceholderText string            `json:"placeholder_text,omitempty"`
+	AvatarURL       string            `json:"avatar_url,omitempty"`
+	DomainWhitelist string            `json:"domain_whitelist,omitempty"`
 	CustomHeaders   map[string]string `json:"custom_headers,omitempty"`
-	Enabled         *bool             `json:"enabled,omitempty"`
 }
 
 // WidgetService provides widget CRUD operations.
@@ -107,8 +109,8 @@ func (h *WidgetHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "name is required")
 		return
 	}
-	if req.SchemaID == "" {
-		writeJSONError(w, http.StatusBadRequest, "schema_id is required")
+	if req.Schema == "" {
+		writeJSONError(w, http.StatusBadRequest, "schema is required")
 		return
 	}
 
@@ -138,7 +140,14 @@ func (h *WidgetHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeDomainError(w, err)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+
+	// Return the updated widget so the frontend can update its state.
+	updated, err := h.service.GetWidget(r.Context(), id)
+	if err != nil {
+		writeDomainError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
 }
 
 // Delete handles DELETE /api/v1/widgets/{id}.
@@ -159,12 +168,11 @@ func (h *WidgetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // WidgetScriptHandler serves GET /widget/{id}.js — the embed script.
 type WidgetScriptHandler struct {
 	service WidgetService
-	baseURL string // engine base URL for widget iframe
 }
 
 // NewWidgetScriptHandler creates a WidgetScriptHandler.
-func NewWidgetScriptHandler(service WidgetService, baseURL string) *WidgetScriptHandler {
-	return &WidgetScriptHandler{service: service, baseURL: baseURL}
+func NewWidgetScriptHandler(service WidgetService) *WidgetScriptHandler {
+	return &WidgetScriptHandler{service: service}
 }
 
 // ServeScript handles GET /widget/{id}.js.
@@ -181,36 +189,98 @@ func (h *WidgetScriptHandler) ServeScript(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Check origin against domain whitelist
+	// Check if widget is enabled.
+	if widget.Status == "disabled" {
+		http.Error(w, "widget is disabled", http.StatusForbidden)
+		return
+	}
+
+	// Origin validation against domain whitelist.
 	origin := r.Header.Get("Origin")
 	if origin == "" {
 		origin = r.Header.Get("Referer")
 	}
-
-	// Set CORS headers based on whitelist
 	allowedOrigin := "*"
-	if len(widget.DomainWhitelist) > 0 && widget.DomainWhitelist[0] != "*" {
-		allowedOrigin = origin // echo back origin if it's in the whitelist
+	if widget.DomainWhitelist != "" {
+		if !isOriginAllowed(origin, widget.DomainWhitelist) {
+			http.Error(w, "origin not allowed", http.StatusForbidden)
+			return
+		}
+		allowedOrigin = origin
 	}
 	w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
-
 	w.Header().Set("Content-Type", "application/javascript")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 
-	// Generate lightweight embed script
-	script := fmt.Sprintf(`(function(){
-  var w=document.createElement('div');
-  w.id='bytebrew-widget-%s';
-  w.innerHTML='<iframe src="%s/widget/%s/frame" style="border:none;position:fixed;%s;bottom:20px;width:400px;height:600px;z-index:999999;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.15);" allow="microphone"></iframe>';
-  document.body.appendChild(w);
-})();`, id, h.baseURL, id, positionCSS(widget.Position))
+	// Derive the base URL from the request (scheme + host) for loading widget.js.
+	scheme := "https"
+	if r.TLS == nil {
+		scheme = "http"
+	}
+	if fwd := r.Header.Get("X-Forwarded-Proto"); fwd != "" {
+		scheme = fwd
+	}
+	baseURL := fmt.Sprintf("%s://%s", scheme, r.Host)
 
-	w.Write([]byte(script))
+	// Generate bootstrap script that loads widget.js with admin-configured data attributes.
+	script := fmt.Sprintf(`(function(){
+  if(document.getElementById('bytebrew-widget-%s'))return;
+  var s=document.createElement('script');
+  s.id='bytebrew-widget-%s';
+  s.src='%s/widget.js';
+  s.setAttribute('data-widget-id','%s');
+  s.setAttribute('data-agent','%s');
+  s.setAttribute('data-endpoint','%s');
+  s.setAttribute('data-position','%s');
+  s.setAttribute('data-theme','light');
+  s.setAttribute('data-title','%s');
+  s.setAttribute('data-primary-color','%s');
+  s.setAttribute('data-welcome','%s');
+  s.setAttribute('data-placeholder','%s');
+  document.body.appendChild(s);
+})();`,
+		id, id, baseURL, id,
+		escapeJS(widget.Schema),
+		baseURL,
+		escapeJS(widget.Position),
+		escapeJS(widget.Name),
+		escapeJS(widget.PrimaryColor),
+		escapeJS(widget.WelcomeMessage),
+		escapeJS(widget.PlaceholderText),
+	)
+
+	_, _ = w.Write([]byte(script))
 }
 
-func positionCSS(position string) string {
-	if position == "bottom-left" {
-		return "left:20px"
+// isOriginAllowed checks if the origin matches the comma-separated domain whitelist.
+func isOriginAllowed(origin, whitelist string) bool {
+	if origin == "" {
+		return true // no origin header (e.g., direct browser navigation)
 	}
-	return "right:20px"
+	for _, d := range strings.Split(whitelist, ",") {
+		d = strings.TrimSpace(d)
+		if d == "" {
+			continue
+		}
+		if d == "*" {
+			return true
+		}
+		if strings.EqualFold(d, origin) {
+			return true
+		}
+		// Allow subdomain matching: whitelist "example.com" matches "https://sub.example.com"
+		if strings.HasSuffix(strings.ToLower(origin), strings.ToLower(d)) {
+			return true
+		}
+	}
+	return false
+}
+
+// escapeJS escapes a string for safe embedding in a JS string literal.
+func escapeJS(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `'`, `\'`)
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	s = strings.ReplaceAll(s, "\r", ``)
+	return s
 }

@@ -1576,8 +1576,26 @@ type taskServiceHTTPAdapter struct {
 	repo *config_repo.GORMTaskRepository
 }
 
-func (a *taskServiceHTTPAdapter) CreateTask(_ context.Context, _ deliveryhttp.CreateTaskRequest) (string, error) {
-	return "", nil
+func (a *taskServiceHTTPAdapter) CreateTask(ctx context.Context, req deliveryhttp.CreateTaskRequest) (string, error) {
+	mode := domain.TaskModeInteractive
+	if req.Mode == "background" {
+		mode = domain.TaskModeBackground
+	}
+
+	task := &domain.EngineTask{
+		Title:       req.Title,
+		Description: req.Description,
+		AgentName:   req.AgentName,
+		Source:      domain.TaskSourceDashboard,
+		UserID:      req.UserID,
+		Status:      domain.EngineTaskStatusPending,
+		Mode:        mode,
+	}
+
+	if err := a.repo.Create(ctx, task); err != nil {
+		return "", fmt.Errorf("create task: %w", err)
+	}
+	return task.ID, nil
 }
 
 func (a *taskServiceHTTPAdapter) buildRepoFilter(filter deliveryhttp.TaskListFilter) config_repo.TaskFilter {
@@ -1654,8 +1672,16 @@ func (a *taskServiceHTTPAdapter) CancelTask(ctx context.Context, id string) erro
 	return a.repo.Cancel(ctx, id)
 }
 
-func (a *taskServiceHTTPAdapter) ProvideInput(_ context.Context, _ string, _ string) error {
-	return nil
+func (a *taskServiceHTTPAdapter) ProvideInput(ctx context.Context, id string, input string) error {
+	task, err := a.repo.GetByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("get task: %w", err)
+	}
+	if task.Status != domain.EngineTaskStatusNeedsInput {
+		return fmt.Errorf("task %s is not awaiting input (status: %s)", id, task.Status)
+	}
+	// Store the input and transition back to in_progress.
+	return a.repo.UpdateStatus(ctx, id, domain.EngineTaskStatusInProgress, input)
 }
 
 // knowledgeStatsHTTPAdapter bridges GORMKnowledgeRepository to the http.KnowledgeStats interface.

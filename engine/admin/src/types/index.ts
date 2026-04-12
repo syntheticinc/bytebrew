@@ -105,7 +105,7 @@ export interface CreateModelRequest {
 export interface MCPServer {
   id: string;
   name: string;
-  type: 'stdio' | 'http' | 'sse' | 'streamable-http';
+  type: 'stdio' | 'http' | 'sse' | 'streamable-http' | 'websocket' | 'docker';
   command?: string;
   args?: string[];
   url?: string;
@@ -127,17 +127,44 @@ export interface MCPServerStatus {
   connected_at?: string;
 }
 
-export interface WellKnownMCP {
+export type MCPCatalogCategory = 'search' | 'data' | 'communication' | 'dev-tools' | 'productivity' | 'payments' | 'generic';
+
+export interface MCPCatalogEnvVar {
   name: string;
-  display: string;
-  command: string;
-  args: string[];
-  env: string[];
-  category?: MCPCatalogCategory;
-  auth_types?: WebhookAuthType[];
+  description?: string;
+  required: boolean;
+  secret?: boolean;
 }
 
-export type MCPCatalogCategory = 'search' | 'data' | 'communication' | 'dev_tools' | 'productivity' | 'generic';
+export interface MCPCatalogTool {
+  name: string;
+  description: string;
+}
+
+export interface MCPCatalogPackage {
+  type: 'stdio' | 'remote' | 'docker';
+  transport?: string;
+  command?: string;
+  args?: string[];
+  image?: string;
+  url_template?: string;
+  env_vars?: MCPCatalogEnvVar[];
+}
+
+export interface MCPCatalogEntry {
+  name: string;
+  display: string;
+  description?: string;
+  category?: MCPCatalogCategory;
+  verified?: boolean;
+  packages: MCPCatalogPackage[];
+  provided_tools?: MCPCatalogTool[];
+}
+
+export interface MCPCatalogResponse {
+  version: string;
+  servers: MCPCatalogEntry[];
+}
 
 export interface CreateMCPServerRequest {
   name: string;
@@ -388,6 +415,7 @@ export interface MemoryEntry {
   content: string;
   metadata?: Record<string, unknown>;
   created_at: string;
+  updated_at: string;
 }
 
 export const CAPABILITY_META: Record<CapabilityType, { label: string; icon: string; description: string }> = {

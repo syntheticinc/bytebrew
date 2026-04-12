@@ -5,7 +5,8 @@ import type {
   Model,
   CreateModelRequest,
   MCPServer,
-  WellKnownMCP,
+  MCPCatalogEntry,
+  MCPCatalogResponse,
   CreateMCPServerRequest,
   TaskResponse,
   TaskDetailResponse,
@@ -44,7 +45,7 @@ import {
   MOCK_HEALTH,
   MOCK_MODELS_LIST,
   MOCK_MCP_SERVERS,
-  MOCK_WELL_KNOWN,
+  MOCK_CATALOG,
   MOCK_TRIGGERS,
   MOCK_TASKS_PAGINATED,
   MOCK_TOKENS,
@@ -199,10 +200,6 @@ class APIClient {
   listMCPServers() {
     if (this.isPrototype) return this.mock(MOCK_MCP_SERVERS);
     return this.request<MCPServer[]>('GET', '/mcp-servers');
-  }
-  getWellKnownMCP() {
-    if (this.isPrototype) return this.mock(MOCK_WELL_KNOWN);
-    return this.request<WellKnownMCP[]>('GET', '/mcp/well-known');
   }
   createMCPServer(data: CreateMCPServerRequest) {
     if (this.isPrototype) return this.mock({ id: crypto.randomUUID(), ...data, status: { status: 'connected', tools_count: 0 }, is_well_known: false, agents: [] } as MCPServer);
@@ -550,10 +547,10 @@ class APIClient {
   async listMemories(schemaId: string): Promise<MemoryEntry[]> {
     if (this.isPrototype) {
       return this.mock<MemoryEntry[]>([
-        { id: 'mem_1', schema_id: schemaId, content: 'User prefers concise responses', metadata: { source: 'conversation' }, created_at: '2026-04-01T10:00:00Z' },
-        { id: 'mem_2', schema_id: schemaId, user_id: 'user_42', content: 'Customer is on Enterprise plan, prefers email communication', metadata: { source: 'crm_sync' }, created_at: '2026-04-02T14:30:00Z' },
-        { id: 'mem_3', schema_id: schemaId, content: 'Product FAQ: refund policy is 30 days', metadata: { source: 'knowledge_base' }, created_at: '2026-04-03T09:15:00Z' },
-        { id: 'mem_4', schema_id: schemaId, user_id: 'user_99', content: 'Reported bug with checkout flow — escalated to engineering', metadata: { source: 'conversation', priority: 'high' }, created_at: '2026-04-04T16:45:00Z' },
+        { id: 'mem_1', schema_id: schemaId, content: 'User prefers concise responses', metadata: { source: 'conversation' }, created_at: '2026-04-01T10:00:00Z', updated_at: '2026-04-01T10:00:00Z' },
+        { id: 'mem_2', schema_id: schemaId, user_id: 'user_42', content: 'Customer is on Enterprise plan, prefers email communication', metadata: { source: 'crm_sync' }, created_at: '2026-04-02T14:30:00Z', updated_at: '2026-04-02T14:30:00Z' },
+        { id: 'mem_3', schema_id: schemaId, content: 'Product FAQ: refund policy is 30 days', metadata: { source: 'knowledge_base' }, created_at: '2026-04-03T09:15:00Z', updated_at: '2026-04-03T09:15:00Z' },
+        { id: 'mem_4', schema_id: schemaId, user_id: 'user_99', content: 'Reported bug with checkout flow — escalated to engineering', metadata: { source: 'conversation', priority: 'high' }, created_at: '2026-04-04T16:45:00Z', updated_at: '2026-04-04T16:45:00Z' },
       ]);
     }
     return this.request<MemoryEntry[]>('GET', `/schemas/${encodeURIComponent(schemaId)}/memory`);
@@ -571,9 +568,9 @@ class APIClient {
 
   // ─── MCP Catalog ───────────────────────────────────────────────────────────────
 
-  async listCatalog(category?: string, query?: string): Promise<WellKnownMCP[]> {
+  async listCatalog(category?: string, query?: string): Promise<MCPCatalogEntry[]> {
     if (this.isPrototype) {
-      let results = [...MOCK_WELL_KNOWN];
+      let results = [...MOCK_CATALOG];
       if (category) results = results.filter((e) => e.category === category);
       if (query) {
         const q = query.toLowerCase();
@@ -585,7 +582,8 @@ class APIClient {
     if (category) params.set('category', category);
     if (query) params.set('q', query);
     const qs = params.toString() ? '?' + params.toString() : '';
-    return this.request<WellKnownMCP[]>('GET', `/mcp/catalog${qs}`);
+    const resp = await this.request<MCPCatalogResponse>('GET', `/mcp/catalog${qs}`);
+    return resp.servers ?? [];
   }
 
   // ─── Capabilities ──────────────────────────────────────────────────────────────
@@ -642,9 +640,9 @@ class APIClient {
     } as KnowledgeFile));
   }
 
-  async deleteKnowledgeFile(agentName: string, filename: string): Promise<void> {
+  async deleteKnowledgeFile(agentName: string, fileId: string): Promise<void> {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
-    return this.request<void>('DELETE', `/agents/${encodeURIComponent(agentName)}/knowledge/files/${encodeURIComponent(filename)}`);
+    return this.request<void>('DELETE', `/agents/${encodeURIComponent(agentName)}/knowledge/files/${encodeURIComponent(fileId)}`);
   }
 
   async reindexKnowledge(agentName: string): Promise<void> {
@@ -652,9 +650,9 @@ class APIClient {
     return this.request<void>('POST', `/agents/${encodeURIComponent(agentName)}/knowledge/reindex`);
   }
 
-  async reindexKnowledgeFile(agentName: string, filename: string): Promise<void> {
+  async reindexKnowledgeFile(agentName: string, fileId: string): Promise<void> {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
-    return this.request<void>('POST', `/agents/${encodeURIComponent(agentName)}/knowledge/files/${encodeURIComponent(filename)}/reindex`);
+    return this.request<void>('POST', `/agents/${encodeURIComponent(agentName)}/knowledge/files/${encodeURIComponent(fileId)}/reindex`);
   }
 
   async uploadKnowledgeFile(agentName: string, file: File): Promise<KnowledgeFile> {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
@@ -47,22 +48,19 @@ func (a *widgetServiceHTTPAdapter) GetWidget(ctx context.Context, id string) (*d
 func (a *widgetServiceHTTPAdapter) CreateWidget(ctx context.Context, req deliveryhttp.CreateWidgetRequest) (*deliveryhttp.WidgetInfo, error) {
 	tenantID := domain.TenantIDFromContext(ctx)
 
-	enabled := true
-	if req.Enabled != nil {
-		enabled = *req.Enabled
-	}
+	enabled := req.Status != "disabled"
 
 	record := &config_repo.WidgetRecord{
 		TenantID:        tenantID,
 		Name:            req.Name,
-		SchemaID:        req.SchemaID,
+		SchemaID:        req.Schema,
 		PrimaryColor:    defaultStr(req.PrimaryColor, "#6366f1"),
 		Position:        defaultStr(req.Position, "bottom-right"),
 		Size:            defaultStr(req.Size, "standard"),
 		WelcomeMessage:  defaultStr(req.WelcomeMessage, "Hi! How can I help?"),
-		Placeholder:     defaultStr(req.Placeholder, "Type a message..."),
+		Placeholder:     defaultStr(req.PlaceholderText, "Type a message..."),
 		AvatarURL:       req.AvatarURL,
-		DomainWhitelist: req.DomainWhitelist,
+		DomainWhitelist: splitDomains(req.DomainWhitelist),
 		CustomHeaders:   req.CustomHeaders,
 		Enabled:         enabled,
 	}
@@ -89,25 +87,25 @@ func (a *widgetServiceHTTPAdapter) UpdateWidget(ctx context.Context, id string, 
 
 	record := &config_repo.WidgetRecord{
 		Name:            defaultStr(req.Name, existing.Name),
-		SchemaID:        defaultStr(req.SchemaID, existing.SchemaID),
+		SchemaID:        defaultStr(req.Schema, existing.SchemaID),
 		PrimaryColor:    defaultStr(req.PrimaryColor, existing.PrimaryColor),
 		Position:        defaultStr(req.Position, existing.Position),
 		Size:            defaultStr(req.Size, existing.Size),
 		WelcomeMessage:  defaultStr(req.WelcomeMessage, existing.WelcomeMessage),
-		Placeholder:     defaultStr(req.Placeholder, existing.Placeholder),
+		Placeholder:     defaultStr(req.PlaceholderText, existing.Placeholder),
 		AvatarURL:       defaultStr(req.AvatarURL, existing.AvatarURL),
 		DomainWhitelist: existing.DomainWhitelist,
 		CustomHeaders:   existing.CustomHeaders,
 		Enabled:         existing.Enabled,
 	}
-	if len(req.DomainWhitelist) > 0 {
-		record.DomainWhitelist = req.DomainWhitelist
+	if req.DomainWhitelist != "" {
+		record.DomainWhitelist = splitDomains(req.DomainWhitelist)
 	}
 	if req.CustomHeaders != nil {
 		record.CustomHeaders = req.CustomHeaders
 	}
-	if req.Enabled != nil {
-		record.Enabled = *req.Enabled
+	if req.Status != "" {
+		record.Enabled = req.Status != "disabled"
 	}
 
 	if err := a.repo.Update(ctx, id, record); err != nil {
@@ -130,20 +128,56 @@ func (a *widgetServiceHTTPAdapter) DeleteWidget(ctx context.Context, id string) 
 }
 
 func toWidgetInfo(r config_repo.WidgetRecord) deliveryhttp.WidgetInfo {
+	status := "active"
+	if !r.Enabled {
+		status = "disabled"
+	}
+
+	var createdAt string
+	if !r.CreatedAt.IsZero() {
+		createdAt = r.CreatedAt.Format("2006-01-02T15:04:05Z07:00")
+	}
+
 	return deliveryhttp.WidgetInfo{
 		ID:              r.ID,
 		Name:            r.Name,
-		SchemaID:        r.SchemaID,
+		Schema:          r.SchemaID,
+		Status:          status,
 		PrimaryColor:    r.PrimaryColor,
 		Position:        r.Position,
 		Size:            r.Size,
 		WelcomeMessage:  r.WelcomeMessage,
-		Placeholder:     r.Placeholder,
+		PlaceholderText: r.Placeholder,
 		AvatarURL:       r.AvatarURL,
-		DomainWhitelist: r.DomainWhitelist,
+		DomainWhitelist: joinDomains(r.DomainWhitelist),
 		CustomHeaders:   r.CustomHeaders,
-		Enabled:         r.Enabled,
+		CreatedAt:       createdAt,
 	}
+}
+
+// splitDomains splits a comma-separated domain whitelist string into a slice.
+func splitDomains(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
+// joinDomains joins a domain whitelist slice into a comma-separated string.
+func joinDomains(domains []string) string {
+	// Filter out the default wildcard for cleaner UI display.
+	if len(domains) == 1 && domains[0] == "*" {
+		return ""
+	}
+	return strings.Join(domains, ", ")
 }
 
 func defaultStr(val, def string) string {

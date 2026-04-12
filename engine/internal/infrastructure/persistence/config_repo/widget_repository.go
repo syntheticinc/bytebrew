@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"gorm.io/gorm"
@@ -25,6 +26,7 @@ type WidgetRecord struct {
 	DomainWhitelist []string
 	CustomHeaders   map[string]string
 	Enabled         bool
+	CreatedAt       time.Time
 }
 
 // GORMWidgetRepository implements widget CRUD using GORM.
@@ -149,6 +151,7 @@ func toWidgetRecord(w models.WidgetModel) WidgetRecord {
 		DomainWhitelist: domains,
 		CustomHeaders:   customHeaders,
 		Enabled:         w.Enabled,
+		CreatedAt:       w.CreatedAt,
 	}
 }
 

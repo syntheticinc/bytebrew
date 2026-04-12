@@ -33,7 +33,7 @@ export default function WidgetConfigPage() {
         const safeSchemas = Array.isArray(s) ? s : [];
         setWidgets(safeWidgets);
         if (safeWidgets.length > 0 && !selectedId) setSelectedId(safeWidgets[0]!.id);
-        setSchemas(safeSchemas.map((sc) => ({ value: sc.name, label: sc.name })));
+        setSchemas(safeSchemas.map((sc) => ({ value: sc.id, label: sc.name })));
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -168,7 +168,7 @@ export default function WidgetConfigPage() {
                     {w.status}
                   </span>
                 </div>
-                <p className="text-xs text-brand-shade3 font-mono">{w.schema}</p>
+                <p className="text-xs text-brand-shade3 font-mono">{schemas.find((s) => s.value === w.schema)?.label ?? w.schema}</p>
                 <div className="flex items-center gap-1.5 mt-1">
                   <div
                     className="w-3 h-3 rounded-full shrink-0 border border-white/10"

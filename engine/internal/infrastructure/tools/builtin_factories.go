@@ -39,8 +39,12 @@ func RegisterAllBuiltins(store *BuiltinToolStore) {
 		return NewExecuteCommandTool(deps.Proxy, deps.SessionID)
 	})
 
-	// Task management
+	// Task management — uses EngineTask (DB-backed, Admin-visible) when available,
+	// falls back to legacy session-scoped TaskManager otherwise.
 	store.Register("manage_tasks", func(deps ToolDependencies) tool.InvokableTool {
+		if deps.EngineTaskManager != nil {
+			return NewEngineManageTasksTool(deps.EngineTaskManager, deps.SessionID)
+		}
 		return NewManageTasksTool(deps.TaskManager, deps.Proxy, deps.SessionID)
 	})
 	store.Register("manage_subtasks", func(deps ToolDependencies) tool.InvokableTool {
@@ -76,10 +80,10 @@ func RegisterAllBuiltins(store *BuiltinToolStore) {
 		return NewGetFileStructureTool(deps.ChunkStore, deps.ProjectRoot)
 	})
 
-	// Engine task management (Phase 4: replaces old manage_tasks for DB-backed tasks)
+	// Legacy alias — kept for backward compatibility with existing agent configs.
 	store.Register("engine_manage_tasks", func(deps ToolDependencies) tool.InvokableTool {
 		if deps.EngineTaskManager == nil {
-			return nil // not available without PostgreSQL
+			return nil
 		}
 		return NewEngineManageTasksTool(deps.EngineTaskManager, deps.SessionID)
 	})

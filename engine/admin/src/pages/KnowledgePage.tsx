@@ -4,7 +4,7 @@ import { useApi } from '../hooks/useApi';
 import DataTable from '../components/DataTable';
 import type { AgentInfo, KnowledgeFile, KnowledgeStatus } from '../types';
 
-const ACCEPTED_TYPES = '.pdf,.txt,.md,.docx';
+const ACCEPTED_TYPES = '.txt,.md,.csv';
 
 function formatStatus(status: KnowledgeStatus['status']) {
   switch (status) {
@@ -106,12 +106,12 @@ export default function KnowledgePage() {
     setReindexingFile(null);
   }
 
-  async function handleDelete(filename: string) {
+  async function handleDelete(fileId: string) {
     if (deletingFile) return;
-    setDeletingFile(filename);
+    setDeletingFile(fileId);
     setActionError(null);
     try {
-      await api.deleteKnowledgeFile(selectedAgent, filename);
+      await api.deleteKnowledgeFile(selectedAgent, fileId);
       refetch();
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : 'Failed to delete file');
@@ -120,12 +120,12 @@ export default function KnowledgePage() {
     }
   }
 
-  async function handleReindexFile(filename: string) {
+  async function handleReindexFile(fileId: string) {
     if (reindexingFile) return;
-    setReindexingFile(filename);
+    setReindexingFile(fileId);
     setActionError(null);
     try {
-      await api.reindexKnowledgeFile(selectedAgent, filename);
+      await api.reindexKnowledgeFile(selectedAgent, fileId);
       refetch();
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : 'Failed to reindex file');
@@ -224,22 +224,22 @@ export default function KnowledgePage() {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              handleReindexFile(row.name);
+              if (row.id) handleReindexFile(row.id);
             }}
-            disabled={reindexingFile === row.name || row.status === 'indexing' || row.status === 'uploading'}
+            disabled={reindexingFile === row.id || row.status === 'indexing' || row.status === 'uploading'}
             className="px-2.5 py-1 text-xs text-brand-shade2 border border-brand-shade3/30 rounded-btn hover:bg-brand-dark-alt hover:text-brand-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {reindexingFile === row.name ? 'Reindexing...' : 'Reindex'}
+            {reindexingFile === row.id ? 'Reindexing...' : 'Reindex'}
           </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
-              handleDelete(row.name);
+              if (row.id) handleDelete(row.id);
             }}
-            disabled={deletingFile === row.name}
+            disabled={deletingFile === row.id}
             className="px-2.5 py-1 text-xs text-red-400 border border-red-500/30 rounded-btn hover:bg-red-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {deletingFile === row.name ? 'Deleting...' : 'Delete'}
+            {deletingFile === row.id ? 'Deleting...' : 'Delete'}
           </button>
         </div>
       ),
@@ -351,7 +351,7 @@ export default function KnowledgePage() {
                   <p className="text-sm text-brand-shade2">
                     Drop files here or <span className="text-brand-accent">browse</span>
                   </p>
-                  <p className="text-xs text-brand-shade3">Supported: PDF, TXT, MD, DOCX</p>
+                  <p className="text-xs text-brand-shade3">Supported: TXT, MD, CSV</p>
                 </>
               )}
             </div>
@@ -370,7 +370,7 @@ export default function KnowledgePage() {
             <DataTable
               columns={columns}
               data={allFiles}
-              keyField="name"
+              keyField="id"
               emptyMessage="No knowledge files uploaded"
               emptyIcon={bookOpenIconSmall}
             />

@@ -69,10 +69,10 @@ func (h *KnowledgeHandler) SetFileLister(lister KnowledgeFileLister) {
 
 // knowledgeStatusResponse is the JSON response for GET .../knowledge/status.
 type knowledgeStatusResponse struct {
-	Agent       string     `json:"agent"`
-	Documents   int        `json:"documents"`
-	Chunks      int        `json:"chunks"`
-	LastIndexed *time.Time `json:"last_indexed,omitempty"`
+	AgentName    string `json:"agent_name"`
+	TotalFiles   int    `json:"total_files"`
+	IndexedFiles int    `json:"indexed_files"`
+	Status       string `json:"status"` // ready, indexing, empty
 }
 
 // Status handles GET /api/v1/agents/{name}/knowledge/status.
@@ -83,17 +83,56 @@ func (h *KnowledgeHandler) Status(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	docCount, chunkCount, lastIndexed, err := h.stats.GetStats(r.Context(), name)
+	// Compute status from file list when available (accurate per-file status).
+	if h.fileLister != nil {
+		files, err := h.fileLister.ListFiles(r.Context(), name)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		totalFiles := len(files)
+		indexedFiles := 0
+		hasIndexing := false
+		for _, f := range files {
+			switch f.Status {
+			case "ready":
+				indexedFiles++
+			case "indexing", "uploading":
+				hasIndexing = true
+			}
+		}
+		status := "empty"
+		if totalFiles > 0 {
+			if hasIndexing {
+				status = "indexing"
+			} else {
+				status = "ready"
+			}
+		}
+		writeJSON(w, http.StatusOK, knowledgeStatusResponse{
+			AgentName:    name,
+			TotalFiles:   totalFiles,
+			IndexedFiles: indexedFiles,
+			Status:       status,
+		})
+		return
+	}
+
+	// Fallback: use stats (no per-file granularity).
+	docCount, _, _, err := h.stats.GetStats(r.Context(), name)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-
+	status := "empty"
+	if docCount > 0 {
+		status = "ready"
+	}
 	writeJSON(w, http.StatusOK, knowledgeStatusResponse{
-		Agent:       name,
-		Documents:   docCount,
-		Chunks:      chunkCount,
-		LastIndexed: lastIndexed,
+		AgentName:    name,
+		TotalFiles:   docCount,
+		IndexedFiles: docCount,
+		Status:       status,
 	})
 }
 

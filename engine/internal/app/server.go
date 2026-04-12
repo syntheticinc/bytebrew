@@ -1081,7 +1081,7 @@ func Run(sc ServerConfig) error {
 
 		// Serve dynamic widget embed script per widget ID (public, no auth)
 		widgetScriptRepo := config_repo.NewGORMWidgetRepository(pgDB)
-		widgetScriptHandler := deliveryhttp.NewWidgetScriptHandler(&widgetServiceHTTPAdapter{repo: widgetScriptRepo}, "")
+		widgetScriptHandler := deliveryhttp.NewWidgetScriptHandler(&widgetServiceHTTPAdapter{repo: widgetScriptRepo})
 		r.Get("/widget/{id}.js", widgetScriptHandler.ServeScript)
 
 		// NOTE: HTTP server start is deferred until after SessionProcessor is created,

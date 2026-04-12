@@ -42,6 +42,7 @@ type memoryResponse struct {
 	Content   string            `json:"content"`
 	Metadata  map[string]string `json:"metadata,omitempty"`
 	CreatedAt time.Time         `json:"created_at"`
+	UpdatedAt time.Time         `json:"updated_at"`
 }
 
 // ListMemories handles GET /api/v1/schemas/{id}/memory
@@ -67,6 +68,7 @@ func (h *MemoryHandler) ListMemories(w http.ResponseWriter, r *http.Request) {
 			Content:   m.Content,
 			Metadata:  m.Metadata,
 			CreatedAt: m.CreatedAt,
+			UpdatedAt: m.UpdatedAt,
 		})
 	}
 
