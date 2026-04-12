@@ -122,13 +122,21 @@ func (r *GORMKnowledgeRepository) DeleteChunksByAgent(ctx context.Context, agent
 
 // SearchSimilar finds the most similar chunks by cosine distance using pgvector.
 // Scoped by tenant_id + agent_name for tenant isolation (WP-3).
-func (r *GORMKnowledgeRepository) SearchSimilar(ctx context.Context, agentName string, embedding pgvector.Vector, limit int) ([]models.KnowledgeChunk, error) {
+func (r *GORMKnowledgeRepository) SearchSimilar(ctx context.Context, agentName string, embedding pgvector.Vector, limit int, similarityThreshold float64) ([]models.KnowledgeChunk, error) {
 	tenantID := r.tenantID(ctx)
 	var chunks []models.KnowledgeChunk
-	err := r.db.WithContext(ctx).
-		Raw("SELECT * FROM knowledge_chunks WHERE tenant_id = ? AND agent_name = ? ORDER BY embedding <=> ? LIMIT ?",
-			tenantID, agentName, embedding, limit).
-		Scan(&chunks).Error
+	var err error
+	if similarityThreshold > 0 {
+		err = r.db.WithContext(ctx).
+			Raw("SELECT * FROM knowledge_chunks WHERE tenant_id = ? AND agent_name = ? AND (1 - (embedding <=> ?)) >= ? ORDER BY embedding <=> ? LIMIT ?",
+				tenantID, agentName, embedding, similarityThreshold, embedding, limit).
+			Scan(&chunks).Error
+	} else {
+		err = r.db.WithContext(ctx).
+			Raw("SELECT * FROM knowledge_chunks WHERE tenant_id = ? AND agent_name = ? ORDER BY embedding <=> ? LIMIT ?",
+				tenantID, agentName, embedding, limit).
+			Scan(&chunks).Error
+	}
 	if err != nil {
 		return nil, fmt.Errorf("search similar: %w", err)
 	}

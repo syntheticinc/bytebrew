@@ -11,24 +11,26 @@ import (
 
 // ModelResponse is the API representation of an LLM provider model.
 type ModelResponse struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Type       string `json:"type"`
-	BaseURL    string `json:"base_url,omitempty"`
-	ModelName  string `json:"model_name"`
-	HasAPIKey  bool   `json:"has_api_key"`
-	APIVersion string `json:"api_version,omitempty"`
-	CreatedAt  string `json:"created_at"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+	BaseURL      string `json:"base_url,omitempty"`
+	ModelName    string `json:"model_name"`
+	HasAPIKey    bool   `json:"has_api_key"`
+	APIVersion   string `json:"api_version,omitempty"`
+	EmbeddingDim int    `json:"embedding_dim,omitempty"` // >0 for embedding models
+	CreatedAt    string `json:"created_at"`
 }
 
 // CreateModelRequest is the body for POST /api/v1/models.
 type CreateModelRequest struct {
-	Name       string `json:"name"`
-	Type       string `json:"type"`
-	BaseURL    string `json:"base_url,omitempty"`
-	ModelName  string `json:"model_name"`
-	APIKey     string `json:"api_key,omitempty"`
-	APIVersion string `json:"api_version,omitempty"`
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+	BaseURL      string `json:"base_url,omitempty"`
+	ModelName    string `json:"model_name"`
+	APIKey       string `json:"api_key,omitempty"`
+	APIVersion   string `json:"api_version,omitempty"`
+	EmbeddingDim int    `json:"embedding_dim,omitempty"` // required when type=embedding
 }
 
 // ModelVerifyResult contains the result of model connectivity verification.
@@ -72,13 +74,29 @@ func (h *ModelHandler) Routes() http.Handler {
 }
 
 // List handles GET /api/v1/models.
+// Supports ?type=embedding (only embedding) or ?type=!embedding (exclude embedding).
 func (h *ModelHandler) List(w http.ResponseWriter, r *http.Request) {
-	models, err := h.service.ListModels(r.Context())
+	allModels, err := h.service.ListModels(r.Context())
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, models)
+
+	typeFilter := r.URL.Query().Get("type")
+	if typeFilter == "" {
+		writeJSON(w, http.StatusOK, allModels)
+		return
+	}
+
+	filtered := make([]ModelResponse, 0, len(allModels))
+	for _, m := range allModels {
+		if typeFilter == "embedding" && m.Type == "embedding" {
+			filtered = append(filtered, m)
+		} else if typeFilter == "!embedding" && m.Type != "embedding" {
+			filtered = append(filtered, m)
+		}
+	}
+	writeJSON(w, http.StatusOK, filtered)
 }
 
 // Create handles POST /api/v1/models.
@@ -128,6 +146,22 @@ func (h *ModelHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Embedding model: require embedding_dim, base_url, api_key.
+	if req.Type == "embedding" {
+		if req.EmbeddingDim <= 0 {
+			writeJSONError(w, http.StatusBadRequest, "embedding_dim is required for embedding models (e.g. 1536 for text-embedding-3-small)")
+			return
+		}
+		if req.BaseURL == "" {
+			writeJSONError(w, http.StatusBadRequest, "base_url is required for embedding models (e.g. https://api.openai.com/v1)")
+			return
+		}
+		if req.APIKey == "" {
+			writeJSONError(w, http.StatusBadRequest, "api_key is required for embedding models")
+			return
+		}
+	}
+
 	model, err := h.service.CreateModel(r.Context(), req)
 	if err != nil {
 		writeDomainError(w, err)
@@ -148,6 +182,22 @@ func (h *ModelHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %s", err.Error()))
 		return
+	}
+
+	// Embedding model: same validation as Create.
+	if req.Type == "embedding" {
+		if req.EmbeddingDim <= 0 {
+			writeJSONError(w, http.StatusBadRequest, "embedding_dim is required for embedding models (e.g. 1536 for text-embedding-3-small)")
+			return
+		}
+		if req.BaseURL == "" {
+			writeJSONError(w, http.StatusBadRequest, "base_url is required for embedding models (e.g. https://api.openai.com/v1)")
+			return
+		}
+		if req.APIKey == "" {
+			writeJSONError(w, http.StatusBadRequest, "api_key is required for embedding models")
+			return
+		}
 	}
 
 	result, err := h.service.UpdateModel(r.Context(), name, req)

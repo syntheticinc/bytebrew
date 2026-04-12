@@ -85,11 +85,22 @@ func (h *CapabilityHandler) Add(w http.ResponseWriter, r *http.Request) {
 	// BUG-001: Validate capability type against allowed list.
 	validTypes := map[string]bool{
 		"memory": true, "knowledge": true, "escalation": true,
-		"guardrail": true, "output_schema": true, "recovery": true, "policies": true,
+		"guardrail": true, "recovery": true, "policies": true,
 	}
 	if !validTypes[req.Type] {
-		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid capability type %q: must be one of memory, knowledge, escalation, guardrail, output_schema, recovery, policies", req.Type))
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid capability type %q: must be one of memory, knowledge, escalation, guardrail, recovery, policies", req.Type))
 		return
+	}
+
+	// BUG-013: Reject duplicate capability type for the same agent.
+	existing, err := h.service.ListCapabilities(r.Context(), name)
+	if err == nil {
+		for _, c := range existing {
+			if c.Type == req.Type {
+				writeJSONError(w, http.StatusConflict, fmt.Sprintf("capability type %q already exists for this agent", req.Type))
+				return
+			}
+		}
 	}
 
 	cap, err := h.service.AddCapability(r.Context(), name, req)

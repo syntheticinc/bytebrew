@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
@@ -64,6 +65,7 @@ type GuardrailCheckConfig struct {
 	JudgePrompt  string
 	JudgeModel   string
 	WebhookURL   string
+	Strict       bool // when true, overrides OnFailure to "error" (block output)
 }
 
 // GuardrailCheckResult holds the result of a guardrail check.
@@ -216,6 +218,19 @@ func (e *EngineAdapter) ExecuteTurn(
 	if flow.MaxContextSize > 0 {
 		compressor = engine.MessageCompressor(agents.NewContextRewriter(flow.MaxContextSize))
 	}
+	// US-003: When guardrail is configured, intercept answer events from the stream
+	// to collect the full answer text for post-execution validation.
+	var collectedAnswer strings.Builder
+	wrappedEventCallback := eventCallback
+	if e.guardrail != nil && e.guardrailConfig != nil && eventCallback != nil {
+		wrappedEventCallback = func(event *domain.AgentEvent) error {
+			if event.Type == domain.EventTypeAnswer && !event.IsComplete {
+				collectedAnswer.WriteString(event.Content)
+			}
+			return eventCallback(event)
+		}
+	}
+
 	execCfg := engine.ExecutionConfig{
 		SessionID:         sessionID,
 		AgentID:           e.agentName,
@@ -225,7 +240,7 @@ func (e *EngineAdapter) ExecuteTurn(
 		ChatModel:         e.chatModel,
 		Streaming:         true,
 		ChunkCallback:     chunkCallback,
-		EventCallback:     eventCallback,
+		EventCallback:     wrappedEventCallback,
 		ContextReminders:  engineReminders,
 		ToolCallRecorder:  convertToolCallRecorderToEngine(e.toolCallRecorder),
 		ModelName:         e.modelName,
@@ -244,7 +259,11 @@ func (e *EngineAdapter) ExecuteTurn(
 		"status", result.Status,
 		"suspended_at", result.SuspendedAt)
 
+	// Use result.Answer for non-streaming, collected answer for streaming.
 	answer := result.Answer
+	if answer == "" {
+		answer = collectedAnswer.String()
+	}
 
 	// US-003: Guardrail check on agent output before sending to user
 	if e.guardrail != nil && e.guardrailConfig != nil && answer != "" {

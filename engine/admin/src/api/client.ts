@@ -172,9 +172,15 @@ class APIClient {
   }
 
   // ---- Models ----
-  listModels() {
-    if (this.isPrototype) return this.mock(MOCK_MODELS_LIST);
-    return this.request<Model[]>('GET', '/models');
+  listModels(typeFilter?: string) {
+    if (this.isPrototype) {
+      const models = MOCK_MODELS_LIST;
+      if (typeFilter === 'embedding') return this.mock(models.filter(m => m.type === 'embedding'));
+      if (typeFilter === '!embedding') return this.mock(models.filter(m => m.type !== 'embedding'));
+      return this.mock(models);
+    }
+    const query = typeFilter ? `?type=${encodeURIComponent(typeFilter)}` : '';
+    return this.request<Model[]>('GET', `/models${query}`);
   }
   createModel(data: CreateModelRequest) {
     if (this.isPrototype) return this.mock({ id: crypto.randomUUID(), ...data, has_api_key: !!data.api_key, created_at: new Date().toISOString() } as Model);

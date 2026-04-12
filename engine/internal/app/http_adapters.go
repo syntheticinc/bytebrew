@@ -1134,6 +1134,14 @@ func (a *agentManagerHTTPAdapter) GetAgent(ctx context.Context, name string) (*d
 }
 
 func (a *agentManagerHTTPAdapter) CreateAgent(ctx context.Context, req deliveryhttp.CreateAgentRequest) (*deliveryhttp.AgentDetail, error) {
+	// WP-4: Prevent using embedding models as agent model.
+	if req.ModelID != nil {
+		var llm models.LLMProviderModel
+		if err := a.db.Where("id = ?", *req.ModelID).First(&llm).Error; err == nil && llm.Type == "embedding" {
+			return nil, pkgerrors.InvalidInput("embedding models cannot be used as agent model, use a chat model instead")
+		}
+	}
+
 	record := a.toAgentRecord(req)
 	if err := a.repo.Create(ctx, record); err != nil {
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "UNIQUE constraint") {
@@ -1150,6 +1158,14 @@ func (a *agentManagerHTTPAdapter) CreateAgent(ctx context.Context, req deliveryh
 }
 
 func (a *agentManagerHTTPAdapter) UpdateAgent(ctx context.Context, name string, req deliveryhttp.CreateAgentRequest) (*deliveryhttp.AgentDetail, error) {
+	// WP-4: Prevent using embedding models as agent model.
+	if req.ModelID != nil {
+		var llm models.LLMProviderModel
+		if err := a.db.Where("id = ?", *req.ModelID).First(&llm).Error; err == nil && llm.Type == "embedding" {
+			return nil, pkgerrors.InvalidInput("embedding models cannot be used as agent model, use a chat model instead")
+		}
+	}
+
 	record := a.toAgentRecord(req)
 
 	// Preserve is_system and builtin tools from the existing record.
@@ -1194,6 +1210,13 @@ func (a *agentManagerHTTPAdapter) DeleteAgent(ctx context.Context, name string) 
 	existing, err := a.repo.GetByName(ctx, name)
 	if err == nil && existing != nil && existing.IsSystem {
 		return pkgerrors.Forbidden(fmt.Sprintf("system agent %q cannot be deleted", name))
+	}
+
+	// BUG-014: Delete triggers before agent to avoid FK constraint on fk_triggers_agent.
+	if err := a.db.WithContext(ctx).
+		Where("agent_id IN (SELECT id FROM agents WHERE name = ?)", name).
+		Delete(&models.TriggerModel{}).Error; err != nil {
+		slog.WarnContext(ctx, "failed to cascade-delete triggers", "agent", name, "error", err)
 	}
 
 	// BUG-004: Delete capabilities before agent to avoid FK constraint violation.
@@ -1322,14 +1345,15 @@ func (m *modelServiceHTTPAdapter) ListModels(ctx context.Context) ([]deliveryhtt
 	result := make([]deliveryhttp.ModelResponse, 0, len(providers))
 	for _, p := range providers {
 		result = append(result, deliveryhttp.ModelResponse{
-			ID:         p.ID,
-			Name:       p.Name,
-			Type:       p.Type,
-			BaseURL:    p.BaseURL,
-			ModelName:  p.ModelName,
-			HasAPIKey:  p.APIKeyEncrypted != "",
-			APIVersion: p.APIVersion,
-			CreatedAt:  p.CreatedAt.Format(time.RFC3339),
+			ID:           p.ID,
+			Name:         p.Name,
+			Type:         p.Type,
+			BaseURL:      p.BaseURL,
+			ModelName:    p.ModelName,
+			HasAPIKey:    p.APIKeyEncrypted != "",
+			APIVersion:   p.APIVersion,
+			EmbeddingDim: p.EmbeddingDim,
+			CreatedAt:    p.CreatedAt.Format(time.RFC3339),
 		})
 	}
 	return result, nil
@@ -1343,6 +1367,7 @@ func (m *modelServiceHTTPAdapter) CreateModel(ctx context.Context, req deliveryh
 		ModelName:       req.ModelName,
 		APIKeyEncrypted: req.APIKey,
 		APIVersion:      req.APIVersion,
+		EmbeddingDim:    req.EmbeddingDim,
 	}
 
 	if err := m.repo.Create(ctx, provider); err != nil {
@@ -1353,14 +1378,15 @@ func (m *modelServiceHTTPAdapter) CreateModel(ctx context.Context, req deliveryh
 	}
 
 	return &deliveryhttp.ModelResponse{
-		ID:         provider.ID,
-		Name:       provider.Name,
-		Type:       provider.Type,
-		BaseURL:    provider.BaseURL,
-		ModelName:  provider.ModelName,
-		HasAPIKey:  provider.APIKeyEncrypted != "",
-		APIVersion: provider.APIVersion,
-		CreatedAt:  provider.CreatedAt.Format(time.RFC3339),
+		ID:           provider.ID,
+		Name:         provider.Name,
+		Type:         provider.Type,
+		BaseURL:      provider.BaseURL,
+		ModelName:    provider.ModelName,
+		HasAPIKey:    provider.APIKeyEncrypted != "",
+		APIVersion:   provider.APIVersion,
+		EmbeddingDim: provider.EmbeddingDim,
+		CreatedAt:    provider.CreatedAt.Format(time.RFC3339),
 	}, nil
 }
 
@@ -1383,11 +1409,12 @@ func (m *modelServiceHTTPAdapter) UpdateModel(ctx context.Context, name string, 
 	}
 
 	update := &models.LLMProviderModel{
-		Name:       req.Name,
-		Type:       req.Type,
-		BaseURL:    req.BaseURL,
-		ModelName:  req.ModelName,
-		APIVersion: req.APIVersion,
+		Name:         req.Name,
+		Type:         req.Type,
+		BaseURL:      req.BaseURL,
+		ModelName:    req.ModelName,
+		APIVersion:   req.APIVersion,
+		EmbeddingDim: req.EmbeddingDim,
 	}
 	// Only update API key if provided (empty means keep existing).
 	if req.APIKey != "" {
@@ -1415,14 +1442,15 @@ func (m *modelServiceHTTPAdapter) UpdateModel(ctx context.Context, name string, 
 	}
 
 	return &deliveryhttp.ModelResponse{
-		ID:         existing.ID,
-		Name:       respName,
-		Type:       req.Type,
-		BaseURL:    req.BaseURL,
-		ModelName:  req.ModelName,
-		HasAPIKey:  hasKey,
-		APIVersion: req.APIVersion,
-		CreatedAt:  existing.CreatedAt.Format(time.RFC3339),
+		ID:           existing.ID,
+		Name:         respName,
+		Type:         req.Type,
+		BaseURL:      req.BaseURL,
+		ModelName:    req.ModelName,
+		HasAPIKey:    hasKey,
+		APIVersion:   req.APIVersion,
+		EmbeddingDim: req.EmbeddingDim,
+		CreatedAt:    existing.CreatedAt.Format(time.RFC3339),
 	}, nil
 }
 

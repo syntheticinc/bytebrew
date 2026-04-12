@@ -80,6 +80,7 @@ export interface Model {
   model_name: string;
   has_api_key: boolean;
   api_version?: string;
+  embedding_dim?: number; // >0 for embedding models
   created_at: string;
 }
 
@@ -90,6 +91,7 @@ export interface CreateModelRequest {
   model_name: string;
   api_key?: string;
   api_version?: string;
+  embedding_dim?: number; // required when type=embedding
 }
 
 // ============================================================================
@@ -326,7 +328,6 @@ export type CapabilityType =
   | 'memory'
   | 'knowledge'
   | 'guardrail'
-  | 'output_schema'
   | 'escalation'
   | 'recovery'
   | 'policies';
@@ -379,7 +380,7 @@ export const CAPABILITY_META: Record<CapabilityType, { label: string; icon: stri
   memory:        { label: 'Memory',           icon: 'brain',          description: 'Per-schema cross-session persistence' },
   knowledge:     { label: 'Knowledge',        icon: 'book-open',      description: 'RAG sources (PDF, DOCX, URL, text)' },
   guardrail:     { label: 'Output Guardrail', icon: 'shield-check',   description: 'JSON Schema, LLM judge, webhook validation' },
-  output_schema: { label: 'Output Schema',    icon: 'file-json',      description: 'Structured JSON output via response_format' },
+
   escalation:    { label: 'Escalation',       icon: 'arrow-up-right', description: 'transfer_to_user, notify, webhook' },
   recovery:      { label: 'Recovery Policy',  icon: 'refresh-cw',     description: 'Retry rules per failure type (per-session scope)' },
   policies:      { label: 'Agent Policies',   icon: 'settings',       description: 'When [condition] → Do [action] rules' },

@@ -125,7 +125,7 @@ function AgentDrillInInner() {
   // Fetch models and all agent names for connections (production only)
   useEffect(() => {
     if (isPrototype) return;
-    api.listModels().then(setModels).catch(() => {});
+    api.listModels('!embedding').then(setModels).catch(() => {});
     api.listAgents().then((agents: Array<{ name: string }>) => setAllAgentNames(agents.map((a) => a.name))).catch(() => {});
   }, [isPrototype]);
 

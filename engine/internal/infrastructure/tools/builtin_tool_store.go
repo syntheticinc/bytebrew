@@ -75,20 +75,33 @@ type CircuitBreakerRegistry interface {
 	Get(name string) CircuitBreakerChecker
 }
 
+// KnowledgeEmbedderResolver resolves a per-agent embedder from capability config (WP-4).
+// Returns nil,nil if no embedding model is configured for the agent (fallback to global).
+type KnowledgeEmbedderResolver interface {
+	ResolveEmbedder(ctx context.Context, agentName string) (KnowledgeEmbedder, error)
+}
+
+// CapabilityConfigReader reads capability config from DB for per-agent runtime customization.
+type CapabilityConfigReader interface {
+	ReadConfig(ctx context.Context, agentName, capType string) (map[string]interface{}, error)
+}
+
 // AgentToolResolver composes tools for a specific agent from various sources.
 type AgentToolResolver struct {
-	builtins          *BuiltinToolStore
-	kitProvider       KitProvider
-	knowledgeSearcher KnowledgeSearcher
-	knowledgeEmbedder KnowledgeEmbedder
-	mcpProvider       MCPClientProvider
-	spawner           GenericAgentSpawner
-	inspector         GenericAgentInspector
-	capInjector       CapabilityToolInjector
-	policyEvaluator   PolicyEvaluator
-	cbRegistry        CircuitBreakerRegistry
-	recoveryExecutor  RecoveryExecutor
-	toolTimeoutMs     int64 // 0 = disabled
+	builtins                *BuiltinToolStore
+	kitProvider             KitProvider
+	knowledgeSearcher       KnowledgeSearcher
+	knowledgeEmbedder       KnowledgeEmbedder       // global fallback (Ollama)
+	knowledgeEmbedResolver  KnowledgeEmbedderResolver // per-agent from capability config (WP-4)
+	mcpProvider             MCPClientProvider
+	spawner                 GenericAgentSpawner
+	inspector               GenericAgentInspector
+	capInjector             CapabilityToolInjector
+	policyEvaluator         PolicyEvaluator
+	cbRegistry              CircuitBreakerRegistry
+	recoveryExecutor        RecoveryExecutor
+	capConfigReader         CapabilityConfigReader
+	toolTimeoutMs           int64 // 0 = disabled
 }
 
 // NewAgentToolResolver creates a new AgentToolResolver.
@@ -110,6 +123,11 @@ func (r *AgentToolResolver) SetKitProvider(kp KitProvider) {
 func (r *AgentToolResolver) SetKnowledge(searcher KnowledgeSearcher, embedder KnowledgeEmbedder) {
 	r.knowledgeSearcher = searcher
 	r.knowledgeEmbedder = embedder
+}
+
+// SetKnowledgeEmbedderResolver configures per-agent embedding model resolution (WP-4).
+func (r *AgentToolResolver) SetKnowledgeEmbedderResolver(resolver KnowledgeEmbedderResolver) {
+	r.knowledgeEmbedResolver = resolver
 }
 
 // SetMCPProvider configures the MCP client provider for MCP tool resolution.
@@ -146,6 +164,11 @@ func (r *AgentToolResolver) SetRecoveryExecutor(executor RecoveryExecutor) {
 // SetToolTimeout configures the per-MCP-tool-call timeout in milliseconds (AC-RESIL-05).
 func (r *AgentToolResolver) SetToolTimeout(timeoutMs int64) {
 	r.toolTimeoutMs = timeoutMs
+}
+
+// SetCapabilityConfigReader configures the reader for per-agent capability configs.
+func (r *AgentToolResolver) SetCapabilityConfigReader(reader CapabilityConfigReader) {
+	r.capConfigReader = reader
 }
 
 // ResolveContext holds per-agent resolution context.
@@ -243,11 +266,16 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 	}
 
 	// Knowledge search — auto-inject when agent has KnowledgePath OR Knowledge capability.
-	// Use ResolveContext deps first, fallback to resolver-level deps.
+	// Priority: 1) ResolveContext deps, 2) per-agent resolver (WP-4), 3) global fallback (Ollama).
 	ks := rc.KnowledgeSearcher
 	ke := rc.KnowledgeEmbedder
 	if ks == nil {
 		ks = r.knowledgeSearcher
+	}
+	if ke == nil && r.knowledgeEmbedResolver != nil {
+		if resolved, err := r.knowledgeEmbedResolver.ResolveEmbedder(ctx, rc.Agent.Record.Name); err == nil && resolved != nil {
+			ke = resolved
+		}
 	}
 	if ke == nil {
 		ke = r.knowledgeEmbedder
@@ -255,7 +283,19 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 	hasKnowledgePath := rc.Agent.Record.KnowledgePath != ""
 	hasKnowledgeCap := capInjectedTools["knowledge_search"] // WP-3: capability-injected
 	if (hasKnowledgePath || hasKnowledgeCap) && ks != nil && ke != nil {
-		knowledgeTool := NewKnowledgeSearchTool(rc.Agent.Record.Name, ks, ke)
+		topK := 5 // domain default
+		var simThreshold float64
+		if r.capConfigReader != nil {
+			if kcfg, err := r.capConfigReader.ReadConfig(ctx, rc.Agent.Record.Name, "knowledge"); err == nil && kcfg != nil {
+				if tk, ok := kcfg["top_k"].(float64); ok && int(tk) > 0 {
+					topK = int(tk)
+				}
+				if st, ok := kcfg["similarity_threshold"].(float64); ok && st > 0 {
+					simThreshold = st
+				}
+			}
+		}
+		knowledgeTool := NewKnowledgeSearchTool(rc.Agent.Record.Name, ks, ke, topK, simThreshold)
 		tools = append(tools, knowledgeTool)
 	} else if hasToolInList(rc.Agent.Record.BuiltinTools, "knowledge_search") {
 		slog.WarnContext(ctx, "agent has knowledge_search in tools but knowledge not available — skipping",
@@ -358,10 +398,29 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 	}
 
 	// Knowledge auto-injection via legacy Resolve path
+	// Priority: 1) per-agent resolver (WP-4), 2) global fallback (Ollama).
 	hasKnowledgePathLegacy := deps.KnowledgePath != "" && deps.AgentName != ""
 	hasKnowledgeCapLegacy := capInjectedTools["knowledge_search"] // WP-3: capability-injected
-	if (hasKnowledgePathLegacy || hasKnowledgeCapLegacy) && r.knowledgeSearcher != nil && r.knowledgeEmbedder != nil {
-		knowledgeTool := NewKnowledgeSearchTool(deps.AgentName, r.knowledgeSearcher, r.knowledgeEmbedder)
+	legacyEmbedder := KnowledgeEmbedder(r.knowledgeEmbedder)
+	if r.knowledgeEmbedResolver != nil && deps.AgentName != "" {
+		if resolved, err := r.knowledgeEmbedResolver.ResolveEmbedder(ctx, deps.AgentName); err == nil && resolved != nil {
+			legacyEmbedder = resolved
+		}
+	}
+	if (hasKnowledgePathLegacy || hasKnowledgeCapLegacy) && r.knowledgeSearcher != nil && legacyEmbedder != nil {
+		legacyTopK := 5 // domain default
+		var legacySimThreshold float64
+		if r.capConfigReader != nil && deps.AgentName != "" {
+			if kcfg, err := r.capConfigReader.ReadConfig(ctx, deps.AgentName, "knowledge"); err == nil && kcfg != nil {
+				if tk, ok := kcfg["top_k"].(float64); ok && int(tk) > 0 {
+					legacyTopK = int(tk)
+				}
+				if st, ok := kcfg["similarity_threshold"].(float64); ok && st > 0 {
+					legacySimThreshold = st
+				}
+			}
+		}
+		knowledgeTool := NewKnowledgeSearchTool(deps.AgentName, r.knowledgeSearcher, legacyEmbedder, legacyTopK, legacySimThreshold)
 		resolved = append(resolved, knowledgeTool)
 	} else if hasToolInList(allToolNames, "knowledge_search") {
 		slog.WarnContext(ctx, "knowledge_search in tool list but knowledge not available — skipping",
@@ -380,6 +439,16 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 
 	// MCP tools via legacy Resolve path
 	if r.mcpProvider != nil && len(deps.MCPServers) > 0 {
+		// Resolve per-agent recovery executor from capability config
+		legacyRecoveryExec := r.recoveryExecutor
+		if r.capConfigReader != nil && r.recoveryExecutor != nil && deps.AgentName != "" {
+			if cfg, err := r.capConfigReader.ReadConfig(ctx, deps.AgentName, "recovery"); err == nil && cfg != nil {
+				if recipes := parseRecoveryRecipes(cfg); len(recipes) > 0 {
+					legacyRecoveryExec = &capabilityRecoveryExecutor{recipes: recipes, fallback: r.recoveryExecutor}
+				}
+			}
+		}
+
 		for _, serverName := range deps.MCPServers {
 			mcpTools, err := r.mcpProvider.GetMCPTools(serverName)
 			if err != nil {
@@ -389,7 +458,7 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 			}
 			// AC-RESIL-05: Timeout is innermost — fires first, feeds timeout error to CB
 			// US-006: Circuit breaker wraps timeout
-			// US-005: Recovery wraps circuit breaker
+			// US-005: Recovery wraps circuit breaker (per-agent config)
 			for i, mt := range mcpTools {
 				if r.toolTimeoutMs > 0 {
 					mcpTools[i] = NewTimeoutToolWrapper(mt, r.toolTimeoutMs)
@@ -399,13 +468,13 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 					mcpTools[i] = NewCircuitBreakerToolWrapper(mt, r.cbRegistry.Get(serverName))
 					mt = mcpTools[i]
 				}
-				if r.recoveryExecutor != nil {
+				if legacyRecoveryExec != nil {
 					info, _ := mt.Info(ctx)
 					toolName := serverName
 					if info != nil {
 						toolName = info.Name
 					}
-					mcpTools[i] = NewRecoveryToolWrapper(mt, r.recoveryExecutor, deps.SessionID, toolName)
+					mcpTools[i] = NewRecoveryToolWrapper(mt, legacyRecoveryExec, deps.SessionID, toolName)
 				}
 			}
 			resolved = append(resolved, mcpTools...)
@@ -450,6 +519,17 @@ func (r *AgentToolResolver) resolveMCPTools(rc ResolveContext) ([]tool.Invokable
 	}
 
 	ctx := context.Background()
+
+	// Resolve per-agent recovery executor from capability config
+	recoveryExec := r.recoveryExecutor
+	if r.capConfigReader != nil && r.recoveryExecutor != nil {
+		if cfg, err := r.capConfigReader.ReadConfig(ctx, rc.Agent.Record.Name, "recovery"); err == nil && cfg != nil {
+			if recipes := parseRecoveryRecipes(cfg); len(recipes) > 0 {
+				recoveryExec = &capabilityRecoveryExecutor{recipes: recipes, fallback: r.recoveryExecutor}
+			}
+		}
+	}
+
 	var result []tool.InvokableTool
 	for _, serverName := range rc.Agent.Record.MCPServers {
 		mcpTools, err := r.mcpProvider.GetMCPTools(serverName)
@@ -460,7 +540,7 @@ func (r *AgentToolResolver) resolveMCPTools(rc ResolveContext) ([]tool.Invokable
 		}
 		// AC-RESIL-05: Timeout is innermost — fires first, feeds timeout error to CB
 		// US-006: Circuit breaker wraps timeout
-		// US-005: Recovery wraps circuit breaker
+		// US-005: Recovery wraps circuit breaker (per-agent config)
 		for i, mt := range mcpTools {
 			if r.toolTimeoutMs > 0 {
 				mcpTools[i] = NewTimeoutToolWrapper(mt, r.toolTimeoutMs)
@@ -470,18 +550,91 @@ func (r *AgentToolResolver) resolveMCPTools(rc ResolveContext) ([]tool.Invokable
 				mcpTools[i] = NewCircuitBreakerToolWrapper(mt, r.cbRegistry.Get(serverName))
 				mt = mcpTools[i]
 			}
-			if r.recoveryExecutor != nil {
+			if recoveryExec != nil {
 				info, _ := mt.Info(ctx)
 				toolName := serverName
 				if info != nil {
 					toolName = info.Name
 				}
-				mcpTools[i] = NewRecoveryToolWrapper(mt, r.recoveryExecutor, rc.Deps.SessionID, toolName)
+				mcpTools[i] = NewRecoveryToolWrapper(mt, recoveryExec, rc.Deps.SessionID, toolName)
 			}
 		}
 		result = append(result, mcpTools...)
 	}
 	return result, nil
+}
+
+// capabilityRecoveryExecutor implements RecoveryExecutor using per-agent recovery recipes.
+type capabilityRecoveryExecutor struct {
+	recipes  map[domain.FailureType]*domain.RecoveryRecipe
+	fallback RecoveryExecutor
+}
+
+func (e *capabilityRecoveryExecutor) Execute(ctx context.Context, sessionID string, failureType domain.FailureType, detail string) RecoveryExecResult {
+	recipe, ok := e.recipes[failureType]
+	if !ok {
+		if e.fallback != nil {
+			return e.fallback.Execute(ctx, sessionID, failureType, detail)
+		}
+		return RecoveryExecResult{Recovered: false, Action: domain.RecoveryBlock, Detail: "no recipe for " + string(failureType)}
+	}
+
+	slog.InfoContext(ctx, "[Recovery] using per-agent recipe",
+		"failure_type", failureType, "action", recipe.Action,
+		"retry_count", recipe.RetryCount, "session_id", sessionID)
+
+	if recipe.Action == domain.RecoveryBlock {
+		return RecoveryExecResult{Recovered: false, Action: recipe.Action, Detail: detail}
+	}
+
+	return RecoveryExecResult{Recovered: true, Action: recipe.Action, Detail: fmt.Sprintf("recovery: %s", recipe.Action)}
+}
+
+// parseRecoveryRecipes parses recovery rules from capability config JSON.
+// UI format: {"rules": [{"failure_type": "...", "action": "...", "retry_count": N, "backoff": "..."}]}
+func parseRecoveryRecipes(config map[string]interface{}) map[domain.FailureType]*domain.RecoveryRecipe {
+	rulesRaw, ok := config["rules"]
+	if !ok {
+		return nil
+	}
+	rulesSlice, ok := rulesRaw.([]interface{})
+	if !ok {
+		return nil
+	}
+	recipes := make(map[domain.FailureType]*domain.RecoveryRecipe, len(rulesSlice))
+	for _, r := range rulesSlice {
+		ruleMap, ok := r.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		ft, _ := ruleMap["failure_type"].(string)
+		failureType := domain.FailureType(ft)
+		if !failureType.IsValid() {
+			continue
+		}
+		action, _ := ruleMap["action"].(string)
+		retryCount := 1
+		if rc, ok := ruleMap["retry_count"].(float64); ok {
+			retryCount = int(rc)
+		}
+		backoff, _ := ruleMap["backoff"].(string)
+		backoffBaseMs := 1000
+		if bb, ok := ruleMap["backoff_base_ms"].(float64); ok {
+			backoffBaseMs = int(bb)
+		}
+		fallbackModel, _ := ruleMap["fallback_model"].(string)
+
+		recipes[failureType] = &domain.RecoveryRecipe{
+			FailureType:   failureType,
+			Action:        domain.RecoveryAction(action),
+			RetryCount:    retryCount,
+			Backoff:       domain.BackoffStrategy(backoff),
+			BackoffBaseMs: backoffBaseMs,
+			FallbackModel: fallbackModel,
+			Escalation:    domain.EscalationLogAndContinue,
+		}
+	}
+	return recipes
 }
 
 // hasToolInList checks if a tool name exists in the given list.

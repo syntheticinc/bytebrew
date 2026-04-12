@@ -50,7 +50,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/service/eventstore"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/lifecycle"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/guardrail"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/policy"
+
 	"github.com/syntheticinc/bytebrew/engine/internal/service/recovery"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/resilience"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/session_processor"
@@ -442,9 +442,14 @@ func Run(sc ServerConfig) error {
 		}
 	}
 
-	// Wire knowledge search into AgentToolResolver
-	if components.AgentToolResolver != nil && knowledgeRepo != nil && embeddingsClient != nil {
+	// Wire knowledge search into AgentToolResolver.
+	// embeddingsClient may be nil (no Ollama) — per-agent resolver provides embedding models.
+	if components.AgentToolResolver != nil && knowledgeRepo != nil {
 		components.AgentToolResolver.SetKnowledge(knowledgeRepo, embeddingsClient)
+		if pgDB != nil {
+			components.AgentToolResolver.SetKnowledgeEmbedderResolver(
+				&knowledgeEmbedderResolverAdapter{resolver: &embeddingModelResolver{db: pgDB}})
+		}
 	}
 
 	// Wire spawner into AgentToolResolver for HTTP chat path spawn support.
@@ -478,14 +483,10 @@ func Run(sc ServerConfig) error {
 		slog.InfoContext(ctx, "Capability injector wired into AgentToolResolver")
 	}
 
-	// US-004: Wire policy engine into AgentToolResolver
-	// Policy rules are loaded from DB per-agent at evaluation time.
-	// For now, create with empty rules — the policy engine is stateless and
-	// rules are passed per-evaluation in production via the adapter.
-	if components.AgentToolResolver != nil {
-		policyEngine := policy.New(nil, nil, nil)
-		components.AgentToolResolver.SetPolicyEvaluator(&policyEvaluatorAdapter{engine: policyEngine})
-		slog.InfoContext(ctx, "Policy engine wired into AgentToolResolver")
+	// US-004: Wire dynamic policy evaluator — loads rules from capabilities DB per-agent.
+	if components.AgentToolResolver != nil && pgDB != nil {
+		components.AgentToolResolver.SetPolicyEvaluator(&dynamicPolicyEvaluatorAdapter{db: pgDB})
+		slog.InfoContext(ctx, "Dynamic policy evaluator wired into AgentToolResolver")
 	}
 
 	// US-006: Wire circuit breaker registry into AgentToolResolver
@@ -518,9 +519,19 @@ func Run(sc ServerConfig) error {
 		slog.InfoContext(ctx, "Recovery executor wired into AgentToolResolver")
 	}
 
-	// US-003: Create guardrail pipeline (registered checkers added later if needed)
+	// Wire per-agent capability config reader (recovery recipes, memory max_entries, knowledge top_k)
+	var capReader *capabilityConfigReader
+	if pgDB != nil {
+		capReader = &capabilityConfigReader{db: pgDB}
+		if components.AgentToolResolver != nil {
+			components.AgentToolResolver.SetCapabilityConfigReader(capReader)
+			slog.InfoContext(ctx, "Capability config reader wired into AgentToolResolver")
+		}
+	}
+
+	// US-003: Guardrail pipeline — wired into factory after factory creation (see below).
 	guardrailPipeline := guardrail.NewPipeline()
-	_ = guardrailPipeline // available for EngineAdapter wiring via factory
+	_ = guardrailPipeline
 
 	// HTTP REST API server — starts only when bootstrap config is available.
 	// Supports two modes:
@@ -715,12 +726,15 @@ func Run(sc ServerConfig) error {
 				)
 
 				// WP-3: Wire file upload service + file management endpoints
-				if embeddingsClient != nil {
+				{
 					dataDir := "data"
 					if envDir := os.Getenv("DATA_DIR"); envDir != "" {
 						dataDir = envDir
 					}
+					// embeddingsClient may be nil (no Ollama) — upload service falls back to
+					// capability-configured embedding models via resolver.
 					uploadSvc := svcknowledge.NewUploadService(knowledgeRepo, embeddingsClient, dataDir)
+					uploadSvc.SetEmbeddingResolver(&embeddingModelResolver{db: pgDB})
 					knowledgeHandler.SetFileUploader(&knowledgeUploadHTTPAdapter{svc: uploadSvc})
 					knowledgeHandler.SetFileLister(&knowledgeFileListerHTTPAdapter{svc: uploadSvc})
 				}
@@ -1160,6 +1174,18 @@ func Run(sc ServerConfig) error {
 		escHandler := escalation.NewHandler(&escalationConfigAdapter{reader: &capabilityInjectorAdapter{repo: escCapRepo}})
 		factory.SetEscalation(escHandler)
 		loggerInstance.InfoContext(ctx, "Escalation handler wired into TurnExecutorFactory")
+
+		// US-003: Wire guardrail pipeline with per-agent config resolver
+		factory.SetGuardrail(
+			&guardrailCheckerAdapter{pipeline: guardrailPipeline},
+			&guardrailConfigResolver{db: pgDB},
+		)
+		loggerInstance.InfoContext(ctx, "Guardrail pipeline wired into TurnExecutorFactory")
+
+		// Wire per-agent capability config reader for memory max_entries
+		if capReader != nil {
+			factory.SetCapabilityConfigReader(capReader)
+		}
 	}
 
 	// Create shared SessionProcessor
@@ -1368,6 +1394,11 @@ func Run(sc ServerConfig) error {
 	if sc.Managed {
 		fmt.Printf("READY:%d\n", grpcServer.ActualPort())
 		os.Stdout.Sync()
+	}
+
+	// Start memory retention cleanup goroutine (deletes expired entries based on per-agent config)
+	if pgDB != nil {
+		startMemoryRetentionCleanup(ctx, pgDB)
 	}
 
 	// Start bridge connectivity if enabled
@@ -1693,5 +1724,84 @@ func connectMCPServers(ctx context.Context, mcpServers []models.MCPServerModel, 
 		tools := client.ListTools()
 		slog.Info("MCP server connected", "name", srv.Name, "tools", len(tools))
 		registry.Register(srv.Name, client)
+	}
+}
+
+// startMemoryRetentionCleanup launches a background goroutine that periodically
+// deletes expired memory entries based on per-agent retention_days config.
+func startMemoryRetentionCleanup(ctx context.Context, db *gorm.DB) {
+	ticker := time.NewTicker(1 * time.Hour)
+	go func() {
+		slog.InfoContext(ctx, "Memory retention cleanup goroutine started (every 1h)")
+		runMemoryRetentionCleanup(ctx, db) // run once on startup
+		for {
+			select {
+			case <-ctx.Done():
+				ticker.Stop()
+				slog.Info("Memory retention cleanup goroutine stopped")
+				return
+			case <-ticker.C:
+				runMemoryRetentionCleanup(ctx, db)
+			}
+		}
+	}()
+}
+
+// runMemoryRetentionCleanup iterates all memory capabilities and deletes expired entries.
+func runMemoryRetentionCleanup(ctx context.Context, db *gorm.DB) {
+	var caps []models.CapabilityModel
+	if err := db.WithContext(ctx).Where("type = ? AND enabled = ?", "memory", true).Find(&caps).Error; err != nil {
+		slog.WarnContext(ctx, "memory retention cleanup: failed to list capabilities", "error", err)
+		return
+	}
+
+	memStorage := persistence.NewMemoryStorage(db)
+	totalDeleted := int64(0)
+
+	for _, cap := range caps {
+		if cap.Config == "" {
+			continue
+		}
+		var config map[string]interface{}
+		if err := json.Unmarshal([]byte(cap.Config), &config); err != nil {
+			continue
+		}
+
+		unlimitedRetention, _ := config["unlimited_retention"].(bool)
+		if unlimitedRetention {
+			continue
+		}
+
+		retentionDays := 0
+		if rd, ok := config["retention_days"].(float64); ok {
+			retentionDays = int(rd)
+		}
+		if retentionDays <= 0 {
+			continue
+		}
+
+		// Find schema_ids for this agent via schema_agents join table
+		var schemaIDs []string
+		if err := db.WithContext(ctx).
+			Raw("SELECT sa.schema_id FROM schema_agents sa WHERE sa.agent_id = ?", cap.AgentID).
+			Scan(&schemaIDs).Error; err != nil {
+			slog.WarnContext(ctx, "memory retention cleanup: failed to get schemas",
+				"agent_id", cap.AgentID, "error", err)
+			continue
+		}
+
+		for _, schemaID := range schemaIDs {
+			deleted, err := memStorage.CleanupExpiredBySchema(ctx, schemaID, retentionDays)
+			if err != nil {
+				slog.WarnContext(ctx, "memory retention cleanup failed",
+					"schema_id", schemaID, "retention_days", retentionDays, "error", err)
+				continue
+			}
+			totalDeleted += deleted
+		}
+	}
+
+	if totalDeleted > 0 {
+		slog.InfoContext(ctx, "memory retention cleanup completed", "total_deleted", totalDeleted)
 	}
 }

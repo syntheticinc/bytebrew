@@ -29,6 +29,12 @@ type AgentSchemaResolver interface {
 	ResolveSchemaID(ctx context.Context, agentName string) (string, error)
 }
 
+// GuardrailConfigResolver resolves guardrail capability config for an agent.
+// Returns nil when the agent has no guardrail capability configured.
+type GuardrailConfigResolver interface {
+	ResolveGuardrailConfig(ctx context.Context, agentName string) (*turn_executor.GuardrailCheckConfig, error)
+}
+
 // EngineTurnExecutorFactory creates EngineAdapter-based TurnExecutors for Supervisor mode.
 // Implements grpc.TurnExecutorFactory interface (consumer-side).
 type EngineTurnExecutorFactory struct {
@@ -55,6 +61,11 @@ type EngineTurnExecutorFactory struct {
 	escalationHandler tools.EscalationHandler
 	// Schema resolver for memory/knowledge tools (BUG-007)
 	schemaResolver AgentSchemaResolver
+	// US-003: Guardrail pipeline (injected via SetGuardrail — nil = disabled)
+	guardrailChecker        turn_executor.GuardrailChecker
+	guardrailConfigResolver GuardrailConfigResolver
+	// Per-agent capability config reader (memory max_entries, etc.)
+	capConfigReader tools.CapabilityConfigReader
 }
 
 // NewEngineTurnExecutorFactory creates a new factory for Engine-based TurnExecutors.
@@ -107,6 +118,17 @@ func (f *EngineTurnExecutorFactory) SetSchemaResolver(resolver AgentSchemaResolv
 	f.schemaResolver = resolver
 }
 
+// SetGuardrail configures the guardrail checker and per-agent config resolver.
+func (f *EngineTurnExecutorFactory) SetGuardrail(checker turn_executor.GuardrailChecker, resolver GuardrailConfigResolver) {
+	f.guardrailChecker = checker
+	f.guardrailConfigResolver = resolver
+}
+
+// SetCapabilityConfigReader configures per-agent capability config resolution.
+func (f *EngineTurnExecutorFactory) SetCapabilityConfigReader(reader tools.CapabilityConfigReader) {
+	f.capConfigReader = reader
+}
+
 // userMemoryDepsProvider wraps DefaultToolDepsProvider and injects userID + memory + escalation refs per session.
 type userMemoryDepsProvider struct {
 	base              *tools.DefaultToolDepsProvider
@@ -143,13 +165,26 @@ func (f *EngineTurnExecutorFactory) CreateForSession(
 		f.webSearchTool,
 		f.webFetchTool,
 	)
+	// Resolve per-agent memory max_entries from capability config
+	memMaxEntries := f.memoryMaxEntries
+	if f.capConfigReader != nil {
+		if cfg, err := f.capConfigReader.ReadConfig(context.Background(), agentName, "memory"); err == nil && cfg != nil {
+			unlimitedEntries, _ := cfg["unlimited_entries"].(bool)
+			if !unlimitedEntries {
+				if me, ok := cfg["max_entries"].(float64); ok && int(me) > 0 {
+					memMaxEntries = int(me)
+				}
+			}
+		}
+	}
+
 	// Wrap with per-user memory + escalation deps
 	toolDeps := &userMemoryDepsProvider{
 		base:              baseDeps,
 		userID:            userID,
 		memoryRecaller:    f.memoryRecaller,
 		memoryStorer:      f.memoryStorer,
-		memoryMaxEntries:  f.memoryMaxEntries,
+		memoryMaxEntries:  memMaxEntries,
 		escalationHandler: f.escalationHandler,
 	}
 
@@ -191,6 +226,14 @@ func (f *EngineTurnExecutorFactory) CreateForSession(
 		}
 	}
 
+	// US-003: Resolve guardrail config for this agent (nil = no guardrails).
+	var guardrailConfig *turn_executor.GuardrailCheckConfig
+	if f.guardrailConfigResolver != nil {
+		if cfg, err := f.guardrailConfigResolver.ResolveGuardrailConfig(context.Background(), agentName); err == nil && cfg != nil {
+			guardrailConfig = cfg
+		}
+	}
+
 	// Create EngineAdapter (implements TurnExecutor interface)
 	adapter, err := turn_executor.NewEngineAdapter(turn_executor.Config{
 		Engine:           f.engine,
@@ -203,6 +246,8 @@ func (f *EngineTurnExecutorFactory) CreateForSession(
 		AgentName:        agentName,
 		SchemaID:         schemaID,
 		ContextReminders: contextReminders,
+		Guardrail:        f.guardrailChecker,
+		GuardrailConfig:  guardrailConfig,
 	})
 
 	if err != nil {

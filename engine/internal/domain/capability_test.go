@@ -52,7 +52,6 @@ func TestCapabilityType_IsValid(t *testing.T) {
 		{CapabilityTypeMemory, true},
 		{CapabilityTypeKnowledge, true},
 		{CapabilityTypeGuardrail, true},
-		{CapabilityTypeOutputSchema, true},
 		{CapabilityTypeEscalation, true},
 		{CapabilityTypeRecovery, true},
 		{CapabilityTypePolicies, true},
@@ -77,7 +76,6 @@ func TestCapabilityType_InjectedTools(t *testing.T) {
 		{CapabilityTypeKnowledge, []string{"knowledge_search"}},
 		{CapabilityTypeEscalation, []string{"escalate"}},
 		{CapabilityTypeGuardrail, nil},
-		{CapabilityTypeOutputSchema, nil},
 		{CapabilityTypeRecovery, nil},
 		{CapabilityTypePolicies, nil},
 	}
@@ -98,8 +96,8 @@ func TestCapabilityType_InjectedTools(t *testing.T) {
 
 func TestAllCapabilityTypes(t *testing.T) {
 	types := AllCapabilityTypes()
-	if len(types) != 7 {
-		t.Errorf("expected 7 capability types, got %d", len(types))
+	if len(types) != 6 {
+		t.Errorf("expected 6 capability types, got %d", len(types))
 	}
 	for _, ct := range types {
 		if !ct.IsValid() {

@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pgvector/pgvector-go"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/indexing"
 	infknowledge "github.com/syntheticinc/bytebrew/engine/internal/infrastructure/knowledge"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 )
@@ -39,6 +40,19 @@ type EmbeddingProvider interface {
 	EmbedBatch(ctx context.Context, texts []string) ([][]float32, error)
 }
 
+// EmbeddingModelInfo holds embedding model details resolved from DB.
+type EmbeddingModelInfo struct {
+	BaseURL      string
+	APIKey       string
+	ModelName    string
+	EmbeddingDim int
+}
+
+// EmbeddingModelResolver resolves the embedding model for an agent's knowledge capability.
+type EmbeddingModelResolver interface {
+	ResolveEmbeddingModel(ctx context.Context, agentName string) (*EmbeddingModelInfo, error)
+}
+
 // FileResponse is the API response for a knowledge file.
 type FileResponse struct {
 	ID         string `json:"id"`
@@ -54,9 +68,10 @@ type FileResponse struct {
 
 // UploadService handles file uploads, storage, and async indexing.
 type UploadService struct {
-	repo       DocumentRepository
-	embeddings EmbeddingProvider
-	dataDir    string
+	repo             DocumentRepository
+	embeddings       EmbeddingProvider       // fallback (Ollama via env)
+	embeddingResolver EmbeddingModelResolver // resolves embedding model from capability config (may be nil)
+	dataDir          string
 }
 
 // NewUploadService creates a new knowledge upload service.
@@ -66,6 +81,11 @@ func NewUploadService(repo DocumentRepository, embeddings EmbeddingProvider, dat
 		embeddings: embeddings,
 		dataDir:    dataDir,
 	}
+}
+
+// SetEmbeddingResolver sets the resolver for capability-based embedding models.
+func (s *UploadService) SetEmbeddingResolver(resolver EmbeddingModelResolver) {
+	s.embeddingResolver = resolver
 }
 
 // UploadFile stores a file on disk, creates a DB record, and triggers async indexing.
@@ -119,6 +139,24 @@ func (s *UploadService) UploadFile(ctx context.Context, tenantID, agentName, fil
 	}, nil
 }
 
+// resolveEmbeddingProvider picks the best embedding provider for this agent.
+// Priority: 1) capability-configured model via resolver, 2) fallback Ollama.
+func (s *UploadService) resolveEmbeddingProvider(ctx context.Context, agentName string) (EmbeddingProvider, error) {
+	if s.embeddingResolver != nil {
+		info, err := s.embeddingResolver.ResolveEmbeddingModel(ctx, agentName)
+		if err == nil && info != nil {
+			slog.InfoContext(ctx, "[KnowledgeUpload] using configured embedding model",
+				"agent", agentName, "model", info.ModelName, "dim", info.EmbeddingDim)
+			return indexing.NewOpenAIEmbeddingsClient(info.BaseURL, info.APIKey, info.ModelName, info.EmbeddingDim), nil
+		}
+		// No configured model — fall through to Ollama
+	}
+	if s.embeddings != nil {
+		return s.embeddings, nil
+	}
+	return nil, fmt.Errorf("no embedding model configured: add an embedding model in Settings > Models and select it in the Knowledge capability")
+}
+
 // indexFileAsync chunks, embeds, and stores vector data for an uploaded file.
 func (s *UploadService) indexFileAsync(docID, tenantID, agentName, fileName, content string) {
 	ctx := context.Background()
@@ -132,13 +170,22 @@ func (s *UploadService) indexFileAsync(docID, tenantID, agentName, fileName, con
 		return
 	}
 
+	// Resolve embedding provider (capability model or Ollama fallback)
+	embedder, err := s.resolveEmbeddingProvider(ctx, agentName)
+	if err != nil {
+		slog.ErrorContext(ctx, "[KnowledgeUpload] no embedding provider available",
+			"doc_id", docID, "agent", agentName, "error", err)
+		s.updateDocStatus(ctx, docID, "error", err.Error(), 0)
+		return
+	}
+
 	// Embed
 	texts := make([]string, len(chunks))
 	for i, c := range chunks {
 		texts[i] = c.Content
 	}
 
-	embeddings, err := s.embeddings.EmbedBatch(ctx, texts)
+	embeddings, err := embedder.EmbedBatch(ctx, texts)
 	if err != nil {
 		slog.ErrorContext(ctx, "[KnowledgeUpload] embedding failed",
 			"doc_id", docID, "agent", agentName, "error", err)
@@ -161,6 +208,16 @@ func (s *UploadService) indexFileAsync(docID, tenantID, agentName, fileName, con
 			ChunkOrder: c.Order,
 			Embedding:  pgvector.NewVector(embeddings[i]),
 		})
+	}
+
+	// BUG-011: If chunking produced content but all embeddings are nil/empty,
+	// the embedding provider is likely unavailable. Mark as error, not ready.
+	if len(chunkModels) == 0 && len(chunks) > 0 {
+		slog.ErrorContext(ctx, "[KnowledgeUpload] no embeddings generated for any chunk",
+			"doc_id", docID, "agent", agentName, "chunks_input", len(chunks))
+		s.updateDocStatus(ctx, docID, "error",
+			"no embeddings generated (embedding provider may be unavailable)", 0)
+		return
 	}
 
 	if len(chunkModels) > 0 {

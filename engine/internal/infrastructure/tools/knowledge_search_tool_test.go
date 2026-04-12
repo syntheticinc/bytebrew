@@ -16,7 +16,7 @@ type mockKnowledgeSearcher struct {
 	err    error
 }
 
-func (m *mockKnowledgeSearcher) SearchSimilar(_ context.Context, _ string, _ pgvector.Vector, _ int) ([]models.KnowledgeChunk, error) {
+func (m *mockKnowledgeSearcher) SearchSimilar(_ context.Context, _ string, _ pgvector.Vector, _ int, _ float64) ([]models.KnowledgeChunk, error) {
 	return m.chunks, m.err
 }
 
@@ -34,7 +34,7 @@ func (m *mockKnowledgeEmbedder) Embed(_ context.Context, _ string) ([]float32, e
 }
 
 func TestKnowledgeSearchTool_Info(t *testing.T) {
-	tool := NewKnowledgeSearchTool("test-agent", &mockKnowledgeSearcher{}, &mockKnowledgeEmbedder{})
+	tool := NewKnowledgeSearchTool("test-agent", &mockKnowledgeSearcher{}, &mockKnowledgeEmbedder{}, 5, 0)
 	info, err := tool.Info(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "knowledge_search", info.Name)
@@ -42,7 +42,7 @@ func TestKnowledgeSearchTool_Info(t *testing.T) {
 }
 
 func TestKnowledgeSearchTool_EmptyQuery(t *testing.T) {
-	tool := NewKnowledgeSearchTool("test-agent", &mockKnowledgeSearcher{}, &mockKnowledgeEmbedder{})
+	tool := NewKnowledgeSearchTool("test-agent", &mockKnowledgeSearcher{}, &mockKnowledgeEmbedder{}, 5, 0)
 	args, _ := json.Marshal(knowledgeSearchArgs{Query: ""})
 	result, err := tool.InvokableRun(context.Background(), string(args))
 	require.NoError(t, err)
@@ -51,7 +51,7 @@ func TestKnowledgeSearchTool_EmptyQuery(t *testing.T) {
 }
 
 func TestKnowledgeSearchTool_InvalidJSON(t *testing.T) {
-	tool := NewKnowledgeSearchTool("test-agent", &mockKnowledgeSearcher{}, &mockKnowledgeEmbedder{})
+	tool := NewKnowledgeSearchTool("test-agent", &mockKnowledgeSearcher{}, &mockKnowledgeEmbedder{}, 5, 0)
 	result, err := tool.InvokableRun(context.Background(), "not json")
 	require.NoError(t, err)
 	assert.Contains(t, result, "[ERROR]")
@@ -60,7 +60,7 @@ func TestKnowledgeSearchTool_InvalidJSON(t *testing.T) {
 func TestKnowledgeSearchTool_NoResults(t *testing.T) {
 	embedder := &mockKnowledgeEmbedder{embedding: []float32{0.1, 0.2, 0.3}}
 	searcher := &mockKnowledgeSearcher{chunks: nil}
-	tool := NewKnowledgeSearchTool("test-agent", searcher, embedder)
+	tool := NewKnowledgeSearchTool("test-agent", searcher, embedder, 5, 0)
 
 	args, _ := json.Marshal(knowledgeSearchArgs{Query: "test query"})
 	result, err := tool.InvokableRun(context.Background(), string(args))
@@ -82,7 +82,7 @@ func TestKnowledgeSearchTool_ReturnsFormattedResults(t *testing.T) {
 			},
 		},
 	}
-	tool := NewKnowledgeSearchTool("test-agent", searcher, embedder)
+	tool := NewKnowledgeSearchTool("test-agent", searcher, embedder, 5, 0)
 
 	args, _ := json.Marshal(knowledgeSearchArgs{Query: "test query", Limit: 2})
 	result, err := tool.InvokableRun(context.Background(), string(args))
@@ -99,7 +99,7 @@ func TestKnowledgeSearchTool_ReturnsFormattedResults(t *testing.T) {
 func TestKnowledgeSearchTool_DefaultLimit(t *testing.T) {
 	embedder := &mockKnowledgeEmbedder{embedding: []float32{0.1, 0.2}}
 	searcher := &mockKnowledgeSearcher{chunks: nil}
-	tool := NewKnowledgeSearchTool("test-agent", searcher, embedder)
+	tool := NewKnowledgeSearchTool("test-agent", searcher, embedder, 5, 0)
 
 	// No limit specified — defaults to 5
 	args, _ := json.Marshal(knowledgeSearchArgs{Query: "test"})
@@ -110,7 +110,7 @@ func TestKnowledgeSearchTool_DefaultLimit(t *testing.T) {
 func TestKnowledgeSearchTool_LimitCap(t *testing.T) {
 	embedder := &mockKnowledgeEmbedder{embedding: []float32{0.1, 0.2}}
 	searcher := &mockKnowledgeSearcher{chunks: nil}
-	tool := NewKnowledgeSearchTool("test-agent", searcher, embedder)
+	tool := NewKnowledgeSearchTool("test-agent", searcher, embedder, 5, 0)
 
 	// Limit > 20 should be capped
 	args, _ := json.Marshal(knowledgeSearchArgs{Query: "test", Limit: 100})
@@ -121,7 +121,7 @@ func TestKnowledgeSearchTool_LimitCap(t *testing.T) {
 func TestKnowledgeSearchTool_EmbedError(t *testing.T) {
 	embedder := &mockKnowledgeEmbedder{err: assert.AnError}
 	searcher := &mockKnowledgeSearcher{}
-	tool := NewKnowledgeSearchTool("test-agent", searcher, embedder)
+	tool := NewKnowledgeSearchTool("test-agent", searcher, embedder, 5, 0)
 
 	args, _ := json.Marshal(knowledgeSearchArgs{Query: "test"})
 	result, err := tool.InvokableRun(context.Background(), string(args))

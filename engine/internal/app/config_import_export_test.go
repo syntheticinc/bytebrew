@@ -46,6 +46,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			model_name VARCHAR(255) NOT NULL,
 			api_key_encrypted VARCHAR(1000),
 			api_version VARCHAR(30) DEFAULT '',
+			embedding_dim INTEGER DEFAULT 0,
 			created_at DATETIME,
 			updated_at DATETIME
 		)`,

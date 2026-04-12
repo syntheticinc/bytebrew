@@ -19,6 +19,7 @@ const PROVIDER_TYPES = [
   { value: 'anthropic', label: 'Anthropic' },
   { value: 'azure_openai', label: 'Azure OpenAI' },
   { value: 'google', label: 'Google (Gemini)' },
+  { value: 'embedding', label: 'Embedding Model' },
 ];
 
 const PROVIDER_BASE_URLS: Record<string, string> = {
@@ -28,6 +29,7 @@ const PROVIDER_BASE_URLS: Record<string, string> = {
 const PROVIDER_HINTS: Record<string, string> = {
   azure_openai: 'Use your Azure resource endpoint as Base URL (e.g. https://my-company.openai.azure.com). Model Name = deployment name.',
   google: 'Uses native Gemini API (generateContent). No Base URL needed — just API key and model name.',
+  embedding: 'OpenAI-compatible embedding API (POST /embeddings). Used for document vectorization in Knowledge capability. Recommended: text-embedding-3-small (1536 dim, $0.02/1M tokens).',
 };
 
 function providerTypeForRegistry(provider: string): string {
@@ -97,6 +99,7 @@ export default function ModelsPage() {
       type: providerType,
       base_url: autoUrl ?? (providerType === prev.type ? prev.base_url : ''),
       model_name: '',
+      embedding_dim: providerType === 'embedding' ? (prev.embedding_dim || 1536) : undefined,
     }));
   }
 
@@ -165,8 +168,15 @@ export default function ModelsPage() {
       key: 'type',
       header: 'Provider',
       render: (row: Model) => (
-        <span className="px-2 py-0.5 bg-brand-light rounded text-xs text-brand-shade3 font-medium">
-          {row.type}
+        <span className="flex items-center gap-1.5">
+          <span className="px-2 py-0.5 bg-brand-light rounded text-xs text-brand-shade3 font-medium">
+            {row.type}
+          </span>
+          {row.type === 'embedding' && (
+            <span className="px-1.5 py-0.5 bg-purple-500/20 border border-purple-500/30 rounded text-xs text-purple-400 font-medium">
+              Embedding
+            </span>
+          )}
         </span>
       ),
     },
@@ -399,6 +409,15 @@ export default function ModelsPage() {
             onChange={(v) => setForm({ ...form, api_version: v })}
             placeholder="2024-10-21"
             hint="Azure OpenAI API version (default: 2024-10-21)"
+          />
+        )}
+        {form.type === 'embedding' && (
+          <FormField
+            label="Embedding Dimension"
+            value={String(form.embedding_dim ?? 1536)}
+            onChange={(v) => setForm({ ...form, embedding_dim: parseInt(v) || 0 })}
+            placeholder="1536"
+            hint="Vector dimension (e.g. 1536 for text-embedding-3-small, 3072 for text-embedding-3-large, 768 for nomic-embed-text)"
           />
         )}
       </FormModal>

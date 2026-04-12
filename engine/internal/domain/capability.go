@@ -9,13 +9,12 @@ import (
 type CapabilityType string
 
 const (
-	CapabilityTypeMemory       CapabilityType = "memory"
-	CapabilityTypeKnowledge    CapabilityType = "knowledge"
-	CapabilityTypeGuardrail    CapabilityType = "guardrail"
-	CapabilityTypeOutputSchema CapabilityType = "output_schema"
-	CapabilityTypeEscalation   CapabilityType = "escalation"
-	CapabilityTypeRecovery     CapabilityType = "recovery"
-	CapabilityTypePolicies     CapabilityType = "policies"
+	CapabilityTypeMemory    CapabilityType = "memory"
+	CapabilityTypeKnowledge CapabilityType = "knowledge"
+	CapabilityTypeGuardrail CapabilityType = "guardrail"
+	CapabilityTypeEscalation CapabilityType = "escalation"
+	CapabilityTypeRecovery  CapabilityType = "recovery"
+	CapabilityTypePolicies  CapabilityType = "policies"
 )
 
 // AllCapabilityTypes returns all valid capability types.
@@ -24,7 +23,6 @@ func AllCapabilityTypes() []CapabilityType {
 		CapabilityTypeMemory,
 		CapabilityTypeKnowledge,
 		CapabilityTypeGuardrail,
-		CapabilityTypeOutputSchema,
 		CapabilityTypeEscalation,
 		CapabilityTypeRecovery,
 		CapabilityTypePolicies,
@@ -76,8 +74,7 @@ func (c *Capability) Validate() error {
 func (ct CapabilityType) IsValid() bool {
 	switch ct {
 	case CapabilityTypeMemory, CapabilityTypeKnowledge, CapabilityTypeGuardrail,
-		CapabilityTypeOutputSchema, CapabilityTypeEscalation, CapabilityTypeRecovery,
-		CapabilityTypePolicies:
+		CapabilityTypeEscalation, CapabilityTypeRecovery, CapabilityTypePolicies:
 		return true
 	}
 	return false

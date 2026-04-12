@@ -144,8 +144,11 @@ func (c *EmbeddingsClient) embedBatchNative(ctx context.Context, texts []string)
 }
 
 // embedBatchIndividual sends one request per text as a fallback.
+// BUG-011: returns error if ALL embeddings failed (not silent nil results).
 func (c *EmbeddingsClient) embedBatchIndividual(ctx context.Context, texts []string) ([][]float32, error) {
 	results := make([][]float32, len(texts))
+	var lastErr error
+	succeeded := 0
 
 	for i, text := range texts {
 		body, err := json.Marshal(embedRequest{
@@ -154,23 +157,31 @@ func (c *EmbeddingsClient) embedBatchIndividual(ctx context.Context, texts []str
 			Truncate: true,
 		})
 		if err != nil {
+			lastErr = err
 			continue
 		}
 
 		respBody, err := c.doWithRetry(ctx, body)
 		if err != nil {
 			slog.WarnContext(ctx, "embed individual failed", "index", i, "error", err)
+			lastErr = err
 			continue
 		}
 
 		var resp embedResponse
 		if err := json.Unmarshal(respBody, &resp); err != nil {
+			lastErr = err
 			continue
 		}
 
 		if len(resp.Embeddings) > 0 {
 			results[i] = resp.Embeddings[0]
+			succeeded++
 		}
+	}
+
+	if succeeded == 0 && len(texts) > 0 {
+		return nil, fmt.Errorf("all %d embeddings failed: %w", len(texts), lastErr)
 	}
 
 	return results, nil

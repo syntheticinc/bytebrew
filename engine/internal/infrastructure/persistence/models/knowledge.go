@@ -34,7 +34,7 @@ type KnowledgeChunk struct {
 	AgentName  string          `gorm:"type:varchar(255);not null;index:idx_knowledge_chunks_tenant_agent"` // denormalized for fast filtering
 	Content    string          `gorm:"type:text;not null"`
 	ChunkOrder int
-	Embedding  pgvector.Vector `gorm:"type:vector(768)"`
+	Embedding  pgvector.Vector `gorm:"type:vector"` // variable dimension (supports 768 Ollama, 1536 OpenAI, etc.)
 	CreatedAt  time.Time
 
 	Document KnowledgeDocument `gorm:"foreignKey:DocumentID"`

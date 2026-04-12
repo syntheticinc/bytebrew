@@ -71,8 +71,8 @@ func TestPipeline_Fail_Fallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !result.Passed {
-		t.Error("expected pass with fallback")
+	if result.Passed {
+		t.Error("expected Passed=false for fallback (caller applies fallback text)")
 	}
 }
 

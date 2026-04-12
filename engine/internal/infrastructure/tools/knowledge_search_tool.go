@@ -15,7 +15,7 @@ import (
 
 // KnowledgeSearcher performs vector similarity search on knowledge chunks.
 type KnowledgeSearcher interface {
-	SearchSimilar(ctx context.Context, agentName string, embedding pgvector.Vector, limit int) ([]models.KnowledgeChunk, error)
+	SearchSimilar(ctx context.Context, agentName string, embedding pgvector.Vector, limit int, similarityThreshold float64) ([]models.KnowledgeChunk, error)
 	SearchByKeyword(ctx context.Context, agentName string, keyword string, limit int) ([]models.KnowledgeChunk, error)
 }
 
@@ -32,17 +32,24 @@ type knowledgeSearchArgs struct {
 
 // KnowledgeSearchTool searches an agent's knowledge base using semantic similarity.
 type KnowledgeSearchTool struct {
-	agentName  string
-	repo       KnowledgeSearcher
-	embeddings KnowledgeEmbedder
+	agentName           string
+	repo                KnowledgeSearcher
+	embeddings          KnowledgeEmbedder
+	defaultLimit        int     // from capability config top_k (default 5)
+	similarityThreshold float64 // from capability config (0 = no filtering)
 }
 
 // NewKnowledgeSearchTool creates a new knowledge_search tool for the given agent.
-func NewKnowledgeSearchTool(agentName string, repo KnowledgeSearcher, embeddings KnowledgeEmbedder) tool.InvokableTool {
+func NewKnowledgeSearchTool(agentName string, repo KnowledgeSearcher, embeddings KnowledgeEmbedder, defaultLimit int, similarityThreshold float64) tool.InvokableTool {
+	if defaultLimit <= 0 {
+		defaultLimit = 5
+	}
 	return &KnowledgeSearchTool{
-		agentName:  agentName,
-		repo:       repo,
-		embeddings: embeddings,
+		agentName:           agentName,
+		repo:                repo,
+		embeddings:          embeddings,
+		defaultLimit:        defaultLimit,
+		similarityThreshold: similarityThreshold,
 	}
 }
 
@@ -83,7 +90,7 @@ func (t *KnowledgeSearchTool) InvokableRun(ctx context.Context, argumentsInJSON 
 	}
 
 	if args.Limit <= 0 {
-		args.Limit = 10
+		args.Limit = t.defaultLimit
 	}
 	if args.Limit > 20 {
 		args.Limit = 20
@@ -100,7 +107,7 @@ func (t *KnowledgeSearchTool) InvokableRun(ctx context.Context, argumentsInJSON 
 	}
 
 	// Hybrid search: vector similarity + keyword fallback
-	chunks, err := t.repo.SearchSimilar(ctx, t.agentName, pgvector.NewVector(embedding), args.Limit)
+	chunks, err := t.repo.SearchSimilar(ctx, t.agentName, pgvector.NewVector(embedding), args.Limit, t.similarityThreshold)
 	if err != nil {
 		slog.ErrorContext(ctx, "[KnowledgeSearchTool] search failed", "error", err)
 		return fmt.Sprintf("[ERROR] Search failed: %v", err), nil

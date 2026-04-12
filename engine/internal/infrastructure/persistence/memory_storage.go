@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
@@ -144,6 +145,25 @@ func (s *MemoryStorage) evictIfNeeded(ctx context.Context, schemaID, userID stri
 
 	slog.DebugContext(ctx, "FIFO eviction", "schema_id", schemaID, "user_id", userID, "evicted", len(ids))
 	return nil
+}
+
+// CleanupExpiredBySchema deletes memories older than retentionDays for a given schema.
+func (s *MemoryStorage) CleanupExpiredBySchema(ctx context.Context, schemaID string, retentionDays int) (int64, error) {
+	if retentionDays <= 0 {
+		return 0, nil
+	}
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
+	result := s.db.WithContext(ctx).
+		Where("schema_id = ? AND created_at < ?", schemaID, cutoff).
+		Delete(&models.MemoryModel{})
+	if result.Error != nil {
+		return 0, fmt.Errorf("cleanup expired memories: %w", result.Error)
+	}
+	if result.RowsAffected > 0 {
+		slog.InfoContext(ctx, "expired memories cleaned",
+			"schema_id", schemaID, "retention_days", retentionDays, "deleted", result.RowsAffected)
+	}
+	return result.RowsAffected, nil
 }
 
 func memoryToModel(mem *domain.Memory) models.MemoryModel {

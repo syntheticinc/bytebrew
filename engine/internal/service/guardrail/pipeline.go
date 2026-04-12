@@ -83,7 +83,13 @@ func (p *Pipeline) Evaluate(ctx context.Context, config *GuardrailConfig, output
 
 	checker, ok := p.checkers[config.Mode]
 	if !ok {
-		return nil, fmt.Errorf("no checker registered for mode %q", config.Mode)
+		// Create checker dynamically from config when not pre-registered.
+		switch config.Mode {
+		case ModeJSONSchema:
+			checker = NewJSONSchemaValidator(config.JSONSchema)
+		default:
+			return nil, fmt.Errorf("no checker registered for mode %q", config.Mode)
+		}
 	}
 
 	maxRetries := config.MaxRetries
@@ -125,7 +131,7 @@ func (p *Pipeline) handleFailure(config *GuardrailConfig, result *CheckResult) (
 		return result, fmt.Errorf("guardrail check failed: %s", result.Reason)
 	case OnFailureFallback:
 		return &CheckResult{
-			Passed:  true,
+			Passed:  false,
 			Reason:  fmt.Sprintf("fallback applied (original failure: %s)", result.Reason),
 			Attempt: result.Attempt,
 		}, nil

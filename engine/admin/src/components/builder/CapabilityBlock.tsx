@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, type DragEvent } from 'react';
-import type { CapabilityConfig, EscalationConditionType, EscalationTrigger, KnowledgeFile, KnowledgeFileStatus, WebhookAuthType } from '../../types';
+import type { CapabilityConfig, KnowledgeFile, KnowledgeFileStatus } from '../../types';
 import { CAPABILITY_META } from '../../types';
 import { api } from '../../api/client';
 
@@ -75,24 +75,6 @@ const FILE_STATUS_CLASSES: Record<KnowledgeFileStatus, string> = {
   error: 'bg-red-500/15 text-red-400 border-red-500/30',
 };
 
-// Escalation condition metadata
-const ESCALATION_CONDITIONS: { value: EscalationConditionType; label: string; paramType: 'slider' | 'text' | 'toggle' | 'number' | 'textarea' }[] = [
-  { value: 'confidence_below', label: 'Confidence below', paramType: 'slider' },
-  { value: 'topic_matches', label: 'Topic matches', paramType: 'text' },
-  { value: 'user_sentiment', label: 'User sentiment negative', paramType: 'toggle' },
-  { value: 'max_turns_exceeded', label: 'Max turns exceeded', paramType: 'number' },
-  { value: 'tool_failed', label: 'Tool failed', paramType: 'text' },
-  { value: 'custom', label: 'Custom prompt', paramType: 'textarea' },
-];
-
-// Webhook auth types
-const WEBHOOK_AUTH_OPTIONS: { value: WebhookAuthType; label: string }[] = [
-  { value: 'none', label: 'None' },
-  { value: 'api_key', label: 'API Key' },
-  { value: 'forward_headers', label: 'Forward Headers' },
-  { value: 'oauth2', label: 'OAuth2' },
-];
-
 function setKey(cap: CapabilityConfig, key: string, value: unknown): CapabilityConfig {
   return { ...cap, config: { ...cap.config, [key]: value } };
 }
@@ -163,6 +145,20 @@ function KnowledgeConfig({ cap, onChange, agentName }: PanelProps) {
   const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [embeddingModels, setEmbeddingModels] = useState<{ id: string; name: string; model_name: string; embedding_dim?: number }[]>([]);
+  const [embeddingModelsLoaded, setEmbeddingModelsLoaded] = useState(false);
+
+  const selectedEmbeddingModelId = getKey(cap, 'embedding_model_id', '') as string;
+  const hasEmbeddingModel = selectedEmbeddingModelId !== '';
+  const hasEmbeddingModelsInSystem = embeddingModels.length > 0;
+
+  // Load embedding models
+  useEffect(() => {
+    api.listModels('embedding').then((models) => {
+      setEmbeddingModels(models.map(m => ({ id: m.id, name: m.name, model_name: m.model_name, embedding_dim: m.embedding_dim })));
+      setEmbeddingModelsLoaded(true);
+    }).catch(() => setEmbeddingModelsLoaded(true));
+  }, []);
 
   // Load files from API on mount
   useEffect(() => {
@@ -195,9 +191,74 @@ function KnowledgeConfig({ cap, onChange, agentName }: PanelProps) {
     addFiles(e.dataTransfer.files);
   }
 
+  const selectedModel = embeddingModels.find(m => m.id === selectedEmbeddingModelId);
+  const isStaleModel = hasEmbeddingModel && embeddingModelsLoaded && !selectedModel;
+  const uploadEnabled = hasEmbeddingModel && !isStaleModel;
+
   return (
     <div className="space-y-3">
       <p className={descCls}>RAG: agent searches uploaded documents before answering</p>
+
+      {/* Embedding Model Selection — 3-state UX */}
+      <div>
+        <label className={labelCls}>Embedding Model</label>
+        {embeddingModelsLoaded && !hasEmbeddingModelsInSystem ? (
+          /* State 1: No embedding models in system */
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-card px-3 py-3 space-y-2">
+            <div className="flex items-start gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-400 shrink-0 mt-0.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+              <div>
+                <p className="text-xs text-amber-400 font-medium">No embedding models configured</p>
+                <p className="text-[10px] text-brand-shade3 mt-1">To enable document indexing and vector search, add an embedding model first.</p>
+              </div>
+            </div>
+            <a
+              href="/admin/models"
+              className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-accent text-brand-light rounded-btn text-xs font-medium hover:bg-brand-accent-hover transition-colors"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+              Add Embedding Model
+            </a>
+            <p className="text-[10px] text-brand-shade3/60">Recommended: OpenAI text-embedding-3-small (1536 dim, $0.02/1M tokens)</p>
+          </div>
+        ) : (
+          /* State 2/3: Models exist — dropdown */
+          <div>
+            <select
+              className={inputCls}
+              value={selectedEmbeddingModelId}
+              onChange={(e) => {
+                const newId = e.target.value;
+                if (newId !== selectedEmbeddingModelId && knowledgeFiles.length > 0 && selectedEmbeddingModelId) {
+                  if (!window.confirm('Changing embedding model will require re-indexing all files. Existing search results may be inaccurate until re-indexing completes. Continue?')) return;
+                }
+                onChange(setKey(cap, 'embedding_model_id', newId));
+              }}
+            >
+              <option value="">Select embedding model...</option>
+              {embeddingModels.map(m => (
+                <option key={m.id} value={m.id}>
+                  {m.name} ({m.model_name}{m.embedding_dim ? `, ${m.embedding_dim}d` : ''})
+                </option>
+              ))}
+            </select>
+            {isStaleModel ? (
+              <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
+                Selected embedding model was deleted. Please select a new model.
+              </p>
+            ) : hasEmbeddingModel && selectedModel ? (
+              <p className="text-[10px] text-status-active mt-1 flex items-center gap-1">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
+                Ready for document indexing
+              </p>
+            ) : (
+              <p className={hintCls}>Select which model to use for document vectorization and similarity search</p>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="bg-brand-dark rounded-card px-3 py-2 space-y-1">
         <span className="text-[11px] text-brand-shade2 font-mono">Auto-included tools:</span>
         <div className="flex gap-2 mt-1">
@@ -257,18 +318,23 @@ function KnowledgeConfig({ cap, onChange, agentName }: PanelProps) {
         </div>
       )}
 
-      <input ref={fileInputRef} type="file" multiple accept=".txt,.md,.csv" className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />
+      <input ref={fileInputRef} type="file" multiple accept=".txt,.md,.csv" className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} disabled={!uploadEnabled} />
       <div
-        className={`border-2 border-dashed rounded-card px-4 py-8 text-center cursor-pointer transition-colors ${
-          dragOver ? 'border-brand-accent bg-brand-accent/5 text-brand-accent' : 'border-brand-shade3/30 text-brand-shade3 hover:border-brand-shade3/50'
+        className={`border-2 border-dashed rounded-card px-4 py-8 text-center transition-colors ${
+          !uploadEnabled ? 'border-brand-shade3/15 text-brand-shade3/40 cursor-not-allowed opacity-60' :
+          dragOver ? 'border-brand-accent bg-brand-accent/5 text-brand-accent cursor-pointer' : 'border-brand-shade3/30 text-brand-shade3 hover:border-brand-shade3/50 cursor-pointer'
         }`}
-        onClick={() => fileInputRef.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onClick={() => uploadEnabled && fileInputRef.current?.click()}
+        onDragOver={(e) => { if (!uploadEnabled) return; e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={handleDrop}
+        onDrop={(e) => { if (!uploadEnabled) { e.preventDefault(); return; } handleDrop(e); }}
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-2 opacity-50"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
-        <p className="text-xs">{uploading ? 'Uploading...' : dragOver ? 'Drop files to upload' : 'Drag & drop files here or click to browse'}</p>
+        {!uploadEnabled ? (
+          <p className="text-xs">{hasEmbeddingModelsInSystem ? 'Select an embedding model to enable uploads' : 'Configure embedding model to enable uploads'}</p>
+        ) : (
+          <p className="text-xs">{uploading ? 'Uploading...' : dragOver ? 'Drop files to upload' : 'Drag & drop files here or click to browse'}</p>
+        )}
         <p className="text-[10px] text-brand-shade3/60 mt-1">Supported: TXT, MD, CSV</p>
         {uploadError && <p className="text-[10px] text-red-400 mt-1">{uploadError}</p>}
       </div>
@@ -314,6 +380,13 @@ function GuardrailConfig({ cap, onChange }: PanelProps) {
     llm_check: 'Judge LLM Prompt \u2014 a separate LLM evaluates the agent\'s response',
     webhook: 'https://validate.example.com/check',
   };
+  // Map UI mode to the backend config key that the guardrail pipeline reads
+  const configKeyForMode: Record<string, string> = {
+    json_schema: 'json_schema',
+    llm_check: 'judge_prompt',
+    webhook: 'webhook_url',
+  };
+  const configKey = configKeyForMode[mode] ?? 'json_schema';
   return (
     <div className="space-y-3">
       <p className={descCls}>Validates agent output before sending to user</p>
@@ -328,32 +401,21 @@ function GuardrailConfig({ cap, onChange }: PanelProps) {
       </div>
       <div>
         <label className={labelCls}>{configLabels[mode] ?? 'Config'}</label>
-        <textarea className={`${inputCls} font-mono resize-y`} data-testid="guardrail-config" rows={4} placeholder={placeholders[mode]} value={getKey(cap, 'config_text', '') as string} onChange={(e) => onChange(setKey(cap, 'config_text', e.target.value))} />
+        <textarea className={`${inputCls} font-mono resize-y`} data-testid="guardrail-config" rows={4} placeholder={placeholders[mode]} value={getKey(cap, configKey, '') as string} onChange={(e) => onChange(setKey(cap, configKey, e.target.value))} />
       </div>
       {mode === 'webhook' && (
-        <>
-          <div>
-            <label className={labelCls}>Auth type</label>
-            <select className={selectCls} value={getKey(cap, 'webhook_auth', 'none') as string} onChange={(e) => onChange(setKey(cap, 'webhook_auth', e.target.value))}>
-              {WEBHOOK_AUTH_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <p className={hintCls}>Authentication method for the webhook endpoint</p>
-          </div>
-          <div className="bg-brand-dark rounded-card px-3 py-2">
-            <p className="text-[10px] text-brand-shade3 font-mono mb-1">Contract</p>
-            <pre className="text-[10px] text-brand-shade2 font-mono leading-relaxed whitespace-pre">
+        <div className="bg-brand-dark rounded-card px-3 py-2">
+          <p className="text-[10px] text-brand-shade3 font-mono mb-1">Contract</p>
+          <pre className="text-[10px] text-brand-shade2 font-mono leading-relaxed whitespace-pre">
 {`Request:  POST { event, agent, session_id, response }
 Response: { pass: boolean, reason?: string }`}
-            </pre>
-          </div>
-        </>
+          </pre>
+        </div>
       )}
       <div>
         <label className={labelCls}>On failure</label>
-        <select className={selectCls} data-testid="guardrail-on-failure" value={getKey(cap, 'on_failure', 'retry_max_3') as string} onChange={(e) => onChange(setKey(cap, 'on_failure', e.target.value))}>
-          <option value="retry_max_3">Retry (agent regenerates response, max 3 attempts)</option>
+        <select className={selectCls} data-testid="guardrail-on-failure" value={getKey(cap, 'on_failure', 'retry') as string} onChange={(e) => onChange(setKey(cap, 'on_failure', e.target.value))}>
+          <option value="retry">Retry (agent regenerates response, max 3 attempts)</option>
           <option value="error">Error (return validation error to user, no response)</option>
           <option value="fallback">Fallback (use simpler prompt for safe response)</option>
         </select>
@@ -368,54 +430,12 @@ Response: { pass: boolean, reason?: string }`}
   );
 }
 
-function OutputSchemaConfig({ cap, onChange }: PanelProps) {
-  const fmt = getKey(cap, 'format', 'json_schema') as string;
-  return (
-    <div className="space-y-3">
-      <p className={descCls}>Enforces structured JSON output format from agent</p>
-      <div>
-        <label className={labelCls}>Format</label>
-        <select className={selectCls} data-testid="schema-format" value={fmt} onChange={(e) => onChange(setKey(cap, 'format', e.target.value))}>
-          <option value="json_schema">JSON Schema</option>
-          <option value="plain_text">Plain Text</option>
-        </select>
-        <p className={hintCls}>JSON Schema: agent must output valid JSON matching the schema. Plain Text: validates basic format rules (length, no code blocks) without JSON</p>
-      </div>
-      <label className="flex items-center gap-2 text-sm text-brand-shade2 cursor-pointer select-none">
-        <input type="checkbox" className="accent-brand-accent" data-testid="schema-enforce" checked={getKey(cap, 'enforce', false) as boolean} onChange={(e) => onChange(setKey(cap, 'enforce', e.target.checked))} />
-        Enforce
-      </label>
-      <p className="text-[11px] text-brand-shade3/70 ml-6">When enabled, response is rejected and error shown to user if output doesn't conform</p>
-      {fmt === 'json_schema' && (
-        <div>
-          <label className={labelCls}>Schema</label>
-          <textarea className={`${inputCls} font-mono resize-y`} rows={6} placeholder='{"type":"object","properties":{}}' value={getKey(cap, 'schema', '') as string} onChange={(e) => onChange(setKey(cap, 'schema', e.target.value))} />
-        </div>
-      )}
-    </div>
-  );
-}
-
 function EscalationConfig({ cap, onChange }: PanelProps) {
   const action = getKey(cap, 'action', 'transfer_to_user') as string;
-  const triggers = getKey<EscalationTrigger[]>(cap, 'triggers', []);
   const actionHints: Record<string, string> = {
     transfer_to_user: 'Session marked as needing human, agent stops responding',
-    notify: 'Webhook called with session context, agent continues',
+    notify_webhook: 'Webhook called with session context, agent continues',
   };
-
-  function updateTrigger(i: number, updated: EscalationTrigger) {
-    const next = triggers.map((t, j) => (j === i ? updated : t));
-    onChange(setKey(cap, 'triggers', next));
-  }
-
-  function removeTrigger(i: number) {
-    onChange(setKey(cap, 'triggers', triggers.filter((_, j) => j !== i)));
-  }
-
-  function addTrigger() {
-    onChange(setKey(cap, 'triggers', [...triggers, { condition: 'confidence_below' as EscalationConditionType, threshold: 0.4 }]));
-  }
 
   return (
     <div className="space-y-3">
@@ -431,82 +451,17 @@ function EscalationConfig({ cap, onChange }: PanelProps) {
         <label className={labelCls}>Action</label>
         <select className={selectCls} data-testid="escalation-action" value={action} onChange={(e) => onChange(setKey(cap, 'action', e.target.value))}>
           <option value="transfer_to_user">Transfer to User</option>
-          <option value="notify">Notify</option>
+          <option value="notify_webhook">Notify</option>
         </select>
         <p className={hintCls}>{actionHints[action]}</p>
       </div>
-      {action !== 'transfer_to_user' && (
+      {action === 'notify_webhook' && (
         <div>
           <label className={labelCls}>Webhook URL</label>
           <input className={inputCls} placeholder="https://hooks.example.com/escalate" value={getKey(cap, 'webhook_url', '') as string} onChange={(e) => onChange(setKey(cap, 'webhook_url', e.target.value))} />
           <p className={hintCls}>Called when escalation triggers. Receives full session context.</p>
         </div>
       )}
-      <div>
-        <label className={labelCls}>Triggers</label>
-        <div className="space-y-2">
-          {triggers.map((trigger, i) => {
-            const condMeta = ESCALATION_CONDITIONS.find(c => c.value === trigger.condition);
-            return (
-              <div key={trigger.condition + '-' + i} className="bg-brand-dark rounded-card p-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <select
-                    className={`${selectCls} flex-1`}
-                    value={trigger.condition}
-                    onChange={(e) => updateTrigger(i, { condition: e.target.value as EscalationConditionType })}
-                  >
-                    {ESCALATION_CONDITIONS.map((c) => (
-                      <option key={c.value} value={c.value}>{c.label}</option>
-                    ))}
-                  </select>
-                  <button type="button" onClick={() => removeTrigger(i)} className="text-brand-shade3 hover:text-brand-accent text-lg leading-none flex-shrink-0">x</button>
-                </div>
-                {/* Parameter input based on condition type */}
-                {condMeta?.paramType === 'slider' && (
-                  <div>
-                    <label className={labelCls}>Threshold: {trigger.threshold ?? 0.4}</label>
-                    <input type="range" min={0} max={1} step={0.05} className="w-full accent-brand-accent" value={trigger.threshold ?? 0.4} onChange={(e) => updateTrigger(i, { ...trigger, threshold: Number(e.target.value) })} />
-                    <div className="flex justify-between text-[10px] text-brand-shade3/60"><span>0.0</span><span>1.0</span></div>
-                  </div>
-                )}
-                {condMeta?.paramType === 'text' && trigger.condition === 'topic_matches' && (
-                  <div>
-                    <label className={labelCls}>Pattern</label>
-                    <input className={inputCls} placeholder="refund, billing, complaint" value={trigger.pattern ?? ''} onChange={(e) => updateTrigger(i, { ...trigger, pattern: e.target.value })} />
-                  </div>
-                )}
-                {condMeta?.paramType === 'text' && trigger.condition === 'tool_failed' && (
-                  <div>
-                    <label className={labelCls}>Tool name</label>
-                    <input className={inputCls} placeholder="payment_process, send_email" value={trigger.pattern ?? ''} onChange={(e) => updateTrigger(i, { ...trigger, pattern: e.target.value })} />
-                  </div>
-                )}
-                {condMeta?.paramType === 'toggle' && (
-                  <label className="flex items-center gap-2 text-sm text-brand-shade2 cursor-pointer select-none">
-                    <input type="checkbox" className="accent-brand-accent" checked={true} readOnly />
-                    Trigger on negative sentiment
-                  </label>
-                )}
-                {condMeta?.paramType === 'number' && (
-                  <div>
-                    <label className={labelCls}>Max turns</label>
-                    <input type="number" className={inputCls} min={1} max={100} value={trigger.threshold ?? 10} onChange={(e) => updateTrigger(i, { ...trigger, threshold: Number(e.target.value) })} />
-                  </div>
-                )}
-                {condMeta?.paramType === 'textarea' && (
-                  <div>
-                    <label className={labelCls}>Custom prompt</label>
-                    <textarea className={`${inputCls} resize-y`} rows={2} placeholder="Describe when escalation should trigger..." value={trigger.prompt ?? ''} onChange={(e) => updateTrigger(i, { ...trigger, prompt: e.target.value })} />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        <button type="button" onClick={addTrigger} className="text-xs text-brand-shade3 hover:text-brand-light transition-colors mt-2">
-          + Add trigger
-        </button>
-      </div>
     </div>
   );
 }
@@ -527,7 +482,7 @@ const failureMeta: Record<string, [string, string]> = {
   context_overflow: ['Context Overflow', 'Context too large -- auto-compact and retry'],
 };
 
-function RecoveryConfig({ cap, onChange, models }: PanelProps) {
+function RecoveryConfig({ cap, onChange }: PanelProps) {
   const rules = getKey<RecoveryRule[]>(cap, 'rules', defaultRules);
 
   function updateRule(i: number, field: keyof RecoveryRule, value: string | number) {
@@ -572,25 +527,19 @@ function RecoveryConfig({ cap, onChange, models }: PanelProps) {
               </select>
             </div>
           )}
-          {rule.action === 'fallback' && (
-            <div>
-              <label className={labelCls}>Fallback model</label>
-              <select className={selectCls} value={rule.fallback_model} onChange={(e) => updateRule(i, 'fallback_model', e.target.value)}>
-                <option value="">Select fallback model...</option>
-                {(models ?? []).map((m) => (
-                  <option key={m.id} value={m.name}>{m.name} ({m.model_name})</option>
-                ))}
-              </select>
-              <p className="text-[11px] text-brand-shade3/70 mt-1">Backup model used when primary model is unavailable</p>
-            </div>
-          )}
+          {/* fallback_model: hidden until runtime model-switching is implemented */}
         </div>
       ))}
     </div>
   );
 }
 
-type PolicyRule = { condition: string; action: string; pattern?: string; webhook_url?: string; webhook_auth?: string; header_name?: string; header_value?: string; time_range?: string };
+// Nested format matching backend policyRuleRaw struct
+type PolicyRule = {
+  enabled: boolean;
+  condition: { type: string; pattern?: string; start?: string; end?: string };
+  action: { type: string; message?: string; webhook_url?: string; headers?: Record<string, string> };
+};
 
 const conditionHints: Record<string, string> = {
   before_tool_call: 'Runs before any tool is invoked. Can block or modify the call',
@@ -610,79 +559,101 @@ const actionHintsPolicy: Record<string, string> = {
 function PoliciesConfig({ cap, onChange }: PanelProps) {
   const rules = getKey<PolicyRule[]>(cap, 'rules', []);
 
-  function updateRule(i: number, field: keyof PolicyRule, value: string) {
-    const next = rules.map((r, j) => (j === i ? { ...r, [field]: value } : r));
-    onChange(setKey(cap, 'rules', next));
+  function setRules(next: PolicyRule[]) { onChange(setKey(cap, 'rules', next)); }
+
+  function updateCondition(i: number, field: string, value: string) {
+    const next = rules.map((r, j) => j === i ? { ...r, condition: { ...r.condition, [field]: value } } : r);
+    setRules(next);
   }
+
+  function updateAction(i: number, field: string, value: string) {
+    const next = rules.map((r, j) => j === i ? { ...r, action: { ...r.action, [field]: value } } : r);
+    setRules(next);
+  }
+
+  function updateHeader(i: number, name: string, value: string) {
+    const next = rules.map((r, j) => j === i ? { ...r, action: { ...r.action, headers: { [name]: value } } } : r);
+    setRules(next);
+  }
+
+  // Helper: extract header name/value from headers map for display
+  const getHeader = (rule: PolicyRule): [string, string] => {
+    const entries = Object.entries(rule.action.headers ?? {});
+    return entries.length > 0 ? [entries[0]![0], entries[0]![1]] : ['', ''];
+  };
+
+  // Helper: format time range from start/end for display
+  const getTimeRange = (rule: PolicyRule): string => {
+    const s = rule.condition.start ?? '';
+    const e = rule.condition.end ?? '';
+    if (s && e) return `${s}-${e}`;
+    return s || e || '';
+  };
+
+  const parseTimeRange = (i: number, val: string) => {
+    const parts = val.split('-');
+    const next = rules.map((r, j) => j === i ? { ...r, condition: { ...r.condition, start: parts[0]?.trim() ?? '', end: parts[1]?.trim() ?? '' } } : r);
+    setRules(next);
+  };
 
   return (
     <div className="space-y-3">
       <p className={descCls}>Visual rules: When [condition] occurs -- Do [action]</p>
       {rules.map((rule, i) => (
-        <div key={rule.condition + '-' + rule.action + '-' + i} className="space-y-2">
+        <div key={rule.condition.type + '-' + rule.action.type + '-' + i} className="space-y-2">
           <div className="flex gap-2 items-center">
-            <select className={`${selectCls} flex-1`} value={rule.condition} onChange={(e) => updateRule(i, 'condition', e.target.value)}>
+            <select className={`${selectCls} flex-1`} value={rule.condition.type} onChange={(e) => updateCondition(i, 'type', e.target.value)}>
               <option value="before_tool_call">Before tool call</option>
               <option value="after_tool_call">After tool call</option>
               <option value="tool_matches">Tool matches</option>
               <option value="time_range">Time range</option>
               <option value="error_occurred">Error occurred</option>
             </select>
-            <select className={`${selectCls} flex-1`} value={rule.action} onChange={(e) => updateRule(i, 'action', e.target.value)}>
+            <select className={`${selectCls} flex-1`} value={rule.action.type} onChange={(e) => updateAction(i, 'type', e.target.value)}>
               <option value="log_to_webhook">Log to webhook</option>
               <option value="block">Block</option>
               <option value="notify">Notify</option>
               <option value="inject_header">Inject header</option>
               <option value="write_audit">Write audit</option>
             </select>
-            <button type="button" onClick={() => onChange(setKey(cap, 'rules', rules.filter((_, j) => j !== i)))} className="text-brand-shade3 hover:text-brand-accent text-lg leading-none flex-shrink-0">x</button>
+            <button type="button" onClick={() => setRules(rules.filter((_, j) => j !== i))} className="text-brand-shade3 hover:text-brand-accent text-lg leading-none flex-shrink-0">x</button>
           </div>
-          <p className="text-[11px] text-brand-shade3/70">{conditionHints[rule.condition]}</p>
-          <p className="text-[11px] text-brand-shade3/70">{actionHintsPolicy[rule.action]}</p>
-          {rule.condition === 'tool_matches' && (
+          <p className="text-[11px] text-brand-shade3/70">{conditionHints[rule.condition.type]}</p>
+          <p className="text-[11px] text-brand-shade3/70">{actionHintsPolicy[rule.action.type]}</p>
+          {rule.condition.type === 'tool_matches' && (
             <div>
               <label className={labelCls}>Tool pattern (glob)</label>
-              <input className={inputCls} placeholder="delete_*, send_email, admin_*" value={rule.pattern ?? ''} onChange={(e) => updateRule(i, 'pattern', e.target.value)} />
+              <input className={inputCls} placeholder="delete_*, send_email, admin_*" value={rule.condition.pattern ?? ''} onChange={(e) => updateCondition(i, 'pattern', e.target.value)} />
               <p className={hintCls}>Use * as wildcard. Matches tool names like delete_user, delete_cache</p>
             </div>
           )}
-          {rule.condition === 'time_range' && (
+          {rule.condition.type === 'time_range' && (
             <div>
               <label className={labelCls}>Time window (UTC, 24h)</label>
-              <input className={inputCls} placeholder="09:00-17:00" value={rule.time_range ?? ''} onChange={(e) => updateRule(i, 'time_range', e.target.value)} />
+              <input className={inputCls} placeholder="09:00-17:00" value={getTimeRange(rule)} onChange={(e) => parseTimeRange(i, e.target.value)} />
               <p className={hintCls}>Format: HH:MM-HH:MM. Example: 09:00-17:00 for working hours only</p>
             </div>
           )}
-          {(rule.action === 'log_to_webhook' || rule.action === 'notify') && (
-            <>
-              <div>
-                <label className={labelCls}>Webhook URL</label>
-                <input className={inputCls} placeholder="https://hooks.example.com/events" value={rule.webhook_url ?? ''} onChange={(e) => updateRule(i, 'webhook_url', e.target.value)} />
-                <p className={hintCls}>Receives JSON payload with event type, tool name, agent name, timestamp</p>
-              </div>
-              <div>
-                <label className={labelCls}>Auth type</label>
-                <select className={selectCls} value={rule.webhook_auth ?? 'none'} onChange={(e) => updateRule(i, 'webhook_auth', e.target.value)}>
-                  {WEBHOOK_AUTH_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-            </>
+          {(rule.action.type === 'log_to_webhook' || rule.action.type === 'notify') && (
+            <div>
+              <label className={labelCls}>Webhook URL</label>
+              <input className={inputCls} placeholder="https://hooks.example.com/events" value={rule.action.webhook_url ?? ''} onChange={(e) => updateAction(i, 'webhook_url', e.target.value)} />
+              <p className={hintCls}>Receives JSON payload with event type, tool name, agent name, timestamp</p>
+            </div>
           )}
-          {rule.action === 'inject_header' && (
+          {rule.action.type === 'inject_header' && (
             <div>
               <label className={labelCls}>HTTP Header (added to MCP tool requests)</label>
               <div className="flex gap-2">
-                <input className={`${inputCls} flex-1`} placeholder="X-Request-ID" value={rule.header_name ?? ''} onChange={(e) => updateRule(i, 'header_name', e.target.value)} />
-                <input className={`${inputCls} flex-1`} placeholder="correlation-id-123" value={rule.header_value ?? ''} onChange={(e) => updateRule(i, 'header_value', e.target.value)} />
+                <input className={`${inputCls} flex-1`} placeholder="X-Request-ID" value={getHeader(rule)[0]} onChange={(e) => updateHeader(i, e.target.value, getHeader(rule)[1])} />
+                <input className={`${inputCls} flex-1`} placeholder="correlation-id-123" value={getHeader(rule)[1]} onChange={(e) => updateHeader(i, getHeader(rule)[0], e.target.value)} />
               </div>
               <p className={hintCls}>Left: header name. Right: header value. Injected into all outgoing MCP requests</p>
             </div>
           )}
         </div>
       ))}
-      <button type="button" onClick={() => onChange(setKey(cap, 'rules', [...rules, { condition: 'before_tool_call', action: 'log_to_webhook' }]))} className="text-xs text-brand-shade3 hover:text-brand-light transition-colors">
+      <button type="button" onClick={() => setRules([...rules, { enabled: true, condition: { type: 'before_tool_call' }, action: { type: 'log_to_webhook' } }])} className="text-xs text-brand-shade3 hover:text-brand-light transition-colors">
         + Add rule
       </button>
     </div>
@@ -721,13 +692,6 @@ function getSummary(cap: CapabilityConfig): string {
       if (onFail) parts.push(`on fail: ${onFail.replace('_', ' ')}`);
       return parts.length > 0 ? parts.join(', ') : 'JSON Schema validation';
     }
-    case 'output_schema': {
-      const parts: string[] = [];
-      const fmt = c.format as string | undefined;
-      if (fmt) parts.push(fmt.replace('_', ' '));
-      if (c.enforce) parts.push('enforced');
-      return parts.length > 0 ? parts.join(', ') : 'No schema defined';
-    }
     case 'escalation': {
       const parts: string[] = [];
       parts.push(c.action ? String(c.action) : 'transfer_to_user');
@@ -759,7 +723,7 @@ const configMap: Record<string, React.FC<PanelProps>> = {
   memory: MemoryConfig,
   knowledge: KnowledgeConfig,
   guardrail: GuardrailConfig,
-  output_schema: OutputSchemaConfig,
+
   escalation: EscalationConfig,
   recovery: RecoveryConfig,
   policies: PoliciesConfig,

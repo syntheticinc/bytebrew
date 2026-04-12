@@ -12,6 +12,10 @@ func AutoMigrate(db *gorm.DB) error {
 	// Silently ignored if extension is not available (non-pgvector PostgreSQL).
 	db.Exec("CREATE EXTENSION IF NOT EXISTS vector")
 
+	// WP-4: Migrate existing knowledge_chunks.embedding from vector(768) to variable-dimension vector.
+	// Safe to run repeatedly — no-op if column already has correct type or table doesn't exist.
+	db.Exec("ALTER TABLE knowledge_chunks ALTER COLUMN embedding TYPE vector USING embedding::vector")
+
 	if err := db.AutoMigrate(
 		// Config tables (11)
 		&AgentModel{},
