@@ -1,11 +1,13 @@
-import React, { useState, useRef, type DragEvent } from 'react';
+import React, { useState, useEffect, useRef, useCallback, type DragEvent } from 'react';
 import type { CapabilityConfig, EscalationConditionType, EscalationTrigger, KnowledgeFile, KnowledgeFileStatus, WebhookAuthType } from '../../types';
 import { CAPABILITY_META } from '../../types';
+import { api } from '../../api/client';
 
 interface CapabilityBlockProps {
   capability: CapabilityConfig;
   onChange: (updated: CapabilityConfig) => void;
   onRemove: () => void;
+  agentName?: string;
   models?: { id: string; name: string; model_name: string }[];
 }
 
@@ -66,12 +68,6 @@ export function capabilityIcon(name: string): React.ReactElement {
   }
 }
 
-// Mock knowledge files for prototype
-const MOCK_KNOWLEDGE_FILES: KnowledgeFile[] = [
-  { name: 'support-docs.pdf', type: 'PDF', size: '2.4 MB', uploaded_at: '2026-04-01', status: 'ready' },
-  { name: 'faq.docx', type: 'DOCX', size: '512 KB', uploaded_at: '2026-04-03', status: 'indexing' },
-];
-
 const FILE_STATUS_CLASSES: Record<KnowledgeFileStatus, string> = {
   uploading: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
   indexing: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
@@ -110,7 +106,7 @@ function getKey<T>(cap: CapabilityConfig, key: string, fallback: T): T {
 // Per-type config panels
 // ---------------------------------------------------------------------------
 
-type PanelProps = { cap: CapabilityConfig; onChange: (u: CapabilityConfig) => void; models?: { id: string; name: string; model_name: string }[] };
+type PanelProps = { cap: CapabilityConfig; onChange: (u: CapabilityConfig) => void; agentName?: string; models?: { id: string; name: string; model_name: string }[] };
 
 function MemoryConfig({ cap, onChange }: PanelProps) {
   const unlimitedRetention = getKey(cap, 'unlimited_retention', false) as boolean;
@@ -160,16 +156,35 @@ function MemoryConfig({ cap, onChange }: PanelProps) {
   );
 }
 
-function KnowledgeConfig({ cap, onChange }: PanelProps) {
+function KnowledgeConfig({ cap, onChange, agentName }: PanelProps) {
   const sources = getKey<string[]>(cap, 'sources', []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeFile[]>(MOCK_KNOWLEDGE_FILES);
+  const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeFile[]>([]);
+  const [uploading, setUploading] = useState(false);
+
+  // Load files from API on mount
+  useEffect(() => {
+    if (!agentName) return;
+    api.listKnowledgeFiles(agentName).then(setKnowledgeFiles).catch(() => {});
+  }, [agentName]);
+
+  const uploadFile = useCallback(async (file: File) => {
+    if (!agentName) return;
+    setUploading(true);
+    try {
+      const uploaded = await api.uploadKnowledgeFile(agentName, file);
+      setKnowledgeFiles(prev => [...prev, uploaded]);
+    } catch (err) {
+      console.error('Upload failed:', err);
+    } finally {
+      setUploading(false);
+    }
+  }, [agentName]);
 
   function addFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
-    const names = Array.from(files).map(f => f.name);
-    onChange(setKey(cap, 'sources', [...sources, ...names]));
+    Array.from(files).forEach(f => uploadFile(f));
   }
 
   function handleDrop(e: DragEvent<HTMLDivElement>) {
@@ -217,10 +232,18 @@ function KnowledgeConfig({ cap, onChange }: PanelProps) {
                   </td>
                   <td className="px-3 py-2 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button type="button" title="Reindex" className="p-1 text-brand-shade3 hover:text-brand-light transition-colors" onClick={() => setKnowledgeFiles(prev => prev.map((f, j) => j === i ? { ...f, status: 'indexing' as KnowledgeFileStatus } : f))}>
+                      <button type="button" title="Reindex" className="p-1 text-brand-shade3 hover:text-brand-light transition-colors" onClick={() => {
+                        if (!agentName || !file.id) return;
+                        setKnowledgeFiles(prev => prev.map((f, j) => j === i ? { ...f, status: 'indexing' as KnowledgeFileStatus } : f));
+                        api.reindexKnowledgeFile(agentName, file.id).catch(() => {});
+                      }}>
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" /></svg>
                       </button>
-                      <button type="button" title="Delete" className="p-1 text-brand-shade3 hover:text-brand-accent transition-colors" onClick={() => setKnowledgeFiles(prev => prev.filter((_, j) => j !== i))}>
+                      <button type="button" title="Delete" className="p-1 text-brand-shade3 hover:text-brand-accent transition-colors" onClick={() => {
+                        if (!agentName || !file.id) return;
+                        setKnowledgeFiles(prev => prev.filter((_, j) => j !== i));
+                        api.deleteKnowledgeFile(agentName, file.id).catch(() => {});
+                      }}>
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
                       </button>
                     </div>
@@ -243,7 +266,7 @@ function KnowledgeConfig({ cap, onChange }: PanelProps) {
         onDrop={handleDrop}
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-2 opacity-50"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
-        <p className="text-xs">{dragOver ? 'Drop files to upload' : 'Drag & drop files here or click to browse'}</p>
+        <p className="text-xs">{uploading ? 'Uploading...' : dragOver ? 'Drop files to upload' : 'Drag & drop files here or click to browse'}</p>
         <p className="text-[10px] text-brand-shade3/60 mt-1">Supported: PDF, DOCX, DOC, TXT, MD, CSV</p>
       </div>
 
@@ -739,7 +762,7 @@ const configMap: Record<string, React.FC<PanelProps>> = {
   policies: PoliciesConfig,
 };
 
-export default function CapabilityBlock({ capability, onChange, onRemove, models }: CapabilityBlockProps) {
+export default function CapabilityBlock({ capability, onChange, onRemove, agentName, models }: CapabilityBlockProps) {
   const [open, setOpen] = useState(false);
   const meta = CAPABILITY_META[capability.type] ?? { label: capability.type, icon: 'brain', description: 'Unknown capability type' };
   const summary = getSummary(capability);
@@ -788,7 +811,7 @@ export default function CapabilityBlock({ capability, onChange, onRemove, models
       </div>
       {open && ConfigPanel && (
         <div className="px-3 py-3 border-t border-brand-shade3/10">
-          <ConfigPanel cap={capability} onChange={onChange} models={models} />
+          <ConfigPanel cap={capability} onChange={onChange} agentName={agentName} models={models} />
         </div>
       )}
     </div>

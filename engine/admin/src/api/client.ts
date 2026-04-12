@@ -59,6 +59,12 @@ import { MOCK_SESSIONS_LIST, MOCK_TRACE, MOCK_TRACE_ERROR } from '../mocks/inspe
 const BASE_URL = '/api/v1';
 const PROTOTYPE_KEY = 'bytebrew_prototype_mode';
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 class APIClient {
   private token: string | null = null;
 
@@ -616,7 +622,18 @@ class APIClient {
 
   async listKnowledgeFiles(agentName: string): Promise<KnowledgeFile[]> {
     if (this.isPrototype) return this.mock<KnowledgeFile[]>([]);
-    return this.request<KnowledgeFile[]>('GET', `/agents/${encodeURIComponent(agentName)}/knowledge/files`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = await this.request<any[]>('GET', `/agents/${encodeURIComponent(agentName)}/knowledge/files`);
+    return (raw ?? []).map((r) => ({
+      id: r.id,
+      name: r.file_name ?? r.name ?? '',
+      type: (r.file_type ?? r.type ?? '').toUpperCase(),
+      size: r.file_size != null ? formatBytes(r.file_size) : (r.size ?? ''),
+      uploaded_at: r.created_at ?? r.uploaded_at ?? '',
+      status: r.status ?? 'ready',
+      error: r.status_message,
+      chunk_count: r.chunk_count,
+    } as KnowledgeFile));
   }
 
   async deleteKnowledgeFile(agentName: string, filename: string): Promise<void> {
@@ -650,7 +667,7 @@ class APIClient {
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
-    const res = await fetch(`${BASE_URL}/agents/${encodeURIComponent(agentName)}/knowledge/upload`, {
+    const res = await fetch(`${BASE_URL}/agents/${encodeURIComponent(agentName)}/knowledge/files`, {
       method: 'POST',
       headers,
       body: formData,
@@ -669,7 +686,18 @@ class APIClient {
       } catch { /* use raw text */ }
       throw new Error(message);
     }
-    return (await res.json()) as KnowledgeFile;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r = (await res.json()) as any;
+    return {
+      id: r.id,
+      name: r.file_name ?? r.name ?? '',
+      type: (r.file_type ?? r.type ?? '').toUpperCase(),
+      size: r.file_size != null ? formatBytes(r.file_size) : (r.size ?? ''),
+      uploaded_at: r.created_at ?? r.uploaded_at ?? '',
+      status: r.status ?? 'indexing',
+      error: r.status_message,
+      chunk_count: r.chunk_count,
+    } as KnowledgeFile;
   }
 
   // ─── Circuit Breakers ────────────────────────────────────────────────────────

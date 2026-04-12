@@ -549,6 +549,7 @@ function AgentDrillInInner() {
                     capability={cap}
                     onChange={(updated) => updateCapability(i, updated)}
                     onRemove={() => removeCapability(i)}
+                    agentName={agentName}
                     models={models as { id: string; name: string; model_name: string }[]}
                   />
                 </div>

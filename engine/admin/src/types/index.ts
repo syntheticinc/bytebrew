@@ -560,12 +560,14 @@ export interface PolicyRule {
 export type KnowledgeFileStatus = 'uploading' | 'indexing' | 'ready' | 'error';
 
 export interface KnowledgeFile {
+  id?: string;
   name: string;
   type: string;
   size: string;
   uploaded_at: string;
   status: KnowledgeFileStatus;
   error?: string;
+  chunk_count?: number;
 }
 
 export interface KnowledgeStatus {

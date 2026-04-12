@@ -46,6 +46,7 @@ import (
 	mcpcatalog "github.com/syntheticinc/bytebrew/engine/internal/service/mcp"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/capability"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/escalation"
+	svcknowledge "github.com/syntheticinc/bytebrew/engine/internal/service/knowledge"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/eventstore"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/lifecycle"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/guardrail"
@@ -712,13 +713,29 @@ func Run(sc ServerConfig) error {
 					&knowledgeStatsHTTPAdapter{repo: knowledgeRepo},
 					reindexer,
 				)
+
+				// WP-3: Wire file upload service + file management endpoints
+				if embeddingsClient != nil {
+					dataDir := "data"
+					if envDir := os.Getenv("DATA_DIR"); envDir != "" {
+						dataDir = envDir
+					}
+					uploadSvc := svcknowledge.NewUploadService(knowledgeRepo, embeddingsClient, dataDir)
+					knowledgeHandler.SetFileUploader(&knowledgeUploadHTTPAdapter{svc: uploadSvc})
+					knowledgeHandler.SetFileLister(&knowledgeFileListerHTTPAdapter{svc: uploadSvc})
+				}
+
 				r.Group(func(r chi.Router) {
 					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
 					r.Get("/api/v1/agents/{name}/knowledge/status", knowledgeHandler.Status)
+					r.Get("/api/v1/agents/{name}/knowledge/files", knowledgeHandler.ListFiles)
 				})
 				r.Group(func(r chi.Router) {
 					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsWrite))
 					r.Post("/api/v1/agents/{name}/knowledge/reindex", knowledgeHandler.Reindex)
+					r.Post("/api/v1/agents/{name}/knowledge/files", knowledgeHandler.UploadFile)
+					r.Delete("/api/v1/agents/{name}/knowledge/files/{file_id}", knowledgeHandler.DeleteFile)
+					r.Post("/api/v1/agents/{name}/knowledge/files/{file_id}/reindex", knowledgeHandler.ReindexFile)
 				})
 			}
 

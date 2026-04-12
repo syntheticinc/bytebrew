@@ -2,11 +2,18 @@ package http
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
+	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 )
 
 // KnowledgeStats provides knowledge base statistics for an agent.
@@ -41,9 +48,10 @@ type KnowledgeFileResponse struct {
 
 // KnowledgeHandler serves /api/v1/agents/{name}/knowledge endpoints.
 type KnowledgeHandler struct {
-	stats      KnowledgeStats
-	reindexer  KnowledgeReindexer
-	fileLister KnowledgeFileLister
+	stats        KnowledgeStats
+	reindexer    KnowledgeReindexer
+	fileLister   KnowledgeFileLister
+	fileUploader KnowledgeFileUploader
 }
 
 // NewKnowledgeHandler creates a KnowledgeHandler.
@@ -183,4 +191,145 @@ func (h *KnowledgeHandler) ReindexFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "reindex_started"})
+}
+
+// --- WP-3: File Upload ---
+
+// KnowledgeFileUploader handles file upload, storage, and async indexing.
+type KnowledgeFileUploader interface {
+	UploadFile(ctx context.Context, tenantID, agentName, fileName, fileType string, fileSize int64, fileHash string, content []byte) (*KnowledgeFileResponse, error)
+}
+
+// SetFileUploader configures the file uploader (WP-3).
+func (h *KnowledgeHandler) SetFileUploader(uploader KnowledgeFileUploader) {
+	h.fileUploader = uploader
+}
+
+// maxUploadSize is the maximum file upload size (50 MB).
+const maxUploadSize = 50 << 20
+
+// allowedMIMETypes maps allowed file extensions to expected MIME prefixes.
+var allowedMIMETypes = map[string][]string{
+	".txt":  {"text/plain"},
+	".md":   {"text/plain", "text/markdown"},
+	".csv":  {"text/csv", "text/plain", "application/csv"},
+	".pdf":  {"application/pdf"},
+	".doc":  {"application/msword"},
+	".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/zip"},
+}
+
+// UploadFile handles POST /api/v1/agents/{name}/knowledge/files (WP-3).
+func (h *KnowledgeHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
+	agentName := chi.URLParam(r, "name")
+	if agentName == "" {
+		writeJSONError(w, http.StatusBadRequest, "agent name is required")
+		return
+	}
+
+	if h.fileUploader == nil {
+		writeJSONError(w, http.StatusNotImplemented, "file upload not available")
+		return
+	}
+
+	// Limit request body size
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize+1024) // +1KB for multipart headers
+
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "file too large or invalid multipart form (max 50MB)")
+		return
+	}
+	defer func() { _ = r.MultipartForm.RemoveAll() }()
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "file field is required")
+		return
+	}
+	defer func() { _ = file.Close() }()
+
+	// Validate filename — sanitize path traversal
+	originalName := sanitizeUploadFilename(header.Filename)
+	if originalName == "" {
+		writeJSONError(w, http.StatusBadRequest, "invalid filename")
+		return
+	}
+
+	// Validate file extension
+	ext := strings.ToLower(filepath.Ext(originalName))
+	allowedMIME, ok := allowedMIMETypes[ext]
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest,
+			fmt.Sprintf("unsupported file type %q, supported: txt, md, csv, pdf, doc, docx", ext))
+		return
+	}
+
+	// Validate MIME type
+	if !validateMIME(header, allowedMIME) {
+		writeJSONError(w, http.StatusBadRequest,
+			fmt.Sprintf("file content type does not match extension %q", ext))
+		return
+	}
+
+	// Read file content
+	content, err := io.ReadAll(file)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "failed to read file")
+		return
+	}
+
+	if len(content) == 0 {
+		writeJSONError(w, http.StatusBadRequest, "empty file")
+		return
+	}
+
+	// Compute hash
+	fileHash := fmt.Sprintf("%x", sha256.Sum256(content))
+
+	// Determine file type from extension
+	fileType := strings.TrimPrefix(ext, ".")
+
+	// Extract tenant from context (CE mode → "default")
+	tenantID := domain.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		tenantID = "default"
+	}
+
+	resp, err := h.fileUploader.UploadFile(r.Context(), tenantID, agentName, originalName, fileType, int64(len(content)), fileHash, content)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, resp)
+}
+
+// sanitizeUploadFilename removes path traversal characters and returns the base filename.
+func sanitizeUploadFilename(name string) string {
+	// Use filepath.Base to strip directory components
+	name = filepath.Base(name)
+	// Remove any remaining path separators
+	name = strings.ReplaceAll(name, "..", "")
+	name = strings.ReplaceAll(name, "/", "")
+	name = strings.ReplaceAll(name, "\\", "")
+	name = strings.TrimSpace(name)
+	if name == "." || name == "" {
+		return ""
+	}
+	return name
+}
+
+// validateMIME checks the Content-Type header against allowed MIME types.
+func validateMIME(header *multipart.FileHeader, allowed []string) bool {
+	ct := header.Header.Get("Content-Type")
+	if ct == "" {
+		return true // browsers may not send Content-Type for some file types
+	}
+	ct = strings.ToLower(strings.Split(ct, ";")[0]) // strip charset
+	for _, a := range allowed {
+		if ct == a {
+			return true
+		}
+	}
+	// Also allow application/octet-stream as a generic fallback
+	return ct == "application/octet-stream"
 }

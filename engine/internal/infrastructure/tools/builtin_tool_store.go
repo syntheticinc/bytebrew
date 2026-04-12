@@ -242,8 +242,8 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 		}
 	}
 
-	// Knowledge search — auto-inject when agent has KnowledgePath configured
-	// Use ResolveContext deps first, fallback to resolver-level deps
+	// Knowledge search — auto-inject when agent has KnowledgePath OR Knowledge capability.
+	// Use ResolveContext deps first, fallback to resolver-level deps.
 	ks := rc.KnowledgeSearcher
 	ke := rc.KnowledgeEmbedder
 	if ks == nil {
@@ -252,13 +252,16 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 	if ke == nil {
 		ke = r.knowledgeEmbedder
 	}
-	if rc.Agent.Record.KnowledgePath != "" && ks != nil && ke != nil {
+	hasKnowledgePath := rc.Agent.Record.KnowledgePath != ""
+	hasKnowledgeCap := capInjectedTools["knowledge_search"] // WP-3: capability-injected
+	if (hasKnowledgePath || hasKnowledgeCap) && ks != nil && ke != nil {
 		knowledgeTool := NewKnowledgeSearchTool(rc.Agent.Record.Name, ks, ke)
 		tools = append(tools, knowledgeTool)
 	} else if hasToolInList(rc.Agent.Record.BuiltinTools, "knowledge_search") {
-		slog.WarnContext(ctx, "agent has knowledge_search in tools but knowledge path is not configured — skipping",
+		slog.WarnContext(ctx, "agent has knowledge_search in tools but knowledge not available — skipping",
 			"agent", rc.Agent.Record.Name,
 			"knowledge_path", rc.Agent.Record.KnowledgePath,
+			"capability_injected", hasKnowledgeCap,
 			"searcher_available", ks != nil,
 			"embedder_available", ke != nil)
 	}
@@ -355,13 +358,16 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 	}
 
 	// Knowledge auto-injection via legacy Resolve path
-	if deps.KnowledgePath != "" && deps.AgentName != "" && r.knowledgeSearcher != nil && r.knowledgeEmbedder != nil {
+	hasKnowledgePathLegacy := deps.KnowledgePath != "" && deps.AgentName != ""
+	hasKnowledgeCapLegacy := capInjectedTools["knowledge_search"] // WP-3: capability-injected
+	if (hasKnowledgePathLegacy || hasKnowledgeCapLegacy) && r.knowledgeSearcher != nil && r.knowledgeEmbedder != nil {
 		knowledgeTool := NewKnowledgeSearchTool(deps.AgentName, r.knowledgeSearcher, r.knowledgeEmbedder)
 		resolved = append(resolved, knowledgeTool)
 	} else if hasToolInList(allToolNames, "knowledge_search") {
-		slog.WarnContext(ctx, "knowledge_search in tool list but knowledge path not configured — skipping",
+		slog.WarnContext(ctx, "knowledge_search in tool list but knowledge not available — skipping",
 			"agent", deps.AgentName,
-			"knowledge_path", deps.KnowledgePath)
+			"knowledge_path", deps.KnowledgePath,
+			"capability_injected", hasKnowledgeCapLegacy)
 	}
 
 	// Spawn tools via legacy Resolve path

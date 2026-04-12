@@ -9,7 +9,8 @@ import (
 // KnowledgeDocument represents an indexed document in the knowledge base.
 type KnowledgeDocument struct {
 	ID         string    `gorm:"primaryKey;type:varchar(36)"`
-	AgentName  string    `gorm:"type:varchar(255);not null;index"`
+	TenantID   string    `gorm:"type:varchar(36);not null;default:'default';index:idx_knowledge_docs_tenant_agent"` // tenant isolation (WP-3)
+	AgentName  string    `gorm:"type:varchar(255);not null;index:idx_knowledge_docs_tenant_agent"`
 	FilePath   string    `gorm:"type:text;not null"`
 	FileName   string    `gorm:"type:varchar(500);not null"`
 	FileType   string    `gorm:"type:varchar(20);not null;default:txt"` // pdf, docx, doc, txt, md, csv (AC-KB-FMT-01..05)
@@ -29,7 +30,8 @@ func (KnowledgeDocument) TableName() string { return "knowledge_documents" }
 type KnowledgeChunk struct {
 	ID         string          `gorm:"primaryKey;type:varchar(36)"`
 	DocumentID string          `gorm:"type:varchar(36);not null;index"`
-	AgentName  string          `gorm:"type:varchar(255);not null;index"` // denormalized for fast filtering
+	TenantID   string          `gorm:"type:varchar(36);not null;default:'default';index:idx_knowledge_chunks_tenant_agent"` // denormalized for fast WHERE (WP-3)
+	AgentName  string          `gorm:"type:varchar(255);not null;index:idx_knowledge_chunks_tenant_agent"` // denormalized for fast filtering
 	Content    string          `gorm:"type:text;not null"`
 	ChunkOrder int
 	Embedding  pgvector.Vector `gorm:"type:vector(768)"`
