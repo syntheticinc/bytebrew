@@ -206,6 +206,23 @@ func (f *EngineTurnExecutorFactory) CreateForSession(
 		contextReminders = append(filtered, envReminder)
 	}
 
+	// Append capability prompt hints so the agent knows about its capabilities.
+	if f.capConfigReader != nil {
+		var hints []string
+		for _, cap := range []struct{ name, hint string }{
+			{"memory", "You have Memory capability. Use memory_recall at the start of conversations to check for prior context about this user. Use memory_store to save important facts for future conversations."},
+			{"knowledge", "You have Knowledge capability. Use knowledge_search to find relevant information from your knowledge base before answering questions."},
+			{"escalation", "You have Escalation capability. Use escalate when a request is beyond your scope or requires human intervention."},
+		} {
+			if cfg, err := f.capConfigReader.ReadConfig(context.Background(), agentName, cap.name); err == nil && cfg != nil {
+				hints = append(hints, cap.hint)
+			}
+		}
+		if len(hints) > 0 {
+			contextReminders = append(contextReminders, &capabilityHintReminder{hints: hints})
+		}
+	}
+
 	// Resolve model: try per-agent DB model first, fall back to ModelSelector.
 	chatModel, modelName := f.resolveModel(agentName)
 	if chatModel == nil {
@@ -279,4 +296,20 @@ func (f *EngineTurnExecutorFactory) resolveModel(agentName string) (model.ToolCa
 	// Fallback: static ModelSelector (legacy config or no per-agent model)
 	flowType := domain.FlowType(agentName)
 	return f.modelSelector.Select(flowType), f.modelSelector.ModelName(flowType)
+}
+
+// capabilityHintReminder injects capability usage hints into the agent's context.
+type capabilityHintReminder struct {
+	hints []string
+}
+
+func (r *capabilityHintReminder) GetContextReminder(_ context.Context, _ string) (string, int, bool) {
+	if len(r.hints) == 0 {
+		return "", 0, false
+	}
+	content := "## Capabilities\n"
+	for _, h := range r.hints {
+		content += "- " + h + "\n"
+	}
+	return content, 5, true // priority 5: after env, before tasks
 }
