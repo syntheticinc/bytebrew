@@ -105,7 +105,7 @@ export interface CreateModelRequest {
 export interface MCPServer {
   id: string;
   name: string;
-  type: 'stdio' | 'http' | 'sse' | 'streamable-http' | 'websocket' | 'docker';
+  type: 'stdio' | 'http' | 'sse' | 'streamable-http';
   command?: string;
   args?: string[];
   url?: string;

@@ -69,3 +69,34 @@ func (r *GORMMCPServerRepository) Delete(ctx context.Context, id string) error {
 	}
 	return nil
 }
+
+// GetAgentNamesByServerIDs returns a map of MCP server ID -> []agent names
+// by querying the agent_mcp_servers join table. Loads all servers in one query.
+func (r *GORMMCPServerRepository) GetAgentNamesByServerIDs(ctx context.Context, serverIDs []string) (map[string][]string, error) {
+	if len(serverIDs) == 0 {
+		return make(map[string][]string), nil
+	}
+
+	var joins []models.AgentMCPServer
+	if err := r.db.WithContext(ctx).
+		Preload("Agent").
+		Where("mcp_server_id IN ?", serverIDs).
+		Find(&joins).Error; err != nil {
+		return nil, fmt.Errorf("load agent names for mcp servers: %w", err)
+	}
+
+	result := make(map[string][]string, len(serverIDs))
+	for _, j := range joins {
+		result[j.MCPServerID] = append(result[j.MCPServerID], j.Agent.Name)
+	}
+	return result, nil
+}
+
+// GetAgentNamesForServer returns agent names assigned to a single MCP server.
+func (r *GORMMCPServerRepository) GetAgentNamesForServer(ctx context.Context, serverID string) ([]string, error) {
+	m, err := r.GetAgentNamesByServerIDs(ctx, []string{serverID})
+	if err != nil {
+		return nil, err
+	}
+	return m[serverID], nil
+}

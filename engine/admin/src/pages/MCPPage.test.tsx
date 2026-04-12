@@ -7,7 +7,7 @@ import MCPPage from './MCPPage';
 vi.mock('../api/client', () => ({
   api: {
     listMCPServers: vi.fn(),
-    getWellKnownMCP: vi.fn(),
+    listCatalog: vi.fn(),
     listCircuitBreakers: vi.fn().mockResolvedValue([]),
     createMCPServer: vi.fn(),
     updateMCPServer: vi.fn(),
@@ -52,7 +52,7 @@ describe('MCPPage', () => {
         status: { status: 'connected' as const, tools_count: 12, connected_at: '2026-03-17T10:00:00Z' },
       },
     ]);
-    mockApi.getWellKnownMCP.mockResolvedValue([]);
+    mockApi.listCatalog.mockResolvedValue([]);
 
     renderPage();
 
@@ -65,7 +65,7 @@ describe('MCPPage', () => {
 
   it('shows empty state', async () => {
     mockApi.listMCPServers.mockResolvedValue([]);
-    mockApi.getWellKnownMCP.mockResolvedValue([]);
+    mockApi.listCatalog.mockResolvedValue([]);
 
     renderPage();
 

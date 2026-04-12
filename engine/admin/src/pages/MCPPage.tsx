@@ -10,7 +10,7 @@ import FormModal from '../components/FormModal';
 import FormField from '../components/FormField';
 import ConfirmDialog from '../components/ConfirmDialog';
 import Modal from '../components/Modal';
-import type { MCPServer, WellKnownMCP, CreateMCPServerRequest, MCPCatalogCategory, CircuitBreakerState } from '../types';
+import type { MCPServer, MCPCatalogEntry, MCPCatalogPackage, CreateMCPServerRequest, MCPCatalogCategory, CircuitBreakerState } from '../types';
 
 // ─── Category meta ──────────────────────────────────────────────────────────
 
@@ -19,8 +19,9 @@ const CATEGORY_META: Record<MCPCatalogCategory | 'all', { label: string; color: 
   search:         { label: 'Search',         color: 'bg-blue-500/15 text-blue-400' },
   data:           { label: 'Data',           color: 'bg-emerald-500/15 text-emerald-400' },
   communication:  { label: 'Communication',  color: 'bg-purple-500/15 text-purple-400' },
-  dev_tools:      { label: 'Dev Tools',      color: 'bg-amber-500/15 text-amber-400' },
+  'dev-tools':    { label: 'Dev Tools',      color: 'bg-amber-500/15 text-amber-400' },
   productivity:   { label: 'Productivity',   color: 'bg-pink-500/15 text-pink-400' },
+  payments:       { label: 'Payments',       color: 'bg-orange-500/15 text-orange-400' },
   generic:        { label: 'Generic',        color: 'bg-brand-shade3/15 text-brand-shade2' },
 };
 
@@ -35,12 +36,12 @@ const emptyForm: CreateMCPServerRequest = {
 export default function MCPPage() {
   const navigate = useNavigate();
   const { data: servers, loading, error, refetch } = useApi(() => api.listMCPServers());
-  const { data: wellKnown } = useApi(() => api.getWellKnownMCP());
+  const { data: catalog } = useApi(() => api.listCatalog());
   const { data: circuitBreakers } = useApi(() => api.listCircuitBreakers());
 
   const [selected, setSelected] = useState<MCPServer | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [showWellKnown, setShowWellKnown] = useState(false);
+  const [showCatalog, setShowCatalog] = useState(false);
   const [editTarget, setEditTarget] = useState<MCPServer | null>(null);
   const [customForm, setCustomForm] = useState<CreateMCPServerRequest>({ ...emptyForm });
   const [envInput, setEnvInput] = useState<Record<string, string>>({});
@@ -55,7 +56,8 @@ export default function MCPPage() {
   // Catalog search/filter state
   const [catalogSearch, setCatalogSearch] = useState('');
   const [catalogCategory, setCatalogCategory] = useState<MCPCatalogCategory | 'all'>('all');
-  const [catalogDetail, setCatalogDetail] = useState<WellKnownMCP | null>(null);
+  const [catalogDetail, setCatalogDetail] = useState<MCPCatalogEntry | null>(null);
+  const [selectedPkgIdx, setSelectedPkgIdx] = useState(0);
 
   const circuitStateMap = useMemo(() => {
     const map: Record<string, CircuitBreakerState> = {};
@@ -68,16 +70,16 @@ export default function MCPPage() {
   }, [circuitBreakers]);
 
   const filteredCatalog = useMemo(() => {
-    if (!wellKnown) return [];
-    return wellKnown.filter((wk) => {
-      if (catalogCategory !== 'all' && wk.category !== catalogCategory) return false;
+    if (!catalog) return [];
+    return catalog.filter((entry) => {
+      if (catalogCategory !== 'all' && entry.category !== catalogCategory) return false;
       if (catalogSearch) {
         const q = catalogSearch.toLowerCase();
-        return wk.display.toLowerCase().includes(q) || wk.name.toLowerCase().includes(q);
+        return entry.display.toLowerCase().includes(q) || entry.name.toLowerCase().includes(q);
       }
       return true;
     });
-  }, [wellKnown, catalogSearch, catalogCategory]);
+  }, [catalog, catalogSearch, catalogCategory]);
 
   function openCreate() {
     resetCustomForm();
@@ -156,22 +158,32 @@ export default function MCPPage() {
     }
   }
 
-  async function handleAddWellKnown(wk: WellKnownMCP) {
+  async function handleInstallCatalogEntry(entry: MCPCatalogEntry) {
+    const pkg: MCPCatalogPackage | undefined = entry.packages.find(p => p.type === 'stdio') ?? entry.packages[0];
+    if (!pkg) return;
+
     setSaving(true);
     try {
       const envVars: Record<string, string> = {};
-      for (const key of wk.env) {
-        envVars[key] = envInput[key] ?? '';
+      for (const ev of pkg.env_vars ?? []) {
+        const val = envInput[ev.name];
+        if (val) envVars[ev.name] = val;
       }
+
+      const serverType = pkg.type === 'remote' ? (pkg.transport ?? 'streamable-http') : pkg.type;
+
       await api.createMCPServer({
-        name: wk.name,
-        type: 'stdio',
-        command: wk.command,
-        args: wk.args,
+        name: entry.name,
+        type: serverType === 'docker' ? 'stdio' : serverType,
+        command: pkg.command,
+        args: pkg.args,
+        url: pkg.url_template,
         env_vars: Object.keys(envVars).length > 0 ? envVars : undefined,
       });
-      setShowWellKnown(false);
+      setShowCatalog(false);
       setEnvInput({});
+      setCatalogDetail(null);
+      setSelectedPkgIdx(0);
       refetch();
     } catch {
       // visible in console
@@ -256,13 +268,16 @@ export default function MCPPage() {
   if (loading) return <div className="text-brand-shade3">Loading MCP servers...</div>;
   if (error) return <div className="text-red-400">Error: {error}</div>;
 
+  // Resolve the selected package for catalog detail view
+  const detailPkg = catalogDetail?.packages[selectedPkgIdx] ?? catalogDetail?.packages[0];
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-brand-light">MCP Servers</h1>
         <div className="flex gap-2">
           <button
-            onClick={() => setShowWellKnown(true)}
+            onClick={() => setShowCatalog(true)}
             className="px-4 py-2 bg-brand-dark text-brand-light rounded-btn text-sm font-medium hover:bg-brand-dark-alt transition-colors"
           >
             Add from Catalog
@@ -285,7 +300,7 @@ export default function MCPPage() {
           activeKey={selected?.name}
           emptyMessage="No MCP servers configured"
           emptyIcon={emptyIcons.mcp}
-          emptyAction={{ label: 'Add from Catalog', onClick: () => setShowWellKnown(true) }}
+          emptyAction={{ label: 'Add from Catalog', onClick: () => setShowCatalog(true) }}
         />
       </div>
 
@@ -394,8 +409,8 @@ export default function MCPPage() {
 
       {/* MCP Catalog modal — with search, category filter, detail view */}
       <Modal
-        open={showWellKnown}
-        onClose={() => { setShowWellKnown(false); setEnvInput({}); setCatalogSearch(''); setCatalogCategory('all'); setCatalogDetail(null); }}
+        open={showCatalog}
+        onClose={() => { setShowCatalog(false); setEnvInput({}); setCatalogSearch(''); setCatalogCategory('all'); setCatalogDetail(null); setSelectedPkgIdx(0); }}
         title="MCP Catalog"
       >
         <div className="space-y-3">
@@ -429,7 +444,7 @@ export default function MCPPage() {
           {catalogDetail ? (
             <div className="space-y-3">
               <button
-                onClick={() => setCatalogDetail(null)}
+                onClick={() => { setCatalogDetail(null); setEnvInput({}); setSelectedPkgIdx(0); }}
                 className="text-xs text-brand-accent hover:underline flex items-center gap-1"
               >
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -440,7 +455,12 @@ export default function MCPPage() {
               <div className="border border-brand-shade3/30 rounded-card p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-semibold text-brand-light text-sm">{catalogDetail.display}</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-brand-light text-sm">{catalogDetail.display}</h3>
+                      {catalogDetail.verified && (
+                        <span className="px-1.5 py-0.5 bg-emerald-500/15 text-emerald-400 rounded text-[9px] font-medium">Verified</span>
+                      )}
+                    </div>
                     <span className="text-xs text-brand-shade3 font-mono">{catalogDetail.name}</span>
                   </div>
                   {catalogDetail.category && (
@@ -450,42 +470,102 @@ export default function MCPPage() {
                   )}
                 </div>
 
-                <div>
-                  <p className="text-xs text-brand-shade3 mb-1">Command</p>
-                  <code className="text-xs text-brand-light font-mono">{catalogDetail.command} {catalogDetail.args.join(' ')}</code>
-                </div>
+                {catalogDetail.description && (
+                  <p className="text-xs text-brand-shade3">{catalogDetail.description}</p>
+                )}
 
-                {catalogDetail.env.length > 0 && (
+                {/* Package selector (if multiple) */}
+                {catalogDetail.packages.length > 1 && (
                   <div>
-                    <p className="text-xs text-brand-shade3 mb-1">Required Environment Variables</p>
-                    <div className="space-y-1.5">
-                      {catalogDetail.env.map((envKey) => (
-                        <input
-                          key={envKey}
-                          type="text"
-                          placeholder={envKey}
-                          value={envInput[envKey] ?? ''}
-                          onChange={(e) => setEnvInput((prev) => ({ ...prev, [envKey]: e.target.value }))}
-                          className="w-full px-2.5 py-1.5 bg-brand-dark border border-brand-shade3/30 rounded-card text-xs text-brand-light placeholder-brand-shade3 font-mono focus:outline-none focus:border-brand-accent transition-colors"
-                        />
-                      ))}
+                    <p className="text-xs text-brand-shade3 mb-1">Transport</p>
+                    <div className="flex gap-1.5">
+                      {catalogDetail.packages.map((pkg, idx) => {
+                        const pkgLabel = pkg.type === 'remote' ? (pkg.transport ?? 'remote') : pkg.type;
+                        return (
+                          <button
+                            key={idx}
+                            onClick={() => { setSelectedPkgIdx(idx); setEnvInput({}); }}
+                            className={`px-2.5 py-1 rounded-btn text-[11px] font-medium transition-colors ${
+                              selectedPkgIdx === idx
+                                ? 'bg-brand-accent text-brand-light'
+                                : 'bg-brand-shade3/10 text-brand-shade2 hover:opacity-80'
+                            }`}
+                          >
+                            {pkgLabel}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
 
-                {catalogDetail.auth_types && catalogDetail.auth_types.length > 0 && (
+                {/* Package details */}
+                {detailPkg && (
+                  <>
+                    {detailPkg.type === 'stdio' && detailPkg.command && (
+                      <div>
+                        <p className="text-xs text-brand-shade3 mb-1">Command</p>
+                        <code className="text-xs text-brand-light font-mono">{detailPkg.command} {(detailPkg.args ?? []).join(' ')}</code>
+                      </div>
+                    )}
+                    {detailPkg.type === 'remote' && detailPkg.url_template && (
+                      <div>
+                        <p className="text-xs text-brand-shade3 mb-1">URL</p>
+                        <code className="text-xs text-brand-light font-mono">{detailPkg.url_template}</code>
+                      </div>
+                    )}
+                    {detailPkg.type === 'docker' && detailPkg.image && (
+                      <div>
+                        <p className="text-xs text-brand-shade3 mb-1">Docker Image</p>
+                        <code className="text-xs text-brand-light font-mono">{detailPkg.image}</code>
+                      </div>
+                    )}
+
+                    {(detailPkg.env_vars ?? []).length > 0 && (
+                      <div>
+                        <p className="text-xs text-brand-shade3 mb-1">Environment Variables</p>
+                        <div className="space-y-1.5">
+                          {(detailPkg.env_vars ?? []).map((ev) => (
+                            <div key={ev.name}>
+                              <div className="flex items-center gap-1 mb-0.5">
+                                <span className="text-[10px] font-mono text-brand-shade2">{ev.name}</span>
+                                {ev.required && <span className="text-[9px] text-red-400">*</span>}
+                              </div>
+                              {ev.description && (
+                                <p className="text-[10px] text-brand-shade3/60 mb-0.5">{ev.description}</p>
+                              )}
+                              <input
+                                type={ev.secret ? 'password' : 'text'}
+                                placeholder={ev.name}
+                                value={envInput[ev.name] ?? ''}
+                                onChange={(e) => setEnvInput((prev) => ({ ...prev, [ev.name]: e.target.value }))}
+                                className="w-full px-2.5 py-1.5 bg-brand-dark border border-brand-shade3/30 rounded-card text-xs text-brand-light placeholder-brand-shade3 font-mono focus:outline-none focus:border-brand-accent transition-colors"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Provided tools */}
+                {catalogDetail.provided_tools && catalogDetail.provided_tools.length > 0 && (
                   <div>
-                    <p className="text-xs text-brand-shade3 mb-1">Auth Types</p>
-                    <div className="flex gap-1.5">
-                      {catalogDetail.auth_types.map((at) => (
-                        <span key={at} className="px-2 py-0.5 bg-brand-shade3/10 rounded text-[10px] text-brand-shade2">{at}</span>
+                    <p className="text-xs text-brand-shade3 mb-1">Provided Tools</p>
+                    <div className="space-y-1">
+                      {catalogDetail.provided_tools.map((tool) => (
+                        <div key={tool.name} className="flex items-start gap-2">
+                          <code className="text-[10px] text-brand-accent font-mono whitespace-nowrap">{tool.name}</code>
+                          <span className="text-[10px] text-brand-shade3">{tool.description}</span>
+                        </div>
                       ))}
                     </div>
                   </div>
                 )}
 
                 <button
-                  onClick={() => handleAddWellKnown(catalogDetail)}
+                  onClick={() => handleInstallCatalogEntry(catalogDetail)}
                   disabled={alreadyAdded.has(catalogDetail.name) || saving}
                   className="w-full py-2 bg-brand-accent text-brand-light rounded-btn text-sm font-medium hover:bg-brand-accent-hover disabled:opacity-50 transition-colors"
                 >
@@ -495,20 +575,24 @@ export default function MCPPage() {
             </div>
           ) : (
             <div className="space-y-2 max-h-80 overflow-y-auto">
-              {filteredCatalog.map((wk) => {
-                const added = alreadyAdded.has(wk.name);
+              {filteredCatalog.map((entry) => {
+                const added = alreadyAdded.has(entry.name);
+                const primaryPkg = entry.packages.find(p => p.type === 'stdio') ?? entry.packages[0];
                 return (
                   <div
-                    key={wk.name}
+                    key={entry.name}
                     className={`border border-brand-shade3/20 rounded-card p-3 hover:border-brand-shade3/40 transition-colors cursor-pointer ${added ? 'opacity-50' : ''}`}
-                    onClick={() => setCatalogDetail(wk)}
+                    onClick={() => { setCatalogDetail(entry); setSelectedPkgIdx(0); setEnvInput({}); }}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-brand-light text-sm">{wk.display}</span>
-                        {wk.category && (
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${CATEGORY_META[wk.category]?.color ?? CATEGORY_META.generic.color}`}>
-                            {CATEGORY_META[wk.category]?.label ?? wk.category}
+                        <span className="font-medium text-brand-light text-sm">{entry.display}</span>
+                        {entry.verified && (
+                          <span className="px-1 py-0.5 bg-emerald-500/15 text-emerald-400 rounded text-[8px] font-medium">Verified</span>
+                        )}
+                        {entry.category && (
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${CATEGORY_META[entry.category]?.color ?? CATEGORY_META.generic.color}`}>
+                            {CATEGORY_META[entry.category]?.label ?? entry.category}
                           </span>
                         )}
                       </div>
@@ -516,12 +600,22 @@ export default function MCPPage() {
                         <span className="text-[10px] text-brand-shade3">Added</span>
                       )}
                     </div>
-                    <div className="text-[11px] text-brand-shade3 mt-1 font-mono truncate">
-                      {wk.command} {wk.args.join(' ')}
-                    </div>
-                    {wk.env.length > 0 && (
+                    {entry.description ? (
+                      <div className="text-[11px] text-brand-shade3 mt-1 truncate">
+                        {entry.description}
+                      </div>
+                    ) : primaryPkg?.command ? (
+                      <div className="text-[11px] text-brand-shade3 mt-1 font-mono truncate">
+                        {primaryPkg.command} {(primaryPkg.args ?? []).join(' ')}
+                      </div>
+                    ) : primaryPkg?.url_template ? (
+                      <div className="text-[11px] text-brand-shade3 mt-1 font-mono truncate">
+                        {primaryPkg.url_template}
+                      </div>
+                    ) : null}
+                    {primaryPkg?.env_vars && primaryPkg.env_vars.length > 0 && (
                       <div className="text-[10px] text-brand-shade3/60 mt-1">
-                        Requires: {wk.env.join(', ')}
+                        Requires: {primaryPkg.env_vars.map(ev => ev.name).join(', ')}
                       </div>
                     )}
                   </div>
@@ -564,8 +658,6 @@ export default function MCPPage() {
             { value: 'streamable-http', label: 'streamable-http — HTTP streaming' },
             { value: 'sse', label: 'sse — Server-Sent Events' },
             { value: 'http', label: 'http — HTTP' },
-            { value: 'websocket', label: 'websocket — WebSocket' },
-            { value: 'docker', label: 'docker — Docker container' },
           ]}
         />
         {customForm.type === 'stdio' && (
@@ -586,31 +678,12 @@ export default function MCPPage() {
             />
           </>
         )}
-        {customForm.type === 'docker' && (
-          <>
-            <FormField
-              label="Docker Image"
-              value={customForm.command ?? ''}
-              onChange={(v) => setCustomForm({ ...customForm, command: v })}
-              placeholder="mcp/google-sheets:latest"
-              hint="Docker image name (will be pulled if not present)"
-            />
-            <FormField
-              label="Container Args (one per line)"
-              type="textarea"
-              value={argsInput}
-              onChange={setArgsInput}
-              rows={2}
-              placeholder="--port=3000"
-            />
-          </>
-        )}
-        {(customForm.type === 'http' || customForm.type === 'sse' || customForm.type === 'streamable-http' || customForm.type === 'websocket') && (
+        {(customForm.type === 'http' || customForm.type === 'sse' || customForm.type === 'streamable-http') && (
           <FormField
             label="URL"
             value={customForm.url ?? ''}
             onChange={(v) => setCustomForm({ ...customForm, url: v })}
-            placeholder={customForm.type === 'websocket' ? 'ws://localhost:3000/mcp' : 'http://localhost:3000/mcp'}
+            placeholder="http://localhost:3000/mcp"
           />
         )}
         <div>

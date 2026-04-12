@@ -28,8 +28,23 @@ func (a *mcpServiceHTTPAdapter) ListMCPServers(ctx context.Context) ([]deliveryh
 	if err != nil {
 		return nil, err
 	}
+
+	// Batch-load agent names for all servers (single query, no N+1)
+	serverIDs := make([]string, 0, len(servers))
+	for _, s := range servers {
+		serverIDs = append(serverIDs, s.ID)
+	}
+	agentsByServer, err := a.repo.GetAgentNamesByServerIDs(ctx, serverIDs)
+	if err != nil {
+		return nil, fmt.Errorf("load agents for mcp servers: %w", err)
+	}
+
 	result := make([]deliveryhttp.MCPServerResponse, 0, len(servers))
 	for _, s := range servers {
+		agents := agentsByServer[s.ID]
+		if agents == nil {
+			agents = []string{}
+		}
 		resp := deliveryhttp.MCPServerResponse{
 			ID:           s.ID,
 			Name:         s.Name,
@@ -41,7 +56,7 @@ func (a *mcpServiceHTTPAdapter) ListMCPServers(ctx context.Context) ([]deliveryh
 			AuthKeyEnv:   s.AuthKeyEnv,
 			AuthTokenEnv: s.AuthTokenEnv,
 			AuthClientID: s.AuthClientID,
-			Agents:       []string{},
+			Agents:       agents,
 		}
 		if s.Args != "" {
 			_ = json.Unmarshal([]byte(s.Args), &resp.Args)
@@ -159,6 +174,13 @@ func (a *mcpServiceHTTPAdapter) UpdateMCPServer(ctx context.Context, name string
 	}
 	for _, s := range updated {
 		if s.ID == targetID {
+			agents, err := a.repo.GetAgentNamesForServer(ctx, targetID)
+			if err != nil {
+				return nil, fmt.Errorf("load agents for mcp server: %w", err)
+			}
+			if agents == nil {
+				agents = []string{}
+			}
 			resp := &deliveryhttp.MCPServerResponse{
 				ID:           s.ID,
 				Name:         s.Name,
@@ -170,7 +192,7 @@ func (a *mcpServiceHTTPAdapter) UpdateMCPServer(ctx context.Context, name string
 				AuthKeyEnv:   s.AuthKeyEnv,
 				AuthTokenEnv: s.AuthTokenEnv,
 				AuthClientID: s.AuthClientID,
-				Agents:       []string{},
+				Agents:       agents,
 			}
 			if s.Args != "" {
 				_ = json.Unmarshal([]byte(s.Args), &resp.Args)
