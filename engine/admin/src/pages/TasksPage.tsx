@@ -70,7 +70,7 @@ export default function TasksPage() {
       key: 'source',
       header: 'Source',
       render: (row: TaskResponse) => (
-        <span className="text-xs text-brand-shade3 bg-brand-light px-2 py-0.5 rounded">{row.source}</span>
+        <span className="text-xs text-brand-shade3 bg-brand-dark px-2 py-0.5 rounded">{row.source}</span>
       ),
     },
     {
@@ -89,10 +89,10 @@ export default function TasksPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-brand-dark">Tasks</h1>
+        <h1 className="text-2xl font-bold text-brand-light">Tasks</h1>
         <button
           onClick={refetch}
-          className="px-4 py-2 text-sm text-brand-dark border border-brand-shade2 rounded-btn hover:bg-brand-light transition-colors"
+          className="px-4 py-2 text-sm text-brand-shade2 border border-brand-shade3/30 rounded-btn hover:bg-brand-dark-alt hover:text-brand-light transition-colors"
         >
           Refresh
         </button>
@@ -103,7 +103,7 @@ export default function TasksPage() {
         <select
           value={filters['status'] ?? ''}
           onChange={(e) => { setFilters({ ...filters, status: e.target.value }); setPage(1); }}
-          className="px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
+          className="px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent"
         >
           <option value="">All statuses</option>
           {STATUS_OPTIONS.filter(Boolean).map((s) => (
@@ -115,7 +115,7 @@ export default function TasksPage() {
         <select
           value={filters['source'] ?? ''}
           onChange={(e) => { setFilters({ ...filters, source: e.target.value }); setPage(1); }}
-          className="px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
+          className="px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent"
         >
           <option value="">All sources</option>
           {SOURCE_OPTIONS.filter(Boolean).map((s) => (
@@ -129,7 +129,7 @@ export default function TasksPage() {
           placeholder="Agent name..."
           value={filters['agent_name'] ?? ''}
           onChange={(e) => { setFilters({ ...filters, agent_name: e.target.value }); setPage(1); }}
-          className="px-3 py-2 bg-white border border-brand-shade1 rounded-card text-sm focus:outline-none focus:border-brand-accent"
+          className="px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light focus:outline-none focus:border-brand-accent"
         />
       </div>
 
@@ -137,7 +137,7 @@ export default function TasksPage() {
       {error && <div className="text-red-600">Error: {error}</div>}
 
       {!loading && !error && (
-        <div className="bg-white rounded-card border border-brand-shade1">
+        <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15">
           <DataTable
             columns={columns}
             data={tasks}
@@ -148,7 +148,7 @@ export default function TasksPage() {
             emptyIcon={emptyIcons.tasks}
           />
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-brand-shade1">
+            <div className="flex items-center justify-between px-4 py-3 border-t border-brand-shade3/15">
               <span className="text-sm text-brand-shade3">
                 Showing {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, total)} of {total} tasks
               </span>
@@ -156,7 +156,7 @@ export default function TasksPage() {
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page <= 1}
-                  className="px-3 py-1 text-sm border border-brand-shade1 rounded-btn hover:bg-brand-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="px-3 py-1 text-sm text-brand-shade2 border border-brand-shade3/30 rounded-btn hover:bg-brand-dark hover:text-brand-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   &lt;
                 </button>
@@ -176,8 +176,8 @@ export default function TasksPage() {
                         onClick={() => setPage(item)}
                         className={`px-3 py-1 text-sm border rounded-btn transition-colors ${
                           item === page
-                            ? 'bg-brand-accent text-white border-brand-accent'
-                            : 'border-brand-shade1 hover:bg-brand-light'
+                            ? 'bg-brand-accent text-brand-light border-brand-accent'
+                            : 'text-brand-shade2 border-brand-shade3/30 hover:bg-brand-dark hover:text-brand-light'
                         }`}
                       >
                         {item}
@@ -187,7 +187,7 @@ export default function TasksPage() {
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page >= totalPages}
-                  className="px-3 py-1 text-sm border border-brand-shade1 rounded-btn hover:bg-brand-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="px-3 py-1 text-sm text-brand-shade2 border border-brand-shade3/30 rounded-btn hover:bg-brand-dark hover:text-brand-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   &gt;
                 </button>
@@ -221,20 +221,20 @@ export default function TasksPage() {
               <DetailRow label="Status"><StatusBadge status={selectedTask.status} /></DetailRow>
               <DetailRow label="Agent">{selectedTask.agent_name}</DetailRow>
               <DetailRow label="Source">
-                <span className="text-xs bg-brand-light px-2 py-0.5 rounded">{selectedTask.source}</span>
+                <span className="text-xs text-brand-shade3 bg-brand-dark px-2 py-0.5 rounded">{selectedTask.source}</span>
               </DetailRow>
               <DetailRow label="Mode">{selectedTask.mode}</DetailRow>
             </DetailSection>
 
             {selectedTask.description && (
               <DetailSection title="Description">
-                <p className="text-sm text-brand-dark">{selectedTask.description}</p>
+                <p className="text-sm text-brand-shade2">{selectedTask.description}</p>
               </DetailSection>
             )}
 
             {selectedTask.result && (
               <DetailSection title="Result">
-                <pre className="p-3 bg-brand-light rounded-btn text-xs whitespace-pre-wrap max-h-48 overflow-y-auto border border-brand-shade1/50">
+                <pre className="p-3 bg-brand-dark rounded-btn text-xs text-brand-shade2 whitespace-pre-wrap max-h-48 overflow-y-auto border border-brand-shade3/30">
                   {selectedTask.result}
                 </pre>
               </DetailSection>
@@ -242,7 +242,7 @@ export default function TasksPage() {
 
             {selectedTask.error && (
               <DetailSection title="Error">
-                <pre className="p-3 bg-red-50 rounded-btn text-xs text-red-700 whitespace-pre-wrap max-h-48 overflow-y-auto border border-red-200">
+                <pre className="p-3 bg-red-500/10 rounded-btn text-xs text-red-400 whitespace-pre-wrap max-h-48 overflow-y-auto border border-red-500/30">
                   {selectedTask.error}
                 </pre>
               </DetailSection>
