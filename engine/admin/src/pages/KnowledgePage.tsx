@@ -4,7 +4,7 @@ import { useApi } from '../hooks/useApi';
 import DataTable from '../components/DataTable';
 import type { AgentInfo, KnowledgeFile, KnowledgeStatus } from '../types';
 
-const ACCEPTED_TYPES = '.txt,.md,.csv';
+const ACCEPTED_TYPES = '.txt,.md,.csv,.pdf,.docx';
 
 function formatStatus(status: KnowledgeStatus['status']) {
   switch (status) {
@@ -351,7 +351,7 @@ export default function KnowledgePage() {
                   <p className="text-sm text-brand-shade2">
                     Drop files here or <span className="text-brand-accent">browse</span>
                   </p>
-                  <p className="text-xs text-brand-shade3">Supported: TXT, MD, CSV</p>
+                  <p className="text-xs text-brand-shade3">Supported: TXT, MD, CSV, PDF, DOCX</p>
                 </>
               )}
             </div>

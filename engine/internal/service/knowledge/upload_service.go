@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -161,9 +162,19 @@ func (s *UploadService) resolveEmbeddingProvider(ctx context.Context, agentName 
 func (s *UploadService) indexFileAsync(docID, tenantID, agentName, fileName, content string) {
 	ctx := context.Background()
 
-	// Chunk the content
+	// Extract text from binary formats (PDF, DOCX) before chunking.
+	fileType := strings.TrimPrefix(strings.ToLower(filepath.Ext(fileName)), ".")
+	text, extractErr := infknowledge.ExtractText([]byte(content), fileType)
+	if extractErr != nil {
+		slog.ErrorContext(ctx, "[KnowledgeUpload] text extraction failed",
+			"doc_id", docID, "file", fileName, "error", extractErr)
+		s.updateDocStatus(ctx, docID, "error", fmt.Sprintf("text extraction failed: %v", extractErr), 0)
+		return
+	}
+
+	// Chunk the extracted text
 	chunker := infknowledge.ChunkerForFile(fileName)
-	chunks := chunker.Chunk(content)
+	chunks := chunker.Chunk(text)
 
 	if len(chunks) == 0 {
 		s.updateDocStatus(ctx, docID, "ready", "", 0)

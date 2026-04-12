@@ -248,11 +248,12 @@ func (h *KnowledgeHandler) SetFileUploader(uploader KnowledgeFileUploader) {
 const maxUploadSize = 50 << 20
 
 // allowedMIMETypes maps allowed file extensions to expected MIME prefixes.
-// Phase 1: text-only formats (chunker handles these). PDF/DOCX require text extractors (Phase 2).
 var allowedMIMETypes = map[string][]string{
-	".txt": {"text/plain"},
-	".md":  {"text/plain", "text/markdown"},
-	".csv": {"text/csv", "text/plain", "application/csv", "application/octet-stream"},
+	".txt":  {"text/plain"},
+	".md":   {"text/plain", "text/markdown"},
+	".csv":  {"text/csv", "text/plain", "application/csv", "application/octet-stream"},
+	".pdf":  {"application/pdf", "application/octet-stream"},
+	".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/octet-stream", "application/zip"},
 }
 
 // UploadFile handles POST /api/v1/agents/{name}/knowledge/files (WP-3).
@@ -296,7 +297,7 @@ func (h *KnowledgeHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	allowedMIME, ok := allowedMIMETypes[ext]
 	if !ok {
 		writeJSONError(w, http.StatusBadRequest,
-			fmt.Sprintf("unsupported file type %q, supported: txt, md, csv", ext))
+			fmt.Sprintf("unsupported file type %q, supported: txt, md, csv, pdf, docx", ext))
 		return
 	}
 
