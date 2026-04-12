@@ -51,6 +51,8 @@ type EngineTurnExecutorFactory struct {
 	memoryRecaller  tools.MemoryRecaller
 	memoryStorer    tools.MemoryStorer
 	memoryMaxEntries int
+	// Escalation capability deps (injected via SetEscalation — nil = disabled)
+	escalationHandler tools.EscalationHandler
 	// Schema resolver for memory/knowledge tools (BUG-007)
 	schemaResolver AgentSchemaResolver
 }
@@ -95,18 +97,24 @@ func (f *EngineTurnExecutorFactory) SetMemory(recaller tools.MemoryRecaller, sto
 	f.memoryMaxEntries = maxEntries
 }
 
+// SetEscalation configures the escalation handler for the escalate tool.
+func (f *EngineTurnExecutorFactory) SetEscalation(handler tools.EscalationHandler) {
+	f.escalationHandler = handler
+}
+
 // SetSchemaResolver configures schema lookup for propagating SchemaID to tool deps.
 func (f *EngineTurnExecutorFactory) SetSchemaResolver(resolver AgentSchemaResolver) {
 	f.schemaResolver = resolver
 }
 
-// userMemoryDepsProvider wraps DefaultToolDepsProvider and injects userID + memory refs per session.
+// userMemoryDepsProvider wraps DefaultToolDepsProvider and injects userID + memory + escalation refs per session.
 type userMemoryDepsProvider struct {
-	base            *tools.DefaultToolDepsProvider
-	userID          string
-	memoryRecaller  tools.MemoryRecaller
-	memoryStorer    tools.MemoryStorer
-	memoryMaxEntries int
+	base              *tools.DefaultToolDepsProvider
+	userID            string
+	memoryRecaller    tools.MemoryRecaller
+	memoryStorer      tools.MemoryStorer
+	memoryMaxEntries  int
+	escalationHandler tools.EscalationHandler
 }
 
 func (p *userMemoryDepsProvider) GetDependencies(sessionID, projectKey string) tools.ToolDependencies {
@@ -115,6 +123,7 @@ func (p *userMemoryDepsProvider) GetDependencies(sessionID, projectKey string) t
 	deps.MemoryRecaller = p.memoryRecaller
 	deps.MemoryStorer = p.memoryStorer
 	deps.MemoryMaxEntries = p.memoryMaxEntries
+	deps.EscalationHandler = p.escalationHandler
 	return deps
 }
 
@@ -134,13 +143,14 @@ func (f *EngineTurnExecutorFactory) CreateForSession(
 		f.webSearchTool,
 		f.webFetchTool,
 	)
-	// Wrap with per-user memory deps (userID + memory recaller/storer)
+	// Wrap with per-user memory + escalation deps
 	toolDeps := &userMemoryDepsProvider{
-		base:             baseDeps,
-		userID:           userID,
-		memoryRecaller:   f.memoryRecaller,
-		memoryStorer:     f.memoryStorer,
-		memoryMaxEntries: f.memoryMaxEntries,
+		base:              baseDeps,
+		userID:            userID,
+		memoryRecaller:    f.memoryRecaller,
+		memoryStorer:      f.memoryStorer,
+		memoryMaxEntries:  f.memoryMaxEntries,
+		escalationHandler: f.escalationHandler,
 	}
 
 	// Get context reminders from getter (if provided)

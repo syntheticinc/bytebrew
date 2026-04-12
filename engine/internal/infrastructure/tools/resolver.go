@@ -37,6 +37,8 @@ type ToolDependencies struct {
 	MemoryRecaller      MemoryRecaller     // nil → memory_recall disabled
 	MemoryStorer        MemoryStorer       // nil → memory_store disabled
 	MemoryMaxEntries    int                // 0 → unlimited
+	// Escalation capability deps (injected when agent has Escalation capability)
+	EscalationHandler  EscalationHandler        // nil → escalate tool disabled
 	ConfirmBefore      []string              // tools requiring user confirmation before execution
 	ConfirmRequester   ConfirmationRequester // confirmation handler for confirm_before tools (nil = no wrapping)
 }

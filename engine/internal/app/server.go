@@ -45,6 +45,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/kits/developer"
 	mcpcatalog "github.com/syntheticinc/bytebrew/engine/internal/service/mcp"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/capability"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/escalation"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/eventstore"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/lifecycle"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/guardrail"
@@ -1136,6 +1137,12 @@ func Run(sc ServerConfig) error {
 		// BUG-007: Wire schema resolver so memory/knowledge tools get SchemaID (UUID).
 		factory.SetSchemaResolver(&agentSchemaIDResolver{db: pgDB})
 		loggerInstance.InfoContext(ctx, "Schema resolver wired into TurnExecutorFactory")
+
+		// WP-2: Wire escalation handler for escalate tool
+		escCapRepo := config_repo.NewGORMCapabilityRepository(pgDB)
+		escHandler := escalation.NewHandler(&escalationConfigAdapter{repo: escCapRepo})
+		factory.SetEscalation(escHandler)
+		loggerInstance.InfoContext(ctx, "Escalation handler wired into TurnExecutorFactory")
 	}
 
 	// Create shared SessionProcessor
