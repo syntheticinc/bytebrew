@@ -50,6 +50,7 @@ export default function MCPPage() {
   const [authType, setAuthType] = useState<string>('none');
   const [authEnvVar, setAuthEnvVar] = useState('');
   const [authClientId, setAuthClientId] = useState('');
+  const [forwardHeadersInput, setForwardHeadersInput] = useState('');
 
   // Catalog search/filter state
   const [catalogSearch, setCatalogSearch] = useState('');
@@ -91,9 +92,17 @@ export default function MCPPage() {
       command: server.command ?? '',
       args: server.args ?? [],
       url: server.url ?? '',
+      forward_headers: server.forward_headers ?? [],
+      auth_type: server.auth_type ?? 'none',
+      auth_key_env: server.auth_key_env ?? '',
+      auth_client_id: server.auth_client_id ?? '',
     });
     setArgsInput((server.args ?? []).join('\n'));
     setEnvInput(server.env_vars ?? {});
+    setForwardHeadersInput((server.forward_headers ?? []).join('\n'));
+    setAuthType(server.auth_type ?? 'none');
+    setAuthEnvVar(server.auth_key_env ?? '');
+    setAuthClientId(server.auth_client_id ?? '');
     setEditTarget(server);
     setShowForm(true);
   }
@@ -111,13 +120,19 @@ export default function MCPPage() {
     setAuthType('none');
     setAuthEnvVar('');
     setAuthClientId('');
+    setForwardHeadersInput('');
   }
 
   function buildPayload(): CreateMCPServerRequest {
+    const fh = forwardHeadersInput ? forwardHeadersInput.split('\n').map((h) => h.trim()).filter(Boolean) : [];
     return {
       ...customForm,
       args: argsInput ? argsInput.split('\n').map((a) => a.trim()).filter(Boolean) : [],
       env_vars: Object.keys(envInput).length > 0 ? envInput : undefined,
+      forward_headers: fh.length > 0 ? fh : undefined,
+      auth_type: authType !== 'none' ? authType : undefined,
+      auth_key_env: authEnvVar || undefined,
+      auth_client_id: authClientId || undefined,
     };
   }
 
@@ -682,7 +697,17 @@ export default function MCPPage() {
             </>
           )}
           {authType === 'forward_headers' && (
-            <p className="mt-2 text-xs text-brand-shade3">Headers from the calling system will be forwarded to this MCP server.</p>
+            <div className="mt-2">
+              <label className="block text-xs font-medium text-brand-shade2 mb-1">Headers to Forward (one per line)</label>
+              <textarea
+                value={forwardHeadersInput}
+                onChange={(e) => setForwardHeadersInput(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 bg-brand-bg border border-brand-shade3/30 rounded-btn text-sm text-brand-light placeholder:text-brand-shade3 focus:outline-none focus:border-brand-accent"
+                placeholder={"Authorization\nX-Tenant-ID"}
+              />
+              <p className="mt-1 text-xs text-brand-shade3">Only these headers from the calling request will be forwarded to this MCP server.</p>
+            </div>
           )}
           {authType === 'service_account' && (
             <FormField

@@ -110,7 +110,12 @@ export interface MCPServer {
   args?: string[];
   url?: string;
   env_vars?: Record<string, string>;
+  forward_headers?: string[];
   is_well_known: boolean;
+  auth_type?: string;
+  auth_key_env?: string;
+  auth_token_env?: string;
+  auth_client_id?: string;
   status?: MCPServerStatus;
   agents: string[];
 }
@@ -141,6 +146,11 @@ export interface CreateMCPServerRequest {
   args?: string[];
   url?: string;
   env_vars?: Record<string, string>;
+  forward_headers?: string[];
+  auth_type?: string;
+  auth_key_env?: string;
+  auth_token_env?: string;
+  auth_client_id?: string;
 }
 
 // ============================================================================

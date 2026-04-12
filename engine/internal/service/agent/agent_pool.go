@@ -231,13 +231,20 @@ func NewAgentPool(cfg AgentPoolConfig) *AgentPool {
 // getOrCreateSessionCtx returns a session-scoped context for spawning agents.
 // Agents derive from this context instead of the supervisor's tool call context,
 // so they survive supervisor turn cancellation.
-func (p *AgentPool) getOrCreateSessionCtx(sessionID string) context.Context {
+// When sourceCtx is provided, context values (e.g. RequestContext with forwarded
+// headers) are preserved via context.WithoutCancel so sub-agents can forward
+// authorization headers to MCP servers.
+func (p *AgentPool) getOrCreateSessionCtx(sessionID string, sourceCtx ...context.Context) context.Context {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if ctx, ok := p.sessionContexts[sessionID]; ok {
 		return ctx
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	var base context.Context = context.Background()
+	if len(sourceCtx) > 0 && sourceCtx[0] != nil {
+		base = context.WithoutCancel(sourceCtx[0])
+	}
+	ctx, cancel := context.WithCancel(base)
 	p.sessionContexts[sessionID] = ctx
 	p.sessionCancels[sessionID] = cancel
 	return ctx
@@ -321,7 +328,8 @@ func (p *AgentPool) Spawn(ctx context.Context, sessionID, projectKey, subtaskID 
 
 	// Create agent context from session-scoped context (NOT from supervisor's turn context).
 	// This ensures agents survive supervisor turn cancellation.
-	sessionCtx := p.getOrCreateSessionCtx(sessionID)
+	// Pass ctx so RequestContext (forwarded headers) propagates to spawned agents.
+	sessionCtx := p.getOrCreateSessionCtx(sessionID, ctx)
 	agentCtx, cancel := context.WithCancel(sessionCtx)
 	agentCtx = domain.WithAgentID(agentCtx, agentID)
 
@@ -551,7 +559,8 @@ func (p *AgentPool) SpawnWithDescription(ctx context.Context, sessionID, project
 	agentID := prefix + "-" + uuid.New().String()[:8]
 
 	// Create agent context from session-scoped context (NOT from supervisor's turn context).
-	sessionCtx := p.getOrCreateSessionCtx(sessionID)
+	// Pass ctx so RequestContext (forwarded headers) propagates to spawned agents.
+	sessionCtx := p.getOrCreateSessionCtx(sessionID, ctx)
 	agentCtx, cancel := context.WithCancel(sessionCtx)
 	agentCtx = domain.WithAgentID(agentCtx, agentID)
 

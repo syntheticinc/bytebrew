@@ -1494,6 +1494,53 @@ func TestAgentPool_RestartAgent_Researcher(t *testing.T) {
 	}
 }
 
+func TestGetOrCreateSessionCtx_PropagatesRequestContext(t *testing.T) {
+	pool := NewAgentPool(AgentPoolConfig{})
+
+	// Create a context with RequestContext (simulates forwarded headers from HTTP request).
+	rc := &domain.RequestContext{
+		Headers: map[string]string{
+			"Authorization": "Bearer test-token",
+			"X-Tenant-ID":  "tenant-42",
+		},
+	}
+	parentCtx := domain.WithRequestContext(context.Background(), rc)
+
+	// First call: should create session context preserving RequestContext.
+	sessionCtx := pool.getOrCreateSessionCtx("sess-1", parentCtx)
+	got := domain.GetRequestContext(sessionCtx)
+	if got == nil {
+		t.Fatal("RequestContext lost after getOrCreateSessionCtx with sourceCtx")
+	}
+	if got.Get("Authorization") != "Bearer test-token" {
+		t.Errorf("Authorization = %q, want %q", got.Get("Authorization"), "Bearer test-token")
+	}
+	if got.Get("X-Tenant-ID") != "tenant-42" {
+		t.Errorf("X-Tenant-ID = %q, want %q", got.Get("X-Tenant-ID"), "tenant-42")
+	}
+
+	// Second call (same session): returns cached context, sourceCtx ignored.
+	sessionCtx2 := pool.getOrCreateSessionCtx("sess-1", context.Background())
+	got2 := domain.GetRequestContext(sessionCtx2)
+	if got2 == nil {
+		t.Fatal("cached session context should still have RequestContext")
+	}
+	if got2.Get("Authorization") != "Bearer test-token" {
+		t.Errorf("cached Authorization = %q, want %q", got2.Get("Authorization"), "Bearer test-token")
+	}
+}
+
+func TestGetOrCreateSessionCtx_NoSourceCtx_BackgroundFallback(t *testing.T) {
+	pool := NewAgentPool(AgentPoolConfig{})
+
+	// Call without sourceCtx — should fall back to context.Background() (no panic, no RequestContext).
+	sessionCtx := pool.getOrCreateSessionCtx("sess-2")
+	got := domain.GetRequestContext(sessionCtx)
+	if got != nil {
+		t.Errorf("expected nil RequestContext when no sourceCtx provided, got %+v", got)
+	}
+}
+
 func TestFirstLine(t *testing.T) {
 	tests := []struct {
 		name   string

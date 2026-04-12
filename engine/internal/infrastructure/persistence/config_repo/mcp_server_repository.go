@@ -45,8 +45,10 @@ func (r *GORMMCPServerRepository) Create(ctx context.Context, model *models.MCPS
 }
 
 // Update updates an MCP server model by ID.
+// Select("*") ensures zero-value fields (e.g. cleared ForwardHeaders) are written.
 func (r *GORMMCPServerRepository) Update(ctx context.Context, id string, model *models.MCPServerModel) error {
-	result := r.db.WithContext(ctx).Model(&models.MCPServerModel{}).Where("id = ?", id).Updates(model)
+	result := r.db.WithContext(ctx).Model(&models.MCPServerModel{}).Where("id = ?", id).
+		Select("*").Omit("id", "created_at", "updated_at", "Runtime").Updates(model)
 	if result.Error != nil {
 		return fmt.Errorf("update mcp server: %w", result.Error)
 	}
