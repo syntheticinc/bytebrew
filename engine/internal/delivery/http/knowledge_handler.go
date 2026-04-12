@@ -252,7 +252,7 @@ const maxUploadSize = 50 << 20
 var allowedMIMETypes = map[string][]string{
 	".txt": {"text/plain"},
 	".md":  {"text/plain", "text/markdown"},
-	".csv": {"text/csv", "text/plain", "application/csv"},
+	".csv": {"text/csv", "text/plain", "application/csv", "application/octet-stream"},
 }
 
 // UploadFile handles POST /api/v1/agents/{name}/knowledge/files (WP-3).
