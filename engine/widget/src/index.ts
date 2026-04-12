@@ -57,6 +57,9 @@ function readConfig(scriptEl: HTMLScriptElement): WidgetConfig {
     position: scriptEl.dataset.position ?? 'bottom-right',
     theme: scriptEl.dataset.theme ?? 'light',
     title: scriptEl.dataset.title ?? 'Chat',
+    primaryColor: scriptEl.dataset.primaryColor ?? null,
+    welcomeMessage: scriptEl.dataset.welcome ?? null,
+    placeholderText: scriptEl.dataset.placeholder ?? null,
   };
 }
 

@@ -9,6 +9,9 @@ export interface WidgetConfig {
   position: string;
   theme: string;
   title: string;
+  primaryColor: string | null;
+  welcomeMessage: string | null;
+  placeholderText: string | null;
 }
 
 // SVG icons
@@ -50,13 +53,18 @@ export class WidgetUI {
 
     // Inject styles
     const style = document.createElement('style');
-    const theme = getTheme(config.theme);
+    const theme = getTheme(config.theme, config.primaryColor);
     style.textContent = buildStyles(theme, config.position);
     this.shadow.appendChild(style);
 
     // Build UI
     this.buildBubble();
     this.buildPanel();
+
+    // Show welcome message if configured
+    if (config.welcomeMessage) {
+      this.addAssistantMessage(config.welcomeMessage);
+    }
 
     // Mount
     document.body.appendChild(this.host);
@@ -109,7 +117,7 @@ export class WidgetUI {
 
     this.input = document.createElement('textarea');
     this.input.className = 'bb-input';
-    this.input.placeholder = 'Type a message...';
+    this.input.placeholder = this.config.placeholderText ?? 'Type a message...';
     this.input.rows = 1;
     this.input.setAttribute('aria-label', 'Message input');
     this.input.addEventListener('keydown', (e) => this.handleKeydown(e));
@@ -163,6 +171,14 @@ export class WidgetUI {
     el.textContent = text;
     this.messagesEl.appendChild(el);
     this.scrollToBottom();
+  }
+
+  private addAssistantMessage(text: string): void {
+    const el = document.createElement('div');
+    el.className = 'bb-msg bb-msg-assistant';
+    el.setAttribute('role', 'article');
+    el.innerHTML = renderMarkdown(text);
+    this.messagesEl.appendChild(el);
   }
 
   private startAssistantMessage(): HTMLElement {

@@ -180,6 +180,15 @@ func joinDomains(domains []string) string {
 	return strings.Join(domains, ", ")
 }
 
+// schemaAgentResolverAdapter resolves schema UUID → agent names via schema repo.
+type schemaAgentResolverAdapter struct {
+	schemaRepo *config_repo.GORMSchemaRepository
+}
+
+func (a *schemaAgentResolverAdapter) ResolveAgents(ctx context.Context, schemaID string) ([]string, error) {
+	return a.schemaRepo.ListAgents(ctx, schemaID)
+}
+
 func defaultStr(val, def string) string {
 	if val == "" {
 		return def

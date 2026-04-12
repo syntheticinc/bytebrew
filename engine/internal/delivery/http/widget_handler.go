@@ -165,14 +165,20 @@ func (h *WidgetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// SchemaAgentResolver resolves a schema UUID to its agent names.
+type SchemaAgentResolver interface {
+	ResolveAgents(ctx context.Context, schemaID string) ([]string, error)
+}
+
 // WidgetScriptHandler serves GET /widget/{id}.js — the embed script.
 type WidgetScriptHandler struct {
-	service WidgetService
+	service  WidgetService
+	resolver SchemaAgentResolver
 }
 
 // NewWidgetScriptHandler creates a WidgetScriptHandler.
-func NewWidgetScriptHandler(service WidgetService) *WidgetScriptHandler {
-	return &WidgetScriptHandler{service: service}
+func NewWidgetScriptHandler(service WidgetService, resolver SchemaAgentResolver) *WidgetScriptHandler {
+	return &WidgetScriptHandler{service: service, resolver: resolver}
 }
 
 // ServeScript handles GET /widget/{id}.js.
@@ -222,6 +228,19 @@ func (h *WidgetScriptHandler) ServeScript(w http.ResponseWriter, r *http.Request
 	}
 	baseURL := fmt.Sprintf("%s://%s", scheme, r.Host)
 
+	// Resolve schema UUID → entry agent name for chat endpoint.
+	agentName := ""
+	if h.resolver != nil {
+		agents, resolveErr := h.resolver.ResolveAgents(r.Context(), widget.Schema)
+		if resolveErr == nil && len(agents) > 0 {
+			agentName = agents[0]
+		}
+	}
+	if agentName == "" {
+		http.Error(w, "no agent found for widget schema", http.StatusNotFound)
+		return
+	}
+
 	// Generate bootstrap script that loads widget.js with admin-configured data attributes.
 	script := fmt.Sprintf(`(function(){
   if(document.getElementById('bytebrew-widget-%s'))return;
@@ -240,7 +259,7 @@ func (h *WidgetScriptHandler) ServeScript(w http.ResponseWriter, r *http.Request
   document.body.appendChild(s);
 })();`,
 		id, id, baseURL, id,
-		escapeJS(widget.Schema),
+		escapeJS(agentName),
 		baseURL,
 		escapeJS(widget.Position),
 		escapeJS(widget.Name),

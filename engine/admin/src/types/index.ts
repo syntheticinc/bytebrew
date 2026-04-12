@@ -420,7 +420,7 @@ export interface MemoryEntry {
 
 export const CAPABILITY_META: Record<CapabilityType, { label: string; icon: string; description: string }> = {
   memory:        { label: 'Memory',           icon: 'brain',          description: 'Per-schema cross-session persistence' },
-  knowledge:     { label: 'Knowledge',        icon: 'book-open',      description: 'RAG sources (PDF, DOCX, URL, text)' },
+  knowledge:     { label: 'Knowledge',        icon: 'book-open',      description: 'RAG sources (TXT, MD, CSV)' },
   guardrail:     { label: 'Output Guardrail', icon: 'shield-check',   description: 'JSON Schema, LLM judge, webhook validation' },
 
   escalation:    { label: 'Escalation',       icon: 'arrow-up-right', description: 'transfer_to_user, notify, webhook' },

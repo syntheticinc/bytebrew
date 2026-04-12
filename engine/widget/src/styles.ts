@@ -73,8 +73,15 @@ const darkTheme: ThemeColors = {
   scrollbarTrack: 'transparent',
 };
 
-export function getTheme(name: string): ThemeColors {
-  return name === 'dark' ? darkTheme : lightTheme;
+export function getTheme(name: string, primaryColor?: string | null): ThemeColors {
+  const base = name === 'dark' ? { ...darkTheme } : { ...lightTheme };
+  if (primaryColor) {
+    base.accent = primaryColor;
+    base.accentHover = primaryColor;
+    base.userBubble = primaryColor;
+    base.inputBorderFocus = primaryColor;
+  }
+  return base;
 }
 
 export function buildStyles(t: ThemeColors, position: string): string {
