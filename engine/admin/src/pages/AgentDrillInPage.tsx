@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import FormField from '../components/FormField';
-import CapabilityBlock, { capabilityIcon } from '../components/builder/CapabilityBlock';
+import CapabilityBlock, { capabilityIcon, getCapabilityDefaultConfig } from '../components/builder/CapabilityBlock';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { ToastProvider, useToast } from '../components/builder/Toast';
 import type { AgentDetail, CapabilityConfig, CapabilityType, Model } from '../types';
@@ -104,13 +104,17 @@ function AgentDrillInInner() {
         setAgent(data);
         setEnabledTools(data.tools ?? []);
         setCanSpawn(data.can_spawn ?? []);
-        const mapped: CapabilityConfig[] = caps.map((c) => ({
-          id: c.id,
-          agent_name: c.agent_name,
-          type: c.type as CapabilityType,
-          config: c.config,
-          enabled: c.enabled,
-        }));
+        const mapped: CapabilityConfig[] = caps.map((c) => {
+          const defaults = getCapabilityDefaultConfig(c.type);
+          const config = Object.keys(c.config ?? {}).length > 0 ? c.config : defaults;
+          return {
+            id: c.id,
+            agent_name: c.agent_name,
+            type: c.type as CapabilityType,
+            config,
+            enabled: c.enabled,
+          };
+        });
         setCapabilities(mapped);
         setInitialCapabilities(mapped.map((c) => ({ ...c })));
       })
@@ -138,7 +142,7 @@ function AgentDrillInInner() {
 
   function addCapability(type: CapabilityType) {
     if (capabilities.some((c) => c.type === type)) return;
-    setCapabilities((prev) => [...prev, { type, enabled: true, config: {} }]);
+    setCapabilities((prev) => [...prev, { type, enabled: true, config: getCapabilityDefaultConfig(type) }]);
     setShowCapDropdown(false);
   }
 

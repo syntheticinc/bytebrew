@@ -23,6 +23,27 @@ const hintCls = 'text-[11px] text-brand-shade3/70 mt-1';
 // B.1: Capability SVG icons
 // ---------------------------------------------------------------------------
 
+/**
+ * Returns default config for a capability type so that pre-populated UI defaults
+ * are persisted to API on first Save (BUG-003: recovery rules were lost).
+ */
+export function getCapabilityDefaultConfig(type: string): Record<string, unknown> {
+  switch (type) {
+    case 'recovery':
+      return {
+        rules: [
+          { failure_type: 'mcp_connection_failed', action: 'retry', retry_count: 1, backoff: 'fixed', fallback_model: '' },
+          { failure_type: 'model_unavailable', action: 'fallback', retry_count: 2, backoff: 'exponential', fallback_model: '' },
+          { failure_type: 'tool_timeout', action: 'retry', retry_count: 1, backoff: 'fixed', fallback_model: '' },
+          { failure_type: 'tool_auth_failure', action: 'block', retry_count: 0, backoff: 'fixed', fallback_model: '' },
+          { failure_type: 'context_overflow', action: 'retry', retry_count: 1, backoff: 'fixed', fallback_model: '' },
+        ],
+      };
+    default:
+      return {};
+  }
+}
+
 export function capabilityIcon(name: string): React.ReactElement {
   const props = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   switch (name) {
