@@ -12,8 +12,8 @@ import (
 
 // mockEngineTaskManager implements EngineTaskManager for testing.
 type mockEngineTaskManager struct {
-	nextID      uint
-	tasks       map[uint]CreateEngineTaskParams
+	nextID      int
+	tasks       map[string]CreateEngineTaskParams
 	statusCalls []setStatusCall
 	updateCalls []updateCall
 	listResult  []EngineTaskSummary
@@ -22,13 +22,13 @@ type mockEngineTaskManager struct {
 }
 
 type setStatusCall struct {
-	ID     uint
+	ID     string
 	Status string
 	Result string
 }
 
 type updateCall struct {
-	ID          uint
+	ID          string
 	Title       string
 	Description string
 }
@@ -36,26 +36,26 @@ type updateCall struct {
 func newMockEngineTaskManager() *mockEngineTaskManager {
 	return &mockEngineTaskManager{
 		nextID: 1,
-		tasks:  make(map[uint]CreateEngineTaskParams),
+		tasks:  make(map[string]CreateEngineTaskParams),
 	}
 }
 
-func (m *mockEngineTaskManager) CreateTask(_ context.Context, params CreateEngineTaskParams) (uint, error) {
+func (m *mockEngineTaskManager) CreateTask(_ context.Context, params CreateEngineTaskParams) (string, error) {
 	if m.createErr != nil {
-		return 0, m.createErr
+		return "", m.createErr
 	}
-	id := m.nextID
+	id := fmt.Sprintf("task-%d", m.nextID)
 	m.nextID++
 	m.tasks[id] = params
 	return id, nil
 }
 
-func (m *mockEngineTaskManager) UpdateTask(_ context.Context, id uint, title, description string) error {
+func (m *mockEngineTaskManager) UpdateTask(_ context.Context, id string, title, description string) error {
 	m.updateCalls = append(m.updateCalls, updateCall{ID: id, Title: title, Description: description})
 	return nil
 }
 
-func (m *mockEngineTaskManager) SetTaskStatus(_ context.Context, id uint, status string, result string) error {
+func (m *mockEngineTaskManager) SetTaskStatus(_ context.Context, id string, status string, result string) error {
 	m.statusCalls = append(m.statusCalls, setStatusCall{ID: id, Status: status, Result: result})
 	return nil
 }
@@ -67,11 +67,11 @@ func (m *mockEngineTaskManager) ListTasks(_ context.Context, _ string) ([]Engine
 	return m.listResult, nil
 }
 
-func (m *mockEngineTaskManager) CreateSubTask(_ context.Context, parentID uint, params CreateEngineTaskParams) (uint, error) {
+func (m *mockEngineTaskManager) CreateSubTask(_ context.Context, parentID string, params CreateEngineTaskParams) (string, error) {
 	if m.createErr != nil {
-		return 0, m.createErr
+		return "", m.createErr
 	}
-	id := m.nextID
+	id := fmt.Sprintf("task-%d", m.nextID)
 	m.nextID++
 	m.tasks[id] = params
 	return id, nil
@@ -88,11 +88,11 @@ func TestEngineManageTasksTool_Create_Single(t *testing.T) {
 	result, err := tl.InvokableRun(context.Background(), string(args))
 
 	require.NoError(t, err)
-	assert.Contains(t, result, "Task created (ID: 1)")
+	assert.Contains(t, result, "Task created (ID: task-1)")
 	assert.Equal(t, 1, len(mgr.tasks))
-	assert.Equal(t, "Fix bug", mgr.tasks[1].Title)
-	assert.Equal(t, "agent", mgr.tasks[1].Source)
-	assert.Equal(t, "session-1", mgr.tasks[1].SessionID)
+	assert.Equal(t, "Fix bug", mgr.tasks["task-1"].Title)
+	assert.Equal(t, "agent", mgr.tasks["task-1"].Source)
+	assert.Equal(t, "session-1", mgr.tasks["task-1"].SessionID)
 }
 
 func TestEngineManageTasksTool_Create_Multiple(t *testing.T) {
@@ -148,16 +148,16 @@ func TestEngineManageTasksTool_Update(t *testing.T) {
 
 	args, _ := json.Marshal(engineManageTasksArgs{
 		Action:      "update",
-		TaskID:      5,
+		TaskID:      "task-5",
 		Title:       "New Title",
 		Description: "New Desc",
 	})
 	result, err := tl.InvokableRun(context.Background(), string(args))
 
 	require.NoError(t, err)
-	assert.Contains(t, result, "Task 5 updated")
+	assert.Contains(t, result, "Task task-5 updated")
 	require.Len(t, mgr.updateCalls, 1)
-	assert.Equal(t, uint(5), mgr.updateCalls[0].ID)
+	assert.Equal(t, "task-5", mgr.updateCalls[0].ID)
 	assert.Equal(t, "New Title", mgr.updateCalls[0].Title)
 }
 
@@ -177,7 +177,7 @@ func TestEngineManageTasksTool_Update_NoFields(t *testing.T) {
 	mgr := newMockEngineTaskManager()
 	tl := NewEngineManageTasksTool(mgr, "session-1")
 
-	args, _ := json.Marshal(engineManageTasksArgs{Action: "update", TaskID: 1})
+	args, _ := json.Marshal(engineManageTasksArgs{Action: "update", TaskID: "task-1"})
 	result, err := tl.InvokableRun(context.Background(), string(args))
 
 	require.NoError(t, err)
@@ -191,14 +191,14 @@ func TestEngineManageTasksTool_SetStatus(t *testing.T) {
 
 	args, _ := json.Marshal(engineManageTasksArgs{
 		Action: "set_status",
-		TaskID: 3,
+		TaskID: "task-3",
 		Status: "completed",
 		Result: "All done",
 	})
 	result, err := tl.InvokableRun(context.Background(), string(args))
 
 	require.NoError(t, err)
-	assert.Contains(t, result, "Task 3 status set to")
+	assert.Contains(t, result, "Task task-3 status set to")
 	require.Len(t, mgr.statusCalls, 1)
 	assert.Equal(t, "completed", mgr.statusCalls[0].Status)
 	assert.Equal(t, "All done", mgr.statusCalls[0].Result)
@@ -208,7 +208,7 @@ func TestEngineManageTasksTool_SetStatus_NoStatus(t *testing.T) {
 	mgr := newMockEngineTaskManager()
 	tl := NewEngineManageTasksTool(mgr, "session-1")
 
-	args, _ := json.Marshal(engineManageTasksArgs{Action: "set_status", TaskID: 1})
+	args, _ := json.Marshal(engineManageTasksArgs{Action: "set_status", TaskID: "task-1"})
 	result, err := tl.InvokableRun(context.Background(), string(args))
 
 	require.NoError(t, err)
@@ -217,11 +217,11 @@ func TestEngineManageTasksTool_SetStatus_NoStatus(t *testing.T) {
 }
 
 func TestEngineManageTasksTool_List(t *testing.T) {
-	parentID := uint(1)
+	parentID := "task-1"
 	mgr := newMockEngineTaskManager()
 	mgr.listResult = []EngineTaskSummary{
-		{ID: 1, Title: "Task 1", Status: "pending", AgentName: "supervisor"},
-		{ID: 2, Title: "Task 2", Status: "completed", AgentName: "coder", ParentID: &parentID},
+		{ID: "task-1", Title: "Task 1", Status: "pending", AgentName: "supervisor"},
+		{ID: "task-2", Title: "Task 2", Status: "completed", AgentName: "coder", ParentID: &parentID},
 	}
 	tl := NewEngineManageTasksTool(mgr, "session-1")
 
@@ -232,7 +232,7 @@ func TestEngineManageTasksTool_List(t *testing.T) {
 	assert.Contains(t, result, "Tasks (2)")
 	assert.Contains(t, result, "Task 1")
 	assert.Contains(t, result, "Task 2")
-	assert.Contains(t, result, "parent: 1")
+	assert.Contains(t, result, "parent: task-1")
 }
 
 func TestEngineManageTasksTool_List_Empty(t *testing.T) {
@@ -253,14 +253,14 @@ func TestEngineManageTasksTool_CreateSubtask(t *testing.T) {
 
 	args, _ := json.Marshal(engineManageTasksArgs{
 		Action:       "create_subtask",
-		ParentTaskID: 10,
+		ParentTaskID: "task-10",
 		Title:        "Sub task",
 		Description:  "Sub desc",
 	})
 	result, err := tl.InvokableRun(context.Background(), string(args))
 
 	require.NoError(t, err)
-	assert.Contains(t, result, "Sub-task created (ID: 1, parent: 10)")
+	assert.Contains(t, result, "Sub-task created (ID: task-1, parent: task-10)")
 }
 
 func TestEngineManageTasksTool_CreateSubtask_NoParent(t *testing.T) {
@@ -279,7 +279,7 @@ func TestEngineManageTasksTool_CreateSubtask_NoTitle(t *testing.T) {
 	mgr := newMockEngineTaskManager()
 	tl := NewEngineManageTasksTool(mgr, "session-1")
 
-	args, _ := json.Marshal(engineManageTasksArgs{Action: "create_subtask", ParentTaskID: 1})
+	args, _ := json.Marshal(engineManageTasksArgs{Action: "create_subtask", ParentTaskID: "task-1"})
 	result, err := tl.InvokableRun(context.Background(), string(args))
 
 	require.NoError(t, err)

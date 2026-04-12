@@ -57,6 +57,8 @@ type EngineTurnExecutorFactory struct {
 	memoryRecaller  tools.MemoryRecaller
 	memoryStorer    tools.MemoryStorer
 	memoryMaxEntries int
+	// Engine task manager (injected via SetEngineTaskManager — nil = old task system fallback)
+	engineTaskManager tools.EngineTaskManager
 	// Escalation capability deps (injected via SetEscalation — nil = disabled)
 	escalationHandler tools.EscalationHandler
 	// Schema resolver for memory/knowledge tools (BUG-007)
@@ -106,6 +108,11 @@ func (f *EngineTurnExecutorFactory) SetMemory(recaller tools.MemoryRecaller, sto
 	f.memoryRecaller = recaller
 	f.memoryStorer = storer
 	f.memoryMaxEntries = maxEntries
+}
+
+// SetEngineTaskManager configures the DB-backed task manager so agents use EngineTask.
+func (f *EngineTurnExecutorFactory) SetEngineTaskManager(mgr tools.EngineTaskManager) {
+	f.engineTaskManager = mgr
 }
 
 // SetEscalation configures the escalation handler for the escalate tool.
@@ -165,6 +172,9 @@ func (f *EngineTurnExecutorFactory) CreateForSession(
 		f.webSearchTool,
 		f.webFetchTool,
 	)
+	if f.engineTaskManager != nil {
+		baseDeps.SetEngineTaskManager(f.engineTaskManager)
+	}
 	// Resolve per-agent memory max_entries from capability config
 	memMaxEntries := f.memoryMaxEntries
 	if f.capConfigReader != nil {

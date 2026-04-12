@@ -12,11 +12,11 @@ import (
 
 // EngineTaskManager defines operations for managing engine tasks (consumer-side).
 type EngineTaskManager interface {
-	CreateTask(ctx context.Context, params CreateEngineTaskParams) (uint, error)
-	UpdateTask(ctx context.Context, id uint, title, description string) error
-	SetTaskStatus(ctx context.Context, id uint, status string, result string) error
+	CreateTask(ctx context.Context, params CreateEngineTaskParams) (string, error)
+	UpdateTask(ctx context.Context, id string, title, description string) error
+	SetTaskStatus(ctx context.Context, id string, status string, result string) error
 	ListTasks(ctx context.Context, sessionID string) ([]EngineTaskSummary, error)
-	CreateSubTask(ctx context.Context, parentID uint, params CreateEngineTaskParams) (uint, error)
+	CreateSubTask(ctx context.Context, parentID string, params CreateEngineTaskParams) (string, error)
 }
 
 // CreateEngineTaskParams holds parameters for creating an engine task.
@@ -31,18 +31,18 @@ type CreateEngineTaskParams struct {
 
 // EngineTaskSummary is a lightweight view of an engine task.
 type EngineTaskSummary struct {
-	ID        uint   `json:"id"`
-	Title     string `json:"title"`
-	Status    string `json:"status"`
-	AgentName string `json:"agent_name"`
-	ParentID  *uint  `json:"parent_id,omitempty"`
+	ID        string  `json:"id"`
+	Title     string  `json:"title"`
+	Status    string  `json:"status"`
+	AgentName string  `json:"agent_name"`
+	ParentID  *string `json:"parent_id,omitempty"`
 }
 
 type engineManageTasksArgs struct {
 	Action       string                   `json:"action"`
 	Tasks        []engineManageTaskCreate `json:"tasks,omitempty"`
-	TaskID       uint                     `json:"task_id,omitempty"`
-	ParentTaskID uint                     `json:"parent_task_id,omitempty"`
+	TaskID       string                   `json:"task_id,omitempty"`
+	ParentTaskID string                   `json:"parent_task_id,omitempty"`
 	Title        string                   `json:"title,omitempty"`
 	Description  string                   `json:"description,omitempty"`
 	Status       string                   `json:"status,omitempty"`
@@ -79,8 +79,8 @@ Actions:
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"action":         {Type: schema.String, Desc: "Action to perform: create, update, set_status, list, create_subtask", Required: true},
 			"tasks":          {Type: schema.Array, Desc: "Array of {title, description} objects (for create)"},
-			"task_id":        {Type: schema.Integer, Desc: "Task ID (for update, set_status)"},
-			"parent_task_id": {Type: schema.Integer, Desc: "Parent task ID (for create_subtask)"},
+			"task_id":        {Type: schema.String, Desc: "Task ID (for update, set_status)"},
+			"parent_task_id": {Type: schema.String, Desc: "Parent task ID (for create_subtask)"},
 			"title":          {Type: schema.String, Desc: "Task title (for update, create_subtask)"},
 			"description":    {Type: schema.String, Desc: "Task description (for update, create_subtask)"},
 			"status":         {Type: schema.String, Desc: "Target status (for set_status)"},
@@ -118,7 +118,7 @@ func (t *EngineManageTasksTool) handleCreate(ctx context.Context, args engineMan
 		return "[ERROR] tasks array is required and must not be empty for create action", nil
 	}
 
-	var ids []uint
+	var ids []string
 	for _, task := range args.Tasks {
 		if task.Title == "" {
 			return "[ERROR] each task must have a title", nil
@@ -136,18 +136,18 @@ func (t *EngineManageTasksTool) handleCreate(ctx context.Context, args engineMan
 	}
 
 	if len(ids) == 1 {
-		return fmt.Sprintf("Task created (ID: %d).", ids[0]), nil
+		return fmt.Sprintf("Task created (ID: %s).", ids[0]), nil
 	}
 
 	result := fmt.Sprintf("%d tasks created:", len(ids))
 	for i, id := range ids {
-		result += fmt.Sprintf("\n  [%d] %s", id, args.Tasks[i].Title)
+		result += fmt.Sprintf("\n  [%s] %s", id, args.Tasks[i].Title)
 	}
 	return result, nil
 }
 
 func (t *EngineManageTasksTool) handleUpdate(ctx context.Context, args engineManageTasksArgs) (string, error) {
-	if args.TaskID == 0 {
+	if args.TaskID == "" {
 		return "[ERROR] task_id is required for update", nil
 	}
 	if args.Title == "" && args.Description == "" {
@@ -156,11 +156,11 @@ func (t *EngineManageTasksTool) handleUpdate(ctx context.Context, args engineMan
 	if err := t.manager.UpdateTask(ctx, args.TaskID, args.Title, args.Description); err != nil {
 		return fmt.Sprintf("[ERROR] %v", err), nil
 	}
-	return fmt.Sprintf("Task %d updated.", args.TaskID), nil
+	return fmt.Sprintf("Task %s updated.", args.TaskID), nil
 }
 
 func (t *EngineManageTasksTool) handleSetStatus(ctx context.Context, args engineManageTasksArgs) (string, error) {
-	if args.TaskID == 0 {
+	if args.TaskID == "" {
 		return "[ERROR] task_id is required for set_status", nil
 	}
 	if args.Status == "" {
@@ -169,7 +169,7 @@ func (t *EngineManageTasksTool) handleSetStatus(ctx context.Context, args engine
 	if err := t.manager.SetTaskStatus(ctx, args.TaskID, args.Status, args.Result); err != nil {
 		return fmt.Sprintf("[ERROR] %v", err), nil
 	}
-	return fmt.Sprintf("Task %d status set to %q.", args.TaskID, args.Status), nil
+	return fmt.Sprintf("Task %s status set to %q.", args.TaskID, args.Status), nil
 }
 
 func (t *EngineManageTasksTool) handleList(ctx context.Context) (string, error) {
@@ -183,9 +183,9 @@ func (t *EngineManageTasksTool) handleList(ctx context.Context) (string, error) 
 
 	result := fmt.Sprintf("Tasks (%d):\n", len(tasks))
 	for _, tk := range tasks {
-		line := fmt.Sprintf("  [%d] %q — %s", tk.ID, tk.Title, tk.Status)
+		line := fmt.Sprintf("  [%s] %q — %s", tk.ID, tk.Title, tk.Status)
 		if tk.ParentID != nil {
-			line += fmt.Sprintf(" (parent: %d)", *tk.ParentID)
+			line += fmt.Sprintf(" (parent: %s)", *tk.ParentID)
 		}
 		result += line + "\n"
 	}
@@ -193,7 +193,7 @@ func (t *EngineManageTasksTool) handleList(ctx context.Context) (string, error) 
 }
 
 func (t *EngineManageTasksTool) handleCreateSubtask(ctx context.Context, args engineManageTasksArgs) (string, error) {
-	if args.ParentTaskID == 0 {
+	if args.ParentTaskID == "" {
 		return "[ERROR] parent_task_id is required for create_subtask", nil
 	}
 	if args.Title == "" {
@@ -209,5 +209,5 @@ func (t *EngineManageTasksTool) handleCreateSubtask(ctx context.Context, args en
 	if err != nil {
 		return fmt.Sprintf("[ERROR] %v", err), nil
 	}
-	return fmt.Sprintf("Sub-task created (ID: %d, parent: %d).", id, args.ParentTaskID), nil
+	return fmt.Sprintf("Sub-task created (ID: %s, parent: %s).", id, args.ParentTaskID), nil
 }

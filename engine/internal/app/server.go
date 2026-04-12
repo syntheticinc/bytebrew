@@ -1176,6 +1176,10 @@ func Run(sc ServerConfig) error {
 		factory.SetEscalation(escHandler)
 		loggerInstance.InfoContext(ctx, "Escalation handler wired into TurnExecutorFactory")
 
+		// Wire EngineTaskManager so agents use DB-backed tasks (visible in Admin)
+		factory.SetEngineTaskManager(&engineTaskManagerAdapter{repo: taskRepo})
+		loggerInstance.InfoContext(ctx, "EngineTaskManager wired into TurnExecutorFactory")
+
 		// US-003: Wire guardrail pipeline with per-agent config resolver
 		factory.SetGuardrail(
 			&guardrailCheckerAdapter{pipeline: guardrailPipeline},
