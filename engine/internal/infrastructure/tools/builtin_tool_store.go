@@ -168,6 +168,7 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 
 	// US-001: Inject capability-derived tool names
 	builtinTools := rc.Agent.Record.BuiltinTools
+	capInjectedTools := make(map[string]bool) // track which tools came from capabilities
 	if r.capInjector != nil {
 		injected, err := r.capInjector.InjectedTools(ctx, rc.Agent.Record.Name)
 		if err != nil {
@@ -183,6 +184,7 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 					builtinTools = append(builtinTools, n)
 					existing[n] = true
 				}
+				capInjectedTools[n] = true
 			}
 		}
 	}
@@ -194,6 +196,13 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 		}
 		factory, ok := r.builtins.Get(name)
 		if !ok {
+			// BUG-006: capability-injected tools that aren't registered yet → warn and skip.
+			// Explicitly configured tools → still error.
+			if capInjectedTools[name] {
+				slog.WarnContext(ctx, "capability-injected tool not registered, skipping",
+					"agent", rc.Agent.Record.Name, "tool", name)
+				continue
+			}
 			return nil, fmt.Errorf("unknown builtin tool %q for agent %q", name, rc.Agent.Record.Name)
 		}
 		t := factory(rc.Deps)
@@ -290,6 +299,7 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, deps ToolDependencies) ([]tool.InvokableTool, error) {
 	// US-001: Inject capability-derived tool names before resolution
 	allToolNames := toolNames
+	capInjectedTools := make(map[string]bool) // track which tools came from capabilities
 	if r.capInjector != nil && deps.AgentName != "" {
 		injected, err := r.capInjector.InjectedTools(ctx, deps.AgentName)
 		if err != nil {
@@ -306,6 +316,7 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 					allToolNames = append(allToolNames, n)
 					existing[n] = true
 				}
+				capInjectedTools[n] = true
 			}
 		}
 	}
@@ -319,6 +330,12 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 		}
 		factory, ok := r.builtins.Get(name)
 		if !ok {
+			// BUG-006: capability-injected tools that aren't registered yet → warn and skip.
+			if capInjectedTools[name] {
+				slog.WarnContext(ctx, "capability-injected tool not registered, skipping",
+					"agent", deps.AgentName, "tool", name)
+				continue
+			}
 			return nil, fmt.Errorf("resolve tool %s: unknown builtin tool", name)
 		}
 		t := factory(deps)

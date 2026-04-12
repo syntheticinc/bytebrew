@@ -1024,6 +1024,24 @@ func isEnvPlaceholder(v string) bool {
 	return strings.HasPrefix(v, "${") && strings.HasSuffix(v, "}")
 }
 
+// agentSchemaIDResolver resolves the primary schema UUID for an agent.
+// BUG-007: memory/knowledge tools need schema_id (UUID) to scope data.
+type agentSchemaIDResolver struct {
+	db *gorm.DB
+}
+
+func (r *agentSchemaIDResolver) ResolveSchemaID(ctx context.Context, agentName string) (string, error) {
+	var agentID string
+	if err := r.db.WithContext(ctx).Raw("SELECT id FROM agents WHERE name = ?", agentName).Scan(&agentID).Error; err != nil || agentID == "" {
+		return "", fmt.Errorf("agent %q not found", agentName)
+	}
+	var schemaID string
+	if err := r.db.WithContext(ctx).Raw("SELECT schema_id FROM schema_agents WHERE agent_id = ? LIMIT 1", agentID).Scan(&schemaID).Error; err != nil || schemaID == "" {
+		return "", fmt.Errorf("no schema for agent %q", agentName)
+	}
+	return schemaID, nil
+}
+
 // agentManagerHTTPAdapter bridges GORMAgentRepository + AgentRegistry to the http.AgentManager interface.
 type agentManagerHTTPAdapter struct {
 	repo       *config_repo.GORMAgentRepository
@@ -1173,8 +1191,16 @@ func (a *agentManagerHTTPAdapter) UpdateAgent(ctx context.Context, name string, 
 
 func (a *agentManagerHTTPAdapter) DeleteAgent(ctx context.Context, name string) error {
 	// System agents cannot be deleted via API.
-	if existing, err := a.repo.GetByName(ctx, name); err == nil && existing != nil && existing.IsSystem {
+	existing, err := a.repo.GetByName(ctx, name)
+	if err == nil && existing != nil && existing.IsSystem {
 		return pkgerrors.Forbidden(fmt.Sprintf("system agent %q cannot be deleted", name))
+	}
+
+	// BUG-004: Delete capabilities before agent to avoid FK constraint violation.
+	if err := a.db.WithContext(ctx).
+		Where("agent_id IN (SELECT id FROM agents WHERE name = ?)", name).
+		Delete(&models.CapabilityModel{}).Error; err != nil {
+		slog.WarnContext(ctx, "failed to cascade-delete capabilities", "agent", name, "error", err)
 	}
 
 	if err := a.repo.Delete(ctx, name); err != nil {
@@ -1210,8 +1236,9 @@ func (a *agentManagerHTTPAdapter) toAgentRecord(req deliveryhttp.CreateAgentRequ
 
 	// Resolve model: by ID or by name.
 	if req.ModelID != nil {
+		rec.ModelID = req.ModelID
 		var llm models.LLMProviderModel
-		if err := a.db.First(&llm, *req.ModelID).Error; err == nil {
+		if err := a.db.Where("id = ?", *req.ModelID).First(&llm).Error; err == nil {
 			rec.ModelName = llm.Name
 		}
 	} else if req.Model != "" {

@@ -91,12 +91,20 @@ func (t *MemoryRecallTool) InvokableRun(ctx context.Context, argumentsInJSON str
 		return "No memories found for this user in this schema.", nil
 	}
 
-	// Simple keyword filtering if query provided
+	// Keyword filtering: all query words must appear in content (AND logic)
 	if args.Query != "" {
-		queryLower := strings.ToLower(args.Query)
+		queryWords := strings.Fields(strings.ToLower(args.Query))
 		filtered := make([]*domain.Memory, 0)
 		for _, m := range memories {
-			if strings.Contains(strings.ToLower(m.Content), queryLower) {
+			contentLower := strings.ToLower(m.Content)
+			match := true
+			for _, w := range queryWords {
+				if !strings.Contains(contentLower, w) {
+					match = false
+					break
+				}
+			}
+			if match {
 				filtered = append(filtered, m)
 			}
 		}

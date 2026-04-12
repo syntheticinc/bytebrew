@@ -1132,6 +1132,10 @@ func Run(sc ServerConfig) error {
 		memStorage := persistence.NewMemoryStorage(pgDB)
 		factory.SetMemory(memStorage, memStorage, 0) // maxEntries=0 means unlimited
 		loggerInstance.InfoContext(ctx, "Memory storage wired into TurnExecutorFactory")
+
+		// BUG-007: Wire schema resolver so memory/knowledge tools get SchemaID (UUID).
+		factory.SetSchemaResolver(&agentSchemaIDResolver{db: pgDB})
+		loggerInstance.InfoContext(ctx, "Schema resolver wired into TurnExecutorFactory")
 	}
 
 	// Create shared SessionProcessor

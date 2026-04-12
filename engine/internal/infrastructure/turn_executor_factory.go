@@ -23,6 +23,12 @@ type AgentModelResolver interface {
 	ResolveModelID(agentName string) *string
 }
 
+// AgentSchemaResolver resolves the primary schema ID (UUID) for an agent.
+// Used to propagate SchemaID into tool dependencies for memory/knowledge tools.
+type AgentSchemaResolver interface {
+	ResolveSchemaID(ctx context.Context, agentName string) (string, error)
+}
+
 // EngineTurnExecutorFactory creates EngineAdapter-based TurnExecutors for Supervisor mode.
 // Implements grpc.TurnExecutorFactory interface (consumer-side).
 type EngineTurnExecutorFactory struct {
@@ -45,6 +51,8 @@ type EngineTurnExecutorFactory struct {
 	memoryRecaller  tools.MemoryRecaller
 	memoryStorer    tools.MemoryStorer
 	memoryMaxEntries int
+	// Schema resolver for memory/knowledge tools (BUG-007)
+	schemaResolver AgentSchemaResolver
 }
 
 // NewEngineTurnExecutorFactory creates a new factory for Engine-based TurnExecutors.
@@ -85,6 +93,11 @@ func (f *EngineTurnExecutorFactory) SetMemory(recaller tools.MemoryRecaller, sto
 	f.memoryRecaller = recaller
 	f.memoryStorer = storer
 	f.memoryMaxEntries = maxEntries
+}
+
+// SetSchemaResolver configures schema lookup for propagating SchemaID to tool deps.
+func (f *EngineTurnExecutorFactory) SetSchemaResolver(resolver AgentSchemaResolver) {
+	f.schemaResolver = resolver
 }
 
 // userMemoryDepsProvider wraps DefaultToolDepsProvider and injects userID + memory refs per session.
@@ -156,6 +169,18 @@ func (f *EngineTurnExecutorFactory) CreateForSession(
 		return nil
 	}
 
+	// BUG-007: Resolve agent's schema for memory/knowledge tool deps.
+	var schemaID string
+	if f.schemaResolver != nil {
+		sid, err := f.schemaResolver.ResolveSchemaID(context.Background(), agentName)
+		if err != nil {
+			slog.Warn("failed to resolve schema for agent, memory tools may be disabled",
+				"agent", agentName, "error", err)
+		} else {
+			schemaID = sid
+		}
+	}
+
 	// Create EngineAdapter (implements TurnExecutor interface)
 	adapter, err := turn_executor.NewEngineAdapter(turn_executor.Config{
 		Engine:           f.engine,
@@ -166,6 +191,7 @@ func (f *EngineTurnExecutorFactory) CreateForSession(
 		AgentConfig:      f.agentConfig,
 		ModelName:        modelName,
 		AgentName:        agentName,
+		SchemaID:         schemaID,
 		ContextReminders: contextReminders,
 	})
 

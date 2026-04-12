@@ -720,7 +720,7 @@ const configMap: Record<string, React.FC<PanelProps>> = {
 
 export default function CapabilityBlock({ capability, onChange, onRemove, models }: CapabilityBlockProps) {
   const [open, setOpen] = useState(false);
-  const meta = CAPABILITY_META[capability.type];
+  const meta = CAPABILITY_META[capability.type] ?? { label: capability.type, icon: 'brain', description: 'Unknown capability type' };
   const summary = getSummary(capability);
   const ConfigPanel = configMap[capability.type];
 
