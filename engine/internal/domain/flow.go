@@ -32,7 +32,11 @@ type Flow struct {
 	Spawn          SpawnPolicy
 	KnowledgePath  string   // path to knowledge folder for RAG
 	MCPServers     []string // MCP server names configured for this agent
-	ConfirmBefore  []string // tools requiring user confirmation before execution
+	ConfirmBefore  []string  // tools requiring user confirmation before execution
+	Temperature    *float64 // per-agent LLM temperature override (nil = use model default)
+	TopP           *float64 // per-agent top_p override (nil = use model default)
+	MaxTokens      *int     // per-agent max_tokens override (nil = use model default)
+	StopSequences  []string // per-agent stop sequences override (nil = use model default)
 }
 
 // Validate validates the Flow configuration

@@ -199,5 +199,9 @@ func toFlow(rec config_repo.AgentRecord) *domain.Flow {
 		KnowledgePath:  rec.KnowledgePath,
 		MCPServers:     rec.MCPServers,
 		ConfirmBefore:  rec.ConfirmBefore,
+		Temperature:    rec.Temperature,
+		TopP:           rec.TopP,
+		MaxTokens:      rec.MaxTokens,
+		StopSequences:  rec.StopSequences,
 	}
 }

@@ -5,7 +5,7 @@ import FormField from '../components/FormField';
 import CapabilityBlock, { capabilityIcon, getCapabilityDefaultConfig } from '../components/builder/CapabilityBlock';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { ToastProvider, useToast } from '../components/builder/Toast';
-import type { AgentDetail, CapabilityConfig, CapabilityType, Model } from '../types';
+import type { AgentDetail, CapabilityConfig, CapabilityType, Model, MCPServer } from '../types';
 import { CAPABILITY_META } from '../types';
 import { usePrototype } from '../hooks/usePrototype';
 import { MOCK_AGENTS, MOCK_MODELS } from '../mocks/agents';
@@ -71,6 +71,9 @@ function AgentDrillInInner() {
   const [canSpawn, setCanSpawn] = useState<string[]>([]);
   const [allAgentNames, setAllAgentNames] = useState<string[]>([]);
   const [models, setModels] = useState<Model[]>([]);
+  const [confirmInput, setConfirmInput] = useState('');
+  const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
+  const [enabledMCP, setEnabledMCP] = useState<string[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -104,6 +107,7 @@ function AgentDrillInInner() {
         setAgent(data);
         setEnabledTools(data.tools ?? []);
         setCanSpawn(data.can_spawn ?? []);
+        setEnabledMCP(data.mcp_servers ?? []);
         const mapped: CapabilityConfig[] = caps.map((c) => {
           const defaults = getCapabilityDefaultConfig(c.type);
           const config = Object.keys(c.config ?? {}).length > 0 ? c.config : defaults;
@@ -127,6 +131,7 @@ function AgentDrillInInner() {
     if (isPrototype) return;
     api.listModels('!embedding').then(setModels).catch(() => {});
     api.listAgents().then((agents: Array<{ name: string }>) => setAllAgentNames(agents.map((a) => a.name))).catch(() => {});
+    api.listMCPServers().then(setMcpServers).catch(() => {});
   }, [isPrototype]);
 
   // Close dropdown on outside click
@@ -171,13 +176,20 @@ function AgentDrillInInner() {
       await api.updateAgent(agentName, {
         system_prompt: agent.system_prompt,
         model_id: agent.model_id,
+        kit: agent.kit,
         lifecycle: agent.lifecycle,
         tool_execution: agent.tool_execution,
         max_steps: agent.max_steps,
         max_context_size: agent.max_context_size,
         max_turn_duration: agent.max_turn_duration,
+        temperature: agent.temperature,
+        top_p: agent.top_p,
+        max_tokens: agent.max_tokens,
+        stop_sequences: agent.stop_sequences,
+        confirm_before: agent.confirm_before,
         tools: enabledTools,
         can_spawn: canSpawn,
+        mcp_servers: enabledMCP,
       });
 
       // Save capabilities — diff against initial state
@@ -388,6 +400,17 @@ function AgentDrillInInner() {
               ]}
               hint="Persistent: always running. Spawn: created on-demand by other agents"
             />
+            <FormField
+              label="Kit"
+              type="select"
+              value={agent?.kit ?? ''}
+              onChange={(v) => updateAgentField('kit', v as string)}
+              options={[
+                { value: '', label: 'None' },
+                { value: 'developer', label: 'Developer' },
+              ]}
+              hint="Pre-built tool kit that adds specialized tools to the agent"
+            />
           </div>
         </div>
 
@@ -454,6 +477,60 @@ function AgentDrillInInner() {
               ]}
               hint="Sequential: tools one by one. Parallel: multiple tools simultaneously"
             />
+          </div>
+
+          {/* Confirm Before */}
+          <div className="border-t border-brand-shade3/10 mt-4 pt-4">
+            <p className="text-xs font-semibold text-brand-shade3 uppercase tracking-widest mb-2 font-mono">Confirm Before</p>
+            <p className="text-xs text-brand-shade3/60 mb-2">Tools requiring user confirmation before execution</p>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={confirmInput}
+                onChange={(e) => setConfirmInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const trimmed = confirmInput.trim();
+                    if (trimmed && !(agent?.confirm_before ?? []).includes(trimmed)) {
+                      updateAgentField('confirm_before', [...(agent?.confirm_before ?? []), trimmed]);
+                      setConfirmInput('');
+                    }
+                  }
+                }}
+                placeholder="Tool name..."
+                className="flex-1 px-3 py-1.5 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light font-mono focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const trimmed = confirmInput.trim();
+                  if (trimmed && !(agent?.confirm_before ?? []).includes(trimmed)) {
+                    updateAgentField('confirm_before', [...(agent?.confirm_before ?? []), trimmed]);
+                    setConfirmInput('');
+                  }
+                }}
+                className="px-3 py-1.5 border border-brand-shade3/30 rounded-btn text-xs text-brand-shade2 font-mono hover:text-brand-light hover:border-brand-shade3/60 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+            {(agent?.confirm_before ?? []).length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {(agent?.confirm_before ?? []).map((t) => (
+                  <span key={t} className="inline-flex items-center gap-1 px-2 py-1 bg-amber-500/10 border border-amber-500/30 rounded-btn text-xs text-amber-400 font-mono">
+                    {t}
+                    <button
+                      type="button"
+                      onClick={() => updateAgentField('confirm_before', (agent?.confirm_before ?? []).filter((x) => x !== t))}
+                      className="text-amber-400/60 hover:text-amber-400 ml-0.5"
+                    >
+                      x
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Model Parameters */}
@@ -625,16 +702,34 @@ function AgentDrillInInner() {
               <p className={`text-xs font-semibold ${TOOL_TIERS.mcp.labelClass} mb-1 font-mono`}>
                 {TOOL_TIERS.mcp.label} <span className="font-normal text-brand-shade3/60">— {TOOL_TIERS.mcp.description}</span>
               </p>
-              {(agent?.mcp_servers?.length ?? 0) > 0 ? (
+              {mcpServers.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  {agent!.mcp_servers.map((srv) => (
-                    <span key={srv} className="px-2 py-0.5 bg-brand-accent/10 border border-brand-accent/20 rounded text-xs text-brand-accent font-mono">
-                      {srv}
-                    </span>
-                  ))}
+                  {mcpServers.map((srv) => {
+                    const isSelected = enabledMCP.includes(srv.name);
+                    return (
+                      <label
+                        key={srv.name}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-btn border text-sm cursor-pointer transition-colors ${
+                          isSelected
+                            ? 'border-brand-accent bg-brand-accent/15 text-brand-accent'
+                            : 'border-brand-shade3/30 bg-brand-dark-alt text-brand-shade2 hover:bg-brand-shade3/10'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => setEnabledMCP((prev) =>
+                            prev.includes(srv.name) ? prev.filter((n) => n !== srv.name) : [...prev, srv.name]
+                          )}
+                          className="sr-only"
+                        />
+                        {srv.name}
+                      </label>
+                    );
+                  })}
                 </div>
               ) : (
-                <p className="text-xs text-brand-shade3/50 font-mono italic">No MCP servers connected. Add via Settings → MCP Servers</p>
+                <p className="text-xs text-brand-shade3/50 font-mono italic">No MCP servers configured. Add via Settings → MCP Servers</p>
               )}
             </div>
           </div>

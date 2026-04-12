@@ -931,7 +931,7 @@ export default function BuilderSidePanel({ agent, agents, onClose, onSaved, onDe
           </button>
         )}
         <button
-          onClick={() => navigate(`/agents/${agent.name}/edit`)}
+          onClick={() => navigate(`/agents/${agent.name}`)}
           className="flex-1 py-1.5 bg-brand-dark border border-brand-shade3/30 text-brand-shade2 rounded-card text-xs hover:text-brand-light hover:border-brand-shade3 transition-colors flex items-center justify-center gap-1"
         >
           Open Full Editor

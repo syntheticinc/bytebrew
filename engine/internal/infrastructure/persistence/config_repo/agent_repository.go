@@ -23,6 +23,10 @@ type AgentRecord struct {
 	MaxSteps       int
 	MaxContextSize  int
 	MaxTurnDuration int
+	Temperature     *float64
+	TopP            *float64
+	MaxTokens       *int
+	StopSequences   []string
 	ConfirmBefore   []string
 	BuiltinTools   []string
 	CustomTools    []CustomToolRecord
@@ -191,6 +195,10 @@ func (r *GORMAgentRepository) Update(ctx context.Context, name string, record *A
 			"max_steps":        agent.MaxSteps,
 			"max_context_size":  agent.MaxContextSize,
 			"max_turn_duration": agent.MaxTurnDuration,
+			"temperature":      agent.Temperature,
+			"top_p":            agent.TopP,
+			"max_tokens":       agent.MaxTokens,
+			"stop_sequences":   agent.StopSequences,
 			"confirm_before":    agent.ConfirmBefore,
 			"is_system":         agent.IsSystem,
 		}
@@ -266,7 +274,17 @@ func toAgentRecord(a models.AgentModel) (AgentRecord, error) {
 		MaxSteps:        a.MaxSteps,
 		MaxContextSize:  a.MaxContextSize,
 		MaxTurnDuration: a.MaxTurnDuration,
+		Temperature:     a.Temperature,
+		TopP:            a.TopP,
+		MaxTokens:       a.MaxTokens,
 		IsSystem:        a.IsSystem,
+	}
+
+	// StopSequences: JSON array -> []string
+	if a.StopSequences != "" {
+		if err := json.Unmarshal([]byte(a.StopSequences), &rec.StopSequences); err != nil {
+			return AgentRecord{}, fmt.Errorf("parse stop_sequences: %w", err)
+		}
 	}
 
 	// Model ID and name
@@ -338,7 +356,19 @@ func (r *GORMAgentRepository) toAgentModelWithDB(db *gorm.DB, rec *AgentRecord) 
 		MaxSteps:        rec.MaxSteps,
 		MaxContextSize:  rec.MaxContextSize,
 		MaxTurnDuration: rec.MaxTurnDuration,
+		Temperature:     rec.Temperature,
+		TopP:            rec.TopP,
+		MaxTokens:       rec.MaxTokens,
 		IsSystem:        rec.IsSystem,
+	}
+
+	// StopSequences: []string -> JSON string
+	if len(rec.StopSequences) > 0 {
+		data, err := json.Marshal(rec.StopSequences)
+		if err != nil {
+			return models.AgentModel{}, fmt.Errorf("marshal stop_sequences: %w", err)
+		}
+		agent.StopSequences = string(data)
 	}
 
 	// Resolve model name -> ID

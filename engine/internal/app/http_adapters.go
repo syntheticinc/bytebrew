@@ -79,20 +79,36 @@ func (a *agentListerHTTPAdapter) GetAgent(_ context.Context, name string) (*deli
 	if err != nil {
 		return nil, nil
 	}
-	tools := make([]string, 0, len(agent.Record.BuiltinTools)+len(agent.Record.CustomTools))
-	tools = append(tools, agent.Record.BuiltinTools...)
-	for _, ct := range agent.Record.CustomTools {
+	rec := agent.Record
+	tools := make([]string, 0, len(rec.BuiltinTools)+len(rec.CustomTools))
+	tools = append(tools, rec.BuiltinTools...)
+	for _, ct := range rec.CustomTools {
 		tools = append(tools, ct.Name)
 	}
 	return &deliveryhttp.AgentDetail{
 		AgentInfo: deliveryhttp.AgentInfo{
-			Name:         agent.Record.Name,
+			Name:         rec.Name,
 			ToolsCount:   len(tools),
-			Kit:          agent.Record.Kit,
-			HasKnowledge: agent.Record.KnowledgePath != "",
+			Kit:          rec.Kit,
+			HasKnowledge: rec.KnowledgePath != "",
+			IsSystem:     rec.IsSystem,
 		},
-		Tools:    tools,
-		CanSpawn: agent.Record.CanSpawn,
+		ModelID:        rec.ModelID,
+		SystemPrompt:   rec.SystemPrompt,
+		KnowledgePath:  rec.KnowledgePath,
+		Tools:          tools,
+		CanSpawn:       rec.CanSpawn,
+		Lifecycle:      rec.Lifecycle,
+		ToolExecution:  rec.ToolExecution,
+		MaxSteps:       rec.MaxSteps,
+		MaxContextSize: rec.MaxContextSize,
+		MaxTurnDuration: rec.MaxTurnDuration,
+		Temperature:    rec.Temperature,
+		TopP:           rec.TopP,
+		MaxTokens:      rec.MaxTokens,
+		StopSequences:  rec.StopSequences,
+		ConfirmBefore:  rec.ConfirmBefore,
+		MCPServers:     rec.MCPServers,
 	}, nil
 }
 
@@ -311,6 +327,10 @@ type agentYAML struct {
 	MaxSteps       int             `yaml:"max_steps"`
 	MaxContextSize int             `yaml:"max_context_size"`
 	MaxTurnDuration int            `yaml:"max_turn_duration"`
+	Temperature    *float64        `yaml:"temperature,omitempty"`
+	TopP           *float64        `yaml:"top_p,omitempty"`
+	MaxTokens      *int            `yaml:"max_tokens,omitempty"`
+	StopSequences  []string        `yaml:"stop_sequences,omitempty"`
 	ConfirmBefore  []string        `yaml:"confirm_before,omitempty"`
 	Tools          []string        `yaml:"tools,omitempty"`
 	CanSpawn       []string        `yaml:"can_spawn,omitempty"`
@@ -475,6 +495,9 @@ func (a *configImportExportHTTPAdapter) exportAgents(_ context.Context) ([]agent
 			MaxSteps:        ag.MaxSteps,
 			MaxContextSize:  ag.MaxContextSize,
 			MaxTurnDuration: ag.MaxTurnDuration,
+			Temperature:     ag.Temperature,
+			TopP:            ag.TopP,
+			MaxTokens:       ag.MaxTokens,
 			MCPServers:      mcpByAgent[ag.ID],
 		}
 
@@ -484,6 +507,9 @@ func (a *configImportExportHTTPAdapter) exportAgents(_ context.Context) ([]agent
 
 		if ag.ConfirmBefore != "" {
 			ay.ConfirmBefore = splitCSV(ag.ConfirmBefore)
+		}
+		if ag.StopSequences != "" {
+			_ = json.Unmarshal([]byte(ag.StopSequences), &ay.StopSequences)
 		}
 
 		for _, t := range ag.Tools {
@@ -765,6 +791,14 @@ func (a *configImportExportHTTPAdapter) importAgents(tx *gorm.DB, items []agentY
 			existing.MaxSteps = ag.MaxSteps
 			existing.MaxContextSize = ag.MaxContextSize
 			existing.MaxTurnDuration = ag.MaxTurnDuration
+			existing.Temperature = ag.Temperature
+			existing.TopP = ag.TopP
+			existing.MaxTokens = ag.MaxTokens
+			if ssJSON, err := json.Marshal(ag.StopSequences); err == nil && len(ag.StopSequences) > 0 {
+				existing.StopSequences = string(ssJSON)
+			} else {
+				existing.StopSequences = ""
+			}
 			if cbJSON, err := json.Marshal(ag.ConfirmBefore); err == nil && len(ag.ConfirmBefore) > 0 {
 				existing.ConfirmBefore = string(cbJSON)
 			} else {
@@ -788,6 +822,16 @@ func (a *configImportExportHTTPAdapter) importAgents(tx *gorm.DB, items []agentY
 			MaxSteps:        ag.MaxSteps,
 			MaxContextSize:  ag.MaxContextSize,
 			MaxTurnDuration: ag.MaxTurnDuration,
+			Temperature:     ag.Temperature,
+			TopP:            ag.TopP,
+			MaxTokens:       ag.MaxTokens,
+			StopSequences: func() string {
+				if len(ag.StopSequences) == 0 {
+					return ""
+				}
+				d, _ := json.Marshal(ag.StopSequences)
+				return string(d)
+			}(),
 			ConfirmBefore: func() string {
 				if len(ag.ConfirmBefore) == 0 {
 					return ""
@@ -1103,6 +1147,10 @@ func (a *agentManagerHTTPAdapter) GetAgent(ctx context.Context, name string) (*d
 		MaxSteps:        rec.MaxSteps,
 		MaxContextSize:  rec.MaxContextSize,
 		MaxTurnDuration: rec.MaxTurnDuration,
+		Temperature:     rec.Temperature,
+		TopP:            rec.TopP,
+		MaxTokens:       rec.MaxTokens,
+		StopSequences:   rec.StopSequences,
 		ConfirmBefore:   rec.ConfirmBefore,
 		MCPServers:      rec.MCPServers,
 	}
@@ -1251,6 +1299,10 @@ func (a *agentManagerHTTPAdapter) toAgentRecord(req deliveryhttp.CreateAgentRequ
 		MaxSteps:        req.MaxSteps,
 		MaxContextSize:  req.MaxContextSize,
 		MaxTurnDuration: req.MaxTurnDuration,
+		Temperature:     req.Temperature,
+		TopP:            req.TopP,
+		MaxTokens:       req.MaxTokens,
+		StopSequences:   req.StopSequences,
 		ConfirmBefore:   req.ConfirmBefore,
 		BuiltinTools:   req.Tools,
 		CanSpawn:       req.CanSpawn,

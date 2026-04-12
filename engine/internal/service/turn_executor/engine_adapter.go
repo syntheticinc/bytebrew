@@ -10,6 +10,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agents"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agents/react"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/engine"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
@@ -231,13 +232,21 @@ func (e *EngineAdapter) ExecuteTurn(
 		}
 	}
 
+	// Wrap ChatModel with per-agent model parameters (temperature, top_p, etc.)
+	chatModel := llm.WrapWithModelParams(e.chatModel, llm.ModelParams{
+		Temperature: flow.Temperature,
+		TopP:        flow.TopP,
+		MaxTokens:   flow.MaxTokens,
+		Stop:        flow.StopSequences,
+	})
+
 	execCfg := engine.ExecutionConfig{
 		SessionID:         sessionID,
 		AgentID:           e.agentName,
 		Flow:              flow,
 		Tools:             baseTools,
 		Input:             question,
-		ChatModel:         e.chatModel,
+		ChatModel:         chatModel,
 		Streaming:         true,
 		ChunkCallback:     chunkCallback,
 		EventCallback:     wrappedEventCallback,

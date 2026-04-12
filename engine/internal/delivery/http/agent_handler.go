@@ -37,6 +37,10 @@ type AgentDetail struct {
 	MaxSteps        int              `json:"max_steps"`
 	MaxContextSize  int              `json:"max_context_size"`
 	MaxTurnDuration int              `json:"max_turn_duration"`
+	Temperature     *float64         `json:"temperature,omitempty"`
+	TopP            *float64         `json:"top_p,omitempty"`
+	MaxTokens       *int             `json:"max_tokens,omitempty"`
+	StopSequences   []string         `json:"stop_sequences,omitempty"`
 	ConfirmBefore   []string         `json:"confirm_before,omitempty"`
 	MCPServers     []string         `json:"mcp_servers,omitempty"`
 	Escalation     *AgentEscalation `json:"escalation,omitempty"`
@@ -63,6 +67,10 @@ type CreateAgentRequest struct {
 	MaxSteps        int              `json:"max_steps,omitempty"`
 	MaxContextSize  int              `json:"max_context_size,omitempty"`
 	MaxTurnDuration int              `json:"max_turn_duration,omitempty"`
+	Temperature     *float64         `json:"temperature,omitempty"`
+	TopP            *float64         `json:"top_p,omitempty"`
+	MaxTokens       *int             `json:"max_tokens,omitempty"`
+	StopSequences   []string         `json:"stop_sequences,omitempty"`
 	ConfirmBefore   []string         `json:"confirm_before,omitempty"`
 	Tools          []string         `json:"tools,omitempty"`
 	CanSpawn       []string         `json:"can_spawn,omitempty"`

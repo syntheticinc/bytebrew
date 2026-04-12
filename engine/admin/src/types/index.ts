@@ -61,6 +61,10 @@ export interface CreateAgentRequest {
   max_steps?: number;
   max_context_size?: number;
   max_turn_duration?: number;
+  temperature?: number;
+  top_p?: number;
+  max_tokens?: number;
+  stop_sequences?: string[];
   confirm_before?: string[];
   tools?: string[];
   can_spawn?: string[];
