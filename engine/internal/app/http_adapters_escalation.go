@@ -4,17 +4,18 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/capability"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/escalation"
 )
 
-// escalationConfigAdapter bridges GORMCapabilityRepository to escalation.CapabilityReader.
+// escalationConfigAdapter bridges capability.CapabilityReader to escalation.CapabilityReader.
+// Depends on interface (capability.CapabilityReader), not concrete repo (DIP).
 type escalationConfigAdapter struct {
-	repo *config_repo.GORMCapabilityRepository
+	reader capability.CapabilityReader
 }
 
 func (a *escalationConfigAdapter) GetEscalationConfig(ctx context.Context, agentName string) (*escalation.Config, error) {
-	records, err := a.repo.ListEnabledByAgent(ctx, agentName)
+	records, err := a.reader.ListEnabledByAgent(ctx, agentName)
 	if err != nil {
 		return nil, fmt.Errorf("list capabilities for %q: %w", agentName, err)
 	}

@@ -1157,7 +1157,7 @@ func Run(sc ServerConfig) error {
 
 		// WP-2: Wire escalation handler for escalate tool
 		escCapRepo := config_repo.NewGORMCapabilityRepository(pgDB)
-		escHandler := escalation.NewHandler(&escalationConfigAdapter{repo: escCapRepo})
+		escHandler := escalation.NewHandler(&escalationConfigAdapter{reader: &capabilityInjectorAdapter{repo: escCapRepo}})
 		factory.SetEscalation(escHandler)
 		loggerInstance.InfoContext(ctx, "Escalation handler wired into TurnExecutorFactory")
 	}

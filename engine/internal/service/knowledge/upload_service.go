@@ -10,9 +10,19 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pgvector/pgvector-go"
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	infknowledge "github.com/syntheticinc/bytebrew/engine/internal/infrastructure/knowledge"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 )
+
+// tenantFromCtx extracts tenant_id from context, falling back to "default" for CE mode.
+func tenantFromCtx(ctx context.Context) string {
+	tid := domain.TenantIDFromContext(ctx)
+	if tid == "" {
+		return "default"
+	}
+	return tid
+}
 
 // DocumentRepository persists knowledge documents and chunks.
 type DocumentRepository interface {
@@ -216,12 +226,18 @@ func (s *UploadService) ListFiles(ctx context.Context, agentName string) ([]File
 }
 
 // DeleteFile removes a file, its chunks, and the physical file.
+// Verifies ownership (agent_name + tenant_id) before deletion to prevent cross-tenant access.
 func (s *UploadService) DeleteFile(ctx context.Context, agentName, fileID string) error {
 	doc, err := s.repo.GetDocumentByID(ctx, fileID)
 	if err != nil {
 		return fmt.Errorf("get document: %w", err)
 	}
-	if doc == nil {
+	if doc == nil || doc.AgentName != agentName {
+		return fmt.Errorf("file not found")
+	}
+	// SCC-02: verify tenant ownership
+	tenantID := tenantFromCtx(ctx)
+	if doc.TenantID != tenantID {
 		return fmt.Errorf("file not found")
 	}
 
@@ -235,7 +251,7 @@ func (s *UploadService) DeleteFile(ctx context.Context, agentName, fileID string
 		_ = os.Remove(doc.FilePath)
 	}
 
-	// Delete document record — use raw delete by ID
+	// Delete document record
 	if err := s.repo.DeleteDocument(ctx, fileID); err != nil {
 		return fmt.Errorf("delete document: %w", err)
 	}
@@ -244,9 +260,15 @@ func (s *UploadService) DeleteFile(ctx context.Context, agentName, fileID string
 }
 
 // ReindexFile re-indexes a single file by deleting old chunks and re-chunking.
+// Verifies ownership before re-indexing.
 func (s *UploadService) ReindexFile(ctx context.Context, agentName, fileID string) error {
 	doc, err := s.repo.GetDocumentByID(ctx, fileID)
-	if err != nil || doc == nil {
+	if err != nil || doc == nil || doc.AgentName != agentName {
+		return fmt.Errorf("file not found")
+	}
+	// SCC-02: verify tenant ownership
+	tenantID := tenantFromCtx(ctx)
+	if doc.TenantID != tenantID {
 		return fmt.Errorf("file not found")
 	}
 

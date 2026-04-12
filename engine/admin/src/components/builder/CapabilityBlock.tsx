@@ -162,6 +162,7 @@ function KnowledgeConfig({ cap, onChange, agentName }: PanelProps) {
   const [dragOver, setDragOver] = useState(false);
   const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeFile[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Load files from API on mount
   useEffect(() => {
@@ -172,11 +173,12 @@ function KnowledgeConfig({ cap, onChange, agentName }: PanelProps) {
   const uploadFile = useCallback(async (file: File) => {
     if (!agentName) return;
     setUploading(true);
+    setUploadError(null);
     try {
       const uploaded = await api.uploadKnowledgeFile(agentName, file);
       setKnowledgeFiles(prev => [...prev, uploaded]);
     } catch (err) {
-      console.error('Upload failed:', err);
+      setUploadError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploading(false);
     }
@@ -255,7 +257,7 @@ function KnowledgeConfig({ cap, onChange, agentName }: PanelProps) {
         </div>
       )}
 
-      <input ref={fileInputRef} type="file" multiple accept=".pdf,.docx,.doc,.txt,.md,.csv" className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />
+      <input ref={fileInputRef} type="file" multiple accept=".txt,.md,.csv" className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />
       <div
         className={`border-2 border-dashed rounded-card px-4 py-8 text-center cursor-pointer transition-colors ${
           dragOver ? 'border-brand-accent bg-brand-accent/5 text-brand-accent' : 'border-brand-shade3/30 text-brand-shade3 hover:border-brand-shade3/50'
@@ -267,7 +269,8 @@ function KnowledgeConfig({ cap, onChange, agentName }: PanelProps) {
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-2 opacity-50"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
         <p className="text-xs">{uploading ? 'Uploading...' : dragOver ? 'Drop files to upload' : 'Drag & drop files here or click to browse'}</p>
-        <p className="text-[10px] text-brand-shade3/60 mt-1">Supported: PDF, DOCX, DOC, TXT, MD, CSV</p>
+        <p className="text-[10px] text-brand-shade3/60 mt-1">Supported: TXT, MD, CSV</p>
+        {uploadError && <p className="text-[10px] text-red-400 mt-1">{uploadError}</p>}
       </div>
 
       {sources.length > 0 && (
