@@ -1,6 +1,0 @@
-User-agent: *
-Disallow: /
-
-# TODO: Remove Disallow and uncomment Allow when ready for indexing
-# Allow: /
-# Sitemap: https://bytebrew.ai/sitemap.xml

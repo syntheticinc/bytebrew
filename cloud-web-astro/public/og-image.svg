@@ -1,9 +1,0 @@
-<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1200" height="630" fill="#111111"/>
-  <text x="100" y="200" font-family="monospace" font-size="64" font-weight="bold" fill="#F7F8F1">ByteBrew Engine</text>
-  <text x="100" y="290" font-family="monospace" font-size="32" fill="#DFD8D0">Self-hosted AI Agent Runtime</text>
-  <line x1="100" y1="330" x2="400" y2="330" stroke="#D7513E" stroke-width="3"/>
-  <text x="100" y="400" font-family="monospace" font-size="24" fill="#87867F">Multi-agent orchestration · Tool calling · SSE streaming</text>
-  <text x="100" y="440" font-family="monospace" font-size="24" fill="#87867F">Any LLM · Self-hosted · Free forever</text>
-  <text x="100" y="540" font-family="monospace" font-size="20" fill="#D7513E">bytebrew.ai</text>
-</svg>
