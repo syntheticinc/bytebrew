@@ -9,26 +9,28 @@ import (
 	einotool "github.com/cloudwego/eino/components/tool"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/repository"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	agentservice "github.com/syntheticinc/bytebrew/engine/internal/service/agent"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/engine"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/task"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/turn_executor"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/work"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	"gorm.io/gorm"
 )
 
 // storageComponents holds all storage-related components created during initialization.
 type storageComponents struct {
-	WorkManager      *work.Manager
+	TaskManager      *EngineTaskManagerAdapter // unified task manager (EngineTask-based)
+	TaskRepo         *config_repo.GORMTaskRepository
 	SessionStorage   *persistence.SessionStorage
 	AgentRunStorage  agentservice.AgentRunStorage
 	ContextReminders []turn_executor.ContextReminderProvider
 }
 
-// createWorkStorage creates work manager, agent pool, session storage from pgDB.
+// createWorkStorage creates task manager, agent pool, session storage from pgDB.
 func createWorkStorage(db *gorm.DB) *storageComponents {
 	if db == nil {
 		slog.Error("no database connection, multi-agent features disabled")
@@ -42,10 +44,10 @@ func initWorkComponents(db *gorm.DB) *storageComponents {
 	ctx := context.Background()
 	result := &storageComponents{}
 
-	taskStorage := persistence.NewTaskStorage(db)
-	subtaskStorage := persistence.NewSubtaskStorage(db)
+	taskRepo := config_repo.NewGORMTaskRepository(db)
 	agentRunStorage := persistence.NewAgentRunStorage(db)
 	result.AgentRunStorage = agentRunStorage
+	result.TaskRepo = taskRepo
 
 	sessionStorage := persistence.NewSessionStorage(db)
 	result.SessionStorage = sessionStorage
@@ -65,12 +67,13 @@ func initWorkComponents(db *gorm.DB) *storageComponents {
 		slog.Info("suspended active sessions from previous crash", "count", suspended)
 	}
 
-	result.WorkManager = work.New(taskStorage, subtaskStorage)
-	slog.Info("work manager initialized")
+	// Unified task manager (replaces old work.Manager, uses EngineTask).
+	result.TaskManager = NewEngineTaskManagerAdapter(taskRepo)
+	slog.Info("task manager initialized (EngineTask-based)")
 
-	// Create context reminder for work status
-	workReminder := work.NewWorkContextReminder(result.WorkManager)
-	result.ContextReminders = append(result.ContextReminders, workReminder)
+	// Context reminder for agent — shows active EngineTasks every turn (survives context compression).
+	taskReminder := task.NewTaskReminderProviderContext(result.TaskManager)
+	result.ContextReminders = append(result.ContextReminders, taskReminder)
 
 	return result
 }
@@ -89,7 +92,7 @@ type engineComponents struct {
 func createEngine(
 	cfg config.Config,
 	db *gorm.DB,
-	workManager *work.Manager,
+	taskManager *EngineTaskManagerAdapter,
 	agentPoolAdapter *agentservice.AgentPoolAdapter,
 	webSearchTool, webFetchTool einotool.InvokableTool,
 ) (*engineComponents, error) {
@@ -116,24 +119,25 @@ func createEngine(
 	}
 	slog.Info("flow manager initialized", "flows_path", flowsPath)
 
-	// Create ToolDepsProvider
+	// Create ToolDepsProvider with unified task manager.
 	toolDepsProvider := tools.NewDefaultToolDepsProvider(
 		nil, // proxy -- set dynamically per-session
-		workManager,
-		workManager,
 		agentPoolAdapter,
 		webSearchTool,
 		webFetchTool,
 	)
+	if taskManager != nil {
+		toolDepsProvider.SetEngineTaskManager(taskManager)
+	}
 
 	// Create AgentToolResolver (factory-based tool resolution)
 	builtinStore := tools.NewBuiltinToolStore()
 	tools.RegisterAllBuiltins(builtinStore)
 
-	// Register spawn_code_agent separately (requires AgentPool, wired later via wireEngineToPool)
+	// Register spawn_agent separately (requires AgentPool, wired later via wireEngineToPool)
 	if agentPoolAdapter != nil {
-		builtinStore.Register("spawn_code_agent", func(deps tools.ToolDependencies) einotool.InvokableTool {
-			return tools.NewSpawnCodeAgentTool(deps.AgentPool, deps.SessionID, deps.ProjectKey)
+		builtinStore.Register("spawn_agent", func(deps tools.ToolDependencies) einotool.InvokableTool {
+			return tools.NewSpawnAgentTool(deps.AgentPool, deps.SessionID, deps.ProjectKey)
 		})
 	}
 
@@ -185,8 +189,6 @@ func NewRuntimeDB(db *gorm.DB) *gorm.DB {
 func MigrateRuntimeTables(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&models.RuntimeSessionModel{},
-		&models.RuntimeTaskModel{},
-		&models.RuntimeSubtaskModel{},
 		&models.RuntimeAgentRunModel{},
 		&models.RuntimeDeviceModel{},
 		&models.RuntimeConfigKV{},

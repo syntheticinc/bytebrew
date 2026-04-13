@@ -246,7 +246,7 @@ type workCheckerAdapter struct {
 }
 
 func (a *workCheckerAdapter) HasActiveWork(ctx context.Context) bool {
-	tasks, err := a.manager.GetTasks(ctx, a.sessionID)
+	tasks, err := a.manager.ListTasksDomain(ctx, a.sessionID)
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to check active work", "error", err)
 		return true // fail-safe
@@ -267,13 +267,13 @@ func (a *workCheckerAdapter) IsWaitingForUser(_ context.Context) bool {
 }
 
 func (a *workCheckerAdapter) ActiveWorkSummary(ctx context.Context) string {
-	tasks, err := a.manager.GetTasks(ctx, a.sessionID)
+	tasks, err := a.manager.ListTasksDomain(ctx, a.sessionID)
 	if err != nil {
 		return fmt.Sprintf("error: %v", err)
 	}
 	var parts []string
 	for _, t := range tasks {
-		if t != nil && !t.IsTerminal() {
+		if !t.IsTerminal() {
 			parts = append(parts, fmt.Sprintf("[%s] %q (%s)", t.ID, t.Title, t.Status))
 		}
 	}

@@ -9,11 +9,9 @@ import (
 	"gorm.io/gorm"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/task"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 )
@@ -578,60 +576,6 @@ func (a *toolMetadataHTTPAdapter) GetAllToolMetadata() []deliveryhttp.ToolMetada
 		}
 	}
 	return result
-}
-
-// triggerRow holds a trigger record loaded from DB.
-type triggerRow struct {
-	ID          string
-	Type        string
-	Schedule    string
-	Title       string
-	Description string
-	AgentName   string
-}
-
-// loadTriggersFromDB loads trigger definitions from PostgreSQL.
-func loadTriggersFromDB(db *gorm.DB) ([]triggerRow, error) {
-	if db == nil {
-		return nil, nil
-	}
-	var rows []models.TriggerModel
-	if err := db.Preload("Agent").Find(&rows).Error; err != nil {
-		return nil, err
-	}
-	triggers := make([]triggerRow, 0, len(rows))
-	for _, r := range rows {
-		triggers = append(triggers, triggerRow{
-			ID:          r.ID,
-			Type:        r.Type,
-			Schedule:    r.Schedule,
-			Title:       r.Title,
-			Description: r.Description,
-			AgentName:   r.Agent.Name,
-		})
-	}
-	return triggers, nil
-}
-
-// cronTaskCreatorHTTPAdapter bridges GORMTaskRepository to task.TaskCreator for CronScheduler.
-type cronTaskCreatorHTTPAdapter struct {
-	repo *config_repo.GORMTaskRepository
-}
-
-func (a *cronTaskCreatorHTTPAdapter) CreateFromTrigger(ctx context.Context, params task.TriggerTaskParams) (string, error) {
-	t := &domain.EngineTask{
-		Title:       params.Title,
-		Description: params.Description,
-		AgentName:   params.AgentName,
-		Source:      domain.TaskSource(params.Source),
-		SourceID:    params.SourceID,
-		Status:      domain.EngineTaskStatusPending,
-		Mode:        domain.TaskModeBackground,
-	}
-	if err := a.repo.Create(ctx, t); err != nil {
-		return "", err
-	}
-	return t.ID, nil
 }
 
 // convertRateLimitRules converts config rate limit rules to delivery HTTP types.

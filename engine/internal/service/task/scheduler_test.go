@@ -2,31 +2,29 @@ package task
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type mockTaskCreator struct {
-	mu     sync.Mutex
-	calls  []TriggerTaskParams
-	nextID int
-	err    error
+	mu    sync.Mutex
+	calls []TriggerTaskParams
+	err   error
 }
 
-func (m *mockTaskCreator) CreateFromTrigger(_ context.Context, params TriggerTaskParams) (string, error) {
+func (m *mockTaskCreator) CreateFromTrigger(_ context.Context, params TriggerTaskParams) (uuid.UUID, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.err != nil {
-		return "", m.err
+		return uuid.Nil, m.err
 	}
-	m.nextID++
 	m.calls = append(m.calls, params)
-	return fmt.Sprintf("%d", m.nextID), nil
+	return uuid.New(), nil
 }
 
 func (m *mockTaskCreator) getCalls() []TriggerTaskParams {

@@ -44,6 +44,6 @@ func TestReviewerSpawnAfterCoder(t *testing.T) {
 	}
 
 	// After coder completes significant changes, supervisor should spawn reviewer
-	AssertHasToolCall(t, result, "spawn_code_agent")
+	AssertHasToolCall(t, result, "spawn_agent")
 	AssertHasReviewerSpawn(t, result)
 }

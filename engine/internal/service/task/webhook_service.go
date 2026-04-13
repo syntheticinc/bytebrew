@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"github.com/google/uuid"
 )
 
 // TriggerProvider looks up webhook triggers by path.
@@ -32,10 +34,10 @@ func NewWebhookService(triggers TriggerProvider, creator TaskCreator) *WebhookSe
 
 // HandleWebhook matches a webhook path to a trigger and creates a task.
 // Fields from the request body (title, description) override trigger defaults.
-func (s *WebhookService) HandleWebhook(ctx context.Context, path string, body []byte) (string, error) {
+func (s *WebhookService) HandleWebhook(ctx context.Context, path string, body []byte) (uuid.UUID, error) {
 	trigger, err := s.triggers.FindWebhookTrigger(ctx, path)
 	if err != nil {
-		return "", fmt.Errorf("find webhook trigger for path %q: %w", path, err)
+		return uuid.Nil, fmt.Errorf("find webhook trigger for path %q: %w", path, err)
 	}
 
 	title := trigger.Title
@@ -64,7 +66,7 @@ func (s *WebhookService) HandleWebhook(ctx context.Context, path string, body []
 		SourceID:    path,
 	})
 	if err != nil {
-		return "", fmt.Errorf("create task from webhook: %w", err)
+		return uuid.Nil, fmt.Errorf("create task from webhook: %w", err)
 	}
 	return taskID, nil
 }

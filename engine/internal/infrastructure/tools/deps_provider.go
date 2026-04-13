@@ -7,37 +7,31 @@ import (
 
 // DefaultToolDepsProvider creates ToolDependencies for a given session
 type DefaultToolDepsProvider struct {
-	proxy              ClientOperationsProxy
-	taskManager        TaskManager
-	subtaskManager     SubtaskManager
-	agentPool          AgentPoolForTool
-	engineTaskManager  EngineTaskManager
-	webSearchTool      tool.InvokableTool
-	webFetchTool       tool.InvokableTool
-	projectRoot        string
-	chunkStore         *indexing.ChunkStore
-	embedder           *indexing.EmbeddingsClient
+	proxy             ClientOperationsProxy
+	agentPool         AgentPoolForTool
+	engineTaskManager EngineTaskManager
+	webSearchTool     tool.InvokableTool
+	webFetchTool      tool.InvokableTool
+	projectRoot       string
+	chunkStore        *indexing.ChunkStore
+	embedder          *indexing.EmbeddingsClient
 }
 
-// NewDefaultToolDepsProvider creates a new provider
+// NewDefaultToolDepsProvider creates a new provider.
 func NewDefaultToolDepsProvider(
 	proxy ClientOperationsProxy,
-	taskManager TaskManager,
-	subtaskManager SubtaskManager,
 	agentPool AgentPoolForTool,
 	webSearchTool, webFetchTool tool.InvokableTool,
 ) *DefaultToolDepsProvider {
 	return &DefaultToolDepsProvider{
-		proxy:          proxy,
-		taskManager:    taskManager,
-		subtaskManager: subtaskManager,
-		agentPool:      agentPool,
-		webSearchTool:  webSearchTool,
-		webFetchTool:   webFetchTool,
+		proxy:         proxy,
+		agentPool:     agentPool,
+		webSearchTool: webSearchTool,
+		webFetchTool:  webFetchTool,
 	}
 }
 
-// SetEngineTaskManager configures the DB-backed task manager for unified task management.
+// SetEngineTaskManager configures the unified EngineTask-based manager.
 func (p *DefaultToolDepsProvider) SetEngineTaskManager(mgr EngineTaskManager) {
 	p.engineTaskManager = mgr
 }
@@ -56,8 +50,6 @@ func (p *DefaultToolDepsProvider) GetDependencies(sessionID, projectKey string) 
 		ProjectKey:        projectKey,
 		ProjectRoot:       p.projectRoot,
 		Proxy:             p.proxy,
-		TaskManager:       p.taskManager,
-		SubtaskManager:    p.subtaskManager,
 		AgentPool:         p.agentPool,
 		EngineTaskManager: p.engineTaskManager,
 		WebSearchTool:     p.webSearchTool,

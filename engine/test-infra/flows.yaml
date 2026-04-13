@@ -15,7 +15,7 @@ flows:
       - execute_command
       - manage_tasks
       - manage_subtasks
-      - spawn_code_agent
+      - spawn_agent
       - ask_user
       - web_search
       - web_fetch

@@ -125,7 +125,7 @@
           },
           {
             "id": "call_spawn_coder_auth01",
-            "name": "spawn_code_agent",
+            "name": "spawn_agent",
             "index": 2,
             "arguments": "{\"action\": \"spawn\", \"subtask_id\": \"sub_auth_001\"}"
           }
@@ -160,7 +160,7 @@
         "tokens": 130,
         "content": "[SUCCESS] Agent: code-agent-auth-def456, Status: completed, Result: BLOCKED\nReason: Cannot find the IAuthValidator interface referenced in subtask description. The file internal/domain/auth.go does not exist. There is no IAuthValidator interface anywhere in the project.\nAttempted: Searched with grep_search for IAuthValidator across entire project — 0 results. Read internal/domain/ directory — contains only user.go and agent_event.go. Checked all interface definitions in domain package.\nNeed: Either create the IAuthValidator interface first, or change approach to implement JWT validation directly in the interceptor without depending on a non-existent interface.",
         "content_preview": "[SUCCESS] Agent: code-agent-auth-def456, Status: completed, Result: BLOCKED...",
-        "tool_name": "spawn_code_agent",
+        "tool_name": "spawn_agent",
         "tool_call_id": "call_spawn_coder_auth01",
         "tool_calls": []
       },

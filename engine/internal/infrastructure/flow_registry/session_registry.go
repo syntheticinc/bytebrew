@@ -31,6 +31,9 @@ type EventStoreReader interface {
 }
 
 // sessionContext holds metadata for a server-streaming session.
+// Note: schema scope is NOT stored here — tool execution resolves it from
+// AgentSchemaResolver(agent_name) via turn_executor_factory. Duplicating
+// schema on the session would be dead data that nothing reads.
 type sessionContext struct {
 	ProjectRoot string
 	Platform    string

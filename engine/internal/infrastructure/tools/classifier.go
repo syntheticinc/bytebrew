@@ -30,7 +30,7 @@ func NewToolClassifier() *DefaultToolClassifier {
 			"web_fetch":        true,
 			"manage_tasks":     true,
 			"manage_subtasks":  true,
-			"spawn_code_agent": true,
+			"spawn_agent": true,
 		},
 	}
 }

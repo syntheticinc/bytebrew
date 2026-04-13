@@ -550,7 +550,7 @@ func TestV2_ToolTierEnforcement_CloudSandbox(t *testing.T) {
 		}{
 			{"ask_user", domain.ToolTierCore},
 			{"manage_tasks", domain.ToolTierCore},
-			{"spawn_code_agent", domain.ToolTierCore},
+			{"spawn_agent", domain.ToolTierCore},
 			{"memory_recall", domain.ToolTierCapability},
 			{"memory_store", domain.ToolTierCapability},
 			{"knowledge_search", domain.ToolTierCapability},

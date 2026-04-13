@@ -22,7 +22,7 @@ func TestLoadFlowsConfig(t *testing.T) {
     tools:
       - read_file
       - search_code
-      - spawn_code_agent
+      - spawn_agent
     max_steps: 50
     max_context_size: 16000
     lifecycle:
@@ -157,7 +157,7 @@ func TestToDomainFlow_Supervisor(t *testing.T) {
 			"supervisor": {
 				Name:            "Supervisor Agent",
 				SystemPromptRef: "supervisor_prompt",
-				Tools:           []string{"read_file", "spawn_code_agent"},
+				Tools:           []string{"read_file", "spawn_agent"},
 				MaxSteps:        50,
 				MaxContextSize:  16000,
 				Lifecycle: LifecycleConfig{
@@ -183,7 +183,7 @@ func TestToDomainFlow_Supervisor(t *testing.T) {
 	assert.Equal(t, domain.FlowType("supervisor"), flow.Type)
 	assert.Equal(t, "Supervisor Agent", flow.Name)
 	assert.Equal(t, "You are a supervisor agent", flow.SystemPrompt)
-	assert.Equal(t, []string{"read_file", "spawn_code_agent"}, flow.ToolNames)
+	assert.Equal(t, []string{"read_file", "spawn_agent"}, flow.ToolNames)
 	assert.Equal(t, 50, flow.MaxSteps)
 	assert.Equal(t, 16000, flow.MaxContextSize)
 	assert.Equal(t, []string{"final_answer", "ask_user"}, flow.Lifecycle.SuspendOn)

@@ -190,15 +190,21 @@ export interface TaskResponse {
   agent_name: string;
   status: string;
   source: string;
+  priority: number;
+  parent_task_id?: string | null;
   created_at: string;
 }
 
 export interface TaskDetailResponse extends TaskResponse {
   description?: string;
+  acceptance_criteria?: string[];
+  blocked_by?: string[];
+  assigned_agent_id?: string;
   mode: string;
   result?: string;
   error?: string;
   started_at?: string;
+  approved_at?: string;
   completed_at?: string;
 }
 
@@ -208,6 +214,19 @@ export interface PaginatedTaskResponse {
   page: number;
   per_page: number;
   total_pages: number;
+}
+
+export interface CreateTaskRequest {
+  title: string;
+  description?: string;
+  agent_name: string;
+  mode?: 'interactive' | 'background';
+  user_id?: string;
+  priority?: number; // 0=normal, 1=high, 2=critical
+  acceptance_criteria?: string[];
+  blocked_by?: string[];
+  parent_task_id?: string;
+  require_approval?: boolean;
 }
 
 // ============================================================================

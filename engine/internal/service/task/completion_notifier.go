@@ -12,26 +12,43 @@ import (
 
 // CompletionPayload is the JSON body sent to the on-complete webhook.
 type CompletionPayload struct {
-	TaskID     uint   `json:"task_id"`
+	TaskID     string `json:"task_id"`
 	Status     string `json:"status"`
 	Result     string `json:"result"`
 	DurationMs int64  `json:"duration_ms"`
-	TriggerID  uint   `json:"trigger_id"`
+	TriggerID  string `json:"trigger_id"`
 	AgentName  string `json:"agent_name"`
 	Timestamp  string `json:"timestamp"`
 }
 
 // CompletionNotifier sends task results to configured webhook URLs.
 type CompletionNotifier struct {
-	httpClient *http.Client
-	maxRetries int
+	httpClient  *http.Client
+	maxRetries  int
+	backoffBase time.Duration // base for exponential backoff; defaults to 1s
 }
 
 // NewCompletionNotifier creates a CompletionNotifier with sensible defaults.
 func NewCompletionNotifier() *CompletionNotifier {
 	return &CompletionNotifier{
-		httpClient: &http.Client{Timeout: 30 * time.Second},
-		maxRetries: 3,
+		httpClient:  &http.Client{Timeout: 30 * time.Second},
+		maxRetries:  3,
+		backoffBase: time.Second,
+	}
+}
+
+// NewCompletionNotifierWithOptions creates a CompletionNotifier with explicit
+// HTTP client timeout, retry count, and backoff base duration. Intended for
+// callers that need to tune delivery behaviour (e.g. high-throughput or test
+// environments). Pass zero for backoffBase to use the default (1s).
+func NewCompletionNotifierWithOptions(clientTimeout time.Duration, maxRetries int, backoffBase time.Duration) *CompletionNotifier {
+	if backoffBase == 0 {
+		backoffBase = time.Second
+	}
+	return &CompletionNotifier{
+		httpClient:  &http.Client{Timeout: clientTimeout},
+		maxRetries:  maxRetries,
+		backoffBase: backoffBase,
 	}
 }
 
@@ -47,7 +64,7 @@ func (n *CompletionNotifier) Notify(ctx context.Context, webhookURL string, head
 	var lastErr error
 	for attempt := 0; attempt < n.maxRetries; attempt++ {
 		if attempt > 0 {
-			backoff := time.Duration(1<<uint(attempt-1)) * time.Second
+			backoff := time.Duration(1<<uint(attempt-1)) * n.backoffBase
 			select {
 			case <-ctx.Done():
 				return fmt.Errorf("context cancelled during retry: %w", ctx.Err())

@@ -161,7 +161,7 @@ func TestGetContentRiskLevel_AllTools(t *testing.T) {
 		// None
 		{"manage_tasks", RiskNone},
 		{"manage_subtasks", RiskNone},
-		{"spawn_code_agent", RiskNone},
+		{"spawn_agent", RiskNone},
 		{"write_file", RiskNone},
 		{"edit_file", RiskNone},
 		{"ask_user", RiskNone},

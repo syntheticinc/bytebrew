@@ -196,8 +196,6 @@ func TestEngineTurnExecutorFactory_CreateForSession(t *testing.T) {
 		toolResolver,
 		newTestModelSelector(chatModel),
 		agentConfig,
-		nil, // taskManager (not needed for this test)
-		nil, // subtaskManager
 		nil, // agentPool
 		nil, // webSearchTool
 		nil, // webFetchTool
@@ -239,11 +237,9 @@ func TestEngineTurnExecutorFactory_CreateForSession_WithProxy(t *testing.T) {
 		toolResolver,
 		newTestModelSelector(chatModel),
 		agentConfig,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
+		nil, // agentPool
+		nil, // webSearchTool
+		nil, // webFetchTool
 		nil, // contextRemindersGetter
 		nil, // modelCache
 		nil, // agentModelResolver
@@ -297,11 +293,9 @@ func TestEngineTurnExecutorFactory_CreateForSession_NilProxy(t *testing.T) {
 		toolResolver,
 		newTestModelSelector(chatModel),
 		agentConfig,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
+		nil, // agentPool
+		nil, // webSearchTool
+		nil, // webFetchTool
 		nil, // contextRemindersGetter
 		nil, // modelCache
 		nil, // agentModelResolver
@@ -342,9 +336,7 @@ func TestEngineTurnExecutorFactory_CreateForSession_WithWebTools(t *testing.T) {
 		toolResolver,
 		newTestModelSelector(chatModel),
 		agentConfig,
-		nil,
-		nil,
-		nil,
+		nil, // agentPool
 		mockWebSearch,
 		mockWebFetch,
 		nil, // contextRemindersGetter
@@ -423,8 +415,6 @@ func TestEngineTurnExecutorFactory_CreateForSession_WithContextReminders(t *test
 		toolResolver,
 		newTestModelSelector(chatModel),
 		agentConfig,
-		nil, // taskManager
-		nil, // subtaskManager
 		nil, // agentPool
 		nil, // webSearchTool
 		nil, // webFetchTool
@@ -466,7 +456,7 @@ func TestEngineTurnExecutorFactory_CreateForSession_NilContextRemindersGetter(t 
 		toolResolver,
 		newTestModelSelector(chatModel),
 		agentConfig,
-		nil, nil, nil, nil, nil,
+		nil, nil, nil,
 		nil, // contextRemindersGetter = nil
 		nil, // modelCache
 		nil, // agentModelResolver

@@ -15,7 +15,7 @@ func TestClassifyToolTier(t *testing.T) {
 		{"manage_tasks", ToolTierCore},
 		{"manage_subtasks", ToolTierCore},
 		{"wait", ToolTierCore},
-		{"spawn_code_agent", ToolTierCore},
+		{"spawn_agent", ToolTierCore},
 		{"spawn_researcher", ToolTierCore},
 
 		// Tier 2 — Capability

@@ -110,12 +110,16 @@ func (a *RunningAgent) signalCompletion() {
 	})
 }
 
-// SubtaskManager defines operations needed by AgentPool for subtask management (consumer-side)
+// SubtaskManager defines operations needed by AgentPool for task management (consumer-side).
+// Operates on EngineTask (subtasks are EngineTask with ParentTaskID set).
+//
+// Task IDs are uuid.UUID — the Spawn/Restart paths parse the agent-supplied string
+// at the JSON boundary and propagate uuid.UUID through the rest of the pool.
 type SubtaskManager interface {
-	AssignSubtaskToAgent(ctx context.Context, subtaskID, agentID string) error
-	CompleteSubtask(ctx context.Context, subtaskID, result string) error
-	FailSubtask(ctx context.Context, subtaskID, reason string) error
-	GetSubtask(ctx context.Context, subtaskID string) (*domain.Subtask, error)
+	AssignTaskToAgent(ctx context.Context, taskID uuid.UUID, agentID string) error
+	CompleteTask(ctx context.Context, taskID uuid.UUID, result string) error
+	FailTask(ctx context.Context, taskID uuid.UUID, reason string) error
+	GetTask(ctx context.Context, taskID uuid.UUID) (*domain.EngineTask, error)
 }
 
 // AgentEngine executes agents with persistence (consumer-side interface for Engine integration)
@@ -309,21 +313,29 @@ func (p *AgentPool) SetEventBus(bus *orchestrator.SessionEventBus) {
 // Spawn starts a Code Agent in a goroutine for the given subtask.
 // Returns agentID immediately (async).
 // blocking: if true, supervisor will block on WaitForAllSessionAgents until this agent completes
+//
+// subtaskID is received from the agent (JSON string); parsed into uuid.UUID at this
+// boundary and propagated through the subtask manager.
 func (p *AgentPool) Spawn(ctx context.Context, sessionID, projectKey, subtaskID string, blocking bool) (string, error) {
 	agentID := "code-agent-" + uuid.New().String()[:8]
 
-	// Get subtask details
-	subtask, err := p.subtaskManager.GetSubtask(ctx, subtaskID)
+	subtaskUUID, err := uuid.Parse(subtaskID)
 	if err != nil {
-		return "", fmt.Errorf("get subtask: %w", err)
-	}
-	if subtask == nil {
-		return "", fmt.Errorf("subtask not found: %s", subtaskID)
+		return "", fmt.Errorf("invalid subtask id %q: %w", subtaskID, err)
 	}
 
-	// Assign subtask to agent
-	if err := p.subtaskManager.AssignSubtaskToAgent(ctx, subtaskID, agentID); err != nil {
-		return "", fmt.Errorf("assign subtask: %w", err)
+	// Get task details (subtask is EngineTask with ParentTaskID set)
+	subtask, err := p.subtaskManager.GetTask(ctx, subtaskUUID)
+	if err != nil {
+		return "", fmt.Errorf("get task: %w", err)
+	}
+	if subtask == nil {
+		return "", fmt.Errorf("task not found: %s", subtaskID)
+	}
+
+	// Assign task to agent (also transitions to in_progress)
+	if err := p.subtaskManager.AssignTaskToAgent(ctx, subtaskUUID, agentID); err != nil {
+		return "", fmt.Errorf("assign task: %w", err)
 	}
 
 	// Create agent context from session-scoped context (NOT from supervisor's turn context).
@@ -536,18 +548,25 @@ func (p *AgentPool) RestartAgent(ctx context.Context, agentID string, blocking b
 	}
 
 	// coder: restart via Spawn (existing logic)
-	subtask, err := p.subtaskManager.GetSubtask(ctx, subtaskID)
+	subtaskUUID, err := uuid.Parse(subtaskID)
 	if err != nil {
-		return "", fmt.Errorf("get subtask for restart: %w", err)
+		return "", fmt.Errorf("invalid subtask id %q: %w", subtaskID, err)
+	}
+	subtask, err := p.subtaskManager.GetTask(ctx, subtaskUUID)
+	if err != nil {
+		return "", fmt.Errorf("get task for restart: %w", err)
 	}
 	if subtask == nil {
-		return "", fmt.Errorf("subtask not found for restart: %s", subtaskID)
+		return "", fmt.Errorf("task not found for restart: %s", subtaskID)
 	}
 
+	// Use project key from running agent record (EngineTask has no Context map).
 	projectKey := ""
-	if pk, ok := subtask.Context["project_key"]; ok {
-		projectKey = pk
+	p.mu.RLock()
+	if a, ok := p.agents[agentID]; ok {
+		projectKey = a.ProjectKey
 	}
+	p.mu.RUnlock()
 
 	return p.Spawn(ctx, sessionID, projectKey, subtaskID, blocking)
 }

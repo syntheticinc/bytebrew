@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -24,7 +25,12 @@ func (m *mockTaskLister) GetBySession(_ context.Context, sessionID string) ([]do
 }
 
 func TestTaskReminderProvider_GetReminder(t *testing.T) {
-	parentID := "1"
+	// Stable UUIDs for predictable assertions.
+	deployID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	buildID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	taskAID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	taskBID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+	taskCID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
 
 	tests := []struct {
 		name      string
@@ -51,12 +57,12 @@ func TestTaskReminderProvider_GetReminder(t *testing.T) {
 			sessionID: "sess-1",
 			tasks: map[string][]domain.EngineTask{
 				"sess-1": {
-					{ID: "1", Title: "Deploy", Status: domain.EngineTaskStatusInProgress},
+					{ID: deployID, Title: "Deploy", Status: domain.EngineTaskStatusInProgress},
 				},
 			},
 			contains: []string{
 				"## Current Tasks",
-				`[in_progress] Task 1: "Deploy"`,
+				fmt.Sprintf(`[in_progress] Task %s: "Deploy"`, deployID),
 				"Progress: 0/1 top-level tasks completed.",
 			},
 		},
@@ -65,11 +71,11 @@ func TestTaskReminderProvider_GetReminder(t *testing.T) {
 			sessionID: "sess-1",
 			tasks: map[string][]domain.EngineTask{
 				"sess-1": {
-					{ID: "1", Title: "Deploy", Status: domain.EngineTaskStatusCompleted},
+					{ID: deployID, Title: "Deploy", Status: domain.EngineTaskStatusCompleted},
 				},
 			},
 			contains: []string{
-				`[completed] Task 1: "Deploy"`,
+				fmt.Sprintf(`[completed] Task %s: "Deploy"`, deployID),
 				"Progress: 1/1 top-level tasks completed.",
 			},
 		},
@@ -78,13 +84,13 @@ func TestTaskReminderProvider_GetReminder(t *testing.T) {
 			sessionID: "sess-1",
 			tasks: map[string][]domain.EngineTask{
 				"sess-1": {
-					{ID: "1", Title: "Deploy", Status: domain.EngineTaskStatusInProgress},
-					{ID: "2", Title: "Build", Status: domain.EngineTaskStatusPending, ParentTaskID: &parentID},
+					{ID: deployID, Title: "Deploy", Status: domain.EngineTaskStatusInProgress},
+					{ID: buildID, Title: "Build", Status: domain.EngineTaskStatusPending, ParentTaskID: &deployID},
 				},
 			},
 			contains: []string{
-				`[in_progress] Task 1: "Deploy"`,
-				`[pending] Task 2: "Build" (sub-task of 1)`,
+				fmt.Sprintf(`[in_progress] Task %s: "Deploy"`, deployID),
+				fmt.Sprintf(`[pending] Task %s: "Build" (sub-task of %s)`, buildID, deployID),
 				"Progress: 0/1 top-level tasks completed.",
 			},
 		},
@@ -93,9 +99,9 @@ func TestTaskReminderProvider_GetReminder(t *testing.T) {
 			sessionID: "sess-1",
 			tasks: map[string][]domain.EngineTask{
 				"sess-1": {
-					{ID: "1", Title: "Task A", Status: domain.EngineTaskStatusCompleted},
-					{ID: "2", Title: "Task B", Status: domain.EngineTaskStatusInProgress},
-					{ID: "3", Title: "Task C", Status: domain.EngineTaskStatusPending},
+					{ID: taskAID, Title: "Task A", Status: domain.EngineTaskStatusCompleted},
+					{ID: taskBID, Title: "Task B", Status: domain.EngineTaskStatusInProgress},
+					{ID: taskCID, Title: "Task C", Status: domain.EngineTaskStatusPending},
 				},
 			},
 			contains: []string{
@@ -107,7 +113,7 @@ func TestTaskReminderProvider_GetReminder(t *testing.T) {
 			sessionID: "sess-other",
 			tasks: map[string][]domain.EngineTask{
 				"sess-1": {
-					{ID: "1", Title: "Deploy", Status: domain.EngineTaskStatusPending},
+					{ID: deployID, Title: "Deploy", Status: domain.EngineTaskStatusPending},
 				},
 			},
 			wantEmpty: true,

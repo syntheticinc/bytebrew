@@ -113,15 +113,15 @@ func (p *AgentPool) runAgentWithEngine(
 	return result.Answer, nil
 }
 
-// runCodeAgentWithEngine executes a coder agent for a specific subtask.
+// runCodeAgentWithEngine executes a coder agent for a specific subtask (EngineTask with ParentTaskID).
 // Delegates to the generic runAgentWithEngine with coder-specific input.
 func (p *AgentPool) runCodeAgentWithEngine(
 	ctx context.Context,
 	sessionID, projectKey, agentID string,
-	subtask *domain.Subtask,
+	subtask *domain.EngineTask,
 ) (string, error) {
 	input := buildCodeAgentInput(subtask)
-	return p.runAgentWithEngine(ctx, sessionID, projectKey, agentID, domain.FlowType("coder"), subtask.ID, input)
+	return p.runAgentWithEngine(ctx, sessionID, projectKey, agentID, domain.FlowType("coder"), subtask.ID.String(), input)
 }
 
 // resolveModel returns the LLM client and model name for the given agent.
@@ -149,10 +149,13 @@ func (p *AgentPool) resolveModel(ctx context.Context, agentName string) (model.T
 	return p.modelSelector.Select(flowType), p.modelSelector.ModelName(flowType)
 }
 
-func buildCodeAgentInput(subtask *domain.Subtask) string {
+func buildCodeAgentInput(subtask *domain.EngineTask) string {
 	input := fmt.Sprintf("Subtask: %s\n\nDescription: %s", subtask.Title, subtask.Description)
-	if len(subtask.FilesInvolved) > 0 {
-		input += fmt.Sprintf("\n\nRelevant files: %v", subtask.FilesInvolved)
+	if len(subtask.AcceptanceCriteria) > 0 {
+		input += "\n\nAcceptance criteria:"
+		for _, c := range subtask.AcceptanceCriteria {
+			input += fmt.Sprintf("\n- %s", c)
+		}
 	}
 	return input
 }

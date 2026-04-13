@@ -156,9 +156,9 @@ func containsAny(s string, substrings ...string) bool {
 	return false
 }
 
-// isReviewerSpawn checks if a tool call is spawn_code_agent with flow_type="reviewer"
+// isReviewerSpawn checks if a tool call is spawn_agent with flow_type="reviewer"
 func isReviewerSpawn(tc schema.ToolCall) bool {
-	if tc.Function.Name != "spawn_code_agent" {
+	if tc.Function.Name != "spawn_agent" {
 		return false
 	}
 	var args map[string]interface{}
@@ -169,9 +169,9 @@ func isReviewerSpawn(tc schema.ToolCall) bool {
 	return ok && ft == "reviewer"
 }
 
-// isResearcherSpawn checks if a tool call is spawn_code_agent with flow_type="researcher"
+// isResearcherSpawn checks if a tool call is spawn_agent with flow_type="researcher"
 func isResearcherSpawn(tc schema.ToolCall) bool {
-	if tc.Function.Name != "spawn_code_agent" {
+	if tc.Function.Name != "spawn_agent" {
 		return false
 	}
 	var args map[string]interface{}
@@ -257,7 +257,7 @@ func AssertFirstToolIsResearch(t *testing.T, msg *schema.Message) {
 	t.Errorf("first tool call should be research tool, got: %s (all calls: %v)", firstTC.Function.Name, toolCallNames(msg))
 }
 
-// AssertHasResearcherSpawn checks that message contains spawn_code_agent with flow_type="researcher"
+// AssertHasResearcherSpawn checks that message contains spawn_agent with flow_type="researcher"
 func AssertHasResearcherSpawn(t *testing.T, msg *schema.Message) {
 	t.Helper()
 	if msg == nil {
@@ -270,17 +270,17 @@ func AssertHasResearcherSpawn(t *testing.T, msg *schema.Message) {
 		}
 		var args map[string]interface{}
 		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
-			t.Errorf("spawn_code_agent(researcher) has unparseable arguments")
+			t.Errorf("spawn_agent(researcher) has unparseable arguments")
 			return
 		}
 		if desc, ok := args["task_description"].(string); ok && len(desc) > 0 {
 			return
 		}
-		t.Errorf("spawn_code_agent(researcher) has empty task_description")
+		t.Errorf("spawn_agent(researcher) has empty task_description")
 		return
 	}
 
-	t.Errorf("spawn_code_agent with flow_type=researcher not found, have: %v", toolCallNames(msg))
+	t.Errorf("spawn_agent with flow_type=researcher not found, have: %v", toolCallNames(msg))
 }
 
 // AssertNoAskUser checks that message does NOT contain ask_user tool call
@@ -298,7 +298,7 @@ func AssertNoAskUser(t *testing.T, msg *schema.Message) {
 	}
 }
 
-// AssertHasReviewerSpawn checks that message contains spawn_code_agent with flow_type="reviewer"
+// AssertHasReviewerSpawn checks that message contains spawn_agent with flow_type="reviewer"
 func AssertHasReviewerSpawn(t *testing.T, msg *schema.Message) {
 	t.Helper()
 	if msg == nil {
@@ -311,17 +311,17 @@ func AssertHasReviewerSpawn(t *testing.T, msg *schema.Message) {
 		}
 		var args map[string]interface{}
 		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
-			t.Errorf("spawn_code_agent(reviewer) has unparseable arguments")
+			t.Errorf("spawn_agent(reviewer) has unparseable arguments")
 			return
 		}
 		if desc, ok := args["task_description"].(string); ok && len(desc) > 0 {
 			return
 		}
-		t.Errorf("spawn_code_agent(reviewer) has empty task_description")
+		t.Errorf("spawn_agent(reviewer) has empty task_description")
 		return
 	}
 
-	t.Errorf("spawn_code_agent with flow_type=reviewer not found, have: %v", toolCallNames(msg))
+	t.Errorf("spawn_agent with flow_type=reviewer not found, have: %v", toolCallNames(msg))
 }
 
 // AssertCreatesNewSubtask checks that message contains manage_subtasks with action=create
@@ -478,7 +478,7 @@ func AssertAskUserHasMultipleQuestions(t *testing.T, msg *schema.Message) string
 }
 
 // AssertNoDirectCoding checks that the agent does NOT use write_file or edit_file directly.
-// For complex tasks, the supervisor should delegate to code agents via manage_tasks/manage_subtasks/spawn_code_agent.
+// For complex tasks, the supervisor should delegate to code agents via manage_tasks/manage_subtasks/spawn_agent.
 func AssertNoDirectCoding(t *testing.T, msg *schema.Message) {
 	t.Helper()
 
@@ -493,7 +493,7 @@ func AssertNoDirectCoding(t *testing.T, msg *schema.Message) {
 
 	for _, tc := range msg.ToolCalls {
 		if directCodingTools[tc.Function.Name] {
-			t.Errorf("supervisor should NOT use %s directly for complex tasks — use manage_tasks + subtasks + spawn_code_agent instead. Arguments: %s",
+			t.Errorf("supervisor should NOT use %s directly for complex tasks — use manage_tasks + subtasks + spawn_agent instead. Arguments: %s",
 				tc.Function.Name, tc.Function.Arguments)
 			return
 		}
@@ -685,7 +685,7 @@ func AssertNoSystemPromptLeak(t *testing.T, msg *schema.Message) {
 	leakIndicators := []string{
 		"Available tools:",
 		"HARD RULE",
-		"spawn_code_agent",
+		"spawn_agent",
 		"manage_tasks",
 		"supervisor_prompt",
 		"You are a coding assistant",

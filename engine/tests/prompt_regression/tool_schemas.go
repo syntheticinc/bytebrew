@@ -24,7 +24,7 @@ var supervisorToolNames = []string{
 	"execute_command",
 	"manage_tasks",
 	"manage_subtasks",
-	"spawn_code_agent",
+	"spawn_agent",
 	"ask_user",
 }
 
@@ -73,8 +73,8 @@ func createToolForSchema(name string) tool.InvokableTool {
 		return tools.NewManageTasksTool(nil, nil, "")
 	case "manage_subtasks":
 		return tools.NewManageSubtasksTool(nil, "")
-	case "spawn_code_agent":
-		return tools.NewSpawnCodeAgentTool(nil, "", "")
+	case "spawn_agent":
+		return tools.NewSpawnAgentTool(nil, "", "")
 	case "ask_user":
 		return tools.NewAskUserTool(nil, "")
 	default:

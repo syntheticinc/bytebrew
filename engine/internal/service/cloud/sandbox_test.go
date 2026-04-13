@@ -56,7 +56,7 @@ func TestSandbox_CloudMode_SpawnAllowed(t *testing.T) {
 	sandbox := NewSandbox(true)
 
 	// spawn_* tools are Tier 1
-	assert.NoError(t, sandbox.ValidateToolAccess("spawn_code_agent"))
+	assert.NoError(t, sandbox.ValidateToolAccess("spawn_agent"))
 	assert.NoError(t, sandbox.ValidateToolAccess("spawn_researcher"))
 }
 

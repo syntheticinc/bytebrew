@@ -17,7 +17,7 @@ func TestFlowManager_GetFlow_AllTypes(t *testing.T) {
 			"supervisor": {
 				Name:            "Supervisor Agent",
 				SystemPromptRef: "supervisor_prompt",
-				Tools:           []string{"read_file", "spawn_code_agent"},
+				Tools:           []string{"read_file", "spawn_agent"},
 				MaxSteps:        50,
 				MaxContextSize:  16000,
 				Lifecycle: config.LifecycleConfig{

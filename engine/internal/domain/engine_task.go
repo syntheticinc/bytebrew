@@ -3,6 +3,8 @@ package domain
 import (
 	"fmt"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // TaskSource identifies how an EngineTask was created.
@@ -20,7 +22,9 @@ const (
 type EngineTaskStatus string
 
 const (
-	EngineTaskStatusPending    EngineTaskStatus = "pending"
+	EngineTaskStatusDraft      EngineTaskStatus = "draft"       // Waiting for user approval
+	EngineTaskStatusApproved   EngineTaskStatus = "approved"    // Approved, ready for execution
+	EngineTaskStatusPending    EngineTaskStatus = "pending"     // Auto-approved, waiting in queue
 	EngineTaskStatusInProgress EngineTaskStatus = "in_progress"
 	EngineTaskStatusCompleted  EngineTaskStatus = "completed"
 	EngineTaskStatusFailed     EngineTaskStatus = "failed"
@@ -39,24 +43,37 @@ const (
 
 // EngineTask is the universal unit of work in ByteBrew Engine.
 // Created by agents, cron triggers, webhooks, API, or dashboard.
+// Subtasks are EngineTask with ParentTaskID set (no separate entity).
+//
+// ID types:
+//   - ID, ParentTaskID, BlockedBy — uuid.UUID (DB-generated UUIDs)
+//   - SourceID — string (external identifier: trigger id, cron expr, webhook path, etc.)
+//   - UserID, SessionID — string (opaque identifiers; stored as-is across subsystems)
+//   - AssignedAgentID — string (agent name, not a UUID)
 type EngineTask struct {
-	ID           string
-	Title        string
-	Description  string
-	AgentName    string
-	Source       TaskSource
-	SourceID     string
-	UserID       string
-	SessionID    string
-	ParentTaskID *string
-	Depth        int
-	Status       EngineTaskStatus
-	Mode         TaskMode
-	Result       string
-	Error        string
-	CreatedAt    time.Time
-	StartedAt    *time.Time
-	CompletedAt  *time.Time
+	ID                 uuid.UUID
+	Title              string
+	Description        string
+	AcceptanceCriteria []string
+	AgentName          string
+	Source             TaskSource
+	SourceID           string
+	UserID             string
+	SessionID          string
+	ParentTaskID       *uuid.UUID
+	Depth              int
+	Status             EngineTaskStatus
+	Mode               TaskMode
+	Priority           int // 0 = normal, 1 = high, 2 = critical
+	AssignedAgentID    string
+	BlockedBy          []uuid.UUID // Task IDs that block this task
+	Result             string
+	Error              string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	ApprovedAt         *time.Time
+	StartedAt          *time.Time
+	CompletedAt        *time.Time
 }
 
 // IsTopLevel returns true if the task has no parent.
@@ -72,11 +89,16 @@ func (t *EngineTask) IsTerminal() bool {
 }
 
 // engineTaskValidTransitions defines the state machine for EngineTask status.
+// NeedsInput / Escalated can transition to Failed so that autonomous task paths
+// (cron, webhook, API) can fail a task that asked for user input without a human
+// in the loop instead of leaving it stuck forever.
 var engineTaskValidTransitions = map[EngineTaskStatus][]EngineTaskStatus{
+	EngineTaskStatusDraft:      {EngineTaskStatusApproved, EngineTaskStatusCancelled},
+	EngineTaskStatusApproved:   {EngineTaskStatusInProgress, EngineTaskStatusCancelled},
 	EngineTaskStatusPending:    {EngineTaskStatusInProgress, EngineTaskStatusCancelled},
 	EngineTaskStatusInProgress: {EngineTaskStatusCompleted, EngineTaskStatusFailed, EngineTaskStatusNeedsInput, EngineTaskStatusEscalated, EngineTaskStatusCancelled},
-	EngineTaskStatusNeedsInput: {EngineTaskStatusInProgress, EngineTaskStatusCancelled},
-	EngineTaskStatusEscalated:  {EngineTaskStatusInProgress, EngineTaskStatusCancelled},
+	EngineTaskStatusNeedsInput: {EngineTaskStatusInProgress, EngineTaskStatusFailed, EngineTaskStatusCancelled},
+	EngineTaskStatusEscalated:  {EngineTaskStatusInProgress, EngineTaskStatusFailed, EngineTaskStatusCancelled},
 	EngineTaskStatusCompleted:  {},
 	EngineTaskStatusFailed:     {},
 	EngineTaskStatusCancelled:  {},
@@ -104,8 +126,11 @@ func (t *EngineTask) Transition(target EngineTaskStatus) error {
 
 	now := time.Now()
 	t.Status = target
+	t.UpdatedAt = now
 
 	switch target {
+	case EngineTaskStatusApproved:
+		t.ApprovedAt = &now
 	case EngineTaskStatusInProgress:
 		if t.StartedAt == nil {
 			t.StartedAt = &now
@@ -117,8 +142,79 @@ func (t *EngineTask) Transition(target EngineTaskStatus) error {
 	return nil
 }
 
+// Approve transitions from draft to approved.
+func (t *EngineTask) Approve() error {
+	return t.Transition(EngineTaskStatusApproved)
+}
+
+// Start transitions from approved/pending to in_progress.
+func (t *EngineTask) Start() error {
+	return t.Transition(EngineTaskStatusInProgress)
+}
+
+// Complete transitions from in_progress to completed.
+func (t *EngineTask) Complete(result string) error {
+	if err := t.Transition(EngineTaskStatusCompleted); err != nil {
+		return err
+	}
+	t.Result = result
+	return nil
+}
+
+// Fail transitions from in_progress to failed.
+func (t *EngineTask) Fail(reason string) error {
+	if err := t.Transition(EngineTaskStatusFailed); err != nil {
+		return err
+	}
+	t.Error = reason
+	return nil
+}
+
+// Cancel transitions any non-terminal status to cancelled.
+func (t *EngineTask) Cancel() error {
+	return t.Transition(EngineTaskStatusCancelled)
+}
+
+// SetPriority sets the task priority with validation.
+func (t *EngineTask) SetPriority(priority int) error {
+	if priority < 0 || priority > 2 {
+		return fmt.Errorf("invalid priority: %d (must be 0-2)", priority)
+	}
+	t.Priority = priority
+	t.UpdatedAt = time.Now()
+	return nil
+}
+
+// AssignToAgent assigns this task to an agent.
+func (t *EngineTask) AssignToAgent(agentID string) {
+	t.AssignedAgentID = agentID
+	t.UpdatedAt = time.Now()
+}
+
+// HasBlockers returns true if this task declares any blockers.
+// NOTE: this does NOT check whether the blocker tasks are actually non-terminal —
+// readiness resolution lives in GORMTaskRepository.GetReadySubtasks, where the
+// blocker statuses are joined from the DB. Use this only to detect declarations.
+func (t *EngineTask) HasBlockers() bool {
+	return len(t.BlockedBy) > 0
+}
+
+// Validate validates the EngineTask.
+func (t *EngineTask) Validate() error {
+	if t.Title == "" {
+		return fmt.Errorf("title is required")
+	}
+	if t.Priority < 0 || t.Priority > 2 {
+		return fmt.Errorf("invalid priority: %d (must be 0-2)", t.Priority)
+	}
+	return nil
+}
+
 // Domain errors for EngineTask.
 var (
-	ErrInvalidTransition = fmt.Errorf("invalid status transition")
+	ErrInvalidTransition  = fmt.Errorf("invalid status transition")
 	ErrEngineTaskNotFound = fmt.Errorf("engine task not found")
+	ErrTaskTerminal       = fmt.Errorf("cannot modify terminal task")
+	ErrMaxDepthExceeded   = fmt.Errorf("subtask depth exceeds maximum")
+	ErrCyclicDependency   = fmt.Errorf("cyclic dependency detected")
 )

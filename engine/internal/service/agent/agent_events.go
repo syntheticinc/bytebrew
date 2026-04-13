@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/orchestrator"
 )
@@ -31,8 +33,10 @@ func (p *AgentPool) markCompleted(agentID, subtaskID, result string) {
 
 	ctx := context.Background()
 	if subtaskID != "" {
-		if err := p.subtaskManager.CompleteSubtask(ctx, subtaskID, result); err != nil {
-			slog.Error("[AgentPool] failed to complete subtask", "subtask_id", subtaskID, "error", err)
+		if subtaskUUID, err := uuid.Parse(subtaskID); err != nil {
+			slog.Error("[AgentPool] invalid subtask id on complete", "task_id", subtaskID, "error", err)
+		} else if err := p.subtaskManager.CompleteTask(ctx, subtaskUUID, result); err != nil {
+			slog.Error("[AgentPool] failed to complete task", "task_id", subtaskID, "error", err)
 		}
 	}
 
@@ -115,8 +119,10 @@ func (p *AgentPool) markFailed(agentID, subtaskID, reason string) {
 
 	ctx := context.Background()
 	if subtaskID != "" {
-		if err := p.subtaskManager.FailSubtask(ctx, subtaskID, reason); err != nil {
-			slog.Error("[AgentPool] failed to mark subtask as failed", "subtask_id", subtaskID, "error", err)
+		if subtaskUUID, err := uuid.Parse(subtaskID); err != nil {
+			slog.Error("[AgentPool] invalid subtask id on fail", "task_id", subtaskID, "error", err)
+		} else if err := p.subtaskManager.FailTask(ctx, subtaskUUID, reason); err != nil {
+			slog.Error("[AgentPool] failed to mark task as failed", "task_id", subtaskID, "error", err)
 		}
 	}
 

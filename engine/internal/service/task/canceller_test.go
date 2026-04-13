@@ -5,26 +5,27 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 )
 
 type mockCancelRepo struct {
-	tasks    map[string]*domain.EngineTask
-	subTasks map[string][]domain.EngineTask // parentID -> sub-tasks
-	statuses map[string]domain.EngineTaskStatus
+	tasks    map[uuid.UUID]*domain.EngineTask
+	subTasks map[uuid.UUID][]domain.EngineTask // parentID -> sub-tasks
+	statuses map[uuid.UUID]domain.EngineTaskStatus
 }
 
 func newMockCancelRepo() *mockCancelRepo {
 	return &mockCancelRepo{
-		tasks:    make(map[string]*domain.EngineTask),
-		subTasks: make(map[string][]domain.EngineTask),
-		statuses: make(map[string]domain.EngineTaskStatus),
+		tasks:    make(map[uuid.UUID]*domain.EngineTask),
+		subTasks: make(map[uuid.UUID][]domain.EngineTask),
+		statuses: make(map[uuid.UUID]domain.EngineTaskStatus),
 	}
 }
 
-func (m *mockCancelRepo) GetByID(_ context.Context, id string) (*domain.EngineTask, error) {
+func (m *mockCancelRepo) GetByID(_ context.Context, id uuid.UUID) (*domain.EngineTask, error) {
 	task, ok := m.tasks[id]
 	if !ok {
 		return nil, fmt.Errorf("task %s not found", id)
@@ -36,7 +37,7 @@ func (m *mockCancelRepo) GetByID(_ context.Context, id string) (*domain.EngineTa
 	return task, nil
 }
 
-func (m *mockCancelRepo) UpdateStatus(_ context.Context, id string, status domain.EngineTaskStatus) error {
+func (m *mockCancelRepo) UpdateStatus(_ context.Context, id uuid.UUID, status domain.EngineTaskStatus) error {
 	if _, ok := m.tasks[id]; !ok {
 		return fmt.Errorf("task %s not found", id)
 	}
@@ -44,97 +45,103 @@ func (m *mockCancelRepo) UpdateStatus(_ context.Context, id string, status domai
 	return nil
 }
 
-func (m *mockCancelRepo) GetSubTasks(_ context.Context, parentID string) ([]domain.EngineTask, error) {
+func (m *mockCancelRepo) GetSubTasks(_ context.Context, parentID uuid.UUID) ([]domain.EngineTask, error) {
 	return m.subTasks[parentID], nil
 }
 
 func TestTaskCanceller_CancelTopLevel(t *testing.T) {
+	id1 := uuid.New()
 	repo := newMockCancelRepo()
-	repo.tasks["task-1"] = &domain.EngineTask{ID: "task-1", Status: domain.EngineTaskStatusInProgress}
+	repo.tasks[id1] = &domain.EngineTask{ID: id1, Status: domain.EngineTaskStatusInProgress}
 
 	c := NewTaskCanceller(repo)
-	err := c.Cancel(context.Background(), "task-1")
+	err := c.Cancel(context.Background(), id1)
 
 	require.NoError(t, err)
-	assert.Equal(t, domain.EngineTaskStatusCancelled, repo.statuses["task-1"])
+	assert.Equal(t, domain.EngineTaskStatusCancelled, repo.statuses[id1])
 }
 
 func TestTaskCanceller_CancelWithSubTasks(t *testing.T) {
+	id1, id2, id3 := uuid.New(), uuid.New(), uuid.New()
 	repo := newMockCancelRepo()
-	repo.tasks["task-1"] = &domain.EngineTask{ID: "task-1", Status: domain.EngineTaskStatusInProgress}
-	repo.tasks["task-2"] = &domain.EngineTask{ID: "task-2", Status: domain.EngineTaskStatusPending}
-	repo.tasks["task-3"] = &domain.EngineTask{ID: "task-3", Status: domain.EngineTaskStatusInProgress}
-	repo.subTasks["task-1"] = []domain.EngineTask{
-		{ID: "task-2", Status: domain.EngineTaskStatusPending},
-		{ID: "task-3", Status: domain.EngineTaskStatusInProgress},
+	repo.tasks[id1] = &domain.EngineTask{ID: id1, Status: domain.EngineTaskStatusInProgress}
+	repo.tasks[id2] = &domain.EngineTask{ID: id2, Status: domain.EngineTaskStatusPending}
+	repo.tasks[id3] = &domain.EngineTask{ID: id3, Status: domain.EngineTaskStatusInProgress}
+	repo.subTasks[id1] = []domain.EngineTask{
+		{ID: id2, Status: domain.EngineTaskStatusPending},
+		{ID: id3, Status: domain.EngineTaskStatusInProgress},
 	}
 
 	c := NewTaskCanceller(repo)
-	err := c.Cancel(context.Background(), "task-1")
+	err := c.Cancel(context.Background(), id1)
 
 	require.NoError(t, err)
-	assert.Equal(t, domain.EngineTaskStatusCancelled, repo.statuses["task-1"])
-	assert.Equal(t, domain.EngineTaskStatusCancelled, repo.statuses["task-2"])
-	assert.Equal(t, domain.EngineTaskStatusCancelled, repo.statuses["task-3"])
+	assert.Equal(t, domain.EngineTaskStatusCancelled, repo.statuses[id1])
+	assert.Equal(t, domain.EngineTaskStatusCancelled, repo.statuses[id2])
+	assert.Equal(t, domain.EngineTaskStatusCancelled, repo.statuses[id3])
 }
 
 func TestTaskCanceller_CancelTerminalTask_Noop(t *testing.T) {
+	id1 := uuid.New()
 	repo := newMockCancelRepo()
-	repo.tasks["task-1"] = &domain.EngineTask{ID: "task-1", Status: domain.EngineTaskStatusCompleted}
+	repo.tasks[id1] = &domain.EngineTask{ID: id1, Status: domain.EngineTaskStatusCompleted}
 
 	c := NewTaskCanceller(repo)
-	err := c.Cancel(context.Background(), "task-1")
+	err := c.Cancel(context.Background(), id1)
 
 	require.NoError(t, err)
 	// No status update should have been made.
-	_, updated := repo.statuses["task-1"]
+	_, updated := repo.statuses[id1]
 	assert.False(t, updated)
 }
 
 func TestTaskCanceller_CancelDeepHierarchy(t *testing.T) {
+	id1, id2, id3 := uuid.New(), uuid.New(), uuid.New()
 	repo := newMockCancelRepo()
-	repo.tasks["task-1"] = &domain.EngineTask{ID: "task-1", Status: domain.EngineTaskStatusInProgress}
-	repo.tasks["task-2"] = &domain.EngineTask{ID: "task-2", Status: domain.EngineTaskStatusInProgress}
-	repo.tasks["task-3"] = &domain.EngineTask{ID: "task-3", Status: domain.EngineTaskStatusPending}
-	repo.subTasks["task-1"] = []domain.EngineTask{{ID: "task-2", Status: domain.EngineTaskStatusInProgress}}
-	repo.subTasks["task-2"] = []domain.EngineTask{{ID: "task-3", Status: domain.EngineTaskStatusPending}}
+	repo.tasks[id1] = &domain.EngineTask{ID: id1, Status: domain.EngineTaskStatusInProgress}
+	repo.tasks[id2] = &domain.EngineTask{ID: id2, Status: domain.EngineTaskStatusInProgress}
+	repo.tasks[id3] = &domain.EngineTask{ID: id3, Status: domain.EngineTaskStatusPending}
+	repo.subTasks[id1] = []domain.EngineTask{{ID: id2, Status: domain.EngineTaskStatusInProgress}}
+	repo.subTasks[id2] = []domain.EngineTask{{ID: id3, Status: domain.EngineTaskStatusPending}}
 
 	c := NewTaskCanceller(repo)
-	err := c.Cancel(context.Background(), "task-1")
+	err := c.Cancel(context.Background(), id1)
 
 	require.NoError(t, err)
-	assert.Equal(t, domain.EngineTaskStatusCancelled, repo.statuses["task-1"])
-	assert.Equal(t, domain.EngineTaskStatusCancelled, repo.statuses["task-2"])
-	assert.Equal(t, domain.EngineTaskStatusCancelled, repo.statuses["task-3"])
+	assert.Equal(t, domain.EngineTaskStatusCancelled, repo.statuses[id1])
+	assert.Equal(t, domain.EngineTaskStatusCancelled, repo.statuses[id2])
+	assert.Equal(t, domain.EngineTaskStatusCancelled, repo.statuses[id3])
 }
 
 func TestTaskCanceller_CancelSkipsTerminalSubTasks(t *testing.T) {
+	id1, id2, id3 := uuid.New(), uuid.New(), uuid.New()
 	repo := newMockCancelRepo()
-	repo.tasks["task-1"] = &domain.EngineTask{ID: "task-1", Status: domain.EngineTaskStatusInProgress}
-	repo.tasks["task-2"] = &domain.EngineTask{ID: "task-2", Status: domain.EngineTaskStatusCompleted}
-	repo.tasks["task-3"] = &domain.EngineTask{ID: "task-3", Status: domain.EngineTaskStatusPending}
-	repo.subTasks["task-1"] = []domain.EngineTask{
-		{ID: "task-2", Status: domain.EngineTaskStatusCompleted},
-		{ID: "task-3", Status: domain.EngineTaskStatusPending},
+	repo.tasks[id1] = &domain.EngineTask{ID: id1, Status: domain.EngineTaskStatusInProgress}
+	repo.tasks[id2] = &domain.EngineTask{ID: id2, Status: domain.EngineTaskStatusCompleted}
+	repo.tasks[id3] = &domain.EngineTask{ID: id3, Status: domain.EngineTaskStatusPending}
+	repo.subTasks[id1] = []domain.EngineTask{
+		{ID: id2, Status: domain.EngineTaskStatusCompleted},
+		{ID: id3, Status: domain.EngineTaskStatusPending},
 	}
 
 	c := NewTaskCanceller(repo)
-	err := c.Cancel(context.Background(), "task-1")
+	err := c.Cancel(context.Background(), id1)
 
 	require.NoError(t, err)
-	assert.Equal(t, domain.EngineTaskStatusCancelled, repo.statuses["task-1"])
+	assert.Equal(t, domain.EngineTaskStatusCancelled, repo.statuses[id1])
 	// Completed sub-task should not be touched.
-	_, task2Updated := repo.statuses["task-2"]
+	_, task2Updated := repo.statuses[id2]
 	assert.False(t, task2Updated)
 	// Pending sub-task should be cancelled.
-	assert.Equal(t, domain.EngineTaskStatusCancelled, repo.statuses["task-3"])
+	assert.Equal(t, domain.EngineTaskStatusCancelled, repo.statuses[id3])
 }
 
 func TestTaskCanceller_NotFound(t *testing.T) {
 	repo := newMockCancelRepo()
 	c := NewTaskCanceller(repo)
 
-	err := c.Cancel(context.Background(), "task-999")
+	missing := uuid.New()
+	err := c.Cancel(context.Background(), missing)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "get task task-999")
+	assert.Contains(t, err.Error(), missing.String())
 }

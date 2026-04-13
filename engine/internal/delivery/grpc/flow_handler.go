@@ -46,9 +46,10 @@ type ToolCallHistoryCleaner interface {
 	ClearSession(sessionID string)
 }
 
-// WorkManagerForOrchestrator provides active work status for the Orchestrator (consumer-side)
+// WorkManagerForOrchestrator provides active work status for the Orchestrator (consumer-side).
+// Returns active (non-terminal) tasks for the session.
 type WorkManagerForOrchestrator interface {
-	GetTasks(ctx context.Context, sessionID string) ([]*domain.Task, error)
+	ListTasksDomain(ctx context.Context, sessionID string) ([]domain.EngineTask, error)
 }
 
 // SessionStorage defines interface for session persistence (consumer-side)
@@ -69,7 +70,7 @@ type FlowHandler struct {
 	pb.UnimplementedFlowServiceServer
 	agentService           AgentService
 	agentPoolProxy         AgentPoolProxy              // For setting proxy/callback on agent pool
-	agentPoolAdapter       tools.AgentPoolForTool      // Adapter for spawn_code_agent tool registration
+	agentPoolAdapter       tools.AgentPoolForTool      // Adapter for spawn_agent tool registration
 	workManager            WorkManagerForOrchestrator  // For active work checking in Orchestrator
 	sessionStorage         SessionStorage              // For session persistence (optional)
 	turnExecutorFactory    TurnExecutorFactory         // Engine-based TurnExecutor factory (required)
@@ -84,7 +85,7 @@ type FlowHandler struct {
 type FlowHandlerConfig struct {
 	AgentService           AgentService
 	AgentPoolProxy         AgentPoolProxy              // Optional: for multi-agent mode
-	AgentPoolAdapter       tools.AgentPoolForTool      // Optional: for spawn_code_agent tool
+	AgentPoolAdapter       tools.AgentPoolForTool      // Optional: for spawn_agent tool
 	WorkManager            WorkManagerForOrchestrator  // Optional: for Orchestrator active work checks
 	SessionStorage         SessionStorage              // Optional: for session persistence
 	TurnExecutorFactory    TurnExecutorFactory         // Engine-based TurnExecutor factory (required)

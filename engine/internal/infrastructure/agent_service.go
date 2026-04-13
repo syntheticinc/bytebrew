@@ -10,11 +10,11 @@ import (
 	licenseinfra "github.com/syntheticinc/bytebrew/engine/internal/infrastructure/license"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/websearch"
 	agentservice "github.com/syntheticinc/bytebrew/engine/internal/service/agent"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/engine"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/work"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	"github.com/syntheticinc/bytebrew/engine/pkg/errors"
 	"github.com/cloudwego/eino/components/model"
@@ -25,7 +25,8 @@ import (
 // InfraComponents holds all infrastructure components created during initialization
 type InfraComponents struct {
 	AgentService     *agentservice.Service
-	WorkManager      *work.Manager
+	TaskManager      *EngineTaskManagerAdapter
+	TaskRepo         *config_repo.GORMTaskRepository
 	AgentPool        *agentservice.AgentPool
 	AgentPoolAdapter *agentservice.AgentPoolAdapter
 	SessionStorage   *persistence.SessionStorage
@@ -37,12 +38,12 @@ type InfraComponents struct {
 	AgentToolResolver *tools.AgentToolResolver
 	ToolDepsProvider  *tools.DefaultToolDepsProvider
 	// Additional dependencies for TurnExecutorFactory
-	ModelName        string
-	ModelCache       *llm.ModelCache
-	WebSearchTool    einotool.InvokableTool
-	WebFetchTool     einotool.InvokableTool
-	AgentConfig      *config.AgentConfig // effective config with defaults applied
-	LicenseInfo      *domain.LicenseInfo
+	ModelName     string
+	ModelCache    *llm.ModelCache
+	WebSearchTool einotool.InvokableTool
+	WebFetchTool  einotool.InvokableTool
+	AgentConfig   *config.AgentConfig // effective config with defaults applied
+	LicenseInfo   *domain.LicenseInfo
 }
 
 // NewAgentService creates a new AgentService with Eino Agent.
@@ -95,10 +96,10 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 
 	var agentPool *agentservice.AgentPool
 	var agentPoolAdapter *agentservice.AgentPoolAdapter
-	if storageCmp.WorkManager != nil {
+	if storageCmp.TaskManager != nil {
 		agentPool = agentservice.NewAgentPool(agentservice.AgentPoolConfig{
 			ModelSelector:   modelSelector,
-			SubtaskManager:  storageCmp.WorkManager,
+			SubtaskManager:  storageCmp.TaskManager,
 			AgentRunStorage: storageCmp.AgentRunStorage,
 			AgentConfig:     &cfg.Agent,
 		})
@@ -125,7 +126,7 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 	webSearchTool, webFetchTool := createWebTools(cfg)
 
 	// 7. Create Engine and wire to AgentPool
-	ec, err := createEngine(cfg, icc.DB, storageCmp.WorkManager, agentPoolAdapter, webSearchTool, webFetchTool)
+	ec, err := createEngine(cfg, icc.DB, storageCmp.TaskManager, agentPoolAdapter, webSearchTool, webFetchTool)
 	if err != nil {
 		return nil, errors.Wrap(err, errors.CodeInternal, "failed to initialize engine")
 	}
@@ -142,8 +143,6 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 		var svcErr error
 		agentService, svcErr = agentservice.New(agentservice.Config{
 			ChatModel:        chatModel,
-			TaskManager:      storageCmp.WorkManager,
-			SubtaskManager:   storageCmp.WorkManager,
 			AgentPool:        agentPool,
 			ContextReminders: contextReminders,
 			WebSearchTool:    webSearchTool,
@@ -157,7 +156,7 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 			return nil, errors.Wrap(svcErr, errors.CodeInternal, "failed to create agent service")
 		}
 		slog.Info("agent service created with multi-agent support",
-			"work_manager", storageCmp.WorkManager != nil,
+			"task_manager", storageCmp.TaskManager != nil,
 			"agent_pool", agentPool != nil,
 			"engine", ec.Engine != nil)
 	} else {
@@ -165,23 +164,24 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 	}
 
 	return &InfraComponents{
-		AgentService:     agentService,
-		WorkManager:      storageCmp.WorkManager,
-		AgentPool:        agentPool,
-		AgentPoolAdapter: agentPoolAdapter,
-		SessionStorage:   storageCmp.SessionStorage,
-		ChatModel:        chatModel,
-		ModelSelector:    modelSelector,
+		AgentService:      agentService,
+		TaskManager:       storageCmp.TaskManager,
+		TaskRepo:          storageCmp.TaskRepo,
+		AgentPool:         agentPool,
+		AgentPoolAdapter:  agentPoolAdapter,
+		SessionStorage:    storageCmp.SessionStorage,
+		ChatModel:         chatModel,
+		ModelSelector:     modelSelector,
 		Engine:            ec.Engine,
 		FlowManager:       ec.FlowManager,
 		AgentToolResolver: ec.AgentToolResolver,
 		ToolDepsProvider:  ec.ToolDepsProvider,
-		ModelName:        modelName,
-		ModelCache:       modelCache,
-		WebSearchTool:    webSearchTool,
-		WebFetchTool:     webFetchTool,
-		AgentConfig:      agentConfig,
-		LicenseInfo:      licenseInfo,
+		ModelName:         modelName,
+		ModelCache:        modelCache,
+		WebSearchTool:     webSearchTool,
+		WebFetchTool:      webFetchTool,
+		AgentConfig:       agentConfig,
+		LicenseInfo:       licenseInfo,
 	}, nil
 }
 

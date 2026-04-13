@@ -11,6 +11,7 @@ import type {
   TaskResponse,
   TaskDetailResponse,
   PaginatedTaskResponse,
+  CreateTaskRequest,
   Trigger,
   CreateTriggerRequest,
   APIToken,
@@ -61,6 +62,12 @@ import { MOCK_SESSIONS_LIST, MOCK_TRACE, MOCK_TRACE_ERROR } from '../mocks/inspe
 
 const BASE_URL = '/api/v1';
 const PROTOTYPE_KEY = 'bytebrew_prototype_mode';
+// Build-time gate. A production build with VITE_PROTOTYPE_ENABLED unset cannot
+// enter prototype mode at all, even if localStorage is tampered with.
+// This matches the logic in hooks/usePrototype.tsx so the UI toggle and the
+// API layer agree on whether mocks are allowed.
+const PROTOTYPE_BUILD_ENABLED =
+  import.meta.env.VITE_PROTOTYPE_ENABLED === 'true' || import.meta.env.DEV;
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -76,6 +83,9 @@ class APIClient {
   }
 
   private get isPrototype(): boolean {
+    // Defense-in-depth: a production build cannot return mock data even if
+    // localStorage is tampered with. The build-time gate must also be enabled.
+    if (!PROTOTYPE_BUILD_ENABLED) return false;
     return localStorage.getItem(PROTOTYPE_KEY) === 'true';
   }
 
@@ -255,8 +265,36 @@ class APIClient {
     return this.request<PaginatedTaskResponse>('GET', `/tasks${qs}`);
   }
   getTask(id: string) {
-    if (this.isPrototype) return this.mock({ id, title: 'Mock Task', agent_name: 'assistant', status: 'completed', source: 'api', created_at: new Date().toISOString(), mode: 'chat' } as TaskDetailResponse);
+    if (this.isPrototype) return this.mock({ id, title: 'Mock Task', agent_name: 'assistant', status: 'completed', source: 'api', priority: 0, created_at: new Date().toISOString(), mode: 'chat' } as TaskDetailResponse);
     return this.request<TaskDetailResponse>('GET', `/tasks/${id}`);
+  }
+  createTask(data: CreateTaskRequest) {
+    if (this.isPrototype) return this.mock({ task_id: 'mock-' + crypto.randomUUID(), status: 'pending' });
+    return this.request<{ task_id: string; status: string }>('POST', '/tasks', data);
+  }
+  listSubtasks(parentId: string) {
+    if (this.isPrototype) return this.mock([] as TaskResponse[]);
+    return this.request<TaskResponse[]>('GET', `/tasks/${parentId}/subtasks`);
+  }
+  approveTask(id: string) {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('POST', `/tasks/${id}/approve`);
+  }
+  startTask(id: string) {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('POST', `/tasks/${id}/start`);
+  }
+  completeTask(id: string, result?: string) {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('POST', `/tasks/${id}/complete`, result ? { result } : undefined);
+  }
+  failTask(id: string, reason: string) {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('POST', `/tasks/${id}/fail`, { reason });
+  }
+  setTaskPriority(id: string, priority: number) {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('POST', `/tasks/${id}/priority`, { priority });
   }
   cancelTask(id: string) {
     if (this.isPrototype) return this.mock(undefined as unknown as void);

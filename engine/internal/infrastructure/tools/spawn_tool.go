@@ -10,7 +10,7 @@ import (
 )
 
 // GenericAgentSpawner is a consumer-side interface for spawn/wait/stop operations.
-// Used by the generic SpawnTool (as opposed to AgentPoolForTool used by the legacy spawn_code_agent).
+// Used by the generic SpawnTool (as opposed to AgentPoolForTool used by the legacy spawn_agent).
 type GenericAgentSpawner interface {
 	SpawnAgent(ctx context.Context, params SpawnParams) (string, error)
 	WaitForAgent(ctx context.Context, sessionID, agentID string) (AgentCompletionInfo, error)

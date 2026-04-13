@@ -4,17 +4,19 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+
+	"github.com/google/uuid"
 )
 
-// TaskExecutor executes a single task by ID.
+// TaskExecutor executes a single task by its UUID.
 type TaskExecutor interface {
-	Execute(ctx context.Context, taskID uint) error
+	Execute(ctx context.Context, taskID uuid.UUID) error
 }
 
 // TaskWorker processes background tasks from a queue using a goroutine pool.
 type TaskWorker struct {
 	executor    TaskExecutor
-	queue       chan uint
+	queue       chan uuid.UUID
 	concurrency int
 	wg          sync.WaitGroup
 	ctx         context.Context
@@ -26,7 +28,7 @@ func NewTaskWorker(executor TaskExecutor, concurrency int) *TaskWorker {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &TaskWorker{
 		executor:    executor,
-		queue:       make(chan uint, 100),
+		queue:       make(chan uuid.UUID, 100),
 		concurrency: concurrency,
 		ctx:         ctx,
 		cancel:      cancel,
@@ -61,7 +63,7 @@ func (w *TaskWorker) worker(id int) {
 
 // Submit adds a task ID to the queue for background execution.
 // Returns false if the queue is full and the task was dropped.
-func (w *TaskWorker) Submit(taskID uint) bool {
+func (w *TaskWorker) Submit(taskID uuid.UUID) bool {
 	select {
 	case w.queue <- taskID:
 		return true

@@ -19,6 +19,17 @@ func AutoMigrate(db *gorm.DB) error {
 	// Safe to run repeatedly — no-op if column already has correct type or table doesn't exist.
 	db.Exec("ALTER TABLE knowledge_chunks ALTER COLUMN embedding TYPE vector USING embedding::vector")
 
+	// V2 Tasks unification: drop legacy V1 tables that are superseded by the
+	// unified EngineTask/TaskModel. No data migration is needed — V1 Task / Subtask
+	// entities were session-scoped and already expired by the time V2 ships.
+	// Safe to run repeatedly: DROP IF EXISTS is a no-op when the table is missing.
+	if err := db.Migrator().DropTable("runtime_tasks", "runtime_subtasks"); err != nil {
+		// DropTable returns an error if the underlying DB refuses the DROP (e.g. permission).
+		// We never want to block startup on a dev DB that does not have these tables,
+		// so log and continue — the AutoMigrate below is what really matters.
+		slog.Warn("[Migration] dropping legacy V1 task tables failed (may already be absent)", "error", err)
+	}
+
 	if err := db.AutoMigrate(
 		// Config tables (11)
 		&AgentModel{},
@@ -40,10 +51,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&APITokenModel{},
 		&AuditLogModel{},
 
-		// Agent runtime tables (9)
+		// Agent runtime tables
 		&RuntimeSessionModel{},
-		&RuntimeTaskModel{},
-		&RuntimeSubtaskModel{},
 		&RuntimeAgentRunModel{},
 		&RuntimeDeviceModel{},
 		&RuntimeConfigKV{},

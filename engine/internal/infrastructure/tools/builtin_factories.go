@@ -4,7 +4,7 @@ import "github.com/cloudwego/eino/components/tool"
 
 // RegisterAllBuiltins registers factory functions for all builtin tools.
 // Tools that require complex dependencies not available at registration time
-// (e.g. AgentPool for spawn_code_agent) must be registered separately.
+// (e.g. AgentPool for spawn_agent) must be registered separately.
 func RegisterAllBuiltins(store *BuiltinToolStore) {
 	// File operations (proxied to client)
 	store.Register("read_file", func(deps ToolDependencies) tool.InvokableTool {
@@ -39,16 +39,13 @@ func RegisterAllBuiltins(store *BuiltinToolStore) {
 		return NewExecuteCommandTool(deps.Proxy, deps.SessionID)
 	})
 
-	// Task management — uses EngineTask (DB-backed, Admin-visible) when available,
-	// falls back to legacy session-scoped TaskManager otherwise.
+	// Unified task management — EngineTask-based, DB-backed, Admin-visible.
+	// Subtasks are EngineTask with ParentTaskID set (single entity, no separate manage_subtasks).
 	store.Register("manage_tasks", func(deps ToolDependencies) tool.InvokableTool {
-		if deps.EngineTaskManager != nil {
-			return NewEngineManageTasksTool(deps.EngineTaskManager, deps.SessionID)
+		if deps.EngineTaskManager == nil {
+			return nil
 		}
-		return NewManageTasksTool(deps.TaskManager, deps.Proxy, deps.SessionID)
-	})
-	store.Register("manage_subtasks", func(deps ToolDependencies) tool.InvokableTool {
-		return NewManageSubtasksTool(deps.SubtaskManager, deps.SessionID)
+		return NewEngineManageTasksTool(deps.EngineTaskManager, deps.SessionID)
 	})
 
 	// User interaction — disabled in background mode (cron/webhook tasks have no user)
@@ -81,6 +78,7 @@ func RegisterAllBuiltins(store *BuiltinToolStore) {
 	})
 
 	// Legacy alias — kept for backward compatibility with existing agent configs.
+	// Same unified tool registered under both names.
 	store.Register("engine_manage_tasks", func(deps ToolDependencies) tool.InvokableTool {
 		if deps.EngineTaskManager == nil {
 			return nil
@@ -118,7 +116,7 @@ func RegisterAllBuiltins(store *BuiltinToolStore) {
 		return NewEscalateTool(deps.SessionID, deps.AgentName, deps.EscalationHandler)
 	})
 
-	// spawn_code_agent — not registered here.
+	// spawn_agent — not registered here.
 	// Requires AgentPool which is created after tool store initialization.
-	// Register separately: store.Register("spawn_code_agent", ...)
+	// Register separately: store.Register("spawn_agent", ...)
 }

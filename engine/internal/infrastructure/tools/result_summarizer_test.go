@@ -220,7 +220,7 @@ Will work on task XYZ...`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := SummarizeToolResult("spawn_code_agent", tt.result)
+			got := SummarizeToolResult("spawn_agent", tt.result)
 			assert.Equal(t, tt.expected, got)
 		})
 	}

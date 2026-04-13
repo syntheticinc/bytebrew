@@ -7,7 +7,7 @@ func TestFlow_Validate(t *testing.T) {
 		Type:           FlowType("supervisor"),
 		Name:           "main-supervisor",
 		SystemPrompt:   "You are a supervisor agent",
-		ToolNames:      []string{"manage_stories", "spawn_code_agent"},
+		ToolNames:      []string{"manage_stories", "spawn_agent"},
 		MaxSteps:       50,
 		MaxContextSize: 100000,
 		Lifecycle: LifecyclePolicy{

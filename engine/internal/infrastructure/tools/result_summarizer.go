@@ -29,7 +29,7 @@ func SummarizeToolResult(toolName, result string) string {
 		return firstLine(result)
 	case "manage_subtasks":
 		return firstLine(result)
-	case "spawn_code_agent":
+	case "spawn_agent":
 		return firstLine(result)
 	case "lsp":
 		return firstLine(result)

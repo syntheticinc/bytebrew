@@ -4,15 +4,19 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 )
 
 // TaskCreator creates tasks from trigger events (cron, webhook).
 type TaskCreator interface {
-	CreateFromTrigger(ctx context.Context, params TriggerTaskParams) (string, error)
+	CreateFromTrigger(ctx context.Context, params TriggerTaskParams) (uuid.UUID, error)
 }
 
 // TriggerTaskParams holds parameters for creating a task from a trigger.
+// Schema scope is resolved downstream via AgentSchemaResolver(AgentName) — the
+// agent already carries its schema binding, so duplicating it here would be
+// redundant state.
 type TriggerTaskParams struct {
 	Title       string
 	Description string

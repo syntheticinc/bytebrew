@@ -461,9 +461,9 @@ func TestToolExecution_MultiAgent(t *testing.T) {
 		collector.chunkCallback, collector.eventCallback)
 	require.NoError(t, err)
 
-	// Verify spawn_code_agent was called by the supervisor
+	// Verify spawn_agent was called by the supervisor
 	toolNames := collector.toolCallNames()
-	assert.Contains(t, toolNames, "spawn_code_agent", "spawn_code_agent should be called")
+	assert.Contains(t, toolNames, "spawn_agent", "spawn_agent should be called")
 
 	// Verify final answer from supervisor confirms completion
 	answer := collector.finalAnswer()
@@ -478,19 +478,19 @@ func TestToolExecution_MultiAgent(t *testing.T) {
 	// the TurnExecutor's event callback. Register a separate collector to verify.
 	poolEvents := collector.getEvents()
 
-	// Verify we have tool_call and tool_result events for spawn_code_agent
+	// Verify we have tool_call and tool_result events for spawn_agent
 	hasToolCall := false
 	hasToolResult := false
 	for _, e := range poolEvents {
-		if e.Type == domain.EventTypeToolCall && e.Content == "spawn_code_agent" {
+		if e.Type == domain.EventTypeToolCall && e.Content == "spawn_agent" {
 			hasToolCall = true
 		}
 		if e.Type == domain.EventTypeToolResult {
 			hasToolResult = true
 		}
 	}
-	assert.True(t, hasToolCall, "should have tool_call event for spawn_code_agent")
-	assert.True(t, hasToolResult, "should have tool_result event for spawn_code_agent")
+	assert.True(t, hasToolCall, "should have tool_call event for spawn_agent")
+	assert.True(t, hasToolResult, "should have tool_result event for spawn_agent")
 
 	// Verify subtask was completed by the code agent
 	assert.Equal(t, domain.SubtaskStatusCompleted, subtask.Status, "subtask should be completed")

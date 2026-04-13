@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/glebarez/sqlite"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
@@ -65,64 +66,35 @@ func main() {
 		Prompts:            promptsCfg,
 	}
 
-	// 6. Create mock managers
-	subtaskMgr := testutil.NewMockSubtaskManager()
-	taskMgr := testutil.NewMockTaskManager()
+	// 6. Create unified mock task manager (EngineTask-based).
+	taskMgr := testutil.NewMockEngineTaskManager()
 
-	// Pre-seed subtask for "multi-agent" scenario
-	if *scenario == "multi-agent" {
-		subtaskMgr.Subtasks["test-subtask-1"] = &domain.Subtask{
-			ID:          "test-subtask-1",
-			SessionID:   "",
-			TaskID:      "test-task-1",
-			Title:       "Implement greeting function",
-			Description: "Create a greeting function that returns Hello World.",
-			Status:      domain.SubtaskStatusPending,
-			CreatedAt:   time.Now(),
-			UpdatedAt:   time.Now(),
+	// Pre-seed subtask (EngineTask with ParentTaskID) for test scenarios.
+	// Use real UUIDs so the mock's uuid.UUID map key and downstream code
+	// (adapter parsing) behave like production.
+	parentID := uuid.New()
+	subtaskID := uuid.New()
+	seedScenario := func(title, description string) {
+		taskMgr.Tasks[subtaskID] = &domain.EngineTask{
+			ID:           subtaskID,
+			ParentTaskID: &parentID,
+			Title:        title,
+			Description:  description,
+			Status:       domain.EngineTaskStatusPending,
+			Mode:         domain.TaskModeInteractive,
+			CreatedAt:    time.Now(),
+			UpdatedAt:    time.Now(),
 		}
 	}
-
-	// Pre-seed subtask for "agent-interrupt" scenario
-	if *scenario == "agent-interrupt" {
-		subtaskMgr.Subtasks["test-subtask-1"] = &domain.Subtask{
-			ID:          "test-subtask-1",
-			SessionID:   "",
-			TaskID:      "test-task-1",
-			Title:       "Long running task",
-			Description: "This task takes a long time to complete.",
-			Status:      domain.SubtaskStatusPending,
-			CreatedAt:   time.Now(),
-			UpdatedAt:   time.Now(),
-		}
-	}
-
-	// Pre-seed subtask for "agent-failure" scenario
-	if *scenario == "agent-failure" {
-		subtaskMgr.Subtasks["test-subtask-1"] = &domain.Subtask{
-			ID:          "test-subtask-1",
-			SessionID:   "",
-			TaskID:      "test-task-1",
-			Title:       "Failing task",
-			Description: "This task will fail.",
-			Status:      domain.SubtaskStatusPending,
-			CreatedAt:   time.Now(),
-			UpdatedAt:   time.Now(),
-		}
-	}
-
-	// Pre-seed subtask for "multi-agent-read" scenario
-	if *scenario == "multi-agent-read" {
-		subtaskMgr.Subtasks["test-subtask-1"] = &domain.Subtask{
-			ID:          "test-subtask-1",
-			SessionID:   "",
-			TaskID:      "test-task-1",
-			Title:       "Read source file",
-			Description: "Read the main source file.",
-			Status:      domain.SubtaskStatusPending,
-			CreatedAt:   time.Now(),
-			UpdatedAt:   time.Now(),
-		}
+	switch *scenario {
+	case "multi-agent":
+		seedScenario("Implement greeting function", "Create a greeting function that returns Hello World.")
+	case "agent-interrupt":
+		seedScenario("Long running task", "This task takes a long time to complete.")
+	case "agent-failure":
+		seedScenario("Failing task", "This task will fail.")
+	case "multi-agent-read":
+		seedScenario("Read source file", "Read the main source file.")
 	}
 
 	// 7. Create ModelSelector and AgentPool for multi-agent support
@@ -130,7 +102,7 @@ func main() {
 	agentRunStorage := testutil.NewMockAgentRunStorage()
 	agentPool := agentservice.NewAgentPool(agentservice.AgentPoolConfig{
 		ModelSelector:   modelSelector,
-		SubtaskManager:  subtaskMgr,
+		SubtaskManager:  taskMgr,
 		AgentRunStorage: agentRunStorage,
 		AgentConfig:     agentConfig,
 		MaxConcurrent:   0,
@@ -139,12 +111,11 @@ func main() {
 
 	// Create ToolDepsProvider for AgentPool (code agents need tool deps)
 	toolDepsProvider := tools.NewDefaultToolDepsProvider(
-		nil,             // proxy — will be set per-session by FlowHandler
-		taskMgr,
-		subtaskMgr,
+		nil, // proxy — will be set per-session by FlowHandler
 		agentPoolAdapter,
-		nil, nil,        // webSearchTool, webFetchTool
+		nil, nil, // webSearchTool, webFetchTool
 	)
+	toolDepsProvider.SetEngineTaskManager(taskMgr)
 
 	// Set Engine deps on AgentPool so spawned agents can run
 	agentPool.SetEngine(agentEngine, flowManager, toolResolver, toolDepsProvider, nil, nil)
@@ -156,15 +127,14 @@ func main() {
 		toolResolver,
 		modelSelector,
 		agentConfig,
-		taskMgr,
-		subtaskMgr,
-		agentPoolAdapter, // was nil
+		agentPoolAdapter,
 		nil,
 		nil,
 		nil, // contextRemindersGetter — not needed in test
 		nil, // modelCache
 		nil, // agentModelResolver
 	)
+	factory.SetEngineTaskManager(taskMgr)
 
 	// 9. Create FlowHandler (SAME as production!)
 	flowRegistry := flow_registry.NewInMemoryRegistry()
@@ -191,7 +161,7 @@ func main() {
 		SessionRegistry:     sessionRegistry,
 		SessionProcessor:    sessProcessor,
 		AgentPoolProxy:      agentPool,        // NEW: for proxy/callback management
-		AgentPoolAdapter:    agentPoolAdapter, // NEW: for spawn_code_agent tool
+		AgentPoolAdapter:    agentPoolAdapter, // NEW: for spawn_agent tool
 	}
 
 	flowHandler, err := deliverygrpc.NewFlowHandlerWithConfig(flowHandlerCfg)

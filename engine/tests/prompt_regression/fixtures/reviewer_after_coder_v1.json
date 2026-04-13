@@ -125,7 +125,7 @@
           },
           {
             "id": "call_spawn_coder_hc01",
-            "name": "spawn_code_agent",
+            "name": "spawn_agent",
             "index": 2,
             "arguments": "{\"action\": \"spawn\", \"subtask_id\": \"sub_hc_001\"}"
           }
@@ -160,7 +160,7 @@
         "tokens": 112,
         "content": "[SUCCESS] Agent: code-agent-hc-abc123, Status: completed, Result: Created internal/delivery/http/health_handler.go with HealthHandler struct implementing HandleHealth, HandleReady, HandleLive endpoints. Created internal/delivery/http/health_handler_test.go with 6 unit tests covering all endpoints, JSON response format, and error cases. Modified cmd/server/main.go to start HTTP server on :60402 alongside gRPC. All tests pass: go test ./internal/delivery/http/... (6 passed, 0 failed).",
         "content_preview": "[SUCCESS] Agent: code-agent-hc-abc123, Status: completed...",
-        "tool_name": "spawn_code_agent",
+        "tool_name": "spawn_agent",
         "tool_call_id": "call_spawn_coder_hc01",
         "tool_calls": []
       },

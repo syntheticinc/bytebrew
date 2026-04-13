@@ -8,18 +8,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type mockExecutor struct {
 	mu        sync.Mutex
-	executed  []uint
+	executed  []uuid.UUID
 	execErr   error
 	execDelay time.Duration
 }
 
-func (m *mockExecutor) Execute(_ context.Context, taskID uint) error {
+func (m *mockExecutor) Execute(_ context.Context, taskID uuid.UUID) error {
 	if m.execDelay > 0 {
 		time.Sleep(m.execDelay)
 	}
@@ -29,10 +30,10 @@ func (m *mockExecutor) Execute(_ context.Context, taskID uint) error {
 	return m.execErr
 }
 
-func (m *mockExecutor) getExecuted() []uint {
+func (m *mockExecutor) getExecuted() []uuid.UUID {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	result := make([]uint, len(m.executed))
+	result := make([]uuid.UUID, len(m.executed))
 	copy(result, m.executed)
 	return result
 }
@@ -42,7 +43,8 @@ func TestTaskWorker_SubmitAndProcess(t *testing.T) {
 	w := NewTaskWorker(exec, 1)
 	w.Start()
 
-	ok := w.Submit(42)
+	id := uuid.New()
+	ok := w.Submit(id)
 	require.True(t, ok)
 
 	// Wait for processing.
@@ -50,7 +52,7 @@ func TestTaskWorker_SubmitAndProcess(t *testing.T) {
 		return len(exec.getExecuted()) == 1
 	}, 2*time.Second, 10*time.Millisecond)
 
-	assert.Equal(t, []uint{42}, exec.getExecuted())
+	assert.Equal(t, []uuid.UUID{id}, exec.getExecuted())
 	w.Stop()
 }
 
@@ -81,8 +83,8 @@ func TestTaskWorker_ConcurrentTasks(t *testing.T) {
 	w.Start()
 
 	const numTasks = 8
-	for i := uint(1); i <= numTasks; i++ {
-		w.Submit(i)
+	for i := 1; i <= numTasks; i++ {
+		w.Submit(uuid.New())
 		counter.Add(1)
 	}
 
@@ -99,7 +101,7 @@ func TestTaskWorker_ExecutionError(t *testing.T) {
 	w := NewTaskWorker(exec, 1)
 	w.Start()
 
-	w.Submit(1)
+	w.Submit(uuid.New())
 
 	// Even on error, the worker continues processing.
 	require.Eventually(t, func() bool {
@@ -107,7 +109,7 @@ func TestTaskWorker_ExecutionError(t *testing.T) {
 	}, 2*time.Second, 10*time.Millisecond)
 
 	// Submit another task — worker is still alive.
-	w.Submit(2)
+	w.Submit(uuid.New())
 	require.Eventually(t, func() bool {
 		return len(exec.getExecuted()) == 2
 	}, 2*time.Second, 10*time.Millisecond)
@@ -121,13 +123,13 @@ func TestTaskWorker_FullQueue(t *testing.T) {
 	// Don't start workers — queue will fill up.
 
 	// Fill the queue (capacity 100).
-	for i := uint(0); i < 100; i++ {
-		ok := w.Submit(i)
+	for i := 0; i < 100; i++ {
+		ok := w.Submit(uuid.New())
 		require.True(t, ok)
 	}
 
 	// Next submit should return false (queue full).
-	ok := w.Submit(999)
+	ok := w.Submit(uuid.New())
 	assert.False(t, ok)
 
 	w.Start()

@@ -2,8 +2,11 @@ package config_repo
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log/slog"
 
+	"github.com/google/uuid"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"gorm.io/gorm"
@@ -16,7 +19,7 @@ type TaskFilter struct {
 	Status       *domain.EngineTaskStatus
 	UserID       *string
 	SessionID    *string
-	ParentTaskID *string
+	ParentTaskID *uuid.UUID
 	Limit        int
 	Offset       int
 }
@@ -42,7 +45,7 @@ func (r *GORMTaskRepository) Create(ctx context.Context, task *domain.EngineTask
 }
 
 // GetByID returns a single task by its primary key.
-func (r *GORMTaskRepository) GetByID(ctx context.Context, id string) (*domain.EngineTask, error) {
+func (r *GORMTaskRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.EngineTask, error) {
 	var m models.TaskModel
 	if err := r.db.WithContext(ctx).First(&m, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -90,7 +93,7 @@ func (r *GORMTaskRepository) Count(ctx context.Context, filter TaskFilter) (int6
 }
 
 // UpdateStatus transitions a task to a new status and optionally sets a result string.
-func (r *GORMTaskRepository) UpdateStatus(ctx context.Context, id string, status domain.EngineTaskStatus, result string) error {
+func (r *GORMTaskRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status domain.EngineTaskStatus, result string) error {
 	var m models.TaskModel
 	if err := r.db.WithContext(ctx).First(&m, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -122,7 +125,7 @@ func (r *GORMTaskRepository) Update(ctx context.Context, task *domain.EngineTask
 }
 
 // GetSubTasks returns all direct children of the given parent task.
-func (r *GORMTaskRepository) GetSubTasks(ctx context.Context, parentID string) ([]domain.EngineTask, error) {
+func (r *GORMTaskRepository) GetSubTasks(ctx context.Context, parentID uuid.UUID) ([]domain.EngineTask, error) {
 	var rows []models.TaskModel
 	if err := r.db.WithContext(ctx).Where("parent_task_id = ?", parentID).Order("created_at ASC").Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("get subtasks for %s: %w", parentID, err)
@@ -152,15 +155,33 @@ func (r *GORMTaskRepository) GetPendingBySession(ctx context.Context, sessionID 
 	return tasks, nil
 }
 
+// MaxCancelDepth is a safety guard against runaway recursion when a cycle
+// exists in parent_task_id (should be impossible via API, but may happen
+// if the database was modified directly).
+const MaxCancelDepth = 64
+
 // Cancel cancels a task and all its non-terminal subtasks (cascading).
-func (r *GORMTaskRepository) Cancel(ctx context.Context, id string) error {
+// The optional reason is stored in the result column for the root task.
+func (r *GORMTaskRepository) Cancel(ctx context.Context, id uuid.UUID, reason string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return cancelRecursive(tx, id)
+		visited := make(map[uuid.UUID]bool)
+		return cancelRecursive(tx, id, reason, 0, visited)
 	})
 }
 
 // cancelRecursive cancels a task and recursively cancels all non-terminal subtasks.
-func cancelRecursive(tx *gorm.DB, id string) error {
+// - depth: guard against cycles (bails out at MaxCancelDepth)
+// - visited: idempotency guard in case the graph is corrupt
+// - reason: stored on the first task only; children get empty result
+func cancelRecursive(tx *gorm.DB, id uuid.UUID, reason string, depth int, visited map[uuid.UUID]bool) error {
+	if depth > MaxCancelDepth {
+		return fmt.Errorf("cancel recursion depth exceeded (%d) for task %s — possible cycle in parent_task_id", MaxCancelDepth, id)
+	}
+	if visited[id] {
+		return nil
+	}
+	visited[id] = true
+
 	var m models.TaskModel
 	if err := tx.First(&m, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -178,8 +199,13 @@ func cancelRecursive(tx *gorm.DB, id string) error {
 		return fmt.Errorf("transition task %s to cancelled: %w", id, err)
 	}
 
-	if err := tx.Exec("UPDATE tasks SET status = $1, completed_at = NOW() WHERE id = $2",
-		string(domain.EngineTaskStatusCancelled), id).Error; err != nil {
+	// Only the root of the cancel call gets the reason string; children are cancelled with no stored reason.
+	if depth == 0 {
+		task.Result = reason
+	}
+
+	updated := toTaskModel(task)
+	if err := tx.Save(&updated).Error; err != nil {
 		return fmt.Errorf("save cancelled task %s: %w", id, err)
 	}
 
@@ -190,7 +216,7 @@ func cancelRecursive(tx *gorm.DB, id string) error {
 	}
 
 	for _, sub := range subtasks {
-		if err := cancelRecursive(tx, sub.ID); err != nil {
+		if err := cancelRecursive(tx, sub.ID, "", depth+1, visited); err != nil {
 			return err
 		}
 	}
@@ -221,26 +247,156 @@ func applyTaskFilter(q *gorm.DB, f TaskFilter) *gorm.DB {
 	return q
 }
 
+// GetBySession returns all tasks for the given session (used by TaskReminderProvider).
+func (r *GORMTaskRepository) GetBySession(ctx context.Context, sessionID string) ([]domain.EngineTask, error) {
+	var rows []models.TaskModel
+	if err := r.db.WithContext(ctx).
+		Where("session_id = ?", sessionID).
+		Order("priority DESC, created_at ASC").
+		Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("get tasks for session %s: %w", sessionID, err)
+	}
+
+	tasks := make([]domain.EngineTask, 0, len(rows))
+	for i := range rows {
+		tasks = append(tasks, *toEngineTask(&rows[i]))
+	}
+	return tasks, nil
+}
+
+// GetByStatus returns tasks for the given session and status.
+func (r *GORMTaskRepository) GetByStatus(ctx context.Context, sessionID string, status domain.EngineTaskStatus) ([]domain.EngineTask, error) {
+	var rows []models.TaskModel
+	if err := r.db.WithContext(ctx).
+		Where("session_id = ? AND status = ?", sessionID, string(status)).
+		Order("priority DESC, created_at ASC").
+		Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("get tasks by status %s: %w", status, err)
+	}
+
+	tasks := make([]domain.EngineTask, 0, len(rows))
+	for i := range rows {
+		tasks = append(tasks, *toEngineTask(&rows[i]))
+	}
+	return tasks, nil
+}
+
+// GetByAgentID returns the active in_progress task assigned to the given agent.
+func (r *GORMTaskRepository) GetByAgentID(ctx context.Context, agentID string) (*domain.EngineTask, error) {
+	var m models.TaskModel
+	if err := r.db.WithContext(ctx).
+		Where("assigned_agent_id = ? AND status = ?", agentID, string(domain.EngineTaskStatusInProgress)).
+		First(&m).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get task by agent %s: %w", agentID, err)
+	}
+	return toEngineTask(&m), nil
+}
+
+// GetReadySubtasks returns pending subtasks of parentID whose blockers
+// (declared in BlockedBy) have all reached terminal state (completed/failed/cancelled).
+// A task with no blockers is always ready. A task with at least one non-terminal blocker is NOT ready.
+func (r *GORMTaskRepository) GetReadySubtasks(ctx context.Context, parentID uuid.UUID) ([]domain.EngineTask, error) {
+	var rows []models.TaskModel
+	if err := r.db.WithContext(ctx).
+		Where("parent_task_id = ? AND status = ?", parentID, string(domain.EngineTaskStatusPending)).
+		Order("priority DESC, created_at ASC").
+		Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("get ready subtasks for %s: %w", parentID, err)
+	}
+	if len(rows) == 0 {
+		return []domain.EngineTask{}, nil
+	}
+
+	// Collect all distinct blocker IDs declared across pending subtasks.
+	blockerSet := make(map[uuid.UUID]struct{})
+	tasks := make([]domain.EngineTask, 0, len(rows))
+	for i := range rows {
+		t := toEngineTask(&rows[i])
+		tasks = append(tasks, *t)
+		for _, b := range t.BlockedBy {
+			if b == uuid.Nil {
+				continue
+			}
+			blockerSet[b] = struct{}{}
+		}
+	}
+
+	// If no blockers declared — all pending subtasks are ready.
+	if len(blockerSet) == 0 {
+		return tasks, nil
+	}
+
+	// Fetch terminal status for all blockers in one query.
+	blockerIDs := make([]uuid.UUID, 0, len(blockerSet))
+	for id := range blockerSet {
+		blockerIDs = append(blockerIDs, id)
+	}
+	terminalStatuses := []string{
+		string(domain.EngineTaskStatusCompleted),
+		string(domain.EngineTaskStatusFailed),
+		string(domain.EngineTaskStatusCancelled),
+	}
+	var terminalBlockers []models.TaskModel
+	if err := r.db.WithContext(ctx).
+		Select("id").
+		Where("id IN ? AND status IN ?", blockerIDs, terminalStatuses).
+		Find(&terminalBlockers).Error; err != nil {
+		return nil, fmt.Errorf("check blocker statuses: %w", err)
+	}
+	terminalSet := make(map[uuid.UUID]struct{}, len(terminalBlockers))
+	for _, b := range terminalBlockers {
+		terminalSet[b.ID] = struct{}{}
+	}
+
+	// A subtask is ready iff every blocker it declares is in terminalSet.
+	ready := make([]domain.EngineTask, 0, len(tasks))
+	for _, t := range tasks {
+		allResolved := true
+		for _, blockerID := range t.BlockedBy {
+			if blockerID == uuid.Nil {
+				continue
+			}
+			if _, ok := terminalSet[blockerID]; !ok {
+				allResolved = false
+				break
+			}
+		}
+		if allResolved {
+			ready = append(ready, t)
+		}
+	}
+	return ready, nil
+}
+
 // toTaskModel maps a domain EngineTask to a GORM TaskModel.
 func toTaskModel(t *domain.EngineTask) models.TaskModel {
 	return models.TaskModel{
-		ID:           t.ID,
-		Title:        t.Title,
-		Description:  t.Description,
-		AgentName:    t.AgentName,
-		Source:       string(t.Source),
-		SourceID:     t.SourceID,
-		UserID:       t.UserID,
-		SessionID:    strPtr(t.SessionID),
-		ParentTaskID: t.ParentTaskID,
-		Depth:        t.Depth,
-		Status:       string(t.Status),
-		Mode:         string(t.Mode),
-		Result:       t.Result,
-		Error:        t.Error,
-		CreatedAt:    t.CreatedAt,
-		StartedAt:    t.StartedAt,
-		CompletedAt:  t.CompletedAt,
+		ID:                 t.ID,
+		Title:              t.Title,
+		Description:        t.Description,
+		AcceptanceCriteria: marshalStringSlice(t.AcceptanceCriteria),
+		AgentName:          t.AgentName,
+		Source:             string(t.Source),
+		SourceID:           t.SourceID,
+		UserID:             t.UserID,
+		SessionID:          strPtr(t.SessionID),
+		ParentTaskID:       t.ParentTaskID,
+		Depth:              t.Depth,
+		Status:             string(t.Status),
+		Mode:               string(t.Mode),
+		Priority:           t.Priority,
+		AssignedAgentID:    t.AssignedAgentID,
+		BlockedBy:          marshalUUIDSlice(t.BlockedBy),
+		Result:             t.Result,
+		Error:              t.Error,
+		CreatedAt:          t.CreatedAt,
+		UpdatedAt:          t.UpdatedAt,
+		ApprovedAt:         t.ApprovedAt,
+		StartedAt:          t.StartedAt,
+		CompletedAt:        t.CompletedAt,
 	}
 }
 
@@ -258,25 +414,78 @@ func derefStr(s *string) string {
 	return *s
 }
 
+func marshalStringSlice(s []string) string {
+	if len(s) == 0 {
+		return "[]"
+	}
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
+func unmarshalStringSlice(s string) []string {
+	if s == "" || s == "[]" {
+		return nil
+	}
+	var result []string
+	if err := json.Unmarshal([]byte(s), &result); err != nil {
+		slog.Warn("unmarshal string slice failed", "error", err, "raw", s)
+		return nil
+	}
+	return result
+}
+
+// marshalUUIDSlice serializes a slice of UUIDs into the JSON array string stored in DB.
+// uuid.UUID implements MarshalJSON (RFC 4122 string form) so encoding/json handles it.
+func marshalUUIDSlice(s []uuid.UUID) string {
+	if len(s) == 0 {
+		return "[]"
+	}
+	b, err := json.Marshal(s)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
+}
+
+// unmarshalUUIDSlice parses the stored JSON array string into a UUID slice.
+// Invalid or empty input returns nil — callers treat nil the same as empty.
+func unmarshalUUIDSlice(s string) []uuid.UUID {
+	if s == "" || s == "[]" {
+		return nil
+	}
+	var result []uuid.UUID
+	if err := json.Unmarshal([]byte(s), &result); err != nil {
+		slog.Warn("unmarshal UUID slice failed", "error", err, "raw", s)
+		return nil
+	}
+	return result
+}
+
 // toEngineTask maps a GORM TaskModel to a domain EngineTask.
 func toEngineTask(m *models.TaskModel) *domain.EngineTask {
 	return &domain.EngineTask{
-		ID:           m.ID,
-		Title:        m.Title,
-		Description:  m.Description,
-		AgentName:    m.AgentName,
-		Source:       domain.TaskSource(m.Source),
-		SourceID:     m.SourceID,
-		UserID:       m.UserID,
-		SessionID:    derefStr(m.SessionID),
-		ParentTaskID: m.ParentTaskID,
-		Depth:        m.Depth,
-		Status:       domain.EngineTaskStatus(m.Status),
-		Mode:         domain.TaskMode(m.Mode),
-		Result:       m.Result,
-		Error:        m.Error,
-		CreatedAt:    m.CreatedAt,
-		StartedAt:    m.StartedAt,
-		CompletedAt:  m.CompletedAt,
+		ID:                 m.ID,
+		Title:              m.Title,
+		Description:        m.Description,
+		AcceptanceCriteria: unmarshalStringSlice(m.AcceptanceCriteria),
+		AgentName:          m.AgentName,
+		Source:             domain.TaskSource(m.Source),
+		SourceID:           m.SourceID,
+		UserID:             m.UserID,
+		SessionID:          derefStr(m.SessionID),
+		ParentTaskID:       m.ParentTaskID,
+		Depth:              m.Depth,
+		Status:             domain.EngineTaskStatus(m.Status),
+		Mode:               domain.TaskMode(m.Mode),
+		Priority:           m.Priority,
+		AssignedAgentID:    m.AssignedAgentID,
+		BlockedBy:          unmarshalUUIDSlice(m.BlockedBy),
+		Result:             m.Result,
+		Error:              m.Error,
+		CreatedAt:          m.CreatedAt,
+		UpdatedAt:          m.UpdatedAt,
+		ApprovedAt:         m.ApprovedAt,
+		StartedAt:          m.StartedAt,
+		CompletedAt:        m.CompletedAt,
 	}
 }

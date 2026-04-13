@@ -46,11 +46,9 @@ type EngineTurnExecutorFactory struct {
 	agentResolver AgentModelResolver
 	agentConfig   *config.AgentConfig
 	// Raw deps for creating per-session ToolDepsProvider
-	taskManager    tools.TaskManager
-	subtaskManager tools.SubtaskManager
-	agentPool      tools.AgentPoolForTool
-	webSearchTool  einotool.InvokableTool
-	webFetchTool   einotool.InvokableTool
+	agentPool     tools.AgentPoolForTool
+	webSearchTool einotool.InvokableTool
+	webFetchTool  einotool.InvokableTool
 	// Getter for context reminders (from AgentService)
 	contextRemindersGetter func() []turn_executor.ContextReminderProvider
 	// Memory capability deps (injected via SetMemory — nil = disabled)
@@ -77,8 +75,6 @@ func NewEngineTurnExecutorFactory(
 	toolResolver *tools.AgentToolResolver,
 	modelSelector *llm.ModelSelector,
 	agentConfig *config.AgentConfig,
-	taskManager tools.TaskManager,
-	subtaskManager tools.SubtaskManager,
 	agentPool tools.AgentPoolForTool,
 	webSearchTool, webFetchTool einotool.InvokableTool,
 	contextRemindersGetter func() []turn_executor.ContextReminderProvider,
@@ -93,8 +89,6 @@ func NewEngineTurnExecutorFactory(
 		modelCache:             modelCache,
 		agentResolver:          agentResolver,
 		agentConfig:            agentConfig,
-		taskManager:            taskManager,
-		subtaskManager:         subtaskManager,
 		agentPool:              agentPool,
 		webSearchTool:          webSearchTool,
 		webFetchTool:           webFetchTool,
@@ -166,8 +160,6 @@ func (f *EngineTurnExecutorFactory) CreateForSession(
 	// Create per-session ToolDepsProvider with proxy for this session
 	baseDeps := tools.NewDefaultToolDepsProvider(
 		proxy,
-		f.taskManager,
-		f.subtaskManager,
 		f.agentPool,
 		f.webSearchTool,
 		f.webFetchTool,

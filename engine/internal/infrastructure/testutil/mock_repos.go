@@ -6,7 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 )
 
@@ -65,189 +67,261 @@ func (m *MockHistoryRepo) Create(ctx context.Context, message *domain.Message) e
 	return nil
 }
 
-// MockSubtaskManager implements tools.SubtaskManager interface for testing
-type MockSubtaskManager struct {
-	Subtasks map[string]*domain.Subtask
+// MockEngineTaskManager implements tools.EngineTaskManager + agent.SubtaskManager for testing.
+// In-memory, no persistence. Subtasks = EngineTask with ParentTaskID set.
+//
+// Task IDs are uuid.UUID so the mock matches the production adapter's behaviour.
+type MockEngineTaskManager struct {
+	Tasks map[uuid.UUID]*domain.EngineTask
+	mu    sync.Mutex
 }
 
-func NewMockSubtaskManager() *MockSubtaskManager {
-	return &MockSubtaskManager{
-		Subtasks: make(map[string]*domain.Subtask),
+func NewMockEngineTaskManager() *MockEngineTaskManager {
+	return &MockEngineTaskManager{Tasks: make(map[uuid.UUID]*domain.EngineTask)}
+}
+
+// --- tools.EngineTaskManager ---
+
+func (m *MockEngineTaskManager) CreateTask(ctx context.Context, params tools.CreateEngineTaskParams) (uuid.UUID, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	id := uuid.New()
+	status := domain.EngineTaskStatusPending
+	if params.RequireApproval {
+		status = domain.EngineTaskStatusDraft
 	}
-}
-
-func (m *MockSubtaskManager) CreateSubtask(ctx context.Context, sessionID, taskID, title, description string, blockedBy, files []string) (*domain.Subtask, error) {
-	id := fmt.Sprintf("subtask-%d", len(m.Subtasks)+1)
-	subtask := &domain.Subtask{
-		ID:            id,
-		SessionID:     sessionID,
-		TaskID:        taskID,
-		Title:         title,
-		Description:   description,
-		Status:        domain.SubtaskStatusPending,
-		BlockedBy:     blockedBy,
-		FilesInvolved: files,
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
-	}
-	m.Subtasks[id] = subtask
-	return subtask, nil
-}
-
-func (m *MockSubtaskManager) GetSubtask(ctx context.Context, subtaskID string) (*domain.Subtask, error) {
-	subtask, exists := m.Subtasks[subtaskID]
-	if !exists {
-		return nil, nil
-	}
-	return subtask, nil
-}
-
-func (m *MockSubtaskManager) GetSubtasksByTask(ctx context.Context, taskID string) ([]*domain.Subtask, error) {
-	var result []*domain.Subtask
-	for _, s := range m.Subtasks {
-		if s.TaskID == taskID {
-			result = append(result, s)
-		}
-	}
-	return result, nil
-}
-
-func (m *MockSubtaskManager) GetReadySubtasks(ctx context.Context, taskID string) ([]*domain.Subtask, error) {
-	var result []*domain.Subtask
-	for _, s := range m.Subtasks {
-		if s.TaskID == taskID && s.Status == domain.SubtaskStatusPending {
-			result = append(result, s)
-		}
-	}
-	return result, nil
-}
-
-func (m *MockSubtaskManager) CompleteSubtask(ctx context.Context, subtaskID, resultText string) error {
-	subtask, exists := m.Subtasks[subtaskID]
-	if !exists {
-		return fmt.Errorf("subtask not found: %s", subtaskID)
-	}
-	subtask.Status = domain.SubtaskStatusCompleted
-	subtask.Result = resultText
-	now := time.Now()
-	subtask.CompletedAt = &now
-	subtask.UpdatedAt = now
-	return nil
-}
-
-func (m *MockSubtaskManager) FailSubtask(ctx context.Context, subtaskID, reason string) error {
-	subtask, exists := m.Subtasks[subtaskID]
-	if !exists {
-		return fmt.Errorf("subtask not found: %s", subtaskID)
-	}
-	subtask.Status = domain.SubtaskStatusFailed
-	subtask.Result = reason
-	subtask.UpdatedAt = time.Now()
-	return nil
-}
-
-func (m *MockSubtaskManager) AssignSubtaskToAgent(ctx context.Context, subtaskID, agentID string) error {
-	subtask, exists := m.Subtasks[subtaskID]
-	if !exists {
-		return fmt.Errorf("subtask not found: %s", subtaskID)
-	}
-	subtask.AssignedAgentID = agentID
-	subtask.UpdatedAt = time.Now()
-	return nil
-}
-
-// MockTaskManager implements tools.TaskManager interface for testing
-type MockTaskManager struct {
-	Tasks  map[string]*domain.Task
-	nextID int
-}
-
-func NewMockTaskManager() *MockTaskManager {
-	return &MockTaskManager{
-		Tasks: make(map[string]*domain.Task),
-	}
-}
-
-func (m *MockTaskManager) CreateTask(ctx context.Context, sessionID, title, description string, criteria []string) (*domain.Task, error) {
-	m.nextID++
-	id := fmt.Sprintf("task-%d", m.nextID)
-	task, err := domain.NewTask(id, sessionID, title, description, criteria)
-	if err != nil {
-		return nil, err
+	task := &domain.EngineTask{
+		ID:                 id,
+		Title:              params.Title,
+		Description:        params.Description,
+		AcceptanceCriteria: params.AcceptanceCriteria,
+		SessionID:          params.SessionID,
+		Source:             domain.TaskSource(params.Source),
+		UserID:             params.UserID,
+		Priority:           params.Priority,
+		BlockedBy:          params.BlockedBy,
+		Status:             status,
+		Mode:               domain.TaskModeInteractive,
+		CreatedAt:          time.Now(),
+		UpdatedAt:          time.Now(),
 	}
 	m.Tasks[id] = task
-	return task, nil
+	return id, nil
 }
 
-func (m *MockTaskManager) ApproveTask(ctx context.Context, taskID string) error {
-	task, exists := m.Tasks[taskID]
-	if !exists {
-		return fmt.Errorf("task not found: %s", taskID)
+func (m *MockEngineTaskManager) UpdateTask(ctx context.Context, id uuid.UUID, title, description string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	task, ok := m.Tasks[id]
+	if !ok {
+		return fmt.Errorf("task not found: %s", id)
 	}
-	return task.Approve()
-}
-
-func (m *MockTaskManager) StartTask(ctx context.Context, taskID string) error {
-	task, exists := m.Tasks[taskID]
-	if !exists {
-		return fmt.Errorf("task not found: %s", taskID)
+	if title != "" {
+		task.Title = title
 	}
-	return task.Start()
-}
-
-func (m *MockTaskManager) GetTask(ctx context.Context, taskID string) (*domain.Task, error) {
-	task, exists := m.Tasks[taskID]
-	if !exists {
-		return nil, nil
+	if description != "" {
+		task.Description = description
 	}
-	return task, nil
+	task.UpdatedAt = time.Now()
+	return nil
 }
 
-func (m *MockTaskManager) GetTasks(ctx context.Context, sessionID string) ([]*domain.Task, error) {
-	var result []*domain.Task
+func (m *MockEngineTaskManager) GetTask(ctx context.Context, id uuid.UUID) (*domain.EngineTask, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.Tasks[id], nil
+}
+
+func (m *MockEngineTaskManager) SetTaskStatus(ctx context.Context, id uuid.UUID, status string, result string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	task, ok := m.Tasks[id]
+	if !ok {
+		return fmt.Errorf("task not found: %s", id)
+	}
+	if err := task.Transition(domain.EngineTaskStatus(status)); err != nil {
+		return err
+	}
+	task.Result = result
+	return nil
+}
+
+func (m *MockEngineTaskManager) ListTasks(ctx context.Context, sessionID string) ([]tools.EngineTaskSummary, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var result []tools.EngineTaskSummary
 	for _, t := range m.Tasks {
-		if t.SessionID == sessionID {
-			result = append(result, t)
+		if t.SessionID != sessionID {
+			continue
 		}
+		var parentID *string
+		if t.ParentTaskID != nil {
+			s := t.ParentTaskID.String()
+			parentID = &s
+		}
+		result = append(result, tools.EngineTaskSummary{
+			ID:       t.ID.String(),
+			Title:    t.Title,
+			Status:   string(t.Status),
+			ParentID: parentID,
+			Priority: t.Priority,
+		})
 	}
 	return result, nil
 }
 
-func (m *MockTaskManager) CompleteTask(ctx context.Context, taskID string) error {
-	task, exists := m.Tasks[taskID]
-	if !exists {
-		return fmt.Errorf("task not found: %s", taskID)
+func (m *MockEngineTaskManager) CreateSubTask(ctx context.Context, parentID uuid.UUID, params tools.CreateEngineTaskParams) (uuid.UUID, error) {
+	if parentID == uuid.Nil {
+		return uuid.Nil, fmt.Errorf("parent task not found: %s", parentID)
 	}
-	return task.Complete()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	id := uuid.New()
+	status := domain.EngineTaskStatusPending
+	if params.RequireApproval {
+		status = domain.EngineTaskStatusDraft
+	}
+	task := &domain.EngineTask{
+		ID:                 id,
+		Title:              params.Title,
+		Description:        params.Description,
+		AcceptanceCriteria: params.AcceptanceCriteria,
+		SessionID:          params.SessionID,
+		Source:             domain.TaskSource(params.Source),
+		UserID:             params.UserID,
+		ParentTaskID:       &parentID,
+		Priority:           params.Priority,
+		BlockedBy:          params.BlockedBy,
+		Status:             status,
+		Mode:               domain.TaskModeInteractive,
+		CreatedAt:          time.Now(),
+		UpdatedAt:          time.Now(),
+	}
+	m.Tasks[id] = task
+	return id, nil
 }
 
-func (m *MockTaskManager) FailTask(ctx context.Context, taskID, reason string) error {
-	task, exists := m.Tasks[taskID]
-	if !exists {
-		return fmt.Errorf("task not found: %s", taskID)
+func (m *MockEngineTaskManager) ListSubtasks(ctx context.Context, parentID uuid.UUID) ([]tools.EngineTaskSummary, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var result []tools.EngineTaskSummary
+	for _, t := range m.Tasks {
+		if t.ParentTaskID == nil || *t.ParentTaskID != parentID {
+			continue
+		}
+		result = append(result, tools.EngineTaskSummary{ID: t.ID.String(), Title: t.Title, Status: string(t.Status)})
 	}
-	return task.Fail()
+	return result, nil
 }
 
-func (m *MockTaskManager) CancelTask(ctx context.Context, taskID, reason string) error {
-	task, exists := m.Tasks[taskID]
-	if !exists {
-		return fmt.Errorf("task not found: %s", taskID)
+func (m *MockEngineTaskManager) ListReadySubtasks(ctx context.Context, parentID uuid.UUID) ([]tools.EngineTaskSummary, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	isTerminal := func(s domain.EngineTaskStatus) bool {
+		return s == domain.EngineTaskStatusCompleted ||
+			s == domain.EngineTaskStatusFailed ||
+			s == domain.EngineTaskStatusCancelled
 	}
-	return task.Cancel()
+	var result []tools.EngineTaskSummary
+	for _, t := range m.Tasks {
+		if t.ParentTaskID == nil || *t.ParentTaskID != parentID {
+			continue
+		}
+		if t.Status != domain.EngineTaskStatusPending {
+			continue
+		}
+		// Every declared blocker must be in terminal state.
+		allResolved := true
+		for _, blockerID := range t.BlockedBy {
+			if blockerID == uuid.Nil {
+				continue
+			}
+			blocker, ok := m.Tasks[blockerID]
+			if !ok || !isTerminal(blocker.Status) {
+				allResolved = false
+				break
+			}
+		}
+		if !allResolved {
+			continue
+		}
+		result = append(result, tools.EngineTaskSummary{ID: t.ID.String(), Title: t.Title, Status: string(t.Status)})
+	}
+	return result, nil
 }
 
-func (m *MockTaskManager) SetTaskPriority(ctx context.Context, taskID string, priority int) error {
-	task, exists := m.Tasks[taskID]
-	if !exists {
-		return fmt.Errorf("task not found: %s", taskID)
+func (m *MockEngineTaskManager) ApproveTask(ctx context.Context, id uuid.UUID) error {
+	return m.SetTaskStatus(ctx, id, string(domain.EngineTaskStatusApproved), "")
+}
+
+func (m *MockEngineTaskManager) StartTask(ctx context.Context, id uuid.UUID) error {
+	return m.SetTaskStatus(ctx, id, string(domain.EngineTaskStatusInProgress), "")
+}
+
+func (m *MockEngineTaskManager) CompleteTask(ctx context.Context, id uuid.UUID, result string) error {
+	return m.SetTaskStatus(ctx, id, string(domain.EngineTaskStatusCompleted), result)
+}
+
+func (m *MockEngineTaskManager) FailTask(ctx context.Context, id uuid.UUID, reason string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	task, ok := m.Tasks[id]
+	if !ok {
+		return fmt.Errorf("task not found: %s", id)
+	}
+	return task.Fail(reason)
+}
+
+func (m *MockEngineTaskManager) CancelTask(ctx context.Context, id uuid.UUID, reason string) error {
+	return m.SetTaskStatus(ctx, id, string(domain.EngineTaskStatusCancelled), reason)
+}
+
+func (m *MockEngineTaskManager) SetTaskPriority(ctx context.Context, id uuid.UUID, priority int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	task, ok := m.Tasks[id]
+	if !ok {
+		return fmt.Errorf("task not found: %s", id)
 	}
 	return task.SetPriority(priority)
 }
 
-func (m *MockTaskManager) GetNextTask(ctx context.Context, sessionID string) (*domain.Task, error) {
+func (m *MockEngineTaskManager) GetNextTask(ctx context.Context, sessionID string) (*domain.EngineTask, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, status := range []domain.EngineTaskStatus{
+		domain.EngineTaskStatusInProgress,
+		domain.EngineTaskStatusApproved,
+		domain.EngineTaskStatusPending,
+	} {
+		for _, t := range m.Tasks {
+			if t.SessionID == sessionID && t.Status == status {
+				return t, nil
+			}
+		}
+	}
+	return nil, nil
+}
+
+func (m *MockEngineTaskManager) AssignTaskToAgent(ctx context.Context, id uuid.UUID, agentID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	task, ok := m.Tasks[id]
+	if !ok {
+		return fmt.Errorf("task not found: %s", id)
+	}
+	task.AssignToAgent(agentID)
+	if task.Status == domain.EngineTaskStatusApproved || task.Status == domain.EngineTaskStatusPending {
+		return task.Start()
+	}
+	return nil
+}
+
+func (m *MockEngineTaskManager) GetTaskByAgentID(ctx context.Context, agentID string) (*domain.EngineTask, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for _, t := range m.Tasks {
-		if t.SessionID == sessionID && (t.Status == domain.TaskStatusApproved || t.Status == domain.TaskStatusInProgress) {
+		if t.AssignedAgentID == agentID && t.Status == domain.EngineTaskStatusInProgress {
 			return t, nil
 		}
 	}
@@ -313,11 +387,11 @@ func TestFlowConfig() (*config.FlowsConfig, *config.PromptsConfig) {
 				Name:            "supervisor-flow",
 				SystemPromptRef: "supervisor_prompt",
 				Tools: []string{
-					"manage_subtasks", "manage_tasks",
+					"manage_tasks",
 					"read_file", "write_file", "edit_file",
 					"search_code", "get_project_tree", "smart_search", "grep_search", "glob",
 					"execute_command", "ask_user",
-					"spawn_code_agent",
+					"spawn_agent",
 					"lsp",
 				},
 				MaxSteps:       10,

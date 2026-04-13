@@ -10,7 +10,7 @@ import (
 
 // TestNoDirectCodingForComplexTask verifies that the supervisor does NOT use write_file/edit_file
 // directly for complex tasks. Instead, it should create a task via manage_tasks and delegate
-// to code agents via spawn_code_agent.
+// to code agents via spawn_agent.
 //
 // This catches the real bug: supervisor reads existing files, then starts writing code directly
 // (write_file main.dart, edit_file pubspec.yaml) instead of creating a structured task.

@@ -50,8 +50,8 @@ type AgentCompletionInfo struct {
 	Error     string
 }
 
-// spawnCodeAgentArgs represents tool arguments
-type spawnCodeAgentArgs struct {
+// spawnAgentArgs represents tool arguments
+type spawnAgentArgs struct {
 	Action          string `json:"action"` // spawn, status, list, stop, restart, wait
 	SubtaskID       string `json:"subtask_id,omitempty"`
 	AgentID         string `json:"agent_id,omitempty"`
@@ -74,27 +74,27 @@ type AgentPoolForTool interface {
 	RestartAgent(ctx context.Context, agentID string, blocking bool) (string, error)
 }
 
-// SpawnCodeAgentTool implements async Code Agent spawning
-type SpawnCodeAgentTool struct {
+// SpawnAgentTool implements async Code Agent spawning
+type SpawnAgentTool struct {
 	pool       AgentPoolForTool
 	sessionID  string
 	projectKey string
 }
 
-// NewSpawnCodeAgentTool creates the spawn_code_agent tool
-func NewSpawnCodeAgentTool(pool AgentPoolForTool, sessionID, projectKey string) tool.InvokableTool {
-	return &SpawnCodeAgentTool{pool: pool, sessionID: sessionID, projectKey: projectKey}
+// NewSpawnAgentTool creates the spawn_agent tool
+func NewSpawnAgentTool(pool AgentPoolForTool, sessionID, projectKey string) tool.InvokableTool {
+	return &SpawnAgentTool{pool: pool, sessionID: sessionID, projectKey: projectKey}
 }
 
-func (t *SpawnCodeAgentTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
+func (t *SpawnAgentTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
-		Name: "spawn_code_agent",
+		Name: "spawn_agent",
 		Desc: `Spawn and manage Code Agent workers (BLOCKING).
 
 BLOCKING BEHAVIOR (CRITICAL):
 - "spawn" now BLOCKS until the agent completes OR user sends a message
 - If user interrupts (sends message while waiting): you will receive [INTERRUPT] with the user's message
-- After handling the user's message, call spawn_code_agent(action=wait) to resume waiting for agents
+- After handling the user's message, call spawn_agent(action=wait) to resume waiting for agents
 - Parallel spawns: if you spawn multiple agents in parallel, only ONE will get [INTERRUPT], others get [PAUSED]
 
 Actions:
@@ -121,18 +121,18 @@ Code Agents execute subtasks autonomously. They have access to: read_file, write
 	}, nil
 }
 
-func (t *SpawnCodeAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
-	var args spawnCodeAgentArgs
+func (t *SpawnAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
+	var args spawnAgentArgs
 	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
 		return fmt.Sprintf("[ERROR] Invalid JSON: %v", err), nil
 	}
 
-	slog.InfoContext(ctx, "[spawn_code_agent] invoked", "action", args.Action)
+	slog.InfoContext(ctx, "[spawn_agent] invoked", "action", args.Action)
 
 	if args.Action == "" {
 		return `[ERROR] "action" field is empty. You MUST specify an action.
 Valid actions: spawn, wait, status, list, stop, restart.
-Typical workflow: manage_subtasks(action=create) → spawn_code_agent(action=spawn, subtask_id=<ID from create response>).
+Typical workflow: manage_subtasks(action=create) → spawn_agent(action=spawn, subtask_id=<ID from create response>).
 Example: {"action": "spawn", "subtask_id": "abc123"}`, nil
 	}
 
@@ -170,7 +170,7 @@ Example: {"action": "spawn", "subtask_id": "abc123"}`, nil
 
 		if err != nil {
 			if strings.Contains(err.Error(), "max concurrent agents reached") {
-				return fmt.Sprintf("Cannot spawn new agent: %s. Use spawn_code_agent(action=list) to check running agents, or spawn_code_agent(action=stop, agent_id=...) to stop one.", err.Error()), nil
+				return fmt.Sprintf("Cannot spawn new agent: %s. Use spawn_agent(action=list) to check running agents, or spawn_agent(action=stop, agent_id=...) to stop one.", err.Error()), nil
 			}
 			if flowType == domain.FlowType("coder") {
 				return fmt.Sprintf("[ERROR] %v. "+
@@ -191,7 +191,7 @@ Example: {"action": "spawn", "subtask_id": "abc123"}`, nil
 				return fmt.Sprintf("[INTERRUPT] User message received while agents work.\n"+
 					"User said: %s\n"+
 					"Agents still running: %s\n\n"+
-					"Handle the user's message, then call spawn_code_agent(action=wait) to resume waiting.",
+					"Handle the user's message, then call spawn_agent(action=wait) to resume waiting.",
 					result.UserMessage, strings.Join(result.StillRunning, ", ")), nil
 			}
 			// Not the responder — another parallel spawn handles the interrupt
@@ -217,7 +217,7 @@ Example: {"action": "spawn", "subtask_id": "abc123"}`, nil
 				return fmt.Sprintf("[INTERRUPT] User message received while agents work.\n"+
 					"User said: %s\n"+
 					"Agents still running: %s\n\n"+
-					"Handle the user's message, then call spawn_code_agent(action=wait) to resume waiting.",
+					"Handle the user's message, then call spawn_agent(action=wait) to resume waiting.",
 					result.UserMessage, strings.Join(result.StillRunning, ", ")), nil
 			}
 			return "[PAUSED] Interrupt handled by parallel spawn call.", nil
@@ -291,7 +291,7 @@ Example: {"action": "spawn", "subtask_id": "abc123"}`, nil
 				return fmt.Sprintf("[INTERRUPT] User message received while agents work.\n"+
 					"User said: %s\n"+
 					"Agents still running: %s\n\n"+
-					"Handle the user's message, then call spawn_code_agent(action=wait) to resume waiting.",
+					"Handle the user's message, then call spawn_agent(action=wait) to resume waiting.",
 					result.UserMessage, strings.Join(result.StillRunning, ", ")), nil
 			}
 			return "[PAUSED] Interrupt handled by parallel spawn call.", nil

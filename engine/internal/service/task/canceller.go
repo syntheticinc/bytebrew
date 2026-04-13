@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/google/uuid"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 )
 
 // CancelTaskRepository defines the data access needed for task cancellation (consumer-side).
 type CancelTaskRepository interface {
-	GetByID(ctx context.Context, id string) (*domain.EngineTask, error)
-	UpdateStatus(ctx context.Context, id string, status domain.EngineTaskStatus) error
-	GetSubTasks(ctx context.Context, parentID string) ([]domain.EngineTask, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*domain.EngineTask, error)
+	UpdateStatus(ctx context.Context, id uuid.UUID, status domain.EngineTaskStatus) error
+	GetSubTasks(ctx context.Context, parentID uuid.UUID) ([]domain.EngineTask, error)
 }
 
 // TaskCanceller cancels a task and its sub-tasks recursively.
@@ -27,7 +28,7 @@ func NewTaskCanceller(repo CancelTaskRepository) *TaskCanceller {
 
 // Cancel cancels a task and all its non-terminal sub-tasks.
 // Terminal tasks are left unchanged (idempotent).
-func (c *TaskCanceller) Cancel(ctx context.Context, taskID string) error {
+func (c *TaskCanceller) Cancel(ctx context.Context, taskID uuid.UUID) error {
 	task, err := c.repo.GetByID(ctx, taskID)
 	if err != nil {
 		return fmt.Errorf("get task %s: %w", taskID, err)

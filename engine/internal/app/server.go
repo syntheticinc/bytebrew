@@ -681,14 +681,22 @@ func Run(sc ServerConfig) error {
 			})
 
 			// Tasks
-			taskHandler := deliveryhttp.NewTaskHandler(&taskServiceHTTPAdapter{repo: taskRepo})
+			taskHandler := deliveryhttp.NewTaskHandler(&taskServiceHTTPAdapter{
+				repo:    taskRepo,
+				manager: components.TaskManager,
+			})
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeTasks))
 				r.Post("/api/v1/tasks", taskHandler.Create)
 				r.Get("/api/v1/tasks", taskHandler.List)
 				r.Get("/api/v1/tasks/{id}", taskHandler.Get)
 				r.Delete("/api/v1/tasks/{id}", taskHandler.Cancel)
-				r.Post("/api/v1/tasks/{id}/input", taskHandler.ProvideInput)
+				r.Get("/api/v1/tasks/{id}/subtasks", taskHandler.ListSubtasks)
+				r.Post("/api/v1/tasks/{id}/approve", taskHandler.Approve)
+				r.Post("/api/v1/tasks/{id}/start", taskHandler.Start)
+				r.Post("/api/v1/tasks/{id}/complete", taskHandler.Complete)
+				r.Post("/api/v1/tasks/{id}/fail", taskHandler.Fail)
+				r.Post("/api/v1/tasks/{id}/priority", taskHandler.SetPriority)
 			})
 
 			// Dispatch Tasks (lifecycle dispatcher queries)
@@ -1170,8 +1178,6 @@ func Run(sc ServerConfig) error {
 		components.AgentToolResolver,
 		components.ModelSelector,
 		components.AgentConfig,
-		components.WorkManager,
-		components.WorkManager,
 		components.AgentPoolAdapter,
 		components.WebSearchTool,
 		components.WebFetchTool,
@@ -1185,6 +1191,11 @@ func Run(sc ServerConfig) error {
 		agentModelResolver,
 	)
 	flowHandlerCfg.TurnExecutorFactory = factory
+
+	// platformTriggerRepo is shared across platform services: completion hook (wired
+	// inside the pgDB block below) and cron scheduler (wired after sessProcessor).
+	// Declared at this scope so both consumers can see it.
+	var platformTriggerRepo *config_repo.GORMTriggerRepository
 
 	// Wire memory storage into factory for memory_recall/memory_store tools (US-001 Memory capability)
 	if pgDB != nil {
@@ -1203,8 +1214,23 @@ func Run(sc ServerConfig) error {
 		loggerInstance.InfoContext(ctx, "Escalation handler wired into TurnExecutorFactory")
 
 		// Wire EngineTaskManager so agents use DB-backed tasks (visible in Admin)
-		factory.SetEngineTaskManager(&engineTaskManagerAdapter{repo: taskRepo})
+		factory.SetEngineTaskManager(components.TaskManager)
 		loggerInstance.InfoContext(ctx, "EngineTaskManager wired into TurnExecutorFactory")
+
+		// Platform services: completion webhook here; cron scheduler wires later
+		// (once sessProcessor exists so the executor can actually run the agent).
+		// The completion hook fires on terminal transitions (completed/failed/cancelled)
+		// and POSTs to the originating trigger's on_complete_url (if any).
+		if taskRepo != nil {
+			platformTriggerRepo = config_repo.NewGORMTriggerRepository(pgDB)
+			completionNotifier := task.NewCompletionNotifier()
+			completionHook := infrastructure.NewTaskCompletionHook(taskRepo, platformTriggerRepo, completionNotifier)
+			components.TaskManager.SetCompletionHook(completionHook)
+			// Drain in-flight webhooks on shutdown so customer integrations do not silently
+			// lose completion notifications when the server is restarted.
+			defer completionHook.Stop()
+			loggerInstance.InfoContext(ctx, "Task completion notifier wired")
+		}
 
 		// US-003: Wire guardrail pipeline with per-agent config resolver
 		factory.SetGuardrail(
@@ -1223,11 +1249,36 @@ func Run(sc ServerConfig) error {
 	sessProcessor := session_processor.New(sessionRegistry, factory, eventStore)
 	flowHandlerCfg.SessionProcessor = sessProcessor
 
+	// Autonomous task executor: cron/webhook triggers create a task, the worker picks it
+	// up, opens a session scoped to the trigger's schema, runs the agent, records the
+	// final answer. Wiring lives here because the executor needs sessProcessor and the
+	// session registry, which are built just above.
+	if taskRepo != nil && platformTriggerRepo != nil {
+		taskExecutor := infrastructure.NewTaskExecutor(
+			components.TaskManager,
+			sessionRegistry,
+			sessProcessor,
+			0, // 0 → DefaultTaskTimeout
+		)
+		taskWorker := infrastructure.StartBackgroundWorker(taskExecutor, 4)
+		if taskWorker != nil {
+			defer taskWorker.Stop()
+		}
+
+		cronScheduler, cronErr := infrastructure.StartCronScheduler(ctx, platformTriggerRepo, components.TaskManager, taskWorker)
+		if cronErr != nil {
+			loggerInstance.WarnContext(ctx, "cron scheduler failed to start", "error", cronErr)
+		} else if cronScheduler != nil {
+			// Stop the scheduler when the server exits so in-flight ticks are not left hanging.
+			defer cronScheduler.Stop()
+		}
+	}
+
 	// Wire up agent pool if available (multi-agent mode)
 	if components.AgentPool != nil && components.AgentPoolAdapter != nil {
 		flowHandlerCfg.AgentPoolProxy = components.AgentPool
 		flowHandlerCfg.AgentPoolAdapter = components.AgentPoolAdapter
-		flowHandlerCfg.WorkManager = components.WorkManager
+		flowHandlerCfg.WorkManager = components.TaskManager
 		flowHandlerCfg.SessionStorage = components.SessionStorage
 		sessProcessor.SetAgentPoolRegistrar(components.AgentPool)
 		// Re-wire AgentPool with AgentRegistry as FlowProvider (replaces legacy FlowManager)
@@ -1349,23 +1400,10 @@ func Run(sc ServerConfig) error {
 		}
 	}
 
-	// CronScheduler: load triggers from DB and start
-	var cronScheduler *task.CronScheduler
-	if taskRepo != nil {
-		cronScheduler = task.NewCronScheduler(&cronTaskCreatorHTTPAdapter{repo: taskRepo})
-		triggers, trigErr := loadTriggersFromDB(pgDB)
-		if trigErr == nil {
-			for _, t := range triggers {
-				if t.Type == "cron" && t.Schedule != "" {
-					if err := cronScheduler.AddTrigger(t.Schedule, t.Title, t.Description, t.AgentName, fmt.Sprintf("trigger-%s", t.ID)); err != nil {
-						slog.Warn("Failed to add cron trigger", "id", t.ID, "error", err)
-					}
-				}
-			}
-		}
-		cronScheduler.Start()
-		slog.InfoContext(ctx, "Cron scheduler started", "triggers", len(triggers))
-	}
+	// Cron scheduler wiring lives in the platform-services block above
+	// (infrastructure.StartCronScheduler). The legacy duplicate that used
+	// cronTaskCreatorHTTPAdapter was removed — it created a second scheduler
+	// that fired every trigger twice on boot.
 
 	// Create WS connection handler for local CLI clients
 	var agentCanceller ws.AgentCanceller
@@ -1460,11 +1498,7 @@ func Run(sc ServerConfig) error {
 		bridgeCleanup()
 	}
 
-	// Stop cron scheduler
-	if cronScheduler != nil {
-		cronScheduler.Stop()
-		slog.Info("Cron scheduler stopped")
-	}
+	// Cron scheduler is stopped via defer inside the platform-services block above.
 
 	// Stop license watcher
 	if sc.LicenseProvider != nil {
