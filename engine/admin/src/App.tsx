@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage';
 import HealthPage from './pages/HealthPage';
 import MCPPage from './pages/MCPPage';
 import ModelsPage from './pages/ModelsPage';
+import TasksPage from './pages/TasksPage';
 import SettingsPage from './pages/SettingsPage';
 import APIKeysPage from './pages/APIKeysPage';
 import ConfigPage from './pages/ConfigPage';
@@ -43,6 +44,7 @@ export default function App() {
             <Route path="/builder/:schema/:agent" element={<AgentDrillInPage />} />
             <Route path="/mcp" element={<MCPPage />} />
             <Route path="/models" element={<ModelsPage />} />
+            <Route path="/tasks" element={<TasksPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/api-keys" element={<APIKeysPage />} />
             <Route path="/config" element={<ConfigPage />} />

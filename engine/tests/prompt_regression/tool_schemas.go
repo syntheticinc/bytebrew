@@ -22,6 +22,9 @@ var supervisorToolNames = []string{
 	"lsp",
 	"get_project_tree",
 	"execute_command",
+	"manage_tasks",
+	"manage_subtasks",
+	"spawn_code_agent",
 	"ask_user",
 }
 
@@ -66,6 +69,12 @@ func createToolForSchema(name string) tool.InvokableTool {
 		return tools.NewGetProjectTreeTool(nil, "", "")
 	case "execute_command":
 		return tools.NewExecuteCommandTool(nil, "")
+	case "manage_tasks":
+		return tools.NewManageTasksTool(nil, nil, "")
+	case "manage_subtasks":
+		return tools.NewManageSubtasksTool(nil, "")
+	case "spawn_code_agent":
+		return tools.NewSpawnCodeAgentTool(nil, "", "")
 	case "ask_user":
 		return tools.NewAskUserTool(nil, "")
 	default:

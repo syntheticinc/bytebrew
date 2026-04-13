@@ -48,6 +48,13 @@ const icons = {
       <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
     </svg>
   ),
+  tasks: (
+    <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
+      <rect x="8" y="2" width="8" height="4" rx="1" />
+      <path d="M9 14l2 2 4-4" />
+    </svg>
+  ),
   apiKeys: (
     <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
@@ -142,6 +149,12 @@ const sections: NavSection[] = [
       { to: '/models', label: 'Models', icon: icons.models },
       { to: '/knowledge', label: 'Knowledge', icon: icons.knowledge },
       { to: '/widget', label: 'Widgets', icon: icons.widget },
+    ],
+  },
+  {
+    label: 'Automation',
+    items: [
+      { to: '/tasks', label: 'Tasks', icon: icons.tasks },
     ],
   },
   {

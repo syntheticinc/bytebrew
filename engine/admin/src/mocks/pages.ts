@@ -3,6 +3,7 @@ import type {
   Model,
   MCPServer,
   Trigger,
+  PaginatedTaskResponse,
   APIToken,
   Setting,
   AuditEntry,
@@ -128,6 +129,19 @@ export const MOCK_TRIGGERS: Trigger[] = [
   { id: '2', type: 'cron', title: 'daily-report', agent_id: '2', agent_name: 'support-agent', schedule: '0 9 * * *', description: 'Daily summary', enabled: true, created_at: '2026-03-25T00:00:00Z' },
   { id: '3', type: 'webhook', title: 'escalation-hook', agent_id: '3', agent_name: 'escalation', webhook_path: '/webhook/escalate', enabled: false, created_at: '2026-04-01T00:00:00Z' },
 ];
+
+export const MOCK_TASKS_PAGINATED: PaginatedTaskResponse = {
+  data: [
+    { id: '1', title: 'Process support ticket #4521', agent_name: 'support-agent', status: 'completed', source: 'webhook', created_at: '2026-04-05T14:30:00Z' },
+    { id: '2', title: 'Analyze lead score batch', agent_name: 'lead-scorer', status: 'in_progress', source: 'cron', created_at: '2026-04-05T14:00:00Z' },
+    { id: '3', title: 'Code review PR #89', agent_name: 'review-agent', status: 'failed', source: 'webhook', created_at: '2026-04-05T13:15:00Z' },
+    { id: '4', title: 'Outreach to prospect', agent_name: 'outreach-agent', status: 'completed', source: 'cron', created_at: '2026-04-05T12:00:00Z' },
+  ],
+  total: 4,
+  page: 1,
+  per_page: 20,
+  total_pages: 1,
+};
 
 export const MOCK_TOKENS: APIToken[] = [
   { id: '1', name: 'Production API', scopes_mask: 7, created_at: '2026-03-01T00:00:00Z', last_used_at: '2026-04-05T14:00:00Z' },

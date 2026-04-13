@@ -159,6 +159,9 @@ func TestGetContentRiskLevel_AllTools(t *testing.T) {
 		{"get_project_tree", RiskLow},
 		{"lsp", RiskLow},
 		// None
+		{"manage_tasks", RiskNone},
+		{"manage_subtasks", RiskNone},
+		{"spawn_code_agent", RiskNone},
 		{"write_file", RiskNone},
 		{"edit_file", RiskNone},
 		{"ask_user", RiskNone},

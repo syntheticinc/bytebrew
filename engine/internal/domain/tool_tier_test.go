@@ -12,7 +12,10 @@ func TestClassifyToolTier(t *testing.T) {
 		// Tier 1 — Core
 		{"ask_user", ToolTierCore},
 		{"show_structured_output", ToolTierCore},
+		{"manage_tasks", ToolTierCore},
+		{"manage_subtasks", ToolTierCore},
 		{"wait", ToolTierCore},
+		{"spawn_code_agent", ToolTierCore},
 		{"spawn_researcher", ToolTierCore},
 
 		// Tier 2 — Capability

@@ -4,7 +4,7 @@ package tools
 type SecurityZone string
 
 const (
-	ZoneSafe      SecurityZone = "safe"      // No risk: ask_user, web_search
+	ZoneSafe      SecurityZone = "safe"      // No risk: ask_user, web_search, manage_tasks
 	ZoneCaution   SecurityZone = "caution"   // Medium risk: web_fetch (external content)
 	ZoneDangerous SecurityZone = "dangerous" // High risk: file system + command execution
 )
@@ -33,6 +33,26 @@ var toolMetadataRegistry = map[string]ToolMetadata{
 		SecurityZone: ZoneSafe,
 		Hint:         "Returns search snippets only. Consider enabling web_fetch (Caution zone) to allow the agent to read full page content from search results.",
 		Companion:    "web_fetch",
+	},
+	"manage_tasks": {
+		Name:         "manage_tasks",
+		Description:  "Creates, updates, and manages work tasks. The agent uses this to plan work, track progress, and organize subtasks for delegation to other agents.",
+		SecurityZone: ZoneSafe,
+	},
+	"manage_subtasks": {
+		Name:         "manage_subtasks",
+		Description:  "Manages subtasks within a parent task — create, update status, mark complete. Used for granular progress tracking.",
+		SecurityZone: ZoneSafe,
+	},
+	"engine_manage_tasks": {
+		Name:         "engine_manage_tasks",
+		Description:  "Manages tasks stored in PostgreSQL. Provides persistent, DB-backed task tracking that survives server restarts.",
+		SecurityZone: ZoneSafe,
+	},
+	"spawn_code_agent": {
+		Name:         "spawn_code_agent",
+		Description:  "Spawns a specialized sub-agent (e.g. code-agent, reviewer) to handle a specific subtask. The sub-agent works independently and returns a summary when done.",
+		SecurityZone: ZoneSafe,
 	},
 
 	// === CAUTION ZONE ===

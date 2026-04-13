@@ -11,9 +11,11 @@ type AuditLogModel struct {
 	Action    string    `gorm:"type:varchar(50);not null;index"`
 	Resource  string    `gorm:"type:varchar(500)"`
 	Details   string    `gorm:"type:text"`
-	SessionID *string `gorm:"type:varchar(36);index"`
+	SessionID *string   `gorm:"type:varchar(36);index"`
+	TaskID    *string   `gorm:"type:uuid;index"`
 
 	Session *SessionModel `gorm:"foreignKey:SessionID"`
+	Task    *TaskModel    `gorm:"foreignKey:TaskID"`
 }
 
 func (AuditLogModel) TableName() string { return "audit_log" }

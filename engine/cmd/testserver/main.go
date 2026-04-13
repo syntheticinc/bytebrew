@@ -65,37 +65,102 @@ func main() {
 		Prompts:            promptsCfg,
 	}
 
-	// 6. Create ModelSelector and AgentPool for multi-agent support
+	// 6. Create mock managers
+	subtaskMgr := testutil.NewMockSubtaskManager()
+	taskMgr := testutil.NewMockTaskManager()
+
+	// Pre-seed subtask for "multi-agent" scenario
+	if *scenario == "multi-agent" {
+		subtaskMgr.Subtasks["test-subtask-1"] = &domain.Subtask{
+			ID:          "test-subtask-1",
+			SessionID:   "",
+			TaskID:      "test-task-1",
+			Title:       "Implement greeting function",
+			Description: "Create a greeting function that returns Hello World.",
+			Status:      domain.SubtaskStatusPending,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		}
+	}
+
+	// Pre-seed subtask for "agent-interrupt" scenario
+	if *scenario == "agent-interrupt" {
+		subtaskMgr.Subtasks["test-subtask-1"] = &domain.Subtask{
+			ID:          "test-subtask-1",
+			SessionID:   "",
+			TaskID:      "test-task-1",
+			Title:       "Long running task",
+			Description: "This task takes a long time to complete.",
+			Status:      domain.SubtaskStatusPending,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		}
+	}
+
+	// Pre-seed subtask for "agent-failure" scenario
+	if *scenario == "agent-failure" {
+		subtaskMgr.Subtasks["test-subtask-1"] = &domain.Subtask{
+			ID:          "test-subtask-1",
+			SessionID:   "",
+			TaskID:      "test-task-1",
+			Title:       "Failing task",
+			Description: "This task will fail.",
+			Status:      domain.SubtaskStatusPending,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		}
+	}
+
+	// Pre-seed subtask for "multi-agent-read" scenario
+	if *scenario == "multi-agent-read" {
+		subtaskMgr.Subtasks["test-subtask-1"] = &domain.Subtask{
+			ID:          "test-subtask-1",
+			SessionID:   "",
+			TaskID:      "test-task-1",
+			Title:       "Read source file",
+			Description: "Read the main source file.",
+			Status:      domain.SubtaskStatusPending,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		}
+	}
+
+	// 7. Create ModelSelector and AgentPool for multi-agent support
 	modelSelector := llm.NewModelSelector(chatModel, "mock-model")
 	agentRunStorage := testutil.NewMockAgentRunStorage()
 	agentPool := agentservice.NewAgentPool(agentservice.AgentPoolConfig{
 		ModelSelector:   modelSelector,
+		SubtaskManager:  subtaskMgr,
 		AgentRunStorage: agentRunStorage,
 		AgentConfig:     agentConfig,
 		MaxConcurrent:   0,
 	})
 	agentPoolAdapter := agentservice.NewAgentPoolAdapter(agentPool)
 
-	// Create ToolDepsProvider for AgentPool (spawned agents need tool deps)
+	// Create ToolDepsProvider for AgentPool (code agents need tool deps)
 	toolDepsProvider := tools.NewDefaultToolDepsProvider(
-		nil, // proxy — will be set per-session by FlowHandler
-		nil, // webSearchTool
-		nil, // webFetchTool
+		nil,             // proxy — will be set per-session by FlowHandler
+		taskMgr,
+		subtaskMgr,
+		agentPoolAdapter,
+		nil, nil,        // webSearchTool, webFetchTool
 	)
 
 	// Set Engine deps on AgentPool so spawned agents can run
 	agentPool.SetEngine(agentEngine, flowManager, toolResolver, toolDepsProvider, nil, nil)
 
-	// 7. Create EngineTurnExecutorFactory (SAME as production!)
+	// 8. Create EngineTurnExecutorFactory (SAME as production!)
 	factory := infrastructure.NewEngineTurnExecutorFactory(
 		agentEngine,
 		flowManager,
 		toolResolver,
 		modelSelector,
 		agentConfig,
-		agentPoolAdapter,
-		nil, // webSearchTool
-		nil, // webFetchTool
+		taskMgr,
+		subtaskMgr,
+		agentPoolAdapter, // was nil
+		nil,
+		nil,
 		nil, // contextRemindersGetter — not needed in test
 		nil, // modelCache
 		nil, // agentModelResolver

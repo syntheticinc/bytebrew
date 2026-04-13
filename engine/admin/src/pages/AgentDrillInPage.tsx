@@ -27,7 +27,7 @@ const TOOL_TIERS: Record<ToolTier, { label: string; description: string; tools: 
   core: {
     label: 'Core',
     description: 'Essential tools always available to every agent',
-    tools: ['ask_user', 'show_structured_output', 'wait'],
+    tools: ['ask_user', 'show_structured_output', 'manage_tasks', 'manage_subtasks', 'wait'],
     labelClass: 'text-brand-shade3',
     borderClass: 'border-brand-shade3/30',
   },

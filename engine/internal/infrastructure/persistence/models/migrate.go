@@ -33,14 +33,17 @@ func AutoMigrate(db *gorm.DB) error {
 		&TriggerModel{},
 		&SettingModel{},
 
-		// Dashboard runtime tables (4)
+		// Dashboard runtime tables (5)
 		&SessionModel{},
+		&TaskModel{},
 		&SessionEventModel{},
 		&APITokenModel{},
 		&AuditLogModel{},
 
-		// Agent runtime tables (7)
+		// Agent runtime tables (9)
 		&RuntimeSessionModel{},
+		&RuntimeTaskModel{},
+		&RuntimeSubtaskModel{},
 		&RuntimeAgentRunModel{},
 		&RuntimeDeviceModel{},
 		&RuntimeConfigKV{},

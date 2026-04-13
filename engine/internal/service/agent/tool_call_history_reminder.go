@@ -163,7 +163,7 @@ func (r *ToolCallHistoryReminder) GetContextReminder(_ context.Context, sessionI
 	// Check for consecutive same-tool calls
 	if sameToolCount := r.consecutiveSameTool[sessionID]; sameToolCount >= 3 {
 		lastTool := r.lastToolName[sessionID]
-		reminder += fmt.Sprintf("\n\n⚠️ WARNING: You called \"%s\" %d times in a row. You may be stuck in a loop. Try a DIFFERENT tool or approach.", lastTool, sameToolCount)
+		reminder += fmt.Sprintf("\n\n⚠️ WARNING: You called \"%s\" %d times in a row. You may be stuck in a loop. Try a DIFFERENT tool or approach. If waiting for subtasks — use spawn_code_agent to start them.", lastTool, sameToolCount)
 	}
 
 	// Check for error loops

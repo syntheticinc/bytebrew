@@ -54,6 +54,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/service/recovery"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/resilience"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/session_processor"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/task"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/turn_executor"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	"github.com/syntheticinc/bytebrew/engine/pkg/logger"
@@ -257,6 +258,7 @@ func Run(sc ServerConfig) error {
 	// Try loading bootstrap config for PostgreSQL database connection.
 	var agentRegistry *agent_registry.AgentRegistry
 	var pgDB *gorm.DB
+	var taskRepo *config_repo.GORMTaskRepository
 	var apiTokenRepo *config_repo.GORMAPITokenRepository
 	bootstrapCfg, bootstrapErr := config.LoadBootstrap(configPath)
 	if bootstrapErr != nil {
@@ -275,6 +277,7 @@ func Run(sc ServerConfig) error {
 		}
 
 		agentRepo := config_repo.NewGORMAgentRepository(pgDB)
+		taskRepo = config_repo.NewGORMTaskRepository(pgDB)
 		apiTokenRepo = config_repo.NewGORMAPITokenRepository(pgDB)
 		agentRegistry = agent_registry.New(agentRepo)
 		if loadErr := agentRegistry.Load(ctx); loadErr != nil {
@@ -455,12 +458,13 @@ func Run(sc ServerConfig) error {
 	// CompositeAgentSpawner routes spawn requests based on agent lifecycle mode:
 	// "spawn" agents → pool (unchanged), "persistent" agents → lifecycle.Manager.
 	var lifecycleManager *lifecycle.Manager
+	var lifecycleDispatcher *lifecycle.Dispatcher
 	var agentLifecycleReader AgentLifecycleReader
 	if components.AgentPoolAdapter != nil && agentRegistry != nil {
 		agentLifecycleReader = newAgentRegistryLifecycleAdapter(agentRegistry)
 		poolRunner := &poolBasedRunner{pool: components.AgentPoolAdapter}
 		lifecycleManager = lifecycle.NewManager(poolRunner)
-		_ = lifecycle.NewDispatcher(lifecycleManager) // dispatcher reserved for future use
+		lifecycleDispatcher = lifecycle.NewDispatcher(lifecycleManager)
 
 		if components.AgentToolResolver != nil {
 			compositeSpawner := NewCompositeAgentSpawner(
@@ -675,6 +679,27 @@ func Run(sc ServerConfig) error {
 				r.Delete("/api/v1/models/{name}", modelHandler.Delete)
 				r.Post("/api/v1/models/{name}/verify", modelHandler.Verify)
 			})
+
+			// Tasks
+			taskHandler := deliveryhttp.NewTaskHandler(&taskServiceHTTPAdapter{repo: taskRepo})
+			r.Group(func(r chi.Router) {
+				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeTasks))
+				r.Post("/api/v1/tasks", taskHandler.Create)
+				r.Get("/api/v1/tasks", taskHandler.List)
+				r.Get("/api/v1/tasks/{id}", taskHandler.Get)
+				r.Delete("/api/v1/tasks/{id}", taskHandler.Cancel)
+				r.Post("/api/v1/tasks/{id}/input", taskHandler.ProvideInput)
+			})
+
+			// Dispatch Tasks (lifecycle dispatcher queries)
+			if lifecycleDispatcher != nil {
+				dispatchHandler := deliveryhttp.NewDispatchHandler(lifecycleDispatcher)
+				r.Group(func(r chi.Router) {
+					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeTasks))
+					r.Get("/api/v1/dispatch/tasks/{taskId}", dispatchHandler.Get)
+					r.Get("/api/v1/sessions/{sessionId}/dispatch-tasks", dispatchHandler.ListBySession)
+				})
+			}
 
 			// Config
 			configHandler := deliveryhttp.NewConfigHandler(
@@ -983,9 +1008,41 @@ func Run(sc ServerConfig) error {
 
 		// Webhook route (internal only — triggered by external services, requires network access)
 		internalRouter.Post("/api/v1/webhooks/{path}", func(w http.ResponseWriter, req *http.Request) {
+			webhookPath := chi.URLParam(req, "path")
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusNotImplemented)
-			w.Write([]byte(`{"error":"webhook task creation removed"}`))
+
+			var body struct {
+				Title       string `json:"title"`
+				Description string `json:"description"`
+				Message     string `json:"message"`
+			}
+			_ = json.NewDecoder(req.Body).Decode(&body)
+
+			t := &domain.EngineTask{
+				Title:     "Webhook: " + webhookPath,
+				AgentName: "supervisor",
+				Source:    domain.TaskSourceWebhook,
+				SourceID:  webhookPath,
+				Status:    domain.EngineTaskStatusPending,
+				Mode:      domain.TaskModeBackground,
+			}
+			if body.Title != "" {
+				t.Title = body.Title
+			}
+			if body.Description != "" {
+				t.Description = body.Description
+			}
+			if body.Message != "" && t.Description == "" {
+				t.Description = body.Message
+			}
+
+			if err := taskRepo.Create(req.Context(), t); err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(`{"error":"` + err.Error() + `"}`))
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
+			w.Write([]byte(fmt.Sprintf(`{"task_id":"%s"}`, t.ID)))
 		})
 
 		// Serve Admin Dashboard SPA (static files) — internal only
@@ -1113,6 +1170,8 @@ func Run(sc ServerConfig) error {
 		components.AgentToolResolver,
 		components.ModelSelector,
 		components.AgentConfig,
+		components.WorkManager,
+		components.WorkManager,
 		components.AgentPoolAdapter,
 		components.WebSearchTool,
 		components.WebFetchTool,
@@ -1143,6 +1202,10 @@ func Run(sc ServerConfig) error {
 		factory.SetEscalation(escHandler)
 		loggerInstance.InfoContext(ctx, "Escalation handler wired into TurnExecutorFactory")
 
+		// Wire EngineTaskManager so agents use DB-backed tasks (visible in Admin)
+		factory.SetEngineTaskManager(&engineTaskManagerAdapter{repo: taskRepo})
+		loggerInstance.InfoContext(ctx, "EngineTaskManager wired into TurnExecutorFactory")
+
 		// US-003: Wire guardrail pipeline with per-agent config resolver
 		factory.SetGuardrail(
 			&guardrailCheckerAdapter{pipeline: guardrailPipeline},
@@ -1164,6 +1227,7 @@ func Run(sc ServerConfig) error {
 	if components.AgentPool != nil && components.AgentPoolAdapter != nil {
 		flowHandlerCfg.AgentPoolProxy = components.AgentPool
 		flowHandlerCfg.AgentPoolAdapter = components.AgentPoolAdapter
+		flowHandlerCfg.WorkManager = components.WorkManager
 		flowHandlerCfg.SessionStorage = components.SessionStorage
 		sessProcessor.SetAgentPoolRegistrar(components.AgentPool)
 		// Re-wire AgentPool with AgentRegistry as FlowProvider (replaces legacy FlowManager)
@@ -1285,6 +1349,24 @@ func Run(sc ServerConfig) error {
 		}
 	}
 
+	// CronScheduler: load triggers from DB and start
+	var cronScheduler *task.CronScheduler
+	if taskRepo != nil {
+		cronScheduler = task.NewCronScheduler(&cronTaskCreatorHTTPAdapter{repo: taskRepo})
+		triggers, trigErr := loadTriggersFromDB(pgDB)
+		if trigErr == nil {
+			for _, t := range triggers {
+				if t.Type == "cron" && t.Schedule != "" {
+					if err := cronScheduler.AddTrigger(t.Schedule, t.Title, t.Description, t.AgentName, fmt.Sprintf("trigger-%s", t.ID)); err != nil {
+						slog.Warn("Failed to add cron trigger", "id", t.ID, "error", err)
+					}
+				}
+			}
+		}
+		cronScheduler.Start()
+		slog.InfoContext(ctx, "Cron scheduler started", "triggers", len(triggers))
+	}
+
 	// Create WS connection handler for local CLI clients
 	var agentCanceller ws.AgentCanceller
 	if components.AgentPool != nil {
@@ -1376,6 +1458,12 @@ func Run(sc ServerConfig) error {
 	// Shutdown bridge first (stops accepting new messages)
 	if bridgeCleanup != nil {
 		bridgeCleanup()
+	}
+
+	// Stop cron scheduler
+	if cronScheduler != nil {
+		cronScheduler.Stop()
+		slog.Info("Cron scheduler stopped")
 	}
 
 	// Stop license watcher

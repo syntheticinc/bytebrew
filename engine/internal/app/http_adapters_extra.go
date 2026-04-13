@@ -9,9 +9,11 @@ import (
 	"gorm.io/gorm"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/task"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 )
@@ -609,6 +611,27 @@ func loadTriggersFromDB(db *gorm.DB) ([]triggerRow, error) {
 		})
 	}
 	return triggers, nil
+}
+
+// cronTaskCreatorHTTPAdapter bridges GORMTaskRepository to task.TaskCreator for CronScheduler.
+type cronTaskCreatorHTTPAdapter struct {
+	repo *config_repo.GORMTaskRepository
+}
+
+func (a *cronTaskCreatorHTTPAdapter) CreateFromTrigger(ctx context.Context, params task.TriggerTaskParams) (string, error) {
+	t := &domain.EngineTask{
+		Title:       params.Title,
+		Description: params.Description,
+		AgentName:   params.AgentName,
+		Source:      domain.TaskSource(params.Source),
+		SourceID:    params.SourceID,
+		Status:      domain.EngineTaskStatusPending,
+		Mode:        domain.TaskModeBackground,
+	}
+	if err := a.repo.Create(ctx, t); err != nil {
+		return "", err
+	}
+	return t.ID, nil
 }
 
 // convertRateLimitRules converts config rate limit rules to delivery HTTP types.

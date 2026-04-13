@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/orchestrator"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 )
@@ -14,9 +15,13 @@ import (
 // returns AllDone when all agents complete normally
 func TestWaitForAllSessionAgents_AllComplete(t *testing.T) {
 	ctx := context.Background()
+	mgr := newMockSubtaskManager()
+	mgr.addSubtask("subtask-1", &domain.Subtask{ID: "subtask-1", Title: "Test 1", Status: domain.SubtaskStatusPending})
+	mgr.addSubtask("subtask-2", &domain.Subtask{ID: "subtask-2", Title: "Test 2", Status: domain.SubtaskStatusPending})
 
 	pool := NewAgentPool(AgentPoolConfig{
-		AgentConfig: &config.AgentConfig{},
+		SubtaskManager: mgr,
+		AgentConfig:    &config.AgentConfig{},
 	})
 
 	// Create 2 blocking agents directly (without Spawn)
@@ -25,7 +30,7 @@ func TestWaitForAllSessionAgents_AllComplete(t *testing.T) {
 	pool.mu.Lock()
 	pool.agents[agent1] = &RunningAgent{
 		ID:            agent1,
-		SubtaskID:     "",
+		SubtaskID:     "subtask-1",
 		SessionID:     "session-1",
 		Status:        "running",
 		StartedAt:     time.Now(),
@@ -35,7 +40,7 @@ func TestWaitForAllSessionAgents_AllComplete(t *testing.T) {
 	}
 	pool.agents[agent2] = &RunningAgent{
 		ID:            agent2,
-		SubtaskID:     "",
+		SubtaskID:     "subtask-2",
 		SessionID:     "session-1",
 		Status:        "running",
 		StartedAt:     time.Now(),
@@ -101,9 +106,13 @@ func TestWaitForAllSessionAgents_AllComplete(t *testing.T) {
 // interrupts the wait
 func TestWaitForAllSessionAgents_Interrupt(t *testing.T) {
 	ctx := context.Background()
+	mgr := newMockSubtaskManager()
+	mgr.addSubtask("subtask-1", &domain.Subtask{ID: "subtask-1", Title: "Test 1", Status: domain.SubtaskStatusPending})
+	mgr.addSubtask("subtask-2", &domain.Subtask{ID: "subtask-2", Title: "Test 2", Status: domain.SubtaskStatusPending})
 
 	pool := NewAgentPool(AgentPoolConfig{
-		AgentConfig: &config.AgentConfig{},
+		SubtaskManager: mgr,
+		AgentConfig:    &config.AgentConfig{},
 	})
 
 	// Create 2 blocking agents directly
@@ -112,7 +121,7 @@ func TestWaitForAllSessionAgents_Interrupt(t *testing.T) {
 	pool.mu.Lock()
 	pool.agents[agent1] = &RunningAgent{
 		ID:            agent1,
-		SubtaskID:     "",
+		SubtaskID:     "subtask-1",
 		SessionID:     "session-1",
 		Status:        "running",
 		StartedAt:     time.Now(),
@@ -122,7 +131,7 @@ func TestWaitForAllSessionAgents_Interrupt(t *testing.T) {
 	}
 	pool.agents[agent2] = &RunningAgent{
 		ID:            agent2,
-		SubtaskID:     "",
+		SubtaskID:     "subtask-2",
 		SessionID:     "session-1",
 		Status:        "running",
 		StartedAt:     time.Now(),
@@ -183,9 +192,12 @@ func TestWaitForAllSessionAgents_Interrupt(t *testing.T) {
 // that only ONE parallel waiter gets IsInterruptResponder=true
 func TestWaitForAllSessionAgents_ParallelInterrupt_SingleResponder(t *testing.T) {
 	ctx := context.Background()
+	mgr := newMockSubtaskManager()
+	mgr.addSubtask("subtask-1", &domain.Subtask{ID: "subtask-1", Title: "Test 1", Status: domain.SubtaskStatusPending})
 
 	pool := NewAgentPool(AgentPoolConfig{
-		AgentConfig: &config.AgentConfig{},
+		SubtaskManager: mgr,
+		AgentConfig:    &config.AgentConfig{},
 	})
 
 	// Create 1 blocking agent directly
@@ -193,7 +205,7 @@ func TestWaitForAllSessionAgents_ParallelInterrupt_SingleResponder(t *testing.T)
 	pool.mu.Lock()
 	pool.agents[agent1] = &RunningAgent{
 		ID:            agent1,
-		SubtaskID:     "",
+		SubtaskID:     "subtask-1",
 		SessionID:     "session-1",
 		Status:        "running",
 		StartedAt:     time.Now(),
@@ -261,9 +273,12 @@ func TestWaitForAllSessionAgents_ParallelInterrupt_SingleResponder(t *testing.T)
 // causes wait to return error
 func TestWaitForAllSessionAgents_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
+	mgr := newMockSubtaskManager()
+	mgr.addSubtask("subtask-1", &domain.Subtask{ID: "subtask-1", Title: "Test 1", Status: domain.SubtaskStatusPending})
 
 	pool := NewAgentPool(AgentPoolConfig{
-		AgentConfig: &config.AgentConfig{},
+		SubtaskManager: mgr,
+		AgentConfig:    &config.AgentConfig{},
 	})
 
 	// Create blocking agent directly
@@ -271,7 +286,7 @@ func TestWaitForAllSessionAgents_ContextCancelled(t *testing.T) {
 	pool.mu.Lock()
 	pool.agents[agent1] = &RunningAgent{
 		ID:            agent1,
-		SubtaskID:     "",
+		SubtaskID:     "subtask-1",
 		SessionID:     "session-1",
 		Status:        "running",
 		StartedAt:     time.Now(),
@@ -311,8 +326,12 @@ func TestHasBlockingWait_TrueWhenWaiting(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // Ensures WaitForAllSessionAgents goroutine exits via ctx.Done()
 
+	mgr := newMockSubtaskManager()
+	mgr.addSubtask("subtask-1", &domain.Subtask{ID: "subtask-1", Title: "Test", Status: domain.SubtaskStatusPending})
+
 	pool := NewAgentPool(AgentPoolConfig{
-		AgentConfig: &config.AgentConfig{},
+		SubtaskManager: mgr,
+		AgentConfig:    &config.AgentConfig{},
 	})
 
 	// Initially false
@@ -326,7 +345,7 @@ func TestHasBlockingWait_TrueWhenWaiting(t *testing.T) {
 	pool.mu.Lock()
 	pool.agents[agent1] = &RunningAgent{
 		ID:            agent1,
-		SubtaskID:     "",
+		SubtaskID:     "subtask-1",
 		SessionID:     "session-1",
 		Status:        "running",
 		StartedAt:     time.Now(),
@@ -362,7 +381,8 @@ func TestHasBlockingWait_TrueWhenWaiting(t *testing.T) {
 // when no waiter is active
 func TestHasBlockingWait_FalseWhenNotWaiting(t *testing.T) {
 	pool := NewAgentPool(AgentPoolConfig{
-		AgentConfig: &config.AgentConfig{},
+		SubtaskManager: newMockSubtaskManager(),
+		AgentConfig:    &config.AgentConfig{},
 	})
 
 	if pool.HasBlockingWait("session-1") {
@@ -393,8 +413,12 @@ func TestSignalCompletion_DoubleClose(t *testing.T) {
 // TestBlockingSpawn_PublishesEventBus verifies that both blocking and non-blocking
 // agents publish to EventBus so Orchestrator can track active work status.
 func TestBlockingSpawn_PublishesEventBus(t *testing.T) {
+	mgr := newMockSubtaskManager()
+	mgr.addSubtask("subtask-1", &domain.Subtask{ID: "subtask-1", Title: "Test", Status: domain.SubtaskStatusPending})
+
 	pool := NewAgentPool(AgentPoolConfig{
-		AgentConfig: &config.AgentConfig{},
+		SubtaskManager: mgr,
+		AgentConfig:    &config.AgentConfig{},
 	})
 
 	// Use real SessionEventBus
@@ -406,7 +430,7 @@ func TestBlockingSpawn_PublishesEventBus(t *testing.T) {
 	pool.mu.Lock()
 	pool.agents[agentID] = &RunningAgent{
 		ID:            agentID,
-		SubtaskID:     "",
+		SubtaskID:     "subtask-1",
 		SessionID:     "session-1",
 		Status:        "running",
 		StartedAt:     time.Now(),
@@ -417,7 +441,7 @@ func TestBlockingSpawn_PublishesEventBus(t *testing.T) {
 	pool.mu.Unlock()
 
 	// Mark completed
-	pool.markCompleted(agentID, "", "result")
+	pool.markCompleted(agentID, "subtask-1", "result")
 
 	// Give async operations time to complete
 	time.Sleep(50 * time.Millisecond)
@@ -433,11 +457,12 @@ func TestBlockingSpawn_PublishesEventBus(t *testing.T) {
 	}
 
 	// Now test non-blocking
+	mgr.addSubtask("subtask-2", &domain.Subtask{ID: "subtask-2", Title: "Test 2", Status: domain.SubtaskStatusPending})
 	agentID2 := "agent-2"
 	pool.mu.Lock()
 	pool.agents[agentID2] = &RunningAgent{
 		ID:            agentID2,
-		SubtaskID:     "",
+		SubtaskID:     "subtask-2",
 		SessionID:     "session-1",
 		Status:        "running",
 		StartedAt:     time.Now(),
@@ -447,7 +472,7 @@ func TestBlockingSpawn_PublishesEventBus(t *testing.T) {
 	}
 	pool.mu.Unlock()
 
-	pool.markCompleted(agentID2, "", "result 2")
+	pool.markCompleted(agentID2, "subtask-2", "result 2")
 
 	// Give async operations time to complete
 	time.Sleep(50 * time.Millisecond)

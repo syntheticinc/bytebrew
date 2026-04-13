@@ -2,7 +2,9 @@ package testutil
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
@@ -61,6 +63,195 @@ func NewMockHistoryRepo() *MockHistoryRepo {
 func (m *MockHistoryRepo) Create(ctx context.Context, message *domain.Message) error {
 	m.Messages = append(m.Messages, message)
 	return nil
+}
+
+// MockSubtaskManager implements tools.SubtaskManager interface for testing
+type MockSubtaskManager struct {
+	Subtasks map[string]*domain.Subtask
+}
+
+func NewMockSubtaskManager() *MockSubtaskManager {
+	return &MockSubtaskManager{
+		Subtasks: make(map[string]*domain.Subtask),
+	}
+}
+
+func (m *MockSubtaskManager) CreateSubtask(ctx context.Context, sessionID, taskID, title, description string, blockedBy, files []string) (*domain.Subtask, error) {
+	id := fmt.Sprintf("subtask-%d", len(m.Subtasks)+1)
+	subtask := &domain.Subtask{
+		ID:            id,
+		SessionID:     sessionID,
+		TaskID:        taskID,
+		Title:         title,
+		Description:   description,
+		Status:        domain.SubtaskStatusPending,
+		BlockedBy:     blockedBy,
+		FilesInvolved: files,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+	m.Subtasks[id] = subtask
+	return subtask, nil
+}
+
+func (m *MockSubtaskManager) GetSubtask(ctx context.Context, subtaskID string) (*domain.Subtask, error) {
+	subtask, exists := m.Subtasks[subtaskID]
+	if !exists {
+		return nil, nil
+	}
+	return subtask, nil
+}
+
+func (m *MockSubtaskManager) GetSubtasksByTask(ctx context.Context, taskID string) ([]*domain.Subtask, error) {
+	var result []*domain.Subtask
+	for _, s := range m.Subtasks {
+		if s.TaskID == taskID {
+			result = append(result, s)
+		}
+	}
+	return result, nil
+}
+
+func (m *MockSubtaskManager) GetReadySubtasks(ctx context.Context, taskID string) ([]*domain.Subtask, error) {
+	var result []*domain.Subtask
+	for _, s := range m.Subtasks {
+		if s.TaskID == taskID && s.Status == domain.SubtaskStatusPending {
+			result = append(result, s)
+		}
+	}
+	return result, nil
+}
+
+func (m *MockSubtaskManager) CompleteSubtask(ctx context.Context, subtaskID, resultText string) error {
+	subtask, exists := m.Subtasks[subtaskID]
+	if !exists {
+		return fmt.Errorf("subtask not found: %s", subtaskID)
+	}
+	subtask.Status = domain.SubtaskStatusCompleted
+	subtask.Result = resultText
+	now := time.Now()
+	subtask.CompletedAt = &now
+	subtask.UpdatedAt = now
+	return nil
+}
+
+func (m *MockSubtaskManager) FailSubtask(ctx context.Context, subtaskID, reason string) error {
+	subtask, exists := m.Subtasks[subtaskID]
+	if !exists {
+		return fmt.Errorf("subtask not found: %s", subtaskID)
+	}
+	subtask.Status = domain.SubtaskStatusFailed
+	subtask.Result = reason
+	subtask.UpdatedAt = time.Now()
+	return nil
+}
+
+func (m *MockSubtaskManager) AssignSubtaskToAgent(ctx context.Context, subtaskID, agentID string) error {
+	subtask, exists := m.Subtasks[subtaskID]
+	if !exists {
+		return fmt.Errorf("subtask not found: %s", subtaskID)
+	}
+	subtask.AssignedAgentID = agentID
+	subtask.UpdatedAt = time.Now()
+	return nil
+}
+
+// MockTaskManager implements tools.TaskManager interface for testing
+type MockTaskManager struct {
+	Tasks  map[string]*domain.Task
+	nextID int
+}
+
+func NewMockTaskManager() *MockTaskManager {
+	return &MockTaskManager{
+		Tasks: make(map[string]*domain.Task),
+	}
+}
+
+func (m *MockTaskManager) CreateTask(ctx context.Context, sessionID, title, description string, criteria []string) (*domain.Task, error) {
+	m.nextID++
+	id := fmt.Sprintf("task-%d", m.nextID)
+	task, err := domain.NewTask(id, sessionID, title, description, criteria)
+	if err != nil {
+		return nil, err
+	}
+	m.Tasks[id] = task
+	return task, nil
+}
+
+func (m *MockTaskManager) ApproveTask(ctx context.Context, taskID string) error {
+	task, exists := m.Tasks[taskID]
+	if !exists {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+	return task.Approve()
+}
+
+func (m *MockTaskManager) StartTask(ctx context.Context, taskID string) error {
+	task, exists := m.Tasks[taskID]
+	if !exists {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+	return task.Start()
+}
+
+func (m *MockTaskManager) GetTask(ctx context.Context, taskID string) (*domain.Task, error) {
+	task, exists := m.Tasks[taskID]
+	if !exists {
+		return nil, nil
+	}
+	return task, nil
+}
+
+func (m *MockTaskManager) GetTasks(ctx context.Context, sessionID string) ([]*domain.Task, error) {
+	var result []*domain.Task
+	for _, t := range m.Tasks {
+		if t.SessionID == sessionID {
+			result = append(result, t)
+		}
+	}
+	return result, nil
+}
+
+func (m *MockTaskManager) CompleteTask(ctx context.Context, taskID string) error {
+	task, exists := m.Tasks[taskID]
+	if !exists {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+	return task.Complete()
+}
+
+func (m *MockTaskManager) FailTask(ctx context.Context, taskID, reason string) error {
+	task, exists := m.Tasks[taskID]
+	if !exists {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+	return task.Fail()
+}
+
+func (m *MockTaskManager) CancelTask(ctx context.Context, taskID, reason string) error {
+	task, exists := m.Tasks[taskID]
+	if !exists {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+	return task.Cancel()
+}
+
+func (m *MockTaskManager) SetTaskPriority(ctx context.Context, taskID string, priority int) error {
+	task, exists := m.Tasks[taskID]
+	if !exists {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+	return task.SetPriority(priority)
+}
+
+func (m *MockTaskManager) GetNextTask(ctx context.Context, sessionID string) (*domain.Task, error) {
+	for _, t := range m.Tasks {
+		if t.SessionID == sessionID && (t.Status == domain.TaskStatusApproved || t.Status == domain.TaskStatusInProgress) {
+			return t, nil
+		}
+	}
+	return nil, nil
 }
 
 // MockAgentRunStorage implements AgentRunStorage interface for testing
@@ -122,9 +313,11 @@ func TestFlowConfig() (*config.FlowsConfig, *config.PromptsConfig) {
 				Name:            "supervisor-flow",
 				SystemPromptRef: "supervisor_prompt",
 				Tools: []string{
+					"manage_subtasks", "manage_tasks",
 					"read_file", "write_file", "edit_file",
 					"search_code", "get_project_tree", "smart_search", "grep_search", "glob",
 					"execute_command", "ask_user",
+					"spawn_code_agent",
 					"lsp",
 				},
 				MaxSteps:       10,

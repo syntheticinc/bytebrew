@@ -113,6 +113,16 @@ func (p *AgentPool) runAgentWithEngine(
 	return result.Answer, nil
 }
 
+// runCodeAgentWithEngine executes a coder agent for a specific subtask.
+// Delegates to the generic runAgentWithEngine with coder-specific input.
+func (p *AgentPool) runCodeAgentWithEngine(
+	ctx context.Context,
+	sessionID, projectKey, agentID string,
+	subtask *domain.Subtask,
+) (string, error) {
+	input := buildCodeAgentInput(subtask)
+	return p.runAgentWithEngine(ctx, sessionID, projectKey, agentID, domain.FlowType("coder"), subtask.ID, input)
+}
 
 // resolveModel returns the LLM client and model name for the given agent.
 // Tries per-agent DB model (via modelIDResolver + modelCache) first,
@@ -139,3 +149,10 @@ func (p *AgentPool) resolveModel(ctx context.Context, agentName string) (model.T
 	return p.modelSelector.Select(flowType), p.modelSelector.ModelName(flowType)
 }
 
+func buildCodeAgentInput(subtask *domain.Subtask) string {
+	input := fmt.Sprintf("Subtask: %s\n\nDescription: %s", subtask.Title, subtask.Description)
+	if len(subtask.FilesInvolved) > 0 {
+		input += fmt.Sprintf("\n\nRelevant files: %v", subtask.FilesInvolved)
+	}
+	return input
+}

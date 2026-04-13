@@ -29,6 +29,12 @@ func (p *AgentPool) markCompleted(agentID, subtaskID, result string) {
 	agentRunStorage := p.agentRunStorage
 	p.mu.Unlock()
 
+	ctx := context.Background()
+	if subtaskID != "" {
+		if err := p.subtaskManager.CompleteSubtask(ctx, subtaskID, result); err != nil {
+			slog.Error("[AgentPool] failed to complete subtask", "subtask_id", subtaskID, "error", err)
+		}
+	}
 
 	// Update agent run in DB (if storage available)
 	if agentRunStorage != nil {
@@ -107,6 +113,12 @@ func (p *AgentPool) markFailed(agentID, subtaskID, reason string) {
 	agentRunStorage := p.agentRunStorage
 	p.mu.Unlock()
 
+	ctx := context.Background()
+	if subtaskID != "" {
+		if err := p.subtaskManager.FailSubtask(ctx, subtaskID, reason); err != nil {
+			slog.Error("[AgentPool] failed to mark subtask as failed", "subtask_id", subtaskID, "error", err)
+		}
+	}
 
 	// Update agent run in DB (if storage available)
 	if agentRunStorage != nil {

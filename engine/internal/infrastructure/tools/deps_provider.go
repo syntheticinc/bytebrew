@@ -8,6 +8,10 @@ import (
 // DefaultToolDepsProvider creates ToolDependencies for a given session
 type DefaultToolDepsProvider struct {
 	proxy              ClientOperationsProxy
+	taskManager        TaskManager
+	subtaskManager     SubtaskManager
+	agentPool          AgentPoolForTool
+	engineTaskManager  EngineTaskManager
 	webSearchTool      tool.InvokableTool
 	webFetchTool       tool.InvokableTool
 	projectRoot        string
@@ -18,13 +22,24 @@ type DefaultToolDepsProvider struct {
 // NewDefaultToolDepsProvider creates a new provider
 func NewDefaultToolDepsProvider(
 	proxy ClientOperationsProxy,
+	taskManager TaskManager,
+	subtaskManager SubtaskManager,
+	agentPool AgentPoolForTool,
 	webSearchTool, webFetchTool tool.InvokableTool,
 ) *DefaultToolDepsProvider {
 	return &DefaultToolDepsProvider{
-		proxy:         proxy,
-		webSearchTool: webSearchTool,
-		webFetchTool:  webFetchTool,
+		proxy:          proxy,
+		taskManager:    taskManager,
+		subtaskManager: subtaskManager,
+		agentPool:      agentPool,
+		webSearchTool:  webSearchTool,
+		webFetchTool:   webFetchTool,
 	}
+}
+
+// SetEngineTaskManager configures the DB-backed task manager for unified task management.
+func (p *DefaultToolDepsProvider) SetEngineTaskManager(mgr EngineTaskManager) {
+	p.engineTaskManager = mgr
 }
 
 // WithIndexing configures the chunk store and embedder for symbol-based tools.
@@ -37,13 +52,17 @@ func (p *DefaultToolDepsProvider) WithIndexing(projectRoot string, store *indexi
 // GetDependencies creates ToolDependencies for a session
 func (p *DefaultToolDepsProvider) GetDependencies(sessionID, projectKey string) ToolDependencies {
 	return ToolDependencies{
-		SessionID:     sessionID,
-		ProjectKey:    projectKey,
-		ProjectRoot:   p.projectRoot,
-		Proxy:         p.proxy,
-		WebSearchTool: p.webSearchTool,
-		WebFetchTool:  p.webFetchTool,
-		ChunkStore:    p.chunkStore,
-		Embedder:      p.embedder,
+		SessionID:         sessionID,
+		ProjectKey:        projectKey,
+		ProjectRoot:       p.projectRoot,
+		Proxy:             p.proxy,
+		TaskManager:       p.taskManager,
+		SubtaskManager:    p.subtaskManager,
+		AgentPool:         p.agentPool,
+		EngineTaskManager: p.engineTaskManager,
+		WebSearchTool:     p.webSearchTool,
+		WebFetchTool:      p.webFetchTool,
+		ChunkStore:        p.chunkStore,
+		Embedder:          p.embedder,
 	}
 }

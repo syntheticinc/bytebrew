@@ -31,6 +31,7 @@ type Entry struct {
 	Resource  string
 	Details   map[string]interface{}
 	SessionID string
+	TaskID    *string
 }
 
 // Log persists an audit entry to the database.
@@ -59,6 +60,7 @@ func (l *Logger) Log(ctx context.Context, entry Entry) error {
 		Resource:  entry.Resource,
 		Details:   string(detailsJSON),
 		SessionID: sessionID,
+		TaskID:    entry.TaskID,
 	}
 
 	if err := l.db.WithContext(ctx).Create(&model).Error; err != nil {

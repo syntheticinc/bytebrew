@@ -17,6 +17,10 @@ func NewAgentPoolAdapter(pool *AgentPool) *AgentPoolAdapter {
 	return &AgentPoolAdapter{pool: pool}
 }
 
+func (a *AgentPoolAdapter) Spawn(ctx context.Context, sessionID, projectKey, subtaskID string, blocking bool) (string, error) {
+	return a.pool.Spawn(ctx, sessionID, projectKey, subtaskID, blocking)
+}
+
 func (a *AgentPoolAdapter) SpawnWithDescription(ctx context.Context, sessionID, projectKey string, flowType domain.FlowType, description string, blocking bool) (string, error) {
 	return a.pool.SpawnWithDescription(ctx, sessionID, projectKey, flowType, description, blocking)
 }
