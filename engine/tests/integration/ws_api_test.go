@@ -71,26 +71,22 @@ func NewWsHarness(t *testing.T, scenario string) *WsHarness {
 		Prompts:            promptsCfg,
 	}
 
-	subtaskMgr := testutil.NewMockSubtaskManager()
-	taskMgr := testutil.NewMockTaskManager()
-
 	modelSelector := llm.NewModelSelector(chatModel, "mock-model")
 	agentRunStorage := testutil.NewMockAgentRunStorage()
 	agentPool := agentservice.NewAgentPool(agentservice.AgentPoolConfig{
 		ModelSelector:   modelSelector,
-		SubtaskManager:  subtaskMgr,
 		AgentRunStorage: agentRunStorage,
 		AgentConfig:     agentConfig,
 		MaxConcurrent:   0,
 	})
 	agentPoolAdapter := agentservice.NewAgentPoolAdapter(agentPool)
 
-	toolDepsProvider := tools.NewDefaultToolDepsProvider(nil, taskMgr, subtaskMgr, agentPoolAdapter, nil, nil)
+	toolDepsProvider := tools.NewDefaultToolDepsProvider(nil, nil, nil)
 	agentPool.SetEngine(agentEngine, flowManager, toolResolver, toolDepsProvider, nil, nil)
 
 	factory := infrastructure.NewEngineTurnExecutorFactory(
 		agentEngine, flowManager, toolResolver, modelSelector, agentConfig,
-		taskMgr, subtaskMgr, agentPoolAdapter, nil, nil, nil,
+		agentPoolAdapter, nil, nil, nil, nil, nil,
 	)
 
 	// Create in-memory event store for tests.

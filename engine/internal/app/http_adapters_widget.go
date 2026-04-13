@@ -9,7 +9,6 @@ import (
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 	"gorm.io/gorm"
 )
@@ -179,82 +178,6 @@ func joinDomains(domains []string) string {
 		return ""
 	}
 	return strings.Join(domains, ", ")
-}
-
-// engineTaskManagerAdapter implements tools.EngineTaskManager using GORMTaskRepository.
-type engineTaskManagerAdapter struct {
-	repo *config_repo.GORMTaskRepository
-}
-
-func (a *engineTaskManagerAdapter) CreateTask(ctx context.Context, params tools.CreateEngineTaskParams) (string, error) {
-	task := &domain.EngineTask{
-		Title:       params.Title,
-		Description: params.Description,
-		AgentName:   params.AgentName,
-		SessionID:   params.SessionID,
-		Source:      domain.TaskSource(params.Source),
-		UserID:      params.UserID,
-		Status:      domain.EngineTaskStatusPending,
-		Mode:        domain.TaskModeInteractive,
-	}
-	if err := a.repo.Create(ctx, task); err != nil {
-		return "", err
-	}
-	return task.ID, nil
-}
-
-func (a *engineTaskManagerAdapter) UpdateTask(ctx context.Context, id string, title, description string) error {
-	task, err := a.repo.GetByID(ctx, id)
-	if err != nil {
-		return err
-	}
-	if title != "" {
-		task.Title = title
-	}
-	if description != "" {
-		task.Description = description
-	}
-	return a.repo.Update(ctx, task)
-}
-
-func (a *engineTaskManagerAdapter) SetTaskStatus(ctx context.Context, id string, status string, result string) error {
-	return a.repo.UpdateStatus(ctx, id, domain.EngineTaskStatus(status), result)
-}
-
-func (a *engineTaskManagerAdapter) ListTasks(ctx context.Context, sessionID string) ([]tools.EngineTaskSummary, error) {
-	tasks, err := a.repo.List(ctx, config_repo.TaskFilter{SessionID: &sessionID})
-	if err != nil {
-		return nil, err
-	}
-	result := make([]tools.EngineTaskSummary, 0, len(tasks))
-	for _, t := range tasks {
-		result = append(result, tools.EngineTaskSummary{
-			ID:        t.ID,
-			Title:     t.Title,
-			Status:    string(t.Status),
-			AgentName: t.AgentName,
-			ParentID:  t.ParentTaskID,
-		})
-	}
-	return result, nil
-}
-
-func (a *engineTaskManagerAdapter) CreateSubTask(ctx context.Context, parentID string, params tools.CreateEngineTaskParams) (string, error) {
-	task := &domain.EngineTask{
-		Title:        params.Title,
-		Description:  params.Description,
-		AgentName:    params.AgentName,
-		SessionID:    params.SessionID,
-		Source:       domain.TaskSource(params.Source),
-		UserID:       params.UserID,
-		ParentTaskID: &parentID,
-		Status:       domain.EngineTaskStatusPending,
-		Mode:         domain.TaskModeInteractive,
-	}
-	if err := a.repo.Create(ctx, task); err != nil {
-		return "", err
-	}
-	return task.ID, nil
 }
 
 // schemaAgentResolverAdapter resolves schema UUID → agent names via schema repo.

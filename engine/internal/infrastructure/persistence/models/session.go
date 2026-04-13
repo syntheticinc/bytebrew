@@ -16,7 +16,6 @@ type SessionModel struct {
 
 	Agent  *AgentModel         `gorm:"foreignKey:AgentID"`
 	Events []SessionEventModel `gorm:"foreignKey:SessionID"`
-	Tasks  []TaskModel         `gorm:"foreignKey:SessionID"`
 }
 
 func (SessionModel) TableName() string { return "sessions" }

@@ -70,7 +70,6 @@ func TestLogger_Log(t *testing.T) {
 	assert.Contains(t, result.Details, `"status_code":200`)
 	require.NotNil(t, result.SessionID)
 	assert.Equal(t, "session-123", *result.SessionID)
-	assert.Nil(t, result.TaskID)
 }
 
 func TestLogger_Log_EmptySessionID(t *testing.T) {
@@ -88,25 +87,8 @@ func TestLogger_Log_EmptySessionID(t *testing.T) {
 	assert.Nil(t, result.SessionID)
 }
 
-func TestLogger_Log_WithTaskID(t *testing.T) {
-	db := setupTestDB(t)
-	logger := NewLogger(db)
 
-	taskID := "task-uuid-42"
-	err := logger.Log(context.Background(), Entry{
-		ActorType: "api_token",
-		ActorID:   "bot-token",
-		Action:    "task_created",
-		Resource:  "POST /api/v1/tasks",
-		TaskID:    &taskID,
-	})
-	require.NoError(t, err)
 
-	var result models.AuditLogModel
-	require.NoError(t, db.First(&result).Error)
-	require.NotNil(t, result.TaskID)
-	assert.Equal(t, "task-uuid-42", *result.TaskID)
-}
 
 func TestLogger_Log_ZeroTimestamp(t *testing.T) {
 	db := setupTestDB(t)

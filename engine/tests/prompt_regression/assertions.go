@@ -685,8 +685,6 @@ func AssertNoSystemPromptLeak(t *testing.T, msg *schema.Message) {
 	leakIndicators := []string{
 		"Available tools:",
 		"HARD RULE",
-		"spawn_code_agent",
-		"manage_tasks",
 		"supervisor_prompt",
 		"You are a coding assistant",
 		"You are a **Supervisor Agent**",

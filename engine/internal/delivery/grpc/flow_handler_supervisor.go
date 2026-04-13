@@ -2,9 +2,7 @@ package grpc
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
@@ -173,11 +171,8 @@ func (h *FlowHandler) runSupervisorMode(
 		}
 	}()
 
-	// 4. Create WorkChecker
+	// 4. Create WorkChecker (nil = no active work tracking)
 	var workChecker orchestrator.ActiveWorkChecker
-	if h.workManager != nil {
-		workChecker = &workCheckerAdapter{manager: h.workManager, sessionID: req.SessionId, proxy: proxy}
-	}
 
 	// 5. Create chunk + event callbacks
 	chunkCallback := createChunkCallback(ctx, streamWriter, req.SessionId)
@@ -236,51 +231,6 @@ func (h *FlowHandler) runSupervisorMode(
 
 	slog.InfoContext(ctx, "[Supervisor] session ended", "session_id", req.SessionId)
 	return nil
-}
-
-// workCheckerAdapter adapts WorkManagerForOrchestrator to orchestrator.ActiveWorkChecker.
-type workCheckerAdapter struct {
-	manager   WorkManagerForOrchestrator
-	sessionID string
-	proxy     *StreamBasedClientOperationsProxy
-}
-
-func (a *workCheckerAdapter) HasActiveWork(ctx context.Context) bool {
-	tasks, err := a.manager.GetTasks(ctx, a.sessionID)
-	if err != nil {
-		slog.ErrorContext(ctx, "failed to check active work", "error", err)
-		return true // fail-safe
-	}
-	for _, t := range tasks {
-		if !t.IsTerminal() {
-			return true
-		}
-	}
-	return false
-}
-
-func (a *workCheckerAdapter) IsWaitingForUser(_ context.Context) bool {
-	if a.proxy == nil {
-		return false
-	}
-	return a.proxy.IsWaitingForUser()
-}
-
-func (a *workCheckerAdapter) ActiveWorkSummary(ctx context.Context) string {
-	tasks, err := a.manager.GetTasks(ctx, a.sessionID)
-	if err != nil {
-		return fmt.Sprintf("error: %v", err)
-	}
-	var parts []string
-	for _, t := range tasks {
-		if t != nil && !t.IsTerminal() {
-			parts = append(parts, fmt.Sprintf("[%s] %q (%s)", t.ID, t.Title, t.Status))
-		}
-	}
-	if len(parts) == 0 {
-		return "none"
-	}
-	return strings.Join(parts, ", ")
 }
 
 // shouldSuppressIsFinal checks if IsFinal should be suppressed for an answer event.

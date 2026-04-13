@@ -8,9 +8,6 @@ import type {
   MCPCatalogEntry,
   MCPCatalogResponse,
   CreateMCPServerRequest,
-  TaskResponse,
-  TaskDetailResponse,
-  PaginatedTaskResponse,
   Trigger,
   CreateTriggerRequest,
   APIToken,
@@ -49,7 +46,6 @@ import {
   MOCK_MCP_SERVERS,
   MOCK_CATALOG,
   MOCK_TRIGGERS,
-  MOCK_TASKS_PAGINATED,
   MOCK_TOKENS,
   MOCK_SETTINGS,
   MOCK_AUDIT_LOGS,
@@ -241,26 +237,6 @@ class APIClient {
   clearTriggerTarget(id: string) {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
     return this.request<void>('DELETE', `/triggers/${id}/target`);
-  }
-
-  // ---- Tasks ----
-  listTasks(params?: Record<string, string>) {
-    if (this.isPrototype) return this.mock([] as TaskResponse[]);
-    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-    return this.request<TaskResponse[]>('GET', `/tasks${qs}`);
-  }
-  listTasksPaginated(params: Record<string, string>) {
-    if (this.isPrototype) return this.mock(MOCK_TASKS_PAGINATED);
-    const qs = '?' + new URLSearchParams(params).toString();
-    return this.request<PaginatedTaskResponse>('GET', `/tasks${qs}`);
-  }
-  getTask(id: string) {
-    if (this.isPrototype) return this.mock({ id, title: 'Mock Task', agent_name: 'assistant', status: 'completed', source: 'api', created_at: new Date().toISOString(), mode: 'chat' } as TaskDetailResponse);
-    return this.request<TaskDetailResponse>('GET', `/tasks/${id}`);
-  }
-  cancelTask(id: string) {
-    if (this.isPrototype) return this.mock(undefined as unknown as void);
-    return this.request<void>('DELETE', `/tasks/${id}`);
   }
 
   // ---- Health ----

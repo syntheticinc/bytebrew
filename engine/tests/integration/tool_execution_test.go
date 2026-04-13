@@ -139,46 +139,40 @@ func createTurnExecutor(t *testing.T, scenario, projectRoot string) *turnExecuto
 		Prompts:            promptsCfg,
 	}
 
-	subtaskMgr := testutil.NewMockSubtaskManager()
-	taskMgr := testutil.NewMockTaskManager()
-
 	modelSelector := llm.NewModelSelector(chatModel, "mock-model")
 	agentRunStorage := testutil.NewMockAgentRunStorage()
 	agentPool := agentservice.NewAgentPool(agentservice.AgentPoolConfig{
 		ModelSelector:   modelSelector,
-		SubtaskManager:  subtaskMgr,
 		AgentRunStorage: agentRunStorage,
 		AgentConfig:     agentConfig,
 		MaxConcurrent:   0,
 	})
 	agentPoolAdapter := agentservice.NewAgentPoolAdapter(agentPool)
 
-	toolDepsProvider := tools.NewDefaultToolDepsProvider(nil, taskMgr, subtaskMgr, agentPoolAdapter, nil, nil)
+	toolDepsProvider := tools.NewDefaultToolDepsProvider(nil, nil, nil)
 	agentPool.SetEngine(agentEngine, flowManager, toolResolver, toolDepsProvider, nil, nil)
 
 	proxy := tools.NewLocalClientOperationsProxy(projectRoot)
 
 	factory := infrastructure.NewEngineTurnExecutorFactory(
 		agentEngine, flowManager, toolResolver, modelSelector, agentConfig,
-		taskMgr, subtaskMgr, agentPoolAdapter, nil, nil, nil,
+		agentPoolAdapter, nil, nil, nil, nil, nil,
 	)
 
 	executor := factory.CreateForSession(proxy, "test-session", "test-project", projectRoot, "linux", "supervisor")
 	require.NotNil(t, executor, "TurnExecutor must not be nil")
 
 	return &turnExecutorSetup{
-		executor:   executor,
-		proxy:      proxy,
-		subtaskMgr: subtaskMgr,
-		agentPool:  agentPool,
+		executor:  executor,
+		proxy:     proxy,
+		agentPool: agentPool,
 	}
 }
 
 type turnExecutorSetup struct {
-	executor   orchestrator.TurnExecutor
-	proxy      *tools.LocalClientOperationsProxy
-	subtaskMgr *testutil.MockSubtaskManager
-	agentPool  *agentservice.AgentPool
+	executor  orchestrator.TurnExecutor
+	proxy     *tools.LocalClientOperationsProxy
+	agentPool *agentservice.AgentPool
 }
 
 // writeFixture creates a file in the project root with the given content.
@@ -431,25 +425,12 @@ func TestToolExecution_CancelDuringExecution(t *testing.T) {
 	}
 }
 
-// TC-A-08: multi-agent spawn — supervisor spawns code agent, code agent completes subtask
+// TC-A-08: multi-agent spawn — supervisor spawns a specialized agent, agent completes work
 func TestToolExecution_MultiAgent(t *testing.T) {
 	projectRoot := t.TempDir()
 
 	setup := createTurnExecutor(t, "multi-agent", projectRoot)
 	defer setup.proxy.Dispose()
-
-	// Pre-seed subtask that the supervisor will spawn a code agent for.
-	// The "multi-agent" MockChatModel scenario uses subtask_id="test-subtask-1".
-	setup.subtaskMgr.Subtasks["test-subtask-1"] = &domain.Subtask{
-		ID:          "test-subtask-1",
-		SessionID:   "test-session",
-		TaskID:      "task-1",
-		Title:       "Implement feature X",
-		Description: "Write the implementation for feature X",
-		Status:      domain.SubtaskStatusPending,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
 
 	// Code agent needs a proxy for the session to resolve tools
 	setup.agentPool.SetProxyForSession("test-session", setup.proxy)
@@ -461,39 +442,9 @@ func TestToolExecution_MultiAgent(t *testing.T) {
 		collector.chunkCallback, collector.eventCallback)
 	require.NoError(t, err)
 
-	// Verify spawn_code_agent was called by the supervisor
-	toolNames := collector.toolCallNames()
-	assert.Contains(t, toolNames, "spawn_code_agent", "spawn_code_agent should be called")
-
 	// Verify final answer from supervisor confirms completion
 	answer := collector.finalAnswer()
 	assert.Contains(t, answer, "agents completed", "answer should confirm all agents completed")
-
-	// Verify subtask was assigned to an agent
-	subtask := setup.subtaskMgr.Subtasks["test-subtask-1"]
-	assert.NotEmpty(t, subtask.AssignedAgentID, "subtask should be assigned to an agent")
-
-	// Verify agent lifecycle events via AgentPool's session event callback.
-	// These events are emitted through AgentPool.emitEventForSession, not through
-	// the TurnExecutor's event callback. Register a separate collector to verify.
-	poolEvents := collector.getEvents()
-
-	// Verify we have tool_call and tool_result events for spawn_code_agent
-	hasToolCall := false
-	hasToolResult := false
-	for _, e := range poolEvents {
-		if e.Type == domain.EventTypeToolCall && e.Content == "spawn_code_agent" {
-			hasToolCall = true
-		}
-		if e.Type == domain.EventTypeToolResult {
-			hasToolResult = true
-		}
-	}
-	assert.True(t, hasToolCall, "should have tool_call event for spawn_code_agent")
-	assert.True(t, hasToolResult, "should have tool_result event for spawn_code_agent")
-
-	// Verify subtask was completed by the code agent
-	assert.Equal(t, domain.SubtaskStatusCompleted, subtask.Status, "subtask should be completed")
 }
 
 // TestToolExecution_EventSequence verifies the event ordering:

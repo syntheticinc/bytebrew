@@ -29,7 +29,7 @@ func TestDispatcher_DispatchSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if packet.Status != domain.TaskPacketCompleted {
+	if packet.Status != DispatchCompleted {
 		t.Errorf("expected completed, got %s", packet.Status)
 	}
 	if packet.Result != "result" {
@@ -40,10 +40,10 @@ func TestDispatcher_DispatchSuccess(t *testing.T) {
 	hasDispatched := false
 	hasCompleted := false
 	for _, e := range stream.events {
-		if e.Type == domain.EventTypeTaskDispatched {
+		if e.Type == EventTypeTaskDispatched {
 			hasDispatched = true
 		}
-		if e.Type == domain.EventTypeTaskCompleted {
+		if e.Type == EventTypeTaskCompleted {
 			hasCompleted = true
 		}
 	}
@@ -66,13 +66,13 @@ func TestDispatcher_DispatchFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if packet.Status != domain.TaskPacketFailed {
+	if packet.Status != DispatchFailed {
 		t.Errorf("expected failed, got %s", packet.Status)
 	}
 
 	hasFailed := false
 	for _, e := range stream.events {
-		if e.Type == domain.EventTypeTaskFailed {
+		if e.Type == EventTypeTaskFailed {
 			hasFailed = true
 		}
 	}
@@ -97,13 +97,13 @@ func TestDispatcher_DispatchTimeout(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected timeout error")
 	}
-	if packet.Status != domain.TaskPacketTimeout {
+	if packet.Status != DispatchTimeout {
 		t.Errorf("expected timeout, got %s", packet.Status)
 	}
 
 	hasTimeout := false
 	for _, e := range stream.events {
-		if e.Type == domain.EventTypeTaskTimeout {
+		if e.Type == EventTypeTaskTimeout {
 			hasTimeout = true
 		}
 	}
@@ -135,7 +135,7 @@ func TestDispatcher_GetTask(t *testing.T) {
 	if !ok {
 		t.Fatal("expected task to exist")
 	}
-	if tp.Status != domain.TaskPacketCompleted {
+	if tp.Status != DispatchCompleted {
 		t.Errorf("expected completed, got %s", tp.Status)
 	}
 }
@@ -174,7 +174,7 @@ func TestDispatcher_PersistentChild(t *testing.T) {
 	if err != nil {
 		t.Fatalf("task 1: %v", err)
 	}
-	if p1.Status != domain.TaskPacketCompleted {
+	if p1.Status != DispatchCompleted {
 		t.Errorf("expected completed, got %s", p1.Status)
 	}
 
@@ -184,7 +184,7 @@ func TestDispatcher_PersistentChild(t *testing.T) {
 	if err != nil {
 		t.Fatalf("task 2: %v", err)
 	}
-	if p2.Status != domain.TaskPacketCompleted {
+	if p2.Status != DispatchCompleted {
 		t.Errorf("expected completed, got %s", p2.Status)
 	}
 

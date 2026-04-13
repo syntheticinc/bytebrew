@@ -48,7 +48,6 @@ agents:
         - glob
         - get_project_tree
         - execute_command
-        - manage_tasks
         - ask_user
         - web_search
         - web_fetch

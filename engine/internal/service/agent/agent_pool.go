@@ -110,13 +110,6 @@ func (a *RunningAgent) signalCompletion() {
 	})
 }
 
-// SubtaskManager defines operations needed by AgentPool for subtask management (consumer-side)
-type SubtaskManager interface {
-	AssignSubtaskToAgent(ctx context.Context, subtaskID, agentID string) error
-	CompleteSubtask(ctx context.Context, subtaskID, result string) error
-	FailSubtask(ctx context.Context, subtaskID, reason string) error
-	GetSubtask(ctx context.Context, subtaskID string) (*domain.Subtask, error)
-}
 
 // AgentEngine executes agents with persistence (consumer-side interface for Engine integration)
 type AgentEngine interface {
@@ -171,7 +164,6 @@ type AgentPoolConfig struct {
 	ModelSelector    AgentModelSelector
 	ModelIDResolver  AgentModelIDResolver  // optional: per-agent model resolution from DB
 	ModelCache       AgentModelCacheProvider // optional: paired with ModelIDResolver
-	SubtaskManager   SubtaskManager
 	AgentRunStorage  AgentRunStorage // optional: nil for backward compatibility
 	AgentConfig      *config.AgentConfig
 	SessionDirName   string // shared session dir from Supervisor for log co-location
@@ -186,7 +178,6 @@ type AgentPool struct {
 	modelIDResolver       AgentModelIDResolver
 	modelCache            AgentModelCacheProvider
 	sessionProxies        map[string]ClientOperationsProxy
-	subtaskManager        SubtaskManager
 	agentRunStorage       AgentRunStorage // optional: nil for backward compatibility
 	agentConfig           *config.AgentConfig
 	sessionEventCallbacks map[string]func(event *domain.AgentEvent) error
@@ -216,7 +207,6 @@ func NewAgentPool(cfg AgentPoolConfig) *AgentPool {
 		modelIDResolver:       cfg.ModelIDResolver,
 		modelCache:            cfg.ModelCache,
 		sessionProxies:        make(map[string]ClientOperationsProxy),
-		subtaskManager:        cfg.SubtaskManager,
 		agentRunStorage:       cfg.AgentRunStorage,
 		agentConfig:           cfg.AgentConfig,
 		sessionEventCallbacks: make(map[string]func(event *domain.AgentEvent) error),
@@ -304,107 +294,6 @@ func (p *AgentPool) SetEventBus(bus *orchestrator.SessionEventBus) {
 	p.mu.Lock()
 	p.eventBus = bus
 	p.mu.Unlock()
-}
-
-// Spawn starts a Code Agent in a goroutine for the given subtask.
-// Returns agentID immediately (async).
-// blocking: if true, supervisor will block on WaitForAllSessionAgents until this agent completes
-func (p *AgentPool) Spawn(ctx context.Context, sessionID, projectKey, subtaskID string, blocking bool) (string, error) {
-	agentID := "code-agent-" + uuid.New().String()[:8]
-
-	// Get subtask details
-	subtask, err := p.subtaskManager.GetSubtask(ctx, subtaskID)
-	if err != nil {
-		return "", fmt.Errorf("get subtask: %w", err)
-	}
-	if subtask == nil {
-		return "", fmt.Errorf("subtask not found: %s", subtaskID)
-	}
-
-	// Assign subtask to agent
-	if err := p.subtaskManager.AssignSubtaskToAgent(ctx, subtaskID, agentID); err != nil {
-		return "", fmt.Errorf("assign subtask: %w", err)
-	}
-
-	// Create agent context from session-scoped context (NOT from supervisor's turn context).
-	// This ensures agents survive supervisor turn cancellation.
-	// Pass ctx so RequestContext (forwarded headers) propagates to spawned agents.
-	sessionCtx := p.getOrCreateSessionCtx(sessionID, ctx)
-	agentCtx, cancel := context.WithCancel(sessionCtx)
-	agentCtx = domain.WithAgentID(agentCtx, agentID)
-
-	running := &RunningAgent{
-		ID:            agentID,
-		SubtaskID:     subtaskID,
-		SubtaskTitle:  subtask.Title,
-		SessionID:     sessionID,
-		ProjectKey:    projectKey,
-		Status:        "running",
-		StartedAt:     time.Now(),
-		Cancel:        cancel,
-		completionCh:  make(chan struct{}),
-		blockingSpawn: blocking,
-		flowType:      domain.FlowType("coder"),
-	}
-
-	// Register agent under lock (isolated critical section with defer)
-	if err := p.registerAgent(ctx, sessionID, agentID, running); err != nil {
-		return "", err
-	}
-
-	// Emit spawned event with full task input (same as what code agent receives).
-	// Client uses first line for UI labels, full content for [Task] message.
-	p.emitEventForSession(sessionID, &domain.AgentEvent{
-		Type:      domain.EventTypeAgentSpawned,
-		Timestamp: time.Now(),
-		AgentID:   agentID,
-		Content:   buildCodeAgentInput(subtask),
-		Metadata: map[string]interface{}{
-			"subtask_id":    subtaskID,
-			"subtask_title": subtask.Title,
-		},
-	})
-
-	// Launch goroutine
-	go func() {
-		defer cancel() // Release context resources on goroutine exit
-		defer func() {
-			if r := recover(); r != nil {
-				slog.Error("[AgentPool] Code Agent panicked",
-					"agent_id", agentID,
-					"subtask_id", subtaskID,
-					"panic", r)
-				p.markFailed(agentID, subtaskID, fmt.Sprintf("panic: %v", r))
-			}
-		}()
-
-		slog.InfoContext(agentCtx, "[AgentPool] Code Agent starting",
-			"agent_id", agentID,
-			"subtask_id", subtaskID)
-
-		// Execute code agent via Engine (always)
-		result, err := p.runCodeAgentWithEngine(agentCtx, sessionID, projectKey, agentID, subtask)
-
-		if err != nil {
-			slog.ErrorContext(agentCtx, "[AgentPool] Code Agent failed",
-				"agent_id", agentID,
-				"subtask_id", subtaskID,
-				"error", err)
-			p.markFailed(agentID, subtaskID, err.Error())
-			return
-		}
-
-		slog.InfoContext(agentCtx, "[AgentPool] Code Agent completed",
-			"agent_id", agentID,
-			"subtask_id", subtaskID)
-		p.markCompleted(agentID, subtaskID, result)
-	}()
-
-	slog.InfoContext(ctx, "[AgentPool] Code Agent spawned",
-		"agent_id", agentID,
-		"subtask_id", subtaskID)
-
-	return agentID, nil
 }
 
 // registerAgent adds the agent to the pool under mutex.
@@ -512,7 +401,7 @@ func (p *AgentPool) StopAgent(agentID string) error {
 	return nil
 }
 
-// RestartAgent restarts a failed/stopped agent on the same subtask or description
+// RestartAgent restarts a failed/stopped agent on the same description
 func (p *AgentPool) RestartAgent(ctx context.Context, agentID string, blocking bool) (string, error) {
 	p.mu.RLock()
 	agent, ok := p.agents[agentID]
@@ -524,32 +413,12 @@ func (p *AgentPool) RestartAgent(ctx context.Context, agentID string, blocking b
 		p.mu.RUnlock()
 		return "", fmt.Errorf("agent is still running: %s", agentID)
 	}
-	subtaskID := agent.SubtaskID
 	sessionID := agent.SessionID
 	flowType := agent.flowType
 	description := agent.description
 	p.mu.RUnlock()
 
-	// researcher/reviewer: restart via SpawnWithDescription
-	if subtaskID == "" {
-		return p.SpawnWithDescription(ctx, sessionID, "", flowType, description, blocking)
-	}
-
-	// coder: restart via Spawn (existing logic)
-	subtask, err := p.subtaskManager.GetSubtask(ctx, subtaskID)
-	if err != nil {
-		return "", fmt.Errorf("get subtask for restart: %w", err)
-	}
-	if subtask == nil {
-		return "", fmt.Errorf("subtask not found for restart: %s", subtaskID)
-	}
-
-	projectKey := ""
-	if pk, ok := subtask.Context["project_key"]; ok {
-		projectKey = pk
-	}
-
-	return p.Spawn(ctx, sessionID, projectKey, subtaskID, blocking)
+	return p.SpawnWithDescription(ctx, sessionID, "", flowType, description, blocking)
 }
 
 // SpawnWithDescription starts an agent (researcher/reviewer) with a text description instead of subtask.

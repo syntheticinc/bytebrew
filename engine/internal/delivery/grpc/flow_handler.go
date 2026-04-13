@@ -46,11 +46,6 @@ type ToolCallHistoryCleaner interface {
 	ClearSession(sessionID string)
 }
 
-// WorkManagerForOrchestrator provides active work status for the Orchestrator (consumer-side)
-type WorkManagerForOrchestrator interface {
-	GetTasks(ctx context.Context, sessionID string) ([]*domain.Task, error)
-}
-
 // SessionStorage defines interface for session persistence (consumer-side)
 type SessionStorage interface {
 	GetByID(ctx context.Context, id string) (*domain.Session, error)
@@ -68,30 +63,28 @@ type TurnExecutorFactory interface {
 type FlowHandler struct {
 	pb.UnimplementedFlowServiceServer
 	agentService           AgentService
-	agentPoolProxy         AgentPoolProxy              // For setting proxy/callback on agent pool
-	agentPoolAdapter       tools.AgentPoolForTool      // Adapter for spawn_code_agent tool registration
-	workManager            WorkManagerForOrchestrator  // For active work checking in Orchestrator
-	sessionStorage         SessionStorage              // For session persistence (optional)
-	turnExecutorFactory    TurnExecutorFactory         // Engine-based TurnExecutor factory (required)
-	toolCallHistoryCleaner ToolCallHistoryCleaner      // For clearing tool call history on cleanup (optional)
+	agentPoolProxy         AgentPoolProxy               // For setting proxy/callback on agent pool
+	agentPoolAdapter       tools.AgentPoolForTool       // Adapter for spawn_code_agent tool registration
+	sessionStorage         SessionStorage               // For session persistence (optional)
+	turnExecutorFactory    TurnExecutorFactory          // Engine-based TurnExecutor factory (required)
+	toolCallHistoryCleaner ToolCallHistoryCleaner       // For clearing tool call history on cleanup (optional)
 	pingService            *infragrpc.PingService
 	flowRegistry           ActiveFlowRegistry
-	sessionRegistry        SessionRegistryForHandler   // For server-streaming API (optional)
+	sessionRegistry        SessionRegistryForHandler    // For server-streaming API (optional)
 	sessionProcessor       *session_processor.Processor // Shared message processing loop (optional)
 }
 
 // FlowHandlerConfig holds configuration for FlowHandler
 type FlowHandlerConfig struct {
 	AgentService           AgentService
-	AgentPoolProxy         AgentPoolProxy              // Optional: for multi-agent mode
-	AgentPoolAdapter       tools.AgentPoolForTool      // Optional: for spawn_code_agent tool
-	WorkManager            WorkManagerForOrchestrator  // Optional: for Orchestrator active work checks
-	SessionStorage         SessionStorage              // Optional: for session persistence
-	TurnExecutorFactory    TurnExecutorFactory         // Engine-based TurnExecutor factory (required)
-	ToolCallHistoryCleaner ToolCallHistoryCleaner      // Optional: for clearing tool call history on cleanup
+	AgentPoolProxy         AgentPoolProxy               // Optional: for multi-agent mode
+	AgentPoolAdapter       tools.AgentPoolForTool       // Optional: for spawn_code_agent tool
+	SessionStorage         SessionStorage               // Optional: for session persistence
+	TurnExecutorFactory    TurnExecutorFactory          // Engine-based TurnExecutor factory (required)
+	ToolCallHistoryCleaner ToolCallHistoryCleaner       // Optional: for clearing tool call history on cleanup
 	PingInterval           time.Duration
 	FlowRegistry           ActiveFlowRegistry
-	SessionRegistry        SessionRegistryForHandler   // Optional: for server-streaming API
+	SessionRegistry        SessionRegistryForHandler    // Optional: for server-streaming API
 	SessionProcessor       *session_processor.Processor // Optional: shared message processing service
 }
 
@@ -128,7 +121,6 @@ func NewFlowHandlerWithConfig(cfg FlowHandlerConfig) (*FlowHandler, error) {
 		agentService:           cfg.AgentService,
 		agentPoolProxy:         cfg.AgentPoolProxy,
 		agentPoolAdapter:       cfg.AgentPoolAdapter,
-		workManager:            cfg.WorkManager,
 		sessionStorage:         cfg.SessionStorage,
 		turnExecutorFactory:    cfg.TurnExecutorFactory,
 		toolCallHistoryCleaner: cfg.ToolCallHistoryCleaner,

@@ -181,36 +181,6 @@ export interface CreateMCPServerRequest {
 }
 
 // ============================================================================
-// Task types
-// ============================================================================
-
-export interface TaskResponse {
-  id: string;
-  title: string;
-  agent_name: string;
-  status: string;
-  source: string;
-  created_at: string;
-}
-
-export interface TaskDetailResponse extends TaskResponse {
-  description?: string;
-  mode: string;
-  result?: string;
-  error?: string;
-  started_at?: string;
-  completed_at?: string;
-}
-
-export interface PaginatedTaskResponse {
-  data: TaskResponse[];
-  total: number;
-  page: number;
-  per_page: number;
-  total_pages: number;
-}
-
-// ============================================================================
 // Trigger types
 // ============================================================================
 

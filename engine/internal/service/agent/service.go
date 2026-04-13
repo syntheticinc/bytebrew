@@ -5,8 +5,6 @@ import (
 	"log/slog"
 
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agents/react"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/turn_executor"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	"github.com/syntheticinc/bytebrew/engine/pkg/errors"
@@ -37,39 +35,11 @@ type ClientOperationsProxy interface {
 	LspRequest(ctx context.Context, sessionID, symbolName, operation string) (string, error)
 }
 
-// TaskManager defines interface for task management (consumer-side)
-type TaskManager interface {
-	CreateTask(ctx context.Context, sessionID, title, description string, criteria []string) (*domain.Task, error)
-	ApproveTask(ctx context.Context, taskID string) error
-	StartTask(ctx context.Context, taskID string) error
-	GetTask(ctx context.Context, taskID string) (*domain.Task, error)
-	GetTasks(ctx context.Context, sessionID string) ([]*domain.Task, error)
-	CompleteTask(ctx context.Context, taskID string) error
-	FailTask(ctx context.Context, taskID, reason string) error
-	CancelTask(ctx context.Context, taskID, reason string) error
-}
-
-// WorkSubtaskManager defines interface for subtask management (consumer-side)
-type WorkSubtaskManager interface {
-	CreateSubtask(ctx context.Context, sessionID, taskID, title, description string, blockedBy, files []string) (*domain.Subtask, error)
-	GetSubtask(ctx context.Context, subtaskID string) (*domain.Subtask, error)
-	GetSubtasksByTask(ctx context.Context, taskID string) ([]*domain.Subtask, error)
-	GetReadySubtasks(ctx context.Context, taskID string) ([]*domain.Subtask, error)
-	AssignSubtaskToAgent(ctx context.Context, subtaskID, agentID string) error
-	CompleteSubtask(ctx context.Context, subtaskID, result string) error
-	FailSubtask(ctx context.Context, subtaskID, reason string) error
-}
-
-// AgentPoolManager defines interface for Code Agent pool (consumer-side)
-type AgentPoolManager interface{}
 
 
 // Service handles agent orchestration and flow execution
 type Service struct {
 	chatModel        ChatModel
-	taskManager      TaskManager
-	subtaskManager   WorkSubtaskManager
-	agentPool        AgentPoolManager
 	contextReminders []turn_executor.ContextReminderProvider
 	toolCallHistory  *ToolCallHistoryReminder
 	webSearchTool    einotool.InvokableTool
@@ -84,9 +54,6 @@ type Service struct {
 // Config holds configuration for Agent Service
 type Config struct {
 	ChatModel        ChatModel
-	TaskManager      TaskManager
-	SubtaskManager   WorkSubtaskManager
-	AgentPool        AgentPoolManager
 	ContextReminders []turn_executor.ContextReminderProvider
 	WebSearchTool    einotool.InvokableTool
 	WebFetchTool     einotool.InvokableTool
@@ -120,9 +87,6 @@ func New(cfg Config) (*Service, error) {
 
 	return &Service{
 		chatModel:        cfg.ChatModel,
-		taskManager:      cfg.TaskManager,
-		subtaskManager:   cfg.SubtaskManager,
-		agentPool:        cfg.AgentPool,
 		contextReminders: contextReminders,
 		toolCallHistory:  toolCallHistory,
 		webSearchTool:    cfg.WebSearchTool,
@@ -131,7 +95,7 @@ func New(cfg Config) (*Service, error) {
 		agentConfig:      agentConfig,
 		modelName:        cfg.ModelName,
 		streaming:        cfg.Streaming,
-		supervisorMode:   cfg.AgentPool != nil,
+		supervisorMode:   false,
 	}, nil
 }
 
@@ -156,7 +120,6 @@ func (s *Service) SetEnvironmentContext(projectRoot, platform string) {
 	s.contextReminders = newReminders
 
 	// Propagate to AgentPool so Code Agents inherit environment context
-	s.propagateContextRemindersToPool()
 }
 
 // SetTestingStrategy sets project-level testing strategy
@@ -185,26 +148,8 @@ func (s *Service) SetTestingStrategy(yamlContent string) {
 	newReminders = append(newReminders, reminder)
 	s.contextReminders = newReminders
 
-	s.propagateContextRemindersToPool()
 }
 
-// propagateContextRemindersToPool sends current context reminders to AgentPool
-// so Code Agents inherit environment context (project root, platform).
-func (s *Service) propagateContextRemindersToPool() {
-	if s.agentPool == nil {
-		return
-	}
-	pool, ok := s.agentPool.(*AgentPool)
-	if !ok {
-		return
-	}
-
-	var reactReminders []react.ContextReminderProvider
-	for _, r := range s.contextReminders {
-		reactReminders = append(reactReminders, r)
-	}
-	pool.SetContextReminders(reactReminders)
-}
 
 // GetToolCallRecorder returns the tool call recorder for callback integration
 func (s *Service) GetToolCallRecorder() ToolCallRecorder {

@@ -31,9 +31,9 @@ func (m *MockChatModel) Generate(ctx context.Context, input []*schema.Message, o
 
 	case "server-tool":
 		if hasToolResult {
-			return textMessage("Task operation complete."), nil
+			return textMessage("Tool operation complete."), nil
 		}
-		return toolCallMessage("manage_subtasks", `{"action":"list","task_id":"test-1"}`), nil
+		return toolCallMessage("read_file", `{"file_path":"server.txt"}`), nil
 
 	case "reasoning":
 		return reasoningMessage("Let me think...", "The answer is 42."), nil
@@ -98,9 +98,9 @@ func (m *MockChatModel) Generate(ctx context.Context, input []*schema.Message, o
 
 	case "task-create":
 		if hasToolResult {
-			return textMessage(fmt.Sprintf("Task result: %s", extractLastToolResult(input))), nil
+			return textMessage(fmt.Sprintf("File result: %s", extractLastToolResult(input))), nil
 		}
-		return toolCallMessage("manage_tasks", `{"action":"create","title":"Test Task","description":"Implement feature X","acceptance_criteria":["Tests pass","Code reviewed"]}`), nil
+		return toolCallMessage("read_file", `{"file_path":"task.txt"}`), nil
 
 	case "proxied-edit":
 		if hasToolResult {
@@ -121,19 +121,12 @@ func (m *MockChatModel) Generate(ctx context.Context, input []*schema.Message, o
 		return toolCallMessage("search_code", `{"query":"hello world"}`), nil
 
 	case "multi-agent":
-		if isCodeAgentCall(input) {
-			return textMessage("Code agent: task completed successfully."), nil
-		}
 		if hasToolResult {
 			return textMessage("All agents completed. Work is done."), nil
 		}
-		return toolCallMessage("spawn_code_agent", `{"action":"spawn","subtask_id":"test-subtask-1"}`), nil
+		return toolCallMessage("execute_command", `{"command":"echo agent-work"}`), nil
 
 	case "agent-interrupt":
-		if isCodeAgentCall(input) {
-			time.Sleep(5 * time.Second)
-			return textMessage("Code agent: task completed."), nil
-		}
 		if hasToolResult {
 			lastResult := extractLastToolResult(input)
 			if strings.Contains(lastResult, "[INTERRUPT]") {
@@ -141,7 +134,7 @@ func (m *MockChatModel) Generate(ctx context.Context, input []*schema.Message, o
 			}
 			return textMessage("Supervisor: all agents completed successfully."), nil
 		}
-		return toolCallMessage("spawn_code_agent", `{"action":"spawn","subtask_id":"test-subtask-1"}`), nil
+		return toolCallMessage("execute_command", `{"command":"echo agent-work"}`), nil
 
 	case "smart-search":
 		return toolCallAndReturn("smart_search", `{"query":"handleError error handling","limit":10}`, "SEARCH_RESULT:", hasToolResult, input)
@@ -242,25 +235,16 @@ func (m *MockChatModel) Generate(ctx context.Context, input []*schema.Message, o
 		}
 
 	case "agent-failure":
-		if isCodeAgentCall(input) {
-			return nil, fmt.Errorf("mock code agent error: file not found")
-		}
 		if hasToolResult {
 			return textMessage("Agent failed. Handling error."), nil
 		}
-		return toolCallMessage("spawn_code_agent", `{"action":"spawn","subtask_id":"test-subtask-1"}`), nil
+		return toolCallMessage("execute_command", `{"command":"echo agent-work"}`), nil
 
 	case "multi-agent-read":
-		if isCodeAgentCall(input) {
-			if hasToolResult {
-				return textMessage(fmt.Sprintf("Code agent read file: %s", extractLastToolResult(input))), nil
-			}
-			return toolCallMessage("read_file", `{"file_path":"src/main.ts"}`), nil
-		}
 		if hasToolResult {
-			return textMessage("Agent read the file successfully."), nil
+			return textMessage(fmt.Sprintf("Agent read file: %s", extractLastToolResult(input))), nil
 		}
-		return toolCallMessage("spawn_code_agent", `{"action":"spawn","subtask_id":"test-subtask-1"}`), nil
+		return toolCallMessage("read_file", `{"file_path":"src/main.ts"}`), nil
 
 	case "persistent-shell":
 		toolCount := countToolResults(input)

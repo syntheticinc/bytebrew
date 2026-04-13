@@ -28,9 +28,6 @@ func NewToolClassifier() *DefaultToolClassifier {
 		serverSideTools: map[string]bool{
 			"web_search":       true,
 			"web_fetch":        true,
-			"manage_tasks":     true,
-			"manage_subtasks":  true,
-			"spawn_code_agent": true,
 		},
 	}
 }

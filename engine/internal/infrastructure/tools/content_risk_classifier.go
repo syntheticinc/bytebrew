@@ -24,8 +24,7 @@ func GetContentRiskLevel(toolName string) ContentRiskLevel {
 	case "glob", "get_project_tree", "lsp", "get_file_structure":
 		return RiskLow
 	// None: internal tools that don't return untrusted content
-	case "manage_tasks", "manage_subtasks", "spawn_code_agent",
-		"write_file", "edit_file", "ask_user":
+	case "write_file", "edit_file", "ask_user":
 		return RiskNone
 	default:
 		// Unknown tools default to high risk

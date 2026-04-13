@@ -17,7 +17,6 @@ import (
 
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agent_registry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/audit"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flow_registry"
@@ -1569,119 +1568,6 @@ func (m *modelServiceHTTPAdapter) VerifyModel(ctx context.Context, name string) 
 		Provider:       vr.Provider,
 		Error:          vr.Error,
 	}, nil
-}
-
-// taskServiceHTTPAdapter bridges task infrastructure to the http.TaskService interface.
-type taskServiceHTTPAdapter struct {
-	repo *config_repo.GORMTaskRepository
-}
-
-func (a *taskServiceHTTPAdapter) CreateTask(ctx context.Context, req deliveryhttp.CreateTaskRequest) (string, error) {
-	mode := domain.TaskModeInteractive
-	if req.Mode == "background" {
-		mode = domain.TaskModeBackground
-	}
-
-	task := &domain.EngineTask{
-		Title:       req.Title,
-		Description: req.Description,
-		AgentName:   req.AgentName,
-		Source:      domain.TaskSourceDashboard,
-		UserID:      req.UserID,
-		Status:      domain.EngineTaskStatusPending,
-		Mode:        mode,
-	}
-
-	if err := a.repo.Create(ctx, task); err != nil {
-		return "", fmt.Errorf("create task: %w", err)
-	}
-	return task.ID, nil
-}
-
-func (a *taskServiceHTTPAdapter) buildRepoFilter(filter deliveryhttp.TaskListFilter) config_repo.TaskFilter {
-	repoFilter := config_repo.TaskFilter{
-		Limit:  filter.Limit,
-		Offset: filter.Offset,
-	}
-	if filter.AgentName != "" {
-		repoFilter.AgentName = &filter.AgentName
-	}
-	if filter.Source != "" {
-		src := domain.TaskSource(filter.Source)
-		repoFilter.Source = &src
-	}
-	if filter.Status != "" {
-		st := domain.EngineTaskStatus(filter.Status)
-		repoFilter.Status = &st
-	}
-	return repoFilter
-}
-
-func (a *taskServiceHTTPAdapter) ListTasks(ctx context.Context, filter deliveryhttp.TaskListFilter) ([]deliveryhttp.TaskResponse, error) {
-	tasks, err := a.repo.List(ctx, a.buildRepoFilter(filter))
-	if err != nil {
-		return nil, err
-	}
-	result := make([]deliveryhttp.TaskResponse, 0, len(tasks))
-	for _, t := range tasks {
-		result = append(result, deliveryhttp.TaskResponse{
-			ID:        t.ID,
-			Title:     t.Title,
-			AgentName: t.AgentName,
-			Status:    string(t.Status),
-			Source:    string(t.Source),
-			CreatedAt: t.CreatedAt.Format(time.RFC3339),
-		})
-	}
-	return result, nil
-}
-
-func (a *taskServiceHTTPAdapter) CountTasks(ctx context.Context, filter deliveryhttp.TaskListFilter) (int64, error) {
-	return a.repo.Count(ctx, a.buildRepoFilter(filter))
-}
-
-func (a *taskServiceHTTPAdapter) GetTask(ctx context.Context, id string) (*deliveryhttp.TaskDetailResponse, error) {
-	t, err := a.repo.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	resp := &deliveryhttp.TaskDetailResponse{
-		TaskResponse: deliveryhttp.TaskResponse{
-			ID:        t.ID,
-			Title:     t.Title,
-			AgentName: t.AgentName,
-			Status:    string(t.Status),
-			Source:    string(t.Source),
-			CreatedAt: t.CreatedAt.Format(time.RFC3339),
-		},
-		Description: t.Description,
-		Mode:        string(t.Mode),
-		Result:      t.Result,
-		Error:       t.Error,
-	}
-	if t.StartedAt != nil {
-		resp.StartedAt = t.StartedAt.Format(time.RFC3339)
-	}
-	if t.CompletedAt != nil {
-		resp.CompletedAt = t.CompletedAt.Format(time.RFC3339)
-	}
-	return resp, nil
-}
-
-func (a *taskServiceHTTPAdapter) CancelTask(ctx context.Context, id string) error {
-	return a.repo.Cancel(ctx, id)
-}
-
-func (a *taskServiceHTTPAdapter) ProvideInput(ctx context.Context, id string, input string) error {
-	task, err := a.repo.GetByID(ctx, id)
-	if err != nil {
-		return fmt.Errorf("get task: %w", err)
-	}
-	if task.Status != domain.EngineTaskStatusNeedsInput {
-		return fmt.Errorf("task %s is not awaiting input (status: %s)", id, task.Status)
-	}
-	// Store the input and transition back to in_progress.
-	return a.repo.UpdateStatus(ctx, id, domain.EngineTaskStatusInProgress, input)
 }
 
 // knowledgeStatsHTTPAdapter bridges GORMKnowledgeRepository to the http.KnowledgeStats interface.

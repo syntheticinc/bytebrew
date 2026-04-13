@@ -13,9 +13,6 @@ flows:
       - lsp
       - get_project_tree
       - execute_command
-      - manage_tasks
-      - manage_subtasks
-      - spawn_code_agent
       - ask_user
       - web_search
       - web_fetch

@@ -20,10 +20,6 @@ type ToolDependencies struct {
 	ProjectRoot        string
 	BackgroundMode     bool               // true for cron/webhook/API tasks (no user interaction)
 	Proxy              ClientOperationsProxy
-	TaskManager        TaskManager
-	SubtaskManager     SubtaskManager
-	AgentPool          AgentPoolForTool
-	EngineTaskManager  EngineTaskManager  // Phase 4: engine task CRUD
 	EventEmitter       ToolEventEmitter   // event stream for tools that emit events
 	WebSearchTool      tool.InvokableTool // pre-created (depends on API key)
 	WebFetchTool       tool.InvokableTool // pre-created
