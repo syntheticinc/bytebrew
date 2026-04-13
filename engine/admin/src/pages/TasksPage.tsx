@@ -77,16 +77,25 @@ export default function TasksPage() {
   // AbortController for subtasks fetch to avoid race conditions.
   const subtasksAbortRef = useRef<AbortController | null>(null);
 
-  const loadDetail = useCallback(async (id: string) => {
-    setLoadingDetail(true);
-    setActionError(null);
+  const loadDetail = useCallback(async (id: string, silent = false) => {
+    if (!silent) {
+      setLoadingDetail(true);
+      setActionError(null);
+    }
     try {
       const detail = await api.getTask(id);
-      setSelectedTask(detail);
+      // Only update state if data actually changed — prevents detail panel
+      // flicker on background auto-refresh when nothing changed.
+      setSelectedTask((prev) => {
+        if (prev && JSON.stringify(prev) === JSON.stringify(detail)) return prev;
+        return detail;
+      });
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
+      if (!silent) {
+        setActionError(e instanceof Error ? e.message : String(e));
+      }
     } finally {
-      setLoadingDetail(false);
+      if (!silent) setLoadingDetail(false);
     }
   }, []);
 
@@ -146,7 +155,7 @@ export default function TasksPage() {
       if (busyAction) return;
       refetch();
       if (selectedTask) {
-        loadDetail(selectedTask.id);
+        loadDetail(selectedTask.id, true);
       }
     };
     const timer = window.setInterval(tick, AUTO_REFRESH_INTERVAL_MS);

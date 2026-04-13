@@ -34,7 +34,15 @@ export function useApi<T>(fetcher: () => Promise<T>, deps: unknown[] = []): UseA
     fetcher()
       .then((result) => {
         if (!cancelled) {
-          setData(result);
+          // Only update state if data actually changed — prevents unnecessary
+          // React re-renders (and visible flicker) on background auto-refresh
+          // when the API returns identical data.
+          setData((prev) => {
+            if (prev === null) return result;
+            const prevJson = JSON.stringify(prev);
+            const nextJson = JSON.stringify(result);
+            return prevJson === nextJson ? prev : result;
+          });
           setLoading(false);
           hasLoadedOnce.current = true;
         }
