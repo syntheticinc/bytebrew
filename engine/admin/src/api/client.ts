@@ -255,9 +255,9 @@ class APIClient {
 
   // ---- Tasks ----
   listTasks(params?: Record<string, string>) {
-    if (this.isPrototype) return this.mock([] as TaskResponse[]);
+    if (this.isPrototype) return this.mock(MOCK_TASKS_PAGINATED);
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-    return this.request<TaskResponse[]>('GET', `/tasks${qs}`);
+    return this.request<PaginatedTaskResponse>('GET', `/tasks${qs}`);
   }
   listTasksPaginated(params: Record<string, string>) {
     if (this.isPrototype) return this.mock(MOCK_TASKS_PAGINATED);
@@ -265,7 +265,7 @@ class APIClient {
     return this.request<PaginatedTaskResponse>('GET', `/tasks${qs}`);
   }
   getTask(id: string) {
-    if (this.isPrototype) return this.mock({ id, title: 'Mock Task', agent_name: 'assistant', status: 'completed', source: 'api', priority: 0, created_at: new Date().toISOString(), mode: 'chat' } as TaskDetailResponse);
+    if (this.isPrototype) return this.mock({ id, title: 'Mock Task', agent_name: 'assistant', status: 'completed', source: 'api', priority: 0, created_at: new Date().toISOString(), mode: 'interactive' } as TaskDetailResponse);
     return this.request<TaskDetailResponse>('GET', `/tasks/${id}`);
   }
   createTask(data: CreateTaskRequest) {
