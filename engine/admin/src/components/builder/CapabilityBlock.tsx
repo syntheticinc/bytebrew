@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback, type DragEvent } from 'react';
-import type { CapabilityConfig, KnowledgeFile, KnowledgeFileStatus } from '../../types';
+import React, { useState } from 'react';
+import type { CapabilityConfig } from '../../types';
 import { CAPABILITY_META } from '../../types';
-import { api } from '../../api/client';
 
 interface CapabilityBlockProps {
   capability: CapabilityConfig;
@@ -68,12 +67,6 @@ export function capabilityIcon(name: string): React.ReactElement {
   }
 }
 
-const FILE_STATUS_CLASSES: Record<KnowledgeFileStatus, string> = {
-  uploading: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
-  indexing: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  ready: 'bg-green-500/15 text-green-400 border-green-500/30',
-  error: 'bg-red-500/15 text-red-400 border-red-500/30',
-};
 
 function setKey(cap: CapabilityConfig, key: string, value: unknown): CapabilityConfig {
   return { ...cap, config: { ...cap.config, [key]: value } };
@@ -138,126 +131,10 @@ function MemoryConfig({ cap, onChange }: PanelProps) {
   );
 }
 
-function KnowledgeConfig({ cap, onChange, agentName }: PanelProps) {
-  const sources = getKey<string[]>(cap, 'sources', []);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [dragOver, setDragOver] = useState(false);
-  const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeFile[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [embeddingModels, setEmbeddingModels] = useState<{ id: string; name: string; model_name: string; embedding_dim?: number }[]>([]);
-  const [embeddingModelsLoaded, setEmbeddingModelsLoaded] = useState(false);
-
-  const selectedEmbeddingModelId = getKey(cap, 'embedding_model_id', '') as string;
-  const hasEmbeddingModel = selectedEmbeddingModelId !== '';
-  const hasEmbeddingModelsInSystem = embeddingModels.length > 0;
-
-  // Load embedding models
-  useEffect(() => {
-    api.listModels('embedding').then((models) => {
-      setEmbeddingModels(models.map(m => ({ id: m.id, name: m.name, model_name: m.model_name, embedding_dim: m.embedding_dim })));
-      setEmbeddingModelsLoaded(true);
-    }).catch(() => setEmbeddingModelsLoaded(true));
-  }, []);
-
-  // Load files from API on mount
-  useEffect(() => {
-    if (!agentName) return;
-    api.listKnowledgeFiles(agentName).then(setKnowledgeFiles).catch(() => {});
-  }, [agentName]);
-
-  const uploadFile = useCallback(async (file: File) => {
-    if (!agentName) return;
-    setUploading(true);
-    setUploadError(null);
-    try {
-      const uploaded = await api.uploadKnowledgeFile(agentName, file);
-      setKnowledgeFiles(prev => [...prev, uploaded]);
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Upload failed');
-    } finally {
-      setUploading(false);
-    }
-  }, [agentName]);
-
-  function addFiles(files: FileList | null) {
-    if (!files || files.length === 0) return;
-    Array.from(files).forEach(f => uploadFile(f));
-  }
-
-  function handleDrop(e: DragEvent<HTMLDivElement>) {
-    e.preventDefault();
-    setDragOver(false);
-    addFiles(e.dataTransfer.files);
-  }
-
-  const selectedModel = embeddingModels.find(m => m.id === selectedEmbeddingModelId);
-  const isStaleModel = hasEmbeddingModel && embeddingModelsLoaded && !selectedModel;
-  const uploadEnabled = hasEmbeddingModel && !isStaleModel;
-
+function KnowledgeConfig({ cap, onChange }: PanelProps) {
   return (
     <div className="space-y-3">
-      <p className={descCls}>RAG: agent searches uploaded documents before answering</p>
-
-      {/* Embedding Model Selection — 3-state UX */}
-      <div>
-        <label className={labelCls}>Embedding Model</label>
-        {embeddingModelsLoaded && !hasEmbeddingModelsInSystem ? (
-          /* State 1: No embedding models in system */
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-card px-3 py-3 space-y-2">
-            <div className="flex items-start gap-2">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-400 shrink-0 mt-0.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
-              <div>
-                <p className="text-xs text-amber-400 font-medium">No embedding models configured</p>
-                <p className="text-[10px] text-brand-shade3 mt-1">To enable document indexing and vector search, add an embedding model first.</p>
-              </div>
-            </div>
-            <a
-              href="/admin/models"
-              className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-accent text-brand-light rounded-btn text-xs font-medium hover:bg-brand-accent-hover transition-colors"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-              Add Embedding Model
-            </a>
-            <p className="text-[10px] text-brand-shade3/60">Recommended: OpenAI text-embedding-3-small (1536 dim, $0.02/1M tokens)</p>
-          </div>
-        ) : (
-          /* State 2/3: Models exist — dropdown */
-          <div>
-            <select
-              className={inputCls}
-              value={selectedEmbeddingModelId}
-              onChange={(e) => {
-                const newId = e.target.value;
-                if (newId !== selectedEmbeddingModelId && knowledgeFiles.length > 0 && selectedEmbeddingModelId) {
-                  if (!window.confirm('Changing embedding model will require re-indexing all files. Existing search results may be inaccurate until re-indexing completes. Continue?')) return;
-                }
-                onChange(setKey(cap, 'embedding_model_id', newId));
-              }}
-            >
-              <option value="">Select embedding model...</option>
-              {embeddingModels.map(m => (
-                <option key={m.id} value={m.id}>
-                  {m.name} ({m.model_name}{m.embedding_dim ? `, ${m.embedding_dim}d` : ''})
-                </option>
-              ))}
-            </select>
-            {isStaleModel ? (
-              <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
-                Selected embedding model was deleted. Please select a new model.
-              </p>
-            ) : hasEmbeddingModel && selectedModel ? (
-              <p className="text-[10px] text-status-active mt-1 flex items-center gap-1">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
-                Ready for document indexing
-              </p>
-            ) : (
-              <p className={hintCls}>Select which model to use for document vectorization and similarity search</p>
-            )}
-          </div>
-        )}
-      </div>
+      <p className={descCls}>RAG: agent searches linked knowledge bases before answering</p>
 
       <div className="bg-brand-dark rounded-card px-3 py-2 space-y-1">
         <span className="text-[11px] text-brand-shade2 font-mono">Auto-included tools:</span>
@@ -267,88 +144,25 @@ function KnowledgeConfig({ cap, onChange, agentName }: PanelProps) {
         <p className={hintCls}>Automatically available to agent when Knowledge is enabled</p>
       </div>
 
-      {/* Knowledge files table */}
-      {knowledgeFiles.length > 0 && (
-        <div className="border border-brand-shade3/20 rounded-card overflow-hidden">
-          <table className="w-full text-xs font-mono">
-            <thead>
-              <tr className="bg-brand-dark text-brand-shade3 text-left">
-                <th className="px-3 py-2">Name</th>
-                <th className="px-3 py-2">Type</th>
-                <th className="px-3 py-2">Size</th>
-                <th className="px-3 py-2">Date</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {knowledgeFiles.map((file, i) => (
-                <tr key={file.name + '-' + i} className="border-t border-brand-shade3/10 text-brand-shade2">
-                  <td className="px-3 py-2">{file.name}</td>
-                  <td className="px-3 py-2">{file.type}</td>
-                  <td className="px-3 py-2">{file.size}</td>
-                  <td className="px-3 py-2">{file.uploaded_at}</td>
-                  <td className="px-3 py-2">
-                    <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] border ${FILE_STATUS_CLASSES[file.status]}`}>
-                      {file.status}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button type="button" title="Reindex" className="p-1 text-brand-shade3 hover:text-brand-light transition-colors" onClick={() => {
-                        if (!agentName || !file.id) return;
-                        setKnowledgeFiles(prev => prev.map((f, j) => j === i ? { ...f, status: 'indexing' as KnowledgeFileStatus } : f));
-                        api.reindexKnowledgeFile(agentName, file.id).catch(() => {});
-                      }}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" /></svg>
-                      </button>
-                      <button type="button" title="Delete" className="p-1 text-brand-shade3 hover:text-brand-accent transition-colors" onClick={() => {
-                        if (!agentName || !file.id) return;
-                        setKnowledgeFiles(prev => prev.filter((_, j) => j !== i));
-                        api.deleteKnowledgeFile(agentName, file.id).catch(() => {});
-                      }}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="bg-brand-dark-alt border border-brand-shade3/20 rounded-card px-3 py-3 space-y-2">
+        <div className="flex items-start gap-2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-brand-accent shrink-0 mt-0.5"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" /></svg>
+          <div>
+            <p className="text-xs text-brand-light font-medium">Knowledge Bases</p>
+            <p className="text-[10px] text-brand-shade3 mt-1">
+              Documents and files are managed through Knowledge Bases. Link one or more KBs to this agent on the Knowledge page.
+            </p>
+          </div>
         </div>
-      )}
-
-      <input ref={fileInputRef} type="file" multiple accept=".txt,.md,.csv" className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} disabled={!uploadEnabled} />
-      <div
-        className={`border-2 border-dashed rounded-card px-4 py-8 text-center transition-colors ${
-          !uploadEnabled ? 'border-brand-shade3/15 text-brand-shade3/40 cursor-not-allowed opacity-60' :
-          dragOver ? 'border-brand-accent bg-brand-accent/5 text-brand-accent cursor-pointer' : 'border-brand-shade3/30 text-brand-shade3 hover:border-brand-shade3/50 cursor-pointer'
-        }`}
-        onClick={() => uploadEnabled && fileInputRef.current?.click()}
-        onDragOver={(e) => { if (!uploadEnabled) return; e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => { if (!uploadEnabled) { e.preventDefault(); return; } handleDrop(e); }}
-      >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-2 opacity-50"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
-        {!uploadEnabled ? (
-          <p className="text-xs">{hasEmbeddingModelsInSystem ? 'Select an embedding model to enable uploads' : 'Configure embedding model to enable uploads'}</p>
-        ) : (
-          <p className="text-xs">{uploading ? 'Uploading...' : dragOver ? 'Drop files to upload' : 'Drag & drop files here or click to browse'}</p>
-        )}
-        <p className="text-[10px] text-brand-shade3/60 mt-1">Supported: TXT, MD, CSV</p>
-        {uploadError && <p className="text-[10px] text-red-400 mt-1">{uploadError}</p>}
+        <a
+          href={import.meta.env.BASE_URL + 'knowledge'}
+          className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-accent text-brand-light rounded-btn text-xs font-medium hover:bg-brand-accent-hover transition-colors"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
+          Manage Knowledge Bases
+        </a>
       </div>
 
-      {sources.length > 0 && (
-        <ul className="space-y-1">
-          {sources.map((src, i) => (
-            <li key={src + '-' + i} className="flex items-center justify-between text-xs text-brand-shade2 bg-brand-dark-alt px-2 py-1 rounded-card">
-              <span className="truncate">{src}</span>
-              <button type="button" onClick={() => onChange(setKey(cap, 'sources', sources.filter((_, j) => j !== i)))} className="ml-2 text-brand-shade3 hover:text-brand-accent">x</button>
-            </li>
-          ))}
-        </ul>
-      )}
       <div>
         <label className={labelCls}>Top-K</label>
         <input type="number" className={inputCls} data-testid="knowledge-top-k" min={1} max={20} value={getKey(cap, 'top_k', 5) as number} onChange={(e) => onChange(setKey(cap, 'top_k', Number(e.target.value)))} />

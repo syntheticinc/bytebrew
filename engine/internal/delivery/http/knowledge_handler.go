@@ -250,7 +250,7 @@ const maxUploadSize = 50 << 20
 // allowedMIMETypes maps allowed file extensions to expected MIME prefixes.
 var allowedMIMETypes = map[string][]string{
 	".txt":  {"text/plain"},
-	".md":   {"text/plain", "text/markdown"},
+	".md":   {"text/plain", "text/markdown", "application/octet-stream"},
 	".csv":  {"text/csv", "text/plain", "application/csv", "application/octet-stream"},
 	".pdf":  {"application/pdf", "application/octet-stream"},
 	".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/octet-stream", "application/zip"},

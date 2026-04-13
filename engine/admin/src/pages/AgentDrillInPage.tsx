@@ -9,7 +9,6 @@ import type { AgentDetail, CapabilityConfig, CapabilityType, Model, MCPServer } 
 import { CAPABILITY_META } from '../types';
 import { usePrototype } from '../hooks/usePrototype';
 import { MOCK_AGENTS, MOCK_MODELS } from '../mocks/agents';
-import { MOCK_SESSIONS } from '../mocks/inspect';
 
 const ALL_CAPABILITY_TYPES = Object.keys(CAPABILITY_META) as CapabilityType[];
 
@@ -297,13 +296,6 @@ function AgentDrillInInner() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => navigate(`/builder/${schema}/${agentName}/inspect/${MOCK_SESSIONS[0]?.id ?? 'latest'}`)}
-            className="px-4 py-1.5 border border-brand-shade3/40 text-brand-shade2 rounded-btn text-sm font-medium font-mono hover:text-brand-light hover:border-brand-shade3 transition-colors"
-          >
-            Inspect
-          </button>
           <button
             type="button"
             onClick={handleSave}

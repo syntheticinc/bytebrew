@@ -597,13 +597,31 @@ export interface PolicyRule {
 }
 
 // ============================================================================
-// V2: Knowledge file types
+// V2: Knowledge Base types (many-to-many)
 // ============================================================================
+
+export interface KnowledgeBase {
+  id: string;
+  name: string;
+  description?: string;
+  embedding_model_id?: string;
+  file_count: number;
+  linked_agents: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateKnowledgeBaseRequest {
+  name: string;
+  description?: string;
+  embedding_model_id: string;
+}
 
 export type KnowledgeFileStatus = 'uploading' | 'indexing' | 'ready' | 'error';
 
 export interface KnowledgeFile {
   id?: string;
+  knowledge_base_id?: string;
   name: string;
   type: string;
   size: string;

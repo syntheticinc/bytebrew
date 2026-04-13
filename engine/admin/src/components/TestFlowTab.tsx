@@ -96,7 +96,6 @@ export default function TestFlowTab() {
   // Use either prototype or production messages
   const messages = isPrototype ? protoMessages : sseChat.messages;
   const isStreaming = isPrototype ? protoStreaming : sseChat.isStreaming;
-  const sessionId = isPrototype ? protoSessionId : sseChat.sessionId;
 
   // Load agents (schema-scoped when a schema is selected)
   useEffect(() => {
@@ -298,7 +297,6 @@ export default function TestFlowTab() {
 
   const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
   const hasError = lastMsg?.role === 'assistant' && lastMsg.content?.startsWith('Error:');
-  const showInspectLink = lastMsg?.role === 'assistant' && !lastMsg.streaming && !hasError && messages.length > 0;
 
   return (
     <div className="flex flex-col h-full">
@@ -557,25 +555,6 @@ export default function TestFlowTab() {
         {isStreaming && (
           <div className="flex justify-end">
             <span className="text-[10px] text-brand-accent animate-pulse">streaming...</span>
-          </div>
-        )}
-
-        {/* View in Inspect link */}
-        {showInspectLink && (sessionId || protoSessionId) && (
-          <div className="flex justify-start mt-1">
-            <button
-              onClick={() => {
-                const sid = sessionId || protoSessionId;
-                const schema = selectedSchema || 'default';
-                navigate(`/builder/${encodeURIComponent(schema)}/${encodeURIComponent(selectedAgent)}/inspect/${encodeURIComponent(sid)}`);
-              }}
-              className="text-[11px] text-brand-accent hover:text-brand-accent-hover transition-colors inline-flex items-center gap-1"
-            >
-              View in Inspect
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </button>
           </div>
         )}
 

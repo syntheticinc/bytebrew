@@ -35,6 +35,8 @@ import type {
   Capability,
   CreateCapabilityRequest,
   UpdateCapabilityRequest,
+  KnowledgeBase,
+  CreateKnowledgeBaseRequest,
   KnowledgeFile,
   KnowledgeStatus,
   CircuitBreakerState,
@@ -702,6 +704,121 @@ class APIClient {
       error: r.status_message,
       chunk_count: r.chunk_count,
     } as KnowledgeFile;
+  }
+
+  // ─── Knowledge Bases (many-to-many) ──────────────────────────────────────────
+
+  async listKnowledgeBases(): Promise<KnowledgeBase[]> {
+    if (this.isPrototype) return this.mock<KnowledgeBase[]>([
+      { id: 'kb-1', name: 'Support Docs', description: 'Customer support documentation', embedding_model_id: '', file_count: 3, linked_agents: [], created_at: '2026-04-10T10:00:00Z', updated_at: '2026-04-10T10:00:00Z' },
+    ]);
+    return this.request<KnowledgeBase[]>('GET', '/knowledge-bases');
+  }
+
+  async getKnowledgeBase(id: string): Promise<KnowledgeBase> {
+    if (this.isPrototype) return this.mock<KnowledgeBase>({ id, name: 'Mock KB', file_count: 0, linked_agents: [], created_at: '', updated_at: '' });
+    return this.request<KnowledgeBase>('GET', `/knowledge-bases/${encodeURIComponent(id)}`);
+  }
+
+  async createKnowledgeBase(data: CreateKnowledgeBaseRequest): Promise<KnowledgeBase> {
+    if (this.isPrototype) return this.mock<KnowledgeBase>({ id: 'kb-new', ...data, file_count: 0, linked_agents: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    return this.request<KnowledgeBase>('POST', '/knowledge-bases', data);
+  }
+
+  async updateKnowledgeBase(id: string, data: CreateKnowledgeBaseRequest): Promise<KnowledgeBase> {
+    if (this.isPrototype) return this.mock<KnowledgeBase>({ id, ...data, file_count: 0, linked_agents: [], created_at: '', updated_at: new Date().toISOString() });
+    return this.request<KnowledgeBase>('PUT', `/knowledge-bases/${encodeURIComponent(id)}`, data);
+  }
+
+  async deleteKnowledgeBase(id: string): Promise<void> {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('DELETE', `/knowledge-bases/${encodeURIComponent(id)}`);
+  }
+
+  async linkAgentToKB(kbId: string, agentName: string): Promise<void> {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('POST', `/knowledge-bases/${encodeURIComponent(kbId)}/agents/${encodeURIComponent(agentName)}`);
+  }
+
+  async unlinkAgentFromKB(kbId: string, agentName: string): Promise<void> {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('DELETE', `/knowledge-bases/${encodeURIComponent(kbId)}/agents/${encodeURIComponent(agentName)}`);
+  }
+
+  async listKBFiles(kbId: string): Promise<KnowledgeFile[]> {
+    if (this.isPrototype) return this.mock<KnowledgeFile[]>([]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = await this.request<any[]>('GET', `/knowledge-bases/${encodeURIComponent(kbId)}/files`);
+    return (raw ?? []).map((r) => ({
+      id: r.id,
+      knowledge_base_id: r.knowledge_base_id,
+      name: r.file_name ?? r.name ?? '',
+      type: (r.file_type ?? r.type ?? '').toUpperCase(),
+      size: r.file_size != null ? formatBytes(r.file_size) : (r.size ?? ''),
+      uploaded_at: r.created_at ?? r.uploaded_at ?? '',
+      status: r.status ?? 'ready',
+      error: r.status_message,
+      chunk_count: r.chunk_count,
+    } as KnowledgeFile));
+  }
+
+  async uploadKBFile(kbId: string, file: File): Promise<KnowledgeFile> {
+    if (this.isPrototype) {
+      return this.mock<KnowledgeFile>({
+        name: file.name,
+        type: file.name.split('.').pop() ?? '',
+        size: `${(file.size / 1024).toFixed(1)} KB`,
+        status: 'ready',
+        uploaded_at: new Date().toISOString(),
+      });
+    }
+    const formData = new FormData();
+    formData.append('file', file);
+    const headers: Record<string, string> = {};
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+    const res = await fetch(`${BASE_URL}/knowledge-bases/${encodeURIComponent(kbId)}/files`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (res.status === 401) {
+      this.clearToken();
+      window.location.href = import.meta.env.BASE_URL + 'login';
+      throw new Error('Unauthorized');
+    }
+    if (!res.ok) {
+      const text = await res.text();
+      let message = text;
+      try {
+        const json = JSON.parse(text) as { error?: string };
+        if (json.error) message = json.error;
+      } catch { /* use raw text */ }
+      throw new Error(message);
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r = (await res.json()) as any;
+    return {
+      id: r.id,
+      name: r.file_name ?? r.name ?? '',
+      type: (r.file_type ?? r.type ?? '').toUpperCase(),
+      size: r.file_size != null ? formatBytes(r.file_size) : (r.size ?? ''),
+      uploaded_at: r.created_at ?? r.uploaded_at ?? '',
+      status: r.status ?? 'indexing',
+      error: r.status_message,
+      chunk_count: r.chunk_count,
+    } as KnowledgeFile;
+  }
+
+  async deleteKBFile(kbId: string, fileId: string): Promise<void> {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('DELETE', `/knowledge-bases/${encodeURIComponent(kbId)}/files/${encodeURIComponent(fileId)}`);
+  }
+
+  async reindexKBFile(kbId: string, fileId: string): Promise<void> {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    return this.request<void>('POST', `/knowledge-bases/${encodeURIComponent(kbId)}/files/${encodeURIComponent(fileId)}/reindex`);
   }
 
   // ─── Circuit Breakers ────────────────────────────────────────────────────────

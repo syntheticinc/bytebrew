@@ -54,9 +54,9 @@ func TestKnowledgeHandler_Status(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	body := w.Body.String()
-	assert.Contains(t, body, `"agent":"sales"`)
-	assert.Contains(t, body, `"documents":5`)
-	assert.Contains(t, body, `"chunks":42`)
+	assert.Contains(t, body, `"agent_name":"sales"`)
+	assert.Contains(t, body, `"total_files":5`)
+	assert.Contains(t, body, `"status":"ready"`)
 }
 
 func TestKnowledgeHandler_Status_NoDocuments(t *testing.T) {
@@ -69,7 +69,7 @@ func TestKnowledgeHandler_Status_NoDocuments(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), `"documents":0`)
+	assert.Contains(t, w.Body.String(), `"total_files":0`)
 }
 
 func TestKnowledgeHandler_Reindex(t *testing.T) {

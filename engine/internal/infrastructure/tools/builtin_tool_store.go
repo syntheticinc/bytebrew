@@ -81,6 +81,11 @@ type KnowledgeEmbedderResolver interface {
 	ResolveEmbedder(ctx context.Context, agentName string) (KnowledgeEmbedder, error)
 }
 
+// KnowledgeKBResolver resolves linked KB IDs for an agent (many-to-many).
+type KnowledgeKBResolver interface {
+	ListKBsByAgentName(ctx context.Context, agentName string) ([]string, error)
+}
+
 // CapabilityConfigReader reads capability config from DB for per-agent runtime customization.
 type CapabilityConfigReader interface {
 	ReadConfig(ctx context.Context, agentName, capType string) (map[string]interface{}, error)
@@ -101,6 +106,7 @@ type AgentToolResolver struct {
 	cbRegistry              CircuitBreakerRegistry
 	recoveryExecutor        RecoveryExecutor
 	capConfigReader         CapabilityConfigReader
+	knowledgeKBResolver     KnowledgeKBResolver // resolves agent → linked KB IDs
 	toolTimeoutMs           int64 // 0 = disabled
 }
 
@@ -128,6 +134,11 @@ func (r *AgentToolResolver) SetKnowledge(searcher KnowledgeSearcher, embedder Kn
 // SetKnowledgeEmbedderResolver configures per-agent embedding model resolution (WP-4).
 func (r *AgentToolResolver) SetKnowledgeEmbedderResolver(resolver KnowledgeEmbedderResolver) {
 	r.knowledgeEmbedResolver = resolver
+}
+
+// SetKnowledgeKBResolver configures agent → KB IDs resolution (many-to-many).
+func (r *AgentToolResolver) SetKnowledgeKBResolver(resolver KnowledgeKBResolver) {
+	r.knowledgeKBResolver = resolver
 }
 
 // SetMCPProvider configures the MCP client provider for MCP tool resolution.
@@ -295,7 +306,16 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 				}
 			}
 		}
-		knowledgeTool := NewKnowledgeSearchTool(rc.Agent.Record.Name, ks, ke, topK, simThreshold)
+		// Try KB-scoped search (many-to-many) first, fall back to legacy agent_name search.
+		var knowledgeTool tool.InvokableTool
+		if r.knowledgeKBResolver != nil {
+			if kbIDs, err := r.knowledgeKBResolver.ListKBsByAgentName(ctx, rc.Agent.Record.Name); err == nil && len(kbIDs) > 0 {
+				knowledgeTool = NewKnowledgeSearchToolKB(rc.Agent.Record.Name, kbIDs, ks, ke, topK, simThreshold)
+			}
+		}
+		if knowledgeTool == nil {
+			knowledgeTool = NewKnowledgeSearchTool(rc.Agent.Record.Name, ks, ke, topK, simThreshold)
+		}
 		tools = append(tools, knowledgeTool)
 	} else if hasToolInList(rc.Agent.Record.BuiltinTools, "knowledge_search") {
 		slog.WarnContext(ctx, "agent has knowledge_search in tools but knowledge not available — skipping",
@@ -420,7 +440,16 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 				}
 			}
 		}
-		knowledgeTool := NewKnowledgeSearchTool(deps.AgentName, r.knowledgeSearcher, legacyEmbedder, legacyTopK, legacySimThreshold)
+		// Try KB-scoped search (many-to-many) first, fall back to legacy agent_name search.
+		var knowledgeTool tool.InvokableTool
+		if r.knowledgeKBResolver != nil && deps.AgentName != "" {
+			if kbIDs, err := r.knowledgeKBResolver.ListKBsByAgentName(ctx, deps.AgentName); err == nil && len(kbIDs) > 0 {
+				knowledgeTool = NewKnowledgeSearchToolKB(deps.AgentName, kbIDs, r.knowledgeSearcher, legacyEmbedder, legacyTopK, legacySimThreshold)
+			}
+		}
+		if knowledgeTool == nil {
+			knowledgeTool = NewKnowledgeSearchTool(deps.AgentName, r.knowledgeSearcher, legacyEmbedder, legacyTopK, legacySimThreshold)
+		}
 		resolved = append(resolved, knowledgeTool)
 	} else if hasToolInList(allToolNames, "knowledge_search") {
 		slog.WarnContext(ctx, "knowledge_search in tool list but knowledge not available — skipping",

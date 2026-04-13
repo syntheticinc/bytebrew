@@ -4,14 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/indexing"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	svcknowledge "github.com/syntheticinc/bytebrew/engine/internal/service/knowledge"
 	"gorm.io/gorm"
 )
+
+// --- Legacy agent-scoped adapters (kept for backward compatibility) ---
 
 // knowledgeUploadHTTPAdapter bridges svcknowledge.UploadService to deliveryhttp.KnowledgeFileUploader.
 type knowledgeUploadHTTPAdapter struct {
@@ -23,17 +27,7 @@ func (a *knowledgeUploadHTTPAdapter) UploadFile(ctx context.Context, tenantID, a
 	if err != nil {
 		return nil, err
 	}
-	return &deliveryhttp.KnowledgeFileResponse{
-		ID:         resp.ID,
-		FileName:   resp.FileName,
-		FileType:   resp.FileType,
-		FileSize:   resp.FileSize,
-		Status:     resp.Status,
-		StatusMsg:  resp.StatusMsg,
-		ChunkCount: resp.ChunkCount,
-		CreatedAt:  resp.CreatedAt,
-		IndexedAt:  resp.IndexedAt,
-	}, nil
+	return svcFileToHTTP(resp), nil
 }
 
 // knowledgeFileListerHTTPAdapter bridges svcknowledge.UploadService to deliveryhttp.KnowledgeFileLister.
@@ -46,6 +40,253 @@ func (a *knowledgeFileListerHTTPAdapter) ListFiles(ctx context.Context, agentNam
 	if err != nil {
 		return nil, err
 	}
+	return svcFilesToHTTP(files), nil
+}
+
+func (a *knowledgeFileListerHTTPAdapter) DeleteFile(ctx context.Context, agentName, fileID string) error {
+	return a.svc.DeleteFile(ctx, agentName, fileID)
+}
+
+func (a *knowledgeFileListerHTTPAdapter) ReindexFile(ctx context.Context, agentName, fileID string) error {
+	return a.svc.ReindexFile(ctx, agentName, fileID)
+}
+
+// --- KB-scoped adapters (new many-to-many architecture) ---
+
+// kbStoreAdapter bridges GORMKnowledgeBaseRepository to deliveryhttp.KBStore.
+type kbStoreAdapter struct {
+	repo *config_repo.GORMKnowledgeBaseRepository
+	db   *gorm.DB // for counting files and resolving agents
+}
+
+func (a *kbStoreAdapter) Create(ctx context.Context, name, description, embeddingModelID, tenantID string) (*deliveryhttp.KnowledgeBaseInfo, error) {
+	kb := &models.KnowledgeBase{
+		TenantID:    tenantID,
+		Name:        name,
+		Description: description,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	if embeddingModelID != "" {
+		kb.EmbeddingModelID = &embeddingModelID
+	}
+	if err := a.repo.Create(ctx, kb); err != nil {
+		return nil, err
+	}
+	return a.toInfo(ctx, kb)
+}
+
+func (a *kbStoreAdapter) Update(ctx context.Context, id, name, description, embeddingModelID string) (*deliveryhttp.KnowledgeBaseInfo, error) {
+	kb, err := a.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if kb == nil {
+		return nil, nil
+	}
+	kb.Name = name
+	kb.Description = description
+	if embeddingModelID != "" {
+		kb.EmbeddingModelID = &embeddingModelID
+	} else {
+		kb.EmbeddingModelID = nil
+	}
+	kb.UpdatedAt = time.Now()
+	if err := a.repo.Update(ctx, kb); err != nil {
+		return nil, err
+	}
+	return a.toInfo(ctx, kb)
+}
+
+func (a *kbStoreAdapter) GetByID(ctx context.Context, id string) (*deliveryhttp.KnowledgeBaseInfo, error) {
+	kb, err := a.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if kb == nil {
+		return nil, nil
+	}
+	return a.toInfo(ctx, kb)
+}
+
+func (a *kbStoreAdapter) List(ctx context.Context) ([]deliveryhttp.KnowledgeBaseInfo, error) {
+	kbs, err := a.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]deliveryhttp.KnowledgeBaseInfo, 0, len(kbs))
+	for i := range kbs {
+		info, err := a.toInfo(ctx, &kbs[i])
+		if err != nil {
+			continue
+		}
+		result = append(result, *info)
+	}
+	return result, nil
+}
+
+func (a *kbStoreAdapter) Delete(ctx context.Context, id string) error {
+	return a.repo.Delete(ctx, id)
+}
+
+func (a *kbStoreAdapter) LinkAgent(ctx context.Context, kbID, agentName string) error {
+	return a.repo.LinkAgent(ctx, kbID, agentName)
+}
+
+func (a *kbStoreAdapter) UnlinkAgent(ctx context.Context, kbID, agentName string) error {
+	return a.repo.UnlinkAgent(ctx, kbID, agentName)
+}
+
+func (a *kbStoreAdapter) toInfo(ctx context.Context, kb *models.KnowledgeBase) (*deliveryhttp.KnowledgeBaseInfo, error) {
+	agents, _ := a.repo.ListLinkedAgents(ctx, kb.ID)
+	if agents == nil {
+		agents = []string{}
+	}
+
+	var fileCount int64
+	a.db.WithContext(ctx).Model(&models.KnowledgeDocument{}).
+		Where("knowledge_base_id = ?", kb.ID).Count(&fileCount)
+
+	embModelID := ""
+	if kb.EmbeddingModelID != nil {
+		embModelID = *kb.EmbeddingModelID
+	}
+
+	return &deliveryhttp.KnowledgeBaseInfo{
+		ID:               kb.ID,
+		Name:             kb.Name,
+		Description:      kb.Description,
+		EmbeddingModelID: embModelID,
+		FileCount:        int(fileCount),
+		LinkedAgents:     agents,
+		CreatedAt:        kb.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:        kb.UpdatedAt.Format(time.RFC3339),
+	}, nil
+}
+
+// kbFileManagerAdapter bridges svcknowledge.UploadService to deliveryhttp.KBFileManager.
+type kbFileManagerAdapter struct {
+	svc *svcknowledge.UploadService
+}
+
+func (a *kbFileManagerAdapter) ListFiles(ctx context.Context, kbID string) ([]deliveryhttp.KnowledgeFileResponse, error) {
+	files, err := a.svc.ListFilesByKB(ctx, kbID)
+	if err != nil {
+		return nil, err
+	}
+	return svcFilesToHTTP(files), nil
+}
+
+func (a *kbFileManagerAdapter) UploadFile(ctx context.Context, tenantID, kbID, embeddingModelID, fileName, fileType string, fileSize int64, fileHash string, content []byte) (*deliveryhttp.KnowledgeFileResponse, error) {
+	resp, err := a.svc.UploadFileToKB(ctx, tenantID, kbID, embeddingModelID, fileName, fileType, fileSize, fileHash, content)
+	if err != nil {
+		return nil, err
+	}
+	return svcFileToHTTP(resp), nil
+}
+
+func (a *kbFileManagerAdapter) DeleteFile(ctx context.Context, kbID, fileID string) error {
+	return a.svc.DeleteFileByKB(ctx, kbID, fileID)
+}
+
+func (a *kbFileManagerAdapter) ReindexFile(ctx context.Context, kbID, embeddingModelID, fileID string) error {
+	return a.svc.ReindexFileByKB(ctx, kbID, embeddingModelID, fileID)
+}
+
+func (a *kbFileManagerAdapter) DeleteAllFiles(ctx context.Context, kbID string) error {
+	return a.svc.DeleteAllByKB(ctx, kbID)
+}
+
+// --- Embedding model resolvers ---
+
+// embeddingModelResolver resolves the embedding model from an agent's knowledge capability config.
+type embeddingModelResolver struct {
+	db *gorm.DB
+}
+
+func (r *embeddingModelResolver) ResolveEmbeddingModel(ctx context.Context, agentName string) (*svcknowledge.EmbeddingModelInfo, error) {
+	var agentID string
+	if err := r.db.WithContext(ctx).
+		Raw("SELECT id FROM agents WHERE name = ?", agentName).
+		Scan(&agentID).Error; err != nil || agentID == "" {
+		return nil, fmt.Errorf("agent %q not found", agentName)
+	}
+
+	var cap models.CapabilityModel
+	if err := r.db.WithContext(ctx).
+		Where("agent_id = ? AND type = ?", agentID, "knowledge").
+		First(&cap).Error; err != nil {
+		return nil, fmt.Errorf("no knowledge capability for agent %q", agentName)
+	}
+
+	var config map[string]interface{}
+	if cap.Config != "" {
+		if err := json.Unmarshal([]byte(cap.Config), &config); err != nil {
+			return nil, fmt.Errorf("parse capability config: %w", err)
+		}
+	}
+
+	embModelID, _ := config["embedding_model_id"].(string)
+	if embModelID == "" {
+		return nil, fmt.Errorf("no embedding_model_id in knowledge config")
+	}
+
+	return resolveEmbeddingModelByID(r.db, ctx, embModelID)
+}
+
+// kbEmbeddingResolver resolves embedding model from a model ID (for KB-scoped operations).
+type kbEmbeddingResolver struct {
+	db *gorm.DB
+}
+
+func (r *kbEmbeddingResolver) ResolveByModelID(ctx context.Context, modelID string) (*svcknowledge.EmbeddingModelInfo, error) {
+	return resolveEmbeddingModelByID(r.db, ctx, modelID)
+}
+
+// resolveEmbeddingModelByID loads an embedding model from the DB by its ID.
+func resolveEmbeddingModelByID(db *gorm.DB, ctx context.Context, modelID string) (*svcknowledge.EmbeddingModelInfo, error) {
+	var llm models.LLMProviderModel
+	if err := db.WithContext(ctx).Where("id = ? AND type = ?", modelID, "embedding").First(&llm).Error; err != nil {
+		return nil, fmt.Errorf("embedding model %q not found or not type=embedding", modelID)
+	}
+	return &svcknowledge.EmbeddingModelInfo{
+		BaseURL:      llm.BaseURL,
+		APIKey:       llm.APIKeyEncrypted,
+		ModelName:    llm.ModelName,
+		EmbeddingDim: llm.EmbeddingDim,
+	}, nil
+}
+
+// knowledgeEmbedderResolverAdapter bridges embeddingModelResolver to tools.KnowledgeEmbedderResolver.
+type knowledgeEmbedderResolverAdapter struct {
+	resolver *embeddingModelResolver
+}
+
+func (a *knowledgeEmbedderResolverAdapter) ResolveEmbedder(ctx context.Context, agentName string) (tools.KnowledgeEmbedder, error) {
+	info, err := a.resolver.ResolveEmbeddingModel(ctx, agentName)
+	if err != nil || info == nil {
+		return nil, err
+	}
+	return indexing.NewOpenAIEmbeddingsClient(info.BaseURL, info.APIKey, info.ModelName, info.EmbeddingDim), nil
+}
+
+// --- Conversion helpers ---
+
+func svcFileToHTTP(f *svcknowledge.FileResponse) *deliveryhttp.KnowledgeFileResponse {
+	return &deliveryhttp.KnowledgeFileResponse{
+		ID:         f.ID,
+		FileName:   f.FileName,
+		FileType:   f.FileType,
+		FileSize:   f.FileSize,
+		Status:     f.Status,
+		StatusMsg:  f.StatusMsg,
+		ChunkCount: f.ChunkCount,
+		CreatedAt:  f.CreatedAt,
+		IndexedAt:  f.IndexedAt,
+	}
+}
+
+func svcFilesToHTTP(files []svcknowledge.FileResponse) []deliveryhttp.KnowledgeFileResponse {
 	result := make([]deliveryhttp.KnowledgeFileResponse, len(files))
 	for i, f := range files {
 		result[i] = deliveryhttp.KnowledgeFileResponse{
@@ -60,78 +301,5 @@ func (a *knowledgeFileListerHTTPAdapter) ListFiles(ctx context.Context, agentNam
 			IndexedAt:  f.IndexedAt,
 		}
 	}
-	return result, nil
+	return result
 }
-
-func (a *knowledgeFileListerHTTPAdapter) DeleteFile(ctx context.Context, agentName, fileID string) error {
-	return a.svc.DeleteFile(ctx, agentName, fileID)
-}
-
-func (a *knowledgeFileListerHTTPAdapter) ReindexFile(ctx context.Context, agentName, fileID string) error {
-	return a.svc.ReindexFile(ctx, agentName, fileID)
-}
-
-// embeddingModelResolver resolves the embedding model from an agent's knowledge capability config.
-// Implements svcknowledge.EmbeddingModelResolver.
-type embeddingModelResolver struct {
-	db *gorm.DB
-}
-
-// knowledgeEmbedderResolverAdapter bridges embeddingModelResolver to tools.KnowledgeEmbedderResolver.
-// Resolves per-agent embedding model from capability config for knowledge_search tool at runtime.
-type knowledgeEmbedderResolverAdapter struct {
-	resolver *embeddingModelResolver
-}
-
-func (a *knowledgeEmbedderResolverAdapter) ResolveEmbedder(ctx context.Context, agentName string) (tools.KnowledgeEmbedder, error) {
-	info, err := a.resolver.ResolveEmbeddingModel(ctx, agentName)
-	if err != nil || info == nil {
-		return nil, err
-	}
-	return indexing.NewOpenAIEmbeddingsClient(info.BaseURL, info.APIKey, info.ModelName, info.EmbeddingDim), nil
-}
-
-func (r *embeddingModelResolver) ResolveEmbeddingModel(ctx context.Context, agentName string) (*svcknowledge.EmbeddingModelInfo, error) {
-	// Find agent ID
-	var agentID string
-	if err := r.db.WithContext(ctx).
-		Raw("SELECT id FROM agents WHERE name = ?", agentName).
-		Scan(&agentID).Error; err != nil || agentID == "" {
-		return nil, fmt.Errorf("agent %q not found", agentName)
-	}
-
-	// Find knowledge capability config
-	var cap models.CapabilityModel
-	if err := r.db.WithContext(ctx).
-		Where("agent_id = ? AND type = ?", agentID, "knowledge").
-		First(&cap).Error; err != nil {
-		return nil, fmt.Errorf("no knowledge capability for agent %q", agentName)
-	}
-
-	// Parse config to get embedding_model_id
-	var config map[string]interface{}
-	if cap.Config != "" {
-		if err := json.Unmarshal([]byte(cap.Config), &config); err != nil {
-			return nil, fmt.Errorf("parse capability config: %w", err)
-		}
-	}
-
-	embModelID, _ := config["embedding_model_id"].(string)
-	if embModelID == "" {
-		return nil, fmt.Errorf("no embedding_model_id in knowledge config")
-	}
-
-	// Load embedding model from DB
-	var llm models.LLMProviderModel
-	if err := r.db.WithContext(ctx).Where("id = ? AND type = ?", embModelID, "embedding").First(&llm).Error; err != nil {
-		return nil, fmt.Errorf("embedding model %q not found or not type=embedding", embModelID)
-	}
-
-	return &svcknowledge.EmbeddingModelInfo{
-		BaseURL:      llm.BaseURL,
-		APIKey:       llm.APIKeyEncrypted,
-		ModelName:    llm.ModelName,
-		EmbeddingDim: llm.EmbeddingDim,
-	}, nil
-}
-

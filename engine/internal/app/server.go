@@ -449,6 +449,8 @@ func Run(sc ServerConfig) error {
 		if pgDB != nil {
 			components.AgentToolResolver.SetKnowledgeEmbedderResolver(
 				&knowledgeEmbedderResolverAdapter{resolver: &embeddingModelResolver{db: pgDB}})
+			components.AgentToolResolver.SetKnowledgeKBResolver(
+				config_repo.NewGORMKnowledgeBaseRepository(pgDB))
 		}
 	}
 
@@ -725,19 +727,25 @@ func Run(sc ServerConfig) error {
 					reindexer,
 				)
 
-				// WP-3: Wire file upload service + file management endpoints
-				{
-					dataDir := "data"
-					if envDir := os.Getenv("DATA_DIR"); envDir != "" {
-						dataDir = envDir
-					}
-					// Embedding models are resolved per-agent from capability config (no Ollama fallback).
-					uploadSvc := svcknowledge.NewUploadService(knowledgeRepo, dataDir)
-					uploadSvc.SetEmbeddingResolver(&embeddingModelResolver{db: pgDB})
-					knowledgeHandler.SetFileUploader(&knowledgeUploadHTTPAdapter{svc: uploadSvc})
-					knowledgeHandler.SetFileLister(&knowledgeFileListerHTTPAdapter{svc: uploadSvc})
+				dataDir := "data"
+				if envDir := os.Getenv("DATA_DIR"); envDir != "" {
+					dataDir = envDir
 				}
 
+				uploadSvc := svcknowledge.NewUploadService(knowledgeRepo, dataDir)
+				uploadSvc.SetEmbeddingResolver(&embeddingModelResolver{db: pgDB})
+				uploadSvc.SetKBEmbeddingResolver(&kbEmbeddingResolver{db: pgDB})
+				knowledgeHandler.SetFileUploader(&knowledgeUploadHTTPAdapter{svc: uploadSvc})
+				knowledgeHandler.SetFileLister(&knowledgeFileListerHTTPAdapter{svc: uploadSvc})
+
+				// Knowledge Bases (many-to-many) handler
+				kbRepo := config_repo.NewGORMKnowledgeBaseRepository(pgDB)
+				kbHandler := deliveryhttp.NewKnowledgeBaseHandler(
+					&kbStoreAdapter{repo: kbRepo, db: pgDB},
+					&kbFileManagerAdapter{svc: uploadSvc},
+				)
+
+				// Legacy agent-scoped knowledge endpoints
 				r.Group(func(r chi.Router) {
 					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
 					r.Get("/api/v1/agents/{name}/knowledge/status", knowledgeHandler.Status)
@@ -749,6 +757,25 @@ func Run(sc ServerConfig) error {
 					r.Post("/api/v1/agents/{name}/knowledge/files", knowledgeHandler.UploadFile)
 					r.Delete("/api/v1/agents/{name}/knowledge/files/{file_id}", knowledgeHandler.DeleteFile)
 					r.Post("/api/v1/agents/{name}/knowledge/files/{file_id}/reindex", knowledgeHandler.ReindexFile)
+				})
+
+				// Knowledge Base CRUD + file management endpoints
+				r.Group(func(r chi.Router) {
+					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
+					r.Get("/api/v1/knowledge-bases", kbHandler.List)
+					r.Get("/api/v1/knowledge-bases/{id}", kbHandler.Get)
+					r.Get("/api/v1/knowledge-bases/{id}/files", kbHandler.ListFiles)
+				})
+				r.Group(func(r chi.Router) {
+					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsWrite))
+					r.Post("/api/v1/knowledge-bases", kbHandler.Create)
+					r.Put("/api/v1/knowledge-bases/{id}", kbHandler.Update)
+					r.Delete("/api/v1/knowledge-bases/{id}", kbHandler.Delete)
+					r.Post("/api/v1/knowledge-bases/{id}/agents/{agent_name}", kbHandler.LinkAgent)
+					r.Delete("/api/v1/knowledge-bases/{id}/agents/{agent_name}", kbHandler.UnlinkAgent)
+					r.Post("/api/v1/knowledge-bases/{id}/files", kbHandler.UploadFile)
+					r.Delete("/api/v1/knowledge-bases/{id}/files/{file_id}", kbHandler.DeleteFile)
+					r.Post("/api/v1/knowledge-bases/{id}/files/{file_id}/reindex", kbHandler.ReindexFile)
 				})
 			}
 

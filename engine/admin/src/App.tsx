@@ -14,9 +14,8 @@ import AgentBuilderPage from './pages/AgentBuilderPage';
 import AgentDrillInPage from './pages/AgentDrillInPage';
 import AgentsPage from './pages/AgentsPage';
 import SchemaListPage from './pages/SchemaListPage';
-import InspectPage from './pages/InspectPage';
 import WidgetConfigPage from './pages/WidgetConfigPage';
-import MemoryPage from './pages/MemoryPage';
+import KnowledgePage from './pages/KnowledgePage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('jwt');
@@ -43,9 +42,6 @@ export default function App() {
             <Route path="/builder" element={<SchemaListPage />} />
             <Route path="/builder/:schemaName" element={<AgentBuilderPage />} />
             <Route path="/builder/:schema/:agent" element={<AgentDrillInPage />} />
-            <Route path="/builder/:schema/:agent/inspect/:session" element={<InspectPage />} />
-            <Route path="/inspect" element={<InspectPage />} />
-            <Route path="/inspect/:session" element={<InspectPage />} />
             <Route path="/mcp" element={<MCPPage />} />
             <Route path="/models" element={<ModelsPage />} />
             <Route path="/tasks" element={<TasksPage />} />
@@ -53,10 +49,10 @@ export default function App() {
             <Route path="/api-keys" element={<APIKeysPage />} />
             <Route path="/config" element={<ConfigPage />} />
             <Route path="/audit" element={<AuditPage />} />
+            <Route path="/knowledge" element={<KnowledgePage />} />
             <Route path="/widget" element={<WidgetConfigPage />} />
             <Route path="/agents" element={<AgentsPage />} />
             <Route path="/agents/:agent" element={<AgentDrillInPage />} />
-            <Route path="/memory" element={<MemoryPage />} />
             <Route path="/" element={<Navigate to="/builder" replace />} />
           </Route>
           <Route path="*" element={<Navigate to="/builder" replace />} />

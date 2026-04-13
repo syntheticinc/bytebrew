@@ -17,6 +17,8 @@ import (
 type KnowledgeSearcher interface {
 	SearchSimilar(ctx context.Context, agentName string, embedding pgvector.Vector, limit int, similarityThreshold float64) ([]models.KnowledgeChunk, error)
 	SearchByKeyword(ctx context.Context, agentName string, keyword string, limit int) ([]models.KnowledgeChunk, error)
+	SearchSimilarByKBs(ctx context.Context, kbIDs []string, embedding pgvector.Vector, limit int, similarityThreshold float64) ([]models.KnowledgeChunk, error)
+	SearchByKeywordKBs(ctx context.Context, kbIDs []string, keyword string, limit int) ([]models.KnowledgeChunk, error)
 }
 
 // KnowledgeEmbedder generates embeddings for search queries.
@@ -33,10 +35,11 @@ type knowledgeSearchArgs struct {
 // KnowledgeSearchTool searches an agent's knowledge base using semantic similarity.
 type KnowledgeSearchTool struct {
 	agentName           string
+	kbIDs               []string // linked KB IDs (many-to-many); empty = use legacy agent_name
 	repo                KnowledgeSearcher
 	embeddings          KnowledgeEmbedder
-	defaultLimit        int     // from capability config top_k (default 5)
-	similarityThreshold float64 // from capability config (0 = no filtering)
+	defaultLimit        int
+	similarityThreshold float64
 }
 
 // NewKnowledgeSearchTool creates a new knowledge_search tool for the given agent.
@@ -46,6 +49,21 @@ func NewKnowledgeSearchTool(agentName string, repo KnowledgeSearcher, embeddings
 	}
 	return &KnowledgeSearchTool{
 		agentName:           agentName,
+		repo:                repo,
+		embeddings:          embeddings,
+		defaultLimit:        defaultLimit,
+		similarityThreshold: similarityThreshold,
+	}
+}
+
+// NewKnowledgeSearchToolKB creates a knowledge_search tool that searches across linked KBs.
+func NewKnowledgeSearchToolKB(agentName string, kbIDs []string, repo KnowledgeSearcher, embeddings KnowledgeEmbedder, defaultLimit int, similarityThreshold float64) tool.InvokableTool {
+	if defaultLimit <= 0 {
+		defaultLimit = 5
+	}
+	return &KnowledgeSearchTool{
+		agentName:           agentName,
+		kbIDs:               kbIDs,
 		repo:                repo,
 		embeddings:          embeddings,
 		defaultLimit:        defaultLimit,
@@ -97,30 +115,40 @@ func (t *KnowledgeSearchTool) InvokableRun(ctx context.Context, argumentsInJSON 
 	}
 
 	slog.InfoContext(ctx, "[KnowledgeSearchTool] searching",
-		"agent", t.agentName, "query", args.Query, "limit", args.Limit)
+		"agent", t.agentName, "kb_ids", t.kbIDs, "query", args.Query, "limit", args.Limit)
 
-	// Embed the query
 	embedding, err := t.embeddings.Embed(ctx, args.Query)
 	if err != nil {
 		slog.ErrorContext(ctx, "[KnowledgeSearchTool] embed query failed", "error", err)
 		return fmt.Sprintf("[ERROR] Failed to embed query: %v", err), nil
 	}
 
-	// Hybrid search: vector similarity + keyword fallback
-	chunks, err := t.repo.SearchSimilar(ctx, t.agentName, pgvector.NewVector(embedding), args.Limit, t.similarityThreshold)
+	var chunks []models.KnowledgeChunk
+
+	// Use KB-scoped search when KB IDs are available, otherwise legacy agent_name search.
+	if len(t.kbIDs) > 0 {
+		chunks, err = t.repo.SearchSimilarByKBs(ctx, t.kbIDs, pgvector.NewVector(embedding), args.Limit, t.similarityThreshold)
+	} else {
+		chunks, err = t.repo.SearchSimilar(ctx, t.agentName, pgvector.NewVector(embedding), args.Limit, t.similarityThreshold)
+	}
 	if err != nil {
 		slog.ErrorContext(ctx, "[KnowledgeSearchTool] search failed", "error", err)
 		return fmt.Sprintf("[ERROR] Search failed: %v", err), nil
 	}
 
-	// Hybrid: merge keyword results to catch terms that embedding misses
-	// Extract significant words from query for keyword search
+	// Hybrid: merge keyword results
 	queryWords := strings.Fields(args.Query)
 	for _, word := range queryWords {
 		if len(word) < 4 {
-			continue // skip short words (the, how, for, etc.)
+			continue
 		}
-		kwChunks, kwErr := t.repo.SearchByKeyword(ctx, t.agentName, word, 3)
+		var kwChunks []models.KnowledgeChunk
+		var kwErr error
+		if len(t.kbIDs) > 0 {
+			kwChunks, kwErr = t.repo.SearchByKeywordKBs(ctx, t.kbIDs, word, 3)
+		} else {
+			kwChunks, kwErr = t.repo.SearchByKeyword(ctx, t.agentName, word, 3)
+		}
 		if kwErr != nil || len(kwChunks) == 0 {
 			continue
 		}
@@ -140,7 +168,6 @@ func (t *KnowledgeSearchTool) InvokableRun(ctx context.Context, argumentsInJSON 
 		return fmt.Sprintf("No results found in knowledge base for: \"%s\". Try different search terms.", args.Query), nil
 	}
 
-	// Format results
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("## Knowledge search results for \"%s\"\n\n", args.Query))
 

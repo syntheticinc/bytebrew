@@ -24,6 +24,14 @@ func (m *mockKnowledgeSearcher) SearchByKeyword(_ context.Context, _ string, _ s
 	return m.chunks, m.err
 }
 
+func (m *mockKnowledgeSearcher) SearchSimilarByKBs(_ context.Context, _ []string, _ pgvector.Vector, _ int, _ float64) ([]models.KnowledgeChunk, error) {
+	return m.chunks, m.err
+}
+
+func (m *mockKnowledgeSearcher) SearchByKeywordKBs(_ context.Context, _ []string, _ string, _ int) ([]models.KnowledgeChunk, error) {
+	return m.chunks, m.err
+}
+
 type mockKnowledgeEmbedder struct {
 	embedding []float32
 	err       error
