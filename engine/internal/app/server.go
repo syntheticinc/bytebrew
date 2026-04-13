@@ -731,9 +731,8 @@ func Run(sc ServerConfig) error {
 					if envDir := os.Getenv("DATA_DIR"); envDir != "" {
 						dataDir = envDir
 					}
-					// embeddingsClient may be nil (no Ollama) — upload service falls back to
-					// capability-configured embedding models via resolver.
-					uploadSvc := svcknowledge.NewUploadService(knowledgeRepo, embeddingsClient, dataDir)
+					// Embedding models are resolved per-agent from capability config (no Ollama fallback).
+					uploadSvc := svcknowledge.NewUploadService(knowledgeRepo, dataDir)
 					uploadSvc.SetEmbeddingResolver(&embeddingModelResolver{db: pgDB})
 					knowledgeHandler.SetFileUploader(&knowledgeUploadHTTPAdapter{svc: uploadSvc})
 					knowledgeHandler.SetFileLister(&knowledgeFileListerHTTPAdapter{svc: uploadSvc})

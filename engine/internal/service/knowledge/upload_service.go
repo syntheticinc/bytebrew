@@ -69,18 +69,16 @@ type FileResponse struct {
 
 // UploadService handles file uploads, storage, and async indexing.
 type UploadService struct {
-	repo             DocumentRepository
-	embeddings       EmbeddingProvider       // fallback (Ollama via env)
+	repo              DocumentRepository
 	embeddingResolver EmbeddingModelResolver // resolves embedding model from capability config (may be nil)
-	dataDir          string
+	dataDir           string
 }
 
 // NewUploadService creates a new knowledge upload service.
-func NewUploadService(repo DocumentRepository, embeddings EmbeddingProvider, dataDir string) *UploadService {
+func NewUploadService(repo DocumentRepository, dataDir string) *UploadService {
 	return &UploadService{
-		repo:       repo,
-		embeddings: embeddings,
-		dataDir:    dataDir,
+		repo:    repo,
+		dataDir: dataDir,
 	}
 }
 
@@ -140,8 +138,7 @@ func (s *UploadService) UploadFile(ctx context.Context, tenantID, agentName, fil
 	}, nil
 }
 
-// resolveEmbeddingProvider picks the best embedding provider for this agent.
-// Priority: 1) capability-configured model via resolver, 2) fallback Ollama.
+// resolveEmbeddingProvider picks the embedding provider for this agent from capability config.
 func (s *UploadService) resolveEmbeddingProvider(ctx context.Context, agentName string) (EmbeddingProvider, error) {
 	if s.embeddingResolver != nil {
 		info, err := s.embeddingResolver.ResolveEmbeddingModel(ctx, agentName)
@@ -150,12 +147,8 @@ func (s *UploadService) resolveEmbeddingProvider(ctx context.Context, agentName 
 				"agent", agentName, "model", info.ModelName, "dim", info.EmbeddingDim)
 			return indexing.NewOpenAIEmbeddingsClient(info.BaseURL, info.APIKey, info.ModelName, info.EmbeddingDim), nil
 		}
-		// No configured model — fall through to Ollama
 	}
-	if s.embeddings != nil {
-		return s.embeddings, nil
-	}
-	return nil, fmt.Errorf("no embedding model configured: add an embedding model in Settings > Models and select it in the Knowledge capability")
+	return nil, fmt.Errorf("no embedding model configured for agent %q: add an embedding model in Settings > Models and select it in the Knowledge capability config", agentName)
 }
 
 // indexFileAsync chunks, embeds, and stores vector data for an uploaded file.
