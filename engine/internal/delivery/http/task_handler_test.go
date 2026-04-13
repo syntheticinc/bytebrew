@@ -187,7 +187,7 @@ func TestTaskHandler_List(t *testing.T) {
 		{ID: uuid.New().String(), Title: "Task 1", AgentName: "sales", Status: "completed"},
 		{ID: uuid.New().String(), Title: "Task 2", AgentName: "devops", Status: "pending"},
 	}
-	handler := NewTaskHandler(&mockTaskService{tasks: tasks})
+	handler := NewTaskHandler(&mockTaskService{tasks: tasks, taskCount: 2})
 	router := newTaskRouter(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/tasks", nil)
@@ -196,10 +196,11 @@ func TestTaskHandler_List(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var result []TaskResponse
+	var result PaginatedTaskResponse
 	err := json.NewDecoder(rec.Body).Decode(&result)
 	require.NoError(t, err)
-	assert.Len(t, result, 2)
+	assert.Len(t, result.Data, 2)
+	assert.Equal(t, int64(2), result.Total)
 }
 
 func TestTaskHandler_List_WithFilters(t *testing.T) {
@@ -294,12 +295,12 @@ func TestTaskHandler_Cancel_Error(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 }
 
-func TestTaskHandler_List_NoPagination_ReturnsArray(t *testing.T) {
+func TestTaskHandler_List_NoPagination_ReturnsPaginated(t *testing.T) {
 	tasks := []TaskResponse{
 		{ID: uuid.New().String(), Title: "T1", Status: "pending"},
 		{ID: uuid.New().String(), Title: "T2", Status: "completed"},
 	}
-	handler := NewTaskHandler(&mockTaskService{tasks: tasks})
+	handler := NewTaskHandler(&mockTaskService{tasks: tasks, taskCount: 2})
 	router := newTaskRouter(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/tasks", nil)
@@ -308,11 +309,11 @@ func TestTaskHandler_List_NoPagination_ReturnsArray(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	// Should return plain array
-	var result []TaskResponse
+	var result PaginatedTaskResponse
 	err := json.NewDecoder(rec.Body).Decode(&result)
 	require.NoError(t, err)
-	assert.Len(t, result, 2)
+	assert.Len(t, result.Data, 2)
+	assert.Equal(t, DefaultTaskListLimit, result.PerPage)
 }
 
 func TestTaskHandler_List_WithPagination(t *testing.T) {
@@ -342,7 +343,7 @@ func TestTaskHandler_List_PaginationDefaults(t *testing.T) {
 	handler := NewTaskHandler(&mockTaskService{tasks: []TaskResponse{}, taskCount: 0})
 	router := newTaskRouter(handler)
 
-	// Only page param triggers pagination, per_page defaults to 20
+	// Only page param triggers pagination, per_page defaults to DefaultTaskListLimit
 	req := httptest.NewRequest(http.MethodGet, "/tasks?page=1", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -353,7 +354,7 @@ func TestTaskHandler_List_PaginationDefaults(t *testing.T) {
 	err := json.NewDecoder(rec.Body).Decode(&result)
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Page)
-	assert.Equal(t, 20, result.PerPage)
+	assert.Equal(t, DefaultTaskListLimit, result.PerPage)
 }
 
 func TestTaskHandler_List_PerPageCappedAt100(t *testing.T) {

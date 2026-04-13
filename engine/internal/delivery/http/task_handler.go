@@ -277,17 +277,17 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 	actor := extractActor(r)
 	taskID, err := h.service.CreateTask(r.Context(), req, actor)
 	if err != nil {
-		status := http.StatusInternalServerError
-		if isClientErr(err) {
-			status = http.StatusBadRequest
-		}
-		writeJSONError(w, status, err.Error())
+		writeJSONError(w, mapTaskError(err), err.Error())
 		return
 	}
 
+	initialStatus := "pending"
+	if req.RequireApproval {
+		initialStatus = "draft"
+	}
 	writeJSON(w, http.StatusCreated, map[string]interface{}{
 		"task_id": taskID.String(),
-		"status":  "pending",
+		"status":  initialStatus,
 	})
 }
 
@@ -305,20 +305,8 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 	pageStr := r.URL.Query().Get("page")
 	perPageStr := r.URL.Query().Get("per_page")
 
-	// No pagination params — apply default limit, return plain array.
-	if pageStr == "" && perPageStr == "" {
-		filter.Limit = DefaultTaskListLimit
-		tasks, err := h.service.ListTasks(r.Context(), filter, actor)
-		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		writeJSON(w, http.StatusOK, tasks)
-		return
-	}
-
 	page := 1
-	perPage := 20
+	perPage := DefaultTaskListLimit
 	if pageStr != "" {
 		if v, err := strconv.Atoi(pageStr); err == nil && v > 0 {
 			page = v

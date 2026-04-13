@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 
 	"github.com/google/uuid"
 )
@@ -21,6 +22,7 @@ type TaskWorker struct {
 	wg          sync.WaitGroup
 	ctx         context.Context
 	cancel      context.CancelFunc
+	stopped     atomic.Bool
 }
 
 // NewTaskWorker creates a new TaskWorker with the given concurrency level.
@@ -62,8 +64,12 @@ func (w *TaskWorker) worker(id int) {
 }
 
 // Submit adds a task ID to the queue for background execution.
-// Returns false if the queue is full and the task was dropped.
+// Returns false if the queue is full, the worker is stopped, or the task was dropped.
 func (w *TaskWorker) Submit(taskID uuid.UUID) bool {
+	if w.stopped.Load() {
+		slog.Debug("task worker stopped, rejecting submit", "task_id", taskID)
+		return false
+	}
 	select {
 	case w.queue <- taskID:
 		return true
@@ -74,7 +80,9 @@ func (w *TaskWorker) Submit(taskID uuid.UUID) bool {
 }
 
 // Stop gracefully shuts down the worker pool.
+// After Stop returns, Submit is a no-op.
 func (w *TaskWorker) Stop() {
+	w.stopped.Store(true)
 	w.cancel()
 	close(w.queue)
 	w.wg.Wait()

@@ -97,7 +97,7 @@ func (h *TaskCompletionHook) Stop() {
 }
 
 func (h *TaskCompletionHook) fire(taskID uuid.UUID) {
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), webhookShutdownTimeout)
 	defer cancel()
 
 	t, err := h.taskRepo.GetByID(ctx, taskID)

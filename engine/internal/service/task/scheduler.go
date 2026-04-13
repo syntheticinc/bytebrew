@@ -29,20 +29,25 @@ type TriggerTaskParams struct {
 type CronScheduler struct {
 	cron    *cron.Cron
 	creator TaskCreator
+	ctx     context.Context
+	cancel  context.CancelFunc
 }
 
 // NewCronScheduler creates a new CronScheduler.
 func NewCronScheduler(creator TaskCreator) *CronScheduler {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &CronScheduler{
 		cron:    cron.New(),
 		creator: creator,
+		ctx:     ctx,
+		cancel:  cancel,
 	}
 }
 
 // AddTrigger registers a cron trigger that creates a task on the given schedule.
 func (s *CronScheduler) AddTrigger(schedule, title, description, agentName, sourceID string) error {
 	_, err := s.cron.AddFunc(schedule, func() {
-		_, createErr := s.creator.CreateFromTrigger(context.Background(), TriggerTaskParams{
+		_, createErr := s.creator.CreateFromTrigger(s.ctx, TriggerTaskParams{
 			Title:       title,
 			Description: description,
 			AgentName:   agentName,
@@ -62,5 +67,8 @@ func (s *CronScheduler) AddTrigger(schedule, title, description, agentName, sour
 // Start begins running scheduled triggers.
 func (s *CronScheduler) Start() { s.cron.Start() }
 
-// Stop halts the scheduler.
-func (s *CronScheduler) Stop() { s.cron.Stop() }
+// Stop halts the scheduler and cancels any in-flight trigger callbacks.
+func (s *CronScheduler) Stop() {
+	s.cancel()
+	s.cron.Stop()
+}

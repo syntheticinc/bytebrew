@@ -221,7 +221,6 @@ export interface CreateTaskRequest {
   description?: string;
   agent_name: string;
   mode?: 'interactive' | 'background';
-  user_id?: string;
   priority?: number; // 0=normal, 1=high, 2=critical
   acceptance_criteria?: string[];
   blocked_by?: string[];
