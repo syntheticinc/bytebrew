@@ -148,7 +148,6 @@ const sections: NavSection[] = [
       { to: '/mcp', label: 'MCP Servers', icon: icons.mcp },
       { to: '/models', label: 'Models', icon: icons.models },
       { to: '/memory', label: 'Memory', icon: icons.memory },
-      { to: '/knowledge', label: 'Knowledge', icon: icons.knowledge },
       { to: '/widget', label: 'Widgets', icon: icons.widget },
     ],
   },

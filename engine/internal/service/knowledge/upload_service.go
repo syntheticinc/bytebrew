@@ -88,7 +88,13 @@ func (s *UploadService) SetEmbeddingResolver(resolver EmbeddingModelResolver) {
 }
 
 // UploadFile stores a file on disk, creates a DB record, and triggers async indexing.
+// Returns an error if no embedding model is configured (Knowledge capability required).
 func (s *UploadService) UploadFile(ctx context.Context, tenantID, agentName, fileName, fileType string, fileSize int64, fileHash string, content []byte) (*FileResponse, error) {
+	// Guard: verify embedding model is available before accepting the file.
+	if _, err := s.resolveEmbeddingProvider(ctx, agentName); err != nil {
+		return nil, fmt.Errorf("cannot upload: %w", err)
+	}
+
 	// Create storage directory: data/knowledge/{tenant_id}/{agent_name}/
 	dir := filepath.Join(s.dataDir, "knowledge", tenantID, agentName)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
