@@ -61,80 +61,6 @@ func TestSummarizeToolResult_SmartSearch(t *testing.T) {
 	}
 }
 
-func TestSummarizeToolResult_WebSearch(t *testing.T) {
-	tests := []struct {
-		name     string
-		result   string
-		expected string
-	}{
-		{
-			name: "multiple results",
-			result: `1. First result - some title
-2. Second result - another title
-3. Third result - third title`,
-			expected: "3 results",
-		},
-		{
-			name: "single result",
-			result: `1. Only result - some title`,
-			expected: "1 result",
-		},
-		{
-			name:     "no results",
-			result:   "No results found for your query",
-			expected: "0 results",
-		},
-		{
-			name:     "empty result",
-			result:   "",
-			expected: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := SummarizeToolResult("web_search", tt.result)
-			assert.Equal(t, tt.expected, got)
-		})
-	}
-}
-
-func TestSummarizeToolResult_WebFetch(t *testing.T) {
-	tests := []struct {
-		name     string
-		result   string
-		expected string
-	}{
-		{
-			name:     "small content (bytes)",
-			result:   "Hello, world!",
-			expected: "fetched (13 bytes)",
-		},
-		{
-			name:     "medium content (KB)",
-			result:   string(make([]byte, 2048)), // 2 KB
-			expected: "fetched (2.0 KB)",
-		},
-		{
-			name:     "large content (MB)",
-			result:   string(make([]byte, 1024*1024*2)), // 2 MB
-			expected: "fetched (2.0 MB)",
-		},
-		{
-			name:     "empty result",
-			result:   "",
-			expected: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := SummarizeToolResult("web_fetch", tt.result)
-			assert.Equal(t, tt.expected, got)
-		})
-	}
-}
-
 func TestSummarizeToolResult_ManageTasks(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -233,7 +159,7 @@ func TestSummarizeToolResult_UnknownTool(t *testing.T) {
 }
 
 func TestSummarizeToolResult_EmptyResult(t *testing.T) {
-	got := SummarizeToolResult("web_search", "")
+	got := SummarizeToolResult("manage_tasks", "")
 	assert.Equal(t, "", got, "Empty result should return empty summary")
 }
 

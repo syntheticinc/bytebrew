@@ -38,9 +38,6 @@ agents:
 
       Always confirm before creating orders or processing refunds.
     tools:
-      builtin:
-        - web_search
-        - web_fetch
       custom:
         - name: "search_products"
           description: "Search product catalog"

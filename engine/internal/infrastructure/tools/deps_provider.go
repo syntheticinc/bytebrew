@@ -2,7 +2,6 @@ package tools
 
 import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/indexing"
-	"github.com/cloudwego/eino/components/tool"
 )
 
 // DefaultToolDepsProvider creates ToolDependencies for a given session
@@ -10,8 +9,6 @@ type DefaultToolDepsProvider struct {
 	proxy             ClientOperationsProxy
 	agentPool         AgentPoolForTool
 	engineTaskManager EngineTaskManager
-	webSearchTool     tool.InvokableTool
-	webFetchTool      tool.InvokableTool
 	projectRoot       string
 	chunkStore        *indexing.ChunkStore
 	embedder          *indexing.EmbeddingsClient
@@ -21,13 +18,10 @@ type DefaultToolDepsProvider struct {
 func NewDefaultToolDepsProvider(
 	proxy ClientOperationsProxy,
 	agentPool AgentPoolForTool,
-	webSearchTool, webFetchTool tool.InvokableTool,
 ) *DefaultToolDepsProvider {
 	return &DefaultToolDepsProvider{
-		proxy:         proxy,
-		agentPool:     agentPool,
-		webSearchTool: webSearchTool,
-		webFetchTool:  webFetchTool,
+		proxy:     proxy,
+		agentPool: agentPool,
 	}
 }
 
@@ -52,8 +46,6 @@ func (p *DefaultToolDepsProvider) GetDependencies(sessionID, projectKey string) 
 		Proxy:             p.proxy,
 		AgentPool:         p.agentPool,
 		EngineTaskManager: p.engineTaskManager,
-		WebSearchTool:     p.webSearchTool,
-		WebFetchTool:      p.webFetchTool,
 		ChunkStore:        p.chunkStore,
 		Embedder:          p.embedder,
 	}

@@ -4,8 +4,8 @@ package tools
 type SecurityZone string
 
 const (
-	ZoneSafe      SecurityZone = "safe"      // No risk: ask_user, web_search, manage_tasks
-	ZoneCaution   SecurityZone = "caution"   // Medium risk: web_fetch (external content)
+	ZoneSafe      SecurityZone = "safe"      // No risk: ask_user, manage_tasks
+	ZoneCaution   SecurityZone = "caution"   // Medium risk: code indexing/symbol tools
 	ZoneDangerous SecurityZone = "dangerous" // High risk: file system + command execution
 )
 
@@ -26,13 +26,6 @@ var toolMetadataRegistry = map[string]ToolMetadata{
 		Name:         "ask_user",
 		Description:  "Asks the user a question and waits for their response. Used for clarification, confirmation, or gathering input during task execution.",
 		SecurityZone: ZoneSafe,
-	},
-	"web_search": {
-		Name:         "web_search",
-		Description:  "Performs web search using Tavily API and returns relevant results with snippets. Useful for finding documentation, solutions, and current information.",
-		SecurityZone: ZoneSafe,
-		Hint:         "Returns search snippets only. Consider enabling web_fetch (Caution zone) to allow the agent to read full page content from search results.",
-		Companion:    "web_fetch",
 	},
 	"manage_tasks": {
 		Name:         "manage_tasks",
@@ -56,12 +49,6 @@ var toolMetadataRegistry = map[string]ToolMetadata{
 	},
 
 	// === CAUTION ZONE ===
-	"web_fetch": {
-		Name:         "web_fetch",
-		Description:  "Fetches the content of a URL and returns the response body. Used to retrieve API responses, documentation pages, or external data.",
-		SecurityZone: ZoneCaution,
-		RiskWarning:  "Fetches external content that could contain prompt injection attacks. The returned content is processed by the LLM and could influence agent behavior.",
-	},
 	"lsp": {
 		Name:         "lsp",
 		Description:  "Interacts with Language Server Protocol servers for code intelligence — diagnostics, hover info, go-to-definition, completions. Provides real-time code analysis.",

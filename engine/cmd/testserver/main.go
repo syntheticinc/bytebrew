@@ -113,7 +113,6 @@ func main() {
 	toolDepsProvider := tools.NewDefaultToolDepsProvider(
 		nil, // proxy — will be set per-session by FlowHandler
 		agentPoolAdapter,
-		nil, nil, // webSearchTool, webFetchTool
 	)
 	toolDepsProvider.SetEngineTaskManager(taskMgr)
 
@@ -128,8 +127,6 @@ func main() {
 		modelSelector,
 		agentConfig,
 		agentPoolAdapter,
-		nil,
-		nil,
 		nil, // contextRemindersGetter — not needed in test
 		nil, // modelCache
 		nil, // agentModelResolver

@@ -13,7 +13,6 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	"github.com/cloudwego/eino/components/model"
-	einotool "github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -197,8 +196,6 @@ func TestFactory_CreateForSession(t *testing.T) {
 		newTestModelSelector(chatModel),
 		agentConfig,
 		nil, // agentPool
-		nil, // webSearchTool
-		nil, // webFetchTool
 		nil, // contextRemindersGetter
 		nil, // modelCache
 		nil, // agentModelResolver
@@ -238,8 +235,6 @@ func TestFactory_CreateForSession_WithProxy(t *testing.T) {
 		newTestModelSelector(chatModel),
 		agentConfig,
 		nil, // agentPool
-		nil, // webSearchTool
-		nil, // webFetchTool
 		nil, // contextRemindersGetter
 		nil, // modelCache
 		nil, // agentModelResolver
@@ -294,8 +289,6 @@ func TestFactory_CreateForSession_NilProxy(t *testing.T) {
 		newTestModelSelector(chatModel),
 		agentConfig,
 		nil, // agentPool
-		nil, // webSearchTool
-		nil, // webFetchTool
 		nil, // contextRemindersGetter
 		nil, // modelCache
 		nil, // agentModelResolver
@@ -306,63 +299,6 @@ func TestFactory_CreateForSession_NilProxy(t *testing.T) {
 
 	// Verify
 	require.NotNil(t, executor, "TurnExecutor should not be nil even with nil proxy")
-}
-
-// Test 4: CreateForSession with web tools
-func TestFactory_CreateForSession_WithWebTools(t *testing.T) {
-	snapshotRepo := newMockSnapshotRepoFactory()
-	historyRepo := newMockHistoryRepoFactory()
-	eng := engine.New(snapshotRepo, historyRepo)
-
-	flowsCfg, promptsCfg := testFlowConfigForFactory()
-	flowManager, err := agentservice.NewFlowManager(flowsCfg, promptsCfg)
-	require.NoError(t, err)
-
-	builtinStore := tools.NewBuiltinToolStore()
-	tools.RegisterAllBuiltins(builtinStore)
-	toolResolver := tools.NewAgentToolResolver(builtinStore)
-	chatModel := &mockChatModelFactory{}
-	agentConfig := &config.AgentConfig{
-		MaxContextSize: 4000,
-	}
-
-	// Mock web tools
-	mockWebSearch := &mockInvokableTool{name: "web_search"}
-	mockWebFetch := &mockInvokableTool{name: "web_fetch"}
-
-	factory := New(
-		eng,
-		flowManager,
-		toolResolver,
-		newTestModelSelector(chatModel),
-		agentConfig,
-		nil, // agentPool
-		mockWebSearch,
-		mockWebFetch,
-		nil, // contextRemindersGetter
-		nil, // modelCache
-		nil, // agentModelResolver
-	)
-
-	executor := factory.CreateForSession(&mockClientProxy{}, "session-1", "project-1", "", "", "supervisor", "")
-
-	require.NotNil(t, executor)
-}
-
-// Mock InvokableTool for web tools test
-type mockInvokableTool struct {
-	name string
-}
-
-func (m *mockInvokableTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
-	return &schema.ToolInfo{
-		Name: m.name,
-		Desc: "mock tool",
-	}, nil
-}
-
-func (m *mockInvokableTool) InvokableRun(ctx context.Context, args string, opts ...einotool.Option) (string, error) {
-	return "mock result", nil
 }
 
 // --- Safety net tests for context reminders (Этап 0) ---
@@ -416,8 +352,6 @@ func TestFactory_CreateForSession_WithContextReminders(t *testing.T) {
 		newTestModelSelector(chatModel),
 		agentConfig,
 		nil, // agentPool
-		nil, // webSearchTool
-		nil, // webFetchTool
 		contextRemindersGetter,
 		nil, // modelCache
 		nil, // agentModelResolver
@@ -456,7 +390,7 @@ func TestFactory_CreateForSession_NilContextRemindersGetter(t *testing.T) {
 		toolResolver,
 		newTestModelSelector(chatModel),
 		agentConfig,
-		nil, nil, nil,
+		nil, // agentPool
 		nil, // contextRemindersGetter = nil
 		nil, // modelCache
 		nil, // agentModelResolver

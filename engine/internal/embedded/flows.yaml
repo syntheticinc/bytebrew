@@ -17,8 +17,6 @@ flows:
       - manage_subtasks
       - spawn_agent
       - ask_user
-      - web_search
-      - web_fetch
     max_steps: 0
     max_context_size: 16000
     lifecycle:
@@ -45,8 +43,6 @@ flows:
       - lsp
       - get_project_tree
       - execute_command
-      - web_search
-      - web_fetch
     max_steps: 100
     max_context_size: 16000
     lifecycle:
@@ -83,8 +79,6 @@ flows:
       - grep_search
       - glob
       - get_project_tree
-      - web_search
-      - web_fetch
     max_steps: 80
     max_context_size: 16000
     lifecycle:

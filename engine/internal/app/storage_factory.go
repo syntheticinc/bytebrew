@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"path/filepath"
 
-	einotool "github.com/cloudwego/eino/components/tool"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
@@ -18,6 +17,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/service/task"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/turnexecutor"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
+	einotool "github.com/cloudwego/eino/components/tool"
 	"gorm.io/gorm"
 )
 
@@ -94,7 +94,6 @@ func createEngine(
 	db *gorm.DB,
 	taskManager *taskrunner.EngineTaskManagerAdapter,
 	agentPoolAdapter *agentservice.AgentPoolAdapter,
-	webSearchTool, webFetchTool einotool.InvokableTool,
 ) (*engineComponents, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database connection required for engine")
@@ -123,8 +122,6 @@ func createEngine(
 	toolDepsProvider := tools.NewDefaultToolDepsProvider(
 		nil, // proxy -- set dynamically per-session
 		agentPoolAdapter,
-		webSearchTool,
-		webFetchTool,
 	)
 	if taskManager != nil {
 		toolDepsProvider.SetEngineTaskManager(taskManager)

@@ -37,8 +37,6 @@ agents:
       - Whether it's within normal range
       - Recommended action if anomalous
     tools:
-      builtin:
-        - web_fetch
       custom:
         - name: "get_sensor_data"
           description: "Fetch current sensor readings"

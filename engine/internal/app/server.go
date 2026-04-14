@@ -1180,8 +1180,6 @@ func Run(sc ServerConfig) error {
 		components.ModelSelector,
 		components.AgentConfig,
 		components.AgentPoolAdapter,
-		components.WebSearchTool,
-		components.WebFetchTool,
 		func() []turnexecutor.ContextReminderProvider {
 			if components.AgentService != nil {
 				return components.AgentService.GetContextReminders()

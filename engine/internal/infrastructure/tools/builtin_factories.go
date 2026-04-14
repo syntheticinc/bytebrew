@@ -86,13 +86,7 @@ func RegisterAllBuiltins(store *BuiltinToolStore) {
 		return NewEngineManageTasksTool(deps.EngineTaskManager, deps.SessionID)
 	})
 
-	// Web tools (pre-created instances passed via deps)
-	store.Register("web_search", func(deps ToolDependencies) tool.InvokableTool {
-		return deps.WebSearchTool
-	})
-	store.Register("web_fetch", func(deps ToolDependencies) tool.InvokableTool {
-		return deps.WebFetchTool
-	})
+	// Web search is available only via MCP servers (Tavily, Brave, Exa, etc.) — attach via Admin UI.
 
 	// Memory capability tools (US-001: auto-injected by capability injector when agent has Memory)
 	store.Register("memory_recall", func(deps ToolDependencies) tool.InvokableTool {

@@ -26,11 +26,9 @@ func NewToolClassifier() *DefaultToolClassifier {
 			"lsp":              true, // Uses proxy → client LSP servers
 		},
 		serverSideTools: map[string]bool{
-			"web_search":       true,
-			"web_fetch":        true,
-			"manage_tasks":     true,
-			"manage_subtasks":  true,
-			"spawn_agent": true,
+			"manage_tasks":    true,
+			"manage_subtasks": true,
+			"spawn_agent":     true,
 		},
 	}
 }

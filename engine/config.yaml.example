@@ -77,7 +77,3 @@ agent:
   max_context_size: 32000 # Maximum context size in TOKENS (not characters). 1 token ≈ 4 chars.
   tool_return_directly: []
   enable_enhanced_tool_call_checker: true
-
-websearch:
-  provider: "tavily"
-  api_key: ""  # or set TAVILY_API_KEY env var

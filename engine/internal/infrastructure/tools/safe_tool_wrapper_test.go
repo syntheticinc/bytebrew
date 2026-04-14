@@ -131,8 +131,8 @@ func TestSafeToolWrapper_InfoDelegates(t *testing.T) {
 
 func TestSafeToolWrapper_InnerErrorPassedThrough(t *testing.T) {
 	innerErr := fmt.Errorf("connection failed")
-	inner := &mockToolForWrapper{name: "web_fetch", result: "", err: innerErr}
-	wrapped := NewSafeToolWrapper(inner, "web_fetch", RiskCritical)
+	inner := &mockToolForWrapper{name: "execute_command", result: "", err: innerErr}
+	wrapped := NewSafeToolWrapper(inner, "execute_command", RiskCritical)
 
 	ctx := context.Background()
 	result, err := wrapped.InvokableRun(ctx, `{}`)
@@ -146,14 +146,12 @@ func TestGetContentRiskLevel_AllTools(t *testing.T) {
 		want     ContentRiskLevel
 	}{
 		// Critical
-		{"web_fetch", RiskCritical},
 		{"execute_command", RiskCritical},
 		// High
 		{"read_file", RiskHigh},
 		{"grep_search", RiskHigh},
 		{"smart_search", RiskHigh},
 		{"search_code", RiskHigh},
-		{"web_search", RiskCritical},
 		// Low
 		{"glob", RiskLow},
 		{"get_project_tree", RiskLow},

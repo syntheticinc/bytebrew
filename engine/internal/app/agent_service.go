@@ -13,13 +13,11 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/taskrunner"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/websearch"
 	agentservice "github.com/syntheticinc/bytebrew/engine/internal/service/agent"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/engine"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	"github.com/syntheticinc/bytebrew/engine/pkg/errors"
 	"github.com/cloudwego/eino/components/model"
-	einotool "github.com/cloudwego/eino/components/tool"
 	"gorm.io/gorm"
 )
 
@@ -39,12 +37,10 @@ type InfraComponents struct {
 	AgentToolResolver *tools.AgentToolResolver
 	ToolDepsProvider  *tools.DefaultToolDepsProvider
 	// Additional dependencies for TurnExecutorFactory
-	ModelName     string
-	ModelCache    *llm.ModelCache
-	WebSearchTool einotool.InvokableTool
-	WebFetchTool  einotool.InvokableTool
-	AgentConfig   *config.AgentConfig // effective config with defaults applied
-	LicenseInfo   *domain.LicenseInfo
+	ModelName   string
+	ModelCache  *llm.ModelCache
+	AgentConfig *config.AgentConfig // effective config with defaults applied
+	LicenseInfo *domain.LicenseInfo
 }
 
 // InfraComponentsConfig holds optional parameters for NewInfraComponents.
@@ -109,22 +105,19 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 	// 5. Fill empty AgentConfig fields with defaults
 	agentConfig := applyAgentConfigDefaults(&cfg.Agent)
 
-	// 6. Create web search/fetch tools
-	webSearchTool, webFetchTool := createWebTools(cfg)
-
-	// 7. Create Engine and wire to AgentPool
-	ec, err := createEngine(cfg, icc.DB, storageCmp.TaskManager, agentPoolAdapter, webSearchTool, webFetchTool)
+	// 6. Create Engine and wire to AgentPool
+	ec, err := createEngine(cfg, icc.DB, storageCmp.TaskManager, agentPoolAdapter)
 	if err != nil {
 		return nil, errors.Wrap(err, errors.CodeInternal, "failed to initialize engine")
 	}
 
 	wireEngineToPool(agentPool, ec)
 
-	// 8. Add security reminder (highest priority -- last in context for max recency bias)
+	// 7. Add security reminder (highest priority -- last in context for max recency bias)
 	contextReminders := storageCmp.ContextReminders
 	contextReminders = append(contextReminders, agents.NewSecurityReminderProvider())
 
-	// 9. Create AgentService (optional — nil when no LLM configured in Docker/bootstrap mode)
+	// 8. Create AgentService (optional — nil when no LLM configured in Docker/bootstrap mode)
 	var agentService *agentservice.Service
 	if chatModel != nil {
 		var svcErr error
@@ -132,8 +125,6 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 			ChatModel:        chatModel,
 			AgentPool:        agentPool,
 			ContextReminders: contextReminders,
-			WebSearchTool:    webSearchTool,
-			WebFetchTool:     webFetchTool,
 			MaxSteps:         cfg.Agent.MaxSteps,
 			AgentConfig:      agentConfig,
 			ModelName:        modelName,
@@ -165,8 +156,6 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 		ToolDepsProvider:  ec.ToolDepsProvider,
 		ModelName:         modelName,
 		ModelCache:        modelCache,
-		WebSearchTool:     webSearchTool,
-		WebFetchTool:      webFetchTool,
 		AgentConfig:       agentConfig,
 		LicenseInfo:       licenseInfo,
 	}, nil
@@ -190,27 +179,6 @@ func applyAgentConfigDefaults(agentConfig *config.AgentConfig) *config.AgentConf
 	}
 
 	return agentConfig
-}
-
-// createWebTools creates web search/fetch tools if API key is available.
-func createWebTools(cfg config.Config) (einotool.InvokableTool, einotool.InvokableTool) {
-	webSearchAPIKey := cfg.WebSearch.APIKey
-	if webSearchAPIKey == "" {
-		webSearchAPIKey = os.Getenv("TAVILY_API_KEY")
-	}
-	webProvider := cfg.WebSearch.Provider
-	if webProvider == "" && webSearchAPIKey != "" {
-		webProvider = "tavily" // auto-detect from API key presence
-	}
-	if webProvider != "tavily" || webSearchAPIKey == "" {
-		return nil, nil
-	}
-
-	provider := websearch.NewTavilyProvider(webSearchAPIKey)
-	webSearchTool := tools.NewWebSearchTool(provider)
-	webFetchTool := tools.NewWebFetchTool(provider)
-	slog.Info("web search initialized", "provider", "tavily")
-	return webSearchTool, webFetchTool
 }
 
 // ValidateLicense validates the license from config. Always returns a LicenseInfo (fallback to Blocked).

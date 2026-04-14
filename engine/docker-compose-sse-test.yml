@@ -12,7 +12,6 @@ services:
       - LLM_PROVIDER=openrouter
       - LLM_API_KEY=${LLM_API_KEY}           # set in .env or shell
       - LLM_MODEL=qwen/qwen3-coder-next
-      - TAVILY_API_KEY=${TAVILY_API_KEY:-}    # optional: web search
     depends_on:
       db:
         condition: service_healthy

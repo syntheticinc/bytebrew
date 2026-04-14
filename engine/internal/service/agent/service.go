@@ -10,7 +10,6 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	"github.com/syntheticinc/bytebrew/engine/pkg/errors"
 	"github.com/cloudwego/eino/components/model"
-	einotool "github.com/cloudwego/eino/components/tool"
 )
 
 // ChatModel defines interface for LLM chat model
@@ -44,8 +43,6 @@ type Service struct {
 	agentPool        AgentPoolManager
 	contextReminders []turnexecutor.ContextReminderProvider
 	toolCallHistory  *ToolCallHistoryReminder
-	webSearchTool    einotool.InvokableTool
-	webFetchTool     einotool.InvokableTool
 	maxSteps         int
 	agentConfig      *config.AgentConfig
 	modelName        string
@@ -58,8 +55,6 @@ type Config struct {
 	ChatModel        ChatModel
 	AgentPool        AgentPoolManager
 	ContextReminders []turnexecutor.ContextReminderProvider
-	WebSearchTool    einotool.InvokableTool
-	WebFetchTool     einotool.InvokableTool
 	MaxSteps         int
 	AgentConfig      *config.AgentConfig
 	ModelName        string // Model name for reasoning extraction
@@ -93,8 +88,6 @@ func New(cfg Config) (*Service, error) {
 		agentPool:        cfg.AgentPool,
 		contextReminders: contextReminders,
 		toolCallHistory:  toolCallHistory,
-		webSearchTool:    cfg.WebSearchTool,
-		webFetchTool:     cfg.WebFetchTool,
 		maxSteps:         maxSteps,
 		agentConfig:      agentConfig,
 		modelName:        cfg.ModelName,

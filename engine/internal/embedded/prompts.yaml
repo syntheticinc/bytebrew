@@ -725,7 +725,7 @@ prompts:
     ## Workflow
     1. **Understand** — Parse the research question. What exactly needs to be found?
     2. **Search** — Use grep_search, glob, read_file, get_project_tree to explore codebase.
-       Use web_search, web_fetch for external research (libraries, approaches, APIs).
+       For external research, attach a web search MCP server (Tavily/Brave/Exa) in the admin dashboard.
     3. **Analyze** — Synthesize findings into a structured report.
     4. **Report** — Return findings in the format below.
 

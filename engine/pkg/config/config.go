@@ -22,7 +22,6 @@ type Config struct {
 	Agent         AgentConfig         `mapstructure:"agent"`
 	PlanStorage   PlanStorageConfig   `mapstructure:"plan_storage"`
 	WorkStorage   WorkStorageConfig   `mapstructure:"work_storage"`
-	WebSearch     WebSearchConfig     `mapstructure:"websearch"`
 	License       LicenseConfig       `mapstructure:"license"`
 	Provider      ProviderConfig      `mapstructure:"provider"`
 	Relay         RelayConfig         `mapstructure:"relay"`
@@ -66,12 +65,6 @@ type ProviderConfig struct {
 // WorkStorageConfig holds work storage (stories + tasks) configuration
 type WorkStorageConfig struct {
 	DBPath string `mapstructure:"db_path"`
-}
-
-// WebSearchConfig holds web search provider configuration
-type WebSearchConfig struct {
-	Provider string `mapstructure:"provider"` // "tavily"
-	APIKey   string `mapstructure:"api_key"`
 }
 
 // LicenseConfig holds license validation configuration.

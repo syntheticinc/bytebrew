@@ -3,7 +3,6 @@ package tools
 import (
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/indexing"
-	"github.com/cloudwego/eino/components/tool"
 )
 
 // ToolEventEmitter sends agent events from tools (e.g. structured output).
@@ -22,9 +21,7 @@ type ToolDependencies struct {
 	Proxy             ClientOperationsProxy
 	AgentPool         AgentPoolForTool
 	EngineTaskManager EngineTaskManager  // unified task manager (EngineTask-based)
-	EventEmitter      ToolEventEmitter   // event stream for tools that emit events
-	WebSearchTool     tool.InvokableTool // pre-created (depends on API key)
-	WebFetchTool      tool.InvokableTool // pre-created
+	EventEmitter      ToolEventEmitter // event stream for tools that emit events
 	ChunkStore        *indexing.ChunkStore
 	Embedder          *indexing.EmbeddingsClient
 	MCPServers        []string // MCP server names for legacy Resolve path

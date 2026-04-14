@@ -5,7 +5,6 @@ import (
 	"log/slog"
 
 	"github.com/cloudwego/eino/components/model"
-	einotool "github.com/cloudwego/eino/components/tool"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
@@ -46,9 +45,7 @@ type Factory struct {
 	agentResolver AgentModelResolver
 	agentConfig   *config.AgentConfig
 	// Raw deps for creating per-session ToolDepsProvider
-	agentPool     tools.AgentPoolForTool
-	webSearchTool einotool.InvokableTool
-	webFetchTool  einotool.InvokableTool
+	agentPool tools.AgentPoolForTool
 	// Getter for context reminders (from AgentService)
 	contextRemindersGetter func() []turnexecutor.ContextReminderProvider
 	// Memory capability deps (injected via SetMemory — nil = disabled)
@@ -76,7 +73,6 @@ func New(
 	modelSelector *llm.ModelSelector,
 	agentConfig *config.AgentConfig,
 	agentPool tools.AgentPoolForTool,
-	webSearchTool, webFetchTool einotool.InvokableTool,
 	contextRemindersGetter func() []turnexecutor.ContextReminderProvider,
 	modelCache *llm.ModelCache,
 	agentResolver AgentModelResolver,
@@ -90,8 +86,6 @@ func New(
 		agentResolver:          agentResolver,
 		agentConfig:            agentConfig,
 		agentPool:              agentPool,
-		webSearchTool:          webSearchTool,
-		webFetchTool:           webFetchTool,
 		contextRemindersGetter: contextRemindersGetter,
 	}
 }
@@ -161,8 +155,6 @@ func (f *Factory) CreateForSession(
 	baseDeps := tools.NewDefaultToolDepsProvider(
 		proxy,
 		f.agentPool,
-		f.webSearchTool,
-		f.webFetchTool,
 	)
 	if f.engineTaskManager != nil {
 		baseDeps.SetEngineTaskManager(f.engineTaskManager)

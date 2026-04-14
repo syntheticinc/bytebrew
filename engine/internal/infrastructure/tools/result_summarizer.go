@@ -21,10 +21,6 @@ func SummarizeToolResult(toolName, result string) string {
 	switch toolName {
 	case "smart_search":
 		return summarizeSmartSearch(result)
-	case "web_search":
-		return summarizeWebSearch(result)
-	case "web_fetch":
-		return summarizeWebFetch(result)
 	case "manage_tasks":
 		return firstLine(result)
 	case "manage_subtasks":
@@ -67,32 +63,6 @@ func summarizeSmartSearch(result string) string {
 		return "1 citation"
 	}
 	return fmt.Sprintf("%d citations", count)
-}
-
-// summarizeWebSearch подсчитывает результаты поиска
-func summarizeWebSearch(result string) string {
-	if strings.HasPrefix(result, "No results") {
-		return "0 results"
-	}
-
-	// Count numbered lines with safety limit (avoid OOM on huge results)
-	count := 0
-	for _, line := range strings.SplitN(result, "\n", 500) {
-		if webSearchResultPattern.MatchString(strings.TrimSpace(line)) {
-			count++
-		}
-	}
-
-	if count == 1 {
-		return "1 result"
-	}
-	return fmt.Sprintf("%d results", count)
-}
-
-// summarizeWebFetch возвращает размер загруженного контента
-func summarizeWebFetch(result string) string {
-	size := len(result)
-	return fmt.Sprintf("fetched (%s)", humanizeBytes(size))
 }
 
 // firstLine возвращает первую строку, обрезанную до 60 рун (UTF-8 safe)

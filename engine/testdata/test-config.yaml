@@ -49,9 +49,5 @@ agent:
   max_steps: 50
   max_context_size: 48000
 
-websearch:
-  provider: "tavily"
-  api_key: "${TAVILY_API_KEY}"  # set via environment variable
-
 license:
   public_key_hex: "${LICENSE_PUBLIC_KEY_HEX}"  # set via environment variable

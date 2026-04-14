@@ -15,8 +15,6 @@ func TestGetToolMetadata_KnownTool(t *testing.T) {
 		wantWarning  bool
 	}{
 		{"safe tool", "ask_user", ZoneSafe, false},
-		{"safe tool web_search", "web_search", ZoneSafe, false},
-		{"caution tool", "web_fetch", ZoneCaution, true},
 		{"caution tool glob", "glob", ZoneCaution, true},
 		{"dangerous tool read_file", "read_file", ZoneDangerous, true},
 		{"dangerous tool execute_command", "execute_command", ZoneDangerous, true},

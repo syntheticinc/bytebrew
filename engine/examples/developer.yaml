@@ -50,8 +50,6 @@ agents:
         - execute_command
         - manage_tasks
         - ask_user
-        - web_search
-        - web_fetch
     can_spawn: ["code-agent", "reviewer", "researcher"]
     kit: "developer"
     max_steps: 50
@@ -78,8 +76,6 @@ agents:
         - glob
         - get_project_tree
         - execute_command
-        - web_search
-        - web_fetch
     kit: "developer"
     lifecycle: "spawn"
     max_steps: 100
@@ -111,8 +107,6 @@ agents:
         - grep_search
         - glob
         - get_project_tree
-        - web_search
-        - web_fetch
     kit: "developer"
     lifecycle: "spawn"
     max_steps: 60
