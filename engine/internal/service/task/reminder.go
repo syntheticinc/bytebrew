@@ -49,7 +49,7 @@ func NewTaskReminderProviderContext(src ReminderSource) *TaskReminderContextProv
 }
 
 // ReminderSource is the minimal interface required by the task reminder.
-// Implemented by infrastructure.EngineTaskManagerAdapter.
+// Implemented by taskrunner.EngineTaskManagerAdapter.
 type ReminderSource interface {
 	ListTasksDomain(ctx context.Context, sessionID string) ([]domain.EngineTask, error)
 	ListSubtasksDomain(ctx context.Context, parentID uuid.UUID) ([]domain.EngineTask, error)

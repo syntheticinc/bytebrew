@@ -1,4 +1,4 @@
-package infrastructure_test
+package taskrunner_test
 
 // End-to-end integration test for the cron-driven autonomous task platform.
 //
@@ -41,8 +41,8 @@ import (
 
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/taskrunner"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/task"
 )
@@ -294,10 +294,10 @@ type platform struct {
 	db          *gorm.DB
 	taskRepo    *configrepo.GORMTaskRepository
 	triggerRepo *configrepo.GORMTriggerRepository
-	adapter     *infrastructure.EngineTaskManagerAdapter
+	adapter     *taskrunner.EngineTaskManagerAdapter
 	worker      *task.TaskWorker
 	creator     task.TaskCreator
-	hook        *infrastructure.TaskCompletionHook
+	hook        *taskrunner.TaskCompletionHook
 	registry    *fakeSessionRegistry
 }
 
@@ -307,17 +307,17 @@ func startPlatform(t *testing.T, registry *fakeSessionRegistry) *platform {
 	taskRepo := configrepo.NewGORMTaskRepository(db)
 	triggerRepo := configrepo.NewGORMTriggerRepository(db)
 
-	adapter := infrastructure.NewEngineTaskManagerAdapter(taskRepo)
+	adapter := taskrunner.NewEngineTaskManagerAdapter(taskRepo)
 
 	notifier := task.NewCompletionNotifier()
-	hook := infrastructure.NewTaskCompletionHook(taskRepo, triggerRepo, notifier)
+	hook := taskrunner.NewTaskCompletionHook(taskRepo, triggerRepo, notifier)
 	adapter.SetCompletionHook(hook)
 
-	executor := infrastructure.NewTaskExecutor(adapter, registry, registry, 5*time.Second)
-	worker := infrastructure.StartBackgroundWorker(executor, 2)
+	executor := taskrunner.NewTaskExecutor(adapter, registry, registry, 5*time.Second)
+	worker := taskrunner.StartBackgroundWorker(executor, 2)
 	require.NotNil(t, worker, "worker must start with a non-nil executor")
 
-	creator := infrastructure.NewTriggerTaskCreator(adapter, worker)
+	creator := taskrunner.NewTriggerTaskCreator(adapter, worker)
 
 	t.Cleanup(func() {
 		worker.Stop()

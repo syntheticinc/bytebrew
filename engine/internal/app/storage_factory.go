@@ -1,4 +1,4 @@
-package infrastructure
+package app
 
 import (
 	"context"
@@ -10,8 +10,8 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/repository"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/taskrunner"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	agentservice "github.com/syntheticinc/bytebrew/engine/internal/service/agent"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/engine"
@@ -23,7 +23,7 @@ import (
 
 // storageComponents holds all storage-related components created during initialization.
 type storageComponents struct {
-	TaskManager      *EngineTaskManagerAdapter // unified task manager (EngineTask-based)
+	TaskManager      *taskrunner.EngineTaskManagerAdapter // unified task manager (EngineTask-based)
 	TaskRepo         *configrepo.GORMTaskRepository
 	SessionStorage   *persistence.SessionStorage
 	AgentRunStorage  agentservice.AgentRunStorage
@@ -68,7 +68,7 @@ func initWorkComponents(db *gorm.DB) *storageComponents {
 	}
 
 	// Unified task manager (replaces old work.Manager, uses EngineTask).
-	result.TaskManager = NewEngineTaskManagerAdapter(taskRepo)
+	result.TaskManager = taskrunner.NewEngineTaskManagerAdapter(taskRepo)
 	slog.Info("task manager initialized (EngineTask-based)")
 
 	// Context reminder for agent — shows active EngineTasks every turn (survives context compression).
@@ -92,7 +92,7 @@ type engineComponents struct {
 func createEngine(
 	cfg config.Config,
 	db *gorm.DB,
-	taskManager *EngineTaskManagerAdapter,
+	taskManager *taskrunner.EngineTaskManagerAdapter,
 	agentPoolAdapter *agentservice.AgentPoolAdapter,
 	webSearchTool, webFetchTool einotool.InvokableTool,
 ) (*engineComponents, error) {
@@ -176,22 +176,4 @@ func wireEngineToPool(
 		agentPool.SetMaxConcurrent(supervisorFlow.Spawn.MaxConcurrent)
 		slog.Info("max concurrent agents configured", "limit", supervisorFlow.Spawn.MaxConcurrent)
 	}
-}
-
-// NewRuntimeDB is a convenience function that returns the existing pgDB reference.
-// Kept for backward compatibility where a separate runtime DB handle was expected.
-func NewRuntimeDB(db *gorm.DB) *gorm.DB {
-	return db
-}
-
-// MigrateRuntimeTables runs migration for runtime-only tables.
-// Called separately from models.AutoMigrate if needed.
-func MigrateRuntimeTables(db *gorm.DB) error {
-	return db.AutoMigrate(
-		&models.RuntimeSessionModel{},
-		&models.RuntimeAgentRunModel{},
-		&models.RuntimeDeviceModel{},
-		&models.RuntimeConfigKV{},
-		&models.RuntimeSessionEventModel{},
-	)
 }

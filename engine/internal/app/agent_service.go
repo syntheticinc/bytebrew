@@ -1,4 +1,4 @@
-package infrastructure
+package app
 
 import (
 	"log/slog"
@@ -11,6 +11,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/taskrunner"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/websearch"
 	agentservice "github.com/syntheticinc/bytebrew/engine/internal/service/agent"
@@ -25,7 +26,7 @@ import (
 // InfraComponents holds all infrastructure components created during initialization
 type InfraComponents struct {
 	AgentService     *agentservice.Service
-	TaskManager      *EngineTaskManagerAdapter
+	TaskManager      *taskrunner.EngineTaskManagerAdapter
 	TaskRepo         *configrepo.GORMTaskRepository
 	AgentPool        *agentservice.AgentPool
 	AgentPoolAdapter *agentservice.AgentPoolAdapter
@@ -44,20 +45,6 @@ type InfraComponents struct {
 	WebFetchTool  einotool.InvokableTool
 	AgentConfig   *config.AgentConfig // effective config with defaults applied
 	LicenseInfo   *domain.LicenseInfo
-}
-
-// NewAgentService creates a new AgentService with Eino Agent.
-// License is always validated from config (legacy behavior).
-func NewAgentService(cfg config.Config) (*agentservice.Service, error) {
-	licenseInfo := ValidateLicense(cfg.License)
-	components, err := NewInfraComponents(InfraComponentsConfig{
-		Config:      cfg,
-		LicenseInfo: licenseInfo,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return components.AgentService, nil
 }
 
 // InfraComponentsConfig holds optional parameters for NewInfraComponents.

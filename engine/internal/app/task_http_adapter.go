@@ -9,8 +9,8 @@ import (
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/taskrunner"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 )
 
@@ -25,7 +25,7 @@ import (
 // from an agent tool or the admin dashboard.
 type taskServiceHTTPAdapter struct {
 	repo    *configrepo.GORMTaskRepository
-	manager *infrastructure.EngineTaskManagerAdapter
+	manager *taskrunner.EngineTaskManagerAdapter
 }
 
 // toHTTPTaskResponse maps a domain EngineTask to the HTTP response shape.

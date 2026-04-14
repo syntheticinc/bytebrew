@@ -29,6 +29,8 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/embedded"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/taskrunner"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/versioncheck"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/audit"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/bridge"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
@@ -319,7 +321,7 @@ func Run(sc ServerConfig) error {
 	}
 
 	// Create infrastructure components (AgentService + WorkManager + AgentPool)
-	components, err := infrastructure.NewInfraComponents(infrastructure.InfraComponentsConfig{
+	components, err := NewInfraComponents(InfraComponentsConfig{
 		Config:      *cfg,
 		LicenseInfo: sc.LicenseInfo,
 		DB:          pgDB,
@@ -584,7 +586,7 @@ func Run(sc ServerConfig) error {
 		auditLogger := audit.NewLogger(pgDB)
 
 		// Update checker (non-blocking, air-gap safe)
-		updateChecker := infrastructure.NewUpdateChecker(sc.Version)
+		updateChecker := versioncheck.NewUpdateChecker(sc.Version)
 		updateChecker.Start(ctx)
 
 		// Health (public) — available on both ports
@@ -1223,7 +1225,7 @@ func Run(sc ServerConfig) error {
 		if taskRepo != nil {
 			platformTriggerRepo = configrepo.NewGORMTriggerRepository(pgDB)
 			completionNotifier := task.NewCompletionNotifier()
-			completionHook := infrastructure.NewTaskCompletionHook(taskRepo, platformTriggerRepo, completionNotifier)
+			completionHook := taskrunner.NewTaskCompletionHook(taskRepo, platformTriggerRepo, completionNotifier)
 			components.TaskManager.SetCompletionHook(completionHook)
 			// Drain in-flight webhooks on shutdown so customer integrations do not silently
 			// lose completion notifications when the server is restarted.
@@ -1253,18 +1255,18 @@ func Run(sc ServerConfig) error {
 	// final answer. Wiring lives here because the executor needs sessProcessor and the
 	// session registry, which are built just above.
 	if taskRepo != nil && platformTriggerRepo != nil {
-		taskExecutor := infrastructure.NewTaskExecutor(
+		taskExecutor := taskrunner.NewTaskExecutor(
 			components.TaskManager,
 			sessionRegistry,
 			sessProcessor,
 			0, // 0 → DefaultTaskTimeout
 		)
-		taskWorker := infrastructure.StartBackgroundWorker(taskExecutor, 4)
+		taskWorker := taskrunner.StartBackgroundWorker(taskExecutor, 4)
 		if taskWorker != nil {
 			defer taskWorker.Stop()
 		}
 
-		cronScheduler, cronErr := infrastructure.StartCronScheduler(ctx, platformTriggerRepo, components.TaskManager, taskWorker)
+		cronScheduler, cronErr := taskrunner.StartCronScheduler(ctx, platformTriggerRepo, components.TaskManager, taskWorker)
 		if cronErr != nil {
 			loggerInstance.WarnContext(ctx, "cron scheduler failed to start", "error", cronErr)
 		} else if cronScheduler != nil {
@@ -1400,7 +1402,7 @@ func Run(sc ServerConfig) error {
 	}
 
 	// Cron scheduler wiring lives in the platform-services block above
-	// (infrastructure.StartCronScheduler). The legacy duplicate that used
+	// (taskrunner.StartCronScheduler). The legacy duplicate that used
 	// cronTaskCreatorHTTPAdapter was removed — it created a second scheduler
 	// that fired every trigger twice on boot.
 

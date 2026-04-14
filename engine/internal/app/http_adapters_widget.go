@@ -181,7 +181,7 @@ func joinDomains(domains []string) string {
 }
 
 // engineTaskManagerAdapter implements tools.EngineTaskManager using GORMTaskRepository.
-// engineTaskManagerAdapter moved to infrastructure.EngineTaskManagerAdapter.
+// engineTaskManagerAdapter moved to taskrunner.EngineTaskManagerAdapter.
 // This file keeps the widget/session adapters only.
 
 // schemaAgentResolverAdapter resolves schema UUID → agent names via schema repo.
