@@ -11,19 +11,19 @@ import (
 
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agent_registry"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flow_registry"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/session_processor"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/sessionprocessor"
 	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 )
 
 // chatServiceHTTPAdapter bridges SessionRegistry + SessionProcessor to the
 // deliveryhttp.ChatService interface for the REST chat endpoint.
 type chatServiceHTTPAdapter struct {
-	registry    *flow_registry.SessionRegistry
-	processor   *session_processor.Processor
-	agents      *agent_registry.AgentRegistry
+	registry    *flowregistry.SessionRegistry
+	processor   *sessionprocessor.Processor
+	agents      *agentregistry.AgentRegistry
 	chatEnabled bool // false when no LLM model configured
 }
 
@@ -189,7 +189,7 @@ func sseEventJSON(eventType string, data map[string]interface{}) *deliveryhttp.S
 
 // chatTriggerCheckerAdapter implements deliveryhttp.ChatTriggerChecker.
 type chatTriggerCheckerAdapter struct {
-	repo *config_repo.GORMTriggerRepository
+	repo *configrepo.GORMTriggerRepository
 }
 
 func (a *chatTriggerCheckerAdapter) HasEnabledChatTrigger(ctx context.Context, agentName string) (bool, error) {

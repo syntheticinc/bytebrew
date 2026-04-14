@@ -9,14 +9,14 @@ import (
 	einotool "github.com/cloudwego/eino/components/tool"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/repository"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	agentservice "github.com/syntheticinc/bytebrew/engine/internal/service/agent"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/engine"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/task"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/turn_executor"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/turnexecutor"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	"gorm.io/gorm"
 )
@@ -24,10 +24,10 @@ import (
 // storageComponents holds all storage-related components created during initialization.
 type storageComponents struct {
 	TaskManager      *EngineTaskManagerAdapter // unified task manager (EngineTask-based)
-	TaskRepo         *config_repo.GORMTaskRepository
+	TaskRepo         *configrepo.GORMTaskRepository
 	SessionStorage   *persistence.SessionStorage
 	AgentRunStorage  agentservice.AgentRunStorage
-	ContextReminders []turn_executor.ContextReminderProvider
+	ContextReminders []turnexecutor.ContextReminderProvider
 }
 
 // createWorkStorage creates task manager, agent pool, session storage from pgDB.
@@ -44,7 +44,7 @@ func initWorkComponents(db *gorm.DB) *storageComponents {
 	ctx := context.Background()
 	result := &storageComponents{}
 
-	taskRepo := config_repo.NewGORMTaskRepository(db)
+	taskRepo := configrepo.NewGORMTaskRepository(db)
 	agentRunStorage := persistence.NewAgentRunStorage(db)
 	result.AgentRunStorage = agentRunStorage
 	result.TaskRepo = taskRepo

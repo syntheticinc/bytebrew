@@ -14,7 +14,7 @@ import (
 	deliverygrpc "github.com/syntheticinc/bytebrew/engine/internal/delivery/grpc"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flow_registry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/testutil"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
@@ -31,7 +31,7 @@ type ProductionHarness struct {
 	grpcServer   *grpc.Server
 	listener     net.Listener
 	srvAddr      string
-	flowRegistry *flow_registry.InMemoryRegistry
+	flowRegistry *flowregistry.InMemoryRegistry
 	cancel       context.CancelFunc
 	ctx          context.Context
 }
@@ -93,7 +93,7 @@ func NewProductionHarness(t *testing.T, scenario string) *ProductionHarness {
 	)
 
 	// 7. FlowHandler + FlowRegistry
-	flowReg := flow_registry.NewInMemoryRegistry()
+	flowReg := flowregistry.NewInMemoryRegistry()
 	flowHandler, err := deliverygrpc.NewFlowHandlerWithConfig(deliverygrpc.FlowHandlerConfig{
 		AgentService:        &testutil.NoopAgentService{},
 		TurnExecutorFactory: factory,
@@ -155,7 +155,7 @@ func (h *ProductionHarness) Cleanup() {
 func (h *ProductionHarness) SrvAddr() string { return h.srvAddr }
 
 // FlowRegistry returns the flow registry.
-func (h *ProductionHarness) FlowRegistry() *flow_registry.InMemoryRegistry { return h.flowRegistry }
+func (h *ProductionHarness) FlowRegistry() *flowregistry.InMemoryRegistry { return h.flowRegistry }
 
 // Context returns the harness context.
 func (h *ProductionHarness) Context() context.Context { return h.ctx }

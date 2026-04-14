@@ -8,7 +8,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/engine"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/turn_executor"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/turnexecutor"
 	agentservice "github.com/syntheticinc/bytebrew/engine/internal/service/agent"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
@@ -367,7 +367,7 @@ func (m *mockInvokableTool) InvokableRun(ctx context.Context, args string, opts 
 
 // --- Safety net tests for context reminders (Этап 0) ---
 
-// mockContextReminderForFactory implements turn_executor.ContextReminderProvider for testing
+// mockContextReminderForFactory implements turnexecutor.ContextReminderProvider for testing
 type mockContextReminderForFactory struct {
 	reminder string
 	priority int
@@ -404,9 +404,9 @@ func TestEngineTurnExecutorFactory_CreateForSession_WithContextReminders(t *test
 		enabled:  true,
 	}
 
-	contextRemindersGetter := func() []turn_executor.ContextReminderProvider {
+	contextRemindersGetter := func() []turnexecutor.ContextReminderProvider {
 		getterCalled = true
-		return []turn_executor.ContextReminderProvider{mockReminder}
+		return []turnexecutor.ContextReminderProvider{mockReminder}
 	}
 
 	factory := NewEngineTurnExecutorFactory(

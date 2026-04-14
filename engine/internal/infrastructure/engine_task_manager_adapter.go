@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 )
 
@@ -27,12 +27,12 @@ const MaxTaskDepth = 10
 // All IDs in the public API are uuid.UUID. Conversion from external string IDs
 // (agent JSON, HTTP path params) happens at the tool/HTTP boundary, not here.
 type EngineTaskManagerAdapter struct {
-	repo           *config_repo.GORMTaskRepository
+	repo           *configrepo.GORMTaskRepository
 	completionHook *TaskCompletionHook // optional — fires on complete/fail/cancel transitions
 }
 
 // NewEngineTaskManagerAdapter creates a new adapter over the given task repository.
-func NewEngineTaskManagerAdapter(repo *config_repo.GORMTaskRepository) *EngineTaskManagerAdapter {
+func NewEngineTaskManagerAdapter(repo *configrepo.GORMTaskRepository) *EngineTaskManagerAdapter {
 	return &EngineTaskManagerAdapter{repo: repo}
 }
 
@@ -201,7 +201,7 @@ func isTerminalStatus(status string) bool {
 }
 
 func (a *EngineTaskManagerAdapter) ListTasks(ctx context.Context, sessionID string) ([]tools.EngineTaskSummary, error) {
-	tasks, err := a.repo.List(ctx, config_repo.TaskFilter{SessionID: &sessionID})
+	tasks, err := a.repo.List(ctx, configrepo.TaskFilter{SessionID: &sessionID})
 	if err != nil {
 		return nil, err
 	}

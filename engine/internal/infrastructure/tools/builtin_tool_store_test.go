@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agent_registry"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 )
 
 // stubTool is a minimal tool implementation for testing.
@@ -83,8 +83,8 @@ func TestAgentToolResolver_ResolveForAgent_Whitelist(t *testing.T) {
 	})
 
 	resolver := NewAgentToolResolver(store)
-	agent := &agent_registry.RegisteredAgent{
-		Record: config_repo.AgentRecord{
+	agent := &agentregistry.RegisteredAgent{
+		Record: configrepo.AgentRecord{
 			Name:         "test_agent",
 			BuiltinTools: []string{"tool_a", "tool_c"},
 		},
@@ -111,8 +111,8 @@ func TestAgentToolResolver_ResolveForAgent_UnknownTool(t *testing.T) {
 	})
 
 	resolver := NewAgentToolResolver(store)
-	agent := &agent_registry.RegisteredAgent{
-		Record: config_repo.AgentRecord{
+	agent := &agentregistry.RegisteredAgent{
+		Record: configrepo.AgentRecord{
 			Name:         "test_agent",
 			BuiltinTools: []string{"tool_a", "unknown_tool"},
 		},
@@ -136,8 +136,8 @@ func TestAgentToolResolver_ResolveForAgent_EmptyWhitelist(t *testing.T) {
 	})
 
 	resolver := NewAgentToolResolver(store)
-	agent := &agent_registry.RegisteredAgent{
-		Record: config_repo.AgentRecord{
+	agent := &agentregistry.RegisteredAgent{
+		Record: configrepo.AgentRecord{
 			Name:         "test_agent",
 			BuiltinTools: nil,
 		},
@@ -161,8 +161,8 @@ func TestAgentToolResolver_ResolveForAgent_PassesDeps(t *testing.T) {
 	})
 
 	resolver := NewAgentToolResolver(store)
-	agent := &agent_registry.RegisteredAgent{
-		Record: config_repo.AgentRecord{
+	agent := &agentregistry.RegisteredAgent{
+		Record: configrepo.AgentRecord{
 			Name:         "test_agent",
 			BuiltinTools: []string{"dep_tool"},
 		},
@@ -218,8 +218,8 @@ func TestAgentToolResolver_KitTools_Appended(t *testing.T) {
 	resolver := NewAgentToolResolver(store)
 	resolver.SetKitProvider(kp)
 
-	agent := &agent_registry.RegisteredAgent{
-		Record: config_repo.AgentRecord{
+	agent := &agentregistry.RegisteredAgent{
+		Record: configrepo.AgentRecord{
 			Name:         "code_agent",
 			Kit:          "developer",
 			BuiltinTools: []string{"tool_a"},
@@ -250,8 +250,8 @@ func TestAgentToolResolver_NoKit_NoExtraTools(t *testing.T) {
 	resolver := NewAgentToolResolver(store)
 	// No kit provider set
 
-	agent := &agent_registry.RegisteredAgent{
-		Record: config_repo.AgentRecord{
+	agent := &agentregistry.RegisteredAgent{
+		Record: configrepo.AgentRecord{
 			Name:         "basic_agent",
 			Kit:          "",
 			BuiltinTools: []string{"tool_a"},
@@ -281,8 +281,8 @@ func TestAgentToolResolver_KitName_NoSession(t *testing.T) {
 	resolver := NewAgentToolResolver(store)
 	resolver.SetKitProvider(kp)
 
-	agent := &agent_registry.RegisteredAgent{
-		Record: config_repo.AgentRecord{
+	agent := &agentregistry.RegisteredAgent{
+		Record: configrepo.AgentRecord{
 			Name:         "code_agent",
 			Kit:          "developer",
 			BuiltinTools: []string{"tool_a"},
@@ -309,8 +309,8 @@ func TestAgentToolResolver_KitNotFound_Error(t *testing.T) {
 	resolver := NewAgentToolResolver(store)
 	resolver.SetKitProvider(kp)
 
-	agent := &agent_registry.RegisteredAgent{
-		Record: config_repo.AgentRecord{
+	agent := &agentregistry.RegisteredAgent{
+		Record: configrepo.AgentRecord{
 			Name: "code_agent",
 			Kit:  "nonexistent",
 		},
@@ -341,8 +341,8 @@ func TestAgentToolResolver_KitReturnsNilTools(t *testing.T) {
 	resolver := NewAgentToolResolver(store)
 	resolver.SetKitProvider(kp)
 
-	agent := &agent_registry.RegisteredAgent{
-		Record: config_repo.AgentRecord{
+	agent := &agentregistry.RegisteredAgent{
+		Record: configrepo.AgentRecord{
 			Name:         "code_agent",
 			Kit:          "developer",
 			BuiltinTools: []string{"tool_a"},

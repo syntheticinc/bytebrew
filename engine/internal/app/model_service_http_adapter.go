@@ -8,7 +8,7 @@ import (
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 )
@@ -20,7 +20,7 @@ type ModelCacheInvalidator interface {
 
 // modelServiceHTTPAdapter bridges GORMLLMProviderRepository to the http.ModelService interface.
 type modelServiceHTTPAdapter struct {
-	repo       *config_repo.GORMLLMProviderRepository
+	repo       *configrepo.GORMLLMProviderRepository
 	modelCache ModelCacheInvalidator
 }
 

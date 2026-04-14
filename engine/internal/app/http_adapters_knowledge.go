@@ -8,7 +8,7 @@ import (
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/indexing"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	svcknowledge "github.com/syntheticinc/bytebrew/engine/internal/service/knowledge"
@@ -55,7 +55,7 @@ func (a *knowledgeFileListerHTTPAdapter) ReindexFile(ctx context.Context, agentN
 
 // kbStoreAdapter bridges GORMKnowledgeBaseRepository to deliveryhttp.KBStore.
 type kbStoreAdapter struct {
-	repo *config_repo.GORMKnowledgeBaseRepository
+	repo *configrepo.GORMKnowledgeBaseRepository
 	db   *gorm.DB // for counting files and resolving agents
 }
 

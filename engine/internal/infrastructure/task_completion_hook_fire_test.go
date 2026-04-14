@@ -17,7 +17,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/task"
 )
 
@@ -138,8 +138,8 @@ VALUES (?,?,?,1,?,?,?,?)`,
 
 // hookFixture builds a fully wired TaskCompletionHook using the provided DB and notifier.
 func hookFixture(db *gorm.DB, n *task.CompletionNotifier) *TaskCompletionHook {
-	taskRepo := config_repo.NewGORMTaskRepository(db)
-	triggerRepo := config_repo.NewGORMTriggerRepository(db)
+	taskRepo := configrepo.NewGORMTaskRepository(db)
+	triggerRepo := configrepo.NewGORMTriggerRepository(db)
 	return NewTaskCompletionHook(taskRepo, triggerRepo, n)
 }
 

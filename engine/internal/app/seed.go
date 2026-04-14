@@ -7,7 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 )
 
@@ -145,7 +145,7 @@ var builderAssistantBuiltinTools = []string{
 // If models already exist, returns the first one. Otherwise creates a default
 // free-tier model (OpenRouter qwen3.6-plus:free) and returns its name.
 func ensureDefaultModel(ctx context.Context, db *gorm.DB) string {
-	llmRepo := config_repo.NewGORMLLMProviderRepository(db)
+	llmRepo := configrepo.NewGORMLLMProviderRepository(db)
 	allModels, listErr := llmRepo.List(ctx)
 	if listErr == nil && len(allModels) > 0 {
 		slog.InfoContext(ctx, "builder-assistant: using existing model", "model", allModels[0].Name)
@@ -168,8 +168,8 @@ func ensureDefaultModel(ctx context.Context, db *gorm.DB) string {
 }
 
 // builderAssistantDefaults returns the factory-default AgentRecord for builder-assistant.
-func builderAssistantDefaults() *config_repo.AgentRecord {
-	return &config_repo.AgentRecord{
+func builderAssistantDefaults() *configrepo.AgentRecord {
+	return &configrepo.AgentRecord{
 		Name:           builderAssistantName,
 		SystemPrompt:   builderAssistantPrompt,
 		Lifecycle:      "persistent",
@@ -188,7 +188,7 @@ func seedByteBrewDocsMCP(ctx context.Context, db *gorm.DB) {
 	if db == nil {
 		return
 	}
-	mcpRepo := config_repo.NewGORMMCPServerRepository(db)
+	mcpRepo := configrepo.NewGORMMCPServerRepository(db)
 	servers, err := mcpRepo.List(ctx)
 	if err != nil {
 		slog.WarnContext(ctx, "seed bytebrew-docs MCP: failed to list", "error", err)
@@ -220,7 +220,7 @@ func seedBuilderAssistant(ctx context.Context, db *gorm.DB) {
 		return
 	}
 
-	agentRepo := config_repo.NewGORMAgentRepository(db)
+	agentRepo := configrepo.NewGORMAgentRepository(db)
 
 	// Check if builder-assistant already exists.
 	_, err := agentRepo.GetByName(ctx, builderAssistantName)
@@ -255,7 +255,7 @@ func seedBuilderSchema(ctx context.Context, db *gorm.DB) {
 		return
 	}
 
-	schemaRepo := config_repo.NewGORMSchemaRepository(db)
+	schemaRepo := configrepo.NewGORMSchemaRepository(db)
 
 	schemas, err := schemaRepo.List(ctx)
 	if err != nil {
@@ -270,7 +270,7 @@ func seedBuilderSchema(ctx context.Context, db *gorm.DB) {
 		}
 	}
 
-	record := &config_repo.SchemaRecord{
+	record := &configrepo.SchemaRecord{
 		Name:        builderSchemaName,
 		Description: "System schema for the AI builder assistant",
 		IsSystem:    true,
@@ -330,7 +330,7 @@ func restoreBuilderAssistant(ctx context.Context, db *gorm.DB) error {
 		return fmt.Errorf("database not available")
 	}
 
-	agentRepo := config_repo.NewGORMAgentRepository(db)
+	agentRepo := configrepo.NewGORMAgentRepository(db)
 	record := builderAssistantDefaults()
 
 	// Determine model to assign.
@@ -370,7 +370,7 @@ func restoreBuilderSchema(ctx context.Context, db *gorm.DB) error {
 		return fmt.Errorf("restore agent: %w", err)
 	}
 
-	schemaRepo := config_repo.NewGORMSchemaRepository(db)
+	schemaRepo := configrepo.NewGORMSchemaRepository(db)
 
 	// 2. Ensure builder-schema exists.
 	schemas, err := schemaRepo.List(ctx)
@@ -385,7 +385,7 @@ func restoreBuilderSchema(ctx context.Context, db *gorm.DB) error {
 		}
 	}
 	if schemaID == "" {
-		record := &config_repo.SchemaRecord{
+		record := &configrepo.SchemaRecord{
 			Name:        builderSchemaName,
 			Description: "System schema for the AI builder assistant",
 			IsSystem:    true,

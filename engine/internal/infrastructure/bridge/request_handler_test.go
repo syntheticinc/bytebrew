@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flow_registry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
 )
 
@@ -107,10 +107,10 @@ func (m *mockSessionManager) Cancel(sessionID string) bool {
 	return m.sessions[sessionID]
 }
 
-func (m *mockSessionManager) ListSessions() []flow_registry.SessionInfo {
-	result := make([]flow_registry.SessionInfo, 0, len(m.sessions))
+func (m *mockSessionManager) ListSessions() []flowregistry.SessionInfo {
+	result := make([]flowregistry.SessionInfo, 0, len(m.sessions))
 	for id := range m.sessions {
-		result = append(result, flow_registry.SessionInfo{
+		result = append(result, flowregistry.SessionInfo{
 			SessionID:      id,
 			CreatedAt:      time.Now(),
 			LastActivityAt: time.Now(),

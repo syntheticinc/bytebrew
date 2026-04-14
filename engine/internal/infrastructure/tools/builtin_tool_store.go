@@ -8,7 +8,7 @@ import (
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agent_registry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 )
 
@@ -184,7 +184,7 @@ func (r *AgentToolResolver) SetCapabilityConfigReader(reader CapabilityConfigRea
 
 // ResolveContext holds per-agent resolution context.
 type ResolveContext struct {
-	Agent            *agent_registry.RegisteredAgent
+	Agent            *agentregistry.RegisteredAgent
 	Deps             ToolDependencies
 	KitSession       *domain.KitSession      // nil if agent has no kit
 	ConfirmRequester ConfirmationRequester    // nil if no confirmation support

@@ -10,7 +10,7 @@ import (
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 )
 
@@ -24,7 +24,7 @@ import (
 // (webhooks) fire consistently regardless of whether the action originated
 // from an agent tool or the admin dashboard.
 type taskServiceHTTPAdapter struct {
-	repo    *config_repo.GORMTaskRepository
+	repo    *configrepo.GORMTaskRepository
 	manager *infrastructure.EngineTaskManagerAdapter
 }
 
@@ -145,8 +145,8 @@ func (a *taskServiceHTTPAdapter) CreateTask(ctx context.Context, req deliveryhtt
 	return a.manager.CreateTask(ctx, params)
 }
 
-func (a *taskServiceHTTPAdapter) buildRepoFilter(filter deliveryhttp.TaskListFilter, actor deliveryhttp.ActorInfo) config_repo.TaskFilter {
-	repoFilter := config_repo.TaskFilter{
+func (a *taskServiceHTTPAdapter) buildRepoFilter(filter deliveryhttp.TaskListFilter, actor deliveryhttp.ActorInfo) configrepo.TaskFilter {
+	repoFilter := configrepo.TaskFilter{
 		Limit:  filter.Limit,
 		Offset: filter.Offset,
 	}

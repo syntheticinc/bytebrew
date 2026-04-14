@@ -11,16 +11,16 @@ import (
 	"gorm.io/gorm"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agent_registry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/audit"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/mcp"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 )
 
 // agentCounterHTTPAdapter bridges AgentRegistry to the http.AgentCounter interface.
 type agentCounterHTTPAdapter struct {
-	registry *agent_registry.AgentRegistry
+	registry *agentregistry.AgentRegistry
 }
 
 func (a *agentCounterHTTPAdapter) Count() int {
@@ -46,7 +46,7 @@ func (a *auditHTTPAdapter) Log(ctx context.Context, entry deliveryhttp.AuditEntr
 
 // agentListerHTTPAdapter bridges AgentRegistry to the http.AgentLister interface.
 type agentListerHTTPAdapter struct {
-	registry *agent_registry.AgentRegistry
+	registry *agentregistry.AgentRegistry
 }
 
 func (a *agentListerHTTPAdapter) ListAgents(_ context.Context) ([]deliveryhttp.AgentInfo, error) {
@@ -103,7 +103,7 @@ func (a *agentListerHTTPAdapter) GetAgent(_ context.Context, name string) (*deli
 
 // tokenRepoHTTPAdapter bridges GORMAPITokenRepository to the http.TokenRepository interface.
 type tokenRepoHTTPAdapter struct {
-	repo *config_repo.GORMAPITokenRepository
+	repo *configrepo.GORMAPITokenRepository
 }
 
 func (a *tokenRepoHTTPAdapter) Create(ctx context.Context, name, tokenHash string, scopesMask int) (string, error) {
@@ -138,7 +138,7 @@ func (a *tokenRepoHTTPAdapter) VerifyToken(ctx context.Context, tokenHash string
 
 // configReloaderHTTPAdapter bridges AgentRegistry and MCP reconnection to the http.ConfigReloader interface.
 type configReloaderHTTPAdapter struct {
-	registry            *agent_registry.AgentRegistry
+	registry            *agentregistry.AgentRegistry
 	mcpRegistry         *mcp.ClientRegistry
 	db                  *gorm.DB
 	forwardHeadersStore *atomic.Value // shared with ChatHandler for dynamic forward header updates
@@ -158,7 +158,7 @@ func (a *configReloaderHTTPAdapter) reconnectMCPServers(ctx context.Context) {
 		return
 	}
 
-	mcpServerRepo := config_repo.NewGORMMCPServerRepository(a.db)
+	mcpServerRepo := configrepo.NewGORMMCPServerRepository(a.db)
 	mcpServers, err := mcpServerRepo.List(ctx)
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to load MCP servers for reload", "error", err)
@@ -208,11 +208,11 @@ func collectForwardHeaders(mcpServers []models.MCPServerModel) []string {
 
 // auditServiceHTTPAdapter bridges GORMAuditRepository to the http.AuditService interface.
 type auditServiceHTTPAdapter struct {
-	repo *config_repo.GORMAuditRepository
+	repo *configrepo.GORMAuditRepository
 }
 
 func (a *auditServiceHTTPAdapter) ListAuditLogs(ctx context.Context, actorType, action, resource string, from, to *time.Time, page, perPage int) ([]deliveryhttp.AuditResponse, int64, error) {
-	filters := config_repo.AuditFilters{
+	filters := configrepo.AuditFilters{
 		ActorType: actorType,
 		Action:    action,
 		Resource:  resource,
@@ -242,11 +242,11 @@ func (a *auditServiceHTTPAdapter) ListAuditLogs(ctx context.Context, actorType, 
 
 // toolCallLogHTTPAdapter bridges ToolCallEventRepository to the http.ToolCallEventQuerier interface.
 type toolCallLogHTTPAdapter struct {
-	repo *config_repo.ToolCallEventRepository
+	repo *configrepo.ToolCallEventRepository
 }
 
 func (a *toolCallLogHTTPAdapter) QueryToolCalls(ctx context.Context, filters deliveryhttp.ToolCallFilters, page, perPage int) ([]deliveryhttp.ToolCallEntry, int64, error) {
-	repoFilters := config_repo.ToolCallFilters{
+	repoFilters := configrepo.ToolCallFilters{
 		SessionID: filters.SessionID,
 		AgentName: filters.AgentName,
 		ToolName:  filters.ToolName,
@@ -301,7 +301,7 @@ func (r *agentSchemaIDResolver) ResolveSchemaID(ctx context.Context, agentName s
 
 // knowledgeStatsHTTPAdapter bridges GORMKnowledgeRepository to the http.KnowledgeStats interface.
 type knowledgeStatsHTTPAdapter struct {
-	repo *config_repo.GORMKnowledgeRepository
+	repo *configrepo.GORMKnowledgeRepository
 }
 
 func (a *knowledgeStatsHTTPAdapter) GetStats(ctx context.Context, agentName string) (int, int, *time.Time, error) {
@@ -311,7 +311,7 @@ func (a *knowledgeStatsHTTPAdapter) GetStats(ctx context.Context, agentName stri
 // knowledgeReindexerHTTPAdapter bridges knowledge.Indexer to the http.KnowledgeReindexer interface.
 type knowledgeReindexerHTTPAdapter struct {
 	indexer  knowledgeIndexer
-	registry *agent_registry.AgentRegistry
+	registry *agentregistry.AgentRegistry
 }
 
 // knowledgeIndexer is the consumer-side interface for indexing.

@@ -13,7 +13,7 @@ import (
 	agentservice "github.com/syntheticinc/bytebrew/engine/internal/service/agent"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/engine"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/orchestrator"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/turn_executor"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/turnexecutor"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 )
 
@@ -32,14 +32,14 @@ type AgentSchemaResolver interface {
 // GuardrailConfigResolver resolves guardrail capability config for an agent.
 // Returns nil when the agent has no guardrail capability configured.
 type GuardrailConfigResolver interface {
-	ResolveGuardrailConfig(ctx context.Context, agentName string) (*turn_executor.GuardrailCheckConfig, error)
+	ResolveGuardrailConfig(ctx context.Context, agentName string) (*turnexecutor.GuardrailCheckConfig, error)
 }
 
 // EngineTurnExecutorFactory creates EngineAdapter-based TurnExecutors for Supervisor mode.
 // Implements grpc.TurnExecutorFactory interface (consumer-side).
 type EngineTurnExecutorFactory struct {
 	engine        *engine.Engine
-	flowManager   turn_executor.FlowProvider
+	flowManager   turnexecutor.FlowProvider
 	toolResolver  *tools.AgentToolResolver
 	modelSelector *llm.ModelSelector
 	modelCache    *llm.ModelCache
@@ -50,7 +50,7 @@ type EngineTurnExecutorFactory struct {
 	webSearchTool einotool.InvokableTool
 	webFetchTool  einotool.InvokableTool
 	// Getter for context reminders (from AgentService)
-	contextRemindersGetter func() []turn_executor.ContextReminderProvider
+	contextRemindersGetter func() []turnexecutor.ContextReminderProvider
 	// Memory capability deps (injected via SetMemory — nil = disabled)
 	memoryRecaller  tools.MemoryRecaller
 	memoryStorer    tools.MemoryStorer
@@ -62,7 +62,7 @@ type EngineTurnExecutorFactory struct {
 	// Schema resolver for memory/knowledge tools (BUG-007)
 	schemaResolver AgentSchemaResolver
 	// US-003: Guardrail pipeline (injected via SetGuardrail — nil = disabled)
-	guardrailChecker        turn_executor.GuardrailChecker
+	guardrailChecker        turnexecutor.GuardrailChecker
 	guardrailConfigResolver GuardrailConfigResolver
 	// Per-agent capability config reader (memory max_entries, etc.)
 	capConfigReader tools.CapabilityConfigReader
@@ -71,13 +71,13 @@ type EngineTurnExecutorFactory struct {
 // NewEngineTurnExecutorFactory creates a new factory for Engine-based TurnExecutors.
 func NewEngineTurnExecutorFactory(
 	engine *engine.Engine,
-	flowManager turn_executor.FlowProvider,
+	flowManager turnexecutor.FlowProvider,
 	toolResolver *tools.AgentToolResolver,
 	modelSelector *llm.ModelSelector,
 	agentConfig *config.AgentConfig,
 	agentPool tools.AgentPoolForTool,
 	webSearchTool, webFetchTool einotool.InvokableTool,
-	contextRemindersGetter func() []turn_executor.ContextReminderProvider,
+	contextRemindersGetter func() []turnexecutor.ContextReminderProvider,
 	modelCache *llm.ModelCache,
 	agentResolver AgentModelResolver,
 ) *EngineTurnExecutorFactory {
@@ -120,7 +120,7 @@ func (f *EngineTurnExecutorFactory) SetSchemaResolver(resolver AgentSchemaResolv
 }
 
 // SetGuardrail configures the guardrail checker and per-agent config resolver.
-func (f *EngineTurnExecutorFactory) SetGuardrail(checker turn_executor.GuardrailChecker, resolver GuardrailConfigResolver) {
+func (f *EngineTurnExecutorFactory) SetGuardrail(checker turnexecutor.GuardrailChecker, resolver GuardrailConfigResolver) {
 	f.guardrailChecker = checker
 	f.guardrailConfigResolver = resolver
 }
@@ -191,7 +191,7 @@ func (f *EngineTurnExecutorFactory) CreateForSession(
 	}
 
 	// Get context reminders from getter (if provided)
-	var contextReminders []turn_executor.ContextReminderProvider
+	var contextReminders []turnexecutor.ContextReminderProvider
 	if f.contextRemindersGetter != nil {
 		contextReminders = f.contextRemindersGetter()
 	}
@@ -199,7 +199,7 @@ func (f *EngineTurnExecutorFactory) CreateForSession(
 	// Create per-request EnvironmentContextReminder (replaces any global one from getter)
 	if projectRoot != "" || platform != "" {
 		envReminder := agentservice.NewEnvironmentContextReminder(projectRoot, platform)
-		var filtered []turn_executor.ContextReminderProvider
+		var filtered []turnexecutor.ContextReminderProvider
 		for _, r := range contextReminders {
 			if _, ok := r.(*agentservice.EnvironmentContextReminder); !ok {
 				filtered = append(filtered, r)
@@ -246,7 +246,7 @@ func (f *EngineTurnExecutorFactory) CreateForSession(
 	}
 
 	// US-003: Resolve guardrail config for this agent (nil = no guardrails).
-	var guardrailConfig *turn_executor.GuardrailCheckConfig
+	var guardrailConfig *turnexecutor.GuardrailCheckConfig
 	if f.guardrailConfigResolver != nil {
 		if cfg, err := f.guardrailConfigResolver.ResolveGuardrailConfig(context.Background(), agentName); err == nil && cfg != nil {
 			guardrailConfig = cfg
@@ -254,7 +254,7 @@ func (f *EngineTurnExecutorFactory) CreateForSession(
 	}
 
 	// Create EngineAdapter (implements TurnExecutor interface)
-	adapter, err := turn_executor.NewEngineAdapter(turn_executor.Config{
+	adapter, err := turnexecutor.NewEngineAdapter(turnexecutor.Config{
 		Engine:           f.engine,
 		FlowProvider:     f.flowManager,
 		ToolResolver:     f.toolResolver,

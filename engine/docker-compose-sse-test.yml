@@ -21,7 +21,7 @@ services:
   mock-mcp:
     build:
       context: .
-      dockerfile: test-infra/mock-mcp-http/Dockerfile
+      dockerfile: testdata/mock-mcp-http/Dockerfile
     ports:
       - "9556:9556"
     environment:

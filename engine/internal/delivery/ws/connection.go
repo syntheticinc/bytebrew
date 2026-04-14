@@ -13,7 +13,7 @@ import (
 
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	sp "github.com/syntheticinc/bytebrew/engine/internal/service/session_processor"
+	sp "github.com/syntheticinc/bytebrew/engine/internal/service/sessionprocessor"
 )
 
 // SessionRegistry provides session management for WS clients (consumer-side interface).

@@ -10,7 +10,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/policy"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/turn_executor"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/turnexecutor"
 	"gorm.io/gorm"
 )
 
@@ -30,7 +30,7 @@ type guardrailConfigResolver struct {
 	db *gorm.DB
 }
 
-func (r *guardrailConfigResolver) ResolveGuardrailConfig(ctx context.Context, agentName string) (*turn_executor.GuardrailCheckConfig, error) {
+func (r *guardrailConfigResolver) ResolveGuardrailConfig(ctx context.Context, agentName string) (*turnexecutor.GuardrailCheckConfig, error) {
 	config, err := resolveCapabilityConfigFromDB(r.db, ctx, agentName, "guardrail")
 	if err != nil {
 		return nil, err
@@ -58,7 +58,7 @@ func (r *guardrailConfigResolver) ResolveGuardrailConfig(ctx context.Context, ag
 
 	strict, _ := config["strict"].(bool)
 
-	result := &turn_executor.GuardrailCheckConfig{
+	result := &turnexecutor.GuardrailCheckConfig{
 		Mode:         mode,
 		OnFailure:    onFailure,
 		MaxRetries:   maxRetries,

@@ -20,7 +20,7 @@ const DefaultTaskTimeout = 30 * time.Minute
 
 // sessionRegistryForExecutor is the consumer-side view of the session registry
 // that TaskExecutor needs. Defined here so the executor doesn't depend on the
-// full flow_registry.SessionRegistry surface area.
+// full flowregistry.SessionRegistry surface area.
 type sessionRegistryForExecutor interface {
 	CreateSession(sessionID, projectKey, userID, projectRoot, platform, agentName string)
 	Subscribe(sessionID string) (<-chan *pb.SessionEvent, func())

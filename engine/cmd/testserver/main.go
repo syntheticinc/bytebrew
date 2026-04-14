@@ -20,14 +20,14 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/delivery/ws"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flow_registry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/testutil"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	agentservice "github.com/syntheticinc/bytebrew/engine/internal/service/agent"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/engine"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/eventstore"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/session_processor"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/sessionprocessor"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	"google.golang.org/grpc"
 )
@@ -137,7 +137,7 @@ func main() {
 	factory.SetEngineTaskManager(taskMgr)
 
 	// 9. Create FlowHandler (SAME as production!)
-	flowRegistry := flow_registry.NewInMemoryRegistry()
+	flowRegistry := flowregistry.NewInMemoryRegistry()
 	// Create in-memory event store for tests (GORM SQLite)
 	eventsGormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
@@ -149,8 +149,8 @@ func main() {
 		log.Fatalf("Failed to create event store: %v", err)
 	}
 
-	sessionRegistry := flow_registry.NewSessionRegistry(evtStore)
-	sessProcessor := session_processor.New(sessionRegistry, factory, evtStore)
+	sessionRegistry := flowregistry.NewSessionRegistry(evtStore)
+	sessProcessor := sessionprocessor.New(sessionRegistry, factory, evtStore)
 	sessProcessor.SetAgentPoolRegistrar(agentPool)
 
 	flowHandlerCfg := deliverygrpc.FlowHandlerConfig{

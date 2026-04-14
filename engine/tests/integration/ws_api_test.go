@@ -21,14 +21,14 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/delivery/ws"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flow_registry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/testutil"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	agentservice "github.com/syntheticinc/bytebrew/engine/internal/service/agent"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/engine"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/eventstore"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/session_processor"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/sessionprocessor"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 )
 
@@ -37,7 +37,7 @@ import (
 type WsHarness struct {
 	wsServer        *ws.Server
 	wsURL           string
-	sessionRegistry *flow_registry.SessionRegistry
+	sessionRegistry *flowregistry.SessionRegistry
 	cancel          context.CancelFunc
 	ctx             context.Context
 	eventsDB        *sql.DB
@@ -110,9 +110,9 @@ func NewWsHarness(t *testing.T, scenario string) *WsHarness {
 		t.Fatalf("create event store: %v", err)
 	}
 
-	sessionReg := flow_registry.NewSessionRegistry(evtStore)
+	sessionReg := flowregistry.NewSessionRegistry(evtStore)
 
-	sessProcessor := session_processor.New(sessionReg, factory, evtStore)
+	sessProcessor := sessionprocessor.New(sessionReg, factory, evtStore)
 	sessProcessor.SetAgentPoolRegistrar(agentPool)
 
 	wsHandler := ws.NewConnectionHandler(sessionReg, sessProcessor, &testutil.NoopAgentService{}, nil, &domain.LicenseInfo{Status: domain.LicenseActive})

@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flow_registry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
 )
 
@@ -32,7 +32,7 @@ type SessionManager interface {
 	HasSession(sessionID string) bool
 	SendAskUserReply(sessionID, callID, reply string)
 	Cancel(sessionID string) bool
-	ListSessions() []flow_registry.SessionInfo
+	ListSessions() []flowregistry.SessionInfo
 }
 
 // MessageProcessor starts background message processing for a session (consumer-side interface).

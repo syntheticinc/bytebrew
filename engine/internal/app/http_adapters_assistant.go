@@ -3,13 +3,13 @@ package app
 import (
 	"context"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/capability"
 )
 
 // capabilityInjectorAdapter bridges GORMCapabilityRepository to capability.CapabilityReader.
 type capabilityInjectorAdapter struct {
-	repo *config_repo.GORMCapabilityRepository
+	repo *configrepo.GORMCapabilityRepository
 }
 
 func (a *capabilityInjectorAdapter) ListEnabledByAgent(ctx context.Context, agentName string) ([]capability.CapabilityRecord, error) {

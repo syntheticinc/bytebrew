@@ -9,7 +9,7 @@ import (
 
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flow_registry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/agent"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/orchestrator"
@@ -170,7 +170,7 @@ func newMockAgentService() *agent.Service {
 
 func TestNewFlowHandler(t *testing.T) {
 	factory := newMockTurnExecutorFactory()
-	flowRegistry := flow_registry.NewInMemoryRegistry()
+	flowRegistry := flowregistry.NewInMemoryRegistry()
 	handler, err := NewFlowHandler(newMockAgentService(), factory, 20*time.Second, flowRegistry)
 
 	if err != nil {
@@ -240,7 +240,7 @@ func TestFlowHandler_ExecuteFlow_Success(t *testing.T) {
 		ctx: ctx,
 	}
 
-	flowRegistry := flow_registry.NewInMemoryRegistry()
+	flowRegistry := flowregistry.NewInMemoryRegistry()
 	handler, err := NewFlowHandler(newMockAgentService(), factory, 20*time.Second, flowRegistry)
 	if err != nil {
 		t.Fatalf("NewFlowHandler() error = %v", err)
@@ -270,7 +270,7 @@ func TestFlowHandler_ExecuteFlow_RecvError(t *testing.T) {
 		ctx: context.Background(),
 	}
 
-	flowRegistry := flow_registry.NewInMemoryRegistry()
+	flowRegistry := flowregistry.NewInMemoryRegistry()
 	handler, err := NewFlowHandler(newMockAgentService(), factory, 20*time.Second, flowRegistry)
 	if err != nil {
 		t.Fatalf("NewFlowHandler() error = %v", err)
@@ -301,7 +301,7 @@ func TestFlowHandler_ExecuteFlow_NilRequest(t *testing.T) {
 		ctx: context.Background(),
 	}
 
-	flowRegistry := flow_registry.NewInMemoryRegistry()
+	flowRegistry := flowregistry.NewInMemoryRegistry()
 	handler, err := NewFlowHandler(newMockAgentService(), factory, 20*time.Second, flowRegistry)
 	if err != nil {
 		t.Fatalf("NewFlowHandler() error = %v", err)
@@ -363,7 +363,7 @@ func TestFlowHandler_ExecuteFlow_ValidationErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			factory := newMockTurnExecutorFactory()
-			flowRegistry := flow_registry.NewInMemoryRegistry()
+			flowRegistry := flowregistry.NewInMemoryRegistry()
 
 			// Use context with timeout for tests that wait for task message
 			ctx := context.Background()
@@ -446,7 +446,7 @@ func TestFlowHandler_ExecuteFlow_UseCaseError(t *testing.T) {
 		ctx: ctx,
 	}
 
-	flowRegistry := flow_registry.NewInMemoryRegistry()
+	flowRegistry := flowregistry.NewInMemoryRegistry()
 	handler, err := NewFlowHandler(newMockAgentService(), factory, 20*time.Second, flowRegistry)
 	if err != nil {
 		t.Fatalf("NewFlowHandler() error = %v", err)
@@ -500,7 +500,7 @@ func TestFlowHandler_ExecuteFlow_ContextCancelled(t *testing.T) {
 		ctx: ctx,
 	}
 
-	flowRegistry := flow_registry.NewInMemoryRegistry()
+	flowRegistry := flowregistry.NewInMemoryRegistry()
 	handler, err := NewFlowHandler(newMockAgentService(), factory, 20*time.Second, flowRegistry)
 	if err != nil {
 		t.Fatalf("NewFlowHandler() error = %v", err)
@@ -554,7 +554,7 @@ func TestFlowHandler_ExecuteFlow_SendError(t *testing.T) {
 		ctx: ctx,
 	}
 
-	flowRegistry := flow_registry.NewInMemoryRegistry()
+	flowRegistry := flowregistry.NewInMemoryRegistry()
 	handler, err := NewFlowHandler(newMockAgentService(), factory, 20*time.Second, flowRegistry)
 	if err != nil {
 		t.Fatalf("NewFlowHandler() error = %v", err)
@@ -601,7 +601,7 @@ func TestFlowHandler_ExecuteFlow_CompletionResponse(t *testing.T) {
 		ctx: ctx,
 	}
 
-	flowRegistry := flow_registry.NewInMemoryRegistry()
+	flowRegistry := flowregistry.NewInMemoryRegistry()
 	handler, err := NewFlowHandler(newMockAgentService(), factory, 20*time.Second, flowRegistry)
 	if err != nil {
 		t.Fatalf("NewFlowHandler() error = %v", err)

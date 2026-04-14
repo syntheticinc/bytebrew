@@ -13,9 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	sp "github.com/syntheticinc/bytebrew/engine/internal/service/session_processor"
+	sp "github.com/syntheticinc/bytebrew/engine/internal/service/sessionprocessor"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flow_registry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 )
 
 // --- mocks ---
@@ -63,7 +63,7 @@ func setupTestServer(t *testing.T) (*httptest.Server, *websocket.Conn) {
 func setupTestServerWithLicense(t *testing.T, license *domain.LicenseInfo) (*httptest.Server, *websocket.Conn) {
 	t.Helper()
 
-	registry := flow_registry.NewSessionRegistry(nil)
+	registry := flowregistry.NewSessionRegistry(nil)
 	processor := sp.New(registry, nil, nil) // nil factory/store is OK — we don't send messages in ping/create tests
 	agentSvc := &mockAgentEnvSetter{}
 
@@ -81,15 +81,15 @@ func setupTestServerWithLicense(t *testing.T, license *domain.LicenseInfo) (*htt
 	return server, conn
 }
 
-func setupTestServerWithRegistry(t *testing.T) (*httptest.Server, *websocket.Conn, *flow_registry.SessionRegistry, *ConnectionHandler) {
+func setupTestServerWithRegistry(t *testing.T) (*httptest.Server, *websocket.Conn, *flowregistry.SessionRegistry, *ConnectionHandler) {
 	t.Helper()
 	return setupTestServerWithRegistryAndLicense(t, activeLicense())
 }
 
-func setupTestServerWithRegistryAndLicense(t *testing.T, license *domain.LicenseInfo) (*httptest.Server, *websocket.Conn, *flow_registry.SessionRegistry, *ConnectionHandler) {
+func setupTestServerWithRegistryAndLicense(t *testing.T, license *domain.LicenseInfo) (*httptest.Server, *websocket.Conn, *flowregistry.SessionRegistry, *ConnectionHandler) {
 	t.Helper()
 
-	registry := flow_registry.NewSessionRegistry(nil)
+	registry := flowregistry.NewSessionRegistry(nil)
 	processor := sp.New(registry, nil, nil)
 	agentSvc := &mockAgentEnvSetter{}
 

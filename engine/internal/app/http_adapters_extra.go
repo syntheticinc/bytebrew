@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
@@ -18,7 +18,7 @@ import (
 
 // mcpServiceHTTPAdapter bridges GORMMCPServerRepository to the http.MCPService interface.
 type mcpServiceHTTPAdapter struct {
-	repo *config_repo.GORMMCPServerRepository
+	repo *configrepo.GORMMCPServerRepository
 }
 
 func (a *mcpServiceHTTPAdapter) ListMCPServers(ctx context.Context) ([]deliveryhttp.MCPServerResponse, error) {
@@ -248,7 +248,7 @@ func derefString(p *string) string {
 
 // triggerServiceHTTPAdapter bridges GORMTriggerRepository to the http.TriggerService interface.
 type triggerServiceHTTPAdapter struct {
-	repo *config_repo.GORMTriggerRepository
+	repo *configrepo.GORMTriggerRepository
 	db   *gorm.DB
 }
 
@@ -408,7 +408,7 @@ func (a *triggerServiceHTTPAdapter) DeleteTrigger(ctx context.Context, id string
 
 // settingServiceHTTPAdapter bridges GORMSettingRepository to the http.SettingService interface.
 type settingServiceHTTPAdapter struct {
-	repo *config_repo.GORMSettingRepository
+	repo *configrepo.GORMSettingRepository
 }
 
 func (a *settingServiceHTTPAdapter) ListSettings(ctx context.Context) ([]deliveryhttp.SettingResponse, error) {
@@ -444,8 +444,8 @@ func (a *settingServiceHTTPAdapter) UpdateSetting(ctx context.Context, key, valu
 
 // sessionServiceHTTPAdapter bridges GORMSessionRepository to the http.SessionService interface.
 type sessionServiceHTTPAdapter struct {
-	repo        *config_repo.GORMSessionRepository
-	messageRepo *config_repo.GORMMessageRepository
+	repo        *configrepo.GORMSessionRepository
+	messageRepo *configrepo.GORMMessageRepository
 }
 
 func (a *sessionServiceHTTPAdapter) ListSessions(ctx context.Context, agentName, userID, status, from, to string, page, perPage int) ([]deliveryhttp.SessionResponse, int64, error) {
@@ -539,7 +539,7 @@ func (a *sessionServiceHTTPAdapter) DeleteSession(ctx context.Context, id string
 
 // eventServiceHTTPAdapter bridges GORMMessageRepository to the http.EventService interface.
 type eventServiceHTTPAdapter struct {
-	repo *config_repo.GORMMessageRepository
+	repo *configrepo.GORMMessageRepository
 }
 
 func (a *eventServiceHTTPAdapter) ListEvents(ctx context.Context, sessionID string) ([]deliveryhttp.EventResponse, error) {

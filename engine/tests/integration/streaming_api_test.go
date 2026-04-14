@@ -15,14 +15,14 @@ import (
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	deliverygrpc "github.com/syntheticinc/bytebrew/engine/internal/delivery/grpc"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flow_registry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/testutil"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	agentservice "github.com/syntheticinc/bytebrew/engine/internal/service/agent"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/engine"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/eventstore"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/session_processor"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/sessionprocessor"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -34,7 +34,7 @@ type StreamingHarness struct {
 	grpcServer      *grpc.Server
 	listener        net.Listener
 	srvAddr         string
-	sessionRegistry *flow_registry.SessionRegistry
+	sessionRegistry *flowregistry.SessionRegistry
 	cancel          context.CancelFunc
 	ctx             context.Context
 }
@@ -89,7 +89,7 @@ func NewStreamingHarness(t *testing.T, scenario string) *StreamingHarness {
 		taskMgr, subtaskMgr, agentPoolAdapter, nil, nil, nil,
 	)
 
-	flowReg := flow_registry.NewInMemoryRegistry()
+	flowReg := flowregistry.NewInMemoryRegistry()
 	// Create in-memory event store for tests
 	eventsDB, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
@@ -105,8 +105,8 @@ func NewStreamingHarness(t *testing.T, scenario string) *StreamingHarness {
 		t.Fatalf("create event store: %v", err)
 	}
 
-	sessionReg := flow_registry.NewSessionRegistry(evtStore)
-	sessProcessor := session_processor.New(sessionReg, factory, evtStore)
+	sessionReg := flowregistry.NewSessionRegistry(evtStore)
+	sessProcessor := sessionprocessor.New(sessionReg, factory, evtStore)
 	sessProcessor.SetAgentPoolRegistrar(agentPool)
 
 	flowHandler, err := deliverygrpc.NewFlowHandlerWithConfig(deliverygrpc.FlowHandlerConfig{

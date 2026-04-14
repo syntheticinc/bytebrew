@@ -7,6 +7,9 @@
 bin/
 dist/
 
+# Protobuf generated (use api/proto/gen/ only)
+/*.pb.go
+
 # Test binary
 *.test
 
@@ -25,6 +28,10 @@ go.work
 *.swp
 *.swo
 *~
+
+# AI tooling state
+.claude/agent-memory/
+.omc/
 
 # OS
 .DS_Store

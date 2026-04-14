@@ -18,7 +18,7 @@ import (
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/capability"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/cloud"
@@ -66,7 +66,7 @@ func newTestDB(t *testing.T) *gorm.DB {
 // ---- HTTP adapter helpers (mirror app/ adapters) ----
 
 type testSchemaServiceAdapter struct {
-	repo *config_repo.GORMSchemaRepository
+	repo *configrepo.GORMSchemaRepository
 }
 
 func (a *testSchemaServiceAdapter) ListSchemas(ctx context.Context) ([]deliveryhttp.SchemaInfo, error) {
@@ -97,7 +97,7 @@ func (a *testSchemaServiceAdapter) GetSchema(ctx context.Context, id uint) (*del
 }
 
 func (a *testSchemaServiceAdapter) CreateSchema(ctx context.Context, req deliveryhttp.CreateSchemaRequest) (*deliveryhttp.SchemaInfo, error) {
-	rec := &config_repo.SchemaRecord{Name: req.Name, Description: req.Description}
+	rec := &configrepo.SchemaRecord{Name: req.Name, Description: req.Description}
 	if err := a.repo.Create(ctx, rec); err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func (a *testSchemaServiceAdapter) CreateSchema(ctx context.Context, req deliver
 }
 
 func (a *testSchemaServiceAdapter) UpdateSchema(ctx context.Context, id uint, req deliveryhttp.UpdateSchemaRequest) error {
-	return a.repo.Update(ctx, id, &config_repo.SchemaRecord{Name: req.Name, Description: req.Description})
+	return a.repo.Update(ctx, id, &configrepo.SchemaRecord{Name: req.Name, Description: req.Description})
 }
 
 func (a *testSchemaServiceAdapter) DeleteSchema(ctx context.Context, id uint) error {
@@ -125,7 +125,7 @@ func (a *testSchemaServiceAdapter) ListSchemaAgents(ctx context.Context, schemaI
 }
 
 type testAgentSchemaListerAdapter struct {
-	repo *config_repo.GORMSchemaRepository
+	repo *configrepo.GORMSchemaRepository
 }
 
 func (a *testAgentSchemaListerAdapter) ListSchemasForAgent(ctx context.Context, agentName string) ([]string, error) {
@@ -133,7 +133,7 @@ func (a *testAgentSchemaListerAdapter) ListSchemasForAgent(ctx context.Context, 
 }
 
 type testCapabilityServiceAdapter struct {
-	repo *config_repo.GORMCapabilityRepository
+	repo *configrepo.GORMCapabilityRepository
 }
 
 func (a *testCapabilityServiceAdapter) ListCapabilities(ctx context.Context, agentName string) ([]deliveryhttp.CapabilityInfo, error) {
@@ -155,7 +155,7 @@ func (a *testCapabilityServiceAdapter) AddCapability(ctx context.Context, agentN
 	if req.Enabled != nil {
 		enabled = *req.Enabled
 	}
-	rec := &config_repo.CapabilityRecord{
+	rec := &configrepo.CapabilityRecord{
 		AgentName: agentName, Type: req.Type, Config: req.Config, Enabled: enabled,
 	}
 	if err := a.repo.Create(ctx, rec); err != nil {
@@ -183,7 +183,7 @@ func (a *testCapabilityServiceAdapter) UpdateCapability(ctx context.Context, id 
 	if req.Enabled != nil {
 		enabled = *req.Enabled
 	}
-	return a.repo.Update(ctx, id, &config_repo.CapabilityRecord{
+	return a.repo.Update(ctx, id, &configrepo.CapabilityRecord{
 		Type: capType, Config: config, Enabled: enabled,
 	})
 }
@@ -193,7 +193,7 @@ func (a *testCapabilityServiceAdapter) RemoveCapability(ctx context.Context, id 
 }
 
 type testCapInjectorAdapter struct {
-	repo *config_repo.GORMCapabilityRepository
+	repo *configrepo.GORMCapabilityRepository
 }
 
 func (a *testCapInjectorAdapter) ListEnabledByAgent(ctx context.Context, agentName string) ([]capability.CapabilityRecord, error) {
@@ -317,7 +317,7 @@ func createTestAgent(t *testing.T, db *gorm.DB, name string) {
 func TestV2_SchemaCRUD_AgentCrossReferences(t *testing.T) {
 	db := newTestDB(t)
 
-	schemaRepo := config_repo.NewGORMSchemaRepository(db)
+	schemaRepo := configrepo.NewGORMSchemaRepository(db)
 	schemaSvc := &testSchemaServiceAdapter{repo: schemaRepo}
 	schemaLister := &testAgentSchemaListerAdapter{repo: schemaRepo}
 
@@ -372,7 +372,7 @@ func TestV2_SchemaCRUD_AgentCrossReferences(t *testing.T) {
 func TestV2_CapabilityCRUD_InjectedTools(t *testing.T) {
 	db := newTestDB(t)
 
-	capRepo := config_repo.NewGORMCapabilityRepository(db)
+	capRepo := configrepo.NewGORMCapabilityRepository(db)
 	capSvc := &testCapabilityServiceAdapter{repo: capRepo}
 
 	capHandler := deliveryhttp.NewCapabilityHandler(capSvc)
@@ -617,7 +617,7 @@ func TestV2_ToolTierEnforcement_CloudSandbox(t *testing.T) {
 func TestV2_CapabilityInjectedTools_MultipleTypes(t *testing.T) {
 	db := newTestDB(t)
 
-	capRepo := config_repo.NewGORMCapabilityRepository(db)
+	capRepo := configrepo.NewGORMCapabilityRepository(db)
 	capSvc := &testCapabilityServiceAdapter{repo: capRepo}
 
 	capHandler := deliveryhttp.NewCapabilityHandler(capSvc)
@@ -685,7 +685,7 @@ func TestV2_CapabilityInjectedTools_MultipleTypes(t *testing.T) {
 func TestV2_Schema_MultipleAgents(t *testing.T) {
 	db := newTestDB(t)
 
-	schemaRepo := config_repo.NewGORMSchemaRepository(db)
+	schemaRepo := configrepo.NewGORMSchemaRepository(db)
 	schemaSvc := &testSchemaServiceAdapter{repo: schemaRepo}
 	schemaLister := &testAgentSchemaListerAdapter{repo: schemaRepo}
 

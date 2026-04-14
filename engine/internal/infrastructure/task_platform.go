@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/task"
@@ -75,7 +75,7 @@ func NewTriggerTaskCreator(manager *EngineTaskManagerAdapter, worker taskSubmitt
 // are still created in the DB but no agent will pick them up).
 func StartCronScheduler(
 	ctx context.Context,
-	triggerRepo *config_repo.GORMTriggerRepository,
+	triggerRepo *configrepo.GORMTriggerRepository,
 	manager *EngineTaskManagerAdapter,
 	worker taskSubmitter,
 ) (*task.CronScheduler, error) {

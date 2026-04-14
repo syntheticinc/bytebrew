@@ -10,18 +10,18 @@ import (
 	"gorm.io/gorm"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agent_registry"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 )
 
 // agentManagerHTTPAdapter bridges GORMAgentRepository + AgentRegistry to the http.AgentManager interface.
 type agentManagerHTTPAdapter struct {
-	repo       *config_repo.GORMAgentRepository
-	registry   *agent_registry.AgentRegistry
+	repo       *configrepo.GORMAgentRepository
+	registry   *agentregistry.AgentRegistry
 	db         *gorm.DB
-	schemaRepo *config_repo.GORMSchemaRepository
+	schemaRepo *configrepo.GORMSchemaRepository
 }
 
 func (a *agentManagerHTTPAdapter) ListAgents(ctx context.Context) ([]deliveryhttp.AgentInfo, error) {
@@ -218,8 +218,8 @@ func (a *agentManagerHTTPAdapter) DeleteAgent(ctx context.Context, name string) 
 	return nil
 }
 
-func (a *agentManagerHTTPAdapter) toAgentRecord(req deliveryhttp.CreateAgentRequest) *config_repo.AgentRecord {
-	rec := &config_repo.AgentRecord{
+func (a *agentManagerHTTPAdapter) toAgentRecord(req deliveryhttp.CreateAgentRequest) *configrepo.AgentRecord {
+	rec := &configrepo.AgentRecord{
 		Name:            req.Name,
 		SystemPrompt:    req.SystemPrompt,
 		Kit:             req.Kit,
@@ -251,7 +251,7 @@ func (a *agentManagerHTTPAdapter) toAgentRecord(req deliveryhttp.CreateAgentRequ
 	}
 
 	if req.Escalation != nil {
-		rec.Escalation = &config_repo.EscalationRecord{
+		rec.Escalation = &configrepo.EscalationRecord{
 			Action:     req.Escalation.Action,
 			WebhookURL: req.Escalation.WebhookURL,
 			Triggers:   req.Escalation.Triggers,

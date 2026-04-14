@@ -6,14 +6,14 @@ import (
 	"fmt"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 	"gorm.io/gorm"
 )
 
 // capabilityServiceHTTPAdapter bridges GORMCapabilityRepository to the http.CapabilityService interface.
 type capabilityServiceHTTPAdapter struct {
-	repo *config_repo.GORMCapabilityRepository
+	repo *configrepo.GORMCapabilityRepository
 }
 
 func (a *capabilityServiceHTTPAdapter) ListCapabilities(ctx context.Context, agentName string) ([]deliveryhttp.CapabilityInfo, error) {
@@ -43,7 +43,7 @@ func (a *capabilityServiceHTTPAdapter) AddCapability(ctx context.Context, agentN
 		enabled = *req.Enabled
 	}
 
-	record := &config_repo.CapabilityRecord{
+	record := &configrepo.CapabilityRecord{
 		AgentName: agentName,
 		Type:      req.Type,
 		Config:    req.Config,
@@ -89,7 +89,7 @@ func (a *capabilityServiceHTTPAdapter) UpdateCapability(ctx context.Context, id 
 		enabled = *req.Enabled
 	}
 
-	record := &config_repo.CapabilityRecord{
+	record := &configrepo.CapabilityRecord{
 		Type:    capType,
 		Config:  config,
 		Enabled: enabled,

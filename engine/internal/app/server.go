@@ -28,16 +28,16 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/embedded"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agent_registry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/audit"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/bridge"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flow_registry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/indexing"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/knowledge"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/kit"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/mcp"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	admintools "github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools/admin"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm/registry"
@@ -53,9 +53,9 @@ import (
 
 	"github.com/syntheticinc/bytebrew/engine/internal/service/recovery"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/resilience"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/session_processor"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/sessionprocessor"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/task"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/turn_executor"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/turnexecutor"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	"github.com/syntheticinc/bytebrew/engine/pkg/logger"
 	"github.com/glebarez/sqlite"
@@ -256,10 +256,10 @@ func Run(sc ServerConfig) error {
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	// Try loading bootstrap config for PostgreSQL database connection.
-	var agentRegistry *agent_registry.AgentRegistry
+	var agentRegistry *agentregistry.AgentRegistry
 	var pgDB *gorm.DB
-	var taskRepo *config_repo.GORMTaskRepository
-	var apiTokenRepo *config_repo.GORMAPITokenRepository
+	var taskRepo *configrepo.GORMTaskRepository
+	var apiTokenRepo *configrepo.GORMAPITokenRepository
 	bootstrapCfg, bootstrapErr := config.LoadBootstrap(configPath)
 	if bootstrapErr != nil {
 		slog.Info("No bootstrap database config, running in legacy mode", "reason", bootstrapErr.Error())
@@ -276,10 +276,10 @@ func Run(sc ServerConfig) error {
 			return fmt.Errorf("run database migrations: %w", migrateErr)
 		}
 
-		agentRepo := config_repo.NewGORMAgentRepository(pgDB)
-		taskRepo = config_repo.NewGORMTaskRepository(pgDB)
-		apiTokenRepo = config_repo.NewGORMAPITokenRepository(pgDB)
-		agentRegistry = agent_registry.New(agentRepo)
+		agentRepo := configrepo.NewGORMAgentRepository(pgDB)
+		taskRepo = configrepo.NewGORMTaskRepository(pgDB)
+		apiTokenRepo = configrepo.NewGORMAPITokenRepository(pgDB)
+		agentRegistry = agentregistry.New(agentRepo)
 		if loadErr := agentRegistry.Load(ctx); loadErr != nil {
 			return fmt.Errorf("load agents from database: %w", loadErr)
 		}
@@ -334,11 +334,11 @@ func Run(sc ServerConfig) error {
 	slog.InfoContext(ctx, "Kit registry initialized", "kits", kitRegistry.List())
 
 	// Knowledge indexing infrastructure (created before HTTP so endpoints can use it)
-	var knowledgeRepo *config_repo.GORMKnowledgeRepository
+	var knowledgeRepo *configrepo.GORMKnowledgeRepository
 	var knowledgeIndexer *knowledge.Indexer
 	var embeddingsClient *indexing.EmbeddingsClient
 	if pgDB != nil {
-		knowledgeRepo = config_repo.NewGORMKnowledgeRepository(pgDB)
+		knowledgeRepo = configrepo.NewGORMKnowledgeRepository(pgDB)
 		embedURL := indexing.DefaultOllamaURL
 		if envURL := os.Getenv("EMBED_URL"); envURL != "" {
 			embedURL = envURL
@@ -396,7 +396,7 @@ func Run(sc ServerConfig) error {
 	}
 
 	if pgDB != nil {
-		mcpServerRepo := config_repo.NewGORMMCPServerRepository(pgDB)
+		mcpServerRepo := configrepo.NewGORMMCPServerRepository(pgDB)
 		mcpServers, mcpErr := mcpServerRepo.List(ctx)
 		if mcpErr != nil {
 			slog.Warn("failed to load MCP servers from database", "error", mcpErr)
@@ -417,14 +417,14 @@ func Run(sc ServerConfig) error {
 		// Wire admin tools into builtin store for builder-assistant.
 		if components.AgentToolResolver != nil {
 			admintools.RegisterAdminTools(components.AgentToolResolver.BuiltinStore(), admintools.AdminToolDependencies{
-				AgentRepo:      newAdminAgentRepoAdapter(config_repo.NewGORMAgentRepository(pgDB)),
-				SchemaRepo:     newAdminSchemaRepoAdapter(config_repo.NewGORMSchemaRepository(pgDB)),
-				TriggerRepo:    newAdminTriggerRepoAdapter(config_repo.NewGORMTriggerRepository(pgDB), pgDB),
-				MCPServerRepo:  newAdminMCPServerRepoAdapter(config_repo.NewGORMMCPServerRepository(pgDB)),
-				ModelRepo:      newAdminModelRepoAdapter(config_repo.NewGORMLLMProviderRepository(pgDB)),
-				EdgeRepo:       newAdminEdgeRepoAdapter(config_repo.NewGORMEdgeRepository(pgDB)),
-				SessionRepo:    newAdminSessionRepoAdapter(config_repo.NewGORMSessionRepository(pgDB)),
-				CapabilityRepo: newAdminCapabilityRepoAdapter(config_repo.NewGORMCapabilityRepository(pgDB)),
+				AgentRepo:      newAdminAgentRepoAdapter(configrepo.NewGORMAgentRepository(pgDB)),
+				SchemaRepo:     newAdminSchemaRepoAdapter(configrepo.NewGORMSchemaRepository(pgDB)),
+				TriggerRepo:    newAdminTriggerRepoAdapter(configrepo.NewGORMTriggerRepository(pgDB), pgDB),
+				MCPServerRepo:  newAdminMCPServerRepoAdapter(configrepo.NewGORMMCPServerRepository(pgDB)),
+				ModelRepo:      newAdminModelRepoAdapter(configrepo.NewGORMLLMProviderRepository(pgDB)),
+				EdgeRepo:       newAdminEdgeRepoAdapter(configrepo.NewGORMEdgeRepository(pgDB)),
+				SessionRepo:    newAdminSessionRepoAdapter(configrepo.NewGORMSessionRepository(pgDB)),
+				CapabilityRepo: newAdminCapabilityRepoAdapter(configrepo.NewGORMCapabilityRepository(pgDB)),
 				Reloader: func() {
 					if agentRegistry != nil {
 						if err := agentRegistry.Load(context.Background()); err != nil {
@@ -450,7 +450,7 @@ func Run(sc ServerConfig) error {
 			components.AgentToolResolver.SetKnowledgeEmbedderResolver(
 				&knowledgeEmbedderResolverAdapter{resolver: &embeddingModelResolver{db: pgDB}})
 			components.AgentToolResolver.SetKnowledgeKBResolver(
-				config_repo.NewGORMKnowledgeBaseRepository(pgDB))
+				configrepo.NewGORMKnowledgeBaseRepository(pgDB))
 		}
 	}
 
@@ -479,7 +479,7 @@ func Run(sc ServerConfig) error {
 
 	// US-001: Wire capability injector into AgentToolResolver
 	if components.AgentToolResolver != nil && pgDB != nil {
-		capRepo := config_repo.NewGORMCapabilityRepository(pgDB)
+		capRepo := configrepo.NewGORMCapabilityRepository(pgDB)
 		injector := capability.NewInjector(&capabilityInjectorAdapter{repo: capRepo})
 		components.AgentToolResolver.SetCapabilityInjector(injector)
 		slog.InfoContext(ctx, "Capability injector wired into AgentToolResolver")
@@ -622,10 +622,10 @@ func Run(sc ServerConfig) error {
 			r.Use(deliveryhttp.AuditMiddleware(&auditHTTPAdapter{logger: auditLogger}))
 
 			// Schema repo (created early because agent manager needs it for used_in_schemas)
-			schemaRepo := config_repo.NewGORMSchemaRepository(pgDB)
+			schemaRepo := configrepo.NewGORMSchemaRepository(pgDB)
 
 			// Agents
-			agentRepo := config_repo.NewGORMAgentRepository(pgDB)
+			agentRepo := configrepo.NewGORMAgentRepository(pgDB)
 			agentManager := &agentManagerHTTPAdapter{repo: agentRepo, registry: agentRegistry, db: pgDB, schemaRepo: schemaRepo}
 			agentHandler := deliveryhttp.NewAgentHandlerWithManager(agentManager)
 			r.Group(func(r chi.Router) {
@@ -651,7 +651,7 @@ func Run(sc ServerConfig) error {
 			}
 
 			// Agent Capabilities
-			capRepo := config_repo.NewGORMCapabilityRepository(pgDB)
+			capRepo := configrepo.NewGORMCapabilityRepository(pgDB)
 			capHandler := deliveryhttp.NewCapabilityHandler(&capabilityServiceHTTPAdapter{repo: capRepo})
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
@@ -665,7 +665,7 @@ func Run(sc ServerConfig) error {
 			})
 
 			// Models
-			llmProviderRepo := config_repo.NewGORMLLMProviderRepository(pgDB)
+			llmProviderRepo := configrepo.NewGORMLLMProviderRepository(pgDB)
 			modelService := &modelServiceHTTPAdapter{repo: llmProviderRepo, modelCache: components.ModelCache}
 			modelHandler := deliveryhttp.NewModelHandler(modelService)
 			r.Group(func(r chi.Router) {
@@ -747,7 +747,7 @@ func Run(sc ServerConfig) error {
 				knowledgeHandler.SetFileLister(&knowledgeFileListerHTTPAdapter{svc: uploadSvc})
 
 				// Knowledge Bases (many-to-many) handler
-				kbRepo := config_repo.NewGORMKnowledgeBaseRepository(pgDB)
+				kbRepo := configrepo.NewGORMKnowledgeBaseRepository(pgDB)
 				kbHandler := deliveryhttp.NewKnowledgeBaseHandler(
 					&kbStoreAdapter{repo: kbRepo, db: pgDB},
 					&kbFileManagerAdapter{svc: uploadSvc},
@@ -789,7 +789,7 @@ func Run(sc ServerConfig) error {
 
 			// Audit log READ API — always registered so Admin UI doesn't get 404.
 			// Returns 403 "EE required" when no license is active.
-			auditRepo := config_repo.NewGORMAuditRepository(pgDB)
+			auditRepo := configrepo.NewGORMAuditRepository(pgDB)
 			auditHandler := deliveryhttp.NewAuditHandler(&auditServiceHTTPAdapter{repo: auditRepo})
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireAdminSession)
@@ -818,7 +818,7 @@ func Run(sc ServerConfig) error {
 			})
 
 			// MCP Servers
-			mcpServerRepo := config_repo.NewGORMMCPServerRepository(pgDB)
+			mcpServerRepo := configrepo.NewGORMMCPServerRepository(pgDB)
 			mcpHandler := deliveryhttp.NewMCPHandler(&mcpServiceHTTPAdapter{repo: mcpServerRepo})
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeMCPRead))
@@ -832,7 +832,7 @@ func Run(sc ServerConfig) error {
 			})
 
 			// Triggers
-			triggerRepo := config_repo.NewGORMTriggerRepository(pgDB)
+			triggerRepo := configrepo.NewGORMTriggerRepository(pgDB)
 			triggerHandler := deliveryhttp.NewTriggerHandler(&triggerServiceHTTPAdapter{repo: triggerRepo, db: pgDB})
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeTriggersRead))
@@ -848,8 +848,8 @@ func Run(sc ServerConfig) error {
 			})
 
 			// Schemas (with gates and edges) — schemaRepo already created above for agent cross-refs
-			gateRepo := config_repo.NewGORMGateRepository(pgDB)
-			edgeRepo := config_repo.NewGORMEdgeRepository(pgDB)
+			gateRepo := configrepo.NewGORMGateRepository(pgDB)
+			edgeRepo := configrepo.NewGORMEdgeRepository(pgDB)
 			schemaHandler := deliveryhttp.NewSchemaHandler(
 				&schemaServiceHTTPAdapter{repo: schemaRepo},
 				&gateServiceHTTPAdapter{repo: gateRepo},
@@ -884,7 +884,7 @@ func Run(sc ServerConfig) error {
 			})
 
 			// Widgets
-			widgetRepo := config_repo.NewGORMWidgetRepository(pgDB)
+			widgetRepo := configrepo.NewGORMWidgetRepository(pgDB)
 			widgetHandler := deliveryhttp.NewWidgetHandler(&widgetServiceHTTPAdapter{repo: widgetRepo})
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireAdminSession)
@@ -892,7 +892,7 @@ func Run(sc ServerConfig) error {
 			})
 
 			// Settings (admin-only)
-			settingRepo := config_repo.NewGORMSettingRepository(pgDB)
+			settingRepo := configrepo.NewGORMSettingRepository(pgDB)
 			settingHandler := deliveryhttp.NewSettingHandler(&settingServiceHTTPAdapter{repo: settingRepo})
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireAdminSession)
@@ -908,8 +908,8 @@ func Run(sc ServerConfig) error {
 			})
 
 			// Sessions (admin-only)
-			sessionRepo := config_repo.NewGORMSessionRepository(pgDB)
-			messageRepo := config_repo.NewGORMMessageRepository(pgDB)
+			sessionRepo := configrepo.NewGORMSessionRepository(pgDB)
+			messageRepo := configrepo.NewGORMMessageRepository(pgDB)
 			sessionHandler := deliveryhttp.NewSessionHandler(&sessionServiceHTTPAdapter{repo: sessionRepo, messageRepo: messageRepo})
 			sessionHandler.SetEventService(&eventServiceHTTPAdapter{repo: messageRepo})
 			r.Group(func(r chi.Router) {
@@ -1002,7 +1002,7 @@ func Run(sc ServerConfig) error {
 				r.Use(eeMW.RequireEE)
 
 				// Tool call audit log (EE) — detailed per-tool-call log
-				toolCallRepo := config_repo.NewToolCallEventRepository(pgDB)
+				toolCallRepo := configrepo.NewToolCallEventRepository(pgDB)
 				toolCallLogHandler := deliveryhttp.NewToolCallLogHandler(&toolCallLogHTTPAdapter{repo: toolCallRepo})
 				r.Get("/api/v1/audit/tool-calls", toolCallLogHandler.List)
 
@@ -1114,8 +1114,8 @@ func Run(sc ServerConfig) error {
 		}
 
 		// Serve dynamic widget embed script per widget ID (public, no auth)
-		widgetScriptRepo := config_repo.NewGORMWidgetRepository(pgDB)
-		schemaAgentResolver := &schemaAgentResolverAdapter{schemaRepo: config_repo.NewGORMSchemaRepository(pgDB)}
+		widgetScriptRepo := configrepo.NewGORMWidgetRepository(pgDB)
+		schemaAgentResolver := &schemaAgentResolverAdapter{schemaRepo: configrepo.NewGORMSchemaRepository(pgDB)}
 		widgetScriptHandler := deliveryhttp.NewWidgetScriptHandler(&widgetServiceHTTPAdapter{repo: widgetScriptRepo}, schemaAgentResolver)
 		r.Get("/widget/{id}.js", widgetScriptHandler.ServeScript)
 
@@ -1137,7 +1137,7 @@ func Run(sc ServerConfig) error {
 	}
 
 	// Create flow registry for managing active flows
-	flowRegistry := flow_registry.NewInMemoryRegistry()
+	flowRegistry := flowregistry.NewInMemoryRegistry()
 
 	// Create event store (PostgreSQL) for reliable event replay on reconnect
 	eventStore, err := eventstore.New(pgDB)
@@ -1146,7 +1146,7 @@ func Run(sc ServerConfig) error {
 	}
 
 	// Create session registry for server-streaming API and bridge
-	sessionRegistry := flow_registry.NewSessionRegistry(eventStore)
+	sessionRegistry := flowregistry.NewSessionRegistry(eventStore)
 
 	// Create FlowHandler with multi-agent support
 	pingInterval := 2 * time.Second
@@ -1162,7 +1162,7 @@ func Run(sc ServerConfig) error {
 
 	// Engine components are always available
 	// Use AgentRegistry as FlowProvider (replaces legacy FlowManager for agent resolution)
-	var flowProvider turn_executor.FlowProvider = components.FlowManager
+	var flowProvider turnexecutor.FlowProvider = components.FlowManager
 	if agentRegistry != nil {
 		flowProvider = agentRegistry
 	}
@@ -1181,7 +1181,7 @@ func Run(sc ServerConfig) error {
 		components.AgentPoolAdapter,
 		components.WebSearchTool,
 		components.WebFetchTool,
-		func() []turn_executor.ContextReminderProvider {
+		func() []turnexecutor.ContextReminderProvider {
 			if components.AgentService != nil {
 				return components.AgentService.GetContextReminders()
 			}
@@ -1195,7 +1195,7 @@ func Run(sc ServerConfig) error {
 	// platformTriggerRepo is shared across platform services: completion hook (wired
 	// inside the pgDB block below) and cron scheduler (wired after sessProcessor).
 	// Declared at this scope so both consumers can see it.
-	var platformTriggerRepo *config_repo.GORMTriggerRepository
+	var platformTriggerRepo *configrepo.GORMTriggerRepository
 
 	// Wire memory storage into factory for memory_recall/memory_store tools (US-001 Memory capability)
 	if pgDB != nil {
@@ -1208,7 +1208,7 @@ func Run(sc ServerConfig) error {
 		loggerInstance.InfoContext(ctx, "Schema resolver wired into TurnExecutorFactory")
 
 		// WP-2: Wire escalation handler for escalate tool
-		escCapRepo := config_repo.NewGORMCapabilityRepository(pgDB)
+		escCapRepo := configrepo.NewGORMCapabilityRepository(pgDB)
 		escHandler := escalation.NewHandler(&escalationConfigAdapter{reader: &capabilityInjectorAdapter{repo: escCapRepo}})
 		factory.SetEscalation(escHandler)
 		loggerInstance.InfoContext(ctx, "Escalation handler wired into TurnExecutorFactory")
@@ -1222,7 +1222,7 @@ func Run(sc ServerConfig) error {
 		// The completion hook fires on terminal transitions (completed/failed/cancelled)
 		// and POSTs to the originating trigger's on_complete_url (if any).
 		if taskRepo != nil {
-			platformTriggerRepo = config_repo.NewGORMTriggerRepository(pgDB)
+			platformTriggerRepo = configrepo.NewGORMTriggerRepository(pgDB)
 			completionNotifier := task.NewCompletionNotifier()
 			completionHook := infrastructure.NewTaskCompletionHook(taskRepo, platformTriggerRepo, completionNotifier)
 			components.TaskManager.SetCompletionHook(completionHook)
@@ -1246,7 +1246,7 @@ func Run(sc ServerConfig) error {
 	}
 
 	// Create shared SessionProcessor
-	sessProcessor := session_processor.New(sessionRegistry, factory, eventStore)
+	sessProcessor := sessionprocessor.New(sessionRegistry, factory, eventStore)
 	flowHandlerCfg.SessionProcessor = sessProcessor
 
 	// Autonomous task executor: cron/webhook triggers create a task, the worker picks it
@@ -1313,7 +1313,7 @@ func Run(sc ServerConfig) error {
 		}
 		var triggerChecker deliveryhttp.ChatTriggerChecker
 		if pgDB != nil {
-			triggerChecker = &chatTriggerCheckerAdapter{repo: config_repo.NewGORMTriggerRepository(pgDB)}
+			triggerChecker = &chatTriggerCheckerAdapter{repo: configrepo.NewGORMTriggerRepository(pgDB)}
 		}
 		chatHandler := deliveryhttp.NewChatHandler(chatService, triggerChecker, func() []string {
 			return forwardHeadersStore.Load().([]string)
@@ -1373,10 +1373,10 @@ func Run(sc ServerConfig) error {
 				}
 				r.Get("/api/v1/agents", deliveryhttp.NewAgentHandlerWithManager(
 					&agentManagerHTTPAdapter{
-						repo:       config_repo.NewGORMAgentRepository(pgDB),
+						repo:       configrepo.NewGORMAgentRepository(pgDB),
 						registry:   agentRegistry,
 						db:         pgDB,
-						schemaRepo: config_repo.NewGORMSchemaRepository(pgDB),
+						schemaRepo: configrepo.NewGORMSchemaRepository(pgDB),
 					}).List)
 			})
 		}
@@ -1655,8 +1655,8 @@ func startBridge(
 	ctx context.Context,
 	cfg *config.Config,
 	dataDir string,
-	sessionRegistry *flow_registry.SessionRegistry,
-	processor *session_processor.Processor,
+	sessionRegistry *flowregistry.SessionRegistry,
+	processor *sessionprocessor.Processor,
 	wsHandler *ws.ConnectionHandler,
 	loggerInstance *logger.Logger,
 	eventStore *eventstore.Store,

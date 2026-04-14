@@ -11,7 +11,7 @@ import (
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	"github.com/syntheticinc/bytebrew/engine/internal/delivery/grpc"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flow_registry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
@@ -174,7 +174,7 @@ func TestFlowHandler_ExecuteFlow_ValidationErrors(t *testing.T) {
 			agentService := newMockAgentService()
 			factory := newMockTurnExecutorFactory()
 
-			flowRegistry := flow_registry.NewInMemoryRegistry()
+			flowRegistry := flowregistry.NewInMemoryRegistry()
 			handler, err := grpc.NewFlowHandler(agentService, factory, 20*time.Second, flowRegistry)
 			require.NoError(t, err)
 

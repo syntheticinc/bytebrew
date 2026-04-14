@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 )
 
@@ -54,10 +54,10 @@ CREATE TABLE tasks (
 	return db
 }
 
-func newAdapter(t *testing.T) (*EngineTaskManagerAdapter, *config_repo.GORMTaskRepository) {
+func newAdapter(t *testing.T) (*EngineTaskManagerAdapter, *configrepo.GORMTaskRepository) {
 	t.Helper()
 	db := setupAdapterTestDB(t)
-	repo := config_repo.NewGORMTaskRepository(db)
+	repo := configrepo.NewGORMTaskRepository(db)
 	return NewEngineTaskManagerAdapter(repo), repo
 }
 

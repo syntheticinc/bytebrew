@@ -3,5 +3,3 @@
 agents:
   - name: test-agent
     system_prompt: "You are a helpful assistant for regression testing."
-    tools:
-      - web_search

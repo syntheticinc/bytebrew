@@ -10,7 +10,7 @@ import (
 	licenseinfra "github.com/syntheticinc/bytebrew/engine/internal/infrastructure/license"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/websearch"
 	agentservice "github.com/syntheticinc/bytebrew/engine/internal/service/agent"
@@ -26,7 +26,7 @@ import (
 type InfraComponents struct {
 	AgentService     *agentservice.Service
 	TaskManager      *EngineTaskManagerAdapter
-	TaskRepo         *config_repo.GORMTaskRepository
+	TaskRepo         *configrepo.GORMTaskRepository
 	AgentPool        *agentservice.AgentPool
 	AgentPoolAdapter *agentservice.AgentPoolAdapter
 	SessionStorage   *persistence.SessionStorage

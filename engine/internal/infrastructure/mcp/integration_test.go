@@ -16,7 +16,7 @@ func TestMCPIntegration_StdioEchoServer(t *testing.T) {
 		t.Skip("node not found, skipping MCP integration test")
 	}
 
-	transport := NewStdioTransport("node", []string{"../../../test-infra/echo-mcp-server.js"}, nil)
+	transport := NewStdioTransport("node", []string{"../../../testdata/echo-mcp-server.js"}, nil)
 	client := NewClient("echo-test", transport)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

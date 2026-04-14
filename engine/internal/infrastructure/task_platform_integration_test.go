@@ -42,7 +42,7 @@ import (
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/task"
 )
@@ -292,8 +292,8 @@ func newWebhookServer(t *testing.T, respond func(attempt int, w http.ResponseWri
 // notifier + trigger creator) and ensures Stop is wired to t.Cleanup.
 type platform struct {
 	db          *gorm.DB
-	taskRepo    *config_repo.GORMTaskRepository
-	triggerRepo *config_repo.GORMTriggerRepository
+	taskRepo    *configrepo.GORMTaskRepository
+	triggerRepo *configrepo.GORMTriggerRepository
 	adapter     *infrastructure.EngineTaskManagerAdapter
 	worker      *task.TaskWorker
 	creator     task.TaskCreator
@@ -304,8 +304,8 @@ type platform struct {
 func startPlatform(t *testing.T, registry *fakeSessionRegistry) *platform {
 	t.Helper()
 	db := setupPlatformDB(t)
-	taskRepo := config_repo.NewGORMTaskRepository(db)
-	triggerRepo := config_repo.NewGORMTriggerRepository(db)
+	taskRepo := configrepo.NewGORMTaskRepository(db)
+	triggerRepo := configrepo.NewGORMTriggerRepository(db)
 
 	adapter := infrastructure.NewEngineTaskManagerAdapter(taskRepo)
 
@@ -367,7 +367,7 @@ func waitForWebhook(t *testing.T, ch <-chan receivedWebhook, timeout time.Durati
 // waitForTaskStatus polls the task row until it reaches the expected status or times out.
 // We poll instead of sleep because the worker -> executor -> hook chain is asynchronous
 // and we need a deterministic synchronisation point on DB state.
-func waitForTaskStatus(t *testing.T, repo *config_repo.GORMTaskRepository, taskID uuid.UUID, want domain.EngineTaskStatus, timeout time.Duration) *domain.EngineTask {
+func waitForTaskStatus(t *testing.T, repo *configrepo.GORMTaskRepository, taskID uuid.UUID, want domain.EngineTaskStatus, timeout time.Duration) *domain.EngineTask {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {

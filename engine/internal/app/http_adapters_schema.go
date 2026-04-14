@@ -7,14 +7,14 @@ import (
 	"strings"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 	"gorm.io/gorm"
 )
 
 // schemaServiceHTTPAdapter bridges GORMSchemaRepository to the http.SchemaService interface.
 type schemaServiceHTTPAdapter struct {
-	repo *config_repo.GORMSchemaRepository
+	repo *configrepo.GORMSchemaRepository
 }
 
 func (a *schemaServiceHTTPAdapter) ListSchemas(ctx context.Context) ([]deliveryhttp.SchemaInfo, error) {
@@ -57,7 +57,7 @@ func (a *schemaServiceHTTPAdapter) GetSchema(ctx context.Context, id string) (*d
 }
 
 func (a *schemaServiceHTTPAdapter) CreateSchema(ctx context.Context, req deliveryhttp.CreateSchemaRequest) (*deliveryhttp.SchemaInfo, error) {
-	record := &config_repo.SchemaRecord{
+	record := &configrepo.SchemaRecord{
 		Name:        req.Name,
 		Description: req.Description,
 	}
@@ -77,7 +77,7 @@ func (a *schemaServiceHTTPAdapter) CreateSchema(ctx context.Context, req deliver
 }
 
 func (a *schemaServiceHTTPAdapter) UpdateSchema(ctx context.Context, id string, req deliveryhttp.UpdateSchemaRequest) error {
-	record := &config_repo.SchemaRecord{
+	record := &configrepo.SchemaRecord{
 		Name:        req.Name,
 		Description: req.Description,
 	}
@@ -139,7 +139,7 @@ func (a *schemaServiceHTTPAdapter) ListSchemaAgents(ctx context.Context, schemaI
 
 // gateServiceHTTPAdapter bridges GORMGateRepository to the http.GateService interface.
 type gateServiceHTTPAdapter struct {
-	repo *config_repo.GORMGateRepository
+	repo *configrepo.GORMGateRepository
 }
 
 func (a *gateServiceHTTPAdapter) ListGates(ctx context.Context, schemaID string) ([]deliveryhttp.GateInfo, error) {
@@ -189,7 +189,7 @@ func (a *gateServiceHTTPAdapter) CreateGate(ctx context.Context, schemaID string
 		condType = "all"
 	}
 
-	record := &config_repo.GateRecord{
+	record := &configrepo.GateRecord{
 		SchemaID:      schemaID,
 		Name:          req.Name,
 		ConditionType: condType,
@@ -213,7 +213,7 @@ func (a *gateServiceHTTPAdapter) CreateGate(ctx context.Context, schemaID string
 }
 
 func (a *gateServiceHTTPAdapter) UpdateGate(ctx context.Context, id string, req deliveryhttp.CreateGateRequest) error {
-	record := &config_repo.GateRecord{
+	record := &configrepo.GateRecord{
 		Name:          req.Name,
 		ConditionType: req.ConditionType,
 		Config:        req.Config,
@@ -241,7 +241,7 @@ func (a *gateServiceHTTPAdapter) DeleteGate(ctx context.Context, id string) erro
 
 // edgeServiceHTTPAdapter bridges GORMEdgeRepository to the http.EdgeService interface.
 type edgeServiceHTTPAdapter struct {
-	repo *config_repo.GORMEdgeRepository
+	repo *configrepo.GORMEdgeRepository
 }
 
 func (a *edgeServiceHTTPAdapter) ListEdges(ctx context.Context, schemaID string) ([]deliveryhttp.EdgeInfo, error) {
@@ -289,7 +289,7 @@ func (a *edgeServiceHTTPAdapter) CreateEdge(ctx context.Context, schemaID string
 		edgeType = "flow"
 	}
 
-	record := &config_repo.EdgeRecord{
+	record := &configrepo.EdgeRecord{
 		SchemaID:        schemaID,
 		SourceAgentName: req.Source,
 		TargetAgentName: req.Target,
@@ -311,7 +311,7 @@ func (a *edgeServiceHTTPAdapter) CreateEdge(ctx context.Context, schemaID string
 }
 
 func (a *edgeServiceHTTPAdapter) UpdateEdge(ctx context.Context, id string, req deliveryhttp.CreateEdgeRequest) error {
-	record := &config_repo.EdgeRecord{
+	record := &configrepo.EdgeRecord{
 		SourceAgentName: req.Source,
 		TargetAgentName: req.Target,
 		Type:            req.Type,
@@ -338,7 +338,7 @@ func (a *edgeServiceHTTPAdapter) DeleteEdge(ctx context.Context, id string) erro
 
 // agentSchemaListerHTTPAdapter bridges GORMSchemaRepository to the http.AgentSchemaLister interface.
 type agentSchemaListerHTTPAdapter struct {
-	repo *config_repo.GORMSchemaRepository
+	repo *configrepo.GORMSchemaRepository
 }
 
 func (a *agentSchemaListerHTTPAdapter) ListSchemasForAgent(ctx context.Context, agentName string) ([]string, error) {

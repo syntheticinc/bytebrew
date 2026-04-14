@@ -6,7 +6,7 @@ import (
 
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agents/react"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/turn_executor"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/turnexecutor"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	"github.com/syntheticinc/bytebrew/engine/pkg/errors"
 	"github.com/cloudwego/eino/components/model"
@@ -42,7 +42,7 @@ type AgentPoolManager interface{}
 type Service struct {
 	chatModel        ChatModel
 	agentPool        AgentPoolManager
-	contextReminders []turn_executor.ContextReminderProvider
+	contextReminders []turnexecutor.ContextReminderProvider
 	toolCallHistory  *ToolCallHistoryReminder
 	webSearchTool    einotool.InvokableTool
 	webFetchTool     einotool.InvokableTool
@@ -57,7 +57,7 @@ type Service struct {
 type Config struct {
 	ChatModel        ChatModel
 	AgentPool        AgentPoolManager
-	ContextReminders []turn_executor.ContextReminderProvider
+	ContextReminders []turnexecutor.ContextReminderProvider
 	WebSearchTool    einotool.InvokableTool
 	WebFetchTool     einotool.InvokableTool
 	MaxSteps         int
@@ -114,7 +114,7 @@ func (s *Service) SetEnvironmentContext(projectRoot, platform string) {
 	reminder := NewEnvironmentContextReminder(projectRoot, platform)
 
 	// Replace existing EnvironmentContextReminder if any
-	var newReminders []turn_executor.ContextReminderProvider
+	var newReminders []turnexecutor.ContextReminderProvider
 	for _, r := range s.contextReminders {
 		if _, ok := r.(*EnvironmentContextReminder); !ok {
 			newReminders = append(newReminders, r)
@@ -144,7 +144,7 @@ func (s *Service) SetTestingStrategy(yamlContent string) {
 	reminder := NewTestingStrategyReminder(strategy)
 
 	// Replace existing TestingStrategyReminder if any
-	var newReminders []turn_executor.ContextReminderProvider
+	var newReminders []turnexecutor.ContextReminderProvider
 	for _, r := range s.contextReminders {
 		if _, ok := r.(*TestingStrategyReminder); !ok {
 			newReminders = append(newReminders, r)
@@ -185,7 +185,7 @@ func (s *Service) GetToolCallHistoryReminder() *ToolCallHistoryReminder {
 }
 
 // GetContextReminders returns the context reminders for Engine integration
-func (s *Service) GetContextReminders() []turn_executor.ContextReminderProvider {
+func (s *Service) GetContextReminders() []turnexecutor.ContextReminderProvider {
 	return s.contextReminders
 }
 

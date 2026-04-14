@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/task"
 )
 
@@ -31,8 +31,8 @@ const webhookShutdownTimeout = 45 * time.Second
 // blocks shutdown up to webhookShutdownTimeout so customers do not silently lose
 // completion notifications during restarts.
 type TaskCompletionHook struct {
-	taskRepo    *config_repo.GORMTaskRepository
-	triggerRepo *config_repo.GORMTriggerRepository
+	taskRepo    *configrepo.GORMTaskRepository
+	triggerRepo *configrepo.GORMTriggerRepository
 	notifier    *task.CompletionNotifier
 
 	wg      sync.WaitGroup
@@ -42,8 +42,8 @@ type TaskCompletionHook struct {
 // NewTaskCompletionHook creates a completion hook.
 // triggerRepo may be nil; in that case the hook is a no-op.
 func NewTaskCompletionHook(
-	taskRepo *config_repo.GORMTaskRepository,
-	triggerRepo *config_repo.GORMTriggerRepository,
+	taskRepo *configrepo.GORMTaskRepository,
+	triggerRepo *configrepo.GORMTriggerRepository,
 	notifier *task.CompletionNotifier,
 ) *TaskCompletionHook {
 	return &TaskCompletionHook{

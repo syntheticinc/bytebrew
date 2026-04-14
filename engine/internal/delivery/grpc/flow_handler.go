@@ -10,7 +10,7 @@ import (
 	infragrpc "github.com/syntheticinc/bytebrew/engine/internal/infrastructure/grpc"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/orchestrator"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/session_processor"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/sessionprocessor"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -78,7 +78,7 @@ type FlowHandler struct {
 	pingService            *infragrpc.PingService
 	flowRegistry           ActiveFlowRegistry
 	sessionRegistry        SessionRegistryForHandler   // For server-streaming API (optional)
-	sessionProcessor       *session_processor.Processor // Shared message processing loop (optional)
+	sessionProcessor       *sessionprocessor.Processor // Shared message processing loop (optional)
 }
 
 // FlowHandlerConfig holds configuration for FlowHandler
@@ -93,7 +93,7 @@ type FlowHandlerConfig struct {
 	PingInterval           time.Duration
 	FlowRegistry           ActiveFlowRegistry
 	SessionRegistry        SessionRegistryForHandler   // Optional: for server-streaming API
-	SessionProcessor       *session_processor.Processor // Optional: shared message processing service
+	SessionProcessor       *sessionprocessor.Processor // Optional: shared message processing service
 }
 
 // NewFlowHandler creates a new Flow handler

@@ -4,16 +4,16 @@ import (
 	"context"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agent_registry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
 )
 
 // agentRegistryLifecycleAdapter adapts AgentRegistry to the AgentLifecycleReader interface.
 type agentRegistryLifecycleAdapter struct {
-	registry *agent_registry.AgentRegistry
+	registry *agentregistry.AgentRegistry
 }
 
 // newAgentRegistryLifecycleAdapter creates a new adapter.
-func newAgentRegistryLifecycleAdapter(registry *agent_registry.AgentRegistry) *agentRegistryLifecycleAdapter {
+func newAgentRegistryLifecycleAdapter(registry *agentregistry.AgentRegistry) *agentRegistryLifecycleAdapter {
 	return &agentRegistryLifecycleAdapter{registry: registry}
 }
 

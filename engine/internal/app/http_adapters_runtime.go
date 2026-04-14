@@ -10,7 +10,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/service/policy"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/recovery"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/resilience"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/turn_executor"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/turnexecutor"
 )
 
 // policyEvaluatorAdapter bridges policy.Engine to tools.PolicyEvaluator.
@@ -67,14 +67,14 @@ func (a *recoveryExecutorAdapter) Execute(ctx context.Context, sessionID string,
 	}
 }
 
-// guardrailCheckerAdapter bridges guardrail.Pipeline to turn_executor.GuardrailChecker.
+// guardrailCheckerAdapter bridges guardrail.Pipeline to turnexecutor.GuardrailChecker.
 type guardrailCheckerAdapter struct {
 	pipeline *guardrail.Pipeline
 }
 
-func (a *guardrailCheckerAdapter) Evaluate(ctx context.Context, config *turn_executor.GuardrailCheckConfig, output string) (*turn_executor.GuardrailCheckResult, error) {
+func (a *guardrailCheckerAdapter) Evaluate(ctx context.Context, config *turnexecutor.GuardrailCheckConfig, output string) (*turnexecutor.GuardrailCheckResult, error) {
 	if config == nil {
-		return &turn_executor.GuardrailCheckResult{Passed: true}, nil
+		return &turnexecutor.GuardrailCheckResult{Passed: true}, nil
 	}
 	grConfig := &guardrail.GuardrailConfig{
 		Mode:         guardrail.GuardrailMode(config.Mode),
@@ -90,13 +90,13 @@ func (a *guardrailCheckerAdapter) Evaluate(ctx context.Context, config *turn_exe
 	if err != nil {
 		return nil, err
 	}
-	return &turn_executor.GuardrailCheckResult{
+	return &turnexecutor.GuardrailCheckResult{
 		Passed: result.Passed,
 		Reason: result.Reason,
 	}, nil
 }
 
-// flowExecutorAdapter bridges flow.Executor to turn_executor.FlowExecutor.
+// flowExecutorAdapter bridges flow.Executor to turnexecutor.FlowExecutor.
 type flowExecutorAdapter struct {
 	executor *flow.Executor
 }
@@ -105,7 +105,7 @@ func (a *flowExecutorAdapter) HasOutgoingEdges(ctx context.Context, schemaID str
 	return a.executor.HasOutgoingEdges(ctx, schemaID, agentName)
 }
 
-func (a *flowExecutorAdapter) Execute(ctx context.Context, cfg turn_executor.FlowExecConfig, entryAgent, input string) error {
+func (a *flowExecutorAdapter) Execute(ctx context.Context, cfg turnexecutor.FlowExecConfig, entryAgent, input string) error {
 	flowCfg := flow.ExecutorConfig{
 		SchemaID:    cfg.SchemaID,
 		SessionID:   cfg.SessionID,

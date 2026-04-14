@@ -89,7 +89,7 @@ type CapabilityRepository interface {
 	Delete(ctx context.Context, id string) error
 }
 
-// AgentRecord mirrors config_repo.AgentRecord fields needed by admin tools.
+// AgentRecord mirrors configrepo.AgentRecord fields needed by admin tools.
 type AgentRecord struct {
 	Name          string
 	SystemPrompt  string

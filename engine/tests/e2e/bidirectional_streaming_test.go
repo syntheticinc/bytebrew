@@ -12,7 +12,7 @@ import (
 
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	"github.com/syntheticinc/bytebrew/engine/internal/delivery/grpc"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flow_registry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	grpcInfra "github.com/syntheticinc/bytebrew/engine/internal/infrastructure/grpc"
 	"github.com/stretchr/testify/require"
 )
@@ -122,14 +122,14 @@ func TestPingService(t *testing.T) {
 func TestFlowHandler_PingPong(t *testing.T) {
 	t.Run("FlowHandler_NewFlowHandler", func(t *testing.T) {
 		factory := newMockTurnExecutorFactory()
-		flowRegistry := flow_registry.NewInMemoryRegistry()
+		flowRegistry := flowregistry.NewInMemoryRegistry()
 		handler, err := grpc.NewFlowHandler(newMockAgentService(), factory, 20*time.Second, flowRegistry)
 		require.NoError(t, err)
 		require.NotNil(t, handler)
 	})
 
 	t.Run("FlowHandler_NewFlowHandler_InvalidInput", func(t *testing.T) {
-		flowRegistry := flow_registry.NewInMemoryRegistry()
+		flowRegistry := flowregistry.NewInMemoryRegistry()
 		handler, err := grpc.NewFlowHandler(nil, nil, 20*time.Second, flowRegistry)
 		require.Error(t, err)
 		require.Nil(t, handler)
@@ -137,7 +137,7 @@ func TestFlowHandler_PingPong(t *testing.T) {
 
 	t.Run("FlowHandler_NewFlowHandler_ZeroInterval", func(t *testing.T) {
 		factory := newMockTurnExecutorFactory()
-		flowRegistry := flow_registry.NewInMemoryRegistry()
+		flowRegistry := flowregistry.NewInMemoryRegistry()
 		handler, err := grpc.NewFlowHandler(newMockAgentService(), factory, 0, flowRegistry)
 		require.Error(t, err)
 		require.Nil(t, handler)
@@ -146,7 +146,7 @@ func TestFlowHandler_PingPong(t *testing.T) {
 	t.Run("FlowHandler_ExecuteFlow_WithPing", func(t *testing.T) {
 		// Create handler with short ping interval
 		factory := newMockTurnExecutorFactory()
-		flowRegistry := flow_registry.NewInMemoryRegistry()
+		flowRegistry := flowregistry.NewInMemoryRegistry()
 		handler, err := grpc.NewFlowHandler(newMockAgentService(), factory, 100*time.Millisecond, flowRegistry)
 		require.NoError(t, err)
 
@@ -220,7 +220,7 @@ func TestFlowHandler_Validation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			factory := newMockTurnExecutorFactory()
-			flowRegistry := flow_registry.NewInMemoryRegistry()
+			flowRegistry := flowregistry.NewInMemoryRegistry()
 			handler, err := grpc.NewFlowHandler(newMockAgentService(), factory, 20*time.Second, flowRegistry)
 			require.NoError(t, err)
 
@@ -258,7 +258,7 @@ func TestBidirectionalStreaming_EndToEnd(t *testing.T) {
 		// Create handler with short ping interval
 		pingInterval := 50 * time.Millisecond
 		factory := newMockTurnExecutorFactory()
-		flowRegistry := flow_registry.NewInMemoryRegistry()
+		flowRegistry := flowregistry.NewInMemoryRegistry()
 		handler, err := grpc.NewFlowHandler(newMockAgentService(), factory, pingInterval, flowRegistry)
 		require.NoError(t, err)
 

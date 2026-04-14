@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	admintools "github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools/admin"
 	"gorm.io/gorm"
@@ -15,10 +15,10 @@ import (
 // --- Agent adapter ---
 
 type adminAgentRepoAdapter struct {
-	repo *config_repo.GORMAgentRepository
+	repo *configrepo.GORMAgentRepository
 }
 
-func newAdminAgentRepoAdapter(repo *config_repo.GORMAgentRepository) *adminAgentRepoAdapter {
+func newAdminAgentRepoAdapter(repo *configrepo.GORMAgentRepository) *adminAgentRepoAdapter {
 	return &adminAgentRepoAdapter{repo: repo}
 }
 
@@ -57,7 +57,7 @@ func (a *adminAgentRepoAdapter) Delete(ctx context.Context, name string) error {
 	return a.repo.Delete(ctx, name)
 }
 
-func toAdminAgentRecord(r config_repo.AgentRecord) admintools.AgentRecord {
+func toAdminAgentRecord(r configrepo.AgentRecord) admintools.AgentRecord {
 	return admintools.AgentRecord{
 		Name:          r.Name,
 		SystemPrompt:  r.SystemPrompt,
@@ -72,8 +72,8 @@ func toAdminAgentRecord(r config_repo.AgentRecord) admintools.AgentRecord {
 	}
 }
 
-func fromAdminAgentRecord(r *admintools.AgentRecord) config_repo.AgentRecord {
-	return config_repo.AgentRecord{
+func fromAdminAgentRecord(r *admintools.AgentRecord) configrepo.AgentRecord {
+	return configrepo.AgentRecord{
 		Name:          r.Name,
 		SystemPrompt:  r.SystemPrompt,
 		ModelName:     r.ModelName,
@@ -90,10 +90,10 @@ func fromAdminAgentRecord(r *admintools.AgentRecord) config_repo.AgentRecord {
 // --- Schema adapter ---
 
 type adminSchemaRepoAdapter struct {
-	repo *config_repo.GORMSchemaRepository
+	repo *configrepo.GORMSchemaRepository
 }
 
-func newAdminSchemaRepoAdapter(repo *config_repo.GORMSchemaRepository) *adminSchemaRepoAdapter {
+func newAdminSchemaRepoAdapter(repo *configrepo.GORMSchemaRepository) *adminSchemaRepoAdapter {
 	return &adminSchemaRepoAdapter{repo: repo}
 }
 
@@ -128,7 +128,7 @@ func (a *adminSchemaRepoAdapter) GetByID(ctx context.Context, id string) (*admin
 }
 
 func (a *adminSchemaRepoAdapter) Create(ctx context.Context, record *admintools.SchemaRecord) error {
-	cr := &config_repo.SchemaRecord{
+	cr := &configrepo.SchemaRecord{
 		Name:        record.Name,
 		Description: record.Description,
 	}
@@ -140,7 +140,7 @@ func (a *adminSchemaRepoAdapter) Create(ctx context.Context, record *admintools.
 }
 
 func (a *adminSchemaRepoAdapter) Update(ctx context.Context, id string, record *admintools.SchemaRecord) error {
-	cr := &config_repo.SchemaRecord{
+	cr := &configrepo.SchemaRecord{
 		Name:        record.Name,
 		Description: record.Description,
 	}
@@ -162,11 +162,11 @@ func (a *adminSchemaRepoAdapter) RemoveAgent(ctx context.Context, schemaID strin
 // --- Trigger adapter ---
 
 type adminTriggerRepoAdapter struct {
-	repo *config_repo.GORMTriggerRepository
+	repo *configrepo.GORMTriggerRepository
 	db   *gorm.DB
 }
 
-func newAdminTriggerRepoAdapter(repo *config_repo.GORMTriggerRepository, db *gorm.DB) *adminTriggerRepoAdapter {
+func newAdminTriggerRepoAdapter(repo *configrepo.GORMTriggerRepository, db *gorm.DB) *adminTriggerRepoAdapter {
 	return &adminTriggerRepoAdapter{repo: repo, db: db}
 }
 
@@ -258,10 +258,10 @@ func toAdminTriggerRecord(t models.TriggerModel) admintools.TriggerRecord {
 // --- MCP Server adapter ---
 
 type adminMCPServerRepoAdapter struct {
-	repo *config_repo.GORMMCPServerRepository
+	repo *configrepo.GORMMCPServerRepository
 }
 
-func newAdminMCPServerRepoAdapter(repo *config_repo.GORMMCPServerRepository) *adminMCPServerRepoAdapter {
+func newAdminMCPServerRepoAdapter(repo *configrepo.GORMMCPServerRepository) *adminMCPServerRepoAdapter {
 	return &adminMCPServerRepoAdapter{repo: repo}
 }
 
@@ -345,10 +345,10 @@ func toAdminMCPServerRecord(s models.MCPServerModel) admintools.MCPServerRecord 
 // --- Model (LLM Provider) adapter ---
 
 type adminModelRepoAdapter struct {
-	repo *config_repo.GORMLLMProviderRepository
+	repo *configrepo.GORMLLMProviderRepository
 }
 
-func newAdminModelRepoAdapter(repo *config_repo.GORMLLMProviderRepository) *adminModelRepoAdapter {
+func newAdminModelRepoAdapter(repo *configrepo.GORMLLMProviderRepository) *adminModelRepoAdapter {
 	return &adminModelRepoAdapter{repo: repo}
 }
 
@@ -423,10 +423,10 @@ func toAdminModelRecord(p models.LLMProviderModel) admintools.ModelRecord {
 // --- Edge adapter ---
 
 type adminEdgeRepoAdapter struct {
-	repo *config_repo.GORMEdgeRepository
+	repo *configrepo.GORMEdgeRepository
 }
 
-func newAdminEdgeRepoAdapter(repo *config_repo.GORMEdgeRepository) *adminEdgeRepoAdapter {
+func newAdminEdgeRepoAdapter(repo *configrepo.GORMEdgeRepository) *adminEdgeRepoAdapter {
 	return &adminEdgeRepoAdapter{repo: repo}
 }
 
@@ -455,7 +455,7 @@ func (a *adminEdgeRepoAdapter) Create(ctx context.Context, record *admintools.Ed
 	if record.Label != "" {
 		config["label"] = record.Label
 	}
-	cr := &config_repo.EdgeRecord{
+	cr := &configrepo.EdgeRecord{
 		SchemaID:        record.SchemaID,
 		SourceAgentName: record.FromAgent,
 		TargetAgentName: record.ToAgent,
@@ -476,10 +476,10 @@ func (a *adminEdgeRepoAdapter) Delete(ctx context.Context, id string) error {
 // --- Session adapter ---
 
 type adminSessionRepoAdapter struct {
-	repo *config_repo.GORMSessionRepository
+	repo *configrepo.GORMSessionRepository
 }
 
-func newAdminSessionRepoAdapter(repo *config_repo.GORMSessionRepository) *adminSessionRepoAdapter {
+func newAdminSessionRepoAdapter(repo *configrepo.GORMSessionRepository) *adminSessionRepoAdapter {
 	return &adminSessionRepoAdapter{repo: repo}
 }
 
@@ -521,10 +521,10 @@ func (a *adminSessionRepoAdapter) GetByID(ctx context.Context, id string) (*admi
 // --- Capability adapter ---
 
 type adminCapabilityRepoAdapter struct {
-	repo *config_repo.GORMCapabilityRepository
+	repo *configrepo.GORMCapabilityRepository
 }
 
-func newAdminCapabilityRepoAdapter(repo *config_repo.GORMCapabilityRepository) *adminCapabilityRepoAdapter {
+func newAdminCapabilityRepoAdapter(repo *configrepo.GORMCapabilityRepository) *adminCapabilityRepoAdapter {
 	return &adminCapabilityRepoAdapter{repo: repo}
 }
 
@@ -547,7 +547,7 @@ func (a *adminCapabilityRepoAdapter) ListByAgent(ctx context.Context, agentName 
 }
 
 func (a *adminCapabilityRepoAdapter) Create(ctx context.Context, record *admintools.CapabilityRecord) error {
-	cr := &config_repo.CapabilityRecord{
+	cr := &configrepo.CapabilityRecord{
 		AgentName: record.AgentName,
 		Type:      record.Type,
 		Config:    record.Config,
@@ -561,7 +561,7 @@ func (a *adminCapabilityRepoAdapter) Create(ctx context.Context, record *adminto
 }
 
 func (a *adminCapabilityRepoAdapter) Update(ctx context.Context, id string, record *admintools.CapabilityRecord) error {
-	cr := &config_repo.CapabilityRecord{
+	cr := &configrepo.CapabilityRecord{
 		AgentName: record.AgentName,
 		Type:      record.Type,
 		Config:    record.Config,

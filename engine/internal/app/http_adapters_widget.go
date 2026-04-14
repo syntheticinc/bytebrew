@@ -8,14 +8,14 @@ import (
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/config_repo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 	"gorm.io/gorm"
 )
 
 // widgetServiceHTTPAdapter bridges GORMWidgetRepository to the http.WidgetService interface.
 type widgetServiceHTTPAdapter struct {
-	repo *config_repo.GORMWidgetRepository
+	repo *configrepo.GORMWidgetRepository
 }
 
 func (a *widgetServiceHTTPAdapter) ListWidgets(ctx context.Context) ([]deliveryhttp.WidgetInfo, error) {
@@ -50,7 +50,7 @@ func (a *widgetServiceHTTPAdapter) CreateWidget(ctx context.Context, req deliver
 
 	enabled := req.Status != "disabled"
 
-	record := &config_repo.WidgetRecord{
+	record := &configrepo.WidgetRecord{
 		TenantID:        tenantID,
 		Name:            req.Name,
 		SchemaID:        req.Schema,
@@ -85,7 +85,7 @@ func (a *widgetServiceHTTPAdapter) UpdateWidget(ctx context.Context, id string, 
 		return fmt.Errorf("get widget: %w", err)
 	}
 
-	record := &config_repo.WidgetRecord{
+	record := &configrepo.WidgetRecord{
 		Name:            defaultStr(req.Name, existing.Name),
 		SchemaID:        defaultStr(req.Schema, existing.SchemaID),
 		PrimaryColor:    defaultStr(req.PrimaryColor, existing.PrimaryColor),
@@ -127,7 +127,7 @@ func (a *widgetServiceHTTPAdapter) DeleteWidget(ctx context.Context, id string) 
 	return nil
 }
 
-func toWidgetInfo(r config_repo.WidgetRecord) deliveryhttp.WidgetInfo {
+func toWidgetInfo(r configrepo.WidgetRecord) deliveryhttp.WidgetInfo {
 	status := "active"
 	if !r.Enabled {
 		status = "disabled"
@@ -186,7 +186,7 @@ func joinDomains(domains []string) string {
 
 // schemaAgentResolverAdapter resolves schema UUID → agent names via schema repo.
 type schemaAgentResolverAdapter struct {
-	schemaRepo *config_repo.GORMSchemaRepository
+	schemaRepo *configrepo.GORMSchemaRepository
 }
 
 func (a *schemaAgentResolverAdapter) ResolveAgents(ctx context.Context, schemaID string) ([]string, error) {

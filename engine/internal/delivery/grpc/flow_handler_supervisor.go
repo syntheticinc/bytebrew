@@ -36,7 +36,7 @@ func routeUserMessage(sessionID, message string, router MessageRouter, eventBus 
 	return false
 }
 
-// eventBusSink adapts SessionEventBus to flow_registry.UserMessageSink.
+// eventBusSink adapts SessionEventBus to flowregistry.UserMessageSink.
 type eventBusSink struct {
 	sessionID string
 	router    MessageRouter
