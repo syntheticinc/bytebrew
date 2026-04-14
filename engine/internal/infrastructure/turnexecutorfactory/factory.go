@@ -1,4 +1,4 @@
-package infrastructure
+package turnexecutorfactory
 
 import (
 	"context"
@@ -35,9 +35,9 @@ type GuardrailConfigResolver interface {
 	ResolveGuardrailConfig(ctx context.Context, agentName string) (*turnexecutor.GuardrailCheckConfig, error)
 }
 
-// EngineTurnExecutorFactory creates EngineAdapter-based TurnExecutors for Supervisor mode.
+// Factory creates EngineAdapter-based TurnExecutors for Supervisor mode.
 // Implements grpc.TurnExecutorFactory interface (consumer-side).
-type EngineTurnExecutorFactory struct {
+type Factory struct {
 	engine        *engine.Engine
 	flowManager   turnexecutor.FlowProvider
 	toolResolver  *tools.AgentToolResolver
@@ -68,8 +68,8 @@ type EngineTurnExecutorFactory struct {
 	capConfigReader tools.CapabilityConfigReader
 }
 
-// NewEngineTurnExecutorFactory creates a new factory for Engine-based TurnExecutors.
-func NewEngineTurnExecutorFactory(
+// New creates a new factory for Engine-based TurnExecutors.
+func New(
 	engine *engine.Engine,
 	flowManager turnexecutor.FlowProvider,
 	toolResolver *tools.AgentToolResolver,
@@ -80,8 +80,8 @@ func NewEngineTurnExecutorFactory(
 	contextRemindersGetter func() []turnexecutor.ContextReminderProvider,
 	modelCache *llm.ModelCache,
 	agentResolver AgentModelResolver,
-) *EngineTurnExecutorFactory {
-	return &EngineTurnExecutorFactory{
+) *Factory {
+	return &Factory{
 		engine:                 engine,
 		flowManager:            flowManager,
 		toolResolver:           toolResolver,
@@ -98,35 +98,35 @@ func NewEngineTurnExecutorFactory(
 
 // SetMemory configures the memory storage for memory_recall/memory_store tools.
 // Call after factory creation to enable memory capability tools.
-func (f *EngineTurnExecutorFactory) SetMemory(recaller tools.MemoryRecaller, storer tools.MemoryStorer, maxEntries int) {
+func (f *Factory) SetMemory(recaller tools.MemoryRecaller, storer tools.MemoryStorer, maxEntries int) {
 	f.memoryRecaller = recaller
 	f.memoryStorer = storer
 	f.memoryMaxEntries = maxEntries
 }
 
 // SetEngineTaskManager configures the DB-backed task manager so agents use EngineTask.
-func (f *EngineTurnExecutorFactory) SetEngineTaskManager(mgr tools.EngineTaskManager) {
+func (f *Factory) SetEngineTaskManager(mgr tools.EngineTaskManager) {
 	f.engineTaskManager = mgr
 }
 
 // SetEscalation configures the escalation handler for the escalate tool.
-func (f *EngineTurnExecutorFactory) SetEscalation(handler tools.EscalationHandler) {
+func (f *Factory) SetEscalation(handler tools.EscalationHandler) {
 	f.escalationHandler = handler
 }
 
 // SetSchemaResolver configures schema lookup for propagating SchemaID to tool deps.
-func (f *EngineTurnExecutorFactory) SetSchemaResolver(resolver AgentSchemaResolver) {
+func (f *Factory) SetSchemaResolver(resolver AgentSchemaResolver) {
 	f.schemaResolver = resolver
 }
 
 // SetGuardrail configures the guardrail checker and per-agent config resolver.
-func (f *EngineTurnExecutorFactory) SetGuardrail(checker turnexecutor.GuardrailChecker, resolver GuardrailConfigResolver) {
+func (f *Factory) SetGuardrail(checker turnexecutor.GuardrailChecker, resolver GuardrailConfigResolver) {
 	f.guardrailChecker = checker
 	f.guardrailConfigResolver = resolver
 }
 
 // SetCapabilityConfigReader configures per-agent capability config resolution.
-func (f *EngineTurnExecutorFactory) SetCapabilityConfigReader(reader tools.CapabilityConfigReader) {
+func (f *Factory) SetCapabilityConfigReader(reader tools.CapabilityConfigReader) {
 	f.capConfigReader = reader
 }
 
@@ -152,7 +152,7 @@ func (p *userMemoryDepsProvider) GetDependencies(sessionID, projectKey string) t
 
 // CreateForSession creates a TurnExecutor for the given session.
 // Implements grpc.TurnExecutorFactory interface.
-func (f *EngineTurnExecutorFactory) CreateForSession(
+func (f *Factory) CreateForSession(
 	proxy tools.ClientOperationsProxy,
 	sessionID, projectKey string,
 	projectRoot, platform, agentName, userID string,
@@ -281,7 +281,7 @@ func (f *EngineTurnExecutorFactory) CreateForSession(
 // resolveModel tries to resolve a model from the DB cache via the agent's ModelID.
 // Falls back to the static ModelSelector when no per-agent model is configured
 // or when the cache is not available.
-func (f *EngineTurnExecutorFactory) resolveModel(agentName string) (model.ToolCallingChatModel, string) {
+func (f *Factory) resolveModel(agentName string) (model.ToolCallingChatModel, string) {
 	if f.modelCache != nil && f.agentResolver != nil {
 		modelID := f.agentResolver.ResolveModelID(agentName)
 		if modelID != nil {

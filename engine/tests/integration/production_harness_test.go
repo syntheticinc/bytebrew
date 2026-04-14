@@ -13,7 +13,7 @@ import (
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	deliverygrpc "github.com/syntheticinc/bytebrew/engine/internal/delivery/grpc"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/turnexecutorfactory"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/testutil"
@@ -87,7 +87,7 @@ func NewProductionHarness(t *testing.T, scenario string) *ProductionHarness {
 	agentPool.SetEngine(agentEngine, flowManager, toolResolver, toolDepsProvider, nil, nil)
 
 	// 6. TurnExecutorFactory
-	factory := infrastructure.NewEngineTurnExecutorFactory(
+	factory := turnexecutorfactory.New(
 		agentEngine, flowManager, toolResolver, modelSelector, agentConfig,
 		taskMgr, subtaskMgr, agentPoolAdapter, nil, nil, nil,
 	)

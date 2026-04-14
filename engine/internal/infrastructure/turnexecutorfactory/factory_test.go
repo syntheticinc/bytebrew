@@ -1,4 +1,4 @@
-package infrastructure
+package turnexecutorfactory
 
 import (
 	"context"
@@ -172,7 +172,7 @@ func newTestModelSelector(chatModel model.ToolCallingChatModel) *llm.ModelSelect
 }
 
 // Test 1: CreateForSession returns non-nil TurnExecutor
-func TestEngineTurnExecutorFactory_CreateForSession(t *testing.T) {
+func TestFactory_CreateForSession(t *testing.T) {
 	// Setup
 	snapshotRepo := newMockSnapshotRepoFactory()
 	historyRepo := newMockHistoryRepoFactory()
@@ -190,7 +190,7 @@ func TestEngineTurnExecutorFactory_CreateForSession(t *testing.T) {
 		MaxContextSize: 4000,
 	}
 
-	factory := NewEngineTurnExecutorFactory(
+	factory := New(
 		eng,
 		flowManager,
 		toolResolver,
@@ -213,7 +213,7 @@ func TestEngineTurnExecutorFactory_CreateForSession(t *testing.T) {
 }
 
 // Test 2: CreateForSession with proxy - proxy is passed to ToolDepsProvider
-func TestEngineTurnExecutorFactory_CreateForSession_WithProxy(t *testing.T) {
+func TestFactory_CreateForSession_WithProxy(t *testing.T) {
 	// Setup
 	snapshotRepo := newMockSnapshotRepoFactory()
 	historyRepo := newMockHistoryRepoFactory()
@@ -231,7 +231,7 @@ func TestEngineTurnExecutorFactory_CreateForSession_WithProxy(t *testing.T) {
 		MaxContextSize: 4000,
 	}
 
-	factory := NewEngineTurnExecutorFactory(
+	factory := New(
 		eng,
 		flowManager,
 		toolResolver,
@@ -270,7 +270,7 @@ func TestEngineTurnExecutorFactory_CreateForSession_WithProxy(t *testing.T) {
 }
 
 // Test 3: CreateForSession with nil proxy - should still create executor
-func TestEngineTurnExecutorFactory_CreateForSession_NilProxy(t *testing.T) {
+func TestFactory_CreateForSession_NilProxy(t *testing.T) {
 	snapshotRepo := newMockSnapshotRepoFactory()
 	historyRepo := newMockHistoryRepoFactory()
 	eng := engine.New(snapshotRepo, historyRepo)
@@ -287,7 +287,7 @@ func TestEngineTurnExecutorFactory_CreateForSession_NilProxy(t *testing.T) {
 		MaxContextSize: 4000,
 	}
 
-	factory := NewEngineTurnExecutorFactory(
+	factory := New(
 		eng,
 		flowManager,
 		toolResolver,
@@ -309,7 +309,7 @@ func TestEngineTurnExecutorFactory_CreateForSession_NilProxy(t *testing.T) {
 }
 
 // Test 4: CreateForSession with web tools
-func TestEngineTurnExecutorFactory_CreateForSession_WithWebTools(t *testing.T) {
+func TestFactory_CreateForSession_WithWebTools(t *testing.T) {
 	snapshotRepo := newMockSnapshotRepoFactory()
 	historyRepo := newMockHistoryRepoFactory()
 	eng := engine.New(snapshotRepo, historyRepo)
@@ -330,7 +330,7 @@ func TestEngineTurnExecutorFactory_CreateForSession_WithWebTools(t *testing.T) {
 	mockWebSearch := &mockInvokableTool{name: "web_search"}
 	mockWebFetch := &mockInvokableTool{name: "web_fetch"}
 
-	factory := NewEngineTurnExecutorFactory(
+	factory := New(
 		eng,
 		flowManager,
 		toolResolver,
@@ -379,7 +379,7 @@ func (m *mockContextReminderForFactory) GetContextReminder(ctx context.Context, 
 }
 
 // Test 5: CreateForSession with contextRemindersGetter - providers are passed through
-func TestEngineTurnExecutorFactory_CreateForSession_WithContextReminders(t *testing.T) {
+func TestFactory_CreateForSession_WithContextReminders(t *testing.T) {
 	snapshotRepo := newMockSnapshotRepoFactory()
 	historyRepo := newMockHistoryRepoFactory()
 	eng := engine.New(snapshotRepo, historyRepo)
@@ -409,7 +409,7 @@ func TestEngineTurnExecutorFactory_CreateForSession_WithContextReminders(t *test
 		return []turnexecutor.ContextReminderProvider{mockReminder}
 	}
 
-	factory := NewEngineTurnExecutorFactory(
+	factory := New(
 		eng,
 		flowManager,
 		toolResolver,
@@ -433,7 +433,7 @@ func TestEngineTurnExecutorFactory_CreateForSession_WithContextReminders(t *test
 }
 
 // Test 6: CreateForSession with nil contextRemindersGetter - should not panic
-func TestEngineTurnExecutorFactory_CreateForSession_NilContextRemindersGetter(t *testing.T) {
+func TestFactory_CreateForSession_NilContextRemindersGetter(t *testing.T) {
 	snapshotRepo := newMockSnapshotRepoFactory()
 	historyRepo := newMockHistoryRepoFactory()
 	eng := engine.New(snapshotRepo, historyRepo)
@@ -450,7 +450,7 @@ func TestEngineTurnExecutorFactory_CreateForSession_NilContextRemindersGetter(t 
 		MaxContextSize: 4000,
 	}
 
-	factory := NewEngineTurnExecutorFactory(
+	factory := New(
 		eng,
 		flowManager,
 		toolResolver,

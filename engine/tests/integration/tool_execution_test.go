@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/turnexecutorfactory"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/testutil"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
@@ -158,7 +158,7 @@ func createTurnExecutor(t *testing.T, scenario, projectRoot string) *turnExecuto
 
 	proxy := tools.NewLocalClientOperationsProxy(projectRoot)
 
-	factory := infrastructure.NewEngineTurnExecutorFactory(
+	factory := turnexecutorfactory.New(
 		agentEngine, flowManager, toolResolver, modelSelector, agentConfig,
 		taskMgr, subtaskMgr, agentPoolAdapter, nil, nil, nil,
 	)

@@ -25,7 +25,7 @@ func (r *capabilityConfigReader) ReadConfig(ctx context.Context, agentName, capT
 }
 
 // guardrailConfigResolver resolves guardrail capability config from DB for an agent.
-// Implements infrastructure.GuardrailConfigResolver.
+// Implements turnexecutorfactory.GuardrailConfigResolver.
 type guardrailConfigResolver struct {
 	db *gorm.DB
 }

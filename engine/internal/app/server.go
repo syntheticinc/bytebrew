@@ -27,9 +27,9 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/delivery/ws"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/embedded"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/taskrunner"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/turnexecutorfactory"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/versioncheck"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/audit"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/bridge"
@@ -1168,12 +1168,12 @@ func Run(sc ServerConfig) error {
 		flowProvider = agentRegistry
 	}
 	// Resolve AgentModelResolver (nil-safe: factory handles nil gracefully)
-	var agentModelResolver infrastructure.AgentModelResolver
+	var agentModelResolver turnexecutorfactory.AgentModelResolver
 	if agentRegistry != nil {
 		agentModelResolver = agentRegistry
 	}
 
-	factory := infrastructure.NewEngineTurnExecutorFactory(
+	factory := turnexecutorfactory.New(
 		components.Engine,
 		flowProvider,
 		components.AgentToolResolver,

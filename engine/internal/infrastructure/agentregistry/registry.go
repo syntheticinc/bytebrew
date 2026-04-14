@@ -132,7 +132,7 @@ func (r *AgentRegistry) GetDefault() (*RegisteredAgent, error) {
 }
 
 // ResolveModelID returns the ModelID for the given agent name, or nil if not found.
-// Implements infrastructure.AgentModelResolver interface.
+// Implements turnexecutorfactory.AgentModelResolver interface.
 func (r *AgentRegistry) ResolveModelID(agentName string) *string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

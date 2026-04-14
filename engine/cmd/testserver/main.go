@@ -19,7 +19,7 @@ import (
 	deliverygrpc "github.com/syntheticinc/bytebrew/engine/internal/delivery/grpc"
 	"github.com/syntheticinc/bytebrew/engine/internal/delivery/ws"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/turnexecutorfactory"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/testutil"
@@ -121,7 +121,7 @@ func main() {
 	agentPool.SetEngine(agentEngine, flowManager, toolResolver, toolDepsProvider, nil, nil)
 
 	// 8. Create EngineTurnExecutorFactory (SAME as production!)
-	factory := infrastructure.NewEngineTurnExecutorFactory(
+	factory := turnexecutorfactory.New(
 		agentEngine,
 		flowManager,
 		toolResolver,

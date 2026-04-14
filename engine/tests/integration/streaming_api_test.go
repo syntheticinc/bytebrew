@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	deliverygrpc "github.com/syntheticinc/bytebrew/engine/internal/delivery/grpc"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/turnexecutorfactory"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/testutil"
@@ -84,7 +84,7 @@ func NewStreamingHarness(t *testing.T, scenario string) *StreamingHarness {
 	toolDepsProvider := tools.NewDefaultToolDepsProvider(nil, taskMgr, subtaskMgr, agentPoolAdapter, nil, nil)
 	agentPool.SetEngine(agentEngine, flowManager, toolResolver, toolDepsProvider, nil, nil)
 
-	factory := infrastructure.NewEngineTurnExecutorFactory(
+	factory := turnexecutorfactory.New(
 		agentEngine, flowManager, toolResolver, modelSelector, agentConfig,
 		taskMgr, subtaskMgr, agentPoolAdapter, nil, nil, nil,
 	)
