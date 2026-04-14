@@ -40,7 +40,7 @@ llm:
     timeout: 300s
     thinking: false
   openrouter:
-    api_key: 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
+    api_key: ${OPENROUTER_API_KEY}  # set via environment variable
     base_url: https://openrouter.ai/api/v1
     model: qwen/qwen3-coder-next
     timeout: 120s
@@ -51,7 +51,7 @@ agent:
 
 websearch:
   provider: "tavily"
-  api_key: "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"
+  api_key: "${TAVILY_API_KEY}"  # set via environment variable
 
 license:
-  public_key_hex: "5395bf9bb925ce56d86005104951984709670126f95a635e4e2ccf79ac58e395"
+  public_key_hex: "${LICENSE_PUBLIC_KEY_HEX}"  # set via environment variable

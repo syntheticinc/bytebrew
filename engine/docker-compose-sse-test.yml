@@ -10,9 +10,9 @@ services:
       - ADMIN_USER=admin
       - ADMIN_PASSWORD=admin123
       - LLM_PROVIDER=openrouter
-      - LLM_API_KEY=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
+      - LLM_API_KEY=${LLM_API_KEY}           # set in .env or shell
       - LLM_MODEL=qwen/qwen3-coder-next
-      - TAVILY_API_KEY=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
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}    # optional: web search
     depends_on:
       db:
         condition: service_healthy

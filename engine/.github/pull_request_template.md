@@ -1,14 +1,22 @@
 ## Summary
-Brief description of changes.
+
+Brief description of changes and motivation.
+
+## Related Issue
+
+Closes #
 
 ## Changes
+
 -
 
-## Testing
+## Checklist
+
+- [ ] Issue exists and is linked above
 - [ ] `go build ./...` passes
 - [ ] `go test ./...` passes
 - [ ] `cd admin && npm run build` passes
-- [ ] Manual testing done
-
-## Related Issues
-Closes #
+- [ ] New code has tests
+- [ ] No hardcoded secrets or credentials
+- [ ] Documentation updated (if applicable)
+- [ ] Breaking changes noted (if applicable)

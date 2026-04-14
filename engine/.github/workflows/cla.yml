@@ -1,0 +1,186 @@
+name: CLA Check
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+  issue_comment:
+    types: [created]
+
+jobs:
+  cla-check:
+    # Only run on PR events (not comments)
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+          sparse-checkout: .github/cla-signers.json
+
+      - name: Check CLA status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const signers = JSON.parse(fs.readFileSync('.github/cla-signers.json', 'utf8'));
+            const prNumber = context.payload.pull_request.number;
+            const author = context.payload.pull_request.user.login;
+            const sha = context.payload.pull_request.head.sha;
+
+            if (signers.includes(author)) {
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha,
+                state: 'success',
+                context: 'CLA',
+                description: 'CLA signed'
+              });
+              return;
+            }
+
+            // Not signed — set pending status
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha,
+              state: 'pending',
+              context: 'CLA',
+              description: 'CLA signature required',
+              target_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/CLA.md`
+            });
+
+            // Post instructions (only once per PR)
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber
+            });
+            const hasComment = comments.data.some(c =>
+              c.user.login === 'github-actions[bot]' &&
+              c.body.includes('Contributor License Agreement')
+            );
+            if (!hasComment) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: [
+                  `Welcome @${author}! :wave:`,
+                  '',
+                  'Before we can merge this PR, you need to sign our [Contributor License Agreement](CLA.md).',
+                  '',
+                  'Please read the CLA and then comment on this PR with exactly:',
+                  '',
+                  '> **I agree to the CLA**',
+                  '',
+                  'You only need to do this once for all future contributions.'
+                ].join('\n')
+              });
+            }
+
+  cla-sign:
+    # Only run on "I agree to the CLA" comments on PRs
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, 'I agree to the CLA')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      statuses: write
+    concurrency:
+      group: cla-signing
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Record CLA signature
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const { execFileSync } = require('child_process');
+            const path = '.github/cla-signers.json';
+            const prNumber = context.payload.issue.number;
+            const commenter = context.payload.comment.user.login;
+
+            // Strict match — must be exactly "I agree to the CLA"
+            const body = context.payload.comment.body.trim();
+            if (body !== 'I agree to the CLA') {
+              core.info('Comment does not exactly match CLA agreement phrase, skipping');
+              return;
+            }
+
+            // Read current signers
+            const signers = JSON.parse(fs.readFileSync(path, 'utf8'));
+            if (signers.includes(commenter)) {
+              core.info(`${commenter} already signed`);
+              return;
+            }
+
+            // Record signature
+            signers.push(commenter);
+            signers.sort();
+            fs.writeFileSync(path, JSON.stringify(signers, null, 2) + '\n');
+
+            // Commit (execFileSync — no shell, immune to injection)
+            execFileSync('git', ['config', 'user.name', 'github-actions[bot]']);
+            execFileSync('git', ['config', 'user.email', 'github-actions[bot]@users.noreply.github.com']);
+            execFileSync('git', ['add', path]);
+            execFileSync('git', ['commit', '-m', `CLA: add ${commenter}`]);
+
+            // Push with retry for concurrent signings
+            let retries = 3;
+            while (retries > 0) {
+              try {
+                execFileSync('git', ['push']);
+                break;
+              } catch (e) {
+                retries--;
+                if (retries === 0) throw e;
+                execFileSync('git', ['pull', '--rebase']);
+                const current = JSON.parse(fs.readFileSync(path, 'utf8'));
+                if (!current.includes(commenter)) {
+                  current.push(commenter);
+                  current.sort();
+                  fs.writeFileSync(path, JSON.stringify(current, null, 2) + '\n');
+                  execFileSync('git', ['add', path]);
+                  execFileSync('git', ['commit', '-m', `CLA: add ${commenter}`]);
+                }
+              }
+            }
+
+            // Thank the signer
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: `@${commenter} Thank you for signing the CLA! :white_check_mark:`
+            });
+
+            // Update PR status — only if the PR AUTHOR has now signed
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber
+            });
+            const prAuthor = pr.data.user.login;
+            const updatedSigners = JSON.parse(fs.readFileSync(path, 'utf8'));
+            if (updatedSigners.includes(prAuthor)) {
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: pr.data.head.sha,
+                state: 'success',
+                context: 'CLA',
+                description: 'CLA signed'
+              });
+            }

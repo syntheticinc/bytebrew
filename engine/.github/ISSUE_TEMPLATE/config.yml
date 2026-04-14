@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & Discussions
+    url: https://github.com/syntheticinc/bytebrew/discussions
+    about: Ask questions and share ideas in GitHub Discussions
+  - name: Documentation
+    url: https://bytebrew.ai/docs/
+    about: Check the docs before opening an issue

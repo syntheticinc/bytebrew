@@ -35,7 +35,7 @@ llm:
     # Note: thinking: true only works with models that support it (qwq, deepseek-r1, etc.)
   
   openrouter:
-    api_key: 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
+    api_key: ${OPENROUTER_API_KEY}  # set via environment variable
     base_url: https://openrouter.ai/api/v1
     model: z-ai/glm-4.7:nitro
     timeout: 120s

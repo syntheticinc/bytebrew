@@ -1,103 +1,126 @@
 # ByteBrew Engine
 
-AI agent runtime with multi-agent orchestration, MCP tools, and REST API.
+[![CI](https://github.com/syntheticinc/bytebrew/actions/workflows/ci.yml/badge.svg)](https://github.com/syntheticinc/bytebrew/actions/workflows/ci.yml)
+[![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/syntheticinc/bytebrew)](go.mod)
 
-## Build
+**Open-source AI agent runtime.** Build, deploy, and orchestrate autonomous AI agents with multi-agent coordination, MCP tool integration, and a visual admin dashboard.
 
-```bash
-go build ./cmd/ce                           # Community Edition binary
-docker build -t bytebrew/engine:latest .    # Docker image
-```
+> Not another AI chatbot. ByteBrew is the agent brewery.
 
-## Entry Points
+## Features
 
-- `cmd/ce` — Production entry point (Community Edition)
-- `cmd/testserver` — Test server with MockChatModel (for integration tests)
+- **Multi-Agent Orchestration** — agents spawn and coordinate with each other via ReAct framework
+- **MCP Tool Ecosystem** — connect any Model Context Protocol server (stdio, SSE, HTTP, Docker)
+- **Visual Admin Dashboard** — configure agents, models, tools, and triggers from a web UI
+- **Task System** — async background tasks with priorities, dependencies, approval gates, and webhooks
+- **Cron & Webhook Triggers** — schedule agents or trigger them from external events
+- **Knowledge Base / RAG** — vector search over uploaded documents with pgvector
+- **Agent Memory** — cross-session persistent memory per agent
+- **Multiple Clients** — REST API + SSE, gRPC, WebSocket (via bridge)
+- **BYOK** — bring your own keys for any OpenAI-compatible LLM provider
+- **Self-Hosted** — deploy on your infrastructure with Docker, Kubernetes, or bare metal
 
-## CE vs EE
-
-Single binary. Community Edition includes all features. Enterprise Edition (coming soon) adds observability and compliance tools, gated by license key.
-
-### CE Features (free forever)
-- Unlimited agents, models, MCP servers
-- Multi-agent spawn orchestration
-- Cron triggers, webhooks, background tasks
-- Knowledge Base / RAG
-- REST API + SSE + WebSocket
-- Admin Dashboard
-- BYOK (bring your own key)
-- API tokens with scopes
-
-### EE Features (coming soon)
-- Session Explorer
-- Cost Analytics
-- Quality Metrics
-- Audit Log Export
-- PII Redaction
-
-## Configuration
-
-Engine can be configured via:
-1. **Environment variables** (recommended for Docker): `DATABASE_URL`, `ADMIN_USER`, `ADMIN_PASSWORD`, `LLM_API_KEY`
-2. **YAML config file**: `config.yaml`
-3. **Admin Dashboard**: visual configuration at `/admin/`
-
-## Docker
+## Quick Start
 
 ```bash
-# Quick start
+# Start with Docker Compose
 curl -fsSL https://bytebrew.ai/releases/docker-compose.yml -o docker-compose.yml
 docker compose up -d
 
-# Verify
-curl http://localhost:8443/api/v1/health
+# Open admin dashboard
+open http://localhost:8443/admin/
+# Default credentials: admin / changeme
 ```
 
-Default credentials: `admin` / `changeme`
-
-## Tasks: Async Work Management
-
-EngineTask is ByteBrew's unified system for managing background work, scheduled jobs, and complex multi-step workflows. Tasks can be created by agents, cron triggers, webhooks, or the REST API.
-
-Key features:
-- **State machine** — draft → approved → pending → in_progress → completed/failed
-- **Priority queue** — 0=normal, 1=high, 2=critical
-- **Hierarchical** — Parent tasks with subtasks
-- **Dependencies** — BlockedBy logic for workflow sequencing
-- **Agent integration** — `manage_tasks` tool for agents to self-organize work
-- **Completion webhooks** — Async notification when tasks finish
-- **Auto-execution** — Cron and webhook triggers automatically run agents
-
-Example:
+Or build from source:
 
 ```bash
-# Create task with approval gate
-curl -X POST http://localhost:8443/api/v1/tasks \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Generate daily report",
-    "agent_name": "reporter",
-    "require_approval": true,
-    "priority": 1
-  }'
-
-# Agent can also create subtasks
-{
-  "action": "create_subtask",
-  "parent_task_id": "task-123",
-  "title": "Extract data",
-  "priority": 2,
-  "blocked_by": []
-}
+go build -o bytebrew ./cmd/ce
+./bytebrew
 ```
 
-**Documentation:**
-- [Task Concepts](../../docs/concepts/tasks.md) — Architecture, lifecycle, state machine
-- [REST API](../../docs/api/tasks.md) — HTTP endpoints
-- [manage_tasks Tool](../../docs/agent-tools/manage-tasks.md) — Agent integration
-- [Cron Automation Example](../../docs/examples/cron-task-automation.md) — Full workflow
+## Configuration
+
+ByteBrew can be configured via:
+
+| Method | Use Case |
+|--------|----------|
+| **Environment variables** | Docker, Kubernetes, CI/CD |
+| **config.yaml** | Local development, bare metal |
+| **Admin Dashboard** | Visual configuration at `/admin/` |
+
+Key environment variables:
+
+```bash
+DATABASE_URL=postgresql://user:pass@host:5432/bytebrew
+ADMIN_USER=admin
+ADMIN_PASSWORD=changeme
+LLM_API_KEY=your-api-key
+LLM_PROVIDER=openrouter          # openrouter, anthropic, ollama, openai
+LLM_MODEL=anthropic/claude-sonnet-4-20250514
+```
+
+## Architecture
+
+ByteBrew follows Clean Architecture with strict layer separation:
+
+```
+cmd/ce/              Community Edition entry point
+internal/
+  domain/            Pure domain entities
+  usecase/           Business logic + consumer-side interfaces
+  service/           Task worker, scheduler, completion hooks
+  infrastructure/    DB, LLM, MCP, agents, tools
+  delivery/          HTTP & gRPC handlers
+  app/               Application bootstrap
+admin/               React/TypeScript admin dashboard
+```
+
+## Deployment
+
+| Method | Guide |
+|--------|-------|
+| **Docker Compose** | See [Quick Start](#quick-start) above |
+| **Kubernetes** | Helm chart in [`deploy/helm/`](deploy/helm/) |
+| **Bare Metal** | Binary + systemd + PostgreSQL + Caddy/nginx |
+
+## Editions
+
+| Feature | Community (CE) | Enterprise (EE) |
+|---------|:-:|:-:|
+| Unlimited agents, models, MCP servers | :white_check_mark: | :white_check_mark: |
+| Multi-agent spawn orchestration | :white_check_mark: | :white_check_mark: |
+| Cron triggers, webhooks, background tasks | :white_check_mark: | :white_check_mark: |
+| Knowledge Base / RAG | :white_check_mark: | :white_check_mark: |
+| REST API + SSE + WebSocket | :white_check_mark: | :white_check_mark: |
+| Admin Dashboard | :white_check_mark: | :white_check_mark: |
+| API tokens with scopes | :white_check_mark: | :white_check_mark: |
+| Session Explorer | | :white_check_mark: |
+| Cost Analytics | | :white_check_mark: |
+| Audit Log Export | | :white_check_mark: |
+| SSO / SAML | | :white_check_mark: |
 
 ## Documentation
 
-https://bytebrew.ai/docs/
+- **Website:** https://bytebrew.ai
+- **Docs:** https://bytebrew.ai/docs/
+- **API Reference:** https://bytebrew.ai/docs/api/
+
+## Contributing
+
+We welcome contributions! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a PR.
+
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security Policy](SECURITY.md)
+
+## License
+
+ByteBrew Engine is licensed under the [Business Source License 1.1](LICENSE).
+
+- **Self-hosting** for internal use: allowed
+- **Embedding** in your product via API: allowed
+- **Managed Service** (reselling ByteBrew as a service): not allowed
+- **Change Date:** 2030-04-06 (converts to Apache 2.0)
+
+For alternative licensing arrangements, contact [info@bytebrew.ai](mailto:info@bytebrew.ai).
