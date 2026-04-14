@@ -42,7 +42,7 @@ import (
 	admintools "github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools/admin"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm/registry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/portfile"
-	"github.com/syntheticinc/bytebrew/engine/internal/kits/developer"
+
 	mcpcatalog "github.com/syntheticinc/bytebrew/engine/internal/service/mcp"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/capability"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/escalation"
@@ -328,9 +328,8 @@ func Run(sc ServerConfig) error {
 		return fmt.Errorf("create infrastructure components: %w", err)
 	}
 
-	// Create KitRegistry and register known kits.
+	// Create KitRegistry (kits will be registered when implemented).
 	kitRegistry := kit.NewRegistry()
-	kitRegistry.Register(developer.New())
 	slog.InfoContext(ctx, "Kit registry initialized", "kits", kitRegistry.List())
 
 	// Knowledge indexing infrastructure (created before HTTP so endpoints can use it)
