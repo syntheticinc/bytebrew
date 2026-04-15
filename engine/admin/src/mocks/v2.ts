@@ -36,7 +36,6 @@ export interface V2Agent {
   description?: string;
   avatarInitials: string; // fallback avatar: 2 letters
   lifecycle: 'persistent' | 'spawn';
-  joinPolicyMode?: 'wait_all' | 'first_n' | 'decide';
   toolsCount: number;
   knowledgeCount: number;
   flowsCount: number;
@@ -126,7 +125,6 @@ export const v2Agents: V2Agent[] = [
     description: 'Classifies incoming requests and delegates to specialists.',
     avatarInitials: 'TR',
     lifecycle: 'persistent',
-    joinPolicyMode: 'decide',
     toolsCount: 3,
     knowledgeCount: 1,
     flowsCount: 0,
@@ -140,7 +138,6 @@ export const v2Agents: V2Agent[] = [
     description: 'Handles pricing, plans, conversion.',
     avatarInitials: 'SL',
     lifecycle: 'persistent',
-    joinPolicyMode: 'wait_all',
     toolsCount: 6,
     knowledgeCount: 2,
     flowsCount: 1,
@@ -206,7 +203,6 @@ export const v2Agents: V2Agent[] = [
     description: 'Qualifies leads via deep interview flow.',
     avatarInitials: 'SQ',
     lifecycle: 'persistent',
-    joinPolicyMode: 'wait_all',
     toolsCount: 4,
     knowledgeCount: 1,
     flowsCount: 1,
@@ -246,7 +242,6 @@ export const v2Agents: V2Agent[] = [
     description: 'Hourly system checks and alerting.',
     avatarInitials: 'HM',
     lifecycle: 'persistent',
-    joinPolicyMode: 'wait_all',
     toolsCount: 5,
     knowledgeCount: 0,
     flowsCount: 0,

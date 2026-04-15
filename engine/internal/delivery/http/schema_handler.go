@@ -39,28 +39,6 @@ type AddSchemaAgentRequest struct {
 	AgentName string `json:"agent_name"`
 }
 
-// --- Gate DTOs ---
-
-// GateInfo is a gate returned in API responses.
-type GateInfo struct {
-	ID            string                 `json:"id"`
-	SchemaID      string                 `json:"schema_id"`
-	Name          string                 `json:"name"`
-	ConditionType string                 `json:"condition_type"`
-	Config        map[string]interface{} `json:"config,omitempty"`
-	MaxIterations int                    `json:"max_iterations"`
-	Timeout       int                    `json:"timeout"`
-}
-
-// CreateGateRequest is the body for POST /api/v1/schemas/{id}/gates.
-type CreateGateRequest struct {
-	Name          string                 `json:"name"`
-	ConditionType string                 `json:"condition_type"`
-	Config        map[string]interface{} `json:"config,omitempty"`
-	MaxIterations int                    `json:"max_iterations,omitempty"`
-	Timeout       int                    `json:"timeout,omitempty"`
-}
-
 // --- Edge DTOs ---
 
 // EdgeInfo is an edge returned in API responses.
@@ -95,15 +73,6 @@ type SchemaService interface {
 	ListSchemaAgents(ctx context.Context, schemaID string) ([]string, error)
 }
 
-// GateService provides gate CRUD operations.
-type GateService interface {
-	ListGates(ctx context.Context, schemaID string) ([]GateInfo, error)
-	GetGate(ctx context.Context, id string) (*GateInfo, error)
-	CreateGate(ctx context.Context, schemaID string, req CreateGateRequest) (*GateInfo, error)
-	UpdateGate(ctx context.Context, id string, req CreateGateRequest) error
-	DeleteGate(ctx context.Context, id string) error
-}
-
 // EdgeService provides edge CRUD operations.
 type EdgeService interface {
 	ListEdges(ctx context.Context, schemaID string) ([]EdgeInfo, error)
@@ -122,18 +91,17 @@ type AgentSchemaLister interface {
 
 // SchemaHandler serves /api/v1/schemas endpoints.
 type SchemaHandler struct {
-	schemas        SchemaService
-	gates          GateService
-	edges          EdgeService
-	agentDetailer  SchemaAgentDetailer // optional, used by export
+	schemas       SchemaService
+	edges         EdgeService
+	agentDetailer SchemaAgentDetailer // optional, used by export
 }
 
 // NewSchemaHandler creates a SchemaHandler.
-func NewSchemaHandler(schemas SchemaService, gates GateService, edges EdgeService) *SchemaHandler {
-	return &SchemaHandler{schemas: schemas, gates: gates, edges: edges}
+func NewSchemaHandler(schemas SchemaService, edges EdgeService) *SchemaHandler {
+	return &SchemaHandler{schemas: schemas, edges: edges}
 }
 
-// Routes returns a chi router with all schema, gate, and edge endpoints.
+// Routes returns a chi router with all schema and edge endpoints.
 func (h *SchemaHandler) Routes() http.Handler {
 	r := chi.NewRouter()
 
@@ -148,13 +116,6 @@ func (h *SchemaHandler) Routes() http.Handler {
 	r.Get("/{id}/agents", h.ListSchemaAgents)
 	r.Post("/{id}/agents", h.AddSchemaAgent)
 	r.Delete("/{id}/agents/{name}", h.RemoveSchemaAgent)
-
-	// Gates (per-schema)
-	r.Get("/{id}/gates", h.ListGates)
-	r.Post("/{id}/gates", h.CreateGate)
-	r.Get("/{id}/gates/{gateId}", h.GetGate)
-	r.Put("/{id}/gates/{gateId}", h.UpdateGate)
-	r.Delete("/{id}/gates/{gateId}", h.DeleteGate)
 
 	// Edges (per-schema)
 	r.Get("/{id}/edges", h.ListEdges)
@@ -300,97 +261,6 @@ func (h *SchemaHandler) RemoveSchemaAgent(w http.ResponseWriter, r *http.Request
 	}
 
 	if err := h.schemas.RemoveSchemaAgent(r.Context(), id, name); err != nil {
-		writeDomainError(w, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// --- Gate endpoints ---
-
-func (h *SchemaHandler) ListGates(w http.ResponseWriter, r *http.Request) {
-	schemaID, err := parseStringParam(r, "id")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	gates, err := h.gates.ListGates(r.Context(), schemaID)
-	if err != nil {
-		writeDomainError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, gates)
-}
-
-func (h *SchemaHandler) GetGate(w http.ResponseWriter, r *http.Request) {
-	gateID, err := parseStringParam(r, "gateId")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	gate, err := h.gates.GetGate(r.Context(), gateID)
-	if err != nil {
-		writeDomainError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, gate)
-}
-
-func (h *SchemaHandler) CreateGate(w http.ResponseWriter, r *http.Request) {
-	schemaID, err := parseStringParam(r, "id")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	var req CreateGateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %s", err.Error()))
-		return
-	}
-	if req.Name == "" {
-		writeJSONError(w, http.StatusBadRequest, "name is required")
-		return
-	}
-
-	gate, err := h.gates.CreateGate(r.Context(), schemaID, req)
-	if err != nil {
-		writeDomainError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, gate)
-}
-
-func (h *SchemaHandler) UpdateGate(w http.ResponseWriter, r *http.Request) {
-	gateID, err := parseStringParam(r, "gateId")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	var req CreateGateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %s", err.Error()))
-		return
-	}
-
-	if err := h.gates.UpdateGate(r.Context(), gateID, req); err != nil {
-		writeDomainError(w, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (h *SchemaHandler) DeleteGate(w http.ResponseWriter, r *http.Request) {
-	gateID, err := parseStringParam(r, "gateId")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	if err := h.gates.DeleteGate(r.Context(), gateID); err != nil {
 		writeDomainError(w, err)
 		return
 	}

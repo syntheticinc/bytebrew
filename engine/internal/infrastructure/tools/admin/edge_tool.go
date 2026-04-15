@@ -116,9 +116,9 @@ func (t *adminCreateEdgeTool) InvokableRun(ctx context.Context, argsJSON string,
 		return "[ERROR] type is required", nil
 	}
 
-	validTypes := map[string]bool{"flow": true, "transfer": true, "loop": true, "spawn": true}
+	validTypes := map[string]bool{"flow": true, "transfer": true, "spawn": true}
 	if !validTypes[args.Type] {
-		return fmt.Sprintf("[ERROR] Invalid edge type %q. Must be: flow, transfer, loop, or spawn.", args.Type), nil
+		return fmt.Sprintf("[ERROR] Invalid edge type %q. Must be: flow, transfer, or spawn.", args.Type), nil
 	}
 
 	record := &EdgeRecord{

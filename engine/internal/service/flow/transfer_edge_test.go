@@ -23,10 +23,9 @@ func TestTransferEdge_AgentA_HandsOff_To_AgentB(t *testing.T) {
 			},
 		},
 	}
-	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 	eventStream := &mockEventStream{}
 
-	executor := NewExecutor(runner, edgeReader, gateReader)
+	executor := NewExecutor(runner, edgeReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
 		SchemaID:    "1",

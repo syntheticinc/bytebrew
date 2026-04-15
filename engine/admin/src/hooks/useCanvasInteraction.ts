@@ -66,31 +66,20 @@ export function useCanvasInteraction({
   const [nodeMenu, setNodeMenu] = useState<NodeMenuState | null>(null);
   const [edgeMenu, setEdgeMenu] = useState<EdgeMenuState | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [selectedGate, setSelectedGate] = useState<Record<string, unknown> | null>(null);
   const [selectedTrigger, setSelectedTrigger] = useState<Record<string, unknown> | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
 
   const onNodeClick: NodeMouseHandler = useCallback((_event, node) => {
     setSelectedNodeId(node.id);
 
-    // Gate node -> show gate config panel (both modes)
-    if (node.type === 'gateNode') {
-      setSelectedGate(node.data as Record<string, unknown>);
-      setSelectedTrigger(null);
-      setSelectedEdge(null);
-      return;
-    }
-
     if (isPrototype) {
       // Trigger node -> show trigger config panel
       if (node.type === 'triggerNode') {
         setSelectedTrigger(node.data as Record<string, unknown>);
-        setSelectedGate(null);
         setSelectedEdge(null);
         return;
       }
       // Agent node -> navigate to drill-in
-      setSelectedGate(null);
       setSelectedTrigger(null);
       navigate(`/builder/${encodeURIComponent(protoSchema)}/${node.id}`);
       return;
@@ -99,12 +88,10 @@ export function useCanvasInteraction({
     // Production mode — trigger node → open config panel
     if (node.type === 'triggerNode' || node.id.startsWith('trigger-')) {
       setSelectedTrigger(node.data as Record<string, unknown>);
-      setSelectedGate(null);
       setSelectedEdge(null);
       return;
     }
     // Agent node — navigate to drill-in
-    setSelectedGate(null);
     setSelectedTrigger(null);
     navigate(`/builder/${encodeURIComponent(selectedSchema)}/${node.id}`);
   }, [handleSelect, addToast, isPrototype, navigate, protoSchema, selectedSchema]);
@@ -142,7 +129,6 @@ export function useCanvasInteraction({
 
   const onEdgeClick = useCallback((_event: React.MouseEvent, edge: Edge) => {
     setSelectedEdge(edge);
-    setSelectedGate(null);
     setSelectedTrigger(null);
   }, []);
 
@@ -190,8 +176,6 @@ export function useCanvasInteraction({
     setEdgeMenu,
     selectedNodeId,
     setSelectedNodeId,
-    selectedGate,
-    setSelectedGate,
     selectedTrigger,
     setSelectedTrigger,
     selectedEdge,

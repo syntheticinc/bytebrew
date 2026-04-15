@@ -37,15 +37,6 @@ const (
 	EdgeRouteCustomPrompt EdgeRouteMode = "custom_prompt"  // template with {{output}} vars
 )
 
-// GateAction defines what happens on gate timeout or failure.
-type GateAction string
-
-const (
-	GateActionBlock    GateAction = "block"    // stop the pipeline
-	GateActionSkip     GateAction = "skip"     // skip gate, continue
-	GateActionEscalate GateAction = "escalate" // escalate to user
-)
-
 // FlowExecution tracks the state of a schema pipeline execution.
 type FlowExecution struct {
 	mu        sync.Mutex
@@ -132,7 +123,6 @@ func (fe *FlowExecution) IsTerminal() bool {
 const (
 	EventTypeFlowStepStarted   AgentEventType = "flow.step_started"
 	EventTypeFlowStepCompleted AgentEventType = "flow.step_completed"
-	EventTypeFlowGateEvaluated AgentEventType = "flow.gate_evaluated"
 	EventTypeFlowCompleted     AgentEventType = "flow.completed"
 	EventTypeFlowFailed        AgentEventType = "flow.failed"
 )
@@ -165,17 +155,3 @@ func NewFlowStepCompletedEvent(agentName, sessionID string, stepIndex int) *Agen
 	}
 }
 
-// NewFlowGateEvaluatedEvent creates a flow.gate_evaluated event.
-func NewFlowGateEvaluatedEvent(gateName string, passed bool, reason string) *AgentEvent {
-	return &AgentEvent{
-		Type:          EventTypeFlowGateEvaluated,
-		SchemaVersion: EventSchemaVersion,
-		Timestamp:     time.Now(),
-		Content:       reason,
-		Metadata: map[string]interface{}{
-			"gate_name": gateName,
-			"passed":    passed,
-			"reason":    reason,
-		},
-	}
-}

@@ -46,7 +46,6 @@ func newTestDB(t *testing.T) *gorm.DB {
 		&models.AgentEscalationTrigger{},
 		&models.SchemaModel{},
 		&models.SchemaAgentModel{},
-		&models.GateModel{},
 		&models.EdgeModel{},
 		&models.CapabilityModel{},
 		&models.MemoryModel{},
@@ -230,23 +229,6 @@ func (a *testMemoryClearerAdapter) DeleteOne(ctx context.Context, id string) err
 	return a.storage.DeleteByID(ctx, id)
 }
 
-// noopGateService implements deliveryhttp.GateService as a no-op for tests that don't need gates.
-type noopGateService struct{}
-
-func (n *noopGateService) ListGates(_ context.Context, _ uint) ([]deliveryhttp.GateInfo, error) {
-	return nil, nil
-}
-func (n *noopGateService) GetGate(_ context.Context, _ uint) (*deliveryhttp.GateInfo, error) {
-	return nil, nil
-}
-func (n *noopGateService) CreateGate(_ context.Context, _ uint, _ deliveryhttp.CreateGateRequest) (*deliveryhttp.GateInfo, error) {
-	return nil, nil
-}
-func (n *noopGateService) UpdateGate(_ context.Context, _ uint, _ deliveryhttp.CreateGateRequest) error {
-	return nil
-}
-func (n *noopGateService) DeleteGate(_ context.Context, _ uint) error { return nil }
-
 // noopEdgeService implements deliveryhttp.EdgeService as a no-op.
 type noopEdgeService struct{}
 
@@ -321,7 +303,7 @@ func TestV2_SchemaCRUD_AgentCrossReferences(t *testing.T) {
 	schemaSvc := &testSchemaServiceAdapter{repo: schemaRepo}
 	schemaLister := &testAgentSchemaListerAdapter{repo: schemaRepo}
 
-	schemaHandler := deliveryhttp.NewSchemaHandler(schemaSvc, &noopGateService{}, &noopEdgeService{})
+	schemaHandler := deliveryhttp.NewSchemaHandler(schemaSvc, &noopEdgeService{})
 
 	r := chi.NewRouter()
 	r.Mount("/api/v1/schemas", schemaHandler.Routes())
@@ -689,7 +671,7 @@ func TestV2_Schema_MultipleAgents(t *testing.T) {
 	schemaSvc := &testSchemaServiceAdapter{repo: schemaRepo}
 	schemaLister := &testAgentSchemaListerAdapter{repo: schemaRepo}
 
-	schemaHandler := deliveryhttp.NewSchemaHandler(schemaSvc, &noopGateService{}, &noopEdgeService{})
+	schemaHandler := deliveryhttp.NewSchemaHandler(schemaSvc, &noopEdgeService{})
 
 	r := chi.NewRouter()
 	r.Mount("/api/v1/schemas", schemaHandler.Routes())

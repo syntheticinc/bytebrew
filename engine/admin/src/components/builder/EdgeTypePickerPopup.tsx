@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 // Types
 // ---------------------------------------------------------------------------
 
-export type EdgeType = 'flow' | 'transfer' | 'loop' | 'can_spawn';
+export type EdgeType = 'flow' | 'transfer' | 'can_spawn';
 
 interface EdgeOption {
   type: EdgeType;
@@ -32,13 +32,6 @@ const EDGE_OPTIONS: EdgeOption[] = [
     description: 'Hand off: A delegates control to B',
     colorClass: 'text-blue-400',
     stroke: '#3B82F6',
-  },
-  {
-    type: 'loop',
-    label: 'Loop',
-    description: 'Repeat: B output feeds back to A',
-    colorClass: 'text-amber-400',
-    stroke: '#F59E0B',
   },
   {
     type: 'can_spawn',

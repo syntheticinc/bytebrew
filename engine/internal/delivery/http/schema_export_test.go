@@ -88,50 +88,6 @@ func (m *mockSchemaService) ListSchemaAgents(_ context.Context, schemaID string)
 	return m.agents[schemaID], nil
 }
 
-type mockGateService struct {
-	gates  map[string][]GateInfo
-	nextID int
-}
-
-func newMockGateService() *mockGateService {
-	return &mockGateService{
-		gates:  make(map[string][]GateInfo),
-		nextID: 1,
-	}
-}
-
-func (m *mockGateService) ListGates(_ context.Context, schemaID string) ([]GateInfo, error) {
-	return m.gates[schemaID], nil
-}
-
-func (m *mockGateService) GetGate(_ context.Context, _ string) (*GateInfo, error) {
-	return nil, nil
-}
-
-func (m *mockGateService) CreateGate(_ context.Context, schemaID string, req CreateGateRequest) (*GateInfo, error) {
-	id := fmt.Sprintf("%d", m.nextID)
-	m.nextID++
-	g := GateInfo{
-		ID:            id,
-		SchemaID:      schemaID,
-		Name:          req.Name,
-		ConditionType: req.ConditionType,
-		Config:        req.Config,
-		MaxIterations: req.MaxIterations,
-		Timeout:       req.Timeout,
-	}
-	m.gates[schemaID] = append(m.gates[schemaID], g)
-	return &g, nil
-}
-
-func (m *mockGateService) UpdateGate(_ context.Context, _ string, _ CreateGateRequest) error {
-	return nil
-}
-
-func (m *mockGateService) DeleteGate(_ context.Context, _ string) error {
-	return nil
-}
-
 type mockEdgeService struct {
 	edges  map[string][]EdgeInfo
 	nextID int
@@ -206,7 +162,6 @@ func setupExportImportRouter(h *SchemaHandler) *chi.Mux {
 
 func TestExportSchema_Basic(t *testing.T) {
 	schemaSvc := newMockSchemaService()
-	gateSvc := newMockGateService()
 	edgeSvc := newMockEdgeService()
 	agentDetailer := newMockAgentDetailer()
 
@@ -232,14 +187,11 @@ func TestExportSchema_Basic(t *testing.T) {
 		Tools:        []string{"search_knowledge", "respond"},
 	}
 
-	gateSvc.gates[schema.ID] = []GateInfo{
-		{ID: "1", SchemaID: schema.ID, Name: "quality-check", ConditionType: "all", MaxIterations: 3},
-	}
 	edgeSvc.edges[schema.ID] = []EdgeInfo{
 		{ID: "1", SchemaID: schema.ID, SourceAgentName: "classifier", TargetAgentName: "support-agent", Type: "flow"},
 	}
 
-	handler := NewSchemaHandler(schemaSvc, gateSvc, edgeSvc)
+	handler := NewSchemaHandler(schemaSvc, edgeSvc)
 	handler.SetAgentDetailer(agentDetailer)
 	router := setupExportImportRouter(handler)
 
@@ -266,15 +218,11 @@ func TestExportSchema_Basic(t *testing.T) {
 	assert.Equal(t, "classifier", exported.Edges[0].Source)
 	assert.Equal(t, "support-agent", exported.Edges[0].Target)
 	assert.Equal(t, "flow", exported.Edges[0].Type)
-	require.Len(t, exported.Gates, 1)
-	assert.Equal(t, "quality-check", exported.Gates[0].Name)
-	assert.Equal(t, "all", exported.Gates[0].ConditionType)
-	assert.Equal(t, 3, exported.Gates[0].MaxIterations)
 }
 
 func TestExportSchema_NotFound(t *testing.T) {
 	schemaSvc := newMockSchemaService()
-	handler := NewSchemaHandler(schemaSvc, newMockGateService(), newMockEdgeService())
+	handler := NewSchemaHandler(schemaSvc, newMockEdgeService())
 	router := setupExportImportRouter(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/schemas/999/export", nil)
@@ -289,7 +237,7 @@ func TestExportSchema_WithoutAgentDetailer(t *testing.T) {
 	schema, _ := schemaSvc.CreateSchema(context.Background(), CreateSchemaRequest{Name: "minimal"})
 	schemaSvc.AddSchemaAgent(context.Background(), schema.ID, "agent-a")
 
-	handler := NewSchemaHandler(schemaSvc, newMockGateService(), newMockEdgeService())
+	handler := NewSchemaHandler(schemaSvc, newMockEdgeService())
 	// Do NOT set agent detailer
 	router := setupExportImportRouter(handler)
 
@@ -311,10 +259,9 @@ func TestExportSchema_WithoutAgentDetailer(t *testing.T) {
 
 func TestImportSchema_Basic(t *testing.T) {
 	schemaSvc := newMockSchemaService()
-	gateSvc := newMockGateService()
 	edgeSvc := newMockEdgeService()
 
-	handler := NewSchemaHandler(schemaSvc, gateSvc, edgeSvc)
+	handler := NewSchemaHandler(schemaSvc, edgeSvc)
 	router := setupExportImportRouter(handler)
 
 	yamlBody := `
@@ -327,10 +274,6 @@ edges:
   - source: "agent-a"
     target: "agent-b"
     type: "flow"
-gates:
-  - name: "gate-1"
-    condition_type: "all"
-    max_iterations: 5
 `
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/schemas/import", bytes.NewBufferString(yamlBody))
@@ -359,17 +302,10 @@ gates:
 	assert.Equal(t, "agent-a", edges[0].SourceAgentName)
 	assert.Equal(t, "agent-b", edges[0].TargetAgentName)
 	assert.Equal(t, "flow", edges[0].Type)
-
-	// Verify gates created
-	gates := gateSvc.gates[createdSchema.ID]
-	require.Len(t, gates, 1)
-	assert.Equal(t, "gate-1", gates[0].Name)
-	assert.Equal(t, "all", gates[0].ConditionType)
-	assert.Equal(t, 5, gates[0].MaxIterations)
 }
 
 func TestImportSchema_EmptyName(t *testing.T) {
-	handler := NewSchemaHandler(newMockSchemaService(), newMockGateService(), newMockEdgeService())
+	handler := NewSchemaHandler(newMockSchemaService(), newMockEdgeService())
 	router := setupExportImportRouter(handler)
 
 	yamlBody := `description: "no name"`
@@ -382,7 +318,7 @@ func TestImportSchema_EmptyName(t *testing.T) {
 }
 
 func TestImportSchema_InvalidYAML(t *testing.T) {
-	handler := NewSchemaHandler(newMockSchemaService(), newMockGateService(), newMockEdgeService())
+	handler := NewSchemaHandler(newMockSchemaService(), newMockEdgeService())
 	router := setupExportImportRouter(handler)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/schemas/import", bytes.NewBufferString("}{not yaml"))
@@ -393,7 +329,7 @@ func TestImportSchema_InvalidYAML(t *testing.T) {
 }
 
 func TestImportSchema_EmptyBody(t *testing.T) {
-	handler := NewSchemaHandler(newMockSchemaService(), newMockGateService(), newMockEdgeService())
+	handler := NewSchemaHandler(newMockSchemaService(), newMockEdgeService())
 	router := setupExportImportRouter(handler)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/schemas/import", bytes.NewBufferString(""))
@@ -407,7 +343,6 @@ func TestImportSchema_EmptyBody(t *testing.T) {
 func TestRoundTrip_ExportImport(t *testing.T) {
 	// Setup source schema
 	srcSchemaSvc := newMockSchemaService()
-	srcGateSvc := newMockGateService()
 	srcEdgeSvc := newMockEdgeService()
 
 	schema, _ := srcSchemaSvc.CreateSchema(context.Background(), CreateSchemaRequest{
@@ -419,11 +354,8 @@ func TestRoundTrip_ExportImport(t *testing.T) {
 	srcEdgeSvc.edges[schema.ID] = []EdgeInfo{
 		{ID: "1", SchemaID: schema.ID, SourceAgentName: "agent-x", TargetAgentName: "agent-y", Type: "transfer"},
 	}
-	srcGateSvc.gates[schema.ID] = []GateInfo{
-		{ID: "1", SchemaID: schema.ID, Name: "check", ConditionType: "any", MaxIterations: 2, Timeout: 30},
-	}
 
-	srcHandler := NewSchemaHandler(srcSchemaSvc, srcGateSvc, srcEdgeSvc)
+	srcHandler := NewSchemaHandler(srcSchemaSvc, srcEdgeSvc)
 	srcRouter := setupExportImportRouter(srcHandler)
 
 	// Export
@@ -436,10 +368,9 @@ func TestRoundTrip_ExportImport(t *testing.T) {
 
 	// Import into a fresh set of services
 	dstSchemaSvc := newMockSchemaService()
-	dstGateSvc := newMockGateService()
 	dstEdgeSvc := newMockEdgeService()
 
-	dstHandler := NewSchemaHandler(dstSchemaSvc, dstGateSvc, dstEdgeSvc)
+	dstHandler := NewSchemaHandler(dstSchemaSvc, dstEdgeSvc)
 	dstRouter := setupExportImportRouter(dstHandler)
 
 	importReq := httptest.NewRequest(http.MethodPost, "/api/v1/schemas/import", bytes.NewReader(exportedYAML))
@@ -466,19 +397,11 @@ func TestRoundTrip_ExportImport(t *testing.T) {
 	assert.Equal(t, "agent-x", edges[0].SourceAgentName)
 	assert.Equal(t, "agent-y", edges[0].TargetAgentName)
 	assert.Equal(t, "transfer", edges[0].Type)
-
-	// Gates
-	gates := dstGateSvc.gates[importedSchema.ID]
-	require.Len(t, gates, 1)
-	assert.Equal(t, "check", gates[0].Name)
-	assert.Equal(t, "any", gates[0].ConditionType)
-	assert.Equal(t, 2, gates[0].MaxIterations)
-	assert.Equal(t, 30, gates[0].Timeout)
 }
 
 func TestSanitizeFilename(t *testing.T) {
 	tests := []struct {
-		name string
+		name  string
 		input string
 		want  string
 	}{

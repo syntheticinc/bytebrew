@@ -23,9 +23,7 @@ import { createMockSchemas, type SchemaName } from '../mocks/canvas';
 import type { AgentDetail, Model, Trigger, Schema } from '../types';
 import AgentNode from '../components/builder/AgentNode';
 import TriggerNode from '../components/builder/TriggerNode';
-import GateNode from '../components/builder/GateNode';
 import EdgeConfigPanel from '../components/builder/EdgeConfigPanel';
-import GateConfigPanel from '../components/builder/GateConfigPanel';
 // BuilderSidePanel removed — Details navigates to AgentDrillInPage
 import DriftNotification from '../components/builder/DriftNotification';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -40,7 +38,7 @@ import { useCanvasInteraction } from '../hooks/useCanvasInteraction';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const nodeTypes = { agentNode: AgentNode, triggerNode: TriggerNode, gateNode: GateNode };
+const nodeTypes = { agentNode: AgentNode, triggerNode: TriggerNode };
 const POSITIONS_KEY = 'bytebrew_builder_positions';
 
 // ─── Layout helpers ───────────────────────────────────────────────────────────
@@ -600,18 +598,6 @@ function AgentBuilderInner() {
             onDelete={(edgeId) => {
               setEdges((eds) => eds.filter((e) => e.id !== edgeId));
               interaction.setSelectedEdge(null);
-            }}
-          />
-        )}
-
-        {/* Gate config panel */}
-        {interaction.selectedGate && (
-          <GateConfigPanel
-            gate={interaction.selectedGate}
-            onClose={() => interaction.setSelectedGate(null)}
-            onSave={(_gateId, _config) => {
-              // TODO: persist gate config to API when backend is ready
-              interaction.setSelectedGate(null);
             }}
           />
         )}

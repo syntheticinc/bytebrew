@@ -28,7 +28,7 @@ import (
 //   - user_question: ask_user prompt for client
 //   - structured_output: tables, action buttons
 //   - state_changed: agent lifecycle state transition (metadata: agent_name, old_state, new_state, reason)
-//   - flow.*: flow pipeline events (flow.step_started, flow.step_completed, flow.gate_evaluated, etc.)
+//   - flow.*: flow pipeline events (flow.step_started, flow.step_completed, flow.completed, flow.failed)
 type AgentEventType string
 
 const (

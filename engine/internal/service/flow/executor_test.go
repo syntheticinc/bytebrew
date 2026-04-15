@@ -3,7 +3,6 @@ package flow
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -43,25 +42,6 @@ func (m *mockEdgeReader) ListEdges(_ context.Context, schemaID string) ([]EdgeRe
 	return m.edges[schemaID], nil
 }
 
-type mockGateReader struct {
-	gates map[string][]GateRecord
-}
-
-func (m *mockGateReader) GetGateByID(_ context.Context, id string) (*GateRecord, error) {
-	for _, gates := range m.gates {
-		for _, g := range gates {
-			if g.ID == id {
-				return &g, nil
-			}
-		}
-	}
-	return nil, fmt.Errorf("gate %s not found", id)
-}
-
-func (m *mockGateReader) ListGates(_ context.Context, schemaID string) ([]GateRecord, error) {
-	return m.gates[schemaID], nil
-}
-
 type mockEventStream struct {
 	events []*domain.AgentEvent
 }
@@ -90,10 +70,9 @@ func TestExecutor_LinearPipeline(t *testing.T) {
 			},
 		},
 	}
-	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 	eventStream := &mockEventStream{}
 
-	executor := NewExecutor(runner, edgeReader, gateReader)
+	executor := NewExecutor(runner, edgeReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
 		SchemaID:    "1",
@@ -151,9 +130,8 @@ func TestExecutor_TransferEdge(t *testing.T) {
 			},
 		},
 	}
-	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 
-	executor := NewExecutor(runner, edgeReader, gateReader)
+	executor := NewExecutor(runner, edgeReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
 		SchemaID:  "1",
@@ -189,9 +167,8 @@ func TestExecutor_ForkJoin(t *testing.T) {
 			},
 		},
 	}
-	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 
-	executor := NewExecutor(runner, edgeReader, gateReader)
+	executor := NewExecutor(runner, edgeReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
 		SchemaID:  "1",
@@ -210,167 +187,13 @@ func TestExecutor_ForkJoin(t *testing.T) {
 	}
 }
 
-func TestExecutor_GatePass(t *testing.T) {
-	// A → gate-1 → B
-	// Gate passes (contains "SUCCESS")
-	runner := &mockAgentRunner{
-		outputs: map[string]string{
-			"agent-a": "result: SUCCESS",
-			"agent-b": "from-b",
-		},
-	}
-	edgeReader := &mockEdgeReader{
-		edges: map[string][]EdgeRecord{
-			"1": {
-				{ID: "1", SchemaID: "1", SourceAgentName: "agent-a", TargetAgentName: "gate-1", Type: "gate"},
-				{ID: "2", SchemaID: "1", SourceAgentName: "gate-1", TargetAgentName: "agent-b", Type: "flow"},
-			},
-		},
-	}
-	gateReader := &mockGateReader{
-		gates: map[string][]GateRecord{
-			"1": {
-				{ID: "1", SchemaID: "1", Name: "gate-1", ConditionType: "all",
-					Config: map[string]interface{}{"condition": "contains", "text": "SUCCESS"}},
-			},
-		},
-	}
-	eventStream := &mockEventStream{}
-
-	executor := NewExecutor(runner, edgeReader, gateReader)
-
-	exec, err := executor.Execute(context.Background(), ExecutorConfig{
-		SchemaID:    "1",
-		SessionID:   "session-1",
-		EventStream: eventStream,
-	}, "agent-a", "input")
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if exec.Status != domain.FlowExecCompleted {
-		t.Errorf("expected completed, got %s", exec.Status)
-	}
-
-	// Check gate evaluated event
-	gateEvents := 0
-	for _, e := range eventStream.events {
-		if e.Type == domain.EventTypeFlowGateEvaluated {
-			gateEvents++
-			if passed, ok := e.Metadata["passed"].(bool); !ok || !passed {
-				t.Error("expected gate to pass")
-			}
-		}
-	}
-	if gateEvents != 1 {
-		t.Errorf("expected 1 gate evaluated event, got %d", gateEvents)
-	}
-}
-
-func TestExecutor_GateFail_Block(t *testing.T) {
-	// A → gate-1 → B
-	// Gate fails (does not contain "SUCCESS"), action=block
-	runner := &mockAgentRunner{
-		outputs: map[string]string{
-			"agent-a": "result: FAILURE",
-		},
-	}
-	edgeReader := &mockEdgeReader{
-		edges: map[string][]EdgeRecord{
-			"1": {
-				{ID: "1", SchemaID: "1", SourceAgentName: "agent-a", TargetAgentName: "gate-1", Type: "gate"},
-				{ID: "2", SchemaID: "1", SourceAgentName: "gate-1", TargetAgentName: "agent-b", Type: "flow"},
-			},
-		},
-	}
-	gateReader := &mockGateReader{
-		gates: map[string][]GateRecord{
-			"1": {
-				{ID: "1", SchemaID: "1", Name: "gate-1", ConditionType: "all",
-					Config: map[string]interface{}{
-						"condition":  "contains",
-						"text":       "SUCCESS",
-						"on_failure": "block",
-					}},
-			},
-		},
-	}
-
-	executor := NewExecutor(runner, edgeReader, gateReader)
-
-	exec, err := executor.Execute(context.Background(), ExecutorConfig{
-		SchemaID:  "1",
-		SessionID: "session-1",
-	}, "agent-a", "input")
-
-	if err == nil {
-		t.Fatal("expected error for gate block")
-	}
-	if !strings.Contains(err.Error(), "condition failed") {
-		t.Errorf("expected condition failed error, got: %v", err)
-	}
-	if exec.Status != domain.FlowExecFailed {
-		t.Errorf("expected failed, got %s", exec.Status)
-	}
-}
-
-func TestExecutor_GateFail_Skip(t *testing.T) {
-	// A → gate-1 → B
-	// Gate fails but action=skip → proceeds to B
-	runner := &mockAgentRunner{
-		outputs: map[string]string{
-			"agent-a": "no match",
-			"agent-b": "from-b",
-		},
-	}
-	edgeReader := &mockEdgeReader{
-		edges: map[string][]EdgeRecord{
-			"1": {
-				{ID: "1", SchemaID: "1", SourceAgentName: "agent-a", TargetAgentName: "gate-1", Type: "gate"},
-				{ID: "2", SchemaID: "1", SourceAgentName: "gate-1", TargetAgentName: "agent-b", Type: "flow"},
-			},
-		},
-	}
-	gateReader := &mockGateReader{
-		gates: map[string][]GateRecord{
-			"1": {
-				{ID: "1", SchemaID: "1", Name: "gate-1", ConditionType: "all",
-					Config: map[string]interface{}{
-						"condition":  "contains",
-						"text":       "MATCH",
-						"on_failure": "skip",
-					}},
-			},
-		},
-	}
-
-	executor := NewExecutor(runner, edgeReader, gateReader)
-
-	exec, err := executor.Execute(context.Background(), ExecutorConfig{
-		SchemaID:  "1",
-		SessionID: "session-1",
-	}, "agent-a", "input")
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if exec.Status != domain.FlowExecCompleted {
-		t.Errorf("expected completed, got %s", exec.Status)
-	}
-	// A + B = 2 steps (gate is skipped)
-	if len(exec.Steps) != 2 {
-		t.Errorf("expected 2 steps, got %d", len(exec.Steps))
-	}
-}
-
 func TestExecutor_SingleAgent_NoEdges(t *testing.T) {
 	runner := &mockAgentRunner{
 		outputs: map[string]string{"agent-a": "done"},
 	}
 	edgeReader := &mockEdgeReader{edges: map[string][]EdgeRecord{}}
-	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 
-	executor := NewExecutor(runner, edgeReader, gateReader)
+	executor := NewExecutor(runner, edgeReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
 		SchemaID:  "1",
@@ -391,9 +214,8 @@ func TestExecutor_SingleAgent_NoEdges(t *testing.T) {
 func TestExecutor_AgentFailure(t *testing.T) {
 	runner := &mockAgentRunner{err: fmt.Errorf("LLM error")}
 	edgeReader := &mockEdgeReader{edges: map[string][]EdgeRecord{}}
-	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 
-	executor := NewExecutor(runner, edgeReader, gateReader)
+	executor := NewExecutor(runner, edgeReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
 		SchemaID:  "1",
@@ -428,9 +250,8 @@ func TestExecutor_EdgeRouting_FieldMapping(t *testing.T) {
 			},
 		},
 	}
-	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 
-	executor := NewExecutor(runner, edgeReader, gateReader)
+	executor := NewExecutor(runner, edgeReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
 		SchemaID:  "1",
@@ -453,9 +274,8 @@ func TestExecutor_HasOutgoingEdges(t *testing.T) {
 			},
 		},
 	}
-	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 
-	executor := NewExecutor(nil, edgeReader, gateReader)
+	executor := NewExecutor(nil, edgeReader)
 
 	has, err := executor.HasOutgoingEdges(context.Background(), "1", "agent-a")
 	if err != nil {

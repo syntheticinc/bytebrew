@@ -15,11 +15,10 @@ import (
 
 // SchemaYAML is the top-level YAML representation of a schema.
 type SchemaYAML struct {
-	Name        string          `yaml:"name"`
-	Description string          `yaml:"description,omitempty"`
-	Agents      []AgentYAML     `yaml:"agents,omitempty"`
-	Edges       []EdgeYAML      `yaml:"edges,omitempty"`
-	Gates       []GateYAML      `yaml:"gates,omitempty"`
+	Name        string      `yaml:"name"`
+	Description string      `yaml:"description,omitempty"`
+	Agents      []AgentYAML `yaml:"agents,omitempty"`
+	Edges       []EdgeYAML  `yaml:"edges,omitempty"`
 }
 
 // AgentYAML is the YAML representation of an agent within a schema export.
@@ -44,15 +43,6 @@ type EdgeYAML struct {
 	Target string                 `yaml:"target"`
 	Type   string                 `yaml:"type"`
 	Config map[string]interface{} `yaml:"config,omitempty"`
-}
-
-// GateYAML is the YAML representation of a gate.
-type GateYAML struct {
-	Name          string                 `yaml:"name"`
-	ConditionType string                 `yaml:"condition_type"`
-	Config        map[string]interface{} `yaml:"config,omitempty"`
-	MaxIterations int                    `yaml:"max_iterations,omitempty"`
-	Timeout       int                    `yaml:"timeout,omitempty"`
 }
 
 // --- Consumer-side interface for agent detail lookup ---
@@ -94,12 +84,6 @@ func (h *SchemaHandler) ExportSchema(w http.ResponseWriter, r *http.Request) {
 	}
 
 	edges, err := h.edges.ListEdges(ctx, id)
-	if err != nil {
-		writeDomainError(w, err)
-		return
-	}
-
-	gates, err := h.gates.ListGates(ctx, id)
 	if err != nil {
 		writeDomainError(w, err)
 		return
@@ -147,17 +131,6 @@ func (h *SchemaHandler) ExportSchema(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Build gates
-	for _, g := range gates {
-		export.Gates = append(export.Gates, GateYAML{
-			Name:          g.Name,
-			ConditionType: g.ConditionType,
-			Config:        g.Config,
-			MaxIterations: g.MaxIterations,
-			Timeout:       g.Timeout,
-		})
-	}
-
 	yamlData, err := yaml.Marshal(export)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("marshal yaml: %s", err.Error()))
@@ -174,7 +147,7 @@ func (h *SchemaHandler) ExportSchema(w http.ResponseWriter, r *http.Request) {
 // --- Import endpoint ---
 
 // ImportSchema handles POST /api/v1/schemas/import.
-// It accepts a YAML body and creates a schema with agents, edges, and gates.
+// It accepts a YAML body and creates a schema with agents and edges.
 func (h *SchemaHandler) ImportSchema(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20)) // 1 MB limit
 	if err != nil {
@@ -217,25 +190,7 @@ func (h *SchemaHandler) ImportSchema(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 3. Create gates
-	for _, g := range input.Gates {
-		if g.Name == "" {
-			continue
-		}
-		_, err := h.gates.CreateGate(ctx, schema.ID, CreateGateRequest{
-			Name:          g.Name,
-			ConditionType: g.ConditionType,
-			Config:        g.Config,
-			MaxIterations: g.MaxIterations,
-			Timeout:       g.Timeout,
-		})
-		if err != nil {
-			slog.WarnContext(ctx, "failed to create gate for imported schema",
-				"schema", schema.Name, "gate", g.Name, "error", err)
-		}
-	}
-
-	// 4. Create edges
+	// 3. Create edges
 	for _, e := range input.Edges {
 		if e.Source == "" || e.Target == "" {
 			continue

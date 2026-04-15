@@ -15,3 +15,5 @@ databaseChangeLog:
       file: migrations/007_create_workflow.yaml
   - include:
       file: migrations/008_create_indexes.yaml
+  - include:
+      file: migrations/009_v2_drop_gates.yaml

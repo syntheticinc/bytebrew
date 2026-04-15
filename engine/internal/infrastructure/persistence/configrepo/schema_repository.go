@@ -116,10 +116,6 @@ func (r *GORMSchemaRepository) Delete(ctx context.Context, id string) error {
 		if err := tx.Where("schema_id = ?", id).Delete(&models.EdgeModel{}).Error; err != nil {
 			return fmt.Errorf("delete schema edges: %w", err)
 		}
-		// Delete gates
-		if err := tx.Where("schema_id = ?", id).Delete(&models.GateModel{}).Error; err != nil {
-			return fmt.Errorf("delete schema gates: %w", err)
-		}
 		// Delete schema itself
 		result := tx.Delete(&models.SchemaModel{}, "id = ?", id)
 		if result.Error != nil {

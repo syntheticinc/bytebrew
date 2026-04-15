@@ -95,12 +95,3 @@ func TestNewFlowStepStartedEvent(t *testing.T) {
 	}
 }
 
-func TestNewFlowGateEvaluatedEvent(t *testing.T) {
-	e := NewFlowGateEvaluatedEvent("gate-1", true, "passed")
-	if e.Type != EventTypeFlowGateEvaluated {
-		t.Errorf("expected type %q, got %q", EventTypeFlowGateEvaluated, e.Type)
-	}
-	if passed, ok := e.Metadata["passed"].(bool); !ok || !passed {
-		t.Error("expected passed=true in metadata")
-	}
-}

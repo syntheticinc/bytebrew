@@ -23,10 +23,9 @@ func TestFlowEdge_AgentA_to_AgentB(t *testing.T) {
 			},
 		},
 	}
-	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 	eventStream := &mockEventStream{}
 
-	executor := NewExecutor(runner, edgeReader, gateReader)
+	executor := NewExecutor(runner, edgeReader)
 
 	exec, err := executor.Execute(context.Background(), ExecutorConfig{
 		SchemaID:    "1",
@@ -102,10 +101,9 @@ func TestFlowEdge_EventStream(t *testing.T) {
 			},
 		},
 	}
-	gateReader := &mockGateReader{gates: map[string][]GateRecord{}}
 	eventStream := &mockEventStream{}
 
-	executor := NewExecutor(runner, edgeReader, gateReader)
+	executor := NewExecutor(runner, edgeReader)
 
 	_, err := executor.Execute(context.Background(), ExecutorConfig{
 		SchemaID:    "1",

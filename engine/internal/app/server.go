@@ -848,12 +848,11 @@ func Run(sc ServerConfig) error {
 				r.Delete("/api/v1/triggers/{id}/target", triggerHandler.ClearTarget)
 			})
 
-			// Schemas (with gates and edges) — schemaRepo already created above for agent cross-refs
-			gateRepo := configrepo.NewGORMGateRepository(pgDB)
+			// Schemas (with edges) — schemaRepo already created above for agent cross-refs.
+			// Gates removed in V2 (see docs/architecture/agent-first-runtime.md §3).
 			edgeRepo := configrepo.NewGORMEdgeRepository(pgDB)
 			schemaHandler := deliveryhttp.NewSchemaHandler(
 				&schemaServiceHTTPAdapter{repo: schemaRepo},
-				&gateServiceHTTPAdapter{repo: gateRepo},
 				&edgeServiceHTTPAdapter{repo: edgeRepo},
 			)
 			schemaHandler.SetAgentDetailer(agentManager)
@@ -862,8 +861,6 @@ func Run(sc ServerConfig) error {
 				r.Get("/api/v1/schemas", schemaHandler.ListSchemas)
 				r.Get("/api/v1/schemas/{id}", schemaHandler.GetSchema)
 				r.Get("/api/v1/schemas/{id}/agents", schemaHandler.ListSchemaAgents)
-				r.Get("/api/v1/schemas/{id}/gates", schemaHandler.ListGates)
-				r.Get("/api/v1/schemas/{id}/gates/{gateId}", schemaHandler.GetGate)
 				r.Get("/api/v1/schemas/{id}/edges", schemaHandler.ListEdges)
 				r.Get("/api/v1/schemas/{id}/edges/{edgeId}", schemaHandler.GetEdge)
 				r.Get("/api/v1/schemas/{id}/export", schemaHandler.ExportSchema)
@@ -876,9 +873,6 @@ func Run(sc ServerConfig) error {
 				r.Delete("/api/v1/schemas/{id}", schemaHandler.DeleteSchema)
 				r.Post("/api/v1/schemas/{id}/agents", schemaHandler.AddSchemaAgent)
 				r.Delete("/api/v1/schemas/{id}/agents/{name}", schemaHandler.RemoveSchemaAgent)
-				r.Post("/api/v1/schemas/{id}/gates", schemaHandler.CreateGate)
-				r.Put("/api/v1/schemas/{id}/gates/{gateId}", schemaHandler.UpdateGate)
-				r.Delete("/api/v1/schemas/{id}/gates/{gateId}", schemaHandler.DeleteGate)
 				r.Post("/api/v1/schemas/{id}/edges", schemaHandler.CreateEdge)
 				r.Put("/api/v1/schemas/{id}/edges/{edgeId}", schemaHandler.UpdateEdge)
 				r.Delete("/api/v1/schemas/{id}/edges/{edgeId}", schemaHandler.DeleteEdge)

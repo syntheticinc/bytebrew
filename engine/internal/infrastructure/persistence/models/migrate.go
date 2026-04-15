@@ -30,6 +30,14 @@ func AutoMigrate(db *gorm.DB) error {
 		slog.Warn("[Migration] dropping legacy V1 task tables failed (may already be absent)", "error", err)
 	}
 
+	// V2 Gate removal: gates are out of V2 (see docs/architecture/agent-first-runtime.md §3).
+	// Drop legacy `gates` table if present. Clean-schema policy: pure DDL, no data
+	// preservation — fresh install is the supported path. Edge-type removal and the
+	// edges→agent_relations rename are handled in a separate commit group.
+	if err := db.Migrator().DropTable("gates"); err != nil {
+		slog.Warn("[Migration] dropping legacy gates table failed (may already be absent)", "error", err)
+	}
+
 	if err := db.AutoMigrate(
 		// Config tables (11)
 		&AgentModel{},
@@ -66,10 +74,9 @@ func AutoMigrate(db *gorm.DB) error {
 		&KnowledgeDocument{},
 		&KnowledgeChunk{},
 
-		// Schema / flow tables (4)
+		// Schema / flow tables (3)
 		&SchemaModel{},
 		&SchemaAgentModel{},
-		&GateModel{},
 		&EdgeModel{},
 
 		// Capability table (1)

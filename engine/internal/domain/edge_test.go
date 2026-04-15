@@ -23,17 +23,7 @@ func TestNewEdge_Valid(t *testing.T) {
 func TestNewEdge_SameSourceTarget(t *testing.T) {
 	_, err := NewEdge("s", "agent-a", "agent-a", EdgeTypeFlow)
 	if err == nil {
-		t.Fatal("expected error for same source and target on non-loop edge")
-	}
-}
-
-func TestNewEdge_LoopSameSourceTarget(t *testing.T) {
-	e, err := NewEdge("s", "agent-a", "agent-a", EdgeTypeLoop)
-	if err != nil {
-		t.Fatalf("unexpected error for loop edge with same source/target: %v", err)
-	}
-	if e.Type != EdgeTypeLoop {
-		t.Errorf("expected type %q, got %q", EdgeTypeLoop, e.Type)
+		t.Fatal("expected error for same source and target")
 	}
 }
 
@@ -46,13 +36,11 @@ func TestEdge_Validate(t *testing.T) {
 		{"valid flow", Edge{SchemaID: "s", SourceAgentName: "a", TargetAgentName: "b", Type: EdgeTypeFlow}, false},
 		{"valid transfer", Edge{SchemaID: "s", SourceAgentName: "a", TargetAgentName: "b", Type: EdgeTypeTransfer}, false},
 		{"valid parallel", Edge{SchemaID: "s", SourceAgentName: "a", TargetAgentName: "b", Type: EdgeTypeParallel}, false},
-		{"valid gate", Edge{SchemaID: "s", SourceAgentName: "a", TargetAgentName: "b", Type: EdgeTypeGate}, false},
-		{"valid loop", Edge{SchemaID: "s", SourceAgentName: "a", TargetAgentName: "a", Type: EdgeTypeLoop}, false},
 		{"empty schema_id", Edge{SourceAgentName: "a", TargetAgentName: "b", Type: EdgeTypeFlow}, true},
 		{"empty source", Edge{SchemaID: "s", TargetAgentName: "b", Type: EdgeTypeFlow}, true},
 		{"empty target", Edge{SchemaID: "s", SourceAgentName: "a", Type: EdgeTypeFlow}, true},
 		{"invalid type", Edge{SchemaID: "s", SourceAgentName: "a", TargetAgentName: "b", Type: "bad"}, true},
-		{"same src/tgt non-loop", Edge{SchemaID: "s", SourceAgentName: "a", TargetAgentName: "a", Type: EdgeTypeFlow}, true},
+		{"same src/tgt", Edge{SchemaID: "s", SourceAgentName: "a", TargetAgentName: "a", Type: EdgeTypeFlow}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

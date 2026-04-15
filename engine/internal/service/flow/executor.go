@@ -20,12 +20,6 @@ type SchemaEdgeReader interface {
 	ListEdges(ctx context.Context, schemaID string) ([]EdgeRecord, error)
 }
 
-// SchemaGateReader reads gates for a schema.
-type SchemaGateReader interface {
-	GetGateByID(ctx context.Context, id string) (*GateRecord, error)
-	ListGates(ctx context.Context, schemaID string) ([]GateRecord, error)
-}
-
 // EdgeRecord is a simplified edge for the service boundary.
 type EdgeRecord struct {
 	ID              string
@@ -34,17 +28,6 @@ type EdgeRecord struct {
 	TargetAgentName string
 	Type            string
 	Config          map[string]interface{}
-}
-
-// GateRecord is a simplified gate for the service boundary.
-type GateRecord struct {
-	ID            string
-	SchemaID      string
-	Name          string
-	ConditionType string
-	Config        map[string]interface{}
-	MaxIterations int
-	Timeout       int
 }
 
 // ExecutorConfig holds configuration for the flow executor.
@@ -56,21 +39,17 @@ type ExecutorConfig struct {
 
 // Executor orchestrates multi-agent pipeline execution based on schema edges.
 type Executor struct {
-	agentRunner   AgentRunner
-	edgeReader    SchemaEdgeReader
-	gateReader    SchemaGateReader
-	edgeRouter    *EdgeRouter
-	gateEvaluator *GateEvaluator
+	agentRunner AgentRunner
+	edgeReader  SchemaEdgeReader
+	edgeRouter  *EdgeRouter
 }
 
 // NewExecutor creates a new flow Executor.
-func NewExecutor(runner AgentRunner, edgeReader SchemaEdgeReader, gateReader SchemaGateReader) *Executor {
+func NewExecutor(runner AgentRunner, edgeReader SchemaEdgeReader) *Executor {
 	return &Executor{
-		agentRunner:   runner,
-		edgeReader:    edgeReader,
-		gateReader:    gateReader,
-		edgeRouter:    NewEdgeRouter(),
-		gateEvaluator: NewGateEvaluator(),
+		agentRunner: runner,
+		edgeReader:  edgeReader,
+		edgeRouter:  NewEdgeRouter(),
 	}
 }
 
@@ -159,17 +138,13 @@ func (e *Executor) executeAgent(ctx context.Context, cfg ExecutorConfig, executi
 	}
 
 	// Separate edges by type
-	var flowEdges, transferEdges, loopEdges []EdgeRecord
+	var flowEdges, transferEdges []EdgeRecord
 	for _, edge := range outgoing {
 		switch domain.EdgeType(edge.Type) {
 		case domain.EdgeTypeFlow, domain.EdgeTypeParallel:
 			flowEdges = append(flowEdges, edge)
 		case domain.EdgeTypeTransfer:
 			transferEdges = append(transferEdges, edge)
-		case domain.EdgeTypeLoop:
-			loopEdges = append(loopEdges, edge)
-		case domain.EdgeTypeGate:
-			flowEdges = append(flowEdges, edge) // gate edges behave like flow
 		}
 	}
 
@@ -192,22 +167,12 @@ func (e *Executor) executeAgent(ctx context.Context, cfg ExecutorConfig, executi
 			return "", fmt.Errorf("route output for flow to %q: %w", edge.TargetAgentName, err)
 		}
 
-		// Check if target is a gate
-		if e.isGateNode(ctx, cfg.SchemaID, edge.TargetAgentName) {
-			return e.executeGate(ctx, cfg, execution, adjacency, edge.TargetAgentName, output, depth+1, loopEdges)
-		}
-
 		return e.executeAgent(ctx, cfg, execution, adjacency, edge.TargetAgentName, routedInput, depth+1)
 	}
 
 	if len(flowEdges) > 1 {
 		// Multiple flow edges — parallel fork
 		return e.executeFork(ctx, cfg, execution, adjacency, flowEdges, output, depth+1)
-	}
-
-	// Handle loop edges
-	if len(loopEdges) > 0 {
-		return e.executeLoop(ctx, cfg, execution, adjacency, loopEdges, agentName, output, depth+1)
 	}
 
 	return output, nil
@@ -270,150 +235,6 @@ func (e *Executor) executeFork(ctx context.Context, cfg ExecutorConfig, executio
 		combined += o
 	}
 	return combined, nil
-}
-
-// executeGate evaluates a gate condition and proceeds accordingly.
-func (e *Executor) executeGate(ctx context.Context, cfg ExecutorConfig, execution *domain.FlowExecution,
-	adjacency map[string][]EdgeRecord, gateName, output string, depth int, loopEdges []EdgeRecord) (string, error) {
-
-	gates, err := e.gateReader.ListGates(ctx, cfg.SchemaID)
-	if err != nil {
-		return "", fmt.Errorf("load gates: %w", err)
-	}
-
-	var gate *GateRecord
-	for _, g := range gates {
-		if g.Name == gateName {
-			gate = &g
-			break
-		}
-	}
-	if gate == nil {
-		return "", fmt.Errorf("gate %q not found", gateName)
-	}
-
-	domainGate := &domain.Gate{
-		ID:            gate.ID,
-		Name:          gate.Name,
-		ConditionType: domain.GateConditionType(gate.ConditionType),
-		Config:        gate.Config,
-		MaxIterations: gate.MaxIterations,
-		Timeout:       gate.Timeout,
-	}
-
-	result, err := e.gateEvaluator.Evaluate(domainGate, output)
-	if err != nil {
-		return "", fmt.Errorf("evaluate gate %q: %w", gateName, err)
-	}
-
-	// Emit gate evaluated event
-	if cfg.EventStream != nil {
-		cfg.EventStream.Send(domain.NewFlowGateEvaluatedEvent(gateName, result.Passed, result.Reason))
-	}
-
-	slog.Info("flow: gate evaluated", "gate", gateName, "passed", result.Passed, "reason", result.Reason)
-
-	if result.Passed {
-		// Proceed to next node after gate
-		outgoing := adjacency[gateName]
-		if len(outgoing) == 0 {
-			return output, nil
-		}
-		nextEdge := outgoing[0]
-		routedInput, err := e.edgeRouter.RouteOutput(output, nextEdge.Config)
-		if err != nil {
-			return "", fmt.Errorf("route gate output: %w", err)
-		}
-		return e.executeAgent(ctx, cfg, execution, adjacency, nextEdge.TargetAgentName, routedInput, depth+1)
-	}
-
-	// Gate failed — handle on_failure action
-	action := e.resolveGateAction(domainGate)
-	switch action {
-	case domain.GateActionBlock:
-		return "", fmt.Errorf("gate %q condition failed: %s", gateName, result.Reason)
-	case domain.GateActionSkip:
-		// Skip gate, proceed with next node
-		outgoing := adjacency[gateName]
-		if len(outgoing) == 0 {
-			return output, nil
-		}
-		return e.executeAgent(ctx, cfg, execution, adjacency, outgoing[0].TargetAgentName, output, depth+1)
-	case domain.GateActionEscalate:
-		return "", fmt.Errorf("gate %q escalated: %s", gateName, result.Reason)
-	default:
-		return "", fmt.Errorf("gate %q failed: %s", gateName, result.Reason)
-	}
-}
-
-// executeLoop runs a loop: re-execute the source agent, check gate, repeat up to max_iterations.
-func (e *Executor) executeLoop(ctx context.Context, cfg ExecutorConfig, execution *domain.FlowExecution,
-	adjacency map[string][]EdgeRecord, loopEdges []EdgeRecord, sourceAgent, lastOutput string, depth int) (string, error) {
-
-	maxIter := 3 // default
-	if len(loopEdges) > 0 {
-		// Check if there's a gate with max_iterations
-		gates, _ := e.gateReader.ListGates(ctx, cfg.SchemaID)
-		for _, g := range gates {
-			if g.MaxIterations > 0 {
-				maxIter = g.MaxIterations
-				break
-			}
-		}
-	}
-
-	for i := 0; i < maxIter; i++ {
-		slog.Info("flow: loop iteration", "agent", sourceAgent, "iteration", i+1, "max", maxIter)
-
-		output, err := e.executeAgent(ctx, cfg, execution, adjacency, sourceAgent, lastOutput, depth+i)
-		if err != nil {
-			return "", err
-		}
-		lastOutput = output
-
-		// Check if loop should continue (re-evaluate outgoing edges)
-		outgoing := adjacency[sourceAgent]
-		hasMoreLoop := false
-		for _, edge := range outgoing {
-			if domain.EdgeType(edge.Type) == domain.EdgeTypeLoop {
-				hasMoreLoop = true
-				break
-			}
-		}
-		if !hasMoreLoop {
-			return output, nil
-		}
-	}
-
-	return lastOutput, fmt.Errorf("loop max iterations (%d) exceeded for agent %q", maxIter, sourceAgent)
-}
-
-func (e *Executor) isGateNode(ctx context.Context, schemaID string, nodeName string) bool {
-	gates, err := e.gateReader.ListGates(ctx, schemaID)
-	if err != nil {
-		return false
-	}
-	for _, g := range gates {
-		if g.Name == nodeName {
-			return true
-		}
-	}
-	return false
-}
-
-func (e *Executor) resolveGateAction(gate *domain.Gate) domain.GateAction {
-	if gate.Config == nil {
-		return domain.GateActionBlock
-	}
-	actionStr, _ := gate.Config["on_failure"].(string)
-	switch domain.GateAction(actionStr) {
-	case domain.GateActionSkip:
-		return domain.GateActionSkip
-	case domain.GateActionEscalate:
-		return domain.GateActionEscalate
-	default:
-		return domain.GateActionBlock
-	}
 }
 
 func buildAdjacency(edges []EdgeRecord) map[string][]EdgeRecord {
