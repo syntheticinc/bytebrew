@@ -45,6 +45,8 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/portfile"
 
 	mcpcatalog "github.com/syntheticinc/bytebrew/engine/internal/service/mcp"
+	svcschematemplate "github.com/syntheticinc/bytebrew/engine/internal/service/schematemplate"
+	ucschematemplate "github.com/syntheticinc/bytebrew/engine/internal/usecase/schematemplate"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/capability"
 	svcknowledge "github.com/syntheticinc/bytebrew/engine/internal/service/knowledge"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/eventstore"
@@ -369,6 +371,9 @@ func Run(sc ServerConfig) error {
 		// V2 Commit Group C (§5.5): the system-wide MCP catalog is now a
 		// DB table populated from mcp-catalog.yaml at boot via upsert.
 		seedMCPCatalog(ctx, pgDB)
+		// V2 Commit Group L (§2.2): schema starter templates catalog is a
+		// DB table populated from schema-templates.yaml at boot via upsert.
+		seedSchemaTemplates(ctx, pgDB)
 	}
 
 	if pgDB != nil {
@@ -915,6 +920,23 @@ func Run(sc ServerConfig) error {
 				catalogSvc := mcpcatalog.NewCatalogService(catalogRepo)
 				catalogHandler := deliveryhttp.NewCatalogHandler(catalogSvc)
 				r.Get("/api/v1/mcp/catalog", catalogHandler.ListCatalog)
+			}
+
+			// Schema templates catalog + fork — DB-backed (V2 Commit Group L, §2.2).
+			// Reads are open to any authenticated user; fork requires the
+			// schemas-write scope (it creates new schemas/agents/triggers).
+			if pgDB != nil {
+				tmplRepo := configrepo.NewGORMSchemaTemplateRepository(pgDB)
+				forkSvc := svcschematemplate.NewForkService(pgDB, tmplRepo)
+				forkAdapter := svcschematemplate.NewUsecaseForkerAdapter(forkSvc)
+				tmplUC := ucschematemplate.New(tmplRepo, forkAdapter)
+				tmplHandler := deliveryhttp.NewSchemaTemplateHandler(tmplUC, "1.0")
+				r.Get("/api/v1/schema-templates", tmplHandler.List)
+				r.Get("/api/v1/schema-templates/{name}", tmplHandler.Get)
+				r.Group(func(r chi.Router) {
+					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeSchemasWrite))
+					r.Post("/api/v1/schema-templates/{name}/fork", tmplHandler.Fork)
+				})
 			}
 
 			// Usage (CE mode — unlimited)

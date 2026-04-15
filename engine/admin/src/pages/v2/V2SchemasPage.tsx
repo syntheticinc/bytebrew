@@ -1,6 +1,8 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { v2Schemas, v2SchemaTemplates, getAgentById } from '../../mocks/v2';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { v2Schemas, getAgentById } from '../../mocks/v2';
+import { api } from '../../api/client';
+import type { SchemaTemplate, SchemaTemplateCategory } from '../../types';
 
 function formatRelativeTime(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -10,44 +12,200 @@ function formatRelativeTime(iso: string) {
   return `${Math.floor(diff / 86_400_000)}d ago`;
 }
 
-function TemplatePicker({ onClose }: { onClose: () => void }) {
+const CATEGORIES: Array<{ key: 'all' | SchemaTemplateCategory; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'support', label: 'Support' },
+  { key: 'sales', label: 'Sales' },
+  { key: 'internal', label: 'Internal' },
+  { key: 'generic', label: 'Generic' },
+];
+
+// sanitizeSchemaName makes a human-entered schema name safe for the DB's
+// unique constraint — lowercase, alphanumerics + hyphens, collapsed
+// whitespace. Returns empty on empty input.
+function sanitizeSchemaName(raw: string): string {
+  return raw
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
+}
+
+interface TemplatePickerProps {
+  onClose: () => void;
+  onForked: (schemaId: string) => void;
+}
+
+function TemplatePicker({ onClose, onForked }: TemplatePickerProps) {
+  const [category, setCategory] = useState<'all' | SchemaTemplateCategory>('all');
+  const [query, setQuery] = useState('');
+  const [templates, setTemplates] = useState<SchemaTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<SchemaTemplate | null>(null);
+  const [schemaName, setSchemaName] = useState('');
+  const [forking, setForking] = useState(false);
+  const [forkError, setForkError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setListError(null);
+    const filter: { category?: SchemaTemplateCategory; q?: string } = {};
+    if (category !== 'all') filter.category = category;
+    if (query.trim() !== '') filter.q = query.trim();
+    api
+      .listSchemaTemplates(filter)
+      .then((resp) => {
+        if (!cancelled) setTemplates(resp.templates);
+      })
+      .catch((err) => {
+        if (!cancelled) setListError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [category, query]);
+
+  async function handleFork() {
+    if (!selected) return;
+    const clean = sanitizeSchemaName(schemaName);
+    if (!clean) {
+      setForkError('Schema name is required (letters, digits, hyphens).');
+      return;
+    }
+    setForking(true);
+    setForkError(null);
+    try {
+      const resp = await api.forkSchemaTemplate(selected.name, clean);
+      onForked(resp.schema_id);
+    } catch (err) {
+      setForkError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setForking(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-40 bg-black/60 flex items-center justify-center p-6">
-      <div className="bg-brand-dark-surface border border-brand-shade3/25 rounded-card max-w-[720px] w-full max-h-[85vh] overflow-hidden shadow-2xl">
+      <div className="bg-brand-dark-surface border border-brand-shade3/25 rounded-card max-w-[840px] w-full max-h-[88vh] overflow-hidden shadow-2xl flex flex-col">
         <div className="px-5 py-4 border-b border-brand-shade3/15 flex items-center justify-between">
           <h2 className="text-[15px] font-semibold text-brand-light">Create Schema</h2>
-          <button onClick={onClose} className="text-brand-shade3 hover:text-brand-light">✕</button>
+          <button onClick={onClose} className="text-brand-shade3 hover:text-brand-light" aria-label="Close">
+            ✕
+          </button>
         </div>
-        <div className="px-5 py-3 text-[12px] text-brand-shade3">
-          Start blank or pick a template. Templates scaffold entry orchestrator + typical delegates.
+        <div className="px-5 py-3 text-[12px] text-brand-shade3 border-b border-brand-shade3/10">
+          Pick a starter template. The fork operation creates a new schema with its agents, delegations, and triggers — independent of the catalog.
         </div>
-        <div className="p-5 grid grid-cols-2 gap-3 overflow-y-auto">
-          {v2SchemaTemplates.map((tpl) => (
-            <button
-              key={tpl.id}
-              disabled
-              className="text-left bg-brand-dark border border-brand-shade3/20 rounded-card p-4 hover:border-brand-accent/40 transition-colors cursor-not-allowed opacity-80"
-              title="Prototype — not wired"
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-[13px] font-semibold text-brand-light">{tpl.name}</span>
-                {tpl.agentCount === 0 && (
+
+        {/* Filters */}
+        <div className="px-5 py-3 border-b border-brand-shade3/10 flex flex-wrap items-center gap-3">
+          <div className="flex gap-1">
+            {CATEGORIES.map((c) => (
+              <button
+                key={c.key}
+                onClick={() => setCategory(c.key)}
+                className={`px-3 py-1 text-[11px] rounded-btn transition-colors ${
+                  category === c.key
+                    ? 'bg-brand-accent text-white'
+                    : 'bg-brand-dark text-brand-shade3 hover:text-brand-light border border-brand-shade3/20'
+                }`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+          <input
+            type="search"
+            placeholder="Search templates..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="flex-1 min-w-[180px] bg-brand-dark border border-brand-shade3/20 rounded-btn px-3 py-1 text-[12px] text-brand-light placeholder:text-brand-shade3 focus:outline-none focus:border-brand-accent/60"
+          />
+        </div>
+
+        {/* Template grid */}
+        <div className="p-5 grid grid-cols-2 gap-3 overflow-y-auto flex-1">
+          {loading && <div className="col-span-2 text-[12px] text-brand-shade3">Loading templates…</div>}
+          {listError && (
+            <div className="col-span-2 text-[12px] text-rose-400">
+              Failed to load templates: {listError}
+            </div>
+          )}
+          {!loading && !listError && templates.length === 0 && (
+            <div className="col-span-2 text-[12px] text-brand-shade3">
+              No templates match the current filter.
+            </div>
+          )}
+          {templates.map((tpl) => {
+            const isSelected = selected?.name === tpl.name;
+            return (
+              <button
+                key={tpl.name}
+                onClick={() => setSelected(tpl)}
+                className={`text-left bg-brand-dark border rounded-card p-4 transition-colors ${
+                  isSelected ? 'border-brand-accent' : 'border-brand-shade3/20 hover:border-brand-accent/40'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[13px] font-semibold text-brand-light">{tpl.display}</span>
                   <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-brand-shade3/15 text-brand-shade3">
-                    blank
+                    {tpl.category}
                   </span>
-                )}
-              </div>
-              <p className="text-[11px] text-brand-shade3 leading-relaxed">{tpl.description}</p>
-              {tpl.agentCount > 0 && (
-                <div className="mt-3 flex items-center gap-2 text-[10px] text-brand-shade3">
-                  <span>{tpl.agentCount} agents</span>
-                  <span>·</span>
-                  <span>{tpl.triggerTypes.join(', ')}</span>
                 </div>
-              )}
-            </button>
-          ))}
+                <p className="text-[11px] text-brand-shade3 leading-relaxed mb-3">{tpl.description}</p>
+                <div className="flex items-center gap-3 text-[10px] text-brand-shade3">
+                  <span>{tpl.definition.agents.length} agents</span>
+                  <span>·</span>
+                  <span>
+                    {tpl.definition.triggers.length === 0
+                      ? 'no triggers'
+                      : tpl.definition.triggers.map((t) => t.type).join(', ')}
+                  </span>
+                  <span>·</span>
+                  <span>v{tpl.version}</span>
+                </div>
+              </button>
+            );
+          })}
         </div>
+
+        {/* Fork footer */}
+        {selected && (
+          <div className="px-5 py-4 border-t border-brand-shade3/15 bg-brand-dark/40">
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <label className="block text-[10px] uppercase tracking-wider text-brand-shade3 mb-1">
+                  New schema name
+                </label>
+                <input
+                  type="text"
+                  value={schemaName}
+                  placeholder={`e.g. ${selected.name}-${Date.now().toString(36)}`}
+                  onChange={(e) => {
+                    setSchemaName(e.target.value);
+                    setForkError(null);
+                  }}
+                  disabled={forking}
+                  className="w-full bg-brand-dark border border-brand-shade3/25 rounded-btn px-3 py-2 text-[12px] text-brand-light placeholder:text-brand-shade3 focus:outline-none focus:border-brand-accent/60 disabled:opacity-60"
+                />
+                {forkError && <div className="mt-1 text-[11px] text-rose-400">{forkError}</div>}
+              </div>
+              <button
+                onClick={handleFork}
+                disabled={forking || schemaName.trim() === ''}
+                className="px-4 py-2 text-[12px] font-medium bg-brand-accent text-white rounded-btn hover:bg-brand-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {forking ? 'Forking…' : 'Use template'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -55,6 +213,12 @@ function TemplatePicker({ onClose }: { onClose: () => void }) {
 
 export default function V2SchemasPage() {
   const [picking, setPicking] = useState(false);
+  const navigate = useNavigate();
+
+  function handleForked(schemaId: string) {
+    setPicking(false);
+    navigate(`/v2/schemas/${schemaId}`);
+  }
 
   return (
     <div className="max-w-[1200px] mx-auto">
@@ -77,7 +241,7 @@ export default function V2SchemasPage() {
         <div className="bg-brand-dark-surface border border-dashed border-brand-shade3/25 rounded-card p-10 text-center">
           <h3 className="text-base font-semibold text-brand-light mb-2">No schemas yet</h3>
           <p className="text-[13px] text-brand-shade3 max-w-md mx-auto mb-4">
-            A schema binds triggers to an entry orchestrator and its delegates. Pick a template or start blank.
+            A schema binds triggers to an entry orchestrator and its delegates. Pick a template to scaffold one.
           </p>
           <button
             onClick={() => setPicking(true)}
@@ -151,7 +315,7 @@ export default function V2SchemasPage() {
         })}
       </div>
 
-      {picking && <TemplatePicker onClose={() => setPicking(false)} />}
+      {picking && <TemplatePicker onClose={() => setPicking(false)} onForked={handleForked} />}
     </div>
   );
 }

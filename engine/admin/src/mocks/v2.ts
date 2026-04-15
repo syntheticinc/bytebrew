@@ -414,47 +414,16 @@ export const v2Widgets: V2Widget[] = [
 ];
 
 // ============================================================================
-// SCHEMA TEMPLATES (for empty-state / onboarding)
+// SCHEMA TEMPLATES — moved out of v2.ts.
+//
+// V2 Commit Group L (§2.2): schema starter templates are now a real catalog
+// backed by `schema_templates` DB table + `schema-templates.yaml`. The
+// prototype-mode mirror lives in `mocks/schemaTemplates.ts` and matches the
+// wire shape of `GET /api/v1/schema-templates`. The old `V2SchemaTemplate`
+// interface + the hardcoded `v2SchemaTemplates` array are gone — the admin
+// UI reads from `MOCK_SCHEMA_TEMPLATES` in prototype mode and from the API
+// in production mode.
 // ============================================================================
-
-export interface V2SchemaTemplate {
-  id: string;
-  name: string;
-  description: string;
-  agentCount: number;
-  triggerTypes: TriggerType[];
-}
-
-export const v2SchemaTemplates: V2SchemaTemplate[] = [
-  {
-    id: 'tpl-blank',
-    name: 'Blank',
-    description: 'Start from scratch. Create your entry orchestrator and build out from there.',
-    agentCount: 0,
-    triggerTypes: [],
-  },
-  {
-    id: 'tpl-support',
-    name: 'Customer Support',
-    description: 'Triage orchestrator with delegation to Sales, Tech, Billing specialists.',
-    agentCount: 5,
-    triggerTypes: ['chat', 'webhook'],
-  },
-  {
-    id: 'tpl-sales',
-    name: 'Sales Qualification',
-    description: 'Deep-interview flow: needs, authority, budget, technical fit.',
-    agentCount: 3,
-    triggerTypes: ['webhook'],
-  },
-  {
-    id: 'tpl-research',
-    name: 'Research Pipeline',
-    description: 'Lead researcher + summarizer pattern.',
-    agentCount: 2,
-    triggerTypes: ['cron'],
-  },
-];
 
 // ============================================================================
 // SESSIONS (for debug mode)

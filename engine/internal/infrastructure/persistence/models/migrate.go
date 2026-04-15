@@ -169,6 +169,9 @@ func AutoMigrate(db *gorm.DB) error {
 		&SchemaModel{},
 		&AgentRelationModel{},
 
+		// Schema template catalog (1) — V2 Commit Group L (§2.2).
+		&SchemaTemplateModel{},
+
 		// Capability table (1)
 		&CapabilityModel{},
 

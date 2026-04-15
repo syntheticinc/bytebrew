@@ -362,6 +362,64 @@ export interface Schema {
 }
 
 // ============================================================================
+// V2: Schema template catalog (Commit Group L, §2.2)
+// ============================================================================
+
+export type SchemaTemplateCategory = 'support' | 'sales' | 'internal' | 'generic';
+
+export interface SchemaTemplateCapability {
+  type: string;
+  config?: Record<string, unknown>;
+}
+
+export interface SchemaTemplateAgent {
+  name: string;
+  system_prompt: string;
+  model?: string;
+  capabilities?: SchemaTemplateCapability[];
+}
+
+export interface SchemaTemplateRelation {
+  source: string;
+  target: string;
+}
+
+export interface SchemaTemplateTrigger {
+  type: 'cron' | 'webhook' | 'chat';
+  title: string;
+  enabled: boolean;
+  config?: Record<string, unknown>;
+}
+
+export interface SchemaTemplateDefinition {
+  entry_agent_name: string;
+  agents: SchemaTemplateAgent[];
+  relations: SchemaTemplateRelation[];
+  triggers: SchemaTemplateTrigger[];
+}
+
+export interface SchemaTemplate {
+  name: string;
+  display: string;
+  description: string;
+  category: SchemaTemplateCategory;
+  icon?: string;
+  version: string;
+  definition: SchemaTemplateDefinition;
+}
+
+export interface SchemaTemplateListResponse {
+  version: string;
+  templates: SchemaTemplate[];
+}
+
+export interface ForkTemplateResponse {
+  schema_id: string;
+  schema_name: string;
+  agent_ids: Record<string, string>;
+}
+
+// ============================================================================
 // V2: Capability types
 // ============================================================================
 

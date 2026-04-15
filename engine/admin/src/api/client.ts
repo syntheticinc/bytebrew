@@ -26,6 +26,10 @@ import type {
   ModelRegistryEntry,
   RegistryProviderInfo,
   Schema,
+  SchemaTemplate,
+  SchemaTemplateListResponse,
+  SchemaTemplateCategory,
+  ForkTemplateResponse,
   PaginatedSessions,
   SessionSummary,
   SessionTrace,
@@ -57,6 +61,7 @@ import {
 import { MOCK_AGENTS } from '../mocks/agents';
 import { SCHEMA_NAMES } from '../mocks/canvas';
 import { MOCK_SESSIONS_LIST, MOCK_TRACE, MOCK_TRACE_ERROR } from '../mocks/inspect';
+import { MOCK_SCHEMA_TEMPLATES } from '../mocks/schemaTemplates';
 
 const BASE_URL = '/api/v1';
 const PROTOTYPE_KEY = 'bytebrew_prototype_mode';
@@ -404,6 +409,70 @@ class APIClient {
   listSchemaAgents(schemaId: string) {
     if (this.isPrototype) return this.mock<string[]>([]);
     return this.request<string[]>('GET', `/schemas/${schemaId}/agents`);
+  }
+
+  // ─── Schema Templates (V2 Commit Group L, §2.2) ──────────────────────────
+  //
+  // Browse curated starter templates and fork one into a new tenant-owned
+  // schema graph (schemas + agents + agent_relations + triggers). Forked
+  // schemas are independent of the catalog — updating the YAML does not
+  // modify existing forks.
+
+  listSchemaTemplates(filter?: { category?: SchemaTemplateCategory; q?: string }) {
+    if (this.isPrototype) {
+      let items = [...MOCK_SCHEMA_TEMPLATES];
+      if (filter?.category) {
+        items = items.filter((t) => t.category === filter.category);
+      }
+      if (filter?.q) {
+        const q = filter.q.toLowerCase();
+        items = items.filter(
+          (t) =>
+            t.name.toLowerCase().includes(q) ||
+            t.display.toLowerCase().includes(q) ||
+            t.description.toLowerCase().includes(q),
+        );
+      }
+      return this.mock<SchemaTemplateListResponse>({
+        version: '1.0',
+        templates: items,
+      });
+    }
+    const qs = new URLSearchParams();
+    if (filter?.category) qs.set('category', filter.category);
+    if (filter?.q) qs.set('q', filter.q);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return this.request<SchemaTemplateListResponse>('GET', `/schema-templates${suffix}`);
+  }
+
+  getSchemaTemplate(name: string) {
+    if (this.isPrototype) {
+      const t = MOCK_SCHEMA_TEMPLATES.find((x) => x.name === name);
+      if (!t) throw new Error('template not found');
+      return this.mock<SchemaTemplate>(t);
+    }
+    return this.request<SchemaTemplate>('GET', `/schema-templates/${encodeURIComponent(name)}`);
+  }
+
+  forkSchemaTemplate(name: string, schemaName: string) {
+    if (this.isPrototype) {
+      const t = MOCK_SCHEMA_TEMPLATES.find((x) => x.name === name);
+      if (!t) throw new Error('template not found');
+      const agentIds: Record<string, string> = {};
+      for (const a of t.definition.agents) {
+        agentIds[a.name] = `mock-${schemaName}-${a.name}`;
+      }
+      return this.mock<ForkTemplateResponse>({
+        schema_id: `mock-schema-${Date.now()}`,
+        schema_name: schemaName,
+        agent_ids: agentIds,
+      });
+    }
+    return this.request<ForkTemplateResponse>(
+      'POST',
+      `/schema-templates/${encodeURIComponent(name)}/fork`,
+      { schema_name: schemaName },
+    );
   }
 
   // ─── Agent Relations (V2 delegation) ──────────────────────────────────────

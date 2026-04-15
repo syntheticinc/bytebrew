@@ -31,3 +31,5 @@ databaseChangeLog:
       file: migrations/015_v2_drop_widgets.yaml
   - include:
       file: migrations/016_v2_mcp_catalog.yaml
+  - include:
+      file: migrations/017_v2_schema_templates.yaml

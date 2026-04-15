@@ -1,0 +1,49 @@
+databaseChangeLog:
+  # V2 schema templates — Commit Group L.
+  #
+  # Ships a curated catalog of schema starter templates so new tenants don't
+  # begin with an empty canvas. Same hybrid pattern as the MCP catalog
+  # (Group C, §5.5):
+  #
+  #   schema-templates.yaml (repo) → seedSchemaTemplates at boot (upsert by
+  #   `name`) → schema_templates (DB) → runtime reads from DB → "Use template"
+  #   forks rows into tenant-owned schemas + agents + agent_relations +
+  #   triggers.
+  #
+  # See `docs/architecture/agent-first-runtime.md §2.2` and
+  # `docs/plan/v2-cleanup-checklist.md` "Commit Group L".
+  #
+  # Why this changeset is DDL-only (clean-schema policy):
+  # - The seeder in `internal/app/seed_schema_templates.go` runs on every
+  #   engine boot and is the source of truth for catalog contents. Catalog
+  #   edits propagate via a YAML bump, never via a new Liquibase changeset.
+  # - Forked rows are tenant-owned — they have no FK back to this table, so
+  #   dropping/replacing a template does not touch existing forks.
+  #
+  # No `tenant_id` — the catalog is global. User-created / tenant-private
+  # templates are explicitly out of scope for V2 (§2.2 "Out of scope").
+  - changeSet:
+      id: 017-v2-schema-templates
+      author: system
+      changes:
+        - sql:
+            sql: |
+              CREATE TABLE IF NOT EXISTS schema_templates (
+                  id          uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
+                  name        varchar(255) NOT NULL UNIQUE,
+                  display     varchar(255) NOT NULL,
+                  description text,
+                  category    varchar(30)  NOT NULL,
+                  icon        varchar(64),
+                  version     varchar(32)  NOT NULL DEFAULT '1.0',
+                  definition  jsonb        NOT NULL,
+                  created_at  timestamptz  NOT NULL DEFAULT now(),
+                  updated_at  timestamptz  NOT NULL DEFAULT now()
+              );
+      rollback:
+        - sql:
+            sql: |
+              -- Rolling back drops the catalog entirely. Forked schemas are
+              -- independent tenant-owned rows (no FK back to schema_templates)
+              -- and are therefore unaffected.
+              DROP TABLE IF EXISTS schema_templates;
