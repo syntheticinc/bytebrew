@@ -131,6 +131,17 @@ func AutoMigrate(db *gorm.DB) error {
 		}
 	}
 
+	// V2 settings final shape (Commit Group G, §5.8).
+	// Defense-in-depth alongside Liquibase 018 — idempotent DropColumn for the
+	// legacy `scope` column. The composite PK (tenant_id, key) and the jsonb
+	// `value` column are installed by Liquibase 018 itself; GORM AutoMigrate
+	// matches the final shape declared on SettingModel.
+	if db.Migrator().HasTable("settings") && db.Migrator().HasColumn("settings", "scope") {
+		if err := db.Migrator().DropColumn("settings", "scope"); err != nil {
+			slog.Warn("[Migration] dropping legacy settings.scope column failed (may already be absent)", "error", err)
+		}
+	}
+
 	if err := db.AutoMigrate(
 		// Config tables (9)
 		&AgentModel{},

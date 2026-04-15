@@ -415,6 +415,24 @@ type settingServiceHTTPAdapter struct {
 	repo *configrepo.GORMSettingRepository
 }
 
+// settingValueAsString renders a jsonb value for the HTTP layer:
+//   - jsonb string ("foo") → unwrapped Go string foo
+//   - any other jsonb (number, bool, array, object) → raw JSON text
+//
+// This keeps the wire shape stable for the existing
+// SettingResponse.Value:string contract while allowing structured values
+// (byok.allowed_providers as a real array) to round-trip as JSON text.
+func settingValueAsString(raw []byte) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return s
+	}
+	return string(raw)
+}
+
 func (a *settingServiceHTTPAdapter) ListSettings(ctx context.Context) ([]deliveryhttp.SettingResponse, error) {
 	settings, err := a.repo.List(ctx)
 	if err != nil {
@@ -424,7 +442,7 @@ func (a *settingServiceHTTPAdapter) ListSettings(ctx context.Context) ([]deliver
 	for _, s := range settings {
 		result = append(result, deliveryhttp.SettingResponse{
 			Key:       s.Key,
-			Value:     s.Value,
+			Value:     settingValueAsString(s.Value),
 			UpdatedAt: s.UpdatedAt.Format(time.RFC3339),
 		})
 	}
@@ -441,7 +459,7 @@ func (a *settingServiceHTTPAdapter) UpdateSetting(ctx context.Context, key, valu
 	}
 	return &deliveryhttp.SettingResponse{
 		Key:       setting.Key,
-		Value:     setting.Value,
+		Value:     settingValueAsString(setting.Value),
 		UpdatedAt: setting.UpdatedAt.Format(time.RFC3339),
 	}, nil
 }

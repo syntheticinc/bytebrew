@@ -2,18 +2,17 @@ import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
 import UsageDashboard from '../components/UsageDashboard';
+
+// V2 §5.8 "Settings + BYOK": admin toggles for per-end-user BYOK. The
+// values are stored in the `settings` table (jsonb) and read by the BYOK
+// middleware on every request — flips here take effect without a
+// restart. Provider-specific allow_* keys translate into a unified
+// byok.allowed_providers array on the API side.
 const BYOK_KEYS = [
   { key: 'byok.enabled', label: 'BYOK Enabled', description: 'Allow users to bring their own API keys' },
   { key: 'byok.allow_openai', label: 'Allow OpenAI', description: 'Users can use their OpenAI keys' },
   { key: 'byok.allow_anthropic', label: 'Allow Anthropic', description: 'Users can use their Anthropic keys' },
   { key: 'byok.allow_ollama', label: 'Allow Ollama', description: 'Users can connect to their Ollama instances' },
-];
-
-const ENV_VARS = [
-  { name: 'BYTEBREW_ADMIN_USER', description: 'Admin username' },
-  { name: 'BYTEBREW_ADMIN_PASSWORD', description: 'Admin password' },
-  { name: 'BYTEBREW_JWT_SECRET', description: 'JWT signing secret' },
-  { name: 'BYTEBREW_DB_URL', description: 'PostgreSQL connection string' },
 ];
 
 type SettingsTab = 'general' | 'usage';
@@ -90,9 +89,16 @@ export default function SettingsPage() {
       {/* General tab */}
       {activeTab === 'general' && <>
 
-      {/* BYOK Configuration */}
+      {/* BYOK Configuration — wired into the request path (V2 §5.8). */}
       <section className="mb-8">
         <h2 className="text-lg font-semibold text-brand-light mb-4">BYOK (Bring Your Own Key)</h2>
+        <p className="text-sm text-brand-shade3 mb-3">
+          When enabled, end users can override the tenant model with their own credentials by sending
+          <code className="mx-1 px-1 bg-brand-dark rounded">X-BYOK-Provider</code>,
+          <code className="mx-1 px-1 bg-brand-dark rounded">X-BYOK-API-Key</code>,
+          <code className="mx-1 px-1 bg-brand-dark rounded">X-BYOK-Model</code>
+          headers on the chat endpoint.
+        </p>
         <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15 divide-y divide-brand-shade3/10">
           {BYOK_KEYS.map((item) => {
             const enabled = localSettings[item.key] === 'true';
@@ -120,118 +126,7 @@ export default function SettingsPage() {
           })}
         </div>
       </section>
-
-      {/* General Settings */}
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold text-brand-light mb-4">General</h2>
-        <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15 divide-y divide-brand-shade3/10">
-          <SettingRow
-            label="Logging Level"
-            settingKey="logging.level"
-            value={localSettings['logging.level'] ?? 'info'}
-            type="select"
-            options={['debug', 'info', 'warn', 'error']}
-            onSave={async (val) => {
-              await api.updateSetting('logging.level', val);
-              refetch();
-            }}
-          />
-        </div>
-      </section>
-
-      {/* Environment Variables (read-only, masked) */}
-      <section>
-        <h2 className="text-lg font-semibold text-brand-light mb-4">Security (Environment Variables)</h2>
-        <p className="text-sm text-brand-shade3 mb-3">
-          These values are set via environment variables and cannot be changed from the dashboard.
-        </p>
-        <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15 divide-y divide-brand-shade3/10">
-          {ENV_VARS.map((env) => (
-            <div key={env.name} className="flex items-center justify-between px-4 py-3">
-              <div>
-                <div className="text-sm font-mono text-brand-light">{env.name}</div>
-                <div className="text-xs text-brand-shade3">{env.description}</div>
-              </div>
-              <span className="text-sm text-brand-shade3 font-mono">*****</span>
-            </div>
-          ))}
-        </div>
-      </section>
       </>}
-    </div>
-  );
-}
-
-function SettingRow({
-  label,
-  settingKey: _settingKey,
-  value,
-  type,
-  options,
-  onSave,
-}: {
-  label: string;
-  settingKey: string;
-  value: string;
-  type: 'select' | 'text';
-  options?: string[];
-  onSave: (value: string) => Promise<void>;
-}) {
-  const [localValue, setLocalValue] = useState(value);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
-
-  async function save() {
-    if (localValue === value) return;
-    setSaving(true);
-    try {
-      await onSave(localValue);
-    } catch {
-      // visible in console
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="flex items-center justify-between px-4 py-3">
-      <div className="text-sm font-medium text-brand-light">{label}</div>
-      <div className="flex items-center gap-2">
-        {type === 'select' && options ? (
-          <select
-            value={localValue}
-            onChange={(e) => {
-              setLocalValue(e.target.value);
-            }}
-            className="px-2 py-1 bg-brand-dark-alt border border-brand-shade3/50 rounded-btn text-sm text-brand-light focus:outline-none focus:border-brand-accent"
-          >
-            {options.map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input
-            type="text"
-            value={localValue}
-            onChange={(e) => setLocalValue(e.target.value)}
-            className="px-2 py-1 bg-brand-dark border border-brand-shade3/30 rounded-btn text-sm text-brand-light w-48 focus:outline-none focus:border-brand-accent"
-          />
-        )}
-        {localValue !== value && (
-          <button
-            onClick={save}
-            disabled={saving}
-            className="px-3 py-1 text-xs text-brand-light bg-brand-accent rounded-btn hover:bg-brand-accent-hover disabled:opacity-50"
-          >
-            {saving ? '...' : 'Save'}
-          </button>
-        )}
-      </div>
     </div>
   );
 }

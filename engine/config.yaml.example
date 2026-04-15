@@ -77,3 +77,16 @@ agent:
   max_context_size: 32000 # Maximum context size in TOKENS (not characters). 1 token ≈ 4 chars.
   tool_return_directly: []
   enable_enhanced_tool_call_checker: true
+
+# Per-end-user BYOK (V2 §5.8 "Settings + BYOK").
+# When enabled, end users can override the tenant-configured model with
+# their own credentials by sending X-BYOK-Provider, X-BYOK-API-Key,
+# X-BYOK-Model (and optionally X-BYOK-Base-URL) headers on the chat
+# endpoint. Empty allowed_providers means "no allowlist enforcement".
+#
+# These values are written into the `settings` table (jsonb) on first
+# boot. Admin UI toggles update the same settings rows and are picked up
+# live by the BYOK middleware — restart not required.
+byok:
+  enabled: false
+  allowed_providers: []  # e.g. [openai, anthropic, openrouter]

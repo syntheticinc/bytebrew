@@ -10,7 +10,31 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
 )
+
+// propagateBYOK translates the http-layer BYOK context keys (set by
+// BYOKMiddleware) into a single llm.BYOKCredentials value attached via
+// llm.WithBYOKCredentials. The downstream turn executor factory reads
+// from there to build an ad-hoc per-end-user ChatModel (V2 §5.8).
+//
+// No-op when no BYOK context is present — keeps the tenant-configured
+// model in use.
+func propagateBYOK(ctx context.Context) context.Context {
+	provider, _ := ctx.Value(ContextKeyBYOKProvider).(string)
+	apiKey, _ := ctx.Value(ContextKeyBYOKAPIKey).(string)
+	if provider == "" || apiKey == "" {
+		return ctx
+	}
+	model, _ := ctx.Value(ContextKeyBYOKModel).(string)
+	baseURL, _ := ctx.Value(ContextKeyBYOKBaseURL).(string)
+	return llm.WithBYOKCredentials(ctx, &llm.BYOKCredentials{
+		Provider: provider,
+		APIKey:   apiKey,
+		Model:    model,
+		BaseURL:  baseURL,
+	})
+}
 
 // ChatService handles agent chat sessions via SSE.
 type ChatService interface {
@@ -93,6 +117,10 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := h.buildRequestContext(r)
+	// Lift BYOK context keys into the canonical llm.BYOKCredentials value
+	// before handing off to the chat service. Downstream layers read them
+	// from there to build an ad-hoc per-end-user ChatModel (V2 §5.8).
+	ctx = propagateBYOK(ctx)
 	if len(req.Headers) > 0 {
 		existing := domain.GetRequestContext(ctx)
 		merged := make(map[string]string, len(req.Headers))

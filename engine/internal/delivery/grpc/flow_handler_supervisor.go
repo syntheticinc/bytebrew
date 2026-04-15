@@ -184,7 +184,7 @@ func (h *FlowHandler) runSupervisorMode(
 	eventCallback := h.createEventCallback(ctx, agentEventStream, req.SessionId, workChecker)
 
 	// 6. Create TurnExecutor (Engine-based, always available)
-	turnExecutor := h.turnExecutorFactory.CreateForSession(proxy, req.SessionId, req.ProjectKey, projectRoot, platform, "supervisor", "")
+	turnExecutor := h.turnExecutorFactory.CreateForSession(ctx, proxy, req.SessionId, req.ProjectKey, projectRoot, platform, "supervisor", "")
 	slog.InfoContext(ctx, "[Supervisor] using Engine-based TurnExecutor", "session_id", req.SessionId)
 
 	// 7. Register active flow (cancel func stored in registry, not in domain entity)

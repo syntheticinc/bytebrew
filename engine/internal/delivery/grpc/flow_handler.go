@@ -61,8 +61,10 @@ type SessionStorage interface {
 
 // TurnExecutorFactory creates a TurnExecutor for the given proxy/session.
 // Consumer-side interface defined in FlowHandler.
+//
+// `ctx` carries per-request values (V2 §5.8 BYOK credentials).
 type TurnExecutorFactory interface {
-	CreateForSession(proxy tools.ClientOperationsProxy, sessionID, projectKey, projectRoot, platform, agentName, userID string) orchestrator.TurnExecutor
+	CreateForSession(ctx context.Context, proxy tools.ClientOperationsProxy, sessionID, projectKey, projectRoot, platform, agentName, userID string) orchestrator.TurnExecutor
 }
 
 // FlowHandler handles FlowService gRPC requests

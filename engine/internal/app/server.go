@@ -374,6 +374,10 @@ func Run(sc ServerConfig) error {
 		// V2 Commit Group L (§2.2): schema starter templates catalog is a
 		// DB table populated from schema-templates.yaml at boot via upsert.
 		seedSchemaTemplates(ctx, pgDB)
+		// V2 Commit Group G (§5.8): per-end-user BYOK config seeds into
+		// the `settings` table (jsonb) once on first boot. Admin UI edits
+		// supersede this on subsequent boots.
+		seedBYOKConfig(ctx, pgDB, cfg.BYOK)
 	}
 
 	if pgDB != nil {
@@ -525,6 +529,7 @@ func Run(sc ServerConfig) error {
 	var httpPort int
 	var internalHTTPPort int
 	var httpAuthMW *deliveryhttp.AuthMiddleware
+	var byokMW *deliveryhttp.BYOKMiddleware
 	var configurableRL *deliveryhttp.ConfigurableRateLimiter
 	if agentRegistry != nil && bootstrapCfg != nil {
 		httpPort = bootstrapCfg.Engine.Port
@@ -561,6 +566,16 @@ func Run(sc ServerConfig) error {
 		jwtSecret := bootstrapCfg.Security.AdminPassword
 		authMW := deliveryhttp.NewAuthMiddleware(jwtSecret, &tokenRepoHTTPAdapter{repo: apiTokenRepo})
 		httpAuthMW = authMW
+
+		// V2 §5.8: per-end-user BYOK middleware. Reads the live config from
+		// `settings` (admin UI updates take effect on the next request via
+		// SetConfig) and falls back to the YAML bootstrap when the table is
+		// empty. Mounted after auth on chat / agent endpoints below.
+		byokCfg := loadBYOKConfig(ctx, pgDB, cfg.BYOK)
+		byokMW = deliveryhttp.NewBYOKMiddleware(deliveryhttp.BYOKConfig{
+			Enabled:          byokCfg.Enabled,
+			AllowedProviders: byokCfg.AllowedProviders,
+		})
 
 		// Audit logger
 		auditLogger := audit.NewLogger(pgDB)
@@ -1344,6 +1359,13 @@ func Run(sc ServerConfig) error {
 			router.Group(func(r chi.Router) {
 				if httpAuthMW != nil {
 					r.Use(httpAuthMW.Authenticate)
+				}
+				// V2 §5.8: BYOK runs AFTER auth so unauthenticated traffic
+				// never reaches the header-parsing path; the LLM factory
+				// reads ContextKeyBYOK* from the request context to decide
+				// between tenant-configured and user-supplied credentials.
+				if byokMW != nil {
+					r.Use(byokMW.InjectBYOK)
 				}
 				if configurableRL != nil {
 					r.Use(configurableRL.Middleware)

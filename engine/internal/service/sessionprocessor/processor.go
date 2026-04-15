@@ -28,8 +28,12 @@ type SessionRegistry interface {
 }
 
 // TurnExecutorFactory creates a TurnExecutor for a given session (consumer-side interface).
+//
+// `ctx` carries per-request values (notably BYOK credentials extracted by
+// the BYOK middleware via llm.BYOKCredentialsFrom). Pass context.Background()
+// in code paths that have no per-request context.
 type TurnExecutorFactory interface {
-	CreateForSession(proxy tools.ClientOperationsProxy, sessionID, projectKey, projectRoot, platform, agentName, userID string) orchestrator.TurnExecutor
+	CreateForSession(ctx context.Context, proxy tools.ClientOperationsProxy, sessionID, projectKey, projectRoot, platform, agentName, userID string) orchestrator.TurnExecutor
 }
 
 // AgentPoolRegistrar registers per-session resources on the AgentPool (consumer-side interface).
@@ -221,7 +225,7 @@ func (p *Processor) processMessage(ctx context.Context, sessionID, message strin
 	)
 	defer proxy.Dispose()
 
-	turnExecutor := p.factory.CreateForSession(proxy, sessionID, projectKey, projectRoot, platform, agentName, userID)
+	turnExecutor := p.factory.CreateForSession(ctx, proxy, sessionID, projectKey, projectRoot, platform, agentName, userID)
 	if turnExecutor == nil {
 		slog.ErrorContext(ctx, "[SessionProcessor] failed to create turn executor — check model configuration in Admin Dashboard",
 			"session_id", sessionID, "agent", agentName)

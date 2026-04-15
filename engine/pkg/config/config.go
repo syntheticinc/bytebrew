@@ -24,6 +24,7 @@ type Config struct {
 	WorkStorage   WorkStorageConfig   `mapstructure:"work_storage"`
 	License       LicenseConfig       `mapstructure:"license"`
 	Provider      ProviderConfig      `mapstructure:"provider"`
+	BYOK          BYOKConfig          `mapstructure:"byok"`
 	Relay         RelayConfig         `mapstructure:"relay"`
 	Bridge        BridgeConfig        `mapstructure:"bridge"`
 	RateLimits    []RateLimitRule     `mapstructure:"rate_limits"`
@@ -31,6 +32,15 @@ type Config struct {
 	// ConfigDir is the directory containing config files (set by Load, not from YAML)
 	ConfigDir string `mapstructure:"-"`
 }
+
+// BYOKConfig is declared in agent_config.go (shared with ModelsConfig.BYOK).
+// It holds bootstrap configuration for per-end-user BYOK (V2 §5.8 "Settings
+// + BYOK"). On startup these values are written into the `settings` table
+// (jsonb), and the middleware reads them from there at request time so
+// admin UI changes can take effect without a restart.
+//
+// Empty AllowedProviders means "no allowlist enforcement" (any provider
+// the user supplies is accepted). Disable BYOK entirely with Enabled=false.
 
 // RateLimitRule defines a configurable rate limiting rule based on request headers.
 // Used by Enterprise Edition for per-header rate limiting (e.g. per-org, per-user).

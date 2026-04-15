@@ -203,7 +203,7 @@ func TestFactory_CreateForSession(t *testing.T) {
 
 	// Execute
 	proxy := &mockClientProxy{}
-	executor := factory.CreateForSession(proxy, "session-1", "project-1", "", "", "supervisor", "")
+	executor := factory.CreateForSession(context.Background(), proxy, "session-1", "project-1", "", "", "supervisor", "")
 
 	// Verify
 	require.NotNil(t, executor, "TurnExecutor should not be nil")
@@ -242,7 +242,7 @@ func TestFactory_CreateForSession_WithProxy(t *testing.T) {
 
 	// Execute
 	proxy := &mockClientProxy{}
-	executor := factory.CreateForSession(proxy, "session-1", "project-1", "", "", "supervisor", "")
+	executor := factory.CreateForSession(context.Background(), proxy, "session-1", "project-1", "", "", "supervisor", "")
 
 	require.NotNil(t, executor)
 
@@ -295,7 +295,7 @@ func TestFactory_CreateForSession_NilProxy(t *testing.T) {
 	)
 
 	// Execute with nil proxy
-	executor := factory.CreateForSession(nil, "session-1", "project-1", "", "", "supervisor", "")
+	executor := factory.CreateForSession(context.Background(), nil, "session-1", "project-1", "", "", "supervisor", "")
 
 	// Verify
 	require.NotNil(t, executor, "TurnExecutor should not be nil even with nil proxy")
@@ -359,7 +359,7 @@ func TestFactory_CreateForSession_WithContextReminders(t *testing.T) {
 
 	// Execute
 	proxy := &mockClientProxy{}
-	executor := factory.CreateForSession(proxy, "session-1", "project-1", "", "", "supervisor", "")
+	executor := factory.CreateForSession(context.Background(), proxy, "session-1", "project-1", "", "", "supervisor", "")
 
 	// Verify
 	require.NotNil(t, executor, "TurnExecutor should not be nil")
@@ -398,7 +398,7 @@ func TestFactory_CreateForSession_NilContextRemindersGetter(t *testing.T) {
 
 	// Execute — should not panic
 	proxy := &mockClientProxy{}
-	executor := factory.CreateForSession(proxy, "session-1", "project-1", "", "", "supervisor", "")
+	executor := factory.CreateForSession(context.Background(), proxy, "session-1", "project-1", "", "", "supervisor", "")
 
 	require.NotNil(t, executor, "TurnExecutor should not be nil even with nil contextRemindersGetter")
 }

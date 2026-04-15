@@ -137,7 +137,14 @@ func (p *userMemoryDepsProvider) GetDependencies(sessionID, projectKey string) t
 
 // CreateForSession creates a TurnExecutor for the given session.
 // Implements grpc.TurnExecutorFactory interface.
+//
+// `ctx` carries per-request values (notably BYOK credentials extracted by
+// the BYOK middleware via llm.BYOKCredentialsFrom) so the factory can
+// build an ad-hoc per-end-user ChatModel instead of using the
+// tenant-configured one. Pass context.Background() in code paths that
+// have no per-request context (e.g. CLI runs).
 func (f *Factory) CreateForSession(
+	ctx context.Context,
 	proxy tools.ClientOperationsProxy,
 	sessionID, projectKey string,
 	projectRoot, platform, agentName, userID string,
@@ -153,7 +160,7 @@ func (f *Factory) CreateForSession(
 	// Resolve per-agent memory max_entries from capability config
 	memMaxEntries := f.memoryMaxEntries
 	if f.capConfigReader != nil {
-		if cfg, err := f.capConfigReader.ReadConfig(context.Background(), agentName, "memory"); err == nil && cfg != nil {
+		if cfg, err := f.capConfigReader.ReadConfig(ctx, agentName, "memory"); err == nil && cfg != nil {
 			unlimitedEntries, _ := cfg["unlimited_entries"].(bool)
 			if !unlimitedEntries {
 				if me, ok := cfg["max_entries"].(float64); ok && int(me) > 0 {
@@ -197,7 +204,7 @@ func (f *Factory) CreateForSession(
 			{"memory", "You have Memory capability. Use memory_recall at the start of conversations to check for prior context about this user. Use memory_store to save important facts for future conversations."},
 			{"knowledge", "You have Knowledge capability. Use knowledge_search to find relevant information from your knowledge base before answering questions."},
 		} {
-			if cfg, err := f.capConfigReader.ReadConfig(context.Background(), agentName, cap.name); err == nil && cfg != nil {
+			if cfg, err := f.capConfigReader.ReadConfig(ctx, agentName, cap.name); err == nil && cfg != nil {
 				hints = append(hints, cap.hint)
 			}
 		}
@@ -206,8 +213,11 @@ func (f *Factory) CreateForSession(
 		}
 	}
 
-	// Resolve model: try per-agent DB model first, fall back to ModelSelector.
-	chatModel, modelName := f.resolveModel(agentName)
+	// Resolve model: BYOK (per-request, per-end-user) overrides the
+	// tenant-configured model when X-BYOK-* headers are present; otherwise
+	// the per-agent DB model is used, falling back to the static
+	// ModelSelector. See V2 §5.8.
+	chatModel, modelName := f.resolveModel(ctx, agentName)
 	if chatModel == nil {
 		slog.Error("no model available for agent — add a model via Admin Dashboard",
 			"agent", agentName)
@@ -217,7 +227,7 @@ func (f *Factory) CreateForSession(
 	// BUG-007: Resolve agent's schema for memory/knowledge tool deps.
 	var schemaID string
 	if f.schemaResolver != nil {
-		sid, err := f.schemaResolver.ResolveSchemaID(context.Background(), agentName)
+		sid, err := f.schemaResolver.ResolveSchemaID(ctx, agentName)
 		if err != nil {
 			slog.Warn("failed to resolve schema for agent, memory tools may be disabled",
 				"agent", agentName, "error", err)
@@ -229,7 +239,7 @@ func (f *Factory) CreateForSession(
 	// US-003: Resolve guardrail config for this agent (nil = no guardrails).
 	var guardrailConfig *turnexecutor.GuardrailCheckConfig
 	if f.guardrailConfigResolver != nil {
-		if cfg, err := f.guardrailConfigResolver.ResolveGuardrailConfig(context.Background(), agentName); err == nil && cfg != nil {
+		if cfg, err := f.guardrailConfigResolver.ResolveGuardrailConfig(ctx, agentName); err == nil && cfg != nil {
 			guardrailConfig = cfg
 		}
 	}
@@ -259,14 +269,44 @@ func (f *Factory) CreateForSession(
 	return adapter
 }
 
-// resolveModel tries to resolve a model from the DB cache via the agent's ModelID.
-// Falls back to the static ModelSelector when no per-agent model is configured
-// or when the cache is not available.
-func (f *Factory) resolveModel(agentName string) (model.ToolCallingChatModel, string) {
+// resolveModel tries to resolve a model from the request context (BYOK),
+// the DB cache via the agent's ModelID, then the static ModelSelector.
+//
+// Order of precedence:
+//  1. BYOK credentials in ctx (V2 §5.8) — per-request override
+//  2. Per-agent ModelID via ModelCache (tenant-configured)
+//  3. Static ModelSelector (legacy config / single-tenant fallback)
+//
+// API key redaction: BYOK paths log only the provider + model + a
+// fingerprinted key (llm.RedactAPIKey) — never the raw secret.
+func (f *Factory) resolveModel(ctx context.Context, agentName string) (model.ToolCallingChatModel, string) {
+	if creds := llm.BYOKCredentialsFrom(ctx); creds != nil {
+		client, err := llm.BuildBYOKChatModel(ctx, *creds)
+		if err != nil {
+			slog.ErrorContext(ctx, "byok: build chat model failed",
+				"agent", agentName,
+				"provider", creds.Provider,
+				"model", creds.Model,
+				"api_key", llm.RedactAPIKey(creds.APIKey),
+				"error", err)
+		} else {
+			modelName := creds.Model
+			if modelName == "" {
+				modelName = creds.Provider
+			}
+			slog.InfoContext(ctx, "byok: using user-supplied model",
+				"agent", agentName,
+				"provider", creds.Provider,
+				"model", modelName,
+				"api_key", llm.RedactAPIKey(creds.APIKey))
+			return client, modelName
+		}
+	}
+
 	if f.modelCache != nil && f.agentResolver != nil {
 		modelID := f.agentResolver.ResolveModelID(agentName)
 		if modelID != nil {
-			client, name, err := f.modelCache.Get(context.Background(), *modelID)
+			client, name, err := f.modelCache.Get(ctx, *modelID)
 			if err != nil {
 				slog.Error("failed to resolve model from cache, falling back to selector",
 					"agent", agentName, "model_id", *modelID, "error", err)

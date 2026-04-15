@@ -33,3 +33,5 @@ databaseChangeLog:
       file: migrations/016_v2_mcp_catalog.yaml
   - include:
       file: migrations/017_v2_schema_templates.yaml
+  - include:
+      file: migrations/018_v2_settings_final_shape.yaml
