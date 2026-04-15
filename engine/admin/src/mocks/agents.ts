@@ -28,7 +28,6 @@ export const MOCK_AGENTS: Record<string, AgentDetail> = {
     description: 'Handles customer support queries',
     tools_count: 8,
     has_knowledge: true,
-    kit: 'support',
     model_id: '2',
     system_prompt:
       'You are a helpful support agent for ByteBrew. Your role is to assist users with billing, account, and subscription questions. Always be professional and empathetic. Use available tools to look up account information before responding.',

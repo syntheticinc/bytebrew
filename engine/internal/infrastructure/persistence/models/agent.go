@@ -8,8 +8,6 @@ type AgentModel struct {
 	Name           string    `gorm:"uniqueIndex;not null"`
 	ModelID        *string   `gorm:"type:uuid;index"`
 	SystemPrompt   string    `gorm:"type:text;not null"`
-	Kit            string    `gorm:"type:varchar(255)"`
-	KnowledgePath  string    `gorm:"type:varchar(500)"`
 	Lifecycle      string    `gorm:"type:varchar(20);not null;default:persistent"`
 	ToolExecution  string    `gorm:"type:varchar(20);not null;default:sequential"`
 	MaxSteps       int       `gorm:"not null;default:0"`

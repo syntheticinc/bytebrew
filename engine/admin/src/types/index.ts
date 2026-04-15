@@ -6,7 +6,6 @@ export interface AgentInfo {
   name: string;
   description?: string;
   tools_count: number;
-  kit?: string;
   has_knowledge: boolean;
   is_system?: boolean;
 }
@@ -33,7 +32,6 @@ export interface CreateAgentRequest {
   name: string;
   model_id?: string;
   system_prompt: string;
-  kit?: string;
   lifecycle?: string;
   tool_execution?: string;
   max_steps?: number;

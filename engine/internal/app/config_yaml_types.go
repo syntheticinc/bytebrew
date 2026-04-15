@@ -96,8 +96,6 @@ type agentYAML struct {
 	Name            string          `yaml:"name"`
 	SystemPrompt    string          `yaml:"system_prompt"`
 	ModelName       string          `yaml:"model_name,omitempty"`
-	Kit             string          `yaml:"kit,omitempty"`
-	KnowledgePath   string          `yaml:"knowledge_path,omitempty"`
 	Lifecycle       string          `yaml:"lifecycle"`
 	ToolExecution   string          `yaml:"tool_execution"`
 	MaxSteps        int             `yaml:"max_steps"`
@@ -116,7 +114,6 @@ type agentYAML struct {
 // UnmarshalYAML supports field aliases used in documentation:
 //   - "system" as alias for "system_prompt"
 //   - "model" as alias for "model_name"
-//   - "knowledge" as alias for "knowledge_path"
 func (a *agentYAML) UnmarshalYAML(node *yaml.Node) error {
 	type agentYAMLAlias agentYAML
 	var alias agentYAMLAlias
@@ -135,10 +132,6 @@ func (a *agentYAML) UnmarshalYAML(node *yaml.Node) error {
 			case "model":
 				if alias.ModelName == "" {
 					alias.ModelName = val.Value
-				}
-			case "knowledge":
-				if alias.KnowledgePath == "" {
-					alias.KnowledgePath = val.Value
 				}
 			}
 		}

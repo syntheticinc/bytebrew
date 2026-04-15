@@ -86,7 +86,6 @@ function agentToYaml(agent: AgentDetail): string {
   lines.push(`max_context_size: ${agent.max_context_size}`);
   lines.push(`max_turn_duration: ${agent.max_turn_duration}`);
   lines.push(`public: ${agent.has_knowledge ?? false}`);
-  if (agent.kit) lines.push(`kit: ${agent.kit}`);
 
   lines.push(`system_prompt: |`);
   for (const line of agent.system_prompt.split('\n')) {

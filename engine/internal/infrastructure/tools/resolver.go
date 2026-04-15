@@ -14,7 +14,6 @@ type ToolEventEmitter interface {
 type ToolDependencies struct {
 	SessionID         string
 	AgentName         string
-	KnowledgePath     string
 	ProjectKey        string
 	ProjectRoot       string
 	BackgroundMode    bool // true for cron/webhook/API tasks (no user interaction)

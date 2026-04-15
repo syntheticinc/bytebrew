@@ -176,7 +176,6 @@ function AgentDrillInInner() {
       await api.updateAgent(agentName, {
         system_prompt: agent.system_prompt,
         model_id: agent.model_id,
-        kit: agent.kit,
         lifecycle: agent.lifecycle,
         tool_execution: agent.tool_execution,
         max_steps: agent.max_steps,
@@ -392,17 +391,6 @@ function AgentDrillInInner() {
                 { value: 'spawn', label: 'Spawn' },
               ]}
               hint="Persistent: always running. Spawn: created on-demand by other agents"
-            />
-            <FormField
-              label="Kit"
-              type="select"
-              value={agent?.kit ?? ''}
-              onChange={(v) => updateAgentField('kit', v as string)}
-              options={[
-                { value: '', label: 'None' },
-                { value: 'developer', label: 'Developer' },
-              ]}
-              hint="Pre-built tool kit that adds specialized tools to the agent"
             />
           </div>
         </div>

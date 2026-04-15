@@ -1,0 +1,32 @@
+databaseChangeLog:
+  # V2 Kit + knowledge_path removal — Commit Group J.
+  #
+  # Kit was a never-implemented "domain-specific module" slot — zero kits
+  # were ever registered. V2 Capabilities + MCP Catalog fully supersede it.
+  # See docs/architecture/agent-first-runtime.md and
+  # docs/plan/v2-cleanup-checklist.md (Commit Group J).
+  #
+  # knowledge_path is a pre-capability folder-binding, superseded by
+  # capability Knowledge + the knowledge_base_agents M2M table.
+  #
+  # Clean-schema policy: pure DDL only (DROP COLUMN IF EXISTS).
+  # No data preservation — kit was unused, knowledge_path is replaced
+  # by knowledge_base_agents rows created via capability Knowledge.
+  #
+  # Idempotent: applies cleanly on fresh DBs (no-op) and on pre-V2 DBs
+  # that have the GORM-auto-migrated agents.kit / agents.knowledge_path
+  # columns.
+  - changeSet:
+      id: 011-v2-drop-agent-kit-knowledge-path
+      author: system
+      changes:
+        - sql:
+            sql: |
+              ALTER TABLE agents DROP COLUMN IF EXISTS kit;
+              ALTER TABLE agents DROP COLUMN IF EXISTS knowledge_path;
+      rollback:
+        - sql:
+            sql: |
+              -- Kit + knowledge_path are out of V2 and cannot be restored via Liquibase.
+              -- If rollback is truly needed, restore from a pre-V2 backup.
+              SELECT 1;

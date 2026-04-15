@@ -196,7 +196,6 @@ func toFlow(rec configrepo.AgentRecord) *domain.Flow {
 		ToolExecution:   rec.ToolExecution,
 		Lifecycle:      lifecycle,
 		Spawn:          spawn,
-		KnowledgePath:  rec.KnowledgePath,
 		MCPServers:     rec.MCPServers,
 		ConfirmBefore:  rec.ConfirmBefore,
 		Temperature:    rec.Temperature,

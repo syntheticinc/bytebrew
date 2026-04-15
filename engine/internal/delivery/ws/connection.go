@@ -46,7 +46,6 @@ type PairingDataProvider interface {
 // AgentInfo holds agent metadata for WS list_agents response.
 type AgentInfo struct {
 	Name         string `json:"name"`
-	Kit          string `json:"kit,omitempty"`
 	ToolsCount   int    `json:"tools_count"`
 	HasKnowledge bool   `json:"has_knowledge"`
 }
@@ -483,7 +482,6 @@ func (h *ConnectionHandler) handleListAgents(writer *wsWriter, msg *WsMessage) {
 	for i, a := range agents {
 		agentList[i] = map[string]interface{}{
 			"name":          a.Name,
-			"kit":           a.Kit,
 			"tools_count":   a.ToolsCount,
 			"has_knowledge": a.HasKnowledge,
 		}

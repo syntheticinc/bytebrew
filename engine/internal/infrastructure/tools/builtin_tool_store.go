@@ -46,17 +46,6 @@ func (s *BuiltinToolStore) Names() []string {
 	return names
 }
 
-// KitProvider looks up a kit by name and returns its tools for a session.
-type KitProvider interface {
-	Get(name string) (Kit, error)
-}
-
-// Kit is the consumer-side interface for domain-specific kits.
-type Kit interface {
-	Tools(session domain.KitSession) []tool.InvokableTool
-	PostToolCall(ctx context.Context, session domain.KitSession, toolName string, result string) *domain.Enrichment
-}
-
 // MCPClientProvider provides MCP tools for a given MCP server name.
 // Defined on the consumer side (AgentToolResolver).
 type MCPClientProvider interface {
@@ -94,7 +83,6 @@ type CapabilityConfigReader interface {
 // AgentToolResolver composes tools for a specific agent from various sources.
 type AgentToolResolver struct {
 	builtins                *BuiltinToolStore
-	kitProvider             KitProvider
 	knowledgeSearcher       KnowledgeSearcher
 	knowledgeEmbedder       KnowledgeEmbedder       // global fallback (Ollama)
 	knowledgeEmbedResolver  KnowledgeEmbedderResolver // per-agent from capability config (WP-4)
@@ -118,11 +106,6 @@ func NewAgentToolResolver(builtins *BuiltinToolStore) *AgentToolResolver {
 // BuiltinStore returns the underlying BuiltinToolStore.
 func (r *AgentToolResolver) BuiltinStore() *BuiltinToolStore {
 	return r.builtins
-}
-
-// SetKitProvider configures the kit provider for kit-based tool resolution.
-func (r *AgentToolResolver) SetKitProvider(kp KitProvider) {
-	r.kitProvider = kp
 }
 
 // SetKnowledge configures knowledge search dependencies for auto-injection.
@@ -186,7 +169,6 @@ func (r *AgentToolResolver) SetCapabilityConfigReader(reader CapabilityConfigRea
 type ResolveContext struct {
 	Agent            *agentregistry.RegisteredAgent
 	Deps             ToolDependencies
-	KitSession       *domain.KitSession      // nil if agent has no kit
 	ConfirmRequester ConfirmationRequester    // nil if no confirmation support
 	Spawner          GenericAgentSpawner      // nil if spawn not available
 	Inspector        GenericAgentInspector    // nil if inspect not available
@@ -224,7 +206,7 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 	}
 
 	for _, name := range builtinTools {
-		// knowledge_search is auto-injected below based on KnowledgePath — skip here
+		// knowledge_search is auto-injected below via capability — skip here
 		if name == "knowledge_search" {
 			continue
 		}
@@ -276,7 +258,7 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 		}
 	}
 
-	// Knowledge search — auto-inject when agent has KnowledgePath OR Knowledge capability.
+	// Knowledge search — auto-inject when agent has Knowledge capability.
 	// Priority: 1) ResolveContext deps, 2) per-agent resolver (WP-4), 3) global fallback (Ollama).
 	ks := rc.KnowledgeSearcher
 	ke := rc.KnowledgeEmbedder
@@ -291,9 +273,8 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 	if ke == nil {
 		ke = r.knowledgeEmbedder
 	}
-	hasKnowledgePath := rc.Agent.Record.KnowledgePath != ""
 	hasKnowledgeCap := capInjectedTools["knowledge_search"] // WP-3: capability-injected
-	if (hasKnowledgePath || hasKnowledgeCap) && ks != nil && ke != nil {
+	if hasKnowledgeCap && ks != nil && ke != nil {
 		topK := 5 // domain default
 		var simThreshold float64
 		if r.capConfigReader != nil {
@@ -320,18 +301,10 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 	} else if hasToolInList(rc.Agent.Record.BuiltinTools, "knowledge_search") {
 		slog.WarnContext(ctx, "agent has knowledge_search in tools but knowledge not available — skipping",
 			"agent", rc.Agent.Record.Name,
-			"knowledge_path", rc.Agent.Record.KnowledgePath,
 			"capability_injected", hasKnowledgeCap,
 			"searcher_available", ks != nil,
 			"embedder_available", ke != nil)
 	}
-
-	// Phase 3: Kit tools — append tools provided by the agent's kit
-	kitTools, err := r.resolveKitTools(rc)
-	if err != nil {
-		return nil, fmt.Errorf("resolve kit tools for agent %q: %w", rc.Agent.Record.Name, err)
-	}
-	tools = append(tools, kitTools...)
 
 	// MCP tools — append tools from connected MCP servers configured for this agent.
 	// Circuit breaker (US-006) and recovery (US-005) wrapping happens inside resolveMCPTools.
@@ -387,7 +360,7 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 	var resolved []tool.InvokableTool
 
 	for _, name := range allToolNames {
-		// knowledge_search is auto-injected below based on KnowledgePath — skip here
+		// knowledge_search is auto-injected below via capability — skip here
 		if name == "knowledge_search" {
 			continue
 		}
@@ -417,9 +390,8 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 		resolved = append(resolved, t)
 	}
 
-	// Knowledge auto-injection via legacy Resolve path
+	// Knowledge auto-injection via legacy Resolve path (capability-driven only).
 	// Priority: 1) per-agent resolver (WP-4), 2) global fallback (Ollama).
-	hasKnowledgePathLegacy := deps.KnowledgePath != "" && deps.AgentName != ""
 	hasKnowledgeCapLegacy := capInjectedTools["knowledge_search"] // WP-3: capability-injected
 	legacyEmbedder := KnowledgeEmbedder(r.knowledgeEmbedder)
 	if r.knowledgeEmbedResolver != nil && deps.AgentName != "" {
@@ -427,7 +399,7 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 			legacyEmbedder = resolved
 		}
 	}
-	if (hasKnowledgePathLegacy || hasKnowledgeCapLegacy) && r.knowledgeSearcher != nil && legacyEmbedder != nil {
+	if hasKnowledgeCapLegacy && r.knowledgeSearcher != nil && legacyEmbedder != nil {
 		legacyTopK := 5 // domain default
 		var legacySimThreshold float64
 		if r.capConfigReader != nil && deps.AgentName != "" {
@@ -454,7 +426,6 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 	} else if hasToolInList(allToolNames, "knowledge_search") {
 		slog.WarnContext(ctx, "knowledge_search in tool list but knowledge not available — skipping",
 			"agent", deps.AgentName,
-			"knowledge_path", deps.KnowledgePath,
 			"capability_injected", hasKnowledgeCapLegacy)
 	}
 
@@ -523,21 +494,6 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 	}
 
 	return resolved, nil
-}
-
-// resolveKitTools returns tools from the agent's kit, if configured.
-func (r *AgentToolResolver) resolveKitTools(rc ResolveContext) ([]tool.InvokableTool, error) {
-	kitName := rc.Agent.Record.Kit
-	if kitName == "" || r.kitProvider == nil || rc.KitSession == nil {
-		return nil, nil
-	}
-
-	kit, err := r.kitProvider.Get(kitName)
-	if err != nil {
-		return nil, fmt.Errorf("get kit %q: %w", kitName, err)
-	}
-
-	return kit.Tools(*rc.KitSession), nil
 }
 
 // resolveMCPTools returns tools from MCP servers configured for the agent.

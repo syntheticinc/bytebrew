@@ -44,7 +44,7 @@ func newAgentRouter(handler *AgentHandler) *chi.Mux {
 
 func TestAgentHandler_List(t *testing.T) {
 	agents := []AgentInfo{
-		{Name: "sales", Description: "Sales agent", ToolsCount: 5, Kit: "crm"},
+		{Name: "sales", Description: "Sales agent", ToolsCount: 5},
 		{Name: "coder", ToolsCount: 3, HasKnowledge: true},
 	}
 	handler := NewAgentHandler(&mockAgentLister{agents: agents})

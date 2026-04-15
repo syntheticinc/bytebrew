@@ -30,7 +30,6 @@ type Flow struct {
 	ToolExecution   string // "sequential" or "parallel"
 	Lifecycle      LifecyclePolicy
 	Spawn          SpawnPolicy
-	KnowledgePath  string   // path to knowledge folder for RAG
 	MCPServers     []string // MCP server names configured for this agent
 	ConfirmBefore  []string  // tools requiring user confirmation before execution
 	Temperature    *float64 // per-agent LLM temperature override (nil = use model default)

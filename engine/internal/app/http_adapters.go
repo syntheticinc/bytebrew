@@ -56,8 +56,6 @@ func (a *agentListerHTTPAdapter) ListAgents(_ context.Context) ([]deliveryhttp.A
 		result = append(result, deliveryhttp.AgentInfo{
 			Name:         agent.Record.Name,
 			ToolsCount:   len(agent.Record.BuiltinTools) + len(agent.Record.CustomTools),
-			Kit:          agent.Record.Kit,
-			HasKnowledge: agent.Record.KnowledgePath != "",
 		})
 	}
 	return result, nil
@@ -78,13 +76,10 @@ func (a *agentListerHTTPAdapter) GetAgent(_ context.Context, name string) (*deli
 		AgentInfo: deliveryhttp.AgentInfo{
 			Name:         rec.Name,
 			ToolsCount:   len(tools),
-			Kit:          rec.Kit,
-			HasKnowledge: rec.KnowledgePath != "",
 			IsSystem:     rec.IsSystem,
 		},
 		ModelID:         rec.ModelID,
 		SystemPrompt:    rec.SystemPrompt,
-		KnowledgePath:   rec.KnowledgePath,
 		Tools:           tools,
 		CanSpawn:        rec.CanSpawn,
 		Lifecycle:       rec.Lifecycle,
@@ -324,12 +319,8 @@ func (a *knowledgeReindexerHTTPAdapter) Reindex(ctx context.Context, agentName s
 	if err != nil {
 		return fmt.Errorf("agent not found: %s", agentName)
 	}
-	if agent.Record.KnowledgePath == "" {
-		return fmt.Errorf("agent %s has no knowledge_path configured", agentName)
-	}
-	slog.InfoContext(ctx, "starting knowledge reindex",
-		"agent", agentName, "path", agent.Record.KnowledgePath)
-	return a.indexer.IndexFolder(ctx, agentName, agent.Record.KnowledgePath)
+	_ = agent
+	return fmt.Errorf("agent %s: legacy knowledge_path reindex is no longer supported; use capability Knowledge + knowledge base instead", agentName)
 }
 
 // chatServiceHTTPAdapter and chatTriggerCheckerAdapter live in chat_http_adapter.go.

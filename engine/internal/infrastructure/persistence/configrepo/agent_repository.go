@@ -16,8 +16,6 @@ type AgentRecord struct {
 	ModelID         *string
 	ModelName       string
 	SystemPrompt    string
-	Kit             string
-	KnowledgePath   string
 	Lifecycle       string
 	ToolExecution   string
 	MaxSteps        int
@@ -173,8 +171,6 @@ func (r *GORMAgentRepository) Update(ctx context.Context, name string, record *A
 			"name":             agent.Name,
 			"model_id":         agent.ModelID,
 			"system_prompt":    agent.SystemPrompt,
-			"kit":              agent.Kit,
-			"knowledge_path":   agent.KnowledgePath,
 			"lifecycle":        agent.Lifecycle,
 			"tool_execution":   agent.ToolExecution,
 			"max_steps":        agent.MaxSteps,
@@ -242,8 +238,6 @@ func toAgentRecord(a models.AgentModel) (AgentRecord, error) {
 	rec := AgentRecord{
 		Name:           a.Name,
 		SystemPrompt:   a.SystemPrompt,
-		Kit:            a.Kit,
-		KnowledgePath:  a.KnowledgePath,
 		Lifecycle:      a.Lifecycle,
 		ToolExecution:  a.ToolExecution,
 		MaxSteps:        a.MaxSteps,
@@ -312,8 +306,6 @@ func (r *GORMAgentRepository) toAgentModelWithDB(db *gorm.DB, rec *AgentRecord) 
 	agent := models.AgentModel{
 		Name:           rec.Name,
 		SystemPrompt:   rec.SystemPrompt,
-		Kit:            rec.Kit,
-		KnowledgePath:  rec.KnowledgePath,
 		Lifecycle:      rec.Lifecycle,
 		ToolExecution:  rec.ToolExecution,
 		MaxSteps:        rec.MaxSteps,

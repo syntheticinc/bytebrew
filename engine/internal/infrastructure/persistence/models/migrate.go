@@ -45,6 +45,23 @@ func AutoMigrate(db *gorm.DB) error {
 		slog.Warn("[Migration] dropping legacy escalation tables failed (may already be absent)", "error", err)
 	}
 
+	// V2 Kit + knowledge_path removal: Kit was a never-implemented slot, superseded
+	// by V2 Capabilities + MCP Catalog. knowledge_path is superseded by capability
+	// Knowledge + knowledge_base_agents M2M. See §5.* and Commit Group J.
+	// Defense-in-depth alongside Liquibase 011 — idempotent DropColumn.
+	if db.Migrator().HasTable("agents") {
+		if db.Migrator().HasColumn("agents", "kit") {
+			if err := db.Migrator().DropColumn("agents", "kit"); err != nil {
+				slog.Warn("[Migration] dropping legacy agents.kit column failed (may already be absent)", "error", err)
+			}
+		}
+		if db.Migrator().HasColumn("agents", "knowledge_path") {
+			if err := db.Migrator().DropColumn("agents", "knowledge_path"); err != nil {
+				slog.Warn("[Migration] dropping legacy agents.knowledge_path column failed (may already be absent)", "error", err)
+			}
+		}
+	}
+
 	if err := db.AutoMigrate(
 		// Config tables (9)
 		&AgentModel{},

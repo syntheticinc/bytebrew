@@ -73,8 +73,6 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			name TEXT NOT NULL UNIQUE,
 			model_id TEXT REFERENCES models(id),
 			system_prompt TEXT NOT NULL,
-			kit VARCHAR(255),
-			knowledge_path VARCHAR(500),
 			lifecycle VARCHAR(20) NOT NULL DEFAULT 'persistent',
 			tool_execution VARCHAR(20) NOT NULL DEFAULT 'sequential',
 			max_steps INTEGER NOT NULL DEFAULT 0,

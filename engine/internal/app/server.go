@@ -36,7 +36,6 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/indexing"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/knowledge"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/kit"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/mcp"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
@@ -329,10 +328,6 @@ func Run(sc ServerConfig) error {
 		return fmt.Errorf("create infrastructure components: %w", err)
 	}
 
-	// Create KitRegistry (kits will be registered when implemented).
-	kitRegistry := kit.NewRegistry()
-	slog.InfoContext(ctx, "Kit registry initialized", "kits", kitRegistry.List())
-
 	// Knowledge indexing infrastructure (created before HTTP so endpoints can use it)
 	var knowledgeRepo *configrepo.GORMKnowledgeRepository
 	var knowledgeIndexer *knowledge.Indexer
@@ -359,27 +354,6 @@ func Run(sc ServerConfig) error {
 			embedDim,
 		)
 		knowledgeIndexer = knowledge.NewIndexer(embeddingsClient, knowledgeRepo, slog.Default())
-
-		// Background indexing for agents with KnowledgePath on startup
-		if agentRegistry != nil {
-			for _, name := range agentRegistry.List() {
-				agent, err := agentRegistry.Get(name)
-				if err != nil || agent.Record.KnowledgePath == "" {
-					continue
-				}
-				agentName := name
-				folderPath := agent.Record.KnowledgePath
-				go func() {
-					bgCtx := context.Background()
-					slog.InfoContext(bgCtx, "starting background knowledge indexing",
-						"agent", agentName, "path", folderPath)
-					if err := knowledgeIndexer.IndexFolder(bgCtx, agentName, folderPath); err != nil {
-						slog.ErrorContext(bgCtx, "background knowledge indexing failed",
-							"agent", agentName, "error", err)
-					}
-				}()
-			}
-		}
 	}
 
 	// Initialize MCP client connections from database
@@ -1116,7 +1090,6 @@ func Run(sc ServerConfig) error {
 		// NOTE: HTTP server start is deferred until after SessionProcessor is created,
 		// so the chat endpoint can be wired with all required dependencies.
 	}
-	_ = kitRegistry // available for Kit resolution in AgentToolResolver
 
 	// Initialize gRPC server.
 	// When HTTP REST API is active (bootstrap mode), gRPC uses a random port

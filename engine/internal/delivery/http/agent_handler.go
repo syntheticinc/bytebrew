@@ -18,7 +18,6 @@ type AgentInfo struct {
 	Name           string   `json:"name"`
 	Description    string   `json:"description,omitempty"`
 	ToolsCount     int      `json:"tools_count"`
-	Kit            string   `json:"kit,omitempty"`
 	HasKnowledge   bool     `json:"has_knowledge"`
 	IsSystem       bool     `json:"is_system,omitempty"`
 	UsedInSchemas  []string `json:"used_in_schemas,omitempty"`
@@ -29,7 +28,6 @@ type AgentDetail struct {
 	AgentInfo
 	ModelID        *string          `json:"model_id,omitempty"`
 	SystemPrompt   string           `json:"system_prompt"`
-	KnowledgePath  string           `json:"knowledge_path,omitempty"`
 	Tools          []string         `json:"tools"`
 	CanSpawn       []string         `json:"can_spawn,omitempty"`
 	Lifecycle      string           `json:"lifecycle"`
@@ -52,8 +50,6 @@ type CreateAgentRequest struct {
 	Model          string           `json:"model,omitempty"`
 	ModelID        *string          `json:"model_id,omitempty"`
 	SystemPrompt   string           `json:"system_prompt"`
-	Kit            string           `json:"kit,omitempty"`
-	KnowledgePath  string           `json:"knowledge_path,omitempty"`
 	Lifecycle      string           `json:"lifecycle,omitempty"`
 	ToolExecution  string           `json:"tool_execution,omitempty"`
 	MaxSteps        int              `json:"max_steps,omitempty"`

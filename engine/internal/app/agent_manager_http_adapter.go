@@ -35,8 +35,6 @@ func (a *agentManagerHTTPAdapter) ListAgents(ctx context.Context) ([]deliveryhtt
 		info := deliveryhttp.AgentInfo{
 			Name:         rec.Name,
 			ToolsCount:   len(rec.BuiltinTools) + len(rec.CustomTools),
-			Kit:          rec.Kit,
-			HasKnowledge: rec.KnowledgePath != "",
 			IsSystem:     rec.IsSystem,
 		}
 		if a.schemaRepo != nil {
@@ -64,12 +62,9 @@ func (a *agentManagerHTTPAdapter) GetAgent(ctx context.Context, name string) (*d
 		AgentInfo: deliveryhttp.AgentInfo{
 			Name:         rec.Name,
 			ToolsCount:   len(tools),
-			Kit:          rec.Kit,
-			HasKnowledge: rec.KnowledgePath != "",
 			IsSystem:     rec.IsSystem,
 		},
 		SystemPrompt:    rec.SystemPrompt,
-		KnowledgePath:   rec.KnowledgePath,
 		Tools:           tools,
 		CanSpawn:        rec.CanSpawn,
 		Lifecycle:       rec.Lifecycle,
@@ -214,8 +209,6 @@ func (a *agentManagerHTTPAdapter) toAgentRecord(req deliveryhttp.CreateAgentRequ
 	rec := &configrepo.AgentRecord{
 		Name:            req.Name,
 		SystemPrompt:    req.SystemPrompt,
-		Kit:             req.Kit,
-		KnowledgePath:   req.KnowledgePath,
 		Lifecycle:       req.Lifecycle,
 		ToolExecution:   req.ToolExecution,
 		MaxSteps:        req.MaxSteps,

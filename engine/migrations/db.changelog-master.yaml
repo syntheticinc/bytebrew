@@ -19,3 +19,5 @@ databaseChangeLog:
       file: migrations/009_v2_drop_gates.yaml
   - include:
       file: migrations/010_v2_drop_escalation.yaml
+  - include:
+      file: migrations/011_v2_drop_agent_kit_knowledge_path.yaml

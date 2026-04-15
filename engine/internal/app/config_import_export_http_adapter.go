@@ -89,8 +89,6 @@ func (a *configImportExportHTTPAdapter) exportAgents(_ context.Context) ([]agent
 		ay := agentYAML{
 			Name:            ag.Name,
 			SystemPrompt:    ag.SystemPrompt,
-			Kit:             ag.Kit,
-			KnowledgePath:   ag.KnowledgePath,
 			Lifecycle:       ag.Lifecycle,
 			ToolExecution:   ag.ToolExecution,
 			MaxSteps:        ag.MaxSteps,
@@ -374,8 +372,6 @@ func (a *configImportExportHTTPAdapter) importAgents(tx *gorm.DB, items []agentY
 		if err == nil {
 			existing.SystemPrompt = ag.SystemPrompt
 			existing.ModelID = modelID
-			existing.Kit = ag.Kit
-			existing.KnowledgePath = ag.KnowledgePath
 			existing.Lifecycle = ag.Lifecycle
 			existing.ToolExecution = ag.ToolExecution
 			existing.MaxSteps = ag.MaxSteps
@@ -405,8 +401,6 @@ func (a *configImportExportHTTPAdapter) importAgents(tx *gorm.DB, items []agentY
 			Name:            ag.Name,
 			SystemPrompt:    ag.SystemPrompt,
 			ModelID:         modelID,
-			Kit:             ag.Kit,
-			KnowledgePath:   ag.KnowledgePath,
 			Lifecycle:       ag.Lifecycle,
 			ToolExecution:   ag.ToolExecution,
 			MaxSteps:        ag.MaxSteps,

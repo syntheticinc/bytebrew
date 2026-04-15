@@ -214,8 +214,6 @@ CREATE TABLE agents (
 	name TEXT NOT NULL,
 	model_id TEXT,
 	system_prompt TEXT,
-	kit TEXT,
-	knowledge_path TEXT,
 	lifecycle TEXT,
 	tool_execution TEXT,
 	max_steps INTEGER,

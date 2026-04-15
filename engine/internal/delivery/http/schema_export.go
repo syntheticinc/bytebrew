@@ -25,7 +25,6 @@ type SchemaYAML struct {
 type AgentYAML struct {
 	Name            string   `yaml:"name"`
 	SystemPrompt    string   `yaml:"system_prompt,omitempty"`
-	Kit             string   `yaml:"kit,omitempty"`
 	Lifecycle       string   `yaml:"lifecycle,omitempty"`
 	ToolExecution   string   `yaml:"tool_execution,omitempty"`
 	MaxSteps        int      `yaml:"max_steps,omitempty"`
@@ -105,7 +104,6 @@ func (h *SchemaHandler) ExportSchema(w http.ResponseWriter, r *http.Request) {
 					"agent", agentName, "error", detailErr)
 			} else {
 				agentYAML.SystemPrompt = detail.SystemPrompt
-				agentYAML.Kit = detail.Kit
 				agentYAML.Lifecycle = detail.Lifecycle
 				agentYAML.ToolExecution = detail.ToolExecution
 				agentYAML.MaxSteps = detail.MaxSteps

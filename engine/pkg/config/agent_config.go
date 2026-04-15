@@ -9,8 +9,6 @@ type AgentDefinition struct {
 	SystemPrompt     string              `mapstructure:"system_prompt"`
 	SystemPromptFile string              `mapstructure:"system_prompt_file"`
 	Tools            AgentToolsConfig    `mapstructure:"tools"`
-	Kit              string              `mapstructure:"kit"`
-	Knowledge        string              `mapstructure:"knowledge"`
 	ConfirmBefore    []string            `mapstructure:"confirm_before"`
 	CanSpawn         []string            `mapstructure:"can_spawn"`
 	Lifecycle        string              `mapstructure:"lifecycle"`
