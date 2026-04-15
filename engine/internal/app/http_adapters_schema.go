@@ -103,29 +103,9 @@ func (a *schemaServiceHTTPAdapter) DeleteSchema(ctx context.Context, id string) 
 	return nil
 }
 
-func (a *schemaServiceHTTPAdapter) AddSchemaAgent(ctx context.Context, schemaID string, agentName string) error {
-	if err := a.repo.AddAgent(ctx, schemaID, agentName); err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pkgerrors.NotFound(fmt.Sprintf("agent not found: %s", agentName))
-		}
-		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "UNIQUE constraint") {
-			return pkgerrors.AlreadyExists(fmt.Sprintf("agent %q already in schema", agentName))
-		}
-		return fmt.Errorf("add agent to schema: %w", err)
-	}
-	return nil
-}
-
-func (a *schemaServiceHTTPAdapter) RemoveSchemaAgent(ctx context.Context, schemaID string, agentName string) error {
-	if err := a.repo.RemoveAgent(ctx, schemaID, agentName); err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pkgerrors.NotFound(fmt.Sprintf("agent %q not in schema %s", agentName, schemaID))
-		}
-		return fmt.Errorf("remove agent from schema: %w", err)
-	}
-	return nil
-}
-
+// ListSchemaAgents returns the derived membership list for a schema (V2:
+// union of source/target agents in agent_relations — see
+// docs/architecture/agent-first-runtime.md §2.1).
 func (a *schemaServiceHTTPAdapter) ListSchemaAgents(ctx context.Context, schemaID string) ([]string, error) {
 	names, err := a.repo.ListAgents(ctx, schemaID)
 	if err != nil {

@@ -3,6 +3,10 @@ package models
 import "time"
 
 // SchemaModel maps to the "schemas" table.
+//
+// V2: schema membership is derived from `agent_relations` (see
+// docs/architecture/agent-first-runtime.md §2.1) — there is no
+// `schema_agents` join table.
 type SchemaModel struct {
 	ID          string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	Name        string    `gorm:"uniqueIndex;not null;type:varchar(255)"`
@@ -13,13 +17,3 @@ type SchemaModel struct {
 }
 
 func (SchemaModel) TableName() string { return "schemas" }
-
-// SchemaAgentModel maps to the "schema_agents" join table (many-to-many: schema <-> agent).
-type SchemaAgentModel struct {
-	ID       string `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
-	SchemaID string `gorm:"type:uuid;not null;uniqueIndex:idx_schema_agent"`
-	AgentID  string `gorm:"type:uuid;not null;uniqueIndex:idx_schema_agent"`
-	Position int    `gorm:"not null;default:0"` // ordering on canvas
-}
-
-func (SchemaAgentModel) TableName() string { return "schema_agents" }

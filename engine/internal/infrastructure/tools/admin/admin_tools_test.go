@@ -145,35 +145,6 @@ func (m *mockSchemaRepo) Delete(_ context.Context, id string) error {
 	return nil
 }
 
-func (m *mockSchemaRepo) AddAgent(_ context.Context, schemaID string, agentName string) error {
-	if m.err != nil {
-		return m.err
-	}
-	s, ok := m.schemas[schemaID]
-	if !ok {
-		return fmt.Errorf("schema not found: %s", schemaID)
-	}
-	s.AgentNames = append(s.AgentNames, agentName)
-	return nil
-}
-
-func (m *mockSchemaRepo) RemoveAgent(_ context.Context, schemaID string, agentName string) error {
-	if m.err != nil {
-		return m.err
-	}
-	s, ok := m.schemas[schemaID]
-	if !ok {
-		return fmt.Errorf("schema not found: %s", schemaID)
-	}
-	for i, n := range s.AgentNames {
-		if n == agentName {
-			s.AgentNames = append(s.AgentNames[:i], s.AgentNames[i+1:]...)
-			return nil
-		}
-	}
-	return fmt.Errorf("agent not found in schema: %s", agentName)
-}
-
 type mockAgentRelationRepo struct {
 	relations map[string]*AgentRelationRecord
 	nextID    int
@@ -558,30 +529,11 @@ func TestAdminDeleteSchema_NotFound(t *testing.T) {
 	assert.Contains(t, result, "not found")
 }
 
-// --- Schema-agent wiring tests ---
-
-func TestAdminAddAgentToSchema_Success(t *testing.T) {
-	repo := newMockSchemaRepo()
-	repo.schemas["schema-1"] = &SchemaRecord{ID: "schema-1", Name: "test"}
-	reloader, count := newReloaderCounter()
-	tool := NewAdminAddAgentToSchemaTool(repo, reloader)
-	args, _ := json.Marshal(schemaAgentArgs{SchemaID: "schema-1", AgentName: "my-agent"})
-	result, err := tool.InvokableRun(context.Background(), string(args))
-	require.NoError(t, err)
-	assert.Contains(t, result, "added")
-	assert.Equal(t, int32(1), count.Load())
-	assert.Contains(t, repo.schemas["schema-1"].AgentNames, "my-agent")
-}
-
-func TestAdminRemoveAgentFromSchema_NotFound(t *testing.T) {
-	repo := newMockSchemaRepo()
-	repo.schemas["schema-1"] = &SchemaRecord{ID: "schema-1", Name: "test"}
-	tool := NewAdminRemoveAgentFromSchemaTool(repo, nil)
-	args, _ := json.Marshal(schemaAgentArgs{SchemaID: "schema-1", AgentName: "nonexistent"})
-	result, err := tool.InvokableRun(context.Background(), string(args))
-	require.NoError(t, err)
-	assert.Contains(t, result, "not found")
-}
+// V2: schema membership is derived from agent_relations
+// (docs/architecture/agent-first-runtime.md §2.1). Adding/removing an agent
+// to/from a schema is done by creating/deleting an agent_relation, covered
+// by TestAdminCreateAgentRelation_Success below — there is no separate
+// admin_add_agent_to_schema / admin_remove_agent_from_schema tool.
 
 // --- Agent relation tool tests ---
 
@@ -724,7 +676,9 @@ func TestRegisterAdminTools_RegistersAllTools(t *testing.T) {
 	expectedTools := []string{
 		"admin_list_agents", "admin_get_agent", "admin_create_agent", "admin_update_agent", "admin_delete_agent",
 		"admin_list_schemas", "admin_get_schema", "admin_create_schema", "admin_update_schema", "admin_delete_schema",
-		"admin_add_agent_to_schema", "admin_remove_agent_from_schema",
+		// V2: admin_add_agent_to_schema / admin_remove_agent_from_schema removed
+		// (docs/architecture/agent-first-runtime.md §2.1) — schema membership is
+		// derived from agent_relations and managed via the relation tools below.
 		"admin_list_agent_relations", "admin_create_agent_relation", "admin_delete_agent_relation",
 		"admin_list_triggers", "admin_create_trigger", "admin_update_trigger", "admin_delete_trigger",
 		"admin_list_mcp_servers", "admin_create_mcp_server", "admin_update_mcp_server", "admin_delete_mcp_server",
@@ -778,7 +732,12 @@ func (m *mockMCPServerRepo) Delete(_ context.Context, _ string) error           
 
 // --- Workflow integration test ---
 
-func TestWorkflow_CreateSchemaWithAgentsAndEdges(t *testing.T) {
+// TestWorkflow_CreateSchemaWithAgentsAndRelations exercises the V2
+// schema-build workflow: create agents, create schema, then create a
+// delegation relation that simultaneously expresses membership
+// (docs/architecture/agent-first-runtime.md §2.1 — schema membership is
+// derived from agent_relations).
+func TestWorkflow_CreateSchemaWithAgentsAndRelations(t *testing.T) {
 	ctx := context.Background()
 	agentRepo := newMockAgentRepo()
 	schemaRepo := newMockSchemaRepo()
@@ -804,29 +763,20 @@ func TestWorkflow_CreateSchemaWithAgentsAndEdges(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, result, "created")
 
-	// Step 3: Add agents to schema.
-	addAgent := NewAdminAddAgentToSchemaTool(schemaRepo, reloader)
-	args, _ = json.Marshal(schemaAgentArgs{SchemaID: "schema-1", AgentName: "router"})
-	_, err = addAgent.InvokableRun(ctx, string(args))
-	require.NoError(t, err)
-
-	args, _ = json.Marshal(schemaAgentArgs{SchemaID: "schema-1", AgentName: "worker"})
-	_, err = addAgent.InvokableRun(ctx, string(args))
-	require.NoError(t, err)
-
-	// Step 4: Create agent relation.
+	// Step 3: Create an agent relation. Both endpoints become schema
+	// members implicitly via the relation row.
 	createRelation := NewAdminCreateAgentRelationTool(relationRepo, reloader)
 	args, _ = json.Marshal(createAgentRelationArgs{SchemaID: "schema-1", FromAgent: "router", ToAgent: "worker"})
 	result, err = createRelation.InvokableRun(ctx, string(args))
 	require.NoError(t, err)
 	assert.Contains(t, result, "Agent relation created")
 
-	// Verify: 2 agents, 1 schema with 2 agents, 1 relation, reloader called 6 times.
+	// Verify: 2 agents, 1 schema, 1 relation, reloader called 4 times
+	// (2 agent creates + 1 schema create + 1 relation create).
 	assert.Len(t, agentRepo.agents, 2)
-	assert.Contains(t, schemaRepo.schemas["schema-1"].AgentNames, "router")
-	assert.Contains(t, schemaRepo.schemas["schema-1"].AgentNames, "worker")
+	assert.Len(t, schemaRepo.schemas, 1)
 	assert.Len(t, relationRepo.relations, 1)
-	assert.Equal(t, int32(6), reloadCount.Load())
+	assert.Equal(t, int32(4), reloadCount.Load())
 }
 
 // --- Invalid JSON test ---

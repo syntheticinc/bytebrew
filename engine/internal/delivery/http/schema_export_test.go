@@ -72,16 +72,14 @@ func (m *mockSchemaService) DeleteSchema(_ context.Context, _ string) error {
 	return nil
 }
 
-func (m *mockSchemaService) AddSchemaAgent(_ context.Context, schemaID string, agentName string) error {
-	if m.addAgentErr != nil {
-		return m.addAgentErr
-	}
+// addSchemaAgent is a test-only helper that records membership in the
+// mock. V2 production code derives membership from agent_relations
+// (docs/architecture/agent-first-runtime.md §2.1); the test wires this
+// helper in places that historically called AddSchemaAgent so the
+// remaining export-side assertions still have a known bag of agent names
+// to compare against.
+func (m *mockSchemaService) addSchemaAgent(schemaID string, agentName string) {
 	m.agents[schemaID] = append(m.agents[schemaID], agentName)
-	return nil
-}
-
-func (m *mockSchemaService) RemoveSchemaAgent(_ context.Context, _ string, _ string) error {
-	return nil
 }
 
 func (m *mockSchemaService) ListSchemaAgents(_ context.Context, schemaID string) ([]string, error) {
@@ -169,8 +167,8 @@ func TestExportSchema_Basic(t *testing.T) {
 		Name:        "support-schema",
 		Description: "Customer support pipeline",
 	})
-	schemaSvc.AddSchemaAgent(context.Background(), schema.ID, "classifier")
-	schemaSvc.AddSchemaAgent(context.Background(), schema.ID, "support-agent")
+	schemaSvc.addSchemaAgent(schema.ID, "classifier")
+	schemaSvc.addSchemaAgent(schema.ID, "support-agent")
 
 	agentDetailer.agents["classifier"] = &AgentDetail{
 		AgentInfo:    AgentInfo{Name: "classifier"},
@@ -233,7 +231,7 @@ func TestExportSchema_NotFound(t *testing.T) {
 func TestExportSchema_WithoutAgentDetailer(t *testing.T) {
 	schemaSvc := newMockSchemaService()
 	schema, _ := schemaSvc.CreateSchema(context.Background(), CreateSchemaRequest{Name: "minimal"})
-	schemaSvc.AddSchemaAgent(context.Background(), schema.ID, "agent-a")
+	schemaSvc.addSchemaAgent(schema.ID, "agent-a")
 
 	handler := NewSchemaHandler(schemaSvc, newMockAgentRelationService())
 	// Do NOT set agent detailer
@@ -289,11 +287,10 @@ agent_relations:
 	assert.Equal(t, "imported-schema", createdSchema.Name)
 	assert.Equal(t, "Imported from YAML", createdSchema.Description)
 
-	// Verify agents added
-	agents := schemaSvc.agents[createdSchema.ID]
-	assert.ElementsMatch(t, []string{"agent-a", "agent-b"}, agents)
-
-	// Verify agent relations created
+	// V2: schema membership is derived from agent_relations
+	// (docs/architecture/agent-first-runtime.md §2.1). The YAML "agents:"
+	// list itself adds no membership; only relations do. The single
+	// imported relation expresses both endpoints as members.
 	rels := relationSvc.relations[createdSchema.ID]
 	require.Len(t, rels, 1)
 	assert.Equal(t, "agent-a", rels[0].SourceAgentName)
@@ -345,8 +342,8 @@ func TestRoundTrip_ExportImport(t *testing.T) {
 		Name:        "roundtrip-schema",
 		Description: "Round trip test",
 	})
-	srcSchemaSvc.AddSchemaAgent(context.Background(), schema.ID, "agent-x")
-	srcSchemaSvc.AddSchemaAgent(context.Background(), schema.ID, "agent-y")
+	srcSchemaSvc.addSchemaAgent(schema.ID, "agent-x")
+	srcSchemaSvc.addSchemaAgent(schema.ID, "agent-y")
 	srcRelationSvc.relations[schema.ID] = []AgentRelationInfo{
 		{ID: "1", SchemaID: schema.ID, SourceAgentName: "agent-x", TargetAgentName: "agent-y"},
 	}
@@ -383,11 +380,10 @@ func TestRoundTrip_ExportImport(t *testing.T) {
 	assert.Equal(t, "roundtrip-schema", importedSchema.Name)
 	assert.Equal(t, "Round trip test", importedSchema.Description)
 
-	// Agents
-	agents := dstSchemaSvc.agents[importedSchema.ID]
-	assert.ElementsMatch(t, []string{"agent-x", "agent-y"}, agents)
-
-	// Agent relations
+	// V2: schema membership is derived from agent_relations
+	// (docs/architecture/agent-first-runtime.md §2.1). After round-trip
+	// the imported schema has only the single delegation relation; both
+	// endpoints are implicit members.
 	rels := dstRelationSvc.relations[importedSchema.ID]
 	require.Len(t, rels, 1)
 	assert.Equal(t, "agent-x", rels[0].SourceAgentName)

@@ -47,13 +47,10 @@ func RegisterAdminTools(store *tools.BuiltinToolStore, deps AdminToolDependencie
 		return NewAdminDeleteSchemaTool(deps.SchemaRepo, reloader)
 	})
 
-	// Schema-agent wiring tools
-	store.Register("admin_add_agent_to_schema", func(_ tools.ToolDependencies) tool.InvokableTool {
-		return NewAdminAddAgentToSchemaTool(deps.SchemaRepo, reloader)
-	})
-	store.Register("admin_remove_agent_from_schema", func(_ tools.ToolDependencies) tool.InvokableTool {
-		return NewAdminRemoveAgentFromSchemaTool(deps.SchemaRepo, reloader)
-	})
+	// V2: schema membership is derived from agent_relations (see
+	// docs/architecture/agent-first-runtime.md §2.1) — admin agents add a
+	// member to a schema by creating a delegation relation via the
+	// agent_relation tools below.
 
 	// AgentRelation tools (V2: edges→agent_relations, single implicit DELEGATION type)
 	store.Register("admin_list_agent_relations", func(_ tools.ToolDependencies) tool.InvokableTool {

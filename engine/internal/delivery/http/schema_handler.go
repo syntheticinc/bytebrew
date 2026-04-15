@@ -34,11 +34,6 @@ type UpdateSchemaRequest struct {
 	Description string `json:"description,omitempty"`
 }
 
-// AddSchemaAgentRequest is the body for POST /api/v1/schemas/{id}/agents.
-type AddSchemaAgentRequest struct {
-	AgentName string `json:"agent_name"`
-}
-
 // --- AgentRelation DTOs ---
 
 // AgentRelationInfo is an agent_relation returned in API responses.
@@ -64,14 +59,17 @@ type CreateAgentRelationRequest struct {
 // --- Service interfaces (consumer-side) ---
 
 // SchemaService provides schema CRUD operations.
+//
+// V2: schema membership is derived from `agent_relations` (see
+// docs/architecture/agent-first-runtime.md §2.1) — there is no separate
+// AddSchemaAgent / RemoveSchemaAgent surface. Adding an agent to a schema
+// is done by creating a delegation relation through AgentRelationService.
 type SchemaService interface {
 	ListSchemas(ctx context.Context) ([]SchemaInfo, error)
 	GetSchema(ctx context.Context, id string) (*SchemaInfo, error)
 	CreateSchema(ctx context.Context, req CreateSchemaRequest) (*SchemaInfo, error)
 	UpdateSchema(ctx context.Context, id string, req UpdateSchemaRequest) error
 	DeleteSchema(ctx context.Context, id string) error
-	AddSchemaAgent(ctx context.Context, schemaID string, agentName string) error
-	RemoveSchemaAgent(ctx context.Context, schemaID string, agentName string) error
 	ListSchemaAgents(ctx context.Context, schemaID string) ([]string, error)
 }
 
@@ -114,10 +112,10 @@ func (h *SchemaHandler) Routes() http.Handler {
 	r.Put("/{id}", h.UpdateSchema)
 	r.Delete("/{id}", h.DeleteSchema)
 
-	// Schema-Agent refs
+	// Schema-Agent membership (read-only — derived from agent_relations).
+	// Mutation is done via the agent-relations endpoints below
+	// (docs/architecture/agent-first-runtime.md §2.1).
 	r.Get("/{id}/agents", h.ListSchemaAgents)
-	r.Post("/{id}/agents", h.AddSchemaAgent)
-	r.Delete("/{id}/agents/{name}", h.RemoveSchemaAgent)
 
 	// Agent relations (per-schema)
 	r.Get("/{id}/agent-relations", h.ListAgentRelations)
@@ -223,50 +221,6 @@ func (h *SchemaHandler) ListSchemaAgents(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeJSON(w, http.StatusOK, agents)
-}
-
-func (h *SchemaHandler) AddSchemaAgent(w http.ResponseWriter, r *http.Request) {
-	id, err := parseStringParam(r, "id")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	var req AddSchemaAgentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %s", err.Error()))
-		return
-	}
-	if req.AgentName == "" {
-		writeJSONError(w, http.StatusBadRequest, "agent_name is required")
-		return
-	}
-
-	if err := h.schemas.AddSchemaAgent(r.Context(), id, req.AgentName); err != nil {
-		writeDomainError(w, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (h *SchemaHandler) RemoveSchemaAgent(w http.ResponseWriter, r *http.Request) {
-	id, err := parseStringParam(r, "id")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	name := chi.URLParam(r, "name")
-	if name == "" {
-		writeJSONError(w, http.StatusBadRequest, "agent name is required")
-		return
-	}
-
-	if err := h.schemas.RemoveSchemaAgent(r.Context(), id, name); err != nil {
-		writeDomainError(w, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // --- AgentRelation endpoints ---

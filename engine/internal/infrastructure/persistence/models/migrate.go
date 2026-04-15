@@ -77,6 +77,15 @@ func AutoMigrate(db *gorm.DB) error {
 		}
 	}
 
+	// V2 schema_agents removal (Commit Group F).
+	// Defense-in-depth alongside Liquibase 013 — idempotent DropTable.
+	// Schema membership is derived from `agent_relations` (entry agent +
+	// relation source/target). See docs/architecture/agent-first-runtime.md
+	// §2.1.
+	if err := db.Migrator().DropTable("schema_agents"); err != nil {
+		slog.Warn("[Migration] dropping legacy schema_agents table failed (may already be absent)", "error", err)
+	}
+
 	if err := db.AutoMigrate(
 		// Config tables (9)
 		&AgentModel{},
@@ -111,9 +120,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&KnowledgeDocument{},
 		&KnowledgeChunk{},
 
-		// Schema / flow tables (3)
+		// Schema / flow tables (2)
 		&SchemaModel{},
-		&SchemaAgentModel{},
 		&AgentRelationModel{},
 
 		// Capability table (1)

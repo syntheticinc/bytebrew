@@ -151,14 +151,6 @@ func (a *adminSchemaRepoAdapter) Delete(ctx context.Context, id string) error {
 	return a.repo.Delete(ctx, id)
 }
 
-func (a *adminSchemaRepoAdapter) AddAgent(ctx context.Context, schemaID string, agentName string) error {
-	return a.repo.AddAgent(ctx, schemaID, agentName)
-}
-
-func (a *adminSchemaRepoAdapter) RemoveAgent(ctx context.Context, schemaID string, agentName string) error {
-	return a.repo.RemoveAgent(ctx, schemaID, agentName)
-}
-
 // --- Trigger adapter ---
 
 type adminTriggerRepoAdapter struct {

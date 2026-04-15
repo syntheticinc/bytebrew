@@ -450,8 +450,18 @@ function AgentBuilderInner() {
         availableAgents={availableAgents}
         onSelectExistingAgent={async (name) => {
           if (!currentSchema) return;
+          // V2: schema membership is derived from agent_relations
+          // (docs/architecture/agent-first-runtime.md §2.1). Add the
+          // selected agent as a delegate of the first existing schema
+          // member so it joins the delegation tree. If the schema is
+          // empty the relation is skipped — drop the agent on the
+          // canvas and let the user wire it from there.
           try {
-            await api.addAgentToSchema(currentSchema.id, name);
+            const existingMembers = await api.listSchemaAgents(currentSchema.id);
+            const parent = existingMembers[0];
+            if (parent && parent !== name) {
+              await api.createAgentRelation(currentSchema.id, parent, name);
+            }
             refetchCanvas();
             addToast(`Agent "${name}" added to schema`, 'success');
           } catch (err) {
@@ -564,8 +574,16 @@ function AgentBuilderInner() {
                             onClick={async () => {
                               setEmptyCanvasDropdown(false);
                               if (!currentSchema) return;
+                              // V2: derived membership via agent_relations
+                              // (docs/architecture/agent-first-runtime.md §2.1).
+                              // Empty schemas land the agent on canvas with
+                              // no relation; user wires it from there.
                               try {
-                                await api.addAgentToSchema(currentSchema.id, name);
+                                const existingMembers = await api.listSchemaAgents(currentSchema.id);
+                                const parent = existingMembers[0];
+                                if (parent && parent !== name) {
+                                  await api.createAgentRelation(currentSchema.id, parent, name);
+                                }
                                 refetchCanvas();
                                 addToast(`Agent "${name}" added to schema`, 'success');
                               } catch (err) {

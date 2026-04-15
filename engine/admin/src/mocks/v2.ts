@@ -802,6 +802,12 @@ export function getFlowsForAgent(agentId: string): V2Flow[] {
   return v2Flows.filter((f) => f.agentId === agentId);
 }
 
+// getSchemaAgents returns the schema's members. V2: membership is derived
+// from agent_relations (entry agent + reachable delegates) per
+// docs/architecture/agent-first-runtime.md §2.1. The mock keeps an
+// `agentIds` cache because the prototype mutates schemas optimistically;
+// real production reads come from `GET /api/v1/schemas/{id}/agents` which
+// derives via the SQL UNION on agent_relations.
 export function getSchemaAgents(schemaId: string): V2Agent[] {
   const schema = getSchemaById(schemaId);
   if (!schema) return [];

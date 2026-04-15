@@ -398,19 +398,43 @@ class APIClient {
     return this.request<void>('DELETE', `/schemas/${schemaId}`);
   }
 
+  // V2: schema membership is derived from agent_relations
+  // (docs/architecture/agent-first-runtime.md §2.1). The list endpoint is
+  // read-only; mutation goes through the agent-relations endpoints below —
+  // creating a relation adds both endpoints as implicit members; deleting
+  // the last relation that referenced an agent removes it from the schema.
   listSchemaAgents(schemaId: string) {
     if (this.isPrototype) return this.mock<string[]>([]);
     return this.request<string[]>('GET', `/schemas/${schemaId}/agents`);
   }
 
-  addAgentToSchema(schemaId: string, agentName: string) {
-    if (this.isPrototype) return this.mock(undefined as unknown as void);
-    return this.request<void>('POST', `/schemas/${schemaId}/agents`, { agent_name: agentName });
+  // ─── Agent Relations (V2 delegation) ──────────────────────────────────────
+  //
+  // V2 has a single implicit DELEGATION relationship type
+  // (docs/architecture/agent-first-runtime.md §3.1). Adding an agent to a
+  // schema is done by creating a relation from an existing schema member
+  // (typically the entry agent / the parent in the delegation tree) to the
+  // new agent.
+
+  listAgentRelations(schemaId: string) {
+    if (this.isPrototype) return this.mock<{ id: string; schema_id: string; source: string; target: string }[]>([]);
+    return this.request<{ id: string; schema_id: string; source: string; target: string }[]>(
+      'GET', `/schemas/${schemaId}/agent-relations`,
+    );
   }
 
-  removeAgentFromSchema(schemaId: string, agentName: string) {
+  createAgentRelation(schemaId: string, source: string, target: string) {
+    if (this.isPrototype) {
+      return this.mock({ id: String(Date.now()), schema_id: schemaId, source, target });
+    }
+    return this.request<{ id: string; schema_id: string; source: string; target: string }>(
+      'POST', `/schemas/${schemaId}/agent-relations`, { source, target },
+    );
+  }
+
+  deleteAgentRelation(schemaId: string, relationId: string) {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
-    return this.request<void>('DELETE', `/schemas/${schemaId}/agents/${encodeURIComponent(agentName)}`);
+    return this.request<void>('DELETE', `/schemas/${schemaId}/agent-relations/${relationId}`);
   }
 
   // ─── Sessions / Inspect ──────────────────────────────────────────────────────

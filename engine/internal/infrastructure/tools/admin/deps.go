@@ -31,14 +31,17 @@ type AgentRepository interface {
 }
 
 // SchemaRepository provides schema CRUD for admin tools.
+//
+// V2: schema membership is derived from `agent_relations` (see
+// docs/architecture/agent-first-runtime.md §2.1) — there is no separate
+// AddAgent / RemoveAgent surface. Adding an agent to a schema is done by
+// creating a delegation relation through AgentRelationRepository.
 type SchemaRepository interface {
 	List(ctx context.Context) ([]SchemaRecord, error)
 	GetByID(ctx context.Context, id string) (*SchemaRecord, error)
 	Create(ctx context.Context, record *SchemaRecord) error
 	Update(ctx context.Context, id string, record *SchemaRecord) error
 	Delete(ctx context.Context, id string) error
-	AddAgent(ctx context.Context, schemaID string, agentName string) error
-	RemoveAgent(ctx context.Context, schemaID string, agentName string) error
 }
 
 // TriggerRepository provides trigger CRUD for admin tools.

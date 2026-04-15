@@ -845,8 +845,10 @@ func Run(sc ServerConfig) error {
 				r.Post("/api/v1/schemas/import", schemaHandler.ImportSchema)
 				r.Put("/api/v1/schemas/{id}", schemaHandler.UpdateSchema)
 				r.Delete("/api/v1/schemas/{id}", schemaHandler.DeleteSchema)
-				r.Post("/api/v1/schemas/{id}/agents", schemaHandler.AddSchemaAgent)
-				r.Delete("/api/v1/schemas/{id}/agents/{name}", schemaHandler.RemoveSchemaAgent)
+				// V2: schema membership is derived from agent_relations
+				// (docs/architecture/agent-first-runtime.md §2.1) — the
+				// POST/DELETE schema-agent routes are gone; create or
+				// remove a delegation relation to add or remove a member.
 				r.Post("/api/v1/schemas/{id}/agent-relations", schemaHandler.CreateAgentRelation)
 				r.Put("/api/v1/schemas/{id}/agent-relations/{relationId}", schemaHandler.UpdateAgentRelation)
 				r.Delete("/api/v1/schemas/{id}/agent-relations/{relationId}", schemaHandler.DeleteAgentRelation)
@@ -1805,13 +1807,24 @@ func runMemoryRetentionCleanup(ctx context.Context, db *gorm.DB) {
 			continue
 		}
 
-		// Find schema_ids for this agent via schema_agents join table
+		// V2: derive schema_ids for this agent via agent_relations
+		// (docs/architecture/agent-first-runtime.md §2.1 — the
+		// `schema_agents` join table no longer exists).
+		var agentName string
+		if err := db.WithContext(ctx).
+			Raw("SELECT name FROM agents WHERE id = ?", cap.AgentID).
+			Scan(&agentName).Error; err != nil || agentName == "" {
+			slog.WarnContext(ctx, "memory retention cleanup: failed to resolve agent name",
+				"agent_id", cap.AgentID, "error", err)
+			continue
+		}
 		var schemaIDs []string
 		if err := db.WithContext(ctx).
-			Raw("SELECT sa.schema_id FROM schema_agents sa WHERE sa.agent_id = ?", cap.AgentID).
+			Raw(`SELECT DISTINCT schema_id FROM agent_relations
+				WHERE source_agent_name = ? OR target_agent_name = ?`, agentName, agentName).
 			Scan(&schemaIDs).Error; err != nil {
 			slog.WarnContext(ctx, "memory retention cleanup: failed to get schemas",
-				"agent_id", cap.AgentID, "error", err)
+				"agent", agentName, "error", err)
 			continue
 		}
 

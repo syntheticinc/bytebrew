@@ -124,8 +124,16 @@ export function useCanvasNodes({
     setDeleteError('');
     try {
       if (currentSchemaId != null) {
-        // Schema-scoped: remove agent from schema only (agent stays in DB)
-        await api.removeAgentFromSchema(currentSchemaId, deleteTarget);
+        // Schema-scoped delete: V2 schema membership is derived from
+        // agent_relations (docs/architecture/agent-first-runtime.md
+        // §2.1). Removing an agent from the schema = deleting every
+        // relation that mentions it within the schema. The agent itself
+        // stays in the global library.
+        const relations = await api.listAgentRelations(currentSchemaId);
+        const targets = relations.filter(
+          (r) => r.source === deleteTarget || r.target === deleteTarget,
+        );
+        await Promise.all(targets.map((r) => api.deleteAgentRelation(currentSchemaId, r.id)));
       } else {
         // No schema context: delete agent globally
         await api.deleteAgent(deleteTarget);
@@ -196,7 +204,21 @@ export function useCanvasNodes({
         } as CreateAgentRequest);
 
         if (currentSchemaId != null) {
-          await api.addAgentToSchema(currentSchemaId, created.name);
+          // V2: schema membership is derived from agent_relations
+          // (docs/architecture/agent-first-runtime.md §2.1). Add the new
+          // agent as a delegate of the first existing schema member
+          // (its entry orchestrator). If the schema is empty the new
+          // agent stays unwired — the user can attach it on canvas.
+          try {
+            const existingMembers = await api.listSchemaAgents(currentSchemaId);
+            const parent = existingMembers[0];
+            if (parent && parent !== created.name) {
+              await api.createAgentRelation(currentSchemaId, parent, created.name);
+            }
+          } catch {
+            // Non-fatal: the agent is created in DB; user can wire it
+            // manually on the canvas.
+          }
         }
 
         agentsCache.current.set(created.name, created);

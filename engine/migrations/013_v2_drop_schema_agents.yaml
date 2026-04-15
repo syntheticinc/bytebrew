@@ -1,0 +1,37 @@
+databaseChangeLog:
+  # V2 schema_agents removal — Commit Group F.
+  #
+  # Target schema (`bytebrew/docs/database/target-schema.dbml`) has NO
+  # `schema_agents` table. Schema membership is fully derivable from
+  # `schemas.entry_agent_id` UNION `agent_relations` per
+  # `docs/architecture/agent-first-runtime.md` §2.1.
+  #
+  # The legacy `schema_agents` join table carried only one unique column —
+  # `position int` — used to remember React Flow drag-and-drop coordinates.
+  # With the V2 rigid org-chart canvas (auto-layout by tree depth, no drag)
+  # `position` is dead and the table adds no information beyond
+  # `agent_relations`.
+  #
+  # An isolated agent in a schema with no relations is not a supported state
+  # in V2 — a standalone orchestrator-without-delegates is just a plain
+  # agent, not a schema member.
+  #
+  # Clean-schema policy: pure DDL — DROP TABLE. No data preservation, no
+  # backfill (V2 cleanup forbids multi-step ALTERs).
+  #
+  # Idempotent: applies cleanly on fresh DBs (no-op when `schema_agents` is
+  # absent) and on pre-V2 DBs that have the GORM-auto-migrated table.
+  - changeSet:
+      id: 013-v2-drop-schema-agents
+      author: system
+      changes:
+        - sql:
+            sql: |
+              DROP TABLE IF EXISTS schema_agents;
+      rollback:
+        - sql:
+            sql: |
+              -- Rolling back is not supported: the dropped position values
+              -- and any rows are irrecoverable. If rollback is truly needed,
+              -- restore from a pre-V2 backup.
+              SELECT 1;

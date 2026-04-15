@@ -10,12 +10,17 @@ import (
 )
 
 // SchemaRecord is an intermediate struct for DB <-> domain mapping.
+//
+// V2: AgentNames is derived at read time from `agent_relations` (union of
+// source and target agent names for the schema). There is no
+// `schema_agents` join table — see docs/architecture/agent-first-runtime.md
+// §2.1.
 type SchemaRecord struct {
 	ID          string
 	Name        string
 	Description string
 	IsSystem    bool
-	AgentNames  []string // names of agents referenced by this schema
+	AgentNames  []string // derived: distinct agents referenced by agent_relations of this schema
 	CreatedAt   time.Time
 }
 
@@ -29,7 +34,7 @@ func NewGORMSchemaRepository(db *gorm.DB) *GORMSchemaRepository {
 	return &GORMSchemaRepository{db: db}
 }
 
-// List returns all schemas with their agent references.
+// List returns all schemas with their derived agent membership.
 func (r *GORMSchemaRepository) List(ctx context.Context) ([]SchemaRecord, error) {
 	var schemas []models.SchemaModel
 	if err := r.db.WithContext(ctx).Order("created_at ASC").Find(&schemas).Error; err != nil {
@@ -38,9 +43,9 @@ func (r *GORMSchemaRepository) List(ctx context.Context) ([]SchemaRecord, error)
 
 	records := make([]SchemaRecord, 0, len(schemas))
 	for _, s := range schemas {
-		agentNames, err := r.loadAgentNames(ctx, s.ID)
+		agentNames, err := r.deriveAgentNames(ctx, s.ID)
 		if err != nil {
-			return nil, fmt.Errorf("load agents for schema %q: %w", s.Name, err)
+			return nil, fmt.Errorf("derive agents for schema %q: %w", s.Name, err)
 		}
 		records = append(records, SchemaRecord{
 			ID:          s.ID,
@@ -54,16 +59,16 @@ func (r *GORMSchemaRepository) List(ctx context.Context) ([]SchemaRecord, error)
 	return records, nil
 }
 
-// GetByID returns a single schema by ID.
+// GetByID returns a single schema by ID with derived agent membership.
 func (r *GORMSchemaRepository) GetByID(ctx context.Context, id string) (*SchemaRecord, error) {
 	var schema models.SchemaModel
 	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&schema).Error; err != nil {
 		return nil, fmt.Errorf("get schema %s: %w", id, err)
 	}
 
-	agentNames, err := r.loadAgentNames(ctx, schema.ID)
+	agentNames, err := r.deriveAgentNames(ctx, schema.ID)
 	if err != nil {
-		return nil, fmt.Errorf("load agents for schema %s: %w", id, err)
+		return nil, fmt.Errorf("derive agents for schema %s: %w", id, err)
 	}
 
 	return &SchemaRecord{
@@ -105,18 +110,14 @@ func (r *GORMSchemaRepository) Update(ctx context.Context, id string, record *Sc
 	return nil
 }
 
-// Delete removes a schema and all its associations by ID.
+// Delete removes a schema and all its agent_relations by ID.
 func (r *GORMSchemaRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Delete schema-agent refs
-		if err := tx.Where("schema_id = ?", id).Delete(&models.SchemaAgentModel{}).Error; err != nil {
-			return fmt.Errorf("delete schema agent refs: %w", err)
-		}
-		// Delete agent relations
+		// Delete agent relations bound to this schema (membership cascade).
 		if err := tx.Where("schema_id = ?", id).Delete(&models.AgentRelationModel{}).Error; err != nil {
 			return fmt.Errorf("delete schema agent relations: %w", err)
 		}
-		// Delete schema itself
+		// Delete schema itself.
 		result := tx.Delete(&models.SchemaModel{}, "id = ?", id)
 		if result.Error != nil {
 			return fmt.Errorf("delete schema %s: %w", id, result.Error)
@@ -128,68 +129,27 @@ func (r *GORMSchemaRepository) Delete(ctx context.Context, id string) error {
 	})
 }
 
-// AddAgent adds an agent reference to a schema.
-func (r *GORMSchemaRepository) AddAgent(ctx context.Context, schemaID string, agentName string) error {
-	// Resolve agent ID by name
-	var agent models.AgentModel
-	if err := r.db.WithContext(ctx).Where("name = ?", agentName).First(&agent).Error; err != nil {
-		return fmt.Errorf("find agent %q: %w", agentName, err)
-	}
-
-	ref := models.SchemaAgentModel{
-		SchemaID: schemaID,
-		AgentID:  agent.ID,
-	}
-	if err := r.db.WithContext(ctx).Create(&ref).Error; err != nil {
-		return fmt.Errorf("add agent %q to schema %s: %w", agentName, schemaID, err)
-	}
-	return nil
-}
-
-// RemoveAgent removes an agent reference from a schema.
-func (r *GORMSchemaRepository) RemoveAgent(ctx context.Context, schemaID string, agentName string) error {
-	// Resolve agent ID by name
-	var agent models.AgentModel
-	if err := r.db.WithContext(ctx).Where("name = ?", agentName).First(&agent).Error; err != nil {
-		return fmt.Errorf("find agent %q: %w", agentName, err)
-	}
-
-	result := r.db.WithContext(ctx).
-		Where("schema_id = ? AND agent_id = ?", schemaID, agent.ID).
-		Delete(&models.SchemaAgentModel{})
-	if result.Error != nil {
-		return fmt.Errorf("remove agent %q from schema %s: %w", agentName, schemaID, result.Error)
-	}
-	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
-	}
-	return nil
-}
-
-// ListAgents returns agent names for a schema.
+// ListAgents returns the derived list of agent names that participate in the
+// given schema (V2: union of source/target agents in agent_relations).
 func (r *GORMSchemaRepository) ListAgents(ctx context.Context, schemaID string) ([]string, error) {
-	return r.loadAgentNames(ctx, schemaID)
+	return r.deriveAgentNames(ctx, schemaID)
 }
 
 // ListSchemasForAgent returns schema names that reference a given agent.
+//
+// V2 derivation: schemas where the agent appears as source or target of any
+// agent_relation. See docs/architecture/agent-first-runtime.md §2.1.
 func (r *GORMSchemaRepository) ListSchemasForAgent(ctx context.Context, agentName string) ([]string, error) {
-	var agent models.AgentModel
-	if err := r.db.WithContext(ctx).Where("name = ?", agentName).First(&agent).Error; err != nil {
-		return nil, fmt.Errorf("find agent %q: %w", agentName, err)
+	var schemaIDs []string
+	if err := r.db.WithContext(ctx).
+		Raw(`SELECT DISTINCT schema_id FROM agent_relations
+			WHERE source_agent_name = ? OR target_agent_name = ?`, agentName, agentName).
+		Scan(&schemaIDs).Error; err != nil {
+		return nil, fmt.Errorf("list schema ids for agent %q: %w", agentName, err)
 	}
 
-	var refs []models.SchemaAgentModel
-	if err := r.db.WithContext(ctx).Where("agent_id = ?", agent.ID).Find(&refs).Error; err != nil {
-		return nil, fmt.Errorf("list schema refs for agent %q: %w", agentName, err)
-	}
-
-	if len(refs) == 0 {
+	if len(schemaIDs) == 0 {
 		return nil, nil
-	}
-
-	schemaIDs := make([]string, 0, len(refs))
-	for _, ref := range refs {
-		schemaIDs = append(schemaIDs, ref.SchemaID)
 	}
 
 	var schemas []models.SchemaModel
@@ -204,37 +164,25 @@ func (r *GORMSchemaRepository) ListSchemasForAgent(ctx context.Context, agentNam
 	return names, nil
 }
 
-func (r *GORMSchemaRepository) loadAgentNames(ctx context.Context, schemaID string) ([]string, error) {
-	var refs []models.SchemaAgentModel
-	if err := r.db.WithContext(ctx).Where("schema_id = ?", schemaID).Order("position ASC").Find(&refs).Error; err != nil {
-		return nil, err
+// deriveAgentNames returns the distinct agent names participating in a schema
+// via agent_relations (union of source_agent_name and target_agent_name).
+//
+// Per docs/architecture/agent-first-runtime.md §2.1, an isolated agent in a
+// schema with no relations is not a supported state — schema membership is
+// expressed through delegation relations.
+func (r *GORMSchemaRepository) deriveAgentNames(ctx context.Context, schemaID string) ([]string, error) {
+	var names []string
+	if err := r.db.WithContext(ctx).
+		Raw(`SELECT DISTINCT name FROM (
+				SELECT source_agent_name AS name FROM agent_relations WHERE schema_id = ?
+				UNION
+				SELECT target_agent_name AS name FROM agent_relations WHERE schema_id = ?
+			) members ORDER BY name`, schemaID, schemaID).
+		Scan(&names).Error; err != nil {
+		return nil, fmt.Errorf("derive agent names: %w", err)
 	}
-
-	if len(refs) == 0 {
+	if len(names) == 0 {
 		return nil, nil
-	}
-
-	agentIDs := make([]string, 0, len(refs))
-	for _, ref := range refs {
-		agentIDs = append(agentIDs, ref.AgentID)
-	}
-
-	var agents []models.AgentModel
-	if err := r.db.WithContext(ctx).Where("id IN ?", agentIDs).Find(&agents).Error; err != nil {
-		return nil, err
-	}
-
-	// Build ID->name map and return in position order
-	nameByID := make(map[string]string, len(agents))
-	for _, a := range agents {
-		nameByID[a.ID] = a.Name
-	}
-
-	names := make([]string, 0, len(refs))
-	for _, ref := range refs {
-		if name, ok := nameByID[ref.AgentID]; ok {
-			names = append(names, name)
-		}
 	}
 	return names, nil
 }

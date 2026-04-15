@@ -280,9 +280,11 @@ func seedBuilderSchema(ctx context.Context, db *gorm.DB) {
 		return
 	}
 
-	if err := schemaRepo.AddAgent(ctx, record.ID, builderAssistantName); err != nil {
-		slog.WarnContext(ctx, "seed builder schema: add agent", "error", err)
-	}
+	// V2: schema membership is derived from agent_relations
+	// (docs/architecture/agent-first-runtime.md §2.1). The builder schema
+	// has a single agent (builder-assistant) and no delegations — the
+	// chat trigger below establishes the entry point. No relation rows are
+	// needed for the single-agent case.
 
 	seedBuilderChatTrigger(ctx, db, record.ID)
 
@@ -396,11 +398,10 @@ func restoreBuilderSchema(ctx context.Context, db *gorm.DB) error {
 		schemaID = record.ID
 	}
 
-	// 3. Ensure builder-assistant is in the schema.
-	if err := schemaRepo.AddAgent(ctx, schemaID, builderAssistantName); err != nil {
-		// Ignore "already exists" errors.
-		slog.DebugContext(ctx, "add agent to schema (may already exist)", "error", err)
-	}
+	// 3. V2: schema membership is derived from agent_relations
+	// (docs/architecture/agent-first-runtime.md §2.1). The builder schema
+	// has only builder-assistant and no delegations — no membership row to
+	// reset. The chat trigger below re-establishes the entry point.
 
 	// 4. Remove stale triggers for this schema and re-create the chat trigger.
 	db.WithContext(ctx).Where("schema_id = ?", schemaID).Delete(&models.TriggerModel{})

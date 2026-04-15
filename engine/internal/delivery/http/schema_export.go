@@ -178,18 +178,15 @@ func (h *SchemaHandler) ImportSchema(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Add agents to schema (by name reference)
-	for _, agent := range input.Agents {
-		if agent.Name == "" {
-			continue
-		}
-		if err := h.schemas.AddSchemaAgent(ctx, schema.ID, agent.Name); err != nil {
-			slog.WarnContext(ctx, "failed to add agent to imported schema",
-				"schema", schema.Name, "agent", agent.Name, "error", err)
-		}
-	}
-
-	// 3. Create agent relations
+	// 2. Create agent relations.
+	//
+	// V2: schema membership is derived from agent_relations (see
+	// docs/architecture/agent-first-runtime.md §2.1). Agent names listed at
+	// the top level of the YAML carry no membership information of their
+	// own — an agent only counts as a schema member by participating in a
+	// relation. Solo-agent imports therefore produce a schema with no
+	// members; create at least one relation in the YAML to express the
+	// delegation tree.
 	for _, rel := range input.AgentRelations {
 		if rel.Source == "" || rel.Target == "" {
 			continue
