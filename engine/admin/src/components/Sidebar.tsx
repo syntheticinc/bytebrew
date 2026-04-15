@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { api } from '../api/client';
+import { usePrototype } from '../hooks/usePrototype';
 
 interface NavItem {
   to: string;
@@ -138,7 +139,6 @@ const sections: NavSection[] = [
     label: 'Core',
     items: [
       { to: '/builder', label: 'Canvas', icon: icons.builder },
-      { to: '/health', label: 'Health', icon: icons.health },
     ],
   },
   {
@@ -168,8 +168,39 @@ const sections: NavSection[] = [
   },
 ];
 
+const v2Section: NavSection = {
+  label: 'V2 Preview (Prototype)',
+  items: [
+    {
+      to: '/v2/overview',
+      label: 'Overview',
+      icon: (
+        <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="7" height="9" rx="1" />
+          <rect x="14" y="3" width="7" height="5" rx="1" />
+          <rect x="14" y="12" width="7" height="9" rx="1" />
+          <rect x="3" y="16" width="7" height="5" rx="1" />
+        </svg>
+      ),
+    },
+    {
+      to: '/v2/schemas',
+      label: 'Schemas',
+      icon: (
+        <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="5" r="2.5" />
+          <circle cx="5" cy="17" r="2.5" />
+          <circle cx="19" cy="17" r="2.5" />
+          <path d="M12 7.5v3M10 12l-4 3M14 12l4 3" />
+        </svg>
+      ),
+    },
+  ],
+};
+
 export default function Sidebar() {
   const { logout } = useAuth();
+  const { isPrototype } = usePrototype();
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
@@ -195,6 +226,32 @@ export default function Sidebar() {
 
       {/* Nav sections */}
       <nav className="flex-1 overflow-y-auto px-3 py-2">
+        {isPrototype && (
+          <div key={v2Section.label} className="mb-4">
+            <div className="px-2 mb-1.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-purple-400/80">
+              {v2Section.label}
+            </div>
+            <div className="space-y-0.5">
+              {v2Section.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) =>
+                    [
+                      'flex items-center gap-2.5 px-2.5 py-[7px] rounded-btn text-[13px] font-medium transition-all duration-150',
+                      isActive
+                        ? 'bg-purple-500/15 text-purple-100 border-l-2 border-l-purple-400 pl-2'
+                        : 'text-brand-shade2 hover:bg-brand-dark-surface hover:text-brand-light border-l-2 border-l-transparent',
+                    ].join(' ')
+                  }
+                >
+                  <span className="flex-shrink-0 text-brand-shade3">{item.icon}</span>
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        )}
         {sections.map((section) => (
           <div key={section.label} className="mb-4">
             <div className="px-2 mb-1.5 text-[10px] font-semibold text-brand-shade3/60 uppercase tracking-[0.15em]">

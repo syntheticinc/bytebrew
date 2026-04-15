@@ -16,6 +16,10 @@ import AgentsPage from './pages/AgentsPage';
 import SchemaListPage from './pages/SchemaListPage';
 import WidgetConfigPage from './pages/WidgetConfigPage';
 import KnowledgePage from './pages/KnowledgePage';
+import V2OverviewPage from './pages/v2/V2OverviewPage';
+import V2SchemasPage from './pages/v2/V2SchemasPage';
+import V2SchemaDetailPage from './pages/v2/V2SchemaDetailPage';
+import V2FlowEditorPage from './pages/v2/V2FlowEditorPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('jwt');
@@ -53,6 +57,11 @@ export default function App() {
             <Route path="/widget" element={<WidgetConfigPage />} />
             <Route path="/agents" element={<AgentsPage />} />
             <Route path="/agents/:agent" element={<AgentDrillInPage />} />
+            {/* V2 Prototype routes (visible only when Prototype mode is on) */}
+            <Route path="/v2/overview" element={<V2OverviewPage />} />
+            <Route path="/v2/schemas" element={<V2SchemasPage />} />
+            <Route path="/v2/schemas/:schemaId" element={<V2SchemaDetailPage />} />
+            <Route path="/v2/agents/:agentId/flows/:flowId" element={<V2FlowEditorPage />} />
             <Route path="/" element={<Navigate to="/builder" replace />} />
           </Route>
           <Route path="*" element={<Navigate to="/builder" replace />} />

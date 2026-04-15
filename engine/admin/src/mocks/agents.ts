@@ -75,7 +75,52 @@ export const MOCK_AGENTS: Record<string, AgentDetail> = {
     confirm_before: ['process_refund'],
     mcp_servers: [],
   },
+  ...makeV2StubAgents(),
 };
+
+function makeV2StubAgents(): Record<string, AgentDetail> {
+  const mk = (
+    name: string,
+    description: string,
+    modelId: string,
+    lifecycle: 'persistent' | 'spawn',
+    toolsCount: number,
+    hasKnowledge: boolean,
+  ): AgentDetail => ({
+    name,
+    description,
+    tools_count: toolsCount,
+    has_knowledge: hasKnowledge,
+    model_id: modelId,
+    system_prompt: `You are ${name}. ${description}`,
+    tools: ['ask_user', 'show_structured_output', 'wait'],
+    can_spawn: [],
+    lifecycle,
+    tool_execution: 'sequential',
+    max_steps: 30,
+    max_context_size: 16000,
+    max_turn_duration: 120,
+    temperature: 0.7,
+    top_p: 1.0,
+    max_tokens: 4096,
+    stop_sequences: [],
+    confirm_before: [],
+    mcp_servers: [],
+  });
+  return {
+    'agent-triage': mk('agent-triage', 'Classifies incoming requests and delegates to specialists.', '1', 'persistent', 3, true),
+    'agent-sales': mk('agent-sales', 'Handles pricing, plans, conversion.', '2', 'persistent', 6, true),
+    'agent-tech': mk('agent-tech', 'Debugging and technical assistance.', '2', 'persistent', 8, true),
+    'agent-billing': mk('agent-billing', 'Invoices, refunds, payment issues.', '1', 'persistent', 4, true),
+    'agent-faq': mk('agent-faq', 'Fast FAQ retrieval from knowledge base.', '1', 'spawn', 2, true),
+    'agent-escalation': mk('agent-escalation', 'Routes to human operators via webhook.', '2', 'spawn', 1, false),
+    'agent-sales-orch': mk('agent-sales-orch', 'Qualifies leads via deep interview flow.', '3', 'persistent', 4, true),
+    'agent-lead-researcher': mk('agent-lead-researcher', 'Gathers public info about prospect.', '2', 'persistent', 5, false),
+    'agent-closer': mk('agent-closer', 'Final pitch and handoff to human AE.', '3', 'persistent', 3, true),
+    'agent-health': mk('agent-health', 'Hourly system checks and alerting.', '1', 'persistent', 5, false),
+    'agent-alerter': mk('agent-alerter', 'Dispatches alerts to Slack/PagerDuty.', '1', 'spawn', 2, false),
+  };
+}
 
 export const MOCK_MODELS = [
   { id: '1', name: 'claude-haiku-3', model_name: 'claude-3-haiku-20240307' },
