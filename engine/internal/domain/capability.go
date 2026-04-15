@@ -12,7 +12,6 @@ const (
 	CapabilityTypeMemory    CapabilityType = "memory"
 	CapabilityTypeKnowledge CapabilityType = "knowledge"
 	CapabilityTypeGuardrail CapabilityType = "guardrail"
-	CapabilityTypeEscalation CapabilityType = "escalation"
 	CapabilityTypeRecovery  CapabilityType = "recovery"
 	CapabilityTypePolicies  CapabilityType = "policies"
 )
@@ -23,7 +22,6 @@ func AllCapabilityTypes() []CapabilityType {
 		CapabilityTypeMemory,
 		CapabilityTypeKnowledge,
 		CapabilityTypeGuardrail,
-		CapabilityTypeEscalation,
 		CapabilityTypeRecovery,
 		CapabilityTypePolicies,
 	}
@@ -74,7 +72,7 @@ func (c *Capability) Validate() error {
 func (ct CapabilityType) IsValid() bool {
 	switch ct {
 	case CapabilityTypeMemory, CapabilityTypeKnowledge, CapabilityTypeGuardrail,
-		CapabilityTypeEscalation, CapabilityTypeRecovery, CapabilityTypePolicies:
+		CapabilityTypeRecovery, CapabilityTypePolicies:
 		return true
 	}
 	return false
@@ -87,8 +85,6 @@ func (ct CapabilityType) InjectedTools() []string {
 		return []string{"memory_recall", "memory_store"}
 	case CapabilityTypeKnowledge:
 		return []string{"knowledge_search"}
-	case CapabilityTypeEscalation:
-		return []string{"escalate"}
 	default:
 		return nil
 	}

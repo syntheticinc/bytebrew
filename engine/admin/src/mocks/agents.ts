@@ -45,13 +45,6 @@ export const MOCK_AGENTS: Record<string, AgentDetail> = {
     stop_sequences: [],
     confirm_before: ['cancel_subscription', 'process_refund'],
     mcp_servers: ['google-sheets'],
-    escalation: {
-      action: 'transfer_to_user',
-      triggers: [
-        { condition: 'confidence_below', threshold: 0.4 },
-        { condition: 'custom', prompt: 'User explicitly requests human assistance' },
-      ],
-    },
   },
   escalation: {
     name: 'escalation',

@@ -94,14 +94,6 @@ func (a *agentManagerHTTPAdapter) GetAgent(ctx context.Context, name string) (*d
 	// Resolve model ID for the response.
 	detail.ModelID = a.resolveModelID(ctx, rec.ModelName)
 
-	if rec.Escalation != nil {
-		detail.Escalation = &deliveryhttp.AgentEscalation{
-			Action:     rec.Escalation.Action,
-			WebhookURL: rec.Escalation.WebhookURL,
-			Triggers:   rec.Escalation.Triggers,
-		}
-	}
-
 	// Populate used_in_schemas (AC-ENT-03)
 	if a.schemaRepo != nil {
 		schemaNames, _ := a.schemaRepo.ListSchemasForAgent(ctx, name)
@@ -248,14 +240,6 @@ func (a *agentManagerHTTPAdapter) toAgentRecord(req deliveryhttp.CreateAgentRequ
 		}
 	} else if req.Model != "" {
 		rec.ModelName = req.Model
-	}
-
-	if req.Escalation != nil {
-		rec.Escalation = &configrepo.EscalationRecord{
-			Action:     req.Escalation.Action,
-			WebhookURL: req.Escalation.WebhookURL,
-			Triggers:   req.Escalation.Triggers,
-		}
 	}
 
 	// Apply defaults.

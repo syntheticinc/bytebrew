@@ -102,14 +102,6 @@ func RegisterAllBuiltins(store *BuiltinToolStore) {
 		return NewMemoryStoreTool(deps.SchemaID, deps.UserID, deps.MemoryStorer, deps.MemoryMaxEntries)
 	})
 
-	// Escalation capability tool (auto-injected by capability injector when agent has Escalation)
-	store.Register("escalate", func(deps ToolDependencies) tool.InvokableTool {
-		if deps.EscalationHandler == nil {
-			return nil // disabled when no escalation handler configured
-		}
-		return NewEscalateTool(deps.SessionID, deps.AgentName, deps.EscalationHandler)
-	})
-
 	// spawn_agent — not registered here.
 	// Requires AgentPool which is created after tool store initialization.
 	// Register separately: store.Register("spawn_agent", ...)

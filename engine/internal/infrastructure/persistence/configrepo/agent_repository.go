@@ -10,17 +10,17 @@ import (
 )
 
 // AgentRecord is an intermediate struct for DB <-> domain mapping.
-// Contains all agent config from DB (agent + tools + spawn + escalation + MCP).
+// Contains all agent config from DB (agent + tools + spawn + MCP).
 type AgentRecord struct {
-	Name           string
-	ModelID        *string
-	ModelName      string
-	SystemPrompt   string
-	Kit            string
-	KnowledgePath  string
-	Lifecycle      string
-	ToolExecution  string
-	MaxSteps       int
+	Name            string
+	ModelID         *string
+	ModelName       string
+	SystemPrompt    string
+	Kit             string
+	KnowledgePath   string
+	Lifecycle       string
+	ToolExecution   string
+	MaxSteps        int
 	MaxContextSize  int
 	MaxTurnDuration int
 	Temperature     *float64
@@ -28,25 +28,17 @@ type AgentRecord struct {
 	MaxTokens       *int
 	StopSequences   []string
 	ConfirmBefore   []string
-	BuiltinTools   []string
-	CustomTools    []CustomToolRecord
-	MCPServers     []string
-	CanSpawn       []string
-	Escalation     *EscalationRecord
-	IsSystem       bool
+	BuiltinTools    []string
+	CustomTools     []CustomToolRecord
+	MCPServers      []string
+	CanSpawn        []string
+	IsSystem        bool
 }
 
 // CustomToolRecord holds a custom tool name and its JSON config.
 type CustomToolRecord struct {
 	Name   string
 	Config string
-}
-
-// EscalationRecord holds escalation settings for an agent.
-type EscalationRecord struct {
-	Action     string
-	WebhookURL string
-	Triggers   []string
 }
 
 // GORMAgentRepository implements AgentReader and AgentWriter using GORM.
@@ -66,8 +58,6 @@ func (r *GORMAgentRepository) List(ctx context.Context) ([]AgentRecord, error) {
 		Preload("Tools").
 		Preload("SpawnTargets").
 		Preload("SpawnTargets.TargetAgent").
-		Preload("Escalation").
-		Preload("Escalation.Triggers").
 		Preload("Model").
 		Find(&agents).Error
 	if err != nil {
@@ -99,8 +89,6 @@ func (r *GORMAgentRepository) GetByName(ctx context.Context, name string) (*Agen
 		Preload("Tools").
 		Preload("SpawnTargets").
 		Preload("SpawnTargets.TargetAgent").
-		Preload("Escalation").
-		Preload("Escalation.Triggers").
 		Preload("Model").
 		Where("name = ?", name).
 		First(&agent).Error
@@ -170,9 +158,6 @@ func (r *GORMAgentRepository) Update(ctx context.Context, name string, record *A
 		if err := tx.Where("agent_id = ?", existing.ID).Delete(&models.AgentSpawnTarget{}).Error; err != nil {
 			return fmt.Errorf("delete old spawn targets: %w", err)
 		}
-		if err := r.deleteEscalation(tx, existing.ID); err != nil {
-			return fmt.Errorf("delete old escalation: %w", err)
-		}
 		if err := tx.Exec("DELETE FROM agent_mcp_servers WHERE agent_id = ?", existing.ID).Error; err != nil {
 			return fmt.Errorf("delete old mcp associations: %w", err)
 		}
@@ -216,13 +201,6 @@ func (r *GORMAgentRepository) Update(ctx context.Context, name string, record *A
 			}
 		}
 
-		if agent.Escalation != nil {
-			agent.Escalation.AgentID = existing.ID
-			if err := tx.Create(agent.Escalation).Error; err != nil {
-				return fmt.Errorf("create escalation: %w", err)
-			}
-		}
-
 		if err := r.createSpawnTargetsWithTx(tx, existing.ID, record.CanSpawn); err != nil {
 			return fmt.Errorf("create spawn targets: %w", err)
 		}
@@ -248,9 +226,6 @@ func (r *GORMAgentRepository) Delete(ctx context.Context, name string) error {
 		}
 		if err := tx.Where("agent_id = ?", agent.ID).Delete(&models.AgentSpawnTarget{}).Error; err != nil {
 			return fmt.Errorf("delete spawn targets: %w", err)
-		}
-		if err := r.deleteEscalation(tx, agent.ID); err != nil {
-			return fmt.Errorf("delete escalation: %w", err)
 		}
 		if err := tx.Exec("DELETE FROM agent_mcp_servers WHERE agent_id = ?", agent.ID).Error; err != nil {
 			return fmt.Errorf("delete mcp associations: %w", err)
@@ -319,18 +294,6 @@ func toAgentRecord(a models.AgentModel) (AgentRecord, error) {
 	}
 
 	// MCP servers: skip loading (loaded separately if needed)
-
-	// Escalation
-	if a.Escalation != nil {
-		esc := &EscalationRecord{
-			Action:     a.Escalation.Action,
-			WebhookURL: a.Escalation.WebhookURL,
-		}
-		for _, t := range a.Escalation.Triggers {
-			esc.Triggers = append(esc.Triggers, t.Keyword)
-		}
-		rec.Escalation = esc
-	}
 
 	return rec, nil
 }
@@ -406,20 +369,6 @@ func (r *GORMAgentRepository) toAgentModelWithDB(db *gorm.DB, rec *AgentRecord) 
 			Config:    ct.Config,
 			SortOrder: len(rec.BuiltinTools) + i,
 		})
-	}
-
-	// Escalation
-	if rec.Escalation != nil {
-		esc := &models.AgentEscalation{
-			Action:     rec.Escalation.Action,
-			WebhookURL: rec.Escalation.WebhookURL,
-		}
-		for _, keyword := range rec.Escalation.Triggers {
-			esc.Triggers = append(esc.Triggers, models.AgentEscalationTrigger{
-				Keyword: keyword,
-			})
-		}
-		agent.Escalation = esc
 	}
 
 	return agent, nil
@@ -515,22 +464,3 @@ func (r *GORMAgentRepository) loadMCPServersForAgent(ctx context.Context, agentI
 	return names, nil
 }
 
-// deleteEscalation removes escalation and its triggers for an agent.
-func (r *GORMAgentRepository) deleteEscalation(tx *gorm.DB, agentID string) error {
-	var esc models.AgentEscalation
-	err := tx.Where("agent_id = ?", agentID).First(&esc).Error
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil
-		}
-		return fmt.Errorf("find escalation: %w", err)
-	}
-
-	if err := tx.Where("escalation_id = ?", esc.ID).Delete(&models.AgentEscalationTrigger{}).Error; err != nil {
-		return fmt.Errorf("delete escalation triggers: %w", err)
-	}
-	if err := tx.Delete(&esc).Error; err != nil {
-		return fmt.Errorf("delete escalation: %w", err)
-	}
-	return nil
-}

@@ -13,7 +13,6 @@ type AgentDefinition struct {
 	Knowledge        string              `mapstructure:"knowledge"`
 	ConfirmBefore    []string            `mapstructure:"confirm_before"`
 	CanSpawn         []string            `mapstructure:"can_spawn"`
-	Escalation       *EscalationConfig   `mapstructure:"escalation"`
 	Lifecycle        string              `mapstructure:"lifecycle"`
 	ToolExecution    string              `mapstructure:"tool_execution"`
 	MaxSteps         int                 `mapstructure:"max_steps"`
@@ -67,13 +66,6 @@ type CustomToolParam struct {
 	Type        string `mapstructure:"type"`
 	Description string `mapstructure:"description"`
 	Required    bool   `mapstructure:"required"`
-}
-
-// EscalationConfig describes when and how an agent should escalate.
-type EscalationConfig struct {
-	Triggers []string `mapstructure:"triggers"`
-	Action   string   `mapstructure:"action"` // "notify" | "webhook"
-	Webhook  string   `mapstructure:"webhook"`
 }
 
 // TriggerDefinition describes an automated trigger for an agent.

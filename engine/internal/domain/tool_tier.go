@@ -7,7 +7,7 @@ const (
 	// ToolTierCore (Tier 1) — always available: ask_user, show_structured_output, spawn_*, manage_tasks, wait
 	ToolTierCore ToolTier = 1
 
-	// ToolTierCapability (Tier 2) — auto-injected by capabilities: memory_recall, memory_store, knowledge_search, escalate
+	// ToolTierCapability (Tier 2) — auto-injected by capabilities: memory_recall, memory_store, knowledge_search
 	ToolTierCapability ToolTier = 2
 
 	// ToolTierSelfHosted (Tier 3) — CE only, blocked in Cloud: read_file, write_file, execute_command, etc.
@@ -34,7 +34,6 @@ func CapabilityToolNames() []string {
 		"memory_recall",
 		"memory_store",
 		"knowledge_search",
-		"escalate",
 	}
 }
 

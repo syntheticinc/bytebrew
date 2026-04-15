@@ -17,3 +17,5 @@ databaseChangeLog:
       file: migrations/008_create_indexes.yaml
   - include:
       file: migrations/009_v2_drop_gates.yaml
+  - include:
+      file: migrations/010_v2_drop_escalation.yaml

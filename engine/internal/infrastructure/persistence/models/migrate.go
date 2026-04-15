@@ -38,13 +38,18 @@ func AutoMigrate(db *gorm.DB) error {
 		slog.Warn("[Migration] dropping legacy gates table failed (may already be absent)", "error", err)
 	}
 
+	// V2 Escalation removal: Escalation capability is out of V2 (see §5.9).
+	// Drop legacy agent_escalation_triggers (child) then agent_escalation (parent).
+	// Order matters because of the FK from triggers → escalation.
+	if err := db.Migrator().DropTable("agent_escalation_triggers", "agent_escalation"); err != nil {
+		slog.Warn("[Migration] dropping legacy escalation tables failed (may already be absent)", "error", err)
+	}
+
 	if err := db.AutoMigrate(
-		// Config tables (11)
+		// Config tables (9)
 		&AgentModel{},
 		&AgentToolModel{},
 		&AgentSpawnTarget{},
-		&AgentEscalation{},
-		&AgentEscalationTrigger{},
 		&LLMProviderModel{},
 		&MCPServerModel{},
 		&MCPServerRuntimeModel{},

@@ -108,10 +108,9 @@ type agentYAML struct {
 	MaxTokens       *int            `yaml:"max_tokens,omitempty"`
 	StopSequences   []string        `yaml:"stop_sequences,omitempty"`
 	ConfirmBefore   []string        `yaml:"confirm_before,omitempty"`
-	Tools           []string        `yaml:"tools,omitempty"`
-	CanSpawn        []string        `yaml:"can_spawn,omitempty"`
-	MCPServers      []string        `yaml:"mcp_servers,omitempty"`
-	Escalation      *escalationYAML `yaml:"escalation,omitempty"`
+	Tools           []string `yaml:"tools,omitempty"`
+	CanSpawn        []string `yaml:"can_spawn,omitempty"`
+	MCPServers      []string `yaml:"mcp_servers,omitempty"`
 }
 
 // UnmarshalYAML supports field aliases used in documentation:
@@ -146,12 +145,6 @@ func (a *agentYAML) UnmarshalYAML(node *yaml.Node) error {
 	}
 	*a = agentYAML(alias)
 	return nil
-}
-
-type escalationYAML struct {
-	Action     string   `yaml:"action"`
-	WebhookURL string   `yaml:"webhook_url,omitempty"`
-	Triggers   []string `yaml:"triggers,omitempty"`
 }
 
 type modelYAML struct {

@@ -22,7 +22,6 @@ func TestClassifyToolTier(t *testing.T) {
 		{"memory_recall", ToolTierCapability},
 		{"memory_store", ToolTierCapability},
 		{"knowledge_search", ToolTierCapability},
-		{"escalate", ToolTierCapability},
 
 		// Tier 3 — Self-hosted
 		{"read_file", ToolTierSelfHosted},

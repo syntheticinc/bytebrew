@@ -27,29 +27,7 @@ export interface AgentDetail extends AgentInfo {
   stop_sequences?: string[];
   confirm_before: string[];
   mcp_servers: string[];
-  escalation?: AgentEscalation;
 }
-
-export interface AgentEscalation {
-  action: 'transfer_to_user' | 'notify';
-  webhook_url?: string;
-  triggers: EscalationTrigger[];
-}
-
-export interface EscalationTrigger {
-  condition: EscalationConditionType;
-  threshold?: number;
-  pattern?: string;
-  prompt?: string;
-}
-
-export type EscalationConditionType =
-  | 'confidence_below'
-  | 'topic_matches'
-  | 'user_sentiment'
-  | 'max_turns_exceeded'
-  | 'tool_failed'
-  | 'custom';
 
 export interface CreateAgentRequest {
   name: string;
@@ -69,7 +47,6 @@ export interface CreateAgentRequest {
   tools?: string[];
   can_spawn?: string[];
   mcp_servers?: string[];
-  escalation?: AgentEscalation;
 }
 
 // ============================================================================
@@ -387,7 +364,6 @@ export type CapabilityType =
   | 'memory'
   | 'knowledge'
   | 'guardrail'
-  | 'escalation'
   | 'recovery'
   | 'policies';
 
@@ -441,7 +417,6 @@ export const CAPABILITY_META: Record<CapabilityType, { label: string; icon: stri
   knowledge:     { label: 'Knowledge',        icon: 'book-open',      description: 'RAG sources (PDF, DOCX, TXT, MD, CSV)' },
   guardrail:     { label: 'Output Guardrail', icon: 'shield-check',   description: 'JSON Schema, LLM judge, webhook validation' },
 
-  escalation:    { label: 'Escalation',       icon: 'arrow-up-right', description: 'transfer_to_user, notify, webhook' },
   recovery:      { label: 'Recovery Policy',  icon: 'refresh-cw',     description: 'Retry rules per failure type (per-session scope)' },
   policies:      { label: 'Agent Policies',   icon: 'settings',       description: 'When [condition] → Do [action] rules' },
 };

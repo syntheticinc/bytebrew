@@ -1,5 +1,5 @@
 # ByteBrew Engine — Sales Assistant Example
-# Demonstrates: custom tools, escalation, BYOK, triggers
+# Demonstrates: custom tools, BYOK, triggers
 
 engine:
   host: "0.0.0.0"
@@ -64,10 +64,6 @@ agents:
             token_env: "STORE_API_KEY"
     confirm_before:
       - create_order
-    escalation:
-      triggers: ["complaint", "refund", "manager", "emergency"]
-      action: "notify"
-      webhook: "https://hooks.slack.com/services/${SLACK_WEBHOOK_ID}"
     max_steps: 30
     triggers:
       - type: "webhook"

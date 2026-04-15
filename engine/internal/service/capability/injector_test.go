@@ -45,7 +45,6 @@ func TestInjectedTools_Multiple(t *testing.T) {
 			"agent-a": {
 				{ID: "1", AgentName: "agent-a", Type: "memory", Enabled: true},
 				{ID: "2", AgentName: "agent-a", Type: "knowledge", Enabled: true},
-				{ID: "3", AgentName: "agent-a", Type: "escalation", Enabled: true},
 			},
 		},
 	}
@@ -55,9 +54,9 @@ func TestInjectedTools_Multiple(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// memory_recall, memory_store, knowledge_search, escalate = 4
-	if len(tools) != 4 {
-		t.Fatalf("expected 4 tools, got %d: %v", len(tools), tools)
+	// memory_recall, memory_store, knowledge_search = 3
+	if len(tools) != 3 {
+		t.Fatalf("expected 3 tools, got %d: %v", len(tools), tools)
 	}
 }
 

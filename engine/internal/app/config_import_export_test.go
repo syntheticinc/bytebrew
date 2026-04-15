@@ -104,18 +104,6 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			target_agent_id TEXT NOT NULL REFERENCES agents(id),
 			UNIQUE(agent_id, target_agent_id)
 		)`,
-		`CREATE TABLE agent_escalation (
-			id TEXT PRIMARY KEY,
-			agent_id TEXT NOT NULL UNIQUE REFERENCES agents(id),
-			action VARCHAR(30) NOT NULL DEFAULT 'transfer_to_human',
-			webhook_url VARCHAR(500)
-		)`,
-		`CREATE TABLE agent_escalation_triggers (
-			id TEXT PRIMARY KEY,
-			escalation_id TEXT NOT NULL REFERENCES agent_escalation(id),
-			keyword VARCHAR(255) NOT NULL,
-			UNIQUE(escalation_id, keyword)
-		)`,
 		`CREATE TABLE agent_mcp_servers (
 			agent_id TEXT NOT NULL REFERENCES agents(id),
 			mcp_server_id TEXT NOT NULL REFERENCES mcp_servers(id),
@@ -210,17 +198,6 @@ func seedTestData(t *testing.T, db *gorm.DB) {
 		AgentID: agent.ID, TargetAgentID: researcher.ID,
 	}).Error)
 
-	// Escalation
-	esc := models.AgentEscalation{
-		AgentID:    agent.ID,
-		Action:     "transfer_to_human",
-		WebhookURL: "https://hooks.example.com/escalate",
-	}
-	require.NoError(t, db.Create(&esc).Error)
-	require.NoError(t, db.Create(&models.AgentEscalationTrigger{
-		EscalationID: esc.ID, Keyword: "angry",
-	}).Error)
-
 	// Trigger
 	agentIDPtr := agent.ID
 	require.NoError(t, db.Create(&models.TriggerModel{
@@ -258,11 +235,6 @@ func TestExportYAML(t *testing.T) {
 	assert.Equal(t, []string{"researcher"}, sales.CanSpawn)
 	assert.Equal(t, []string{"shop-api"}, sales.MCPServers)
 	assert.Equal(t, []string{"delete_order", "refund"}, sales.ConfirmBefore)
-
-	// Escalation
-	require.NotNil(t, sales.Escalation)
-	assert.Equal(t, "transfer_to_human", sales.Escalation.Action)
-	assert.Equal(t, []string{"angry"}, sales.Escalation.Triggers)
 
 	// Models — API key must NOT be present
 	require.Len(t, cfg.Models.Items, 1)

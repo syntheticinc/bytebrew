@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useApi } from '../../hooks/useApi';
-import type { AgentDetail, AgentEscalation, AgentInfo, Model, MCPServer, ToolMetadata, SecurityZone, CreateAgentRequest, EscalationTrigger } from '../../types';
+import type { AgentDetail, AgentInfo, Model, MCPServer, ToolMetadata, SecurityZone, CreateAgentRequest } from '../../types';
 import BuilderChat from './BuilderChat';
 
 // ---------------------------------------------------------------------------
@@ -119,16 +119,6 @@ function agentToYaml(agent: AgentDetail): string {
     for (const t of agent.confirm_before) lines.push(`  - ${t}`);
   } else {
     lines.push('confirm_before: []');
-  }
-
-  if (agent.escalation) {
-    lines.push('escalation:');
-    lines.push(`  action: ${agent.escalation.action}`);
-    if (agent.escalation.webhook_url) lines.push(`  webhook_url: ${agent.escalation.webhook_url}`);
-    if (agent.escalation.triggers?.length) {
-      lines.push('  triggers:');
-      for (const t of agent.escalation.triggers) lines.push(`    - ${t}`);
-    }
   }
 
   return lines.join('\n');
@@ -305,7 +295,6 @@ export default function BuilderSidePanel({ agent, agents, onClose, onSaved, onDe
       can_spawn: agent.can_spawn ?? [],
       mcp_servers: agent.mcp_servers ?? [],
       confirm_before: agent.confirm_before ?? [],
-      escalation: agent.escalation,
     });
     setSaveError('');
     setConfirmInput('');
@@ -338,7 +327,6 @@ export default function BuilderSidePanel({ agent, agents, onClose, onSaved, onDe
     if (!arraysEqual(form.can_spawn, agent.can_spawn)) return true;
     if (!arraysEqual(form.mcp_servers, agent.mcp_servers)) return true;
     if (!arraysEqual(form.confirm_before, agent.confirm_before)) return true;
-    if (JSON.stringify(form.escalation ?? null) !== JSON.stringify(agent.escalation ?? null)) return true;
     return false;
   }, [form, agent]);
 
@@ -419,7 +407,6 @@ export default function BuilderSidePanel({ agent, agents, onClose, onSaved, onDe
     can_spawn: form.can_spawn ?? agent.can_spawn,
     mcp_servers: form.mcp_servers ?? agent.mcp_servers,
     confirm_before: form.confirm_before ?? agent.confirm_before,
-    escalation: form.escalation ?? agent.escalation,
   };
 
   // YAML copy
@@ -766,66 +753,6 @@ export default function BuilderSidePanel({ agent, agents, onClose, onSaved, onDe
               })()}
             </Section>
 
-            {/* Escalation */}
-            <Section title="Escalation" defaultOpen={false}>
-              {!form.escalation && (
-                <p className="text-[10px] text-brand-shade3/60 mb-2 italic">
-                  Not configured. Escalation lets agents hand off complex issues to human operators or specialized agents.
-                </p>
-              )}
-              <div className="space-y-2">
-                <div>
-                  <label className="block text-[9px] text-brand-shade3 mb-0.5">Action</label>
-                  <select
-                    value={form.escalation?.action ?? 'none'}
-                    onChange={(e) => {
-                      const action = e.target.value;
-                      if (action === 'none') {
-                        updateField('escalation', undefined);
-                      } else {
-                        updateField('escalation', {
-                          action: action as AgentEscalation['action'],
-                          webhook_url: form.escalation?.webhook_url ?? '',
-                          triggers: form.escalation?.triggers ?? [],
-                        });
-                      }
-                    }}
-                    className="w-full px-2 py-1.5 bg-brand-dark border border-brand-shade3/30 rounded-card text-xs text-brand-light focus:outline-none focus:border-brand-accent transition-colors"
-                  >
-                    <option value="none">None</option>
-                    <option value="transfer_to_user">Transfer to User</option>
-                    <option value="notify">Notify</option>
-                  </select>
-                </div>
-                {form.escalation && (
-                  <>
-                    <div>
-                      <label className="block text-[9px] text-brand-shade3 mb-0.5">Webhook URL</label>
-                      <input
-                        type="text"
-                        value={form.escalation.webhook_url ?? ''}
-                        onChange={(e) => updateField('escalation', { ...form.escalation!, webhook_url: e.target.value })}
-                        placeholder="https://..."
-                        className="w-full px-2 py-1 bg-brand-dark border border-brand-shade3/30 rounded text-[10px] text-brand-light placeholder-brand-shade3 focus:outline-none focus:border-brand-accent transition-colors"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] text-brand-shade3 mb-0.5">Trigger Conditions (one per line)</label>
-                      <textarea
-                        value={(form.escalation.triggers ?? []).map((t: EscalationTrigger) => t.prompt ?? t.condition).join('\n')}
-                        onChange={(e) => updateField('escalation', {
-                          ...form.escalation!,
-                          triggers: e.target.value.split('\n').filter((t) => t.trim()).map((t): EscalationTrigger => ({ condition: 'custom', prompt: t })),
-                        })}
-                        rows={3}
-                        placeholder="user is angry&#10;urgent request"
-                        className="w-full px-2 py-1.5 bg-brand-dark border border-brand-shade3/30 rounded text-[10px] text-brand-light placeholder-brand-shade3 focus:outline-none focus:border-brand-accent transition-colors resize-none leading-relaxed"
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-            </Section>
 
             {/* Lifecycle */}
             <Section title="Lifecycle" defaultOpen={false}>

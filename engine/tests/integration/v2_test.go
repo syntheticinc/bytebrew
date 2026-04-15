@@ -42,8 +42,6 @@ func newTestDB(t *testing.T) *gorm.DB {
 		&models.AgentModel{},
 		&models.AgentToolModel{},
 		&models.AgentSpawnTarget{},
-		&models.AgentEscalation{},
-		&models.AgentEscalationTrigger{},
 		&models.SchemaModel{},
 		&models.SchemaAgentModel{},
 		&models.EdgeModel{},
@@ -536,7 +534,6 @@ func TestV2_ToolTierEnforcement_CloudSandbox(t *testing.T) {
 			{"memory_recall", domain.ToolTierCapability},
 			{"memory_store", domain.ToolTierCapability},
 			{"knowledge_search", domain.ToolTierCapability},
-			{"escalate", domain.ToolTierCapability},
 			{"execute_command", domain.ToolTierSelfHosted},
 			{"read_file", domain.ToolTierSelfHosted},
 			{"write_file", domain.ToolTierSelfHosted},
@@ -586,10 +583,10 @@ func TestV2_ToolTierEnforcement_CloudSandbox(t *testing.T) {
 	t.Run("FilterTools_Cloud", func(t *testing.T) {
 		sandbox := cloud.NewSandbox(true)
 
-		allTools := []string{"ask_user", "memory_recall", "execute_command", "read_file", "escalate"}
+		allTools := []string{"ask_user", "memory_recall", "execute_command", "read_file"}
 		allowed, blocked := sandbox.FilterTools(allTools)
 
-		assert.ElementsMatch(t, []string{"ask_user", "memory_recall", "escalate"}, allowed)
+		assert.ElementsMatch(t, []string{"ask_user", "memory_recall"}, allowed)
 		assert.Len(t, blocked, 2)
 	})
 }
@@ -627,13 +624,6 @@ func TestV2_CapabilityInjectedTools_MultipleTypes(t *testing.T) {
 	})
 	require.Equal(t, http.StatusCreated, rec.Code)
 
-	// Add escalation capability
-	rec = postJSON(t, r, "/api/v1/agents/multi-cap-agent/capabilities", map[string]interface{}{
-		"type":   "escalation",
-		"config": map[string]interface{}{"action": "webhook"},
-	})
-	require.Equal(t, http.StatusCreated, rec.Code)
-
 	// Verify InjectedTools returns all tools from all capabilities
 	injector := capability.NewInjector(&testCapInjectorAdapter{repo: capRepo})
 	tools, err := injector.InjectedTools(context.Background(), "multi-cap-agent")
@@ -641,8 +631,7 @@ func TestV2_CapabilityInjectedTools_MultipleTypes(t *testing.T) {
 	assert.Contains(t, tools, "memory_recall")
 	assert.Contains(t, tools, "memory_store")
 	assert.Contains(t, tools, "knowledge_search")
-	assert.Contains(t, tools, "escalate")
-	assert.Len(t, tools, 4, "should have exactly 4 tools (no duplicates)")
+	assert.Len(t, tools, 3, "should have exactly 3 tools (no duplicates)")
 
 	// Verify guardrail capability injects no tools
 	rec = postJSON(t, r, "/api/v1/agents/multi-cap-agent/capabilities", map[string]interface{}{
@@ -653,13 +642,13 @@ func TestV2_CapabilityInjectedTools_MultipleTypes(t *testing.T) {
 
 	tools, err = injector.InjectedTools(context.Background(), "multi-cap-agent")
 	require.NoError(t, err)
-	assert.Len(t, tools, 4, "guardrail should not inject additional tools")
+	assert.Len(t, tools, 3, "guardrail should not inject additional tools")
 
-	// List capabilities → 4 total
+	// List capabilities → 3 total
 	rec = getJSON(t, r, "/api/v1/agents/multi-cap-agent/capabilities")
 	require.Equal(t, http.StatusOK, rec.Code)
 	caps := decodeJSON[[]deliveryhttp.CapabilityInfo](t, rec)
-	assert.Len(t, caps, 4)
+	assert.Len(t, caps, 3)
 }
 
 // ---- Test: Schema with multiple agents ----

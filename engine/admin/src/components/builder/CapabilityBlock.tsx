@@ -244,42 +244,6 @@ Response: { pass: boolean, reason?: string }`}
   );
 }
 
-function EscalationConfig({ cap, onChange }: PanelProps) {
-  const action = getKey(cap, 'action', 'transfer_to_user') as string;
-  const actionHints: Record<string, string> = {
-    transfer_to_user: 'Session marked as needing human, agent stops responding',
-    notify_webhook: 'Webhook called with session context, agent continues',
-  };
-
-  return (
-    <div className="space-y-3">
-      <p className={descCls}>Defines when and how agent escalates to human or another system</p>
-      <div className="bg-brand-dark rounded-card px-3 py-2 space-y-1">
-        <span className="text-[11px] text-brand-shade2 font-mono">Auto-included tools:</span>
-        <div className="flex gap-2 mt-1">
-          <span className="text-[10px] px-2 py-0.5 bg-brand-dark-alt border border-brand-shade3/20 rounded-card text-brand-shade2">escalate</span>
-        </div>
-        <p className={hintCls}>Agent can trigger escalation when conditions are met</p>
-      </div>
-      <div>
-        <label className={labelCls}>Action</label>
-        <select className={selectCls} data-testid="escalation-action" value={action} onChange={(e) => onChange(setKey(cap, 'action', e.target.value))}>
-          <option value="transfer_to_user">Transfer to User</option>
-          <option value="notify_webhook">Notify</option>
-        </select>
-        <p className={hintCls}>{actionHints[action]}</p>
-      </div>
-      {action === 'notify_webhook' && (
-        <div>
-          <label className={labelCls}>Webhook URL</label>
-          <input className={inputCls} placeholder="https://hooks.example.com/escalate" value={getKey(cap, 'webhook_url', '') as string} onChange={(e) => onChange(setKey(cap, 'webhook_url', e.target.value))} />
-          <p className={hintCls}>Called when escalation triggers. Receives full session context.</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
 type RecoveryRule = { failure_type: string; action: string; retry_count: number; backoff: string; fallback_model: string };
 const defaultRules: RecoveryRule[] = [
   { failure_type: 'mcp_connection_failed', action: 'retry', retry_count: 1, backoff: 'fixed', fallback_model: '' },
@@ -506,16 +470,6 @@ function getSummary(cap: CapabilityConfig): string {
       if (onFail) parts.push(`on fail: ${onFail.replace('_', ' ')}`);
       return parts.length > 0 ? parts.join(', ') : 'JSON Schema validation';
     }
-    case 'escalation': {
-      const parts: string[] = [];
-      parts.push(c.action ? String(c.action) : 'transfer_to_user');
-      const triggers = c.triggers_text as string | undefined;
-      if (triggers) {
-        const count = triggers.split(',').filter(Boolean).length;
-        if (count > 0) parts.push(`${count} trigger${count > 1 ? 's' : ''}`);
-      }
-      return parts.join(', ');
-    }
     case 'recovery': {
       const rules = c.rules as RecoveryRule[] | undefined;
       const count = rules?.length ?? 5;
@@ -538,7 +492,6 @@ const configMap: Record<string, React.FC<PanelProps>> = {
   knowledge: KnowledgeConfig,
   guardrail: GuardrailConfig,
 
-  escalation: EscalationConfig,
   recovery: RecoveryConfig,
   policies: PoliciesConfig,
 };

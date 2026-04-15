@@ -12,12 +12,6 @@ const (
 	ToolExecutionParallel   = "parallel"
 )
 
-// EscalationAction — what happens on escalation.
-const (
-	EscalationActionTransferToHuman = "transfer_to_human"
-	EscalationActionNotify          = "notify"
-)
-
 // ModelProviderType — LLM provider backend.
 const (
 	ModelProviderOllama           = "ollama"

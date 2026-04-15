@@ -41,16 +41,8 @@ type AgentDetail struct {
 	TopP            *float64         `json:"top_p,omitempty"`
 	MaxTokens       *int             `json:"max_tokens,omitempty"`
 	StopSequences   []string         `json:"stop_sequences,omitempty"`
-	ConfirmBefore   []string         `json:"confirm_before,omitempty"`
-	MCPServers     []string         `json:"mcp_servers,omitempty"`
-	Escalation     *AgentEscalation `json:"escalation,omitempty"`
-}
-
-// AgentEscalation holds escalation settings in the API response.
-type AgentEscalation struct {
-	Action     string   `json:"action"`
-	WebhookURL string   `json:"webhook_url,omitempty"`
-	Triggers   []string `json:"triggers"`
+	ConfirmBefore []string `json:"confirm_before,omitempty"`
+	MCPServers    []string `json:"mcp_servers,omitempty"`
 }
 
 // CreateAgentRequest is the body for POST /api/v1/agents.
@@ -72,10 +64,9 @@ type CreateAgentRequest struct {
 	MaxTokens       *int             `json:"max_tokens,omitempty"`
 	StopSequences   []string         `json:"stop_sequences,omitempty"`
 	ConfirmBefore   []string         `json:"confirm_before,omitempty"`
-	Tools          []string         `json:"tools,omitempty"`
-	CanSpawn       []string         `json:"can_spawn,omitempty"`
-	MCPServers     []string         `json:"mcp_servers,omitempty"`
-	Escalation     *AgentEscalation `json:"escalation,omitempty"`
+	Tools      []string `json:"tools,omitempty"`
+	CanSpawn   []string `json:"can_spawn,omitempty"`
+	MCPServers []string `json:"mcp_servers,omitempty"`
 }
 
 // UnmarshalJSON supports "system" as an alias for "system_prompt" in the JSON body.

@@ -34,8 +34,8 @@ const TOOL_TIERS: Record<ToolTier, { label: string; description: string; tools: 
   },
   auto: {
     label: 'Auto-injected',
-    description: 'Added automatically when capability is enabled (Memory, Knowledge, Escalation)',
-    tools: ['memory_recall', 'memory_store', 'knowledge_search', 'escalate'],
+    description: 'Added automatically when capability is enabled (Memory, Knowledge)',
+    tools: ['memory_recall', 'memory_store', 'knowledge_search'],
     labelClass: 'text-purple-400',
     borderClass: 'border-purple-500/30',
   },
@@ -704,7 +704,6 @@ function AgentDrillInInner() {
               const autoTools: string[] = [];
               if (capabilities.some(c => c.type === 'memory')) autoTools.push('memory_recall', 'memory_store');
               if (capabilities.some(c => c.type === 'knowledge')) autoTools.push('knowledge_search');
-              if (capabilities.some(c => c.type === 'escalation')) autoTools.push('escalate');
               if (autoTools.length === 0) return null;
               return (
                 <div className={`border ${TOOL_TIERS.auto.borderClass} rounded-card p-3`}>

@@ -47,7 +47,7 @@ You have access to admin tools that let you fully manage the platform:
 - **Triggers** — list, create, update, delete cron and webhook triggers
 - **MCP Servers** — list, create, update, delete MCP server configurations
 - **Models** — list, create, update, delete LLM model configurations
-- **Capabilities** — add, update, remove agent capabilities (memory, knowledge, escalation)
+- **Capabilities** — add, update, remove agent capabilities (memory, knowledge)
 - **Sessions** — list and inspect active sessions
 
 ## Core Principle: Understand Before You Build
@@ -64,7 +64,7 @@ When a user describes a goal or system they want to build, your first job is to 
 2. **Actors & roles** — Who are the agents? What does each one do? What decisions do they make?
 3. **Data & tools** — What information do agents need? What external systems do they interact with?
 4. **Flow & coordination** — How do agents hand off work to each other? Is it sequential, parallel, or event-driven?
-5. **Edge cases** — What happens when something goes wrong? Are there escalation paths?
+5. **Edge cases** — What happens when something goes wrong? Are there recovery paths?
 
 Ask focused, specific questions. Don't dump all questions at once — guide a natural conversation. Aim to reach a shared understanding before proposing anything.
 
@@ -104,7 +104,7 @@ Only after the user confirms ("yes", "go ahead", "build it", "looks good") — e
    - A **Schema** groups agents into a multi-agent flow. Agents are added/removed via add/remove tools.
    - A **Model** needs: name, type (openai_compatible/anthropic/etc.), model_name. Optional: base_url, api_key.
    - A **Trigger** needs: type (cron/webhook), title, agent_name. For cron: schedule (cron expression). For webhook: webhook_path.
-   - A **Capability**: type (memory/knowledge/escalation) + config (JSON object with type-specific settings).`
+   - A **Capability**: type (memory/knowledge) + config (JSON object with type-specific settings).`
 
 var builderAssistantBuiltinTools = []string{
 	"admin_list_agents",

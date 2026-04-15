@@ -40,7 +40,7 @@ func TestTierEnforcer_Cloud_AllowsTier1(t *testing.T) {
 func TestTierEnforcer_Cloud_AllowsTier2(t *testing.T) {
 	enforcer := NewTierEnforcer(DeploymentModeCloud)
 
-	allowed := []string{"memory_recall", "memory_store", "knowledge_search", "escalate"}
+	allowed := []string{"memory_recall", "memory_store", "knowledge_search"}
 	for _, tool := range allowed {
 		if err := enforcer.IsAllowed(tool); err != nil {
 			t.Errorf("Cloud mode should allow Tier 2 %q, got: %v", tool, err)

@@ -54,8 +54,6 @@ type Factory struct {
 	memoryMaxEntries int
 	// Engine task manager (injected via SetEngineTaskManager — nil = old task system fallback)
 	engineTaskManager tools.EngineTaskManager
-	// Escalation capability deps (injected via SetEscalation — nil = disabled)
-	escalationHandler tools.EscalationHandler
 	// Schema resolver for memory/knowledge tools (BUG-007)
 	schemaResolver AgentSchemaResolver
 	// US-003: Guardrail pipeline (injected via SetGuardrail — nil = disabled)
@@ -103,11 +101,6 @@ func (f *Factory) SetEngineTaskManager(mgr tools.EngineTaskManager) {
 	f.engineTaskManager = mgr
 }
 
-// SetEscalation configures the escalation handler for the escalate tool.
-func (f *Factory) SetEscalation(handler tools.EscalationHandler) {
-	f.escalationHandler = handler
-}
-
 // SetSchemaResolver configures schema lookup for propagating SchemaID to tool deps.
 func (f *Factory) SetSchemaResolver(resolver AgentSchemaResolver) {
 	f.schemaResolver = resolver
@@ -124,14 +117,13 @@ func (f *Factory) SetCapabilityConfigReader(reader tools.CapabilityConfigReader)
 	f.capConfigReader = reader
 }
 
-// userMemoryDepsProvider wraps DefaultToolDepsProvider and injects userID + memory + escalation refs per session.
+// userMemoryDepsProvider wraps DefaultToolDepsProvider and injects userID + memory refs per session.
 type userMemoryDepsProvider struct {
-	base              *tools.DefaultToolDepsProvider
-	userID            string
-	memoryRecaller    tools.MemoryRecaller
-	memoryStorer      tools.MemoryStorer
-	memoryMaxEntries  int
-	escalationHandler tools.EscalationHandler
+	base             *tools.DefaultToolDepsProvider
+	userID           string
+	memoryRecaller   tools.MemoryRecaller
+	memoryStorer     tools.MemoryStorer
+	memoryMaxEntries int
 }
 
 func (p *userMemoryDepsProvider) GetDependencies(sessionID, projectKey string) tools.ToolDependencies {
@@ -140,7 +132,6 @@ func (p *userMemoryDepsProvider) GetDependencies(sessionID, projectKey string) t
 	deps.MemoryRecaller = p.memoryRecaller
 	deps.MemoryStorer = p.memoryStorer
 	deps.MemoryMaxEntries = p.memoryMaxEntries
-	deps.EscalationHandler = p.escalationHandler
 	return deps
 }
 
@@ -172,14 +163,13 @@ func (f *Factory) CreateForSession(
 		}
 	}
 
-	// Wrap with per-user memory + escalation deps
+	// Wrap with per-user memory deps
 	toolDeps := &userMemoryDepsProvider{
-		base:              baseDeps,
-		userID:            userID,
-		memoryRecaller:    f.memoryRecaller,
-		memoryStorer:      f.memoryStorer,
-		memoryMaxEntries:  memMaxEntries,
-		escalationHandler: f.escalationHandler,
+		base:             baseDeps,
+		userID:           userID,
+		memoryRecaller:   f.memoryRecaller,
+		memoryStorer:     f.memoryStorer,
+		memoryMaxEntries: memMaxEntries,
 	}
 
 	// Get context reminders from getter (if provided)
@@ -206,7 +196,6 @@ func (f *Factory) CreateForSession(
 		for _, cap := range []struct{ name, hint string }{
 			{"memory", "You have Memory capability. Use memory_recall at the start of conversations to check for prior context about this user. Use memory_store to save important facts for future conversations."},
 			{"knowledge", "You have Knowledge capability. Use knowledge_search to find relevant information from your knowledge base before answering questions."},
-			{"escalation", "You have Escalation capability. Use escalate when a request is beyond your scope or requires human intervention."},
 		} {
 			if cfg, err := f.capConfigReader.ReadConfig(context.Background(), agentName, cap.name); err == nil && cfg != nil {
 				hints = append(hints, cap.hint)

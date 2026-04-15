@@ -70,7 +70,7 @@ func (a *configImportExportHTTPAdapter) exportAgents(_ context.Context) ([]agent
 	var agents []models.AgentModel
 	if err := a.db.Preload("Model").Preload("Tools", func(db *gorm.DB) *gorm.DB {
 		return db.Order("sort_order ASC")
-	}).Preload("SpawnTargets.TargetAgent").Preload("Escalation.Triggers").Find(&agents).Error; err != nil {
+	}).Preload("SpawnTargets.TargetAgent").Find(&agents).Error; err != nil {
 		return nil, fmt.Errorf("query agents: %w", err)
 	}
 
@@ -119,17 +119,6 @@ func (a *configImportExportHTTPAdapter) exportAgents(_ context.Context) ([]agent
 
 		for _, st := range ag.SpawnTargets {
 			ay.CanSpawn = append(ay.CanSpawn, st.TargetAgent.Name)
-		}
-
-		if ag.Escalation != nil {
-			esc := &escalationYAML{
-				Action:     ag.Escalation.Action,
-				WebhookURL: ag.Escalation.WebhookURL,
-			}
-			for _, et := range ag.Escalation.Triggers {
-				esc.Triggers = append(esc.Triggers, et.Keyword)
-			}
-			ay.Escalation = esc
 		}
 
 		result = append(result, ay)
@@ -447,7 +436,7 @@ func (a *configImportExportHTTPAdapter) importAgents(tx *gorm.DB, items []agentY
 		agentIDs[ag.Name] = newAgent.ID
 	}
 
-	// Pass 2: sync relations (tools, spawn targets, MCP servers, escalation).
+	// Pass 2: sync relations (tools, spawn targets, MCP servers).
 	for _, ag := range items {
 		agentID := agentIDs[ag.Name]
 		if err := a.syncAgentRelations(tx, agentID, ag); err != nil {
@@ -508,30 +497,6 @@ func (a *configImportExportHTTPAdapter) syncAgentRelations(tx *gorm.DB, agentID 
 		}
 		if err := tx.Create(&link).Error; err != nil {
 			return fmt.Errorf("link mcp server %q: %w", mcpName, err)
-		}
-	}
-
-	// Escalation: delete old, insert new.
-	if err := tx.Where("agent_id = ?", agentID).Delete(&models.AgentEscalation{}).Error; err != nil {
-		return fmt.Errorf("delete old escalation: %w", err)
-	}
-	if ag.Escalation != nil {
-		esc := models.AgentEscalation{
-			AgentID:    agentID,
-			Action:     ag.Escalation.Action,
-			WebhookURL: ag.Escalation.WebhookURL,
-		}
-		if err := tx.Create(&esc).Error; err != nil {
-			return fmt.Errorf("create escalation: %w", err)
-		}
-		for _, keyword := range ag.Escalation.Triggers {
-			trigger := models.AgentEscalationTrigger{
-				EscalationID: esc.ID,
-				Keyword:      keyword,
-			}
-			if err := tx.Create(&trigger).Error; err != nil {
-				return fmt.Errorf("create escalation trigger %q: %w", keyword, err)
-			}
 		}
 	}
 

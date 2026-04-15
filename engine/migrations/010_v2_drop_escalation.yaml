@@ -1,0 +1,31 @@
+databaseChangeLog:
+  # V2 Escalation removal — Commit Group B.
+  #
+  # Escalation capability (human handoff) is out of V2.
+  # See docs/architecture/agent-first-runtime.md §5.9 and
+  # docs/plan/v2-cleanup-checklist.md (Commit Group B).
+  #
+  # Clean-schema policy: pure DDL only (DROP TABLE IF EXISTS).
+  # No data preservation — escalation configs were coupled to the
+  # legacy capability system and have no V2 equivalent. Users on
+  # old DBs re-init; fresh install is the supported path.
+  #
+  # Order matters: agent_escalation_triggers references
+  # agent_escalation via FK, so the child table drops first.
+  #
+  # Idempotent: applies cleanly on fresh DBs (no-op) and on pre-V2
+  # DBs that have the GORM-auto-migrated escalation tables.
+  - changeSet:
+      id: 010-v2-drop-escalation
+      author: system
+      changes:
+        - sql:
+            sql: |
+              DROP TABLE IF EXISTS agent_escalation_triggers;
+              DROP TABLE IF EXISTS agent_escalation;
+      rollback:
+        - sql:
+            sql: |
+              -- Escalation is out of V2 and cannot be restored via Liquibase.
+              -- If rollback is truly needed, restore from a pre-V2 backup.
+              SELECT 1;
