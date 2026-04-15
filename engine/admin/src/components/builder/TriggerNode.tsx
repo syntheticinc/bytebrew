@@ -5,6 +5,9 @@ export interface TriggerNodeData {
   id: string;
   title: string;
   type: 'cron' | 'webhook' | 'chat';
+  // Type-specific config (collapsed per V2 §4.1). Surfaces as a flat object on
+  // the node data so rendering can read config.schedule / config.webhook_path
+  // without unwrapping a nested `config` prop.
   schedule?: string;
   webhook_path?: string;
   enabled: boolean;

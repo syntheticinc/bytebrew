@@ -86,6 +86,21 @@ func AutoMigrate(db *gorm.DB) error {
 		slog.Warn("[Migration] dropping legacy schema_agents table failed (may already be absent)", "error", err)
 	}
 
+	// V2 triggers cleanup (Commit Group D).
+	// Defense-in-depth alongside Liquibase 014 — idempotent DropColumn.
+	// Type-specific fields (schedule, webhook_path) collapse into the
+	// `config` jsonb column. The on_complete webhook feature is removed
+	// entirely. See docs/architecture/agent-first-runtime.md §4.1 / §4.2.
+	if db.Migrator().HasTable("triggers") {
+		for _, col := range []string{"schedule", "webhook_path", "on_complete_url", "on_complete_headers"} {
+			if db.Migrator().HasColumn("triggers", col) {
+				if err := db.Migrator().DropColumn("triggers", col); err != nil {
+					slog.Warn("[Migration] dropping legacy triggers column failed (may already be absent)", "column", col, "error", err)
+				}
+			}
+		}
+	}
+
 	if err := db.AutoMigrate(
 		// Config tables (9)
 		&AgentModel{},
@@ -143,14 +158,12 @@ func AutoMigrate(db *gorm.DB) error {
 		return fmt.Errorf("migrate knowledge to KB: %w", err)
 	}
 
-	// Partial unique index: enforce uniqueness on webhook_path only when non-empty.
-	// This allows multiple cron triggers with empty webhook_path without conflicts.
-	// DROP the old full unique index first (ignore error if it doesn't exist).
+	// V2 triggers cleanup (Commit Group D): the legacy partial unique index
+	// on `triggers.webhook_path` is obsolete — the column itself was dropped.
+	// Drop the index if a pre-V2 DB still has it. Any future uniqueness on
+	// webhook_path must be expressed against `config->>'webhook_path'`.
 	db.Exec("DROP INDEX IF EXISTS idx_triggers_webhook_path")
-	if err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_triggers_webhook_path_nonempty
-		ON triggers (webhook_path) WHERE webhook_path != ''`).Error; err != nil {
-		return fmt.Errorf("create partial unique index on webhook_path: %w", err)
-	}
+	db.Exec("DROP INDEX IF EXISTS idx_triggers_webhook_path_nonempty")
 
 	return nil
 }

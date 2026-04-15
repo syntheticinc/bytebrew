@@ -34,13 +34,17 @@ export default function TriggerConfigPanel({ trigger, setTrigger, setNodes, setE
     if (isPrototype) return;
     setSaving(true);
     try {
+      // §4.1: type-specific fields (schedule, webhook_path) belong inside
+      // config on the wire; the panel keeps them flat locally for UX.
+      const config: Record<string, string> = {};
+      if (trigger.schedule) config.schedule = trigger.schedule as string;
+      if (trigger.webhook_path) config.webhook_path = trigger.webhook_path as string;
       await api.updateTrigger(triggerId, {
         type: trigger.type as string,
         title: trigger.title as string,
-        schedule: (trigger.schedule as string) || '',
-        webhook_path: (trigger.webhook_path as string) || '',
         description: (trigger.description as string) || '',
         enabled: trigger.enabled !== false,
+        config,
       });
       addToast('Trigger saved', 'success');
     } catch (err) {

@@ -3,6 +3,7 @@ package configrepo
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"gorm.io/gorm"
@@ -94,6 +95,26 @@ func (r *GORMTriggerRepository) HasEnabledChatTrigger(ctx context.Context, agent
 	return count > 0, nil
 }
 
+// FindEnabledChatTrigger returns the first enabled chat trigger for the given
+// agent, or nil when there is none. Used by the chat dispatcher to stamp
+// last_fired_at on the originating channel when a new session opens (§4.1).
+func (r *GORMTriggerRepository) FindEnabledChatTrigger(ctx context.Context, agentName string) (*models.TriggerModel, error) {
+	var trigger models.TriggerModel
+	err := r.db.WithContext(ctx).
+		Table("triggers").
+		Joins("JOIN agents ON agents.id = triggers.agent_id").
+		Where("agents.name = ? AND triggers.type = ? AND triggers.enabled = ?", agentName, models.TriggerTypeChat, true).
+		Select("triggers.*").
+		First(&trigger).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("find enabled chat trigger for %q: %w", agentName, err)
+	}
+	return &trigger, nil
+}
+
 // SetAgentID sets the target agent for a trigger (canvas edge → routing enabled).
 func (r *GORMTriggerRepository) SetAgentID(ctx context.Context, triggerID string, agentID string) error {
 	result := r.db.WithContext(ctx).Model(&models.TriggerModel{}).Where("id = ?", triggerID).Update("agent_id", agentID)
@@ -123,6 +144,48 @@ func (r *GORMTriggerRepository) Delete(ctx context.Context, id string) error {
 	result := r.db.WithContext(ctx).Delete(&models.TriggerModel{}, "id = ?", id)
 	if result.Error != nil {
 		return fmt.Errorf("delete trigger: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("trigger not found: %s", id)
+	}
+	return nil
+}
+
+// FindByWebhookPath resolves an enabled webhook-type trigger by its
+// `config->>'webhook_path'` value. Returns nil (no error) when no trigger
+// matches — callers decide whether that is a 404.
+//
+// V2 (§4.1): webhook_path lives inside `config` jsonb; the legacy flat
+// column is gone.
+func (r *GORMTriggerRepository) FindByWebhookPath(ctx context.Context, path string) (*models.TriggerModel, error) {
+	var trigger models.TriggerModel
+	err := r.db.WithContext(ctx).
+		Preload("Agent").
+		Where("type = ? AND enabled = ? AND config->>'webhook_path' = ?", models.TriggerTypeWebhook, true, path).
+		First(&trigger).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("find webhook trigger %q: %w", path, err)
+	}
+	return &trigger, nil
+}
+
+// MarkFired stamps the trigger's last_fired_at to now(). Called from
+// CronScheduler (every tick), the webhook handler (after validation), and the
+// chat dispatcher (first message of a new session) — see
+// docs/architecture/agent-first-runtime.md §4.1.
+//
+// Idempotent by design: every call just overwrites the timestamp; a missing
+// trigger row is reported as an error so callers can distinguish the "stale
+// trigger id" case (e.g. trigger deleted mid-flight) from a successful stamp.
+func (r *GORMTriggerRepository) MarkFired(ctx context.Context, id string) error {
+	result := r.db.WithContext(ctx).Model(&models.TriggerModel{}).
+		Where("id = ?", id).
+		Update("last_fired_at", time.Now())
+	if result.Error != nil {
+		return fmt.Errorf("mark trigger fired: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
 		return fmt.Errorf("trigger not found: %s", id)

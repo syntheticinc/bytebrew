@@ -260,16 +260,42 @@ func triggerModelToResponse(t models.TriggerModel) deliveryhttp.TriggerResponse 
 		AgentID:     derefString(t.AgentID),
 		AgentName:   t.Agent.Name,
 		SchemaID:    t.SchemaID,
-		Schedule:    t.Schedule,
-		WebhookPath: t.WebhookPath,
 		Description: t.Description,
 		Enabled:     t.Enabled,
+		Config:      triggerConfigToMap(t.Config),
 		CreatedAt:   t.CreatedAt.Format(time.RFC3339),
 	}
 	if t.LastFiredAt != nil {
 		resp.LastFiredAt = t.LastFiredAt.Format(time.RFC3339)
 	}
 	return resp
+}
+
+// triggerConfigToMap flattens a typed TriggerConfig into the wire-format map
+// served by the HTTP API. Empty fields are elided so `config` stays compact
+// for chat-type triggers that carry no config.
+func triggerConfigToMap(c models.TriggerConfig) map[string]interface{} {
+	out := map[string]interface{}{}
+	if c.Schedule != "" {
+		out["schedule"] = c.Schedule
+	}
+	if c.WebhookPath != "" {
+		out["webhook_path"] = c.WebhookPath
+	}
+	return out
+}
+
+// triggerConfigFromMap materialises a typed TriggerConfig from the wire map.
+// Unknown keys are dropped silently — the API surface is deliberately narrow.
+func triggerConfigFromMap(m map[string]interface{}) models.TriggerConfig {
+	var c models.TriggerConfig
+	if v, ok := m["schedule"].(string); ok {
+		c.Schedule = v
+	}
+	if v, ok := m["webhook_path"].(string); ok {
+		c.WebhookPath = v
+	}
+	return c
 }
 
 func (a *triggerServiceHTTPAdapter) ListTriggers(ctx context.Context) ([]deliveryhttp.TriggerResponse, error) {
@@ -337,10 +363,9 @@ func (a *triggerServiceHTTPAdapter) CreateTrigger(ctx context.Context, req deliv
 		Title:       req.Title,
 		AgentID:     ptrString(req.AgentID),
 		SchemaID:    req.SchemaID,
-		Schedule:    req.Schedule,
-		WebhookPath: req.WebhookPath,
 		Description: req.Description,
 		Enabled:     true,
+		Config:      triggerConfigFromMap(req.Config),
 	}
 	if req.Enabled != nil {
 		model.Enabled = *req.Enabled
@@ -360,9 +385,8 @@ func (a *triggerServiceHTTPAdapter) UpdateTrigger(ctx context.Context, id string
 		Type:        req.Type,
 		Title:       req.Title,
 		AgentID:     ptrString(req.AgentID),
-		Schedule:    req.Schedule,
-		WebhookPath: req.WebhookPath,
 		Description: req.Description,
+		Config:      triggerConfigFromMap(req.Config),
 	}
 	if req.Enabled != nil {
 		model.Enabled = *req.Enabled

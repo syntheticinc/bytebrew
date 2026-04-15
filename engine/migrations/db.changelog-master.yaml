@@ -25,3 +25,5 @@ databaseChangeLog:
       file: migrations/012_v2_rename_edges_to_agent_relations.yaml
   - include:
       file: migrations/013_v2_drop_schema_agents.yaml
+  - include:
+      file: migrations/014_v2_triggers_cleanup.yaml

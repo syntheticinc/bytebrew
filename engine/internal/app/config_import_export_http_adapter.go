@@ -197,8 +197,8 @@ func (a *configImportExportHTTPAdapter) exportTriggers(_ context.Context) ([]tri
 			Title:       t.Title,
 			Type:        t.Type,
 			AgentName:   t.Agent.Name,
-			Schedule:    t.Schedule,
-			WebhookPath: t.WebhookPath,
+			Schedule:    t.Config.Schedule,
+			WebhookPath: t.Config.WebhookPath,
 			Description: t.Description,
 			Enabled:     t.Enabled,
 		})
@@ -508,8 +508,7 @@ func (a *configImportExportHTTPAdapter) importTriggers(tx *gorm.DB, items []trig
 		err := tx.Where("title = ? AND agent_id = ?", t.Title, agent.ID).First(&existing).Error
 		if err == nil {
 			existing.Type = t.Type
-			existing.Schedule = t.Schedule
-			existing.WebhookPath = t.WebhookPath
+			existing.Config = models.TriggerConfig{Schedule: t.Schedule, WebhookPath: t.WebhookPath}
 			existing.Description = t.Description
 			existing.Enabled = t.Enabled
 			if err := tx.Save(&existing).Error; err != nil {
@@ -522,10 +521,9 @@ func (a *configImportExportHTTPAdapter) importTriggers(tx *gorm.DB, items []trig
 			Type:        t.Type,
 			Title:       t.Title,
 			AgentID:     ptrString(agent.ID),
-			Schedule:    t.Schedule,
-			WebhookPath: t.WebhookPath,
 			Description: t.Description,
 			Enabled:     t.Enabled,
+			Config:      models.TriggerConfig{Schedule: t.Schedule, WebhookPath: t.WebhookPath},
 		}
 		if err := tx.Create(&newTrigger).Error; err != nil {
 			return fmt.Errorf("create trigger %q: %w", t.Title, err)

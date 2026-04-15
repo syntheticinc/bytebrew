@@ -207,6 +207,15 @@ export interface CreateTaskRequest {
 // Trigger types
 // ============================================================================
 
+// TriggerConfig carries the type-specific configuration for a Trigger.
+// Fields are type-dependent: cron → {schedule}; webhook → {webhook_path};
+// chat → {} (may grow later).
+// See docs/architecture/agent-first-runtime.md §4.1.
+export interface TriggerConfig {
+  schedule?: string;
+  webhook_path?: string;
+}
+
 export interface Trigger {
   id: string;
   type: 'cron' | 'webhook' | 'chat';
@@ -214,12 +223,9 @@ export interface Trigger {
   agent_id: string;
   agent_name?: string;
   schema_id?: string;
-  schedule?: string;
-  webhook_path?: string;
   description?: string;
   enabled: boolean;
-  on_complete_url?: string;
-  on_complete_headers?: Record<string, string>;
+  config?: TriggerConfig;
   last_fired_at?: string;
   created_at: string;
 }
@@ -230,12 +236,9 @@ export interface CreateTriggerRequest {
   agent_id?: string;
   agent_name?: string;
   schema_id?: string;
-  schedule?: string;
-  webhook_path?: string;
   description?: string;
   enabled?: boolean;
-  on_complete_url?: string;
-  on_complete_headers?: Record<string, string>;
+  config?: TriggerConfig;
 }
 
 // ============================================================================

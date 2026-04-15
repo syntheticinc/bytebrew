@@ -13,6 +13,13 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/service/task"
 )
 
+// triggerMarker narrows GORMTriggerRepository to just MarkFired for the
+// scheduler closure, so the adapter's other methods are not transitively
+// pinned into the cron fan-out.
+type triggerMarker interface {
+	MarkFired(ctx context.Context, id string) error
+}
+
 // taskSubmitter hands a created task id to a background worker for autonomous
 // execution. Implemented by *task.TaskWorker; defined here (consumer-side) so
 // triggerTaskCreator can be nil-safe when no worker is wired.
@@ -22,12 +29,16 @@ type taskSubmitter interface {
 
 // triggerTaskCreator is the bridge from CronScheduler's TaskCreator interface to
 // the unified EngineTaskManagerAdapter. It records the trigger id as SourceID so
-// the completion hook can look up the on-complete webhook later, and hands the
-// new task id to the background worker so the agent actually runs (otherwise the
-// row just sits pending in the DB forever).
+// the run is traceable back to the originating trigger, and hands the new task
+// id to the background worker so the agent actually runs (otherwise the row
+// just sits pending in the DB forever).
+//
+// V2 (§4.1): every cron tick also stamps the trigger's last_fired_at via
+// MarkFired so admin UIs can show the most recent fire for each trigger.
 type triggerTaskCreator struct {
-	manager *EngineTaskManagerAdapter
-	worker  taskSubmitter // optional — nil means cron only records the task without auto-executing
+	manager     *EngineTaskManagerAdapter
+	worker      taskSubmitter // optional — nil means cron only records the task without auto-executing
+	triggerRepo triggerMarker // optional — nil means fire timestamps are not tracked (tests)
 }
 
 // CreateFromTrigger implements task.TaskCreator.
@@ -41,6 +52,13 @@ func (c *triggerTaskCreator) CreateFromTrigger(ctx context.Context, params task.
 	})
 	if err != nil {
 		return uuid.Nil, err
+	}
+	if c.triggerRepo != nil && params.SourceID != "" {
+		if markErr := c.triggerRepo.MarkFired(ctx, params.SourceID); markErr != nil {
+			// Non-fatal: the task is already persisted; a missing last_fired_at
+			// is cosmetic for cron. Log and move on.
+			slog.Warn("mark trigger fired failed", "trigger_id", params.SourceID, "error", markErr)
+		}
 	}
 	if c.worker != nil {
 		if !c.worker.Submit(taskID) {
@@ -58,9 +76,10 @@ func (c *triggerTaskCreator) CreateFromTrigger(ctx context.Context, params task.
 
 // NewTriggerTaskCreator returns a task.TaskCreator backed by the unified task manager.
 // If worker is non-nil, every task produced by a trigger is submitted for autonomous
-// execution on the background worker pool.
-func NewTriggerTaskCreator(manager *EngineTaskManagerAdapter, worker taskSubmitter) task.TaskCreator {
-	return &triggerTaskCreator{manager: manager, worker: worker}
+// execution on the background worker pool. If triggerRepo is non-nil, each fire stamps
+// the originating trigger's last_fired_at (§4.1).
+func NewTriggerTaskCreator(manager *EngineTaskManagerAdapter, worker taskSubmitter, triggerRepo triggerMarker) task.TaskCreator {
+	return &triggerTaskCreator{manager: manager, worker: worker, triggerRepo: triggerRepo}
 }
 
 // StartCronScheduler loads all enabled cron triggers from the DB and registers them
@@ -79,7 +98,7 @@ func StartCronScheduler(
 	manager *EngineTaskManagerAdapter,
 	worker taskSubmitter,
 ) (*task.CronScheduler, error) {
-	scheduler := task.NewCronScheduler(NewTriggerTaskCreator(manager, worker))
+	scheduler := task.NewCronScheduler(NewTriggerTaskCreator(manager, worker, triggerRepo))
 
 	triggers, err := triggerRepo.List(ctx)
 	if err != nil {
@@ -88,7 +107,7 @@ func StartCronScheduler(
 
 	registered, considered, skipped := 0, 0, 0
 	for _, t := range triggers {
-		if !t.Enabled || t.Type != "cron" || t.Schedule == "" {
+		if !t.Enabled || t.Type != "cron" || t.Config.Schedule == "" {
 			continue
 		}
 		considered++
@@ -98,8 +117,8 @@ func StartCronScheduler(
 			skipped++
 			continue
 		}
-		if err := scheduler.AddTrigger(t.Schedule, title, description, agentName, t.ID); err != nil {
-			slog.Warn("invalid cron schedule, skipping trigger", "trigger_id", t.ID, "schedule", t.Schedule, "error", err)
+		if err := scheduler.AddTrigger(t.Config.Schedule, title, description, agentName, t.ID); err != nil {
+			slog.Warn("invalid cron schedule, skipping trigger", "trigger_id", t.ID, "schedule", t.Config.Schedule, "error", err)
 			skipped++
 			continue
 		}

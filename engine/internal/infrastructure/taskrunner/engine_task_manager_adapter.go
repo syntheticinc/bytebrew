@@ -26,28 +26,17 @@ const MaxTaskDepth = 10
 //
 // All IDs in the public API are uuid.UUID. Conversion from external string IDs
 // (agent JSON, HTTP path params) happens at the tool/HTTP boundary, not here.
+//
+// V2 (§4.2): the on-complete webhook feature is removed. Terminal transitions
+// do not fan out to external URLs — if that use case returns it will be
+// expressed as an MCP webhook tool call from the agent itself.
 type EngineTaskManagerAdapter struct {
-	repo           *configrepo.GORMTaskRepository
-	completionHook *TaskCompletionHook // optional — fires on complete/fail/cancel transitions
+	repo *configrepo.GORMTaskRepository
 }
 
 // NewEngineTaskManagerAdapter creates a new adapter over the given task repository.
 func NewEngineTaskManagerAdapter(repo *configrepo.GORMTaskRepository) *EngineTaskManagerAdapter {
 	return &EngineTaskManagerAdapter{repo: repo}
-}
-
-// SetCompletionHook attaches an optional webhook hook that fires on terminal transitions.
-// Safe to call at startup after the adapter is constructed.
-func (a *EngineTaskManagerAdapter) SetCompletionHook(hook *TaskCompletionHook) {
-	a.completionHook = hook
-}
-
-// notifyTerminal is called after a task moves to a terminal state.
-// Wrapped in a nil-check so tests and unit scenarios can run without a hook.
-func (a *EngineTaskManagerAdapter) notifyTerminal(ctx context.Context, id uuid.UUID) {
-	if a.completionHook != nil {
-		a.completionHook.OnCompleted(ctx, id)
-	}
 }
 
 // validateBlockers ensures every id in blockers references an existing task.
@@ -180,24 +169,7 @@ func (a *EngineTaskManagerAdapter) GetTask(ctx context.Context, id uuid.UUID) (*
 }
 
 func (a *EngineTaskManagerAdapter) SetTaskStatus(ctx context.Context, id uuid.UUID, status string, result string) error {
-	if err := a.repo.UpdateStatus(ctx, id, domain.EngineTaskStatus(status), result); err != nil {
-		return err
-	}
-	if isTerminalStatus(status) {
-		a.notifyTerminal(ctx, id)
-	}
-	return nil
-}
-
-// isTerminalStatus returns true if the string matches a terminal EngineTaskStatus.
-func isTerminalStatus(status string) bool {
-	switch domain.EngineTaskStatus(status) {
-	case domain.EngineTaskStatusCompleted,
-		domain.EngineTaskStatusFailed,
-		domain.EngineTaskStatusCancelled:
-		return true
-	}
-	return false
+	return a.repo.UpdateStatus(ctx, id, domain.EngineTaskStatus(status), result)
 }
 
 func (a *EngineTaskManagerAdapter) ListTasks(ctx context.Context, sessionID string) ([]tools.EngineTaskSummary, error) {
@@ -278,11 +250,7 @@ func (a *EngineTaskManagerAdapter) StartTask(ctx context.Context, id uuid.UUID) 
 }
 
 func (a *EngineTaskManagerAdapter) CompleteTask(ctx context.Context, id uuid.UUID, result string) error {
-	if err := a.repo.UpdateStatus(ctx, id, domain.EngineTaskStatusCompleted, result); err != nil {
-		return err
-	}
-	a.notifyTerminal(ctx, id)
-	return nil
+	return a.repo.UpdateStatus(ctx, id, domain.EngineTaskStatusCompleted, result)
 }
 
 func (a *EngineTaskManagerAdapter) FailTask(ctx context.Context, id uuid.UUID, reason string) error {
@@ -293,19 +261,11 @@ func (a *EngineTaskManagerAdapter) FailTask(ctx context.Context, id uuid.UUID, r
 	if err := task.Fail(reason); err != nil {
 		return err
 	}
-	if err := a.repo.Update(ctx, task); err != nil {
-		return err
-	}
-	a.notifyTerminal(ctx, id)
-	return nil
+	return a.repo.Update(ctx, task)
 }
 
 func (a *EngineTaskManagerAdapter) CancelTask(ctx context.Context, id uuid.UUID, reason string) error {
-	if err := a.repo.Cancel(ctx, id, reason); err != nil {
-		return err
-	}
-	a.notifyTerminal(ctx, id)
-	return nil
+	return a.repo.Cancel(ctx, id, reason)
 }
 
 func (a *EngineTaskManagerAdapter) SetTaskPriority(ctx context.Context, id uuid.UUID, priority int) error {

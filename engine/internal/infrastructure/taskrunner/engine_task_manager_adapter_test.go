@@ -237,25 +237,14 @@ func TestAdapter_CancelTask_StoresReasonOnRoot(t *testing.T) {
 	assert.Equal(t, "", child.Result)
 }
 
-// --- Completion hook smoke test ---
+// --- Terminal transition smoke test ---
+//
+// V2 (§4.2): the on-complete webhook feature is removed, so terminal
+// transitions are now pure DB updates with no fan-out. This test documents
+// that the adapter still walks the state machine cleanly after the hook
+// was excised.
 
-func TestAdapter_CompletionHookSafeWithNilTriggerRepo(t *testing.T) {
-	// A hook with nil triggerRepo should short-circuit without panicking,
-	// so terminal transitions still succeed.
-	adapter, _ := newAdapter(t)
-	adapter.SetCompletionHook(NewTaskCompletionHook(nil, nil, nil))
-
-	rootID := createTopLevelTask(t, adapter, "root")
-
-	// Non-terminal transition.
-	require.NoError(t, adapter.SetTaskStatus(context.Background(), rootID, string(domain.EngineTaskStatusInProgress), ""))
-
-	// Terminal transition — hook path must be invoked but safely no-op.
-	require.NoError(t, adapter.CompleteTask(context.Background(), rootID, "done"))
-}
-
-func TestAdapter_CompletionHookNilSafe(t *testing.T) {
-	// Without any hook set, all terminal methods must still succeed.
+func TestAdapter_TerminalTransitionsSucceed(t *testing.T) {
 	adapter, _ := newAdapter(t)
 	id := createTopLevelTask(t, adapter, "t")
 	// Walk through the state machine: pending → in_progress → completed.

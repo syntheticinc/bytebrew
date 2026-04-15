@@ -14,9 +14,18 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/sessionprocessor"
 	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 )
+
+// chatTriggerMarker narrows GORMTriggerRepository to the operations used by
+// the chat dispatcher: look up the enabled chat trigger for an agent and
+// stamp its last_fired_at on the first message of a new session (§4.1).
+type chatTriggerMarker interface {
+	FindEnabledChatTrigger(ctx context.Context, agentName string) (*models.TriggerModel, error)
+	MarkFired(ctx context.Context, id string) error
+}
 
 // chatServiceHTTPAdapter bridges SessionRegistry + SessionProcessor to the
 // deliveryhttp.ChatService interface for the REST chat endpoint.
@@ -24,7 +33,8 @@ type chatServiceHTTPAdapter struct {
 	registry    *flowregistry.SessionRegistry
 	processor   *sessionprocessor.Processor
 	agents      *agentregistry.AgentRegistry
-	chatEnabled bool // false when no LLM model configured
+	triggers    chatTriggerMarker // optional — nil in tests / no-DB mode
+	chatEnabled bool              // false when no LLM model configured
 }
 
 // Chat creates (or resumes) a session, enqueues the message, subscribes to
@@ -39,13 +49,28 @@ func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, agentName, message, u
 	}
 
 	// Create a new session if none provided.
-	if sessionID == "" {
+	isNewSession := sessionID == ""
+	if isNewSession {
 		sessionID = uuid.New().String()
 	}
 
 	// Create session in registry (idempotent — reuses existing if already present).
 	if !a.registry.HasSession(sessionID) {
+		// Registry didn't know this session either — still "new" from the
+		// trigger's perspective.
+		isNewSession = true
 		a.registry.CreateSession(sessionID, "", userID, "", "", agentName)
+	}
+
+	// §4.1: first message of a session → stamp the chat trigger's
+	// last_fired_at. Non-fatal on any error — chat must still work when the
+	// trigger lookup misbehaves.
+	if isNewSession && a.triggers != nil {
+		if trigger, lookupErr := a.triggers.FindEnabledChatTrigger(ctx, agentName); lookupErr == nil && trigger != nil {
+			if markErr := a.triggers.MarkFired(ctx, trigger.ID); markErr != nil {
+				slog.WarnContext(ctx, "mark chat trigger fired failed", "trigger_id", trigger.ID, "error", markErr)
+			}
+		}
 	}
 
 	// Subscribe BEFORE enqueueing so we don't miss events.

@@ -10,32 +10,34 @@ import (
 )
 
 // TriggerResponse is the API representation of a trigger.
+//
+// V2: the flat `schedule` / `webhook_path` fields collapsed into `Config`
+// and the `on_complete_url` / `on_complete_headers` webhook feature is gone.
+// See docs/architecture/agent-first-runtime.md §4.1 / §4.2.
 type TriggerResponse struct {
-	ID          string  `json:"id"`
-	Type        string  `json:"type"`
-	Title       string  `json:"title"`
-	AgentID     string  `json:"agent_id"`
-	AgentName   string  `json:"agent_name,omitempty"`
-	SchemaID    *string `json:"schema_id,omitempty"`
-	Schedule    string  `json:"schedule,omitempty"`
-	WebhookPath string  `json:"webhook_path,omitempty"`
-	Description string  `json:"description,omitempty"`
-	Enabled     bool    `json:"enabled"`
-	LastFiredAt string  `json:"last_fired_at,omitempty"`
-	CreatedAt   string  `json:"created_at"`
+	ID          string                 `json:"id"`
+	Type        string                 `json:"type"`
+	Title       string                 `json:"title"`
+	AgentID     string                 `json:"agent_id"`
+	AgentName   string                 `json:"agent_name,omitempty"`
+	SchemaID    *string                `json:"schema_id,omitempty"`
+	Description string                 `json:"description,omitempty"`
+	Enabled     bool                   `json:"enabled"`
+	Config      map[string]interface{} `json:"config,omitempty"`
+	LastFiredAt string                 `json:"last_fired_at,omitempty"`
+	CreatedAt   string                 `json:"created_at"`
 }
 
 // CreateTriggerRequest is the body for POST /api/v1/triggers.
 type CreateTriggerRequest struct {
-	Type        string  `json:"type"`
-	Title       string  `json:"title"`
-	AgentID     string  `json:"agent_id"`
-	AgentName   string  `json:"agent_name,omitempty"`
-	SchemaID    *string `json:"schema_id,omitempty"`
-	Schedule    string  `json:"schedule,omitempty"`
-	WebhookPath string  `json:"webhook_path,omitempty"`
-	Description string  `json:"description,omitempty"`
-	Enabled     *bool   `json:"enabled,omitempty"`
+	Type        string                 `json:"type"`
+	Title       string                 `json:"title"`
+	AgentID     string                 `json:"agent_id"`
+	AgentName   string                 `json:"agent_name,omitempty"`
+	SchemaID    *string                `json:"schema_id,omitempty"`
+	Description string                 `json:"description,omitempty"`
+	Enabled     *bool                  `json:"enabled,omitempty"`
+	Config      map[string]interface{} `json:"config,omitempty"`
 }
 
 // TriggerService provides trigger CRUD operations.

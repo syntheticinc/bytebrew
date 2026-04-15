@@ -107,18 +107,18 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			mcp_server_id TEXT NOT NULL REFERENCES mcp_servers(id),
 			PRIMARY KEY (agent_id, mcp_server_id)
 		)`,
+		// V2 (§4.1): type-specific trigger config is a single jsonb column.
+		// SQLite has no jsonb; TEXT round-trips cleanly via the TriggerConfig
+		// Scan/Value implementations in models.
 		`CREATE TABLE triggers (
 			id TEXT PRIMARY KEY,
 			type VARCHAR(10) NOT NULL,
 			title VARCHAR(255) NOT NULL,
 			agent_id TEXT REFERENCES agents(id),
 			schema_id TEXT,
-			schedule VARCHAR(100),
-			webhook_path VARCHAR(500),
 			description TEXT,
 			enabled BOOLEAN NOT NULL DEFAULT 1,
-			on_complete_url VARCHAR(2000),
-			on_complete_headers TEXT,
+			config TEXT NOT NULL DEFAULT '{}',
 			last_fired_at DATETIME,
 			created_at DATETIME,
 			updated_at DATETIME
@@ -200,7 +200,8 @@ func seedTestData(t *testing.T, db *gorm.DB) {
 	agentIDPtr := agent.ID
 	require.NoError(t, db.Create(&models.TriggerModel{
 		Type: "cron", Title: "Morning report", AgentID: &agentIDPtr,
-		Schedule: "0 9 * * *", Description: "Daily report", Enabled: true,
+		Config:      models.TriggerConfig{Schedule: "0 9 * * *"},
+		Description: "Daily report", Enabled: true,
 	}).Error)
 }
 

@@ -68,8 +68,10 @@ export function makeTriggerNode(
       id: trigger.id,
       title: trigger.title,
       type: trigger.type,
-      schedule: trigger.schedule,
-      webhook_path: trigger.webhook_path,
+      // §4.1: type-specific fields live in `config` on the wire; the canvas
+      // node data flattens them so existing render code stays flat.
+      schedule: trigger.config?.schedule,
+      webhook_path: trigger.config?.webhook_path,
       enabled: trigger.enabled,
       agentName: trigger.agent_name,
     },
@@ -260,7 +262,17 @@ export function useCanvasNodes({
     if (isPrototype) {
       const mockId = String(Date.now());
       const newNode = makeTriggerNode(
-        { id: mockId, type: triggerType, title, webhook_path: webhookPath, enabled: true, agent_name: '', schedule: '', description: '', created_at: new Date().toISOString() } as Trigger,
+        {
+          id: mockId,
+          type: triggerType,
+          title,
+          enabled: true,
+          agent_id: '',
+          agent_name: '',
+          description: '',
+          config: triggerType === 'webhook' ? { webhook_path: webhookPath } : {},
+          created_at: new Date().toISOString(),
+        } satisfies Trigger,
         pos,
       );
       setNodes((nds) => [...nds, newNode]);
@@ -274,7 +286,8 @@ export function useCanvasNodes({
         type: triggerType,
         title,
         enabled: true,
-        ...(triggerType === 'webhook' ? { webhook_path: webhookPath } : {}),
+        // §4.1: type-specific fields nest inside config.
+        config: triggerType === 'webhook' ? { webhook_path: webhookPath } : {},
         ...(currentSchemaId ? { schema_id: currentSchemaId } : {}),
       };
       const created = await api.createTrigger(data);

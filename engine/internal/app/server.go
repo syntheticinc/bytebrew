@@ -54,7 +54,6 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/service/recovery"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/resilience"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/sessionprocessor"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/task"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/turnexecutor"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	"github.com/syntheticinc/bytebrew/engine/pkg/logger"
@@ -986,9 +985,28 @@ func Run(sc ServerConfig) error {
 		}
 
 		// Webhook route (internal only — triggered by external services, requires network access)
+		//
+		// V2 (§4.1): this endpoint resolves the incoming path against
+		// `triggers.config->>'webhook_path'`, stamps the trigger's
+		// last_fired_at, and creates the task with the trigger's UUID in
+		// SourceID so the admin UI can trace the run back to its channel.
+		// Paths without a matching enabled trigger return 404.
+		webhookTriggerRepo := configrepo.NewGORMTriggerRepository(pgDB)
 		internalRouter.Post("/api/v1/webhooks/{path}", func(w http.ResponseWriter, req *http.Request) {
 			webhookPath := chi.URLParam(req, "path")
 			w.Header().Set("Content-Type", "application/json")
+
+			trigger, err := webhookTriggerRepo.FindByWebhookPath(req.Context(), "/"+webhookPath)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(`{"error":"resolve webhook trigger: ` + err.Error() + `"}`))
+				return
+			}
+			if trigger == nil {
+				w.WriteHeader(http.StatusNotFound)
+				w.Write([]byte(`{"error":"no enabled webhook trigger for path"}`))
+				return
+			}
 
 			var body struct {
 				Title       string `json:"title"`
@@ -997,22 +1015,33 @@ func Run(sc ServerConfig) error {
 			}
 			_ = json.NewDecoder(req.Body).Decode(&body)
 
-			t := &domain.EngineTask{
-				Title:     "Webhook: " + webhookPath,
-				AgentName: "supervisor",
-				Source:    domain.TaskSourceWebhook,
-				SourceID:  webhookPath,
-				Status:    domain.EngineTaskStatusPending,
-				Mode:      domain.TaskModeBackground,
+			title := trigger.Title
+			if title == "" {
+				title = "Webhook: /" + webhookPath
 			}
 			if body.Title != "" {
-				t.Title = body.Title
+				title = body.Title
 			}
+			description := trigger.Description
 			if body.Description != "" {
-				t.Description = body.Description
+				description = body.Description
 			}
-			if body.Message != "" && t.Description == "" {
-				t.Description = body.Message
+			if body.Message != "" && description == "" {
+				description = body.Message
+			}
+			agentName := trigger.Agent.Name
+			if agentName == "" {
+				agentName = "supervisor"
+			}
+
+			t := &domain.EngineTask{
+				Title:       title,
+				Description: description,
+				AgentName:   agentName,
+				Source:      domain.TaskSourceWebhook,
+				SourceID:    trigger.ID,
+				Status:      domain.EngineTaskStatusPending,
+				Mode:        domain.TaskModeBackground,
 			}
 
 			if err := taskRepo.Create(req.Context(), t); err != nil {
@@ -1020,6 +1049,14 @@ func Run(sc ServerConfig) error {
 				w.Write([]byte(`{"error":"` + err.Error() + `"}`))
 				return
 			}
+
+			// §4.1: stamp last_fired_at after validation + task creation so the
+			// admin UI reflects the most recent fire. Non-fatal on error — the
+			// task row is what the operator really needs.
+			if markErr := webhookTriggerRepo.MarkFired(req.Context(), trigger.ID); markErr != nil {
+				slog.WarnContext(req.Context(), "mark webhook trigger fired failed", "trigger_id", trigger.ID, "error", markErr)
+			}
+
 			w.WriteHeader(http.StatusCreated)
 			w.Write([]byte(fmt.Sprintf(`{"task_id":"%s"}`, t.ID)))
 		})
@@ -1179,19 +1216,16 @@ func Run(sc ServerConfig) error {
 		factory.SetEngineTaskManager(components.TaskManager)
 		loggerInstance.InfoContext(ctx, "EngineTaskManager wired into TurnExecutorFactory")
 
-		// Platform services: completion webhook here; cron scheduler wires later
-		// (once sessProcessor exists so the executor can actually run the agent).
-		// The completion hook fires on terminal transitions (completed/failed/cancelled)
-		// and POSTs to the originating trigger's on_complete_url (if any).
+		// Platform services: the cron scheduler wires later, once sessProcessor
+		// exists so the executor can actually run the agent.
+		//
+		// V2 (§4.2): the on-complete webhook feature is removed. Task terminal
+		// transitions do not fan out to external URLs — if that use case
+		// returns it will be expressed as an MCP webhook tool call from the
+		// agent. last_fired_at is driven by TriggerRepository.MarkFired from
+		// cron / webhook / chat dispatchers.
 		if taskRepo != nil {
 			platformTriggerRepo = configrepo.NewGORMTriggerRepository(pgDB)
-			completionNotifier := task.NewCompletionNotifier()
-			completionHook := taskrunner.NewTaskCompletionHook(taskRepo, platformTriggerRepo, completionNotifier)
-			components.TaskManager.SetCompletionHook(completionHook)
-			// Drain in-flight webhooks on shutdown so customer integrations do not silently
-			// lose completion notifications when the server is restarted.
-			defer completionHook.Stop()
-			loggerInstance.InfoContext(ctx, "Task completion notifier wired")
 		}
 
 		// US-003: Wire guardrail pipeline with per-agent config resolver
@@ -1275,7 +1309,10 @@ func Run(sc ServerConfig) error {
 		}
 		var triggerChecker deliveryhttp.ChatTriggerChecker
 		if pgDB != nil {
-			triggerChecker = &chatTriggerCheckerAdapter{repo: configrepo.NewGORMTriggerRepository(pgDB)}
+			chatTriggerRepo := configrepo.NewGORMTriggerRepository(pgDB)
+			triggerChecker = &chatTriggerCheckerAdapter{repo: chatTriggerRepo}
+			// §4.1: stamp last_fired_at on the first message of a chat session.
+			chatService.triggers = chatTriggerRepo
 		}
 		chatHandler := deliveryhttp.NewChatHandler(chatService, triggerChecker, func() []string {
 			return forwardHeadersStore.Load().([]string)

@@ -192,10 +192,12 @@ func (a *adminTriggerRepoAdapter) Create(ctx context.Context, record *admintools
 		Type:        record.Type,
 		Title:       record.Title,
 		AgentID:     ptrString(agentID),
-		Schedule:    record.Schedule,
-		WebhookPath: record.WebhookPath,
 		Description: record.Description,
 		Enabled:     record.Enabled,
+		Config: models.TriggerConfig{
+			Schedule:    record.Schedule,
+			WebhookPath: record.WebhookPath,
+		},
 	}
 	if err := a.repo.Create(ctx, m); err != nil {
 		return err
@@ -209,10 +211,12 @@ func (a *adminTriggerRepoAdapter) Update(ctx context.Context, id string, record 
 		Type:        record.Type,
 		Title:       record.Title,
 		AgentID:     ptrString(record.AgentID),
-		Schedule:    record.Schedule,
-		WebhookPath: record.WebhookPath,
 		Description: record.Description,
 		Enabled:     record.Enabled,
+		Config: models.TriggerConfig{
+			Schedule:    record.Schedule,
+			WebhookPath: record.WebhookPath,
+		},
 	}
 	if record.AgentName != "" {
 		agentID, err := resolveAgentID(ctx, a.db, record.AgentName)
@@ -240,8 +244,8 @@ func toAdminTriggerRecord(t models.TriggerModel) admintools.TriggerRecord {
 		AgentName:   agentName,
 		AgentID:     derefString(t.AgentID),
 		SchemaID:    t.SchemaID,
-		Schedule:    t.Schedule,
-		WebhookPath: t.WebhookPath,
+		Schedule:    t.Config.Schedule,
+		WebhookPath: t.Config.WebhookPath,
 		Description: t.Description,
 		Enabled:     t.Enabled,
 	}
