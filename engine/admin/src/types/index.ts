@@ -477,29 +477,26 @@ export interface PaginatedSessions {
 }
 
 // ============================================================================
-// V2: Widget types
+// V2: Widget snippet generator types (client-side only, not API entities)
 // ============================================================================
+// V2 drops the server-side widgets table entirely — see
+// docs/architecture/agent-first-runtime.md §4.3. A widget is a client,
+// configured purely through the <script> tag's data-* attributes. The
+// admin "Widgets" page is a pure snippet generator; these types describe
+// the form state for that generator, not a DB entity.
 
 export type WidgetPosition = 'bottom-right' | 'bottom-left';
 export type WidgetSize = 'compact' | 'standard' | 'full';
 
-export interface WidgetConfig {
-  id: string;
-  name: string;
-  schema: string;
-  status: 'active' | 'disabled';
-  primary_color: string;
+export interface WidgetSnippetConfig {
+  triggerId: string;      // id of a chat trigger (type === 'chat')
+  primaryColor: string;
   position: WidgetPosition;
   size: WidgetSize;
-  welcome_message: string;
-  placeholder_text: string;
-  avatar_url: string;
-  domain_whitelist: string;
-  custom_headers?: Record<string, string>;
-  created_at?: string;
+  welcomeMessage: string;
+  placeholderText: string;
+  title: string;
 }
-
-export type CreateWidgetRequest = Omit<WidgetConfig, 'id' | 'created_at'>;
 
 // ============================================================================
 // V2: Usage / Quota types

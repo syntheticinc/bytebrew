@@ -853,13 +853,9 @@ func Run(sc ServerConfig) error {
 				r.Delete("/api/v1/schemas/{id}/agent-relations/{relationId}", schemaHandler.DeleteAgentRelation)
 			})
 
-			// Widgets
-			widgetRepo := configrepo.NewGORMWidgetRepository(pgDB)
-			widgetHandler := deliveryhttp.NewWidgetHandler(&widgetServiceHTTPAdapter{repo: widgetRepo})
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireAdminSession)
-				r.Mount("/api/v1/widgets", widgetHandler.Routes())
-			})
+			// Widgets: V2 removes the server-side widgets entity. The admin
+			// UI is a pure snippet generator (docs/architecture/agent-first-runtime.md
+			// §4.3); no /api/v1/widgets routes are registered.
 
 			// Settings (admin-only)
 			settingRepo := configrepo.NewGORMSettingRepository(pgDB)
@@ -1109,7 +1105,11 @@ func Run(sc ServerConfig) error {
 			slog.InfoContext(ctx, "Web Client served", "path", webclientDir)
 		}
 
-		// Serve widget.js (static file) — external only (or both in single-port mode)
+		// Serve widget.js (static file) — external only (or both in single-port mode).
+		// V2: the admin generates a <script src="…/widget.js" data-agent="…" …>
+		// snippet client-side (docs/architecture/agent-first-runtime.md §4.3),
+		// so only the static bundle is served here — no dynamic /widget/{id}.js
+		// bootstrap endpoint and no server-side widget configuration.
 		widgetPath := "/usr/share/bytebrew/widget/widget.js"
 		if _, statErr := os.Stat(widgetPath); statErr == nil {
 			widgetFileHandler := func(w http.ResponseWriter, req *http.Request) {
@@ -1120,12 +1120,6 @@ func Run(sc ServerConfig) error {
 			r.Get("/widget.js", widgetFileHandler)
 			slog.InfoContext(ctx, "Widget served", "path", widgetPath)
 		}
-
-		// Serve dynamic widget embed script per widget ID (public, no auth)
-		widgetScriptRepo := configrepo.NewGORMWidgetRepository(pgDB)
-		schemaAgentResolver := &schemaAgentResolverAdapter{schemaRepo: configrepo.NewGORMSchemaRepository(pgDB)}
-		widgetScriptHandler := deliveryhttp.NewWidgetScriptHandler(&widgetServiceHTTPAdapter{repo: widgetScriptRepo}, schemaAgentResolver)
-		r.Get("/widget/{id}.js", widgetScriptHandler.ServeScript)
 
 		// NOTE: HTTP server start is deferred until after SessionProcessor is created,
 		// so the chat endpoint can be wired with all required dependencies.

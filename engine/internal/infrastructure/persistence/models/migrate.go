@@ -101,6 +101,16 @@ func AutoMigrate(db *gorm.DB) error {
 		}
 	}
 
+	// V2 widgets removal (Commit Group E).
+	// Defense-in-depth alongside Liquibase 015 — idempotent DropTable.
+	// A chat widget is a client (same class as web-client / mobile / CLI),
+	// not a domain entity — there is no server-side widget configuration to
+	// persist. The admin UI becomes a pure snippet generator. See
+	// docs/architecture/agent-first-runtime.md §4.3.
+	if err := db.Migrator().DropTable("widgets"); err != nil {
+		slog.Warn("[Migration] dropping legacy widgets table failed (may already be absent)", "error", err)
+	}
+
 	if err := db.AutoMigrate(
 		// Config tables (9)
 		&AgentModel{},
@@ -145,9 +155,8 @@ func AutoMigrate(db *gorm.DB) error {
 		// Memory table (1)
 		&MemoryModel{},
 
-		// Tenant + Widget tables (2)
+		// Tenant table (1)
 		&TenantModel{},
-		&WidgetModel{},
 	); err != nil {
 		return err
 	}

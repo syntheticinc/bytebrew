@@ -27,3 +27,5 @@ databaseChangeLog:
       file: migrations/013_v2_drop_schema_agents.yaml
   - include:
       file: migrations/014_v2_triggers_cleanup.yaml
+  - include:
+      file: migrations/015_v2_drop_widgets.yaml

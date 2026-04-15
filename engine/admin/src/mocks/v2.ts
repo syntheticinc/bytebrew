@@ -15,6 +15,11 @@ export interface V2Trigger {
   lastFiredAt?: string;
 }
 
+// V2Widget is a prototype-only UI config shape describing how a chat trigger
+// is embedded in a host page. It does NOT correspond to a DB entity — the
+// engine has no widgets table in V2 (docs/architecture/agent-first-runtime.md
+// §4.3). The production admin "Widgets" page is a pure snippet generator
+// that renders a <script> tag with these values as data-* attributes.
 export interface V2Widget {
   id: string;
   name: string;

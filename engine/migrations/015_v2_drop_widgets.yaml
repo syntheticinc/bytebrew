@@ -1,0 +1,39 @@
+databaseChangeLog:
+  # V2 widgets removal — Commit Group E.
+  #
+  # Target schema (`bytebrew/docs/database/target-schema.dbml`) has NO
+  # `widgets` table. Per `docs/architecture/agent-first-runtime.md` §4.3
+  # ("Widget is not a domain entity"), an embeddable chat widget is a
+  # *client* — exactly like the web-client, mobile app, or CLI — not a
+  # server-side entity. The engine does not need to persist widget
+  # configuration: each embed on a customer page is a pure `<script>` tag
+  # whose data-* attributes (agent name, colour, position, welcome text)
+  # are authored once by the admin and copied into the host page.
+  #
+  # The legacy `widgets` table stored admin-configured presets so that the
+  # `GET /widget/{id}.js` endpoint could emit a bootstrap script with those
+  # attributes baked in. In V2 the admin UI becomes a pure snippet
+  # generator — it renders the `<script>` tag directly with the chosen
+  # parameters, no server round-trip required. The dynamic embed route
+  # disappears along with this table.
+  #
+  # Clean-schema policy: pure DDL — DROP TABLE. No data preservation, no
+  # backfill (V2 cleanup forbids multi-step ALTERs).
+  #
+  # Idempotent: applies cleanly on fresh DBs (no-op when `widgets` is
+  # absent) and on pre-V2 DBs that have the GORM-auto-migrated table.
+  - changeSet:
+      id: 015-v2-drop-widgets
+      author: system
+      changes:
+        - sql:
+            sql: |
+              DROP TABLE IF EXISTS widgets;
+      rollback:
+        - sql:
+            sql: |
+              -- Rolling back is not supported: the dropped rows are
+              -- irrecoverable. Widget configuration in V2 is client-side
+              -- only and is not stored in the engine DB. If rollback is
+              -- truly needed, restore from a pre-V2 backup.
+              SELECT 1;

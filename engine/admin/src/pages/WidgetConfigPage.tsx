@@ -1,8 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import FormField from '../components/FormField';
-import WidgetPreview from '../components/WidgetPreview';
 import { api } from '../api/client';
-import type { WidgetConfig, WidgetPosition, WidgetSize } from '../types';
+import type { Trigger, WidgetPosition, WidgetSize, WidgetSnippetConfig } from '../types';
+
+/**
+ * Widget snippet generator.
+ *
+ * V2: a widget is a *client*, not a domain entity — there is no server-side
+ * widgets table (docs/architecture/agent-first-runtime.md §4.3). This page
+ * renders a <script> tag that loads the static widget.js bundle with the
+ * chosen chat-trigger's agent name and styling baked in as data-* attributes.
+ *
+ * The admin picks an existing chat trigger, configures visual options, and
+ * copies the resulting snippet to paste into the host page.
+ */
 
 const POSITION_OPTIONS = [
   { value: 'bottom-right', label: 'Bottom Right' },
@@ -15,254 +26,154 @@ const SIZE_OPTIONS = [
   { value: 'full', label: 'Full' },
 ];
 
-export default function WidgetConfigPage() {
-  const [widgets, setWidgets] = useState<WidgetConfig[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [schemas, setSchemas] = useState<{ value: string; label: string }[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [copiedEmbed, setCopiedEmbed] = useState(false);
-  const [copiedSelfHosted, setCopiedSelfHosted] = useState(false);
-  const [copiedId, setCopiedId] = useState(false);
-  const [loading, setLoading] = useState(true);
+const DEFAULT_CONFIG: WidgetSnippetConfig = {
+  triggerId: '',
+  primaryColor: '#6366f1',
+  position: 'bottom-right',
+  size: 'standard',
+  welcomeMessage: 'Hi! How can I help?',
+  placeholderText: 'Type a message...',
+  title: 'Chat',
+};
 
-  // Load widgets and schemas
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+export default function WidgetConfigPage() {
+  const [triggers, setTriggers] = useState<Trigger[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [config, setConfig] = useState<WidgetSnippetConfig>(DEFAULT_CONFIG);
+  const [copied, setCopied] = useState(false);
+
   useEffect(() => {
-    Promise.all([api.listWidgets(), api.listSchemas()])
-      .then(([w, s]) => {
-        const safeWidgets = Array.isArray(w) ? w : [];
-        const safeSchemas = Array.isArray(s) ? s : [];
-        setWidgets(safeWidgets);
-        if (safeWidgets.length > 0 && !selectedId) setSelectedId(safeWidgets[0]!.id);
-        setSchemas(safeSchemas.map((sc) => ({ value: sc.id, label: sc.name })));
+    api
+      .listTriggers()
+      .then((list) => {
+        const chatOnly = (Array.isArray(list) ? list : []).filter((t) => t.type === 'chat');
+        setTriggers(chatOnly);
+        if (chatOnly.length > 0 && !config.triggerId) {
+          setConfig((c) => ({ ...c, triggerId: chatOnly[0]!.id }));
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const selected = widgets.find((w) => w.id === selectedId) ?? null;
-
-  const updateWidget = useCallback(
-    <K extends keyof WidgetConfig>(key: K, value: WidgetConfig[K]) => {
-      setWidgets((prev) =>
-        prev.map((w) => (w.id === selectedId ? { ...w, [key]: value } : w)),
-      );
-    },
-    [selectedId],
+  const selectedTrigger = useMemo(
+    () => triggers.find((t) => t.id === config.triggerId) ?? null,
+    [triggers, config.triggerId],
   );
 
-  const handleCreate = useCallback(() => {
-    const firstSchema = schemas[0]?.value ?? '';
-    api
-      .createWidget({
-        name: 'New Widget',
-        schema: firstSchema,
-        status: 'disabled',
-        primary_color: '#6366f1',
-        position: 'bottom-right',
-        size: 'standard',
-        welcome_message: 'Hello! How can I help?',
-        placeholder_text: 'Type your message...',
-        avatar_url: '',
-        domain_whitelist: '',
-      })
-      .then((w) => {
-        setWidgets((prev) => [...prev, w]);
-        setSelectedId(w.id);
-      })
-      .catch(() => {});
-  }, [schemas]);
+  const agentName = selectedTrigger?.agent_name ?? '';
 
-  const handleSave = useCallback(() => {
-    if (!selected) return;
-    setSaving(true);
-    const { id, created_at, ...data } = selected;
-    void created_at;
-    api
-      .updateWidget(id, data)
-      .then((updated) => {
-        setWidgets((prev) => prev.map((w) => (w.id === id ? updated : w)));
-      })
-      .catch(() => {})
-      .finally(() => setSaving(false));
-  }, [selected]);
+  const snippet = useMemo(() => {
+    if (!agentName) return '';
+    const attrs = [
+      'src="https://your-engine.example.com/widget.js"',
+      `data-agent="${escapeAttr(agentName)}"`,
+      `data-position="${config.position}"`,
+      `data-primary-color="${escapeAttr(config.primaryColor)}"`,
+      `data-title="${escapeAttr(config.title)}"`,
+      `data-welcome="${escapeAttr(config.welcomeMessage)}"`,
+      `data-placeholder="${escapeAttr(config.placeholderText)}"`,
+    ];
+    return `<script ${attrs.join('\n        ')}></script>`;
+  }, [agentName, config]);
 
-  const handleDelete = useCallback(() => {
-    if (!selected) return;
-    api
-      .deleteWidget(selected.id)
-      .then(() => {
-        setWidgets((prev) => {
-          const next = prev.filter((w) => w.id !== selected.id);
-          setSelectedId(next[0]?.id ?? null);
-          return next;
-        });
-      })
-      .catch(() => {});
-  }, [selected]);
+  function update<K extends keyof WidgetSnippetConfig>(key: K, value: WidgetSnippetConfig[K]) {
+    setConfig((c) => ({ ...c, [key]: value }));
+  }
 
-  function copyToClipboard(text: string, setter: (v: boolean) => void) {
+  function handleCopy() {
+    if (!snippet) return;
     navigator.clipboard
-      .writeText(text)
+      .writeText(snippet)
       .then(() => {
-        setter(true);
-        setTimeout(() => setter(false), 1500);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
       })
       .catch(() => {});
   }
 
-  const cloudEmbed = selected
-    ? `<script src="https://bytebrew.ai/widget/${selected.id}.js"></script>`
-    : '';
-  const selfHostedEmbed = selected
-    ? `<script src="https://your-domain.com/widget/${selected.id}.js"></script>`
-    : '';
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <span className="text-sm text-brand-shade3 font-mono">Loading widgets...</span>
+        <span className="text-sm text-brand-shade3 font-mono">Loading triggers...</span>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold text-brand-light font-mono">Widget Configuration</h1>
-        <button
-          type="button"
-          onClick={handleCreate}
-          className="px-4 py-1.5 bg-brand-accent text-brand-light rounded-btn text-sm font-medium font-mono hover:bg-brand-accent-hover transition-colors"
-        >
-          + Create Widget
-        </button>
+      <div className="mb-6">
+        <h1 className="text-lg font-semibold text-brand-light font-mono">Widget Snippet Generator</h1>
+        <p className="mt-1 text-xs text-brand-shade3 font-mono max-w-2xl">
+          Pick a chat trigger, choose how the widget looks, and copy the{' '}
+          <code className="text-brand-shade2">&lt;script&gt;</code> tag into your site. Widgets are clients — the engine
+          does not store widget configuration, so every embed is self-contained.
+        </p>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="grid grid-cols-12 gap-6">
-          {/* Widget list */}
-          <div className="col-span-3 space-y-2">
-            {widgets.map((w) => (
-              <button
-                key={w.id}
-                type="button"
-                onClick={() => setSelectedId(w.id)}
-                className={[
-                  'w-full text-left px-4 py-3 rounded-card border transition-colors',
-                  w.id === selectedId
-                    ? 'bg-brand-dark-surface border-brand-accent/50'
-                    : 'bg-brand-dark-surface border-brand-shade3/10 hover:border-brand-shade3/30',
-                ].join(' ')}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium text-brand-light font-mono truncate">{w.name}</span>
-                  <span
-                    className={[
-                      'text-[10px] font-semibold px-2 py-0.5 rounded-card font-mono uppercase tracking-wider shrink-0 ml-2',
-                      w.status === 'active'
-                        ? 'bg-status-active/15 text-status-active'
-                        : 'bg-brand-shade3/15 text-brand-shade3',
-                    ].join(' ')}
-                  >
-                    {w.status}
-                  </span>
-                </div>
-                <p className="text-xs text-brand-shade3 font-mono">{schemas.find((s) => s.value === w.schema)?.label ?? w.schema}</p>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <div
-                    className="w-3 h-3 rounded-full shrink-0 border border-white/10"
-                    style={{ backgroundColor: w.primary_color }}
-                  />
-                  <span className="text-[10px] text-brand-shade3/60 font-mono">{w.id}</span>
-                </div>
-              </button>
-            ))}
-            {widgets.length === 0 && (
-              <p className="text-xs text-brand-shade3 font-mono text-center py-8">
-                No widgets yet. Create one to get started.
-              </p>
-            )}
-          </div>
-
-          {/* Widget config form */}
-          {selected ? (
-            <div className="col-span-5 space-y-4">
+      {triggers.length === 0 ? (
+        <div className="bg-brand-dark-surface border border-brand-shade3/10 rounded-card p-6 text-sm text-brand-shade3 font-mono">
+          No chat triggers found. Create a trigger of type <strong>chat</strong> bound to an agent, then return here to
+          generate an embed snippet.
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto">
+          <div className="grid grid-cols-12 gap-6">
+            {/* Config form */}
+            <div className="col-span-7 space-y-4">
               {/* Identity */}
               <div className="bg-brand-dark-surface border border-brand-shade3/10 rounded-card p-4">
                 <h2 className="text-xs font-semibold text-brand-shade3 uppercase tracking-widest mb-3 font-mono">
-                  Identity
+                  Chat Trigger
                 </h2>
-                <div>
-                  <label className="block text-sm font-medium text-brand-light mb-1">Widget ID</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={selected.id}
-                      readOnly
-                      className="flex-1 px-3 py-2 bg-brand-dark border border-brand-shade3/30 rounded-card text-sm text-brand-shade2 font-mono cursor-default"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(selected.id, setCopiedId)}
-                      className="px-3 py-2 border border-brand-shade3/30 rounded-card text-xs text-brand-shade2 font-mono hover:text-brand-light hover:border-brand-shade3/60 transition-colors"
-                    >
-                      {copiedId ? 'Copied' : 'Copy'}
-                    </button>
+                <FormField
+                  label="Trigger"
+                  type="select"
+                  value={config.triggerId}
+                  onChange={(v) => update('triggerId', v)}
+                  options={triggers.map((t) => ({
+                    value: t.id,
+                    label: t.agent_name ? `${t.title} → ${t.agent_name}` : t.title,
+                  }))}
+                  hint="Each chat trigger routes incoming widget chats to a specific agent."
+                />
+                {agentName && (
+                  <div className="mt-3 text-xs text-brand-shade3 font-mono">
+                    Binds to agent: <span className="text-brand-light">{agentName}</span>
                   </div>
-                </div>
-                <div className="mt-3">
-                  <FormField
-                    label="Name"
-                    value={selected.name}
-                    onChange={(v) => updateWidget('name', v)}
-                    hint="Display name for this widget"
-                  />
-                </div>
-                <div className="mt-3">
-                  <FormField
-                    label="Schema"
-                    type="select"
-                    value={selected.schema}
-                    onChange={(v) => updateWidget('schema', v)}
-                    options={schemas}
-                    hint="Agent schema handling conversations"
-                  />
-                </div>
-                <div className="mt-3">
-                  <FormField
-                    label="Status"
-                    type="select"
-                    value={selected.status}
-                    onChange={(v) => updateWidget('status', v as WidgetConfig['status'])}
-                    options={[
-                      { value: 'active', label: 'Active' },
-                      { value: 'disabled', label: 'Disabled' },
-                    ]}
-                    hint="Disabled widgets won't load on client sites"
-                  />
-                </div>
+                )}
               </div>
 
-              {/* Styling */}
+              {/* Appearance */}
               <div className="bg-brand-dark-surface border border-brand-shade3/10 rounded-card p-4">
                 <h2 className="text-xs font-semibold text-brand-shade3 uppercase tracking-widest mb-3 font-mono">
                   Appearance
                 </h2>
                 <div className="space-y-3">
+                  <FormField
+                    label="Title"
+                    value={config.title}
+                    onChange={(v) => update('title', v)}
+                    hint="Shown in the widget header"
+                  />
                   <div>
                     <label className="block text-sm font-medium text-brand-light mb-1">Primary Color</label>
                     <div className="flex items-center gap-2">
                       <input
                         type="color"
-                        value={selected.primary_color}
-                        onChange={(e) => updateWidget('primary_color', e.target.value)}
+                        value={config.primaryColor}
+                        onChange={(e) => update('primaryColor', e.target.value)}
                         className="w-9 h-9 rounded-card border border-brand-shade3/30 cursor-pointer bg-transparent p-0.5"
                       />
                       <input
                         type="text"
-                        value={selected.primary_color}
-                        onChange={(e) => updateWidget('primary_color', e.target.value)}
+                        value={config.primaryColor}
+                        onChange={(e) => update('primaryColor', e.target.value)}
                         className="flex-1 px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light font-mono focus:outline-none focus:border-brand-accent transition-colors"
                       />
                     </div>
@@ -270,25 +181,18 @@ export default function WidgetConfigPage() {
                   <FormField
                     label="Position"
                     type="select"
-                    value={selected.position}
-                    onChange={(v) => updateWidget('position', v as WidgetPosition)}
+                    value={config.position}
+                    onChange={(v) => update('position', v as WidgetPosition)}
                     options={POSITION_OPTIONS}
                     hint="Widget placement on the page"
                   />
                   <FormField
                     label="Size"
                     type="select"
-                    value={selected.size}
-                    onChange={(v) => updateWidget('size', v as WidgetSize)}
+                    value={config.size}
+                    onChange={(v) => update('size', v as WidgetSize)}
                     options={SIZE_OPTIONS}
                     hint="Chat window dimensions"
-                  />
-                  <FormField
-                    label="Avatar URL"
-                    value={selected.avatar_url}
-                    onChange={(v) => updateWidget('avatar_url', v)}
-                    placeholder="https://example.com/avatar.png"
-                    hint="Agent avatar in widget header (optional)"
                   />
                 </div>
               </div>
@@ -301,176 +205,54 @@ export default function WidgetConfigPage() {
                 <div className="space-y-3">
                   <FormField
                     label="Welcome Message"
-                    value={selected.welcome_message}
-                    onChange={(v) => updateWidget('welcome_message', v)}
+                    value={config.welcomeMessage}
+                    onChange={(v) => update('welcomeMessage', v)}
                     hint="Greeting shown when the widget opens"
                   />
                   <FormField
                     label="Placeholder Text"
-                    value={selected.placeholder_text}
-                    onChange={(v) => updateWidget('placeholder_text', v)}
+                    value={config.placeholderText}
+                    onChange={(v) => update('placeholderText', v)}
                     hint="Input placeholder text"
                   />
                 </div>
               </div>
+            </div>
 
-              {/* Security */}
-              <div className="bg-brand-dark-surface border border-brand-shade3/10 rounded-card p-4">
-                <h2 className="text-xs font-semibold text-brand-shade3 uppercase tracking-widest mb-3 font-mono">
-                  Security
-                </h2>
-                <FormField
-                  label="Domain Whitelist"
-                  value={selected.domain_whitelist}
-                  onChange={(v) => updateWidget('domain_whitelist', v)}
-                  placeholder="example.com, app.example.com"
-                  hint="Comma-separated list of allowed embed domains (empty = allow all)"
-                />
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-brand-light mb-1">Custom Headers</label>
-                  <p className="text-xs text-brand-shade3 mb-2 font-mono">
-                    HTTP headers forwarded with every chat request (e.g. auth tokens, tenant IDs)
+            {/* Snippet output */}
+            <div className="col-span-5">
+              <div className="sticky top-0 pt-2 space-y-4">
+                <div className="bg-brand-dark-surface border border-brand-shade3/10 rounded-card p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-xs font-semibold text-brand-shade3 uppercase tracking-widest font-mono">
+                      Embed Snippet
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={handleCopy}
+                      disabled={!snippet}
+                      className="px-3 py-1.5 bg-brand-accent hover:bg-brand-accent-hover text-brand-light rounded-btn text-xs font-medium font-mono transition-colors disabled:opacity-50"
+                    >
+                      {copied ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                  {snippet ? (
+                    <pre className="bg-brand-dark-alt px-4 py-3 rounded-card text-xs text-brand-shade2 font-mono overflow-x-auto border border-brand-shade3/20 whitespace-pre-wrap break-all">
+                      <code>{snippet}</code>
+                    </pre>
+                  ) : (
+                    <p className="text-xs text-brand-shade3 font-mono">Select a chat trigger to generate a snippet.</p>
+                  )}
+                  <p className="mt-3 text-[11px] text-brand-shade3 font-mono">
+                    Replace <code className="text-brand-shade2">your-engine.example.com</code> with the hostname where
+                    your ByteBrew engine is reachable from the browser.
                   </p>
-                  <div className="space-y-2">
-                    {Object.entries(selected.custom_headers ?? {}).map(([key, value]) => (
-                      <div key={key} className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={key}
-                          placeholder="Header name"
-                          onChange={(e) => {
-                            const headers = { ...(selected.custom_headers ?? {}) };
-                            const val = headers[key] ?? '';
-                            delete headers[key];
-                            headers[e.target.value] = val;
-                            updateWidget('custom_headers', headers);
-                          }}
-                          className="flex-1 px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light font-mono focus:outline-none focus:border-brand-accent transition-colors"
-                        />
-                        <input
-                          type="text"
-                          value={value}
-                          placeholder="Value"
-                          onChange={(e) => {
-                            const headers = { ...(selected.custom_headers ?? {}) };
-                            headers[key] = e.target.value;
-                            updateWidget('custom_headers', headers);
-                          }}
-                          className="flex-1 px-3 py-2 bg-brand-dark-alt border border-brand-shade3/50 rounded-card text-sm text-brand-light font-mono focus:outline-none focus:border-brand-accent transition-colors"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const headers = { ...(selected.custom_headers ?? {}) };
-                            delete headers[key];
-                            updateWidget('custom_headers', Object.keys(headers).length > 0 ? headers : undefined);
-                          }}
-                          className="px-2 py-2 text-red-400 hover:text-red-300 transition-colors"
-                          title="Remove header"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const headers = { ...(selected.custom_headers ?? {}) };
-                      headers[''] = '';
-                      updateWidget('custom_headers', headers);
-                    }}
-                    className="mt-2 px-3 py-1.5 text-xs text-brand-accent hover:text-brand-accent-hover font-mono transition-colors"
-                  >
-                    + Add Header
-                  </button>
                 </div>
               </div>
-
-              {/* Embed code */}
-              <div className="bg-brand-dark-surface border border-brand-shade3/10 rounded-card p-4">
-                <h2 className="text-xs font-semibold text-brand-shade3 uppercase tracking-widest mb-3 font-mono">
-                  Embed Code
-                </h2>
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-xs text-brand-shade3 mb-1.5 font-mono">Cloud (bytebrew.ai)</p>
-                    <div className="relative">
-                      <pre className="bg-brand-dark-alt px-4 py-3 rounded-card text-xs text-brand-shade2 font-mono overflow-x-auto border border-brand-shade3/20">
-                        <code>{cloudEmbed}</code>
-                      </pre>
-                      <button
-                        type="button"
-                        onClick={() => copyToClipboard(cloudEmbed, setCopiedEmbed)}
-                        className="absolute top-2 right-2 px-2.5 py-1 bg-brand-dark border border-brand-shade3/30 rounded-btn text-[11px] text-brand-shade2 font-mono hover:text-brand-light transition-colors"
-                      >
-                        {copiedEmbed ? 'Copied' : 'Copy'}
-                      </button>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-xs text-brand-shade3 mb-1.5 font-mono">Self-hosted</p>
-                    <div className="relative">
-                      <pre className="bg-brand-dark-alt px-4 py-3 rounded-card text-xs text-brand-shade2 font-mono overflow-x-auto border border-brand-shade3/20">
-                        <code>{selfHostedEmbed}</code>
-                      </pre>
-                      <button
-                        type="button"
-                        onClick={() => copyToClipboard(selfHostedEmbed, setCopiedSelfHosted)}
-                        className="absolute top-2 right-2 px-2.5 py-1 bg-brand-dark border border-brand-shade3/30 rounded-btn text-[11px] text-brand-shade2 font-mono hover:text-brand-light transition-colors"
-                      >
-                        {copiedSelfHosted ? 'Copied' : 'Copy'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-6 py-2 bg-brand-accent hover:bg-brand-accent-hover text-brand-light rounded-btn text-sm font-medium font-mono transition-colors disabled:opacity-60"
-                >
-                  {saving ? 'Saving...' : 'Save'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-btn text-sm font-medium font-mono border border-red-500/20 transition-colors"
-                >
-                  Delete Widget
-                </button>
-              </div>
             </div>
-          ) : (
-            <div className="col-span-5 flex items-center justify-center text-sm text-brand-shade3 font-mono py-16">
-              Select a widget to configure
-            </div>
-          )}
-
-          {/* Live preview */}
-          <div className="col-span-4">
-            {selected && (
-              <div className="sticky top-0 pt-2">
-                <WidgetPreview
-                  primaryColor={selected.primary_color}
-                  position={selected.position}
-                  welcomeMessage={selected.welcome_message}
-                  placeholderText={selected.placeholder_text}
-                  size={selected.size}
-                  avatarUrl={selected.avatar_url || undefined}
-                  name={selected.name}
-                />
-              </div>
-            )}
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
