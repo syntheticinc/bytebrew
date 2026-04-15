@@ -8,15 +8,15 @@ import "context"
 // AdminToolDependencies holds repositories and callbacks for admin tools.
 // Captured in closure at registration time via RegisterAdminTools.
 type AdminToolDependencies struct {
-	AgentRepo      AgentRepository
-	SchemaRepo     SchemaRepository
-	TriggerRepo    TriggerRepository
-	MCPServerRepo  MCPServerRepository
-	ModelRepo      ModelRepository
-	EdgeRepo       EdgeRepository
-	SessionRepo    SessionRepository
-	CapabilityRepo CapabilityRepository
-	Reloader       func() // AgentRegistry reload callback
+	AgentRepo         AgentRepository
+	SchemaRepo        SchemaRepository
+	TriggerRepo       TriggerRepository
+	MCPServerRepo     MCPServerRepository
+	ModelRepo         ModelRepository
+	AgentRelationRepo AgentRelationRepository
+	SessionRepo       SessionRepository
+	CapabilityRepo    CapabilityRepository
+	Reloader          func() // AgentRegistry reload callback
 }
 
 // Consumer-side interfaces (defined here, implemented by GORM repo adapters):
@@ -68,10 +68,10 @@ type ModelRepository interface {
 	Delete(ctx context.Context, id string) error
 }
 
-// EdgeRepository provides edge CRUD for admin tools.
-type EdgeRepository interface {
-	List(ctx context.Context, schemaID string) ([]EdgeRecord, error)
-	Create(ctx context.Context, record *EdgeRecord) error
+// AgentRelationRepository provides agent-relation CRUD for admin tools.
+type AgentRelationRepository interface {
+	List(ctx context.Context, schemaID string) ([]AgentRelationRecord, error)
+	Create(ctx context.Context, record *AgentRelationRecord) error
 	Delete(ctx context.Context, id string) error
 }
 
@@ -146,13 +146,14 @@ type ModelRecord struct {
 	APIKey    string // write-only, masked on read
 }
 
-// EdgeRecord represents an edge between agents in a schema.
-type EdgeRecord struct {
+// AgentRelationRecord represents a delegation relation between agents in a
+// schema. V2 has a single implicit DELEGATION type — no per-row Type field
+// (see docs/architecture/agent-first-runtime.md §3.1).
+type AgentRelationRecord struct {
 	ID        string
 	SchemaID  string
 	FromAgent string
 	ToAgent   string
-	Type      string // flow, transfer, loop, spawn
 	Label     string
 }
 

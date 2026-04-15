@@ -75,21 +75,13 @@ type GuardrailCheckResult struct {
 	Reason string
 }
 
-// FlowExecutor executes multi-agent flow pipelines (consumer-side interface).
-type FlowExecutor interface {
-	HasOutgoingEdges(ctx context.Context, schemaID string, agentName string) (bool, error)
-	Execute(ctx context.Context, cfg FlowExecConfig, entryAgent, input string) error
-}
-
-// FlowExecConfig holds flow execution configuration.
-type FlowExecConfig struct {
-	SchemaID    string
-	SessionID   string
-	EventStream domain.AgentEventStream
-}
-
 // EngineAdapter adapts Engine to TurnExecutor interface (orchestrator.TurnExecutor)
-// It bridges the Orchestrator event loop with the new Engine
+// It bridges the Orchestrator event loop with the new Engine.
+//
+// V2 note: post-Group A.1 the schema-level multi-agent pipeline executor was
+// removed. Multi-agent delegation in V2 is expressed by the agent itself via
+// tool calls (see docs/architecture/agent-first-runtime.md §3.1), not by a
+// separate flow Executor walking edge types.
 type EngineAdapter struct {
 	engine           AgentEngine
 	flowProvider     FlowProvider
@@ -102,9 +94,8 @@ type EngineAdapter struct {
 	// pass-through deps
 	contextReminders []ContextReminderProvider
 	toolCallRecorder ToolCallRecorder
-	// US-002: Flow executor for multi-agent pipelines
-	flowExecutor FlowExecutor
-	schemaID     string
+	// Schema scope for memory tools (empty = no explicit schema context)
+	schemaID string
 	// US-003: Guardrail pipeline
 	guardrail       GuardrailChecker
 	guardrailConfig *GuardrailCheckConfig
@@ -122,9 +113,8 @@ type Config struct {
 	AgentName        string
 	ContextReminders []ContextReminderProvider
 	ToolCallRecorder ToolCallRecorder
-	// US-002: Flow executor (nil = no flow execution)
-	FlowExecutor FlowExecutor
-	SchemaID     string
+	// Schema scope (empty = no explicit schema context)
+	SchemaID string
 	// US-003: Guardrail pipeline (nil = no guardrails)
 	Guardrail       GuardrailChecker
 	GuardrailConfig *GuardrailCheckConfig
@@ -159,7 +149,6 @@ func NewEngineAdapter(cfg Config) (*EngineAdapter, error) {
 		agentName:        cfg.AgentName,
 		contextReminders: cfg.ContextReminders,
 		toolCallRecorder: cfg.ToolCallRecorder,
-		flowExecutor:     cfg.FlowExecutor,
 		schemaID:         cfg.SchemaID,
 		guardrail:        cfg.Guardrail,
 		guardrailConfig:  cfg.GuardrailConfig,
@@ -307,27 +296,9 @@ func (e *EngineAdapter) ExecuteTurn(
 		})
 	}
 
-	// US-002: Execute flow pipeline if agent has outgoing edges
-	if e.flowExecutor != nil && e.schemaID != "" {
-		hasEdges, edgeErr := e.flowExecutor.HasOutgoingEdges(ctx, e.schemaID, e.agentName)
-		if edgeErr != nil {
-			slog.WarnContext(ctx, "[EngineAdapter] failed to check outgoing edges",
-				"agent", e.agentName, "schema_id", e.schemaID, "error", edgeErr)
-		} else if hasEdges {
-			slog.InfoContext(ctx, "[EngineAdapter] executing flow pipeline",
-				"agent", e.agentName, "schema_id", e.schemaID)
-			flowCfg := FlowExecConfig{
-				SchemaID:    e.schemaID,
-				SessionID:   sessionID,
-				EventStream: eventCallbackStream(eventCallback),
-			}
-			if flowErr := e.flowExecutor.Execute(ctx, flowCfg, e.agentName, answer); flowErr != nil {
-				slog.ErrorContext(ctx, "[EngineAdapter] flow execution failed",
-					"agent", e.agentName, "error", flowErr)
-				// Flow failure is not fatal — the primary agent answer was already sent
-			}
-		}
-	}
+	// V2 (Group A.1): no schema-level pipeline dispatch happens here. Multi-agent
+	// delegation is expressed by the agent itself through tool calls (see
+	// docs/architecture/agent-first-runtime.md §3.1).
 
 	return nil
 }
@@ -383,23 +354,3 @@ func convertToolCallRecorderToEngine(recorder ToolCallRecorder) react.ToolCallRe
 	return &toolCallRecorderEngineAdapter{recorder: recorder}
 }
 
-// eventCallbackStreamAdapter wraps eventCallback as domain.AgentEventStream.
-type eventCallbackStreamAdapter struct {
-	cb func(event *domain.AgentEvent) error
-}
-
-func (a *eventCallbackStreamAdapter) Send(event *domain.AgentEvent) error {
-	if a.cb == nil {
-		return nil
-	}
-	return a.cb(event)
-}
-
-// eventCallbackStream wraps eventCallback as domain.AgentEventStream.
-// Returns nil if eventCallback is nil.
-func eventCallbackStream(cb func(event *domain.AgentEvent) error) domain.AgentEventStream {
-	if cb == nil {
-		return nil
-	}
-	return &eventCallbackStreamAdapter{cb: cb}
-}

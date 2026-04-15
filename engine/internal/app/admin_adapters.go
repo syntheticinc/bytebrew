@@ -420,46 +420,44 @@ func toAdminModelRecord(p models.LLMProviderModel) admintools.ModelRecord {
 	}
 }
 
-// --- Edge adapter ---
+// --- AgentRelation adapter ---
 
-type adminEdgeRepoAdapter struct {
-	repo *configrepo.GORMEdgeRepository
+type adminAgentRelationRepoAdapter struct {
+	repo *configrepo.GORMAgentRelationRepository
 }
 
-func newAdminEdgeRepoAdapter(repo *configrepo.GORMEdgeRepository) *adminEdgeRepoAdapter {
-	return &adminEdgeRepoAdapter{repo: repo}
+func newAdminAgentRelationRepoAdapter(repo *configrepo.GORMAgentRelationRepository) *adminAgentRelationRepoAdapter {
+	return &adminAgentRelationRepoAdapter{repo: repo}
 }
 
-func (a *adminEdgeRepoAdapter) List(ctx context.Context, schemaID string) ([]admintools.EdgeRecord, error) {
+func (a *adminAgentRelationRepoAdapter) List(ctx context.Context, schemaID string) ([]admintools.AgentRelationRecord, error) {
 	records, err := a.repo.List(ctx, schemaID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]admintools.EdgeRecord, 0, len(records))
+	out := make([]admintools.AgentRelationRecord, 0, len(records))
 	for _, r := range records {
 		label, _ := r.Config["label"].(string)
-		out = append(out, admintools.EdgeRecord{
+		out = append(out, admintools.AgentRelationRecord{
 			ID:        r.ID,
 			SchemaID:  r.SchemaID,
 			FromAgent: r.SourceAgentName,
 			ToAgent:   r.TargetAgentName,
-			Type:      r.Type,
 			Label:     label,
 		})
 	}
 	return out, nil
 }
 
-func (a *adminEdgeRepoAdapter) Create(ctx context.Context, record *admintools.EdgeRecord) error {
+func (a *adminAgentRelationRepoAdapter) Create(ctx context.Context, record *admintools.AgentRelationRecord) error {
 	config := map[string]interface{}{}
 	if record.Label != "" {
 		config["label"] = record.Label
 	}
-	cr := &configrepo.EdgeRecord{
+	cr := &configrepo.AgentRelationRecord{
 		SchemaID:        record.SchemaID,
 		SourceAgentName: record.FromAgent,
 		TargetAgentName: record.ToAgent,
-		Type:            record.Type,
 		Config:          config,
 	}
 	if err := a.repo.Create(ctx, cr); err != nil {
@@ -469,7 +467,7 @@ func (a *adminEdgeRepoAdapter) Create(ctx context.Context, record *admintools.Ed
 	return nil
 }
 
-func (a *adminEdgeRepoAdapter) Delete(ctx context.Context, id string) error {
+func (a *adminAgentRelationRepoAdapter) Delete(ctx context.Context, id string) error {
 	return a.repo.Delete(ctx, id)
 }
 

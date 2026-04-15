@@ -5,7 +5,6 @@ import (
 
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/flow"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/guardrail"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/policy"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/recovery"
@@ -96,21 +95,3 @@ func (a *guardrailCheckerAdapter) Evaluate(ctx context.Context, config *turnexec
 	}, nil
 }
 
-// flowExecutorAdapter bridges flow.Executor to turnexecutor.FlowExecutor.
-type flowExecutorAdapter struct {
-	executor *flow.Executor
-}
-
-func (a *flowExecutorAdapter) HasOutgoingEdges(ctx context.Context, schemaID string, agentName string) (bool, error) {
-	return a.executor.HasOutgoingEdges(ctx, schemaID, agentName)
-}
-
-func (a *flowExecutorAdapter) Execute(ctx context.Context, cfg turnexecutor.FlowExecConfig, entryAgent, input string) error {
-	flowCfg := flow.ExecutorConfig{
-		SchemaID:    cfg.SchemaID,
-		SessionID:   cfg.SessionID,
-		EventStream: cfg.EventStream,
-	}
-	_, err := a.executor.Execute(ctx, flowCfg, entryAgent, input)
-	return err
-}

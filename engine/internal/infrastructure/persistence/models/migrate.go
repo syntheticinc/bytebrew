@@ -62,6 +62,21 @@ func AutoMigrate(db *gorm.DB) error {
 		}
 	}
 
+	// V2 edges → agent_relations rename + drop type column (Commit Group A.1).
+	// Defense-in-depth alongside Liquibase 012 — idempotent rename + DropColumn.
+	// Target schema models a single implicit DELEGATION type — no per-row type
+	// column. See docs/architecture/agent-first-runtime.md §3.1.
+	if db.Migrator().HasTable("edges") && !db.Migrator().HasTable("agent_relations") {
+		if err := db.Migrator().RenameTable("edges", "agent_relations"); err != nil {
+			slog.Warn("[Migration] renaming legacy edges table to agent_relations failed", "error", err)
+		}
+	}
+	if db.Migrator().HasTable("agent_relations") && db.Migrator().HasColumn("agent_relations", "type") {
+		if err := db.Migrator().DropColumn("agent_relations", "type"); err != nil {
+			slog.Warn("[Migration] dropping legacy agent_relations.type column failed (may already be absent)", "error", err)
+		}
+	}
+
 	if err := db.AutoMigrate(
 		// Config tables (9)
 		&AgentModel{},
@@ -99,7 +114,7 @@ func AutoMigrate(db *gorm.DB) error {
 		// Schema / flow tables (3)
 		&SchemaModel{},
 		&SchemaAgentModel{},
-		&EdgeModel{},
+		&AgentRelationModel{},
 
 		// Capability table (1)
 		&CapabilityModel{},

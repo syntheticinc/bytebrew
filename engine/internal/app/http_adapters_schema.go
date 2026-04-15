@@ -137,99 +137,90 @@ func (a *schemaServiceHTTPAdapter) ListSchemaAgents(ctx context.Context, schemaI
 	return names, nil
 }
 
-// edgeServiceHTTPAdapter bridges GORMEdgeRepository to the http.EdgeService interface.
-type edgeServiceHTTPAdapter struct {
-	repo *configrepo.GORMEdgeRepository
+// agentRelationServiceHTTPAdapter bridges GORMAgentRelationRepository to the
+// http.AgentRelationService interface.
+type agentRelationServiceHTTPAdapter struct {
+	repo *configrepo.GORMAgentRelationRepository
 }
 
-func (a *edgeServiceHTTPAdapter) ListEdges(ctx context.Context, schemaID string) ([]deliveryhttp.EdgeInfo, error) {
+func (a *agentRelationServiceHTTPAdapter) ListAgentRelations(ctx context.Context, schemaID string) ([]deliveryhttp.AgentRelationInfo, error) {
 	records, err := a.repo.List(ctx, schemaID)
 	if err != nil {
-		return nil, fmt.Errorf("list edges: %w", err)
+		return nil, fmt.Errorf("list agent relations: %w", err)
 	}
 
-	result := make([]deliveryhttp.EdgeInfo, 0, len(records))
+	result := make([]deliveryhttp.AgentRelationInfo, 0, len(records))
 	for _, r := range records {
-		result = append(result, deliveryhttp.EdgeInfo{
+		result = append(result, deliveryhttp.AgentRelationInfo{
 			ID:              r.ID,
 			SchemaID:        r.SchemaID,
 			SourceAgentName: r.SourceAgentName,
 			TargetAgentName: r.TargetAgentName,
-			Type:            r.Type,
 			Config:          r.Config,
 		})
 	}
 	return result, nil
 }
 
-func (a *edgeServiceHTTPAdapter) GetEdge(ctx context.Context, id string) (*deliveryhttp.EdgeInfo, error) {
+func (a *agentRelationServiceHTTPAdapter) GetAgentRelation(ctx context.Context, id string) (*deliveryhttp.AgentRelationInfo, error) {
 	record, err := a.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, pkgerrors.NotFound(fmt.Sprintf("edge not found: %s", id))
+			return nil, pkgerrors.NotFound(fmt.Sprintf("agent relation not found: %s", id))
 		}
-		return nil, fmt.Errorf("get edge: %w", err)
+		return nil, fmt.Errorf("get agent relation: %w", err)
 	}
 
-	return &deliveryhttp.EdgeInfo{
+	return &deliveryhttp.AgentRelationInfo{
 		ID:              record.ID,
 		SchemaID:        record.SchemaID,
 		SourceAgentName: record.SourceAgentName,
 		TargetAgentName: record.TargetAgentName,
-		Type:            record.Type,
 		Config:          record.Config,
 	}, nil
 }
 
-func (a *edgeServiceHTTPAdapter) CreateEdge(ctx context.Context, schemaID string, req deliveryhttp.CreateEdgeRequest) (*deliveryhttp.EdgeInfo, error) {
-	edgeType := req.Type
-	if edgeType == "" {
-		edgeType = "flow"
-	}
-
-	record := &configrepo.EdgeRecord{
+func (a *agentRelationServiceHTTPAdapter) CreateAgentRelation(ctx context.Context, schemaID string, req deliveryhttp.CreateAgentRelationRequest) (*deliveryhttp.AgentRelationInfo, error) {
+	record := &configrepo.AgentRelationRecord{
 		SchemaID:        schemaID,
 		SourceAgentName: req.Source,
 		TargetAgentName: req.Target,
-		Type:            edgeType,
 		Config:          req.Config,
 	}
 	if err := a.repo.Create(ctx, record); err != nil {
-		return nil, fmt.Errorf("create edge: %w", err)
+		return nil, fmt.Errorf("create agent relation: %w", err)
 	}
 
-	return &deliveryhttp.EdgeInfo{
+	return &deliveryhttp.AgentRelationInfo{
 		ID:              record.ID,
 		SchemaID:        record.SchemaID,
 		SourceAgentName: record.SourceAgentName,
 		TargetAgentName: record.TargetAgentName,
-		Type:            record.Type,
 		Config:          record.Config,
 	}, nil
 }
 
-func (a *edgeServiceHTTPAdapter) UpdateEdge(ctx context.Context, id string, req deliveryhttp.CreateEdgeRequest) error {
-	record := &configrepo.EdgeRecord{
+func (a *agentRelationServiceHTTPAdapter) UpdateAgentRelation(ctx context.Context, id string, req deliveryhttp.CreateAgentRelationRequest) error {
+	record := &configrepo.AgentRelationRecord{
 		SourceAgentName: req.Source,
 		TargetAgentName: req.Target,
-		Type:            req.Type,
 		Config:          req.Config,
 	}
 	if err := a.repo.Update(ctx, id, record); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pkgerrors.NotFound(fmt.Sprintf("edge not found: %s", id))
+			return pkgerrors.NotFound(fmt.Sprintf("agent relation not found: %s", id))
 		}
-		return fmt.Errorf("update edge: %w", err)
+		return fmt.Errorf("update agent relation: %w", err)
 	}
 	return nil
 }
 
-func (a *edgeServiceHTTPAdapter) DeleteEdge(ctx context.Context, id string) error {
+func (a *agentRelationServiceHTTPAdapter) DeleteAgentRelation(ctx context.Context, id string) error {
 	if err := a.repo.Delete(ctx, id); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return pkgerrors.NotFound(fmt.Sprintf("edge not found: %s", id))
+			return pkgerrors.NotFound(fmt.Sprintf("agent relation not found: %s", id))
 		}
-		return fmt.Errorf("delete edge: %w", err)
+		return fmt.Errorf("delete agent relation: %w", err)
 	}
 	return nil
 }

@@ -88,46 +88,45 @@ func (m *mockSchemaService) ListSchemaAgents(_ context.Context, schemaID string)
 	return m.agents[schemaID], nil
 }
 
-type mockEdgeService struct {
-	edges  map[string][]EdgeInfo
-	nextID int
+type mockAgentRelationService struct {
+	relations map[string][]AgentRelationInfo
+	nextID    int
 }
 
-func newMockEdgeService() *mockEdgeService {
-	return &mockEdgeService{
-		edges:  make(map[string][]EdgeInfo),
-		nextID: 1,
+func newMockAgentRelationService() *mockAgentRelationService {
+	return &mockAgentRelationService{
+		relations: make(map[string][]AgentRelationInfo),
+		nextID:    1,
 	}
 }
 
-func (m *mockEdgeService) ListEdges(_ context.Context, schemaID string) ([]EdgeInfo, error) {
-	return m.edges[schemaID], nil
+func (m *mockAgentRelationService) ListAgentRelations(_ context.Context, schemaID string) ([]AgentRelationInfo, error) {
+	return m.relations[schemaID], nil
 }
 
-func (m *mockEdgeService) GetEdge(_ context.Context, _ string) (*EdgeInfo, error) {
+func (m *mockAgentRelationService) GetAgentRelation(_ context.Context, _ string) (*AgentRelationInfo, error) {
 	return nil, nil
 }
 
-func (m *mockEdgeService) CreateEdge(_ context.Context, schemaID string, req CreateEdgeRequest) (*EdgeInfo, error) {
+func (m *mockAgentRelationService) CreateAgentRelation(_ context.Context, schemaID string, req CreateAgentRelationRequest) (*AgentRelationInfo, error) {
 	id := fmt.Sprintf("%d", m.nextID)
 	m.nextID++
-	e := EdgeInfo{
+	rel := AgentRelationInfo{
 		ID:              id,
 		SchemaID:        schemaID,
 		SourceAgentName: req.Source,
 		TargetAgentName: req.Target,
-		Type:            req.Type,
 		Config:          req.Config,
 	}
-	m.edges[schemaID] = append(m.edges[schemaID], e)
-	return &e, nil
+	m.relations[schemaID] = append(m.relations[schemaID], rel)
+	return &rel, nil
 }
 
-func (m *mockEdgeService) UpdateEdge(_ context.Context, _ string, _ CreateEdgeRequest) error {
+func (m *mockAgentRelationService) UpdateAgentRelation(_ context.Context, _ string, _ CreateAgentRelationRequest) error {
 	return nil
 }
 
-func (m *mockEdgeService) DeleteEdge(_ context.Context, _ string) error {
+func (m *mockAgentRelationService) DeleteAgentRelation(_ context.Context, _ string) error {
 	return nil
 }
 
@@ -162,7 +161,7 @@ func setupExportImportRouter(h *SchemaHandler) *chi.Mux {
 
 func TestExportSchema_Basic(t *testing.T) {
 	schemaSvc := newMockSchemaService()
-	edgeSvc := newMockEdgeService()
+	relationSvc := newMockAgentRelationService()
 	agentDetailer := newMockAgentDetailer()
 
 	// Setup data
@@ -187,11 +186,11 @@ func TestExportSchema_Basic(t *testing.T) {
 		Tools:        []string{"search_knowledge", "respond"},
 	}
 
-	edgeSvc.edges[schema.ID] = []EdgeInfo{
-		{ID: "1", SchemaID: schema.ID, SourceAgentName: "classifier", TargetAgentName: "support-agent", Type: "flow"},
+	relationSvc.relations[schema.ID] = []AgentRelationInfo{
+		{ID: "1", SchemaID: schema.ID, SourceAgentName: "classifier", TargetAgentName: "support-agent"},
 	}
 
-	handler := NewSchemaHandler(schemaSvc, edgeSvc)
+	handler := NewSchemaHandler(schemaSvc, relationSvc)
 	handler.SetAgentDetailer(agentDetailer)
 	router := setupExportImportRouter(handler)
 
@@ -214,15 +213,14 @@ func TestExportSchema_Basic(t *testing.T) {
 	assert.Equal(t, "You are a classifier", exported.Agents[0].SystemPrompt)
 	assert.Equal(t, "spawn", exported.Agents[0].Lifecycle)
 	assert.Equal(t, "support-agent", exported.Agents[1].Name)
-	require.Len(t, exported.Edges, 1)
-	assert.Equal(t, "classifier", exported.Edges[0].Source)
-	assert.Equal(t, "support-agent", exported.Edges[0].Target)
-	assert.Equal(t, "flow", exported.Edges[0].Type)
+	require.Len(t, exported.AgentRelations, 1)
+	assert.Equal(t, "classifier", exported.AgentRelations[0].Source)
+	assert.Equal(t, "support-agent", exported.AgentRelations[0].Target)
 }
 
 func TestExportSchema_NotFound(t *testing.T) {
 	schemaSvc := newMockSchemaService()
-	handler := NewSchemaHandler(schemaSvc, newMockEdgeService())
+	handler := NewSchemaHandler(schemaSvc, newMockAgentRelationService())
 	router := setupExportImportRouter(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/schemas/999/export", nil)
@@ -237,7 +235,7 @@ func TestExportSchema_WithoutAgentDetailer(t *testing.T) {
 	schema, _ := schemaSvc.CreateSchema(context.Background(), CreateSchemaRequest{Name: "minimal"})
 	schemaSvc.AddSchemaAgent(context.Background(), schema.ID, "agent-a")
 
-	handler := NewSchemaHandler(schemaSvc, newMockEdgeService())
+	handler := NewSchemaHandler(schemaSvc, newMockAgentRelationService())
 	// Do NOT set agent detailer
 	router := setupExportImportRouter(handler)
 
@@ -259,9 +257,9 @@ func TestExportSchema_WithoutAgentDetailer(t *testing.T) {
 
 func TestImportSchema_Basic(t *testing.T) {
 	schemaSvc := newMockSchemaService()
-	edgeSvc := newMockEdgeService()
+	relationSvc := newMockAgentRelationService()
 
-	handler := NewSchemaHandler(schemaSvc, edgeSvc)
+	handler := NewSchemaHandler(schemaSvc, relationSvc)
 	router := setupExportImportRouter(handler)
 
 	yamlBody := `
@@ -270,10 +268,9 @@ description: "Imported from YAML"
 agents:
   - name: "agent-a"
   - name: "agent-b"
-edges:
+agent_relations:
   - source: "agent-a"
     target: "agent-b"
-    type: "flow"
 `
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/schemas/import", bytes.NewBufferString(yamlBody))
@@ -296,16 +293,15 @@ edges:
 	agents := schemaSvc.agents[createdSchema.ID]
 	assert.ElementsMatch(t, []string{"agent-a", "agent-b"}, agents)
 
-	// Verify edges created
-	edges := edgeSvc.edges[createdSchema.ID]
-	require.Len(t, edges, 1)
-	assert.Equal(t, "agent-a", edges[0].SourceAgentName)
-	assert.Equal(t, "agent-b", edges[0].TargetAgentName)
-	assert.Equal(t, "flow", edges[0].Type)
+	// Verify agent relations created
+	rels := relationSvc.relations[createdSchema.ID]
+	require.Len(t, rels, 1)
+	assert.Equal(t, "agent-a", rels[0].SourceAgentName)
+	assert.Equal(t, "agent-b", rels[0].TargetAgentName)
 }
 
 func TestImportSchema_EmptyName(t *testing.T) {
-	handler := NewSchemaHandler(newMockSchemaService(), newMockEdgeService())
+	handler := NewSchemaHandler(newMockSchemaService(), newMockAgentRelationService())
 	router := setupExportImportRouter(handler)
 
 	yamlBody := `description: "no name"`
@@ -318,7 +314,7 @@ func TestImportSchema_EmptyName(t *testing.T) {
 }
 
 func TestImportSchema_InvalidYAML(t *testing.T) {
-	handler := NewSchemaHandler(newMockSchemaService(), newMockEdgeService())
+	handler := NewSchemaHandler(newMockSchemaService(), newMockAgentRelationService())
 	router := setupExportImportRouter(handler)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/schemas/import", bytes.NewBufferString("}{not yaml"))
@@ -329,7 +325,7 @@ func TestImportSchema_InvalidYAML(t *testing.T) {
 }
 
 func TestImportSchema_EmptyBody(t *testing.T) {
-	handler := NewSchemaHandler(newMockSchemaService(), newMockEdgeService())
+	handler := NewSchemaHandler(newMockSchemaService(), newMockAgentRelationService())
 	router := setupExportImportRouter(handler)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/schemas/import", bytes.NewBufferString(""))
@@ -343,7 +339,7 @@ func TestImportSchema_EmptyBody(t *testing.T) {
 func TestRoundTrip_ExportImport(t *testing.T) {
 	// Setup source schema
 	srcSchemaSvc := newMockSchemaService()
-	srcEdgeSvc := newMockEdgeService()
+	srcRelationSvc := newMockAgentRelationService()
 
 	schema, _ := srcSchemaSvc.CreateSchema(context.Background(), CreateSchemaRequest{
 		Name:        "roundtrip-schema",
@@ -351,11 +347,11 @@ func TestRoundTrip_ExportImport(t *testing.T) {
 	})
 	srcSchemaSvc.AddSchemaAgent(context.Background(), schema.ID, "agent-x")
 	srcSchemaSvc.AddSchemaAgent(context.Background(), schema.ID, "agent-y")
-	srcEdgeSvc.edges[schema.ID] = []EdgeInfo{
-		{ID: "1", SchemaID: schema.ID, SourceAgentName: "agent-x", TargetAgentName: "agent-y", Type: "transfer"},
+	srcRelationSvc.relations[schema.ID] = []AgentRelationInfo{
+		{ID: "1", SchemaID: schema.ID, SourceAgentName: "agent-x", TargetAgentName: "agent-y"},
 	}
 
-	srcHandler := NewSchemaHandler(srcSchemaSvc, srcEdgeSvc)
+	srcHandler := NewSchemaHandler(srcSchemaSvc, srcRelationSvc)
 	srcRouter := setupExportImportRouter(srcHandler)
 
 	// Export
@@ -368,9 +364,9 @@ func TestRoundTrip_ExportImport(t *testing.T) {
 
 	// Import into a fresh set of services
 	dstSchemaSvc := newMockSchemaService()
-	dstEdgeSvc := newMockEdgeService()
+	dstRelationSvc := newMockAgentRelationService()
 
-	dstHandler := NewSchemaHandler(dstSchemaSvc, dstEdgeSvc)
+	dstHandler := NewSchemaHandler(dstSchemaSvc, dstRelationSvc)
 	dstRouter := setupExportImportRouter(dstHandler)
 
 	importReq := httptest.NewRequest(http.MethodPost, "/api/v1/schemas/import", bytes.NewReader(exportedYAML))
@@ -391,12 +387,11 @@ func TestRoundTrip_ExportImport(t *testing.T) {
 	agents := dstSchemaSvc.agents[importedSchema.ID]
 	assert.ElementsMatch(t, []string{"agent-x", "agent-y"}, agents)
 
-	// Edges
-	edges := dstEdgeSvc.edges[importedSchema.ID]
-	require.Len(t, edges, 1)
-	assert.Equal(t, "agent-x", edges[0].SourceAgentName)
-	assert.Equal(t, "agent-y", edges[0].TargetAgentName)
-	assert.Equal(t, "transfer", edges[0].Type)
+	// Agent relations
+	rels := dstRelationSvc.relations[importedSchema.ID]
+	require.Len(t, rels, 1)
+	assert.Equal(t, "agent-x", rels[0].SourceAgentName)
+	assert.Equal(t, "agent-y", rels[0].TargetAgentName)
 }
 
 func TestSanitizeFilename(t *testing.T) {

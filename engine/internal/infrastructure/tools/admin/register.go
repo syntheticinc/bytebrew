@@ -55,15 +55,15 @@ func RegisterAdminTools(store *tools.BuiltinToolStore, deps AdminToolDependencie
 		return NewAdminRemoveAgentFromSchemaTool(deps.SchemaRepo, reloader)
 	})
 
-	// Edge tools
-	store.Register("admin_list_edges", func(_ tools.ToolDependencies) tool.InvokableTool {
-		return NewAdminListEdgesTool(deps.EdgeRepo)
+	// AgentRelation tools (V2: edges→agent_relations, single implicit DELEGATION type)
+	store.Register("admin_list_agent_relations", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminListAgentRelationsTool(deps.AgentRelationRepo)
 	})
-	store.Register("admin_create_edge", func(_ tools.ToolDependencies) tool.InvokableTool {
-		return NewAdminCreateEdgeTool(deps.EdgeRepo, reloader)
+	store.Register("admin_create_agent_relation", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminCreateAgentRelationTool(deps.AgentRelationRepo, reloader)
 	})
-	store.Register("admin_delete_edge", func(_ tools.ToolDependencies) tool.InvokableTool {
-		return NewAdminDeleteEdgeTool(deps.EdgeRepo, reloader)
+	store.Register("admin_delete_agent_relation", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminDeleteAgentRelationTool(deps.AgentRelationRepo, reloader)
 	})
 
 	// Trigger tools

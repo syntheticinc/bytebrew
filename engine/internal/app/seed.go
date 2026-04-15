@@ -43,7 +43,7 @@ const builderAssistantPrompt = `You are the ByteBrew Builder Assistant — an AI
 You have access to admin tools that let you fully manage the platform:
 - **Agents** — list, get, create, update, delete agents with full configuration
 - **Schemas** — list, get, create, update, delete agent schemas (multi-agent flows)
-- **Edges** — list, create, delete edges between agents in schemas
+- **Agent Relations** — list, create, delete delegation relations between agents in schemas
 - **Triggers** — list, create, update, delete cron and webhook triggers
 - **MCP Servers** — list, create, update, delete MCP server configurations
 - **Models** — list, create, update, delete LLM model configurations
@@ -83,15 +83,15 @@ Present this as a plan and **explicitly ask for approval** before proceeding. Ex
 
 Only after the user confirms ("yes", "go ahead", "build it", "looks good") — execute the plan using tools:
 1. Use list tools to check current state first
-2. Create resources in logical order (agents first, then schemas, then edges, triggers, capabilities)
+2. Create resources in logical order (agents first, then schemas, then agent relations, triggers, capabilities)
 3. Report each step briefly as you go
 4. Summarise what was created at the end
 
 ## Other Guidelines
 
 - **Schema scoping rules:**
-  - ` + "`builder-schema`" + ` is a system schema reserved for the builder-assistant itself. NEVER create, add, or move user agents into builder-schema. NEVER create edges or triggers in builder-schema.
-  - Messages may begin with "[Schema: name]" — this means the user is working inside that user schema. Scope all operations (creating agents, edges, capabilities) to that schema. When creating an agent, immediately add it to the schema.
+  - ` + "`builder-schema`" + ` is a system schema reserved for the builder-assistant itself. NEVER create, add, or move user agents into builder-schema. NEVER create agent relations or triggers in builder-schema.
+  - Messages may begin with "[Schema: name]" — this means the user is working inside that user schema. Scope all operations (creating agents, agent relations, capabilities) to that schema. When creating an agent, immediately add it to the schema.
   - When NO schema context is provided, and the user asks to create agents or build a system, create a NEW schema with a descriptive name (e.g., "support-flow", "iot-pipeline"), then create agents inside it.
   - If the user explicitly asks "create a schema", always create a new one — never reuse builder-schema.
   - When listing agents, highlight which ones are in the current schema.
@@ -119,9 +119,9 @@ var builderAssistantBuiltinTools = []string{
 	"admin_delete_schema",
 	"admin_add_agent_to_schema",
 	"admin_remove_agent_from_schema",
-	"admin_list_edges",
-	"admin_create_edge",
-	"admin_delete_edge",
+	"admin_list_agent_relations",
+	"admin_create_agent_relation",
+	"admin_delete_agent_relation",
 	"admin_list_triggers",
 	"admin_create_trigger",
 	"admin_update_trigger",
@@ -406,8 +406,8 @@ func restoreBuilderSchema(ctx context.Context, db *gorm.DB) error {
 	db.WithContext(ctx).Where("schema_id = ?", schemaID).Delete(&models.TriggerModel{})
 	seedBuilderChatTrigger(ctx, db, schemaID)
 
-	// 5. Remove stale edges for this schema (builder-assistant has no spawn targets by default).
-	db.WithContext(ctx).Where("schema_id = ?", schemaID).Delete(&models.EdgeModel{})
+	// 5. Remove stale agent relations for this schema (builder-assistant has no spawn targets by default).
+	db.WithContext(ctx).Where("schema_id = ?", schemaID).Delete(&models.AgentRelationModel{})
 
 	slog.InfoContext(ctx, "restored builder-schema to factory defaults")
 	return nil

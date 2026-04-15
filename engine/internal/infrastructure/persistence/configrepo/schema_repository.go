@@ -112,9 +112,9 @@ func (r *GORMSchemaRepository) Delete(ctx context.Context, id string) error {
 		if err := tx.Where("schema_id = ?", id).Delete(&models.SchemaAgentModel{}).Error; err != nil {
 			return fmt.Errorf("delete schema agent refs: %w", err)
 		}
-		// Delete edges
-		if err := tx.Where("schema_id = ?", id).Delete(&models.EdgeModel{}).Error; err != nil {
-			return fmt.Errorf("delete schema edges: %w", err)
+		// Delete agent relations
+		if err := tx.Where("schema_id = ?", id).Delete(&models.AgentRelationModel{}).Error; err != nil {
+			return fmt.Errorf("delete schema agent relations: %w", err)
 		}
 		// Delete schema itself
 		result := tx.Delete(&models.SchemaModel{}, "id = ?", id)

@@ -15,10 +15,10 @@ import (
 
 // SchemaYAML is the top-level YAML representation of a schema.
 type SchemaYAML struct {
-	Name        string      `yaml:"name"`
-	Description string      `yaml:"description,omitempty"`
-	Agents      []AgentYAML `yaml:"agents,omitempty"`
-	Edges       []EdgeYAML  `yaml:"edges,omitempty"`
+	Name           string               `yaml:"name"`
+	Description    string               `yaml:"description,omitempty"`
+	Agents         []AgentYAML          `yaml:"agents,omitempty"`
+	AgentRelations []AgentRelationYAML  `yaml:"agent_relations,omitempty"`
 }
 
 // AgentYAML is the YAML representation of an agent within a schema export.
@@ -36,11 +36,13 @@ type AgentYAML struct {
 	MCPServers      []string `yaml:"mcp_servers,omitempty"`
 }
 
-// EdgeYAML is the YAML representation of an edge.
-type EdgeYAML struct {
+// AgentRelationYAML is the YAML representation of an agent relation.
+//
+// V2 has a single implicit DELEGATION relationship type (see
+// docs/architecture/agent-first-runtime.md §3.1) — no `type` field is exported.
+type AgentRelationYAML struct {
 	Source string                 `yaml:"source"`
 	Target string                 `yaml:"target"`
-	Type   string                 `yaml:"type"`
 	Config map[string]interface{} `yaml:"config,omitempty"`
 }
 
@@ -82,7 +84,7 @@ func (h *SchemaHandler) ExportSchema(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	edges, err := h.edges.ListEdges(ctx, id)
+	relations, err := h.agentRelations.ListAgentRelations(ctx, id)
 	if err != nil {
 		writeDomainError(w, err)
 		return
@@ -119,13 +121,12 @@ func (h *SchemaHandler) ExportSchema(w http.ResponseWriter, r *http.Request) {
 		export.Agents = append(export.Agents, agentYAML)
 	}
 
-	// Build edges
-	for _, e := range edges {
-		export.Edges = append(export.Edges, EdgeYAML{
-			Source: e.SourceAgentName,
-			Target: e.TargetAgentName,
-			Type:   e.Type,
-			Config: e.Config,
+	// Build agent relations
+	for _, rel := range relations {
+		export.AgentRelations = append(export.AgentRelations, AgentRelationYAML{
+			Source: rel.SourceAgentName,
+			Target: rel.TargetAgentName,
+			Config: rel.Config,
 		})
 	}
 
@@ -145,7 +146,7 @@ func (h *SchemaHandler) ExportSchema(w http.ResponseWriter, r *http.Request) {
 // --- Import endpoint ---
 
 // ImportSchema handles POST /api/v1/schemas/import.
-// It accepts a YAML body and creates a schema with agents and edges.
+// It accepts a YAML body and creates a schema with agents and agent relations.
 func (h *SchemaHandler) ImportSchema(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20)) // 1 MB limit
 	if err != nil {
@@ -188,20 +189,19 @@ func (h *SchemaHandler) ImportSchema(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 3. Create edges
-	for _, e := range input.Edges {
-		if e.Source == "" || e.Target == "" {
+	// 3. Create agent relations
+	for _, rel := range input.AgentRelations {
+		if rel.Source == "" || rel.Target == "" {
 			continue
 		}
-		_, err := h.edges.CreateEdge(ctx, schema.ID, CreateEdgeRequest{
-			Source: e.Source,
-			Target: e.Target,
-			Type:   e.Type,
-			Config: e.Config,
+		_, err := h.agentRelations.CreateAgentRelation(ctx, schema.ID, CreateAgentRelationRequest{
+			Source: rel.Source,
+			Target: rel.Target,
+			Config: rel.Config,
 		})
 		if err != nil {
-			slog.WarnContext(ctx, "failed to create edge for imported schema",
-				"schema", schema.Name, "edge_source", e.Source, "edge_target", e.Target, "error", err)
+			slog.WarnContext(ctx, "failed to create agent relation for imported schema",
+				"schema", schema.Name, "relation_source", rel.Source, "relation_target", rel.Target, "error", err)
 		}
 	}
 

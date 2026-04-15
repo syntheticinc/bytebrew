@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Schema represents a named group of agents + edges + triggers.
+// Schema represents a named group of agents + agent_relations + triggers.
 // Agents are global entities referenced by schemas, not owned by them.
 type Schema struct {
 	ID          string

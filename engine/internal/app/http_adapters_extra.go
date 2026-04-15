@@ -314,11 +314,11 @@ func (a *triggerServiceHTTPAdapter) isEntryAgent(ctx context.Context, agentID st
 		return pkgerrors.NotFound("agent not found")
 	}
 	var count int64
-	a.db.WithContext(ctx).Model(&models.EdgeModel{}).
+	a.db.WithContext(ctx).Model(&models.AgentRelationModel{}).
 		Where("target_agent_name = ?", agent.Name).
 		Count(&count)
 	if count > 0 {
-		return pkgerrors.InvalidInput(fmt.Sprintf("agent %q has incoming edges and cannot be a trigger target", agent.Name))
+		return pkgerrors.InvalidInput(fmt.Sprintf("agent %q has incoming agent relations and cannot be a trigger target", agent.Name))
 	}
 	return nil
 }

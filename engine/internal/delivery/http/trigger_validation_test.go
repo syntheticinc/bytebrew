@@ -51,7 +51,7 @@ func (m *mockTriggerService) ClearTriggerTarget(_ context.Context, _ string) err
 // for a non-entry agent returns an error containing "entry agent".
 func TestTriggerHandler_Create_RejectsNonEntryAgent(t *testing.T) {
 	service := &mockTriggerService{
-		createErr: fmt.Errorf("agent %q is not an entry agent: it has incoming flow or transfer edges", "worker"),
+		createErr: fmt.Errorf("agent %q is not an entry agent: it has incoming agent relations", "worker"),
 	}
 	handler := NewTriggerHandler(service)
 

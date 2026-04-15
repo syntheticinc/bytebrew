@@ -396,7 +396,7 @@ func Run(sc ServerConfig) error {
 				TriggerRepo:    newAdminTriggerRepoAdapter(configrepo.NewGORMTriggerRepository(pgDB), pgDB),
 				MCPServerRepo:  newAdminMCPServerRepoAdapter(configrepo.NewGORMMCPServerRepository(pgDB)),
 				ModelRepo:      newAdminModelRepoAdapter(configrepo.NewGORMLLMProviderRepository(pgDB)),
-				EdgeRepo:       newAdminEdgeRepoAdapter(configrepo.NewGORMEdgeRepository(pgDB)),
+				AgentRelationRepo: newAdminAgentRelationRepoAdapter(configrepo.NewGORMAgentRelationRepository(pgDB)),
 				SessionRepo:    newAdminSessionRepoAdapter(configrepo.NewGORMSessionRepository(pgDB)),
 				CapabilityRepo: newAdminCapabilityRepoAdapter(configrepo.NewGORMCapabilityRepository(pgDB)),
 				Reloader: func() {
@@ -821,12 +821,13 @@ func Run(sc ServerConfig) error {
 				r.Delete("/api/v1/triggers/{id}/target", triggerHandler.ClearTarget)
 			})
 
-			// Schemas (with edges) — schemaRepo already created above for agent cross-refs.
+			// Schemas (with agent_relations) — schemaRepo already created above for agent cross-refs.
+			// V2: edges→agent_relations rename + drop type column (Group A.1).
 			// Gates removed in V2 (see docs/architecture/agent-first-runtime.md §3).
-			edgeRepo := configrepo.NewGORMEdgeRepository(pgDB)
+			agentRelationRepo := configrepo.NewGORMAgentRelationRepository(pgDB)
 			schemaHandler := deliveryhttp.NewSchemaHandler(
 				&schemaServiceHTTPAdapter{repo: schemaRepo},
-				&edgeServiceHTTPAdapter{repo: edgeRepo},
+				&agentRelationServiceHTTPAdapter{repo: agentRelationRepo},
 			)
 			schemaHandler.SetAgentDetailer(agentManager)
 			r.Group(func(r chi.Router) {
@@ -834,8 +835,8 @@ func Run(sc ServerConfig) error {
 				r.Get("/api/v1/schemas", schemaHandler.ListSchemas)
 				r.Get("/api/v1/schemas/{id}", schemaHandler.GetSchema)
 				r.Get("/api/v1/schemas/{id}/agents", schemaHandler.ListSchemaAgents)
-				r.Get("/api/v1/schemas/{id}/edges", schemaHandler.ListEdges)
-				r.Get("/api/v1/schemas/{id}/edges/{edgeId}", schemaHandler.GetEdge)
+				r.Get("/api/v1/schemas/{id}/agent-relations", schemaHandler.ListAgentRelations)
+				r.Get("/api/v1/schemas/{id}/agent-relations/{relationId}", schemaHandler.GetAgentRelation)
 				r.Get("/api/v1/schemas/{id}/export", schemaHandler.ExportSchema)
 			})
 			r.Group(func(r chi.Router) {
@@ -846,9 +847,9 @@ func Run(sc ServerConfig) error {
 				r.Delete("/api/v1/schemas/{id}", schemaHandler.DeleteSchema)
 				r.Post("/api/v1/schemas/{id}/agents", schemaHandler.AddSchemaAgent)
 				r.Delete("/api/v1/schemas/{id}/agents/{name}", schemaHandler.RemoveSchemaAgent)
-				r.Post("/api/v1/schemas/{id}/edges", schemaHandler.CreateEdge)
-				r.Put("/api/v1/schemas/{id}/edges/{edgeId}", schemaHandler.UpdateEdge)
-				r.Delete("/api/v1/schemas/{id}/edges/{edgeId}", schemaHandler.DeleteEdge)
+				r.Post("/api/v1/schemas/{id}/agent-relations", schemaHandler.CreateAgentRelation)
+				r.Put("/api/v1/schemas/{id}/agent-relations/{relationId}", schemaHandler.UpdateAgentRelation)
+				r.Delete("/api/v1/schemas/{id}/agent-relations/{relationId}", schemaHandler.DeleteAgentRelation)
 			})
 
 			// Widgets

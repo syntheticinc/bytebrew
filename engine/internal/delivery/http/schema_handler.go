@@ -39,23 +39,25 @@ type AddSchemaAgentRequest struct {
 	AgentName string `json:"agent_name"`
 }
 
-// --- Edge DTOs ---
+// --- AgentRelation DTOs ---
 
-// EdgeInfo is an edge returned in API responses.
-type EdgeInfo struct {
+// AgentRelationInfo is an agent_relation returned in API responses.
+//
+// V2 has a single implicit DELEGATION relationship type (see
+// docs/architecture/agent-first-runtime.md §3.1). Optional Config carries
+// non-typing routing hints.
+type AgentRelationInfo struct {
 	ID              string                 `json:"id"`
 	SchemaID        string                 `json:"schema_id"`
 	SourceAgentName string                 `json:"source"`
 	TargetAgentName string                 `json:"target"`
-	Type            string                 `json:"type"`
 	Config          map[string]interface{} `json:"config,omitempty"`
 }
 
-// CreateEdgeRequest is the body for POST /api/v1/schemas/{id}/edges.
-type CreateEdgeRequest struct {
+// CreateAgentRelationRequest is the body for POST /api/v1/schemas/{id}/agent-relations.
+type CreateAgentRelationRequest struct {
 	Source string                 `json:"source"`
 	Target string                 `json:"target"`
-	Type   string                 `json:"type"`
 	Config map[string]interface{} `json:"config,omitempty"`
 }
 
@@ -73,13 +75,13 @@ type SchemaService interface {
 	ListSchemaAgents(ctx context.Context, schemaID string) ([]string, error)
 }
 
-// EdgeService provides edge CRUD operations.
-type EdgeService interface {
-	ListEdges(ctx context.Context, schemaID string) ([]EdgeInfo, error)
-	GetEdge(ctx context.Context, id string) (*EdgeInfo, error)
-	CreateEdge(ctx context.Context, schemaID string, req CreateEdgeRequest) (*EdgeInfo, error)
-	UpdateEdge(ctx context.Context, id string, req CreateEdgeRequest) error
-	DeleteEdge(ctx context.Context, id string) error
+// AgentRelationService provides agent-relation CRUD operations.
+type AgentRelationService interface {
+	ListAgentRelations(ctx context.Context, schemaID string) ([]AgentRelationInfo, error)
+	GetAgentRelation(ctx context.Context, id string) (*AgentRelationInfo, error)
+	CreateAgentRelation(ctx context.Context, schemaID string, req CreateAgentRelationRequest) (*AgentRelationInfo, error)
+	UpdateAgentRelation(ctx context.Context, id string, req CreateAgentRelationRequest) error
+	DeleteAgentRelation(ctx context.Context, id string) error
 }
 
 // AgentSchemaLister provides the ability to list schemas that reference an agent.
@@ -91,17 +93,17 @@ type AgentSchemaLister interface {
 
 // SchemaHandler serves /api/v1/schemas endpoints.
 type SchemaHandler struct {
-	schemas       SchemaService
-	edges         EdgeService
-	agentDetailer SchemaAgentDetailer // optional, used by export
+	schemas        SchemaService
+	agentRelations AgentRelationService
+	agentDetailer  SchemaAgentDetailer // optional, used by export
 }
 
 // NewSchemaHandler creates a SchemaHandler.
-func NewSchemaHandler(schemas SchemaService, edges EdgeService) *SchemaHandler {
-	return &SchemaHandler{schemas: schemas, edges: edges}
+func NewSchemaHandler(schemas SchemaService, agentRelations AgentRelationService) *SchemaHandler {
+	return &SchemaHandler{schemas: schemas, agentRelations: agentRelations}
 }
 
-// Routes returns a chi router with all schema and edge endpoints.
+// Routes returns a chi router with all schema and agent-relation endpoints.
 func (h *SchemaHandler) Routes() http.Handler {
 	r := chi.NewRouter()
 
@@ -117,12 +119,12 @@ func (h *SchemaHandler) Routes() http.Handler {
 	r.Post("/{id}/agents", h.AddSchemaAgent)
 	r.Delete("/{id}/agents/{name}", h.RemoveSchemaAgent)
 
-	// Edges (per-schema)
-	r.Get("/{id}/edges", h.ListEdges)
-	r.Post("/{id}/edges", h.CreateEdge)
-	r.Get("/{id}/edges/{edgeId}", h.GetEdge)
-	r.Put("/{id}/edges/{edgeId}", h.UpdateEdge)
-	r.Delete("/{id}/edges/{edgeId}", h.DeleteEdge)
+	// Agent relations (per-schema)
+	r.Get("/{id}/agent-relations", h.ListAgentRelations)
+	r.Post("/{id}/agent-relations", h.CreateAgentRelation)
+	r.Get("/{id}/agent-relations/{relationId}", h.GetAgentRelation)
+	r.Put("/{id}/agent-relations/{relationId}", h.UpdateAgentRelation)
+	r.Delete("/{id}/agent-relations/{relationId}", h.DeleteAgentRelation)
 
 	return r
 }
@@ -267,46 +269,46 @@ func (h *SchemaHandler) RemoveSchemaAgent(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// --- Edge endpoints ---
+// --- AgentRelation endpoints ---
 
-func (h *SchemaHandler) ListEdges(w http.ResponseWriter, r *http.Request) {
+func (h *SchemaHandler) ListAgentRelations(w http.ResponseWriter, r *http.Request) {
 	schemaID, err := parseStringParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	edges, err := h.edges.ListEdges(r.Context(), schemaID)
+	rels, err := h.agentRelations.ListAgentRelations(r.Context(), schemaID)
 	if err != nil {
 		writeDomainError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, edges)
+	writeJSON(w, http.StatusOK, rels)
 }
 
-func (h *SchemaHandler) GetEdge(w http.ResponseWriter, r *http.Request) {
-	edgeID, err := parseStringParam(r, "edgeId")
+func (h *SchemaHandler) GetAgentRelation(w http.ResponseWriter, r *http.Request) {
+	relationID, err := parseStringParam(r, "relationId")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	edge, err := h.edges.GetEdge(r.Context(), edgeID)
+	rel, err := h.agentRelations.GetAgentRelation(r.Context(), relationID)
 	if err != nil {
 		writeDomainError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, edge)
+	writeJSON(w, http.StatusOK, rel)
 }
 
-func (h *SchemaHandler) CreateEdge(w http.ResponseWriter, r *http.Request) {
+func (h *SchemaHandler) CreateAgentRelation(w http.ResponseWriter, r *http.Request) {
 	schemaID, err := parseStringParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	var req CreateEdgeRequest
+	var req CreateAgentRelationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %s", err.Error()))
 		return
@@ -316,42 +318,42 @@ func (h *SchemaHandler) CreateEdge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	edge, err := h.edges.CreateEdge(r.Context(), schemaID, req)
+	rel, err := h.agentRelations.CreateAgentRelation(r.Context(), schemaID, req)
 	if err != nil {
 		writeDomainError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, edge)
+	writeJSON(w, http.StatusCreated, rel)
 }
 
-func (h *SchemaHandler) UpdateEdge(w http.ResponseWriter, r *http.Request) {
-	edgeID, err := parseStringParam(r, "edgeId")
+func (h *SchemaHandler) UpdateAgentRelation(w http.ResponseWriter, r *http.Request) {
+	relationID, err := parseStringParam(r, "relationId")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	var req CreateEdgeRequest
+	var req CreateAgentRelationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %s", err.Error()))
 		return
 	}
 
-	if err := h.edges.UpdateEdge(r.Context(), edgeID, req); err != nil {
+	if err := h.agentRelations.UpdateAgentRelation(r.Context(), relationID, req); err != nil {
 		writeDomainError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *SchemaHandler) DeleteEdge(w http.ResponseWriter, r *http.Request) {
-	edgeID, err := parseStringParam(r, "edgeId")
+func (h *SchemaHandler) DeleteAgentRelation(w http.ResponseWriter, r *http.Request) {
+	relationID, err := parseStringParam(r, "relationId")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	if err := h.edges.DeleteEdge(r.Context(), edgeID); err != nil {
+	if err := h.agentRelations.DeleteAgentRelation(r.Context(), relationID); err != nil {
 		writeDomainError(w, err)
 		return
 	}

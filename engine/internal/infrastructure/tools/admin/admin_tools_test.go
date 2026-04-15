@@ -174,47 +174,47 @@ func (m *mockSchemaRepo) RemoveAgent(_ context.Context, schemaID string, agentNa
 	return fmt.Errorf("agent not found in schema: %s", agentName)
 }
 
-type mockEdgeRepo struct {
-	edges  map[string]*EdgeRecord
-	nextID int
-	err    error
+type mockAgentRelationRepo struct {
+	relations map[string]*AgentRelationRecord
+	nextID    int
+	err       error
 }
 
-func newMockEdgeRepo() *mockEdgeRepo {
-	return &mockEdgeRepo{edges: make(map[string]*EdgeRecord), nextID: 1}
+func newMockAgentRelationRepo() *mockAgentRelationRepo {
+	return &mockAgentRelationRepo{relations: make(map[string]*AgentRelationRecord), nextID: 1}
 }
 
-func (m *mockEdgeRepo) List(_ context.Context, schemaID string) ([]EdgeRecord, error) {
+func (m *mockAgentRelationRepo) List(_ context.Context, schemaID string) ([]AgentRelationRecord, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
-	var result []EdgeRecord
-	for _, e := range m.edges {
-		if e.SchemaID == schemaID {
-			result = append(result, *e)
+	var result []AgentRelationRecord
+	for _, r := range m.relations {
+		if r.SchemaID == schemaID {
+			result = append(result, *r)
 		}
 	}
 	return result, nil
 }
 
-func (m *mockEdgeRepo) Create(_ context.Context, record *EdgeRecord) error {
+func (m *mockAgentRelationRepo) Create(_ context.Context, record *AgentRelationRecord) error {
 	if m.err != nil {
 		return m.err
 	}
-	record.ID = fmt.Sprintf("edge-%d", m.nextID)
+	record.ID = fmt.Sprintf("rel-%d", m.nextID)
 	m.nextID++
-	m.edges[record.ID] = record
+	m.relations[record.ID] = record
 	return nil
 }
 
-func (m *mockEdgeRepo) Delete(_ context.Context, id string) error {
+func (m *mockAgentRelationRepo) Delete(_ context.Context, id string) error {
 	if m.err != nil {
 		return m.err
 	}
-	if _, ok := m.edges[id]; !ok {
-		return fmt.Errorf("edge not found: %s", id)
+	if _, ok := m.relations[id]; !ok {
+		return fmt.Errorf("agent relation not found: %s", id)
 	}
-	delete(m.edges, id)
+	delete(m.relations, id)
 	return nil
 }
 
@@ -583,35 +583,26 @@ func TestAdminRemoveAgentFromSchema_NotFound(t *testing.T) {
 	assert.Contains(t, result, "not found")
 }
 
-// --- Edge tool tests ---
+// --- Agent relation tool tests ---
 
-func TestAdminCreateEdge_Success(t *testing.T) {
-	repo := newMockEdgeRepo()
+func TestAdminCreateAgentRelation_Success(t *testing.T) {
+	repo := newMockAgentRelationRepo()
 	reloader, count := newReloaderCounter()
-	tool := NewAdminCreateEdgeTool(repo, reloader)
-	args, _ := json.Marshal(createEdgeArgs{SchemaID: "schema-1", FromAgent: "a", ToAgent: "b", Type: "flow"})
+	tool := NewAdminCreateAgentRelationTool(repo, reloader)
+	args, _ := json.Marshal(createAgentRelationArgs{SchemaID: "schema-1", FromAgent: "a", ToAgent: "b"})
 	result, err := tool.InvokableRun(context.Background(), string(args))
 	require.NoError(t, err)
-	assert.Contains(t, result, "Edge created")
+	assert.Contains(t, result, "Agent relation created")
 	assert.Equal(t, int32(1), count.Load())
 }
 
-func TestAdminCreateEdge_InvalidType(t *testing.T) {
-	repo := newMockEdgeRepo()
-	tool := NewAdminCreateEdgeTool(repo, nil)
-	args, _ := json.Marshal(createEdgeArgs{SchemaID: "schema-1", FromAgent: "a", ToAgent: "b", Type: "invalid"})
+func TestAdminListAgentRelations_Empty(t *testing.T) {
+	repo := newMockAgentRelationRepo()
+	tool := NewAdminListAgentRelationsTool(repo)
+	args, _ := json.Marshal(listAgentRelationsArgs{SchemaID: "schema-1"})
 	result, err := tool.InvokableRun(context.Background(), string(args))
 	require.NoError(t, err)
-	assert.Contains(t, result, "Invalid edge type")
-}
-
-func TestAdminListEdges_Empty(t *testing.T) {
-	repo := newMockEdgeRepo()
-	tool := NewAdminListEdgesTool(repo)
-	args, _ := json.Marshal(listEdgesArgs{SchemaID: "schema-1"})
-	result, err := tool.InvokableRun(context.Background(), string(args))
-	require.NoError(t, err)
-	assert.Contains(t, result, "No edges")
+	assert.Contains(t, result, "No agent relations")
 }
 
 // --- Model tool tests ---
@@ -726,7 +717,7 @@ func TestRegisterAdminTools_RegistersAllTools(t *testing.T) {
 		TriggerRepo:    newMockTriggerRepo(),
 		MCPServerRepo:  &mockMCPServerRepo{},
 		ModelRepo:      newMockModelRepo(),
-		EdgeRepo:       newMockEdgeRepo(),
+		AgentRelationRepo: newMockAgentRelationRepo(),
 		CapabilityRepo: newMockCapabilityRepo(),
 	})
 
@@ -734,7 +725,7 @@ func TestRegisterAdminTools_RegistersAllTools(t *testing.T) {
 		"admin_list_agents", "admin_get_agent", "admin_create_agent", "admin_update_agent", "admin_delete_agent",
 		"admin_list_schemas", "admin_get_schema", "admin_create_schema", "admin_update_schema", "admin_delete_schema",
 		"admin_add_agent_to_schema", "admin_remove_agent_from_schema",
-		"admin_list_edges", "admin_create_edge", "admin_delete_edge",
+		"admin_list_agent_relations", "admin_create_agent_relation", "admin_delete_agent_relation",
 		"admin_list_triggers", "admin_create_trigger", "admin_update_trigger", "admin_delete_trigger",
 		"admin_list_mcp_servers", "admin_create_mcp_server", "admin_update_mcp_server", "admin_delete_mcp_server",
 		"admin_list_models", "admin_create_model", "admin_update_model", "admin_delete_model",
@@ -791,7 +782,7 @@ func TestWorkflow_CreateSchemaWithAgentsAndEdges(t *testing.T) {
 	ctx := context.Background()
 	agentRepo := newMockAgentRepo()
 	schemaRepo := newMockSchemaRepo()
-	edgeRepo := newMockEdgeRepo()
+	relationRepo := newMockAgentRelationRepo()
 	reloader, reloadCount := newReloaderCounter()
 
 	// Step 1: Create agents.
@@ -823,18 +814,18 @@ func TestWorkflow_CreateSchemaWithAgentsAndEdges(t *testing.T) {
 	_, err = addAgent.InvokableRun(ctx, string(args))
 	require.NoError(t, err)
 
-	// Step 4: Create edge.
-	createEdge := NewAdminCreateEdgeTool(edgeRepo, reloader)
-	args, _ = json.Marshal(createEdgeArgs{SchemaID: "schema-1", FromAgent: "router", ToAgent: "worker", Type: "flow"})
-	result, err = createEdge.InvokableRun(ctx, string(args))
+	// Step 4: Create agent relation.
+	createRelation := NewAdminCreateAgentRelationTool(relationRepo, reloader)
+	args, _ = json.Marshal(createAgentRelationArgs{SchemaID: "schema-1", FromAgent: "router", ToAgent: "worker"})
+	result, err = createRelation.InvokableRun(ctx, string(args))
 	require.NoError(t, err)
-	assert.Contains(t, result, "Edge created")
+	assert.Contains(t, result, "Agent relation created")
 
-	// Verify: 2 agents, 1 schema with 2 agents, 1 edge, reloader called 6 times.
+	// Verify: 2 agents, 1 schema with 2 agents, 1 relation, reloader called 6 times.
 	assert.Len(t, agentRepo.agents, 2)
 	assert.Contains(t, schemaRepo.schemas["schema-1"].AgentNames, "router")
 	assert.Contains(t, schemaRepo.schemas["schema-1"].AgentNames, "worker")
-	assert.Len(t, edgeRepo.edges, 1)
+	assert.Len(t, relationRepo.relations, 1)
 	assert.Equal(t, int32(6), reloadCount.Load())
 }
 
