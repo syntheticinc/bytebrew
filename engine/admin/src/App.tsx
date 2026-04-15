@@ -57,7 +57,8 @@ export default function App() {
             <Route path="/widget" element={<WidgetConfigPage />} />
             <Route path="/agents" element={<AgentsPage />} />
             <Route path="/agents/:agent" element={<AgentDrillInPage />} />
-            {/* V2 Prototype routes (visible only when Prototype mode is on) */}
+            {/* Overview — Core landing. Also served at /v2/overview for backward compat. */}
+            <Route path="/overview" element={<V2OverviewPage />} />
             <Route path="/v2/overview" element={<V2OverviewPage />} />
             <Route path="/v2/schemas" element={<V2SchemasPage />} />
             <Route path="/v2/schemas/:schemaId" element={<V2SchemaDetailPage />} />

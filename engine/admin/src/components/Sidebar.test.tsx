@@ -45,7 +45,9 @@ describe('Sidebar', () => {
 
     renderSidebar();
 
-    expect(screen.getByText('Health')).toBeInTheDocument();
+    // Overview replaces Health in Core nav (Group K)
+    expect(screen.getByText('Overview')).toBeInTheDocument();
+    expect(screen.queryByText('Health')).not.toBeInTheDocument();
     expect(screen.getByText('Canvas')).toBeInTheDocument();
     expect(screen.getByText('MCP Servers')).toBeInTheDocument();
     expect(screen.getByText('Settings')).toBeInTheDocument();

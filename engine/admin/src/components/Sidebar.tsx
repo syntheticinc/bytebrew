@@ -134,10 +134,20 @@ const icons = {
   ),
 };
 
+const overviewIcon = (
+  <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="7" height="9" rx="1" />
+    <rect x="14" y="3" width="7" height="5" rx="1" />
+    <rect x="14" y="12" width="7" height="9" rx="1" />
+    <rect x="3" y="16" width="7" height="5" rx="1" />
+  </svg>
+);
+
 const sections: NavSection[] = [
   {
     label: 'Core',
     items: [
+      { to: '/overview', label: 'Overview', icon: overviewIcon },
       { to: '/builder', label: 'Canvas', icon: icons.builder },
     ],
   },
@@ -171,18 +181,6 @@ const sections: NavSection[] = [
 const v2Section: NavSection = {
   label: 'V2 Preview (Prototype)',
   items: [
-    {
-      to: '/v2/overview',
-      label: 'Overview',
-      icon: (
-        <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="7" height="9" rx="1" />
-          <rect x="14" y="3" width="7" height="5" rx="1" />
-          <rect x="14" y="12" width="7" height="9" rx="1" />
-          <rect x="3" y="16" width="7" height="5" rx="1" />
-        </svg>
-      ),
-    },
     {
       to: '/v2/schemas',
       label: 'Schemas',
