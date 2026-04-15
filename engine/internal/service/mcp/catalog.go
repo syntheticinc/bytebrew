@@ -1,121 +1,125 @@
 package mcp
 
 import (
-	"fmt"
+	"context"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"gopkg.in/yaml.v3"
 )
 
+// Consumer-side interface — the repository shape CatalogService needs. The
+// actual implementation lives in
+// `internal/infrastructure/persistence/configrepo.GORMMCPCatalogRepository`.
+type catalogRepository interface {
+	List(ctx context.Context) ([]domain.MCPCatalogRecord, error)
+	GetByName(ctx context.Context, name string) (*domain.MCPCatalogRecord, error)
+}
+
+// CatalogVersion is the version string returned by CatalogService.Version().
+// V2 Commit Group C (§5.5): the catalog moved from runtime YAML reads to the
+// `mcp_catalog` DB table seeded from `mcp-catalog.yaml` at engine startup.
+// The YAML `catalog_version` tag is no longer load-bearing — the DB is the
+// source of truth and individual rows are addressable by `name`. We still
+// publish a top-level version string on `GET /api/v1/mcp/catalog` for the
+// admin UI.
+const CatalogVersion = "1.0"
+
 // CatalogService loads and manages the MCP server catalog.
+//
+// All reads hit the DB via the injected repository. No filesystem access at
+// query time.
 type CatalogService struct {
-	catalog *domain.MCPCatalog
+	repo catalogRepository
 }
 
-// NewCatalogService creates a catalog service by loading the catalog from YAML.
-// It searches for mcp-catalog.yaml alongside the binary or in the working directory.
-func NewCatalogService() (*CatalogService, error) {
-	catalog, err := loadCatalog()
-	if err != nil {
-		slog.Warn("[MCPCatalog] failed to load catalog, using empty", "error", err)
-		catalog = &domain.MCPCatalog{
-			CatalogVersion: "1.0",
-			Servers:        []domain.MCPCatalogEntry{},
-		}
-	}
-
-	slog.Info("[MCPCatalog] loaded", "version", catalog.CatalogVersion, "servers", len(catalog.Servers))
-	return &CatalogService{catalog: catalog}, nil
+// NewCatalogService creates a catalog service backed by the supplied
+// repository.
+func NewCatalogService(repo catalogRepository) *CatalogService {
+	return &CatalogService{repo: repo}
 }
 
-// NewCatalogServiceFromData creates a catalog service from raw YAML data (for testing).
-func NewCatalogServiceFromData(data []byte) (*CatalogService, error) {
-	catalog, err := parseCatalog(data)
-	if err != nil {
-		return nil, fmt.Errorf("parse catalog: %w", err)
-	}
-	return &CatalogService{catalog: catalog}, nil
-}
-
-// List returns all catalog entries.
+// List returns all catalog entries as domain.MCPCatalogEntry (the shape the
+// admin UI and `GET /api/v1/mcp/catalog` already consume).
 func (s *CatalogService) List() []domain.MCPCatalogEntry {
-	return s.catalog.Servers
+	records, err := s.repo.List(context.Background())
+	if err != nil {
+		slog.Warn("[MCPCatalog] list failed", "error", err)
+		return []domain.MCPCatalogEntry{}
+	}
+	return toEntries(records)
 }
 
 // ListByCategory returns catalog entries filtered by category.
 func (s *CatalogService) ListByCategory(category domain.MCPCatalogCategory) []domain.MCPCatalogEntry {
-	var result []domain.MCPCatalogEntry
-	for _, entry := range s.catalog.Servers {
-		if entry.Category == category {
-			result = append(result, entry)
+	records, err := s.repo.List(context.Background())
+	if err != nil {
+		slog.Warn("[MCPCatalog] list-by-category failed", "error", err)
+		return []domain.MCPCatalogEntry{}
+	}
+	out := make([]domain.MCPCatalogEntry, 0, len(records))
+	for _, r := range records {
+		if r.Category == category {
+			out = append(out, toEntry(r))
 		}
 	}
-	return result
+	return out
 }
 
-// Search returns catalog entries matching the query (name or description).
+// Search returns catalog entries matching the query (name / display / description).
 func (s *CatalogService) Search(query string) []domain.MCPCatalogEntry {
+	records, err := s.repo.List(context.Background())
+	if err != nil {
+		slog.Warn("[MCPCatalog] search failed", "error", err)
+		return []domain.MCPCatalogEntry{}
+	}
 	q := strings.ToLower(query)
-	var result []domain.MCPCatalogEntry
-	for _, entry := range s.catalog.Servers {
-		if strings.Contains(strings.ToLower(entry.Name), q) ||
-			strings.Contains(strings.ToLower(entry.Display), q) ||
-			strings.Contains(strings.ToLower(entry.Description), q) {
-			result = append(result, entry)
+	out := make([]domain.MCPCatalogEntry, 0, len(records))
+	for _, r := range records {
+		if strings.Contains(strings.ToLower(r.Name), q) ||
+			strings.Contains(strings.ToLower(r.Display), q) ||
+			strings.Contains(strings.ToLower(r.Description), q) {
+			out = append(out, toEntry(r))
 		}
 	}
-	return result
+	return out
 }
 
 // GetByName returns a specific catalog entry by name.
 func (s *CatalogService) GetByName(name string) (*domain.MCPCatalogEntry, bool) {
-	for _, entry := range s.catalog.Servers {
-		if entry.Name == name {
-			return &entry, true
-		}
+	rec, err := s.repo.GetByName(context.Background(), name)
+	if err != nil {
+		slog.Warn("[MCPCatalog] get-by-name failed", "name", name, "error", err)
+		return nil, false
 	}
-	return nil, false
+	if rec == nil {
+		return nil, false
+	}
+	entry := toEntry(*rec)
+	return &entry, true
 }
 
 // Version returns the catalog version string.
-func (s *CatalogService) Version() string {
-	return s.catalog.CatalogVersion
+func (s *CatalogService) Version() string { return CatalogVersion }
+
+// toEntry projects the DB-backed record into the wire entry shape consumed by
+// the admin UI (`MCPCatalogEntry` is the YAML-shaped representation).
+func toEntry(r domain.MCPCatalogRecord) domain.MCPCatalogEntry {
+	return domain.MCPCatalogEntry{
+		Name:          r.Name,
+		Display:       r.Display,
+		Description:   r.Description,
+		Category:      r.Category,
+		Verified:      r.Verified,
+		Packages:      r.Packages,
+		ProvidedTools: r.ProvidedTools,
+	}
 }
 
-func loadCatalog() (*domain.MCPCatalog, error) {
-	// Search paths: alongside binary, then working directory
-	paths := []string{}
-
-	// Path relative to binary
-	if exe, err := os.Executable(); err == nil {
-		paths = append(paths, filepath.Join(filepath.Dir(exe), "mcp-catalog.yaml"))
+func toEntries(records []domain.MCPCatalogRecord) []domain.MCPCatalogEntry {
+	out := make([]domain.MCPCatalogEntry, len(records))
+	for i, r := range records {
+		out[i] = toEntry(r)
 	}
-
-	// Working directory
-	if wd, err := os.Getwd(); err == nil {
-		paths = append(paths, filepath.Join(wd, "mcp-catalog.yaml"))
-	}
-
-	for _, p := range paths {
-		data, err := os.ReadFile(p)
-		if err != nil {
-			continue
-		}
-		slog.Info("[MCPCatalog] loading from", "path", p)
-		return parseCatalog(data)
-	}
-
-	return nil, fmt.Errorf("mcp-catalog.yaml not found in: %v", paths)
-}
-
-func parseCatalog(data []byte) (*domain.MCPCatalog, error) {
-	var catalog domain.MCPCatalog
-	if err := yaml.Unmarshal(data, &catalog); err != nil {
-		return nil, fmt.Errorf("parse YAML: %w", err)
-	}
-	return &catalog, nil
+	return out
 }

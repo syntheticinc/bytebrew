@@ -111,6 +111,26 @@ func AutoMigrate(db *gorm.DB) error {
 		slog.Warn("[Migration] dropping legacy widgets table failed (may already be absent)", "error", err)
 	}
 
+	// V2 MCP catalog split + runtime cleanup (Commit Group C, §5.5/§5.6).
+	// Defense-in-depth alongside Liquibase 016 — idempotent DropTable +
+	// DropColumn. The `mcp_server_runtime` table is gone (status is answered
+	// live via MCP client ping/ListTools, not persisted). `is_well_known` and
+	// `catalog_name` are gone because the catalog lives in its own
+	// `mcp_catalog` table and install-from-catalog is a copy operation with
+	// no link back.
+	if err := db.Migrator().DropTable("mcp_server_runtime"); err != nil {
+		slog.Warn("[Migration] dropping legacy mcp_server_runtime table failed (may already be absent)", "error", err)
+	}
+	if db.Migrator().HasTable("mcp_servers") {
+		for _, col := range []string{"is_well_known", "catalog_name"} {
+			if db.Migrator().HasColumn("mcp_servers", col) {
+				if err := db.Migrator().DropColumn("mcp_servers", col); err != nil {
+					slog.Warn("[Migration] dropping legacy mcp_servers column failed (may already be absent)", "column", col, "error", err)
+				}
+			}
+		}
+	}
+
 	if err := db.AutoMigrate(
 		// Config tables (9)
 		&AgentModel{},
@@ -118,7 +138,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&AgentSpawnTarget{},
 		&LLMProviderModel{},
 		&MCPServerModel{},
-		&MCPServerRuntimeModel{},
+		&MCPCatalogModel{},
 		&AgentMCPServer{},
 		&TriggerModel{},
 		&SettingModel{},

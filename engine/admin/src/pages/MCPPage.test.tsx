@@ -47,7 +47,6 @@ describe('MCPPage', () => {
         type: 'stdio' as const,
         command: 'npx',
         args: ['@anthropic/playwright-mcp'],
-        is_well_known: true,
         agents: ['e2e-test'],
         status: { status: 'connected' as const, tools_count: 12, connected_at: '2026-03-17T10:00:00Z' },
       },

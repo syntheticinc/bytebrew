@@ -334,11 +334,6 @@ export default function MCPPage() {
               <DetailRow label="Type">
                 <span className="px-2 py-0.5 bg-brand-light rounded text-xs font-medium">{selected.type}</span>
               </DetailRow>
-              {selected.is_well_known && (
-                <DetailRow label="Source">
-                  <span className="px-2 py-0.5 bg-brand-accent/10 text-brand-accent rounded text-xs font-medium">catalog</span>
-                </DetailRow>
-              )}
               {selected.command && (
                 <DetailRow label="Command">
                   <code className="font-mono text-xs">{selected.command} {(selected.args ?? []).join(' ')}</code>

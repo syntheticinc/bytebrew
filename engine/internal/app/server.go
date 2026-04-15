@@ -366,6 +366,9 @@ func Run(sc ServerConfig) error {
 		seedByteBrewDocsMCP(ctx, pgDB)
 		seedBuilderAssistant(ctx, pgDB)
 		seedBuilderSchema(ctx, pgDB)
+		// V2 Commit Group C (§5.5): the system-wide MCP catalog is now a
+		// DB table populated from mcp-catalog.yaml at boot via upsert.
+		seedMCPCatalog(ctx, pgDB)
 	}
 
 	if pgDB != nil {
@@ -906,9 +909,10 @@ func Run(sc ServerConfig) error {
 				r.Delete("/api/v1/schemas/{id}/memory/{entry_id}", memoryHandler.DeleteMemory)
 			})
 
-			// MCP Catalog (read-only)
-			catalogSvc, catalogErr := mcpcatalog.NewCatalogService()
-			if catalogErr == nil {
+			// MCP Catalog (read-only) — DB-backed (V2 Commit Group C, §5.5).
+			if pgDB != nil {
+				catalogRepo := configrepo.NewGORMMCPCatalogRepository(pgDB)
+				catalogSvc := mcpcatalog.NewCatalogService(catalogRepo)
 				catalogHandler := deliveryhttp.NewCatalogHandler(catalogSvc)
 				r.Get("/api/v1/mcp/catalog", catalogHandler.ListCatalog)
 			}

@@ -26,9 +26,9 @@ export const MOCK_MODELS_LIST: Model[] = [
 ];
 
 export const MOCK_MCP_SERVERS: MCPServer[] = [
-  { id: '1', name: 'google-sheets', type: 'stdio', command: 'npx', args: ['-y', '@anthropic/mcp-google-sheets'], is_well_known: true, status: { status: 'connected', tools_count: 12, connected_at: '2026-04-05T10:00:00Z' }, agents: ['support-agent'] },
-  { id: '2', name: 'web-search', type: 'stdio', command: 'npx', args: ['-y', '@anthropic/mcp-web-search'], is_well_known: true, status: { status: 'connected', tools_count: 3, connected_at: '2026-04-05T10:00:00Z' }, agents: ['classifier', 'support-agent'] },
-  { id: '3', name: 'slack-notifications', type: 'http', url: 'https://mcp.example.com/slack', is_well_known: false, status: { status: 'disconnected', status_message: 'Auth expired', tools_count: 5 }, agents: [] },
+  { id: '1', name: 'google-sheets', type: 'stdio', command: 'npx', args: ['-y', '@anthropic/mcp-google-sheets'], status: { status: 'connected', tools_count: 12, connected_at: '2026-04-05T10:00:00Z' }, agents: ['support-agent'] },
+  { id: '2', name: 'web-search', type: 'stdio', command: 'npx', args: ['-y', '@anthropic/mcp-web-search'], status: { status: 'connected', tools_count: 3, connected_at: '2026-04-05T10:00:00Z' }, agents: ['classifier', 'support-agent'] },
+  { id: '3', name: 'slack-notifications', type: 'http', url: 'https://mcp.example.com/slack', status: { status: 'disconnected', status_message: 'Auth expired', tools_count: 5 }, agents: [] },
 ];
 
 export const MOCK_CATALOG: MCPCatalogEntry[] = [

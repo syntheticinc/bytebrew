@@ -1,0 +1,76 @@
+databaseChangeLog:
+  # V2 MCP catalog split + MCP runtime cleanup — Commit Group C.
+  #
+  # Target schema (`bytebrew/docs/database/target-schema.dbml`) splits the
+  # system-wide MCP catalog out of `mcp_servers` into its own table
+  # `mcp_catalog`, and drops the ephemeral `mcp_server_runtime` table along
+  # with the catalog-link columns on `mcp_servers`. See
+  # `docs/architecture/agent-first-runtime.md` §5.5 ("MCP catalog — Separate
+  # table, no FK to instances") and §5.6 ("MCP connection status — Not
+  # persisted").
+  #
+  # Why the split:
+  # - Catalog is global, `mcp_servers` is tenant-scoped. Keeping them on the
+  #   same row forced us to mix system-wide well-known metadata with
+  #   tenant-owned instance state.
+  # - Installing from the catalog is a COPY operation. Once a tenant
+  #   installs `tavily-web-search`, the catalog entry can change or
+  #   disappear without touching the install. No FK from `mcp_servers` back
+  #   to `mcp_catalog`.
+  #
+  # Why the runtime table goes:
+  # - Connection status (connected / disconnected / tools_count / connected_at)
+  #   is ephemeral. The MCP client already knows the truth — answering UI
+  #   queries with a live `ListTools` call is simpler than syncing a row.
+  #
+  # Seeding: the `mcp_catalog` table is populated at engine startup by
+  # `seedMCPCatalog` in `internal/app/seed_mcp_catalog.go`, which parses
+  # `mcp-catalog.yaml` (shipped alongside the binary) and upserts each
+  # entry by its unique `name` key. Re-boots are idempotent; edits to the
+  # YAML propagate without a new Liquibase changeset. This keeps the
+  # changeset itself as pure DDL (clean-schema policy — no data backfill).
+  #
+  # Idempotent: applies cleanly on fresh DBs and on pre-V2 DBs that have
+  # any subset of the legacy artefacts.
+  - changeSet:
+      id: 016-v2-mcp-catalog
+      author: system
+      changes:
+        # 1) Create the catalog table (global, no tenant_id).
+        - sql:
+            sql: |
+              CREATE TABLE IF NOT EXISTS mcp_catalog (
+                  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                  name            varchar(255) NOT NULL UNIQUE,
+                  display         varchar(255) NOT NULL,
+                  description     text,
+                  category        varchar(30)  NOT NULL,
+                  verified        boolean      NOT NULL DEFAULT false,
+                  packages        jsonb        NOT NULL DEFAULT '[]'::jsonb,
+                  provided_tools  jsonb,
+                  created_at      timestamptz  NOT NULL DEFAULT now(),
+                  updated_at      timestamptz  NOT NULL DEFAULT now()
+              );
+        # 2) Drop the ephemeral runtime table (V2 §5.6).
+        - sql:
+            sql: |
+              DROP TABLE IF EXISTS mcp_server_runtime;
+        # 3) Drop catalog-link columns on mcp_servers (V2 §5.5 — install is
+        #    a copy, no FK back, and the catalog lives in its own table).
+        - sql:
+            sql: |
+              ALTER TABLE IF EXISTS mcp_servers
+                  DROP COLUMN IF EXISTS is_well_known;
+        - sql:
+            sql: |
+              ALTER TABLE IF EXISTS mcp_servers
+                  DROP COLUMN IF EXISTS catalog_name;
+      rollback:
+        - sql:
+            sql: |
+              -- Rolling back is not supported: the seed from
+              -- mcp-catalog.yaml is re-applied on every engine boot, but
+              -- tenant-owned installs that were migrated off the flags
+              -- cannot be re-linked to the catalog without user input.
+              -- If rollback is required, restore from a pre-V2 backup.
+              SELECT 1;

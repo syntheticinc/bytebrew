@@ -212,11 +212,11 @@ class APIClient {
     return this.request<MCPServer[]>('GET', '/mcp-servers');
   }
   createMCPServer(data: CreateMCPServerRequest) {
-    if (this.isPrototype) return this.mock({ id: crypto.randomUUID(), ...data, status: { status: 'connected', tools_count: 0 }, is_well_known: false, agents: [] } as MCPServer);
+    if (this.isPrototype) return this.mock({ id: crypto.randomUUID(), ...data, status: { status: 'connected', tools_count: 0 }, agents: [] } as MCPServer);
     return this.request<MCPServer>('POST', '/mcp-servers', data);
   }
   updateMCPServer(name: string, data: CreateMCPServerRequest) {
-    if (this.isPrototype) return this.mock({ id: '', ...data, name, is_well_known: false, agents: [] } as MCPServer);
+    if (this.isPrototype) return this.mock({ id: '', ...data, name, agents: [] } as MCPServer);
     return this.request<MCPServer>('PUT', `/mcp-servers/${encodeURIComponent(name)}`, data);
   }
   deleteMCPServer(name: string) {

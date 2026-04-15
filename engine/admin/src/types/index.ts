@@ -77,6 +77,11 @@ export interface CreateModelRequest {
 // MCP types
 // ============================================================================
 
+// V2 Commit Group C (§5.5, §5.6):
+// - `is_well_known` removed — catalog origin is not persisted on installs
+//   (installs are independent copies in `mcp_servers`).
+// - `status` is no longer served by the MCP server list endpoint; it is
+//   populated by a live ping in the UI (or left undefined while pinging).
 export interface MCPServer {
   id: string;
   name: string;
@@ -86,7 +91,6 @@ export interface MCPServer {
   url?: string;
   env_vars?: Record<string, string>;
   forward_headers?: string[];
-  is_well_known: boolean;
   auth_type?: string;
   auth_key_env?: string;
   auth_token_env?: string;

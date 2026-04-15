@@ -18,10 +18,14 @@ func NewGORMMCPServerRepository(db *gorm.DB) *GORMMCPServerRepository {
 	return &GORMMCPServerRepository{db: db}
 }
 
-// List returns all MCP server models with runtime status.
+// List returns all MCP server models.
+//
+// V2 Commit Group C (§5.6): runtime status (connection state, tools_count)
+// is no longer persisted — callers that need status must ping the live MCP
+// client registry instead.
 func (r *GORMMCPServerRepository) List(ctx context.Context) ([]models.MCPServerModel, error) {
 	var servers []models.MCPServerModel
-	if err := r.db.WithContext(ctx).Preload("Runtime").Order("name").Find(&servers).Error; err != nil {
+	if err := r.db.WithContext(ctx).Order("name").Find(&servers).Error; err != nil {
 		return nil, fmt.Errorf("list mcp servers: %w", err)
 	}
 	return servers, nil
@@ -48,7 +52,7 @@ func (r *GORMMCPServerRepository) Create(ctx context.Context, model *models.MCPS
 // Select("*") ensures zero-value fields (e.g. cleared ForwardHeaders) are written.
 func (r *GORMMCPServerRepository) Update(ctx context.Context, id string, model *models.MCPServerModel) error {
 	result := r.db.WithContext(ctx).Model(&models.MCPServerModel{}).Where("id = ?", id).
-		Select("*").Omit("id", "created_at", "updated_at", "Runtime").Updates(model)
+		Select("*").Omit("id", "created_at", "updated_at").Updates(model)
 	if result.Error != nil {
 		return fmt.Errorf("update mcp server: %w", result.Error)
 	}

@@ -50,6 +50,8 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			created_at DATETIME,
 			updated_at DATETIME
 		)`,
+		// V2 Commit Group C (§5.5): `is_well_known` and `catalog_name` are
+		// gone (catalog lives in `mcp_catalog`, install is a copy with no FK).
 		`CREATE TABLE mcp_servers (
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL UNIQUE,
@@ -59,12 +61,10 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			url VARCHAR(500),
 			env_vars TEXT,
 			forward_headers TEXT,
-			is_well_known BOOLEAN NOT NULL DEFAULT 0,
 			auth_type VARCHAR(30) NOT NULL DEFAULT 'none',
 			auth_key_env VARCHAR(255),
 			auth_token_env VARCHAR(255),
 			auth_client_id VARCHAR(255),
-			catalog_name VARCHAR(255),
 			created_at DATETIME,
 			updated_at DATETIME
 		)`,

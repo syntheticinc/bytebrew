@@ -49,7 +49,6 @@ func (a *mcpServiceHTTPAdapter) ListMCPServers(ctx context.Context) ([]deliveryh
 			Type:         s.Type,
 			Command:      s.Command,
 			URL:          s.URL,
-			IsWellKnown:  s.IsWellKnown,
 			AuthType:     s.AuthType,
 			AuthKeyEnv:   s.AuthKeyEnv,
 			AuthTokenEnv: s.AuthTokenEnv,
@@ -65,16 +64,8 @@ func (a *mcpServiceHTTPAdapter) ListMCPServers(ctx context.Context) ([]deliveryh
 		if s.ForwardHeaders != "" {
 			_ = json.Unmarshal([]byte(s.ForwardHeaders), &resp.ForwardHeaders)
 		}
-		if s.Runtime != nil {
-			resp.Status = &deliveryhttp.MCPStatusInfo{
-				Status:        s.Runtime.Status,
-				StatusMessage: s.Runtime.StatusMessage,
-				ToolsCount:    s.Runtime.ToolsCount,
-			}
-			if s.Runtime.ConnectedAt != nil {
-				resp.Status.ConnectedAt = s.Runtime.ConnectedAt.Format(time.RFC3339)
-			}
-		}
+		// V2 Commit Group C (§5.6): connection status is no longer persisted
+		// — callers query the live MCP client registry separately.
 		result = append(result, resp)
 	}
 	return result, nil
@@ -112,7 +103,6 @@ func (a *mcpServiceHTTPAdapter) CreateMCPServer(ctx context.Context, req deliver
 		Type:           model.Type,
 		Command:        model.Command,
 		URL:            model.URL,
-		IsWellKnown:    model.IsWellKnown,
 		AuthType:       model.AuthType,
 		AuthKeyEnv:     model.AuthKeyEnv,
 		AuthTokenEnv:   model.AuthTokenEnv,
@@ -185,7 +175,6 @@ func (a *mcpServiceHTTPAdapter) UpdateMCPServer(ctx context.Context, name string
 				Type:         s.Type,
 				Command:      s.Command,
 				URL:          s.URL,
-				IsWellKnown:  s.IsWellKnown,
 				AuthType:     s.AuthType,
 				AuthKeyEnv:   s.AuthKeyEnv,
 				AuthTokenEnv: s.AuthTokenEnv,
@@ -201,16 +190,7 @@ func (a *mcpServiceHTTPAdapter) UpdateMCPServer(ctx context.Context, name string
 			if s.ForwardHeaders != "" {
 				_ = json.Unmarshal([]byte(s.ForwardHeaders), &resp.ForwardHeaders)
 			}
-			if s.Runtime != nil {
-				resp.Status = &deliveryhttp.MCPStatusInfo{
-					Status:        s.Runtime.Status,
-					StatusMessage: s.Runtime.StatusMessage,
-					ToolsCount:    s.Runtime.ToolsCount,
-				}
-				if s.Runtime.ConnectedAt != nil {
-					resp.Status.ConnectedAt = s.Runtime.ConnectedAt.Format(time.RFC3339)
-				}
-			}
+			// V2 Commit Group C (§5.6): live status no longer persisted.
 			return resp, nil
 		}
 	}

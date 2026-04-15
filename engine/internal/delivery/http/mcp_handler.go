@@ -10,6 +10,12 @@ import (
 )
 
 // MCPServerResponse is the API representation of an MCP server.
+//
+// V2 Commit Group C (§5.5, §5.6): `is_well_known` is gone (the catalog lives
+// in its own `mcp_catalog` table and installs are independent copies).
+// Connection status is omitted from this response — callers that want live
+// status query the MCP client registry endpoint instead of reading a
+// persisted field.
 type MCPServerResponse struct {
 	ID             string            `json:"id"`
 	Name           string            `json:"name"`
@@ -19,21 +25,11 @@ type MCPServerResponse struct {
 	URL            string            `json:"url,omitempty"`
 	EnvVars        map[string]string `json:"env_vars,omitempty"`
 	ForwardHeaders []string          `json:"forward_headers,omitempty"`
-	IsWellKnown    bool              `json:"is_well_known"`
 	AuthType       string            `json:"auth_type,omitempty"`
 	AuthKeyEnv     string            `json:"auth_key_env,omitempty"`
 	AuthTokenEnv   string            `json:"auth_token_env,omitempty"`
 	AuthClientID   string            `json:"auth_client_id,omitempty"`
-	Status         *MCPStatusInfo    `json:"status,omitempty"`
 	Agents         []string          `json:"agents"`
-}
-
-// MCPStatusInfo is the runtime status of an MCP server.
-type MCPStatusInfo struct {
-	Status        string `json:"status"`
-	StatusMessage string `json:"status_message,omitempty"`
-	ToolsCount    int    `json:"tools_count"`
-	ConnectedAt   string `json:"connected_at,omitempty"`
 }
 
 // CreateMCPServerRequest is the body for POST /api/v1/mcp-servers.
