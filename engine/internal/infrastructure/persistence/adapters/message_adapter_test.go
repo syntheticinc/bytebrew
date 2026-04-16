@@ -25,7 +25,7 @@ func TestEventToModel_UserMessage(t *testing.T) {
 	if model.SessionID != "session-1" {
 		t.Errorf("SessionID = %v, want session-1", model.SessionID)
 	}
-	if model.AgentID != "supervisor" {
+	if model.AgentID == nil || *model.AgentID != "supervisor" {
 		t.Errorf("AgentID = %v, want supervisor", model.AgentID)
 	}
 	if model.Payload == nil {
@@ -89,11 +89,12 @@ func TestEventToModel_GeneratesUUID(t *testing.T) {
 
 func TestEventFromModel_UserMessage(t *testing.T) {
 	payload, _ := json.Marshal(domain.ContentPayload{Content: "Hello"})
+	supervisorID := "supervisor"
 	model := &models.MessageModel{
 		ID:        uuid.New().String(),
 		SessionID: "session-1",
 		EventType: "user_message",
-		AgentID:   "supervisor",
+		AgentID:   &supervisorID,
 		Payload:   payload,
 		CreatedAt: time.Now(),
 	}

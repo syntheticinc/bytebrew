@@ -686,8 +686,9 @@ func Run(sc ServerConfig) error {
 
 			// Tasks
 			taskHandler := deliveryhttp.NewTaskHandler(&taskServiceHTTPAdapter{
-				repo:    taskRepo,
-				manager: components.TaskManager,
+				repo:          taskRepo,
+				manager:       components.TaskManager,
+				sessionReader: configrepo.NewGORMSessionRepository(pgDB),
 			})
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeTasks))

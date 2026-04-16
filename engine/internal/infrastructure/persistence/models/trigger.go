@@ -61,7 +61,7 @@ type TriggerModel struct {
 	ID          string        `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	Type        string        `gorm:"type:varchar(10);not null;index"`
 	Title       string        `gorm:"type:varchar(255);not null"`
-	SchemaID    *string       `gorm:"type:uuid;index;constraint:OnDelete:CASCADE"`
+	SchemaID    string        `gorm:"type:uuid;not null;index;constraint:OnDelete:CASCADE"`
 	Description string        `gorm:"type:text"`
 	Enabled     bool          `gorm:"not null;default:true"`
 	Config      TriggerConfig `gorm:"type:jsonb;not null;default:'{}'"`

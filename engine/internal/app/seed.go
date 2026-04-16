@@ -313,7 +313,7 @@ func seedBuilderChatTrigger(ctx context.Context, db *gorm.DB, schemaID string) {
 	trigger := &models.TriggerModel{
 		Type:     models.TriggerTypeChat,
 		Title:    "Builder Assistant Chat",
-		SchemaID: &schemaID,
+		SchemaID: schemaID,
 		Enabled:  true,
 	}
 	if err := db.WithContext(ctx).Create(trigger).Error; err != nil {

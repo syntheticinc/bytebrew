@@ -25,11 +25,16 @@ func EventToModel(event *domain.Message) (*models.MessageModel, error) {
 		payload = json.RawMessage("{}")
 	}
 
+	var agentID *string
+	if event.AgentID != "" {
+		agentID = &event.AgentID
+	}
+
 	return &models.MessageModel{
 		ID:        id,
 		SessionID: event.SessionID,
 		EventType: string(event.Type),
-		AgentID:   event.AgentID,
+		AgentID:   agentID,
 		CallID:    event.CallID,
 		Payload:   payload,
 		CreatedAt: event.CreatedAt,
@@ -47,11 +52,16 @@ func EventFromModel(model *models.MessageModel) (*domain.Message, error) {
 		payload = json.RawMessage("{}")
 	}
 
+	agentID := ""
+	if model.AgentID != nil {
+		agentID = *model.AgentID
+	}
+
 	return &domain.Message{
 		ID:        model.ID,
 		SessionID: model.SessionID,
 		Type:      domain.MessageType(model.EventType),
-		AgentID:   model.AgentID,
+		AgentID:   agentID,
 		CallID:    model.CallID,
 		Payload:   payload,
 		CreatedAt: model.CreatedAt,

@@ -5,7 +5,7 @@ import "time"
 // AuditLogModel maps to the "audit_logs" table.
 type AuditLogModel struct {
 	ID        string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
-	Timestamp time.Time `gorm:"not null;default:now();index"`
+	OccurredAt time.Time `gorm:"column:occurred_at;not null;default:now();index"`
 	ActorType string    `gorm:"type:varchar(20);not null;index"`
 	ActorUserID *string `gorm:"column:actor_user_id;type:uuid"`
 	Action    string    `gorm:"type:varchar(50);not null;index"`

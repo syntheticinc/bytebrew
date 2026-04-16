@@ -196,7 +196,6 @@ func TestCreateEngineTaskParams_MirrorsTaskFields(t *testing.T) {
 		Description:        "y",
 		AcceptanceCriteria: []string{"a"},
 		SessionID:          "sess-1",
-		UserID:             "u",
 		Priority:           1,
 		BlockedBy:          []uuid.UUID{uuid.New()},
 		RequireApproval:    false,

@@ -1,0 +1,60 @@
+databaseChangeLog:
+  - changeSet:
+      id: 033-schema-final-alignment
+      author: bytebrew
+      comment: >
+        Final alignment to target-schema.dbml:
+        audit_logs.timestamp → occurred_at rename.
+        api_tokens.user_id SET NOT NULL.
+        triggers.schema_id SET NOT NULL.
+        tasks: drop user_id, session_id SET NOT NULL, acceptance_criteria+blocked_by text→jsonb.
+        agent_relations: unique index on (source_agent_id, target_agent_id).
+      changes:
+        - sql:
+            sql: |
+              -- 1. audit_logs: rename timestamp → occurred_at
+              ALTER TABLE audit_logs RENAME COLUMN timestamp TO occurred_at;
+
+              -- 2. api_tokens: user_id NOT NULL
+              UPDATE api_tokens
+                SET user_id = (SELECT id FROM users WHERE external_id = 'admin' LIMIT 1)
+                WHERE user_id IS NULL;
+              ALTER TABLE api_tokens ALTER COLUMN user_id SET NOT NULL;
+
+              -- 3. triggers: schema_id NOT NULL (orphan triggers deleted first)
+              DELETE FROM triggers WHERE schema_id IS NULL;
+              ALTER TABLE triggers ALTER COLUMN schema_id SET NOT NULL;
+
+              -- 4. tasks: drop user_id
+              ALTER TABLE tasks DROP COLUMN IF EXISTS user_id;
+
+              -- 5. tasks: session_id NOT NULL (orphan tasks deleted first)
+              DELETE FROM tasks WHERE session_id IS NULL;
+              ALTER TABLE tasks ALTER COLUMN session_id SET NOT NULL;
+
+              -- 6. tasks: acceptance_criteria text → jsonb
+              ALTER TABLE tasks
+                ALTER COLUMN acceptance_criteria TYPE jsonb
+                USING CASE
+                  WHEN acceptance_criteria IS NULL OR acceptance_criteria = '' OR acceptance_criteria = '[]'
+                  THEN '[]'::jsonb
+                  ELSE acceptance_criteria::jsonb
+                END;
+
+              -- 7. tasks: blocked_by text → jsonb
+              ALTER TABLE tasks
+                ALTER COLUMN blocked_by TYPE jsonb
+                USING CASE
+                  WHEN blocked_by IS NULL OR blocked_by = '' OR blocked_by = '[]'
+                  THEN '[]'::jsonb
+                  ELSE blocked_by::jsonb
+                END;
+
+              -- 8. agent_relations: unique index on pair
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_relations_pair
+                ON agent_relations(source_agent_id, target_agent_id);
+      rollback:
+        - sql:
+            sql: |
+              DROP INDEX IF EXISTS idx_agent_relations_pair;
+              ALTER TABLE audit_logs RENAME COLUMN occurred_at TO timestamp;

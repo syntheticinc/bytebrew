@@ -228,7 +228,7 @@ func applyTaskFilter(q *gorm.DB, f TaskFilter) *gorm.DB {
 		q = q.Where("status = ?", string(*f.Status))
 	}
 	if f.UserID != nil {
-		q = q.Where("user_id = ?", *f.UserID)
+		q = q.Where("session_id IN (?)", q.Session(&gorm.Session{NewDB: true}).Table("sessions").Select("id").Where("user_id = ?", *f.UserID))
 	}
 	if f.SessionID != nil {
 		q = q.Where("session_id = ?", *f.SessionID)
@@ -372,8 +372,7 @@ func toTaskModel(t *domain.EngineTask) models.TaskModel {
 		Title:              t.Title,
 		Description:        t.Description,
 		AcceptanceCriteria: marshalStringSlice(t.AcceptanceCriteria),
-		UserID:             t.UserID,
-		SessionID:          strPtr(t.SessionID),
+		SessionID:          t.SessionID,
 		ParentTaskID:       t.ParentTaskID,
 		Status:             string(t.Status),
 		Mode:               string(t.Mode),
@@ -458,8 +457,7 @@ func toEngineTask(m *models.TaskModel) *domain.EngineTask {
 		Title:              m.Title,
 		Description:        m.Description,
 		AcceptanceCriteria: unmarshalStringSlice(m.AcceptanceCriteria),
-		UserID:             m.UserID,
-		SessionID:          derefStr(m.SessionID),
+		SessionID:          m.SessionID,
 		ParentTaskID:       m.ParentTaskID,
 		Status:             domain.EngineTaskStatus(m.Status),
 		Mode:               domain.TaskMode(m.Mode),

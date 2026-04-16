@@ -14,6 +14,11 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 )
 
+// sessionUserReader looks up the owner of a session.
+type sessionUserReader interface {
+	GetUserIDBySessionID(ctx context.Context, sessionID string) (string, bool, error)
+}
+
 // taskServiceHTTPAdapter bridges task infrastructure to the http.TaskService interface.
 //
 // It holds both the repository (for reads) and the shared EngineTaskManagerAdapter
@@ -24,8 +29,9 @@ import (
 // (webhooks) fire consistently regardless of whether the action originated
 // from an agent tool or the admin dashboard.
 type taskServiceHTTPAdapter struct {
-	repo    *configrepo.GORMTaskRepository
-	manager *taskrunner.EngineTaskManagerAdapter
+	repo          *configrepo.GORMTaskRepository
+	manager       *taskrunner.EngineTaskManagerAdapter
+	sessionReader sessionUserReader
 }
 
 // toHTTPTaskResponse maps a domain EngineTask to the HTTP response shape.
@@ -79,14 +85,21 @@ func parseBlockedByUUIDs(raw []string) ([]uuid.UUID, error) {
 	return out, nil
 }
 
-// checkOwnership verifies that a non-admin actor owns the given task.
+// checkOwnership verifies that a non-admin actor owns the given task via its session.
 // Admin actors are allowed to operate on any task. Returns ErrEngineTaskNotFound
 // if the task belongs to a different user (information hiding — don't leak existence).
-func checkOwnership(task *domain.EngineTask, actor deliveryhttp.ActorInfo) error {
+func checkOwnership(ctx context.Context, task *domain.EngineTask, actor deliveryhttp.ActorInfo, sr sessionUserReader) error {
 	if actor.IsAdmin {
 		return nil
 	}
-	if task.UserID != actor.ID {
+	if task.SessionID == "" {
+		return domain.ErrEngineTaskNotFound
+	}
+	ownerID, ok, err := sr.GetUserIDBySessionID(ctx, task.SessionID)
+	if err != nil {
+		return err
+	}
+	if !ok || ownerID != actor.ID {
 		return domain.ErrEngineTaskNotFound
 	}
 	return nil
@@ -98,7 +111,7 @@ func (a *taskServiceHTTPAdapter) getTaskWithOwnershipCheck(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
-	if err := checkOwnership(task, actor); err != nil {
+	if err := checkOwnership(ctx, task, actor, a.sessionReader); err != nil {
 		return nil, err
 	}
 	return task, nil
@@ -118,12 +131,10 @@ func (a *taskServiceHTTPAdapter) CreateTask(ctx context.Context, req deliveryhtt
 		return uuid.Nil, err
 	}
 
-	// UserID is set server-side from the authenticated actor, never from client input.
 	params := tools.CreateEngineTaskParams{
 		Title:              req.Title,
 		Description:        req.Description,
 		AcceptanceCriteria: req.AcceptanceCriteria,
-		UserID:             actor.ID,
 		Priority:           req.Priority,
 		BlockedBy:          blockers,
 		RequireApproval:    req.RequireApproval,
@@ -157,7 +168,8 @@ func (a *taskServiceHTTPAdapter) buildRepoFilter(filter deliveryhttp.TaskListFil
 			repoFilter.ParentTaskID = &pid
 		}
 	}
-	// Non-admin actors only see their own tasks.
+	// Non-admin actors only see tasks belonging to their sessions.
+	// The UserID filter is resolved via session ownership in the repository layer.
 	if !actor.IsAdmin {
 		repoFilter.UserID = &actor.ID
 	}

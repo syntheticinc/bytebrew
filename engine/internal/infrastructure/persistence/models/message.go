@@ -11,7 +11,7 @@ type MessageModel struct {
 	ID        string          `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	SessionID string          `gorm:"type:uuid;not null;index:idx_messages_session"`
 	EventType string          `gorm:"type:varchar(20);not null"`
-	AgentID   string          `gorm:"type:uuid;index:idx_messages_agent"`
+	AgentID   *string         `gorm:"type:uuid;index:idx_messages_agent"`
 	CallID    string          `gorm:"type:varchar(100)"`
 	Payload   json.RawMessage `gorm:"type:jsonb;not null;default:'{}'"`
 	TenantID  string          `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`

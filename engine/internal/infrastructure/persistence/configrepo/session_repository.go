@@ -2,6 +2,7 @@ package configrepo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
@@ -102,4 +103,20 @@ func (r *GORMSessionRepository) TouchUpdatedAt(ctx context.Context, id string) e
 		return fmt.Errorf("touch session updated_at: %w", result.Error)
 	}
 	return nil
+}
+
+// GetUserIDBySessionID returns the user_id for a session (for task ownership checks).
+// Returns ("", false, nil) if session not found or has no user.
+func (r *GORMSessionRepository) GetUserIDBySessionID(ctx context.Context, sessionID string) (string, bool, error) {
+	var m models.SessionModel
+	if err := r.db.WithContext(ctx).Select("user_id").First(&m, "id = ?", sessionID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("get session user: %w", err)
+	}
+	if m.UserID == nil {
+		return "", false, nil
+	}
+	return *m.UserID, true, nil
 }

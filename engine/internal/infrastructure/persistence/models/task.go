@@ -15,14 +15,13 @@ type TaskModel struct {
 	ID                 uuid.UUID  `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	Title              string     `gorm:"type:varchar(500);not null"`
 	Description        string     `gorm:"type:text"`
-	AcceptanceCriteria string     `gorm:"type:text"` // JSON array
-	UserID             string     `gorm:"type:varchar(255);index"`
-	SessionID          *string    `gorm:"type:uuid;index"`
+	AcceptanceCriteria string     `gorm:"type:jsonb"` // JSON array
+	SessionID          string     `gorm:"type:uuid;not null;index"`
 	ParentTaskID       *uuid.UUID `gorm:"type:uuid;index"`
 	Status             string     `gorm:"type:varchar(20);not null;default:pending;index"`
 	Mode               string     `gorm:"type:varchar(20);not null;default:interactive"`
 	Priority           int        `gorm:"not null;default:0"`
-	BlockedBy          string     `gorm:"type:text"` // JSON array of task UUIDs
+	BlockedBy          string     `gorm:"type:jsonb"` // JSON array of task UUIDs
 	Result             string     `gorm:"type:text"`
 	Error              string     `gorm:"type:text"`
 	TenantID           string     `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`

@@ -24,7 +24,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	// Create table manually to avoid PostgreSQL-specific syntax in GORM tags.
 	err = db.Exec(`CREATE TABLE audit_logs (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		timestamp DATETIME,
+		occurred_at DATETIME,
 		actor_type VARCHAR(20) NOT NULL,
 		actor_user_id VARCHAR(255),
 		action VARCHAR(50) NOT NULL,
@@ -123,7 +123,7 @@ func TestLogger_Log_ZeroTimestamp(t *testing.T) {
 
 	var result models.AuditLogModel
 	require.NoError(t, db.First(&result).Error)
-	assert.False(t, result.Timestamp.Before(before))
+	assert.False(t, result.OccurredAt.Before(before))
 }
 
 func TestLogger_Log_NilDetails(t *testing.T) {

@@ -58,7 +58,7 @@ func (l *Logger) Log(ctx context.Context, entry Entry) error {
 	}
 
 	model := models.AuditLogModel{
-		Timestamp:   ts,
+		OccurredAt:  ts,
 		ActorType:   entry.ActorType,
 		ActorUserID: actorUserID,
 		Action:      entry.Action,

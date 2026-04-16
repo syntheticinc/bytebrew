@@ -13,8 +13,8 @@ import "time"
 type AgentRelationModel struct {
 	ID            string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	SchemaID      string    `gorm:"type:uuid;not null;index"`
-	SourceAgentID string    `gorm:"type:uuid;not null"`
-	TargetAgentID string    `gorm:"type:uuid;not null"`
+	SourceAgentID string    `gorm:"type:uuid;not null;uniqueIndex:idx_agent_relations_pair"`
+	TargetAgentID string    `gorm:"type:uuid;not null;uniqueIndex:idx_agent_relations_pair"`
 	Config        string    `gorm:"type:jsonb"` // JSON, optional routing hints (priority, conditions)
 	TenantID      string    `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`
 	CreatedAt     time.Time `gorm:"autoCreateTime"`

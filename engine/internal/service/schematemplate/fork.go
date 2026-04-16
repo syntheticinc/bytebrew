@@ -230,11 +230,10 @@ func (s *ForkService) forkInTx(tx *gorm.DB, tmpl *domain.SchemaTemplate, newSche
 		if err != nil {
 			return ForkedSchema{}, fmt.Errorf("trigger %q: %w", t.Title, err)
 		}
-		schemaID := schema.ID
 		trigger := models.TriggerModel{
 			Type:     triggerType,
 			Title:    t.Title,
-			SchemaID: &schemaID,
+			SchemaID: schema.ID,
 			Enabled:  t.Enabled,
 			Config:   config,
 		}

@@ -42,14 +42,13 @@ const (
 //
 // ID types:
 //   - ID, ParentTaskID, BlockedBy — uuid.UUID (DB-generated UUIDs)
-//   - UserID, SessionID — string (opaque identifiers; stored as-is across subsystems)
+//   - SessionID — string (opaque identifier; stored as-is across subsystems)
 type EngineTask struct {
 	ID                 uuid.UUID
 	TenantID           string
 	Title              string
 	Description        string
 	AcceptanceCriteria []string
-	UserID             string
 	SessionID          string
 	ParentTaskID       *uuid.UUID
 	Status             EngineTaskStatus

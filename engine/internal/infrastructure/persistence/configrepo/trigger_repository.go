@@ -70,7 +70,11 @@ func (r *GORMTriggerRepository) Update(ctx context.Context, id string, model *mo
 }
 
 // SetSchemaID assigns a trigger to a specific schema. Used for explicit reassignment.
-func (r *GORMTriggerRepository) SetSchemaID(ctx context.Context, triggerID string, schemaID *string) error {
+// schemaID must be non-empty — triggers.schema_id is NOT NULL.
+func (r *GORMTriggerRepository) SetSchemaID(ctx context.Context, triggerID string, schemaID string) error {
+	if schemaID == "" {
+		return fmt.Errorf("schema_id is required: triggers.schema_id is NOT NULL")
+	}
 	result := r.db.WithContext(ctx).Model(&models.TriggerModel{}).Where("id = ?", triggerID).Update("schema_id", schemaID)
 	if result.Error != nil {
 		return fmt.Errorf("set trigger schema: %w", result.Error)

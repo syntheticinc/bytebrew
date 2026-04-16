@@ -58,7 +58,6 @@ type CreateEngineTaskParams struct {
 	Description        string
 	AcceptanceCriteria []string
 	SessionID          string
-	UserID             string
 	Priority           int
 	BlockedBy          []uuid.UUID
 	RequireApproval    bool            // true = starts as draft, false = starts as pending

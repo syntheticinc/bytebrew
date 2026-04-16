@@ -234,11 +234,16 @@ type triggerServiceHTTPAdapter struct {
 }
 
 func triggerModelToResponse(t models.TriggerModel) deliveryhttp.TriggerResponse {
+	var schemaIDPtr *string
+	if t.SchemaID != "" {
+		s := t.SchemaID
+		schemaIDPtr = &s
+	}
 	resp := deliveryhttp.TriggerResponse{
 		ID:          t.ID,
 		Type:        t.Type,
 		Title:       t.Title,
-		SchemaID:    t.SchemaID,
+		SchemaID:    schemaIDPtr,
 		Description: t.Description,
 		Enabled:     t.Enabled,
 		Config:      triggerConfigToMap(t.Config),
@@ -304,10 +309,14 @@ func (a *triggerServiceHTTPAdapter) ListTriggersBySchema(ctx context.Context, sc
 // Q.5: triggers no longer have agent_id — they target schemas only.
 
 func (a *triggerServiceHTTPAdapter) CreateTrigger(ctx context.Context, req deliveryhttp.CreateTriggerRequest) (*deliveryhttp.TriggerResponse, error) {
+	schemaID := ""
+	if req.SchemaID != nil {
+		schemaID = *req.SchemaID
+	}
 	model := &models.TriggerModel{
 		Type:        req.Type,
 		Title:       req.Title,
-		SchemaID:    req.SchemaID,
+		SchemaID:    schemaID,
 		Description: req.Description,
 		Enabled:     true,
 		Config:      triggerConfigFromMap(req.Config),
@@ -354,7 +363,7 @@ func (a *triggerServiceHTTPAdapter) SetTriggerTarget(ctx context.Context, id str
 		Scan(&schemaID).Error; err != nil || schemaID == "" {
 		return nil, pkgerrors.NotFound(fmt.Sprintf("no schema with entry agent %q", agentName))
 	}
-	if err := a.repo.SetSchemaID(ctx, id, &schemaID); err != nil {
+	if err := a.repo.SetSchemaID(ctx, id, schemaID); err != nil {
 		return nil, err
 	}
 	t, err := a.repo.GetByID(ctx, id)
@@ -365,9 +374,10 @@ func (a *triggerServiceHTTPAdapter) SetTriggerTarget(ctx context.Context, id str
 	return &resp, nil
 }
 
-// ClearTriggerTarget clears the trigger's schema_id.
+// ClearTriggerTarget is no longer supported — triggers.schema_id is NOT NULL.
+// Returns an error directing callers to delete and recreate the trigger instead.
 func (a *triggerServiceHTTPAdapter) ClearTriggerTarget(ctx context.Context, id string) error {
-	return a.repo.SetSchemaID(ctx, id, nil)
+	return fmt.Errorf("clearing trigger schema is not supported (schema_id is NOT NULL); delete and recreate the trigger instead")
 }
 
 func (a *triggerServiceHTTPAdapter) DeleteTrigger(ctx context.Context, id string) error {
@@ -550,10 +560,14 @@ func (a *eventServiceHTTPAdapter) ListEvents(ctx context.Context, sessionID stri
 	}
 	result := make([]deliveryhttp.EventResponse, 0, len(events))
 	for _, ev := range events {
+		agentID := ""
+		if ev.AgentID != nil {
+			agentID = *ev.AgentID
+		}
 		result = append(result, deliveryhttp.EventResponse{
 			ID:        ev.ID,
 			EventType: ev.EventType,
-			AgentID:   ev.AgentID,
+			AgentID:   agentID,
 			CallID:    ev.CallID,
 			Payload:   ev.Payload,
 			CreatedAt: ev.CreatedAt.Format(time.RFC3339),

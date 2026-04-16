@@ -184,10 +184,14 @@ func (a *adminTriggerRepoAdapter) GetByID(ctx context.Context, id string) (*admi
 }
 
 func (a *adminTriggerRepoAdapter) Create(ctx context.Context, record *admintools.TriggerRecord) error {
+	schemaID := ""
+	if record.SchemaID != nil {
+		schemaID = *record.SchemaID
+	}
 	m := &models.TriggerModel{
 		Type:        record.Type,
 		Title:       record.Title,
-		SchemaID:    record.SchemaID,
+		SchemaID:    schemaID,
 		Description: record.Description,
 		Enabled:     record.Enabled,
 		Config: models.TriggerConfig{
@@ -221,11 +225,16 @@ func (a *adminTriggerRepoAdapter) Delete(ctx context.Context, id string) error {
 }
 
 func toAdminTriggerRecord(t models.TriggerModel) admintools.TriggerRecord {
+	var schemaIDPtr *string
+	if t.SchemaID != "" {
+		s := t.SchemaID
+		schemaIDPtr = &s
+	}
 	return admintools.TriggerRecord{
 		ID:          t.ID,
 		Type:        t.Type,
 		Title:       t.Title,
-		SchemaID:    t.SchemaID,
+		SchemaID:    schemaIDPtr,
 		Schedule:    t.Config.Schedule,
 		WebhookPath: t.Config.WebhookPath,
 		Description: t.Description,

@@ -241,7 +241,7 @@ func (a *auditServiceHTTPAdapter) ListAuditLogs(ctx context.Context, actorType, 
 		}
 		result = append(result, deliveryhttp.AuditResponse{
 			ID:        l.ID,
-			Timestamp: l.Timestamp.Format(time.RFC3339),
+			Timestamp: l.OccurredAt.Format(time.RFC3339),
 			ActorType: l.ActorType,
 			ActorID:   actorID,
 			Action:    l.Action,
