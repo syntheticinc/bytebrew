@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -180,7 +179,7 @@ func TestToDomainFlow_Supervisor(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, flow)
 
-	assert.Equal(t, domain.FlowType("supervisor"), flow.Type)
+	assert.Equal(t, "supervisor", flow.Type)
 	assert.Equal(t, "Supervisor Agent", flow.Name)
 	assert.Equal(t, "You are a supervisor agent", flow.SystemPrompt)
 	assert.Equal(t, []string{"read_file", "spawn_agent"}, flow.ToolNames)
@@ -188,7 +187,7 @@ func TestToDomainFlow_Supervisor(t *testing.T) {
 	assert.Equal(t, 16000, flow.MaxContextSize)
 	assert.Equal(t, []string{"final_answer", "ask_user"}, flow.Lifecycle.SuspendOn)
 	assert.Equal(t, "user", flow.Lifecycle.ReportTo)
-	assert.Equal(t, []domain.FlowType{domain.FlowType("coder"), domain.FlowType("reviewer")}, flow.Spawn.AllowedFlows)
+	assert.Equal(t, []string{"coder", "reviewer"}, flow.Spawn.AllowedFlows)
 }
 
 func TestToDomainFlow_UnknownType(t *testing.T) {
@@ -259,7 +258,7 @@ func TestToDomainFlow_Reviewer(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, flow)
 
-	assert.Equal(t, domain.FlowType("reviewer"), flow.Type)
+	assert.Equal(t, "reviewer", flow.Type)
 	assert.Equal(t, "Code Reviewer", flow.Name)
 	assert.Equal(t, "You are a code reviewer agent", flow.SystemPrompt)
 	assert.Equal(t, []string{"read_file", "execute_command"}, flow.ToolNames)

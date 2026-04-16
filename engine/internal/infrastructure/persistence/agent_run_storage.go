@@ -129,9 +129,9 @@ func (s *AgentRunStorage) Close() error {
 func agentRunToModel(run *domain.AgentRun) models.AgentRunModel {
 	return models.AgentRunModel{
 		ID:          run.ID,
-		SubtaskID:   run.SubtaskID,
+		AgentID:     run.AgentID,
+		TaskID:      run.TaskID,
 		SessionID:   run.SessionID,
-		FlowType:    string(run.FlowType),
 		Status:      string(run.Status),
 		Result:      run.Result,
 		Error:       run.Error,
@@ -143,9 +143,9 @@ func agentRunToModel(run *domain.AgentRun) models.AgentRunModel {
 func modelToAgentRun(m *models.AgentRunModel) *domain.AgentRun {
 	return &domain.AgentRun{
 		ID:          m.ID,
-		SubtaskID:   m.SubtaskID,
+		AgentID:     m.AgentID,
+		TaskID:      m.TaskID,
 		SessionID:   m.SessionID,
-		FlowType:    domain.FlowType(m.FlowType),
 		Status:      domain.AgentRunStatus(m.Status),
 		Result:      m.Result,
 		Error:       m.Error,

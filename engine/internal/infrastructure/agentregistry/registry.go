@@ -80,8 +80,8 @@ func (r *AgentRegistry) Get(name string) (*RegisteredAgent, error) {
 
 // GetFlow implements the FlowProvider interface used by EngineAdapter and AgentPool.
 // This allows AgentRegistry to be a drop-in replacement for FlowManager.
-func (r *AgentRegistry) GetFlow(_ context.Context, flowType domain.FlowType) (*domain.Flow, error) {
-	agent, err := r.Get(string(flowType))
+func (r *AgentRegistry) GetFlow(_ context.Context, agentName string) (*domain.Flow, error) {
+	agent, err := r.Get(agentName)
 	if err != nil {
 		return nil, err
 	}
@@ -154,10 +154,10 @@ func (r *AgentRegistry) Count() int {
 // toFlow converts an AgentRecord into a domain.Flow.
 func toFlow(rec configrepo.AgentRecord) *domain.Flow {
 	spawn := domain.SpawnPolicy{
-		AllowedFlows: make([]domain.FlowType, 0, len(rec.CanSpawn)),
+		AllowedFlows: make([]string, 0, len(rec.CanSpawn)),
 	}
 	for _, name := range rec.CanSpawn {
-		spawn.AllowedFlows = append(spawn.AllowedFlows, domain.FlowType(name))
+		spawn.AllowedFlows = append(spawn.AllowedFlows, string(name))
 	}
 
 	// Collect all tool names (builtin + custom)
@@ -186,7 +186,7 @@ func toFlow(rec configrepo.AgentRecord) *domain.Flow {
 	}
 
 	return &domain.Flow{
-		Type:           domain.FlowType(rec.Name),
+		Type:           string(rec.Name),
 		Name:           rec.Name,
 		SystemPrompt:   systemPrompt,
 		ToolNames:      toolNames,

@@ -24,8 +24,7 @@ const CurrentSchemaVersion = 1
 type AgentContextSnapshot struct {
 	ID            string
 	SessionID     string
-	AgentID       string             // "supervisor" | "code-agent-{uuid}"
-	FlowType      FlowType
+	AgentID       string             // agent name or "supervisor"
 	SchemaVersion int                // For detecting incompatible snapshots after eino updates
 	ContextData   []byte             // JSON blob: serialized []*schema.Message
 	StepNumber    int
@@ -42,9 +41,6 @@ func (s *AgentContextSnapshot) Validate() error {
 	}
 	if s.AgentID == "" {
 		return fmt.Errorf("agent_id is required")
-	}
-	if s.FlowType == "" {
-		return fmt.Errorf("flow_type is required")
 	}
 	if s.SchemaVersion <= 0 {
 		return fmt.Errorf("schema_version must be positive")

@@ -68,8 +68,8 @@ type RunningAgent struct {
 	completionCh chan struct{} // closed when agent reaches terminal state
 	closeOnce    sync.Once
 	blockingSpawn bool              // true = supervisor blocks on this agent
-	flowType    domain.FlowType // agent type (for restart without subtask)
-	description string          // task description for researcher/reviewer agents
+	agentType   string // agent type name (for restart without subtask)
+	description string // task description for researcher/reviewer agents
 }
 
 // snapshot returns an immutable copy of the agent state.
@@ -129,7 +129,7 @@ type AgentEngine interface {
 
 // FlowProvider provides flow configurations (consumer-side)
 type FlowProvider interface {
-	GetFlow(ctx context.Context, flowType domain.FlowType) (*domain.Flow, error)
+	GetFlow(ctx context.Context, agentName string) (*domain.Flow, error)
 }
 
 // ToolResolver resolves tool names to tool instances (consumer-side)
@@ -152,11 +152,11 @@ type AgentRunStorage interface {
 	CleanupOrphanedRuns(ctx context.Context) (int64, error)
 }
 
-// AgentModelSelector selects a ChatModel based on FlowType (consumer-side).
-// Allows Supervisor and Coder to use different LLM models.
+// AgentModelSelector selects a ChatModel based on agent name (consumer-side).
+// Allows different agents to use different LLM models.
 type AgentModelSelector interface {
-	Select(flowType domain.FlowType) model.ToolCallingChatModel
-	ModelName(flowType domain.FlowType) string
+	Select(agentName string) model.ToolCallingChatModel
+	ModelName(agentName string) string
 }
 
 // AgentModelIDResolver resolves the model ID configured for a named agent (consumer-side).
@@ -356,7 +356,7 @@ func (p *AgentPool) Spawn(ctx context.Context, sessionID, projectKey, subtaskID 
 		Cancel:        cancel,
 		completionCh:  make(chan struct{}),
 		blockingSpawn: blocking,
-		flowType:      domain.FlowType("coder"),
+		agentType:     "coder",
 	}
 
 	// Register agent under lock (isolated critical section with defer)
@@ -440,11 +440,7 @@ func (p *AgentPool) registerAgent(ctx context.Context, sessionID, agentID string
 
 	// Save agent run to DB (if storage available)
 	if p.agentRunStorage != nil {
-		flowType := running.flowType
-		if flowType == "" {
-			flowType = domain.FlowType("coder")
-		}
-		agentRun, err := domain.NewAgentRun(agentID, running.SubtaskID, sessionID, flowType)
+		agentRun, err := domain.NewAgentRun(agentID, running.agentType, sessionID)
 		if err != nil {
 			return fmt.Errorf("create agent run: %w", err)
 		}
@@ -538,13 +534,13 @@ func (p *AgentPool) RestartAgent(ctx context.Context, agentID string, blocking b
 	}
 	subtaskID := agent.SubtaskID
 	sessionID := agent.SessionID
-	flowType := agent.flowType
+	agentType := agent.agentType
 	description := agent.description
 	p.mu.RUnlock()
 
 	// researcher/reviewer: restart via SpawnWithDescription
 	if subtaskID == "" {
-		return p.SpawnWithDescription(ctx, sessionID, "", flowType, description, blocking)
+		return p.SpawnWithDescription(ctx, sessionID, "", agentType, description, blocking)
 	}
 
 	// coder: restart via Spawn (existing logic)
@@ -573,8 +569,8 @@ func (p *AgentPool) RestartAgent(ctx context.Context, agentID string, blocking b
 
 // SpawnWithDescription starts an agent (researcher/reviewer) with a text description instead of subtask.
 // Returns agentID immediately (async).
-func (p *AgentPool) SpawnWithDescription(ctx context.Context, sessionID, projectKey string, flowType domain.FlowType, description string, blocking bool) (string, error) {
-	prefix := string(flowType)
+func (p *AgentPool) SpawnWithDescription(ctx context.Context, sessionID, projectKey string, agentType string, description string, blocking bool) (string, error) {
+	prefix := agentType
 	agentID := prefix + "-" + uuid.New().String()[:8]
 
 	// Create agent context from session-scoped context (NOT from supervisor's turn context).
@@ -596,7 +592,7 @@ func (p *AgentPool) SpawnWithDescription(ctx context.Context, sessionID, project
 		Cancel:        cancel,
 		completionCh:  make(chan struct{}),
 		blockingSpawn: blocking,
-		flowType:    flowType,
+		agentType:   agentType,
 		description: description,
 	}
 
@@ -618,7 +614,7 @@ func (p *AgentPool) SpawnWithDescription(ctx context.Context, sessionID, project
 			if r := recover(); r != nil {
 				slog.Error("[AgentPool] Agent panicked",
 					"agent_id", agentID,
-					"flow_type", flowType,
+					"agent_type", agentType,
 					"panic", r)
 				p.markFailed(agentID, "", fmt.Sprintf("panic: %v", r))
 			}
@@ -626,13 +622,13 @@ func (p *AgentPool) SpawnWithDescription(ctx context.Context, sessionID, project
 
 		slog.InfoContext(agentCtx, "[AgentPool] Agent starting",
 			"agent_id", agentID,
-			"flow_type", flowType)
+			"agent_type", agentType)
 
-		result, err := p.runAgentWithEngine(agentCtx, sessionID, projectKey, agentID, flowType, "", description)
+		result, err := p.runAgentWithEngine(agentCtx, sessionID, projectKey, agentID, agentType, "", description)
 		if err != nil {
 			slog.ErrorContext(agentCtx, "[AgentPool] Agent failed",
 				"agent_id", agentID,
-				"flow_type", flowType,
+				"agent_type", agentType,
 				"error", err)
 			p.markFailed(agentID, "", err.Error())
 			return
@@ -640,13 +636,13 @@ func (p *AgentPool) SpawnWithDescription(ctx context.Context, sessionID, project
 
 		slog.InfoContext(agentCtx, "[AgentPool] Agent completed",
 			"agent_id", agentID,
-			"flow_type", flowType)
+			"agent_type", agentType)
 		p.markCompleted(agentID, "", result)
 	}()
 
 	slog.InfoContext(ctx, "[AgentPool] Agent spawned",
 		"agent_id", agentID,
-		"flow_type", flowType)
+		"agent_type", agentType)
 
 	return agentID, nil
 }

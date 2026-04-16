@@ -6,7 +6,6 @@ import (
 
 	"github.com/cloudwego/eino/components/model"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	agentservice "github.com/syntheticinc/bytebrew/engine/internal/service/agent"
@@ -317,8 +316,7 @@ func (f *Factory) resolveModel(ctx context.Context, agentName string) (model.Too
 	}
 
 	// Fallback: static ModelSelector (legacy config or no per-agent model)
-	flowType := domain.FlowType(agentName)
-	return f.modelSelector.Select(flowType), f.modelSelector.ModelName(flowType)
+	return f.modelSelector.Select(agentName), f.modelSelector.ModelName(agentName)
 }
 
 // capabilityHintReminder injects capability usage hints into the agent's context.

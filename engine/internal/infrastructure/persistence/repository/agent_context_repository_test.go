@@ -33,7 +33,6 @@ func createTestSnapshot(sessionID, agentID string, status domain.AgentContextSta
 		ID:            uuid.New().String(),
 		SessionID:     sessionID,
 		AgentID:       agentID,
-		FlowType:      "supervisor",
 		SchemaVersion: domain.CurrentSchemaVersion,
 		ContextData:   []byte(`[{"role":"user","content":"test"}]`),
 		StepNumber:    1,
@@ -68,7 +67,7 @@ func TestAgentContextRepository_SaveAndLoad(t *testing.T) {
 	// Verify data identity
 	assert.Equal(t, sessionID, loaded.SessionID)
 	assert.Equal(t, agentID, loaded.AgentID)
-	assert.Equal(t, domain.FlowType("supervisor"), loaded.FlowType)
+	assert.Equal(t, "supervisor", loaded.AgentID)
 	assert.Equal(t, domain.CurrentSchemaVersion, loaded.SchemaVersion)
 	assert.Equal(t, originalData, loaded.ContextData)
 	assert.Equal(t, 1, loaded.StepNumber)

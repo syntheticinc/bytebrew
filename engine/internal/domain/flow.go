@@ -2,10 +2,6 @@ package domain
 
 import "fmt"
 
-// FlowType represents the type of flow (agent name from DB).
-// No hardcoded constants — values come from agent definitions.
-type FlowType string
-
 // LifecyclePolicy defines when a flow should suspend and where to report
 type LifecyclePolicy struct {
 	SuspendOn []string // events that cause suspension: "final_answer", "ask_user"
@@ -14,13 +10,13 @@ type LifecyclePolicy struct {
 
 // SpawnPolicy defines which flows can be spawned by this flow
 type SpawnPolicy struct {
-	AllowedFlows  []FlowType
+	AllowedFlows  []string
 	MaxConcurrent int // 0 = no limit (backward compatibility)
 }
 
 // Flow represents a flow configuration (agent behavior template)
 type Flow struct {
-	Type           FlowType
+	Type           string
 	Name           string
 	SystemPrompt   string
 	ToolNames      []string
@@ -59,7 +55,7 @@ func (f *Flow) Validate() error {
 }
 
 // CanSpawn returns true if this flow can spawn the specified flow type
-func (f *Flow) CanSpawn(flowType FlowType) bool {
+func (f *Flow) CanSpawn(flowType string) bool {
 	for _, allowed := range f.Spawn.AllowedFlows {
 		if allowed == flowType {
 			return true

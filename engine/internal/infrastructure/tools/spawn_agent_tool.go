@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 )
@@ -64,7 +63,7 @@ type spawnAgentArgs struct {
 // Implemented by agent.AgentPoolAdapter.
 type AgentPoolForTool interface {
 	Spawn(ctx context.Context, sessionID, projectKey, subtaskID string, blocking bool) (string, error)
-	SpawnWithDescription(ctx context.Context, sessionID, projectKey string, flowType domain.FlowType, description string, blocking bool) (string, error)
+	SpawnWithDescription(ctx context.Context, sessionID, projectKey string, agentType string, description string, blocking bool) (string, error)
 	WaitForAllSessionAgents(ctx context.Context, sessionID string) (WaitResult, error)
 	HasBlockingWait(sessionID string) bool
 	NotifyUserMessage(sessionID, message string)
@@ -138,25 +137,25 @@ Example: {"action": "spawn", "subtask_id": "abc123"}`, nil
 
 	switch args.Action {
 	case "spawn":
-		flowType := domain.FlowType("coder")
+		agentType := "coder"
 		if args.FlowType != "" {
-			flowType = domain.FlowType(args.FlowType)
+			agentType = args.FlowType
 		}
 
-		// Validate flow_type
-		validFlows := map[domain.FlowType]bool{
-			domain.FlowType("coder"):      true,
-			domain.FlowType("researcher"): true,
-			domain.FlowType("reviewer"):   true,
+		// Validate agent type
+		validTypes := map[string]bool{
+			"coder":      true,
+			"researcher": true,
+			"reviewer":   true,
 		}
-		if !validFlows[flowType] {
+		if !validTypes[agentType] {
 			return fmt.Sprintf("[ERROR] invalid flow_type: %s. Must be: coder, researcher, reviewer", args.FlowType), nil
 		}
 
 		var agentID string
 		var err error
 
-		if flowType == domain.FlowType("coder") {
+		if agentType == "coder" {
 			if args.SubtaskID == "" {
 				return "[ERROR] subtask_id is required for coder agent", nil
 			}
@@ -165,14 +164,14 @@ Example: {"action": "spawn", "subtask_id": "abc123"}`, nil
 			if args.TaskDescription == "" {
 				return fmt.Sprintf("[ERROR] task_description is required for %s agent", args.FlowType), nil
 			}
-			agentID, err = t.pool.SpawnWithDescription(ctx, t.sessionID, t.projectKey, flowType, args.TaskDescription, true)
+			agentID, err = t.pool.SpawnWithDescription(ctx, t.sessionID, t.projectKey, agentType, args.TaskDescription, true)
 		}
 
 		if err != nil {
 			if strings.Contains(err.Error(), "max concurrent agents reached") {
 				return fmt.Sprintf("Cannot spawn new agent: %s. Use spawn_agent(action=list) to check running agents, or spawn_agent(action=stop, agent_id=...) to stop one.", err.Error()), nil
 			}
-			if flowType == domain.FlowType("coder") {
+			if agentType == "coder" {
 				return fmt.Sprintf("[ERROR] %v. "+
 					"subtask_id MUST be the exact ID returned by manage_subtasks(action=create), e.g. \"a1b2c3d4\". "+
 					"Do NOT invent IDs. Use manage_subtasks(action=get_ready, task_id=...) to list available subtask IDs.", err), nil

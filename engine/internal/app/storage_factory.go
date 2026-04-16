@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"path/filepath"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/repository"
@@ -153,7 +152,7 @@ func wireEngineToPool(
 
 	// Set MaxConcurrent from supervisor flow (legacy: uses "supervisor" as default flow for spawn config)
 	ctx := context.Background()
-	supervisorFlow, err := ec.FlowManager.GetFlow(ctx, domain.FlowType("supervisor"))
+	supervisorFlow, err := ec.FlowManager.GetFlow(ctx, "supervisor")
 	if err != nil {
 		slog.Warn("failed to get supervisor flow for MaxConcurrent config", "error", err)
 		return

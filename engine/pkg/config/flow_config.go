@@ -69,13 +69,13 @@ func (fc *FlowsConfig) ToDomainFlow(flowType string, prompts *PromptsConfig) (*d
 	}
 
 	// Convert allowed flows
-	allowedFlows := make([]domain.FlowType, 0, len(def.SpawnPolicy.AllowedFlows))
+	allowedFlows := make([]string, 0, len(def.SpawnPolicy.AllowedFlows))
 	for _, f := range def.SpawnPolicy.AllowedFlows {
-		allowedFlows = append(allowedFlows, domain.FlowType(f))
+		allowedFlows = append(allowedFlows, string(f))
 	}
 
 	flow := &domain.Flow{
-		Type:           domain.FlowType(flowType),
+		Type:           string(flowType),
 		Name:           def.Name,
 		SystemPrompt:   systemPrompt,
 		ToolNames:      def.Tools,

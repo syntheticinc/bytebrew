@@ -10,7 +10,6 @@ func TestAgentContextSnapshot_Validate(t *testing.T) {
 		ID:            "snap-1",
 		SessionID:     "session-1",
 		AgentID:       "supervisor",
-		FlowType:      FlowType("supervisor"),
 		SchemaVersion: CurrentSchemaVersion,
 		ContextData:   []byte(`[{"role":"user","content":"test"}]`),
 		StepNumber:    5,
@@ -28,7 +27,6 @@ func TestAgentContextSnapshot_Validate(t *testing.T) {
 func TestAgentContextSnapshot_Validate_MissingSessionID(t *testing.T) {
 	snapshot := &AgentContextSnapshot{
 		AgentID:       "supervisor",
-		FlowType:      FlowType("supervisor"),
 		SchemaVersion: 1,
 		Status:        AgentContextStatusActive,
 	}
@@ -45,7 +43,6 @@ func TestAgentContextSnapshot_Validate_MissingSessionID(t *testing.T) {
 func TestAgentContextSnapshot_Validate_MissingAgentID(t *testing.T) {
 	snapshot := &AgentContextSnapshot{
 		SessionID:     "session-1",
-		FlowType:      FlowType("supervisor"),
 		SchemaVersion: 1,
 		Status:        AgentContextStatusActive,
 	}
@@ -59,28 +56,10 @@ func TestAgentContextSnapshot_Validate_MissingAgentID(t *testing.T) {
 	}
 }
 
-func TestAgentContextSnapshot_Validate_MissingFlowType(t *testing.T) {
-	snapshot := &AgentContextSnapshot{
-		SessionID:     "session-1",
-		AgentID:       "supervisor",
-		SchemaVersion: 1,
-		Status:        AgentContextStatusActive,
-	}
-
-	err := snapshot.Validate()
-	if err == nil {
-		t.Error("expected error for missing flow_type, got nil")
-	}
-	if err.Error() != "flow_type is required" {
-		t.Errorf("expected 'flow_type is required', got: %v", err)
-	}
-}
-
 func TestAgentContextSnapshot_Validate_ZeroSchemaVersion(t *testing.T) {
 	snapshot := &AgentContextSnapshot{
 		SessionID:     "session-1",
 		AgentID:       "supervisor",
-		FlowType:      FlowType("supervisor"),
 		SchemaVersion: 0,
 		Status:        AgentContextStatusActive,
 	}
@@ -98,7 +77,6 @@ func TestAgentContextSnapshot_Validate_InvalidStatus(t *testing.T) {
 	snapshot := &AgentContextSnapshot{
 		SessionID:     "session-1",
 		AgentID:       "supervisor",
-		FlowType:      FlowType("supervisor"),
 		SchemaVersion: 1,
 		Status:        AgentContextStatus("invalid"),
 	}

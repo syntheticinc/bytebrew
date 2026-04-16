@@ -170,7 +170,6 @@ func TestAgentContextSnapshotToModel_Roundtrip(t *testing.T) {
 		ID:            uuid.New().String(),
 		SessionID:     uuid.New().String(),
 		AgentID:       "supervisor",
-		FlowType:      "supervisor",
 		SchemaVersion: domain.CurrentSchemaVersion,
 		ContextData:   []byte(`[{"role":"user","content":"test"}]`),
 		StepNumber:    5,
@@ -192,7 +191,6 @@ func TestAgentContextSnapshotToModel_Roundtrip(t *testing.T) {
 	assert.Equal(t, domainSnapshot.ID, restored.ID)
 	assert.Equal(t, domainSnapshot.SessionID, restored.SessionID)
 	assert.Equal(t, domainSnapshot.AgentID, restored.AgentID)
-	assert.Equal(t, domainSnapshot.FlowType, restored.FlowType)
 	assert.Equal(t, domainSnapshot.SchemaVersion, restored.SchemaVersion)
 	assert.Equal(t, domainSnapshot.ContextData, restored.ContextData)
 	assert.Equal(t, domainSnapshot.StepNumber, restored.StepNumber)
@@ -212,21 +210,20 @@ func TestAgentContextSnapshotToModel_Nil(t *testing.T) {
 	assert.Nil(t, domain)
 }
 
-func TestAgentContextSnapshotToModel_AllFlowTypes(t *testing.T) {
-	flowTypes := []domain.FlowType{
+func TestAgentContextSnapshotToModel_AllAgentTypes(t *testing.T) {
+	agentTypes := []string{
 		"supervisor",
 		"coder",
 		"reviewer",
 		"researcher",
 	}
 
-	for _, flowType := range flowTypes {
-		t.Run(string(flowType), func(t *testing.T) {
+	for _, agentType := range agentTypes {
+		t.Run(agentType, func(t *testing.T) {
 			domainSnapshot := &domain.AgentContextSnapshot{
 				ID:            uuid.New().String(),
 				SessionID:     uuid.New().String(),
-				AgentID:       "agent-" + string(flowType),
-				FlowType:      flowType,
+				AgentID:       "agent-" + agentType,
 				SchemaVersion: 1,
 				ContextData:   []byte(`[]`),
 				StepNumber:    0,
@@ -240,8 +237,8 @@ func TestAgentContextSnapshotToModel_AllFlowTypes(t *testing.T) {
 			model := AgentContextSnapshotToModel(domainSnapshot)
 			restored := AgentContextSnapshotFromModel(model)
 
-			// Verify flow type preserved
-			assert.Equal(t, flowType, restored.FlowType)
+			// Verify agent ID preserved
+			assert.Equal(t, "agent-"+agentType, restored.AgentID)
 		})
 	}
 }
@@ -260,7 +257,6 @@ func TestAgentContextSnapshotToModel_AllStatuses(t *testing.T) {
 				ID:            uuid.New().String(),
 				SessionID:     uuid.New().String(),
 				AgentID:       "test-agent",
-				FlowType:      "supervisor",
 				SchemaVersion: 1,
 				ContextData:   []byte(`[]`),
 				StepNumber:    0,

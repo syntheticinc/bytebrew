@@ -1,12 +1,11 @@
 package llm
 
 import (
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/cloudwego/eino/components/model"
 )
 
-// flowTypeRoles maps each FlowType to the "role" string sent to the proxy.
-var flowTypeRoles = map[domain.FlowType]string{
+// agentRoles maps each agent name to the "role" string sent to the proxy.
+var agentRoles = map[string]string{
 	"supervisor": "supervisor",
 	"coder":      "coder",
 	"reviewer":   "reviewer",
@@ -24,9 +23,9 @@ type ProviderResolverConfig struct {
 
 // ResolveModelSelector creates a ModelSelector based on the configured mode.
 //
-//   - "byok" (or empty): all flow types use the BYOK model.
-//   - "proxy": each flow type gets a ProxyChatModel with its own role.
-//   - "auto": each flow type gets an AutoChatModel(proxy, byok).
+//   - "byok" (or empty): all agent types use the BYOK model.
+//   - "proxy": each agent type gets a ProxyChatModel with its own role.
+//   - "auto": each agent type gets an AutoChatModel(proxy, byok).
 func ResolveModelSelector(cfg ProviderResolverConfig) *ModelSelector {
 	mode := cfg.Mode
 	if mode == "" {
@@ -43,32 +42,32 @@ func ResolveModelSelector(cfg ProviderResolverConfig) *ModelSelector {
 	}
 }
 
-// resolveProxy creates a ModelSelector where every flow type is backed by a
+// resolveProxy creates a ModelSelector where every agent type is backed by a
 // ProxyChatModel with the matching role.
 func resolveProxy(cfg ProviderResolverConfig) *ModelSelector {
-	// Default proxy model (used for unknown flow types).
+	// Default proxy model (used for unknown agent types).
 	defaultProxy := NewProxyChatModel(cfg.CloudAPIURL, cfg.AccessToken, "default")
 	selector := NewModelSelector(defaultProxy, "proxy-llm")
 
-	for ft, role := range flowTypeRoles {
+	for agentName, role := range agentRoles {
 		proxy := NewProxyChatModel(cfg.CloudAPIURL, cfg.AccessToken, role)
-		selector.SetModel(ft, proxy, "proxy-llm")
+		selector.SetModel(agentName, proxy, "proxy-llm")
 	}
 
 	return selector
 }
 
-// resolveAuto creates a ModelSelector where every flow type is backed by an
+// resolveAuto creates a ModelSelector where every agent type is backed by an
 // AutoChatModel that tries proxy first and falls back to byok.
 func resolveAuto(cfg ProviderResolverConfig) *ModelSelector {
 	defaultProxy := NewProxyChatModel(cfg.CloudAPIURL, cfg.AccessToken, "default")
 	defaultAuto := NewAutoChatModel(defaultProxy, cfg.BYOKModel)
 	selector := NewModelSelector(defaultAuto, "auto-llm")
 
-	for ft, role := range flowTypeRoles {
+	for agentName, role := range agentRoles {
 		proxy := NewProxyChatModel(cfg.CloudAPIURL, cfg.AccessToken, role)
 		auto := NewAutoChatModel(proxy, cfg.BYOKModel)
-		selector.SetModel(ft, auto, "auto-llm")
+		selector.SetModel(agentName, auto, "auto-llm")
 	}
 
 	return selector

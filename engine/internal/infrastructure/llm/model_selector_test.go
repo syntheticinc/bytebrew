@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 	"github.com/stretchr/testify/assert"
@@ -39,40 +38,40 @@ func TestModelSelector_Select(t *testing.T) {
 	coderModel := &mockChatModel{id: "coder"}
 
 	tests := []struct {
-		name     string
-		flowType domain.FlowType
-		setup    func(s *ModelSelector)
-		wantID   string
+		name      string
+		agentName string
+		setup     func(s *ModelSelector)
+		wantID    string
 	}{
 		{
-			name:     "default returned when no override",
-			flowType: domain.FlowType("supervisor"),
-			setup:    func(s *ModelSelector) {},
-			wantID:   "default",
+			name:      "default returned when no override",
+			agentName: "supervisor",
+			setup:     func(s *ModelSelector) {},
+			wantID:    "default",
 		},
 		{
-			name:     "default returned for unregistered flow type",
-			flowType: domain.FlowType("reviewer"),
+			name:      "default returned for unregistered agent name",
+			agentName: "reviewer",
 			setup: func(s *ModelSelector) {
-				s.SetModel(domain.FlowType("coder"), coderModel, "coder-model")
+				s.SetModel("coder", coderModel, "coder-model")
 			},
 			wantID: "default",
 		},
 		{
-			name:     "override returned when set",
-			flowType: domain.FlowType("coder"),
+			name:      "override returned when set",
+			agentName: "coder",
 			setup: func(s *ModelSelector) {
-				s.SetModel(domain.FlowType("coder"), coderModel, "coder-model")
+				s.SetModel("coder", coderModel, "coder-model")
 			},
 			wantID: "coder",
 		},
 		{
-			name:     "each flow type gets its own model",
-			flowType: domain.FlowType("supervisor"),
+			name:      "each agent name gets its own model",
+			agentName: "supervisor",
 			setup: func(s *ModelSelector) {
 				supervisorModel := &mockChatModel{id: "supervisor"}
-				s.SetModel(domain.FlowType("supervisor"), supervisorModel, "supervisor-model")
-				s.SetModel(domain.FlowType("coder"), coderModel, "coder-model")
+				s.SetModel("supervisor", supervisorModel, "supervisor-model")
+				s.SetModel("coder", coderModel, "coder-model")
 			},
 			wantID: "supervisor",
 		},
@@ -83,7 +82,7 @@ func TestModelSelector_Select(t *testing.T) {
 			selector := NewModelSelector(defaultModel, "default-model")
 			tt.setup(selector)
 
-			got := selector.Select(tt.flowType)
+			got := selector.Select(tt.agentName)
 			require.NotNil(t, got)
 
 			// Verify by generating a response (mockChatModel returns its id as content)
@@ -99,30 +98,30 @@ func TestModelSelector_ModelName(t *testing.T) {
 	coderModel := &mockChatModel{id: "coder"}
 
 	tests := []struct {
-		name     string
-		flowType domain.FlowType
-		setup    func(s *ModelSelector)
-		want     string
+		name      string
+		agentName string
+		setup     func(s *ModelSelector)
+		want      string
 	}{
 		{
-			name:     "default name returned when no override",
-			flowType: domain.FlowType("supervisor"),
-			setup:    func(s *ModelSelector) {},
-			want:     "default-model",
+			name:      "default name returned when no override",
+			agentName: "supervisor",
+			setup:     func(s *ModelSelector) {},
+			want:      "default-model",
 		},
 		{
-			name:     "default name returned for unregistered flow type",
-			flowType: domain.FlowType("reviewer"),
+			name:      "default name returned for unregistered agent name",
+			agentName: "reviewer",
 			setup: func(s *ModelSelector) {
-				s.SetModel(domain.FlowType("coder"), coderModel, "coder-model")
+				s.SetModel("coder", coderModel, "coder-model")
 			},
 			want: "default-model",
 		},
 		{
-			name:     "override name returned when set",
-			flowType: domain.FlowType("coder"),
+			name:      "override name returned when set",
+			agentName: "coder",
 			setup: func(s *ModelSelector) {
-				s.SetModel(domain.FlowType("coder"), coderModel, "coder-model")
+				s.SetModel("coder", coderModel, "coder-model")
 			},
 			want: "coder-model",
 		},
@@ -133,7 +132,7 @@ func TestModelSelector_ModelName(t *testing.T) {
 			selector := NewModelSelector(defaultModel, "default-model")
 			tt.setup(selector)
 
-			got := selector.ModelName(tt.flowType)
+			got := selector.ModelName(tt.agentName)
 			assert.Equal(t, tt.want, got)
 		})
 	}

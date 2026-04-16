@@ -15,12 +15,12 @@ const (
 	AgentRunStopped   AgentRunStatus = "stopped"
 )
 
-// AgentRun represents the execution of a code agent working on a subtask
+// AgentRun represents the execution of an agent working on a task
 type AgentRun struct {
 	ID          string
-	SubtaskID   string
+	AgentID     string // uuid of the agent definition
+	TaskID      string // uuid of the task (optional, empty for non-task agents)
 	SessionID   string
-	FlowType    FlowType
 	Status      AgentRunStatus
 	Result      string
 	Error       string
@@ -29,12 +29,11 @@ type AgentRun struct {
 }
 
 // NewAgentRun creates a new AgentRun with validation
-func NewAgentRun(id, subtaskID, sessionID string, flowType FlowType) (*AgentRun, error) {
+func NewAgentRun(id, agentID, sessionID string) (*AgentRun, error) {
 	run := &AgentRun{
 		ID:        id,
-		SubtaskID: subtaskID,
+		AgentID:   agentID,
 		SessionID: sessionID,
-		FlowType:  flowType,
 		Status:    AgentRunRunning,
 		StartedAt: time.Now(),
 	}
@@ -51,7 +50,7 @@ func (r *AgentRun) Validate() error {
 	if r.ID == "" {
 		return fmt.Errorf("id is required")
 	}
-	// SubtaskID optional — HTTP chat path may spawn agents without task/subtask context
+	// AgentID optional — HTTP chat path may spawn agents without agent definition context
 	if r.SessionID == "" {
 		return fmt.Errorf("session_id is required")
 	}

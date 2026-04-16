@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 )
 
@@ -21,8 +20,8 @@ func (a *AgentPoolAdapter) Spawn(ctx context.Context, sessionID, projectKey, sub
 	return a.pool.Spawn(ctx, sessionID, projectKey, subtaskID, blocking)
 }
 
-func (a *AgentPoolAdapter) SpawnWithDescription(ctx context.Context, sessionID, projectKey string, flowType domain.FlowType, description string, blocking bool) (string, error) {
-	return a.pool.SpawnWithDescription(ctx, sessionID, projectKey, flowType, description, blocking)
+func (a *AgentPoolAdapter) SpawnWithDescription(ctx context.Context, sessionID, projectKey string, agentType string, description string, blocking bool) (string, error) {
+	return a.pool.SpawnWithDescription(ctx, sessionID, projectKey, agentType, description, blocking)
 }
 
 func (a *AgentPoolAdapter) WaitForAllSessionAgents(ctx context.Context, sessionID string) (tools.WaitResult, error) {
@@ -98,7 +97,7 @@ func (a *AgentPoolAdapter) SpawnAgent(ctx context.Context, params tools.SpawnPar
 		ctx,
 		params.SessionID,
 		"", // projectKey — not needed for spawn via tool
-		domain.FlowType(params.AgentName),
+		params.AgentName,
 		params.Description,
 		params.Blocking,
 	)

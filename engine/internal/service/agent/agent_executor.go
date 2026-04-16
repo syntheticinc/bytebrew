@@ -18,7 +18,7 @@ import (
 func (p *AgentPool) runAgentWithEngine(
 	ctx context.Context,
 	sessionID, projectKey, agentID string,
-	flowType domain.FlowType,
+	agentType string,
 	subtaskID string,
 	input string,
 ) (string, error) {
@@ -35,19 +35,15 @@ func (p *AgentPool) runAgentWithEngine(
 		return "", fmt.Errorf("engine dependencies not configured")
 	}
 
-	flow, err := flowProvider.GetFlow(ctx, flowType)
+	flow, err := flowProvider.GetFlow(ctx, agentType)
 	if err != nil {
-		return "", fmt.Errorf("get %s flow: %w", flowType, err)
+		return "", fmt.Errorf("get %s flow: %w", agentType, err)
 	}
 
 	deps := toolDeps.GetDependencies(sessionID, projectKey)
 	deps.AgentName = flow.Name
 	deps.MCPServers = flow.MCPServers
-	canSpawn := make([]string, len(flow.Spawn.AllowedFlows))
-	for i, ft := range flow.Spawn.AllowedFlows {
-		canSpawn[i] = string(ft)
-	}
-	deps.CanSpawn = canSpawn
+	deps.CanSpawn = flow.Spawn.AllowedFlows
 
 	p.mu.RLock()
 	sessionProxy, ok := p.sessionProxies[sessionID]
@@ -120,7 +116,7 @@ func (p *AgentPool) runCodeAgentWithEngine(
 	subtask *domain.EngineTask,
 ) (string, error) {
 	input := buildCodeAgentInput(subtask)
-	return p.runAgentWithEngine(ctx, sessionID, projectKey, agentID, domain.FlowType("coder"), subtask.ID.String(), input)
+	return p.runAgentWithEngine(ctx, sessionID, projectKey, agentID, "coder", subtask.ID.String(), input)
 }
 
 // resolveModel returns the LLM client and model name for the given agent.
@@ -144,8 +140,7 @@ func (p *AgentPool) resolveModel(ctx context.Context, agentName string) (model.T
 		}
 	}
 
-	flowType := domain.FlowType(agentName)
-	return p.modelSelector.Select(flowType), p.modelSelector.ModelName(flowType)
+	return p.modelSelector.Select(agentName), p.modelSelector.ModelName(agentName)
 }
 
 func buildCodeAgentInput(subtask *domain.EngineTask) string {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,17 +17,17 @@ func TestResolveModelSelector_Byok(t *testing.T) {
 		BYOKModelName: "gpt-4",
 	})
 
-	// All flow types should return the BYOK model.
-	for _, ft := range []domain.FlowType{
-		domain.FlowType("supervisor"),
-		domain.FlowType("coder"),
-		domain.FlowType("reviewer"),
-		domain.FlowType("researcher"),
+	// All agent types should return the BYOK model.
+	for _, agentName := range []string{
+		"supervisor",
+		"coder",
+		"reviewer",
+		"researcher",
 	} {
-		m := selector.Select(ft)
+		m := selector.Select(agentName)
 		resp, err := m.Generate(context.Background(), nil)
 		require.NoError(t, err)
-		assert.Equal(t, "byok", resp.Content, "flow type %s should use byok", ft)
+		assert.Equal(t, "byok", resp.Content, "agent %s should use byok", agentName)
 	}
 }
 
@@ -40,11 +39,11 @@ func TestResolveModelSelector_EmptyMode_DefaultsByok(t *testing.T) {
 		BYOKModelName: "gpt-4",
 	})
 
-	m := selector.Select(domain.FlowType("supervisor"))
+	m := selector.Select("supervisor")
 	resp, err := m.Generate(context.Background(), nil)
 	require.NoError(t, err)
 	assert.Equal(t, "byok", resp.Content, "empty mode should default to byok")
-	assert.Equal(t, "gpt-4", selector.ModelName(domain.FlowType("supervisor")))
+	assert.Equal(t, "gpt-4", selector.ModelName("supervisor"))
 }
 
 func TestResolveModelSelector_Proxy(t *testing.T) {
@@ -57,23 +56,23 @@ func TestResolveModelSelector_Proxy(t *testing.T) {
 		BYOKModelName: "gpt-4",
 	})
 
-	// Each flow type should get a ProxyChatModel.
-	for _, ft := range []domain.FlowType{
-		domain.FlowType("supervisor"),
-		domain.FlowType("coder"),
-		domain.FlowType("reviewer"),
-		domain.FlowType("researcher"),
+	// Each agent type should get a ProxyChatModel.
+	for _, agentName := range []string{
+		"supervisor",
+		"coder",
+		"reviewer",
+		"researcher",
 	} {
-		m := selector.Select(ft)
+		m := selector.Select(agentName)
 		proxy, ok := m.(*ProxyChatModel)
-		require.True(t, ok, "flow type %s should return *ProxyChatModel", ft)
+		require.True(t, ok, "agent %s should return *ProxyChatModel", agentName)
 		assert.Equal(t, "http://proxy.example.com", proxy.cloudAPIURL)
 		assert.Equal(t, "token-123", proxy.accessToken)
-		assert.Equal(t, flowTypeRoles[ft], proxy.role)
+		assert.Equal(t, agentRoles[agentName], proxy.role)
 	}
 
 	// Model name should be "proxy-llm".
-	assert.Equal(t, "proxy-llm", selector.ModelName(domain.FlowType("supervisor")))
+	assert.Equal(t, "proxy-llm", selector.ModelName("supervisor"))
 }
 
 func TestResolveModelSelector_Auto(t *testing.T) {
@@ -86,21 +85,21 @@ func TestResolveModelSelector_Auto(t *testing.T) {
 		BYOKModelName: "gpt-4",
 	})
 
-	// Each flow type should get an AutoChatModel.
-	for _, ft := range []domain.FlowType{
-		domain.FlowType("supervisor"),
-		domain.FlowType("coder"),
-		domain.FlowType("reviewer"),
-		domain.FlowType("researcher"),
+	// Each agent type should get an AutoChatModel.
+	for _, agentName := range []string{
+		"supervisor",
+		"coder",
+		"reviewer",
+		"researcher",
 	} {
-		m := selector.Select(ft)
+		m := selector.Select(agentName)
 		auto, ok := m.(*AutoChatModel)
-		require.True(t, ok, "flow type %s should return *AutoChatModel", ft)
+		require.True(t, ok, "agent %s should return *AutoChatModel", agentName)
 
 		// Type assert proxy to verify internal wiring (allowed in tests).
 		proxy, ok := auto.proxy.(*ProxyChatModel)
-		require.True(t, ok, "auto.proxy should be *ProxyChatModel for %s", ft)
-		assert.Equal(t, flowTypeRoles[ft], proxy.role)
+		require.True(t, ok, "auto.proxy should be *ProxyChatModel for %s", agentName)
+		assert.Equal(t, agentRoles[agentName], proxy.role)
 		assert.Equal(t, "http://proxy.example.com", proxy.cloudAPIURL)
 
 		// BYOK should be the mock.
@@ -110,7 +109,7 @@ func TestResolveModelSelector_Auto(t *testing.T) {
 	}
 
 	// Model name should be "auto-llm".
-	assert.Equal(t, "auto-llm", selector.ModelName(domain.FlowType("supervisor")))
+	assert.Equal(t, "auto-llm", selector.ModelName("supervisor"))
 }
 
 func TestResolveModelSelector_Proxy_DefaultModel(t *testing.T) {
@@ -123,11 +122,10 @@ func TestResolveModelSelector_Proxy_DefaultModel(t *testing.T) {
 		BYOKModelName: "gpt-4",
 	})
 
-	// An unknown flow type should fall back to the default proxy.
-	unknownFlowType := domain.FlowType("unknown")
-	m := selector.Select(unknownFlowType)
+	// An unknown agent type should fall back to the default proxy.
+	m := selector.Select("unknown")
 	proxy, ok := m.(*ProxyChatModel)
-	require.True(t, ok, "unknown flow type should return the default *ProxyChatModel")
+	require.True(t, ok, "unknown agent type should return the default *ProxyChatModel")
 	assert.Equal(t, "default", proxy.role)
 }
 
@@ -141,10 +139,9 @@ func TestResolveModelSelector_Auto_DefaultModel(t *testing.T) {
 		BYOKModelName: "gpt-4",
 	})
 
-	unknownFlowType := domain.FlowType("unknown")
-	m := selector.Select(unknownFlowType)
+	m := selector.Select("unknown")
 	auto, ok := m.(*AutoChatModel)
-	require.True(t, ok, "unknown flow type should return the default *AutoChatModel")
+	require.True(t, ok, "unknown agent type should return the default *AutoChatModel")
 	proxy, ok := auto.proxy.(*ProxyChatModel)
 	require.True(t, ok, "auto.proxy should be *ProxyChatModel")
 	assert.Equal(t, "default", proxy.role)
@@ -158,24 +155,24 @@ func TestResolveModelSelector_UnknownMode_DefaultsByok(t *testing.T) {
 		BYOKModelName: "gpt-4",
 	})
 
-	m := selector.Select(domain.FlowType("supervisor"))
+	m := selector.Select("supervisor")
 	resp, err := m.Generate(context.Background(), nil)
 	require.NoError(t, err)
 	assert.Equal(t, "byok", resp.Content, "unknown mode should fall back to byok")
 }
 
-// Verify that flowTypeRoles covers all defined FlowTypes.
-func TestFlowTypeRoles_Coverage(t *testing.T) {
-	expectedFlows := []domain.FlowType{
-		domain.FlowType("supervisor"),
-		domain.FlowType("coder"),
-		domain.FlowType("reviewer"),
-		domain.FlowType("researcher"),
+// Verify that agentRoles covers all defined agent types.
+func TestAgentRoles_Coverage(t *testing.T) {
+	expectedAgents := []string{
+		"supervisor",
+		"coder",
+		"reviewer",
+		"researcher",
 	}
 
-	for _, ft := range expectedFlows {
-		_, ok := flowTypeRoles[ft]
-		assert.True(t, ok, "flowTypeRoles should contain %s", ft)
+	for _, name := range expectedAgents {
+		_, ok := agentRoles[name]
+		assert.True(t, ok, "agentRoles should contain %s", name)
 	}
 }
 

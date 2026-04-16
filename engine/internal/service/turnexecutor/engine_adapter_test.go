@@ -33,7 +33,7 @@ type mockFlowProvider struct {
 	err  error
 }
 
-func (m *mockFlowProvider) GetFlow(ctx context.Context, flowType domain.FlowType) (*domain.Flow, error) {
+func (m *mockFlowProvider) GetFlow(ctx context.Context, agentName string) (*domain.Flow, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -115,7 +115,7 @@ func (m *mockChatModelAdapter) WithTools(tools []*schema.ToolInfo) (model.ToolCa
 
 func testFlowForAdapter() *domain.Flow {
 	return &domain.Flow{
-		Type:           domain.FlowType("supervisor"),
+		Type:           "supervisor",
 		Name:           "test-flow",
 		SystemPrompt:   "You are a test agent",
 		ToolNames:      []string{},
@@ -290,7 +290,7 @@ func TestEngineAdapter_ExecuteTurn(t *testing.T) {
 	assert.True(t, capturedCfg.Streaming)
 	assert.NotNil(t, capturedCfg.ChatModel)
 	assert.NotNil(t, capturedCfg.Flow)
-	assert.Equal(t, domain.FlowType("supervisor"), capturedCfg.Flow.Type)
+	assert.Equal(t, "supervisor", capturedCfg.Flow.Type)
 	assert.NotNil(t, capturedCfg.ChunkCallback)
 	assert.NotNil(t, capturedCfg.EventCallback)
 	assert.Equal(t, "test-model", capturedCfg.ModelName)

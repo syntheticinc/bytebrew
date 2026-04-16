@@ -348,7 +348,6 @@ func (e *Engine) saveSnapshot(
 	snap := &domain.AgentContextSnapshot{
 		SessionID:     cfg.SessionID,
 		AgentID:       cfg.AgentID,
-		FlowType:      cfg.Flow.Type,
 		SchemaVersion: domain.CurrentSchemaVersion,
 		ContextData:   contextData,
 		StepNumber:    collector.StepCount(),

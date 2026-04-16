@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -87,21 +86,21 @@ func TestFlowManager_GetFlow_AllTypes(t *testing.T) {
 
 	// Test all 4 flow types
 	tests := []struct {
-		flowType domain.FlowType
-		wantName string
+		agentName string
+		wantName  string
 	}{
-		{domain.FlowType("supervisor"), "Supervisor Agent"},
-		{domain.FlowType("coder"), "Code Agent"},
-		{domain.FlowType("reviewer"), "Code Reviewer"},
-		{domain.FlowType("researcher"), "Researcher"},
+		{"supervisor", "Supervisor Agent"},
+		{"coder", "Code Agent"},
+		{"reviewer", "Code Reviewer"},
+		{"researcher", "Researcher"},
 	}
 
 	for _, tt := range tests {
-		t.Run(string(tt.flowType), func(t *testing.T) {
-			flow, err := manager.GetFlow(ctx, tt.flowType)
+		t.Run(tt.agentName, func(t *testing.T) {
+			flow, err := manager.GetFlow(ctx, tt.agentName)
 			require.NoError(t, err)
 			require.NotNil(t, flow)
-			assert.Equal(t, tt.flowType, flow.Type)
+			assert.Equal(t, tt.agentName, flow.Type)
 			assert.Equal(t, tt.wantName, flow.Name)
 		})
 	}
@@ -182,14 +181,14 @@ func TestFlowManager_SupervisorCanSpawn(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	supervisorFlow, err := manager.GetFlow(ctx, domain.FlowType("supervisor"))
+	supervisorFlow, err := manager.GetFlow(ctx, "supervisor")
 	require.NoError(t, err)
 
 	// Supervisor should be able to spawn coder, reviewer, researcher
-	assert.True(t, supervisorFlow.CanSpawn(domain.FlowType("coder")))
-	assert.True(t, supervisorFlow.CanSpawn(domain.FlowType("reviewer")))
-	assert.True(t, supervisorFlow.CanSpawn(domain.FlowType("researcher")))
+	assert.True(t, supervisorFlow.CanSpawn("coder"))
+	assert.True(t, supervisorFlow.CanSpawn("reviewer"))
+	assert.True(t, supervisorFlow.CanSpawn("researcher"))
 
 	// Supervisor cannot spawn another supervisor
-	assert.False(t, supervisorFlow.CanSpawn(domain.FlowType("supervisor")))
+	assert.False(t, supervisorFlow.CanSpawn("supervisor"))
 }

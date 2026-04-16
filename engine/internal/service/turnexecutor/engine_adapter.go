@@ -27,7 +27,7 @@ type AgentEngine interface {
 
 // FlowProvider provides flow configurations
 type FlowProvider interface {
-	GetFlow(ctx context.Context, flowType domain.FlowType) (*domain.Flow, error)
+	GetFlow(ctx context.Context, agentName string) (*domain.Flow, error)
 }
 
 // ToolResolver resolves tool names to instances
@@ -163,7 +163,7 @@ func (e *EngineAdapter) ExecuteTurn(
 	eventCallback func(event *domain.AgentEvent) error,
 ) error {
 	// 1. Get flow config for the agent
-	flow, err := e.flowProvider.GetFlow(ctx, domain.FlowType(e.agentName))
+	flow, err := e.flowProvider.GetFlow(ctx, e.agentName)
 	if err != nil {
 		return fmt.Errorf("get flow %q: %w", e.agentName, err)
 	}
@@ -183,11 +183,7 @@ func (e *EngineAdapter) ExecuteTurn(
 	}
 
 	// Populate spawn targets from flow's SpawnPolicy
-	canSpawn := make([]string, len(flow.Spawn.AllowedFlows))
-	for i, ft := range flow.Spawn.AllowedFlows {
-		canSpawn[i] = string(ft)
-	}
-	toolDeps.CanSpawn = canSpawn
+	toolDeps.CanSpawn = flow.Spawn.AllowedFlows
 
 	// 3. Resolve tools from flow.ToolNames
 	slog.InfoContext(ctx, "[EngineAdapter] resolving tools", "agent", e.agentName, "flow_tool_names_count", len(flow.ToolNames), "flow_tool_names", flow.ToolNames)

@@ -3,12 +3,12 @@ package models
 import "time"
 
 // AgentRunModel maps to the "agent_runs" table.
-// Stores domain.AgentRun data for Code Agent execution tracking.
+// Stores domain.AgentRun data for agent execution tracking.
 type AgentRunModel struct {
 	ID          string     `gorm:"primaryKey;type:varchar(36)"`
-	SubtaskID   string     `gorm:"type:varchar(36);not null"`
+	AgentID     string     `gorm:"type:uuid" json:"agent_id"`
+	TaskID      string     `gorm:"type:uuid" json:"task_id"`
 	SessionID   string     `gorm:"type:varchar(36);not null;index"`
-	FlowType    string     `gorm:"type:varchar(50);not null;default:coder"`
 	Status      string     `gorm:"type:varchar(20);not null;index:idx_agent_runs_session_status"`
 	Result      string     `gorm:"type:text"`
 	Error       string     `gorm:"type:text"`
