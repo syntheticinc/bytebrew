@@ -10,7 +10,8 @@ import (
 )
 
 // AgentRecord is an intermediate struct for DB <-> domain mapping.
-// Contains all agent config from DB (agent + tools + spawn + MCP).
+// Contains all agent config from DB (agent + tools + MCP).
+// CanSpawn is derived from agent_relations (V2).
 type AgentRecord struct {
 	Name            string
 	ModelID         *string
@@ -54,8 +55,6 @@ func (r *GORMAgentRepository) List(ctx context.Context) ([]AgentRecord, error) {
 	var agents []models.AgentModel
 	err := r.db.WithContext(ctx).
 		Preload("Tools").
-		Preload("SpawnTargets").
-		Preload("SpawnTargets.TargetAgent").
 		Preload("Model").
 		Find(&agents).Error
 	if err != nil {
@@ -68,6 +67,12 @@ func (r *GORMAgentRepository) List(ctx context.Context) ([]AgentRecord, error) {
 		return nil, fmt.Errorf("load mcp servers: %w", err)
 	}
 
+	// Load CanSpawn from agent_relations for all agents
+	spawnByAgent, err := r.loadAllCanSpawn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load can_spawn: %w", err)
+	}
+
 	records := make([]AgentRecord, 0, len(agents))
 	for _, a := range agents {
 		rec, err := toAgentRecord(a)
@@ -75,6 +80,7 @@ func (r *GORMAgentRepository) List(ctx context.Context) ([]AgentRecord, error) {
 			return nil, fmt.Errorf("convert agent %q: %w", a.Name, err)
 		}
 		rec.MCPServers = mcpByAgent[a.ID]
+		rec.CanSpawn = spawnByAgent[a.Name]
 		records = append(records, rec)
 	}
 	return records, nil
@@ -85,8 +91,6 @@ func (r *GORMAgentRepository) GetByName(ctx context.Context, name string) (*Agen
 	var agent models.AgentModel
 	err := r.db.WithContext(ctx).
 		Preload("Tools").
-		Preload("SpawnTargets").
-		Preload("SpawnTargets.TargetAgent").
 		Preload("Model").
 		Where("name = ?", name).
 		First(&agent).Error
@@ -105,6 +109,9 @@ func (r *GORMAgentRepository) GetByName(ctx context.Context, name string) (*Agen
 		return nil, fmt.Errorf("load mcp servers for agent %q: %w", name, err)
 	}
 	rec.MCPServers = mcpNames
+
+	// Load CanSpawn from agent_relations
+	rec.CanSpawn = r.loadCanSpawnForAgent(ctx, agent.Name)
 
 	return &rec, nil
 }
@@ -130,10 +137,6 @@ func (r *GORMAgentRepository) Create(ctx context.Context, record *AgentRecord) e
 		return fmt.Errorf("create agent %q: %w", record.Name, err)
 	}
 
-	if err := r.createSpawnTargets(ctx, agent.ID, record.CanSpawn); err != nil {
-		return fmt.Errorf("create spawn targets: %w", err)
-	}
-
 	if err := r.createMCPAssociations(ctx, agent.ID, record.MCPServers); err != nil {
 		return fmt.Errorf("create mcp associations: %w", err)
 	}
@@ -152,9 +155,6 @@ func (r *GORMAgentRepository) Update(ctx context.Context, name string, record *A
 		// Delete old associations
 		if err := tx.Where("agent_id = ?", existing.ID).Delete(&models.AgentToolModel{}).Error; err != nil {
 			return fmt.Errorf("delete old tools: %w", err)
-		}
-		if err := tx.Where("agent_id = ?", existing.ID).Delete(&models.AgentSpawnTarget{}).Error; err != nil {
-			return fmt.Errorf("delete old spawn targets: %w", err)
 		}
 		if err := tx.Exec("DELETE FROM agent_mcp_servers WHERE agent_id = ?", existing.ID).Error; err != nil {
 			return fmt.Errorf("delete old mcp associations: %w", err)
@@ -197,10 +197,6 @@ func (r *GORMAgentRepository) Update(ctx context.Context, name string, record *A
 			}
 		}
 
-		if err := r.createSpawnTargetsWithTx(tx, existing.ID, record.CanSpawn); err != nil {
-			return fmt.Errorf("create spawn targets: %w", err)
-		}
-
 		if err := r.createMCPAssociationsWithTx(tx, existing.ID, record.MCPServers); err != nil {
 			return fmt.Errorf("create mcp associations: %w", err)
 		}
@@ -219,9 +215,6 @@ func (r *GORMAgentRepository) Delete(ctx context.Context, name string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("agent_id = ?", agent.ID).Delete(&models.AgentToolModel{}).Error; err != nil {
 			return fmt.Errorf("delete tools: %w", err)
-		}
-		if err := tx.Where("agent_id = ?", agent.ID).Delete(&models.AgentSpawnTarget{}).Error; err != nil {
-			return fmt.Errorf("delete spawn targets: %w", err)
 		}
 		if err := tx.Exec("DELETE FROM agent_mcp_servers WHERE agent_id = ?", agent.ID).Error; err != nil {
 			return fmt.Errorf("delete mcp associations: %w", err)
@@ -282,12 +275,7 @@ func toAgentRecord(a models.AgentModel) (AgentRecord, error) {
 		}
 	}
 
-	// SpawnTargets: extract target agent names
-	for _, st := range a.SpawnTargets {
-		rec.CanSpawn = append(rec.CanSpawn, st.TargetAgent.Name)
-	}
-
-	// MCP servers: skip loading (loaded separately if needed)
+	// CanSpawn + MCP servers: loaded separately via agent_relations / agent_mcp_servers queries.
 
 	return rec, nil
 }
@@ -366,40 +354,33 @@ func (r *GORMAgentRepository) toAgentModelWithDB(db *gorm.DB, rec *AgentRecord) 
 	return agent, nil
 }
 
-// createSpawnTargets resolves target agent names to IDs and inserts spawn target rows.
-func (r *GORMAgentRepository) createSpawnTargets(ctx context.Context, agentID string, targets []string) error {
-	return r.createSpawnTargetsWithTx(r.db.WithContext(ctx), agentID, targets)
+// loadAllCanSpawn loads CanSpawn (delegation targets) from agent_relations for all agents.
+// In V2, agent_relations replaces agent_spawn_targets — source_agent_name → target_agent_name.
+func (r *GORMAgentRepository) loadAllCanSpawn(ctx context.Context) (map[string][]string, error) {
+	var rels []models.AgentRelationModel
+	if err := r.db.WithContext(ctx).Find(&rels).Error; err != nil {
+		return nil, fmt.Errorf("load agent relations: %w", err)
+	}
+
+	result := make(map[string][]string)
+	for _, rel := range rels {
+		result[rel.SourceAgentName] = append(result[rel.SourceAgentName], rel.TargetAgentName)
+	}
+	return result, nil
 }
 
-func (r *GORMAgentRepository) createSpawnTargetsWithTx(tx *gorm.DB, agentID string, targets []string) error {
-	if len(targets) == 0 {
+// loadCanSpawnForAgent loads CanSpawn targets for a single agent from agent_relations.
+func (r *GORMAgentRepository) loadCanSpawnForAgent(ctx context.Context, agentName string) []string {
+	var rels []models.AgentRelationModel
+	if err := r.db.WithContext(ctx).Where("source_agent_name = ?", agentName).Find(&rels).Error; err != nil {
 		return nil
 	}
 
-	var targetAgents []models.AgentModel
-	if err := tx.Where("name IN ?", targets).Find(&targetAgents).Error; err != nil {
-		return fmt.Errorf("resolve spawn targets: %w", err)
+	names := make([]string, 0, len(rels))
+	for _, rel := range rels {
+		names = append(names, rel.TargetAgentName)
 	}
-
-	nameToID := make(map[string]string, len(targetAgents))
-	for _, a := range targetAgents {
-		nameToID[a.Name] = a.ID
-	}
-
-	for _, name := range targets {
-		targetID, ok := nameToID[name]
-		if !ok {
-			return fmt.Errorf("spawn target agent %q not found", name)
-		}
-		st := models.AgentSpawnTarget{
-			AgentID:       agentID,
-			TargetAgentID: targetID,
-		}
-		if err := tx.Create(&st).Error; err != nil {
-			return fmt.Errorf("create spawn target %q: %w", name, err)
-		}
-	}
-	return nil
+	return names
 }
 
 // createMCPAssociations links agent to MCP servers via join table.

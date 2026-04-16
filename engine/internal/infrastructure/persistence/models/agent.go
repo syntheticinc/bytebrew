@@ -23,9 +23,8 @@ type AgentModel struct {
 	UpdatedAt      time.Time `gorm:"autoUpdateTime"`
 
 	// Associations (not loaded by default).
-	Model        *LLMProviderModel  `gorm:"foreignKey:ModelID"`
-	Tools        []AgentToolModel   `gorm:"foreignKey:AgentID"`
-	SpawnTargets []AgentSpawnTarget `gorm:"foreignKey:AgentID"`
+	Model *LLMProviderModel `gorm:"foreignKey:ModelID"`
+	Tools []AgentToolModel  `gorm:"foreignKey:AgentID"`
 	// MCPServers loaded manually via separate query (GORM many2many infers wrong column names from AgentModel → agent_model_id)
 }
 

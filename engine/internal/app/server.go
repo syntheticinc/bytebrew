@@ -1310,7 +1310,7 @@ func Run(sc ServerConfig) error {
 		flowHandlerCfg.AgentPoolProxy = components.AgentPool
 		flowHandlerCfg.AgentPoolAdapter = components.AgentPoolAdapter
 		flowHandlerCfg.WorkManager = components.TaskManager
-		flowHandlerCfg.SessionStorage = components.SessionStorage
+		// SessionStorage removed (V2 Group N: runtime_sessions table dropped).
 		sessProcessor.SetAgentPoolRegistrar(components.AgentPool)
 		// Re-wire AgentPool with AgentRegistry as FlowProvider (replaces legacy FlowManager)
 		// so spawned agents can resolve flows from DB, not just YAML

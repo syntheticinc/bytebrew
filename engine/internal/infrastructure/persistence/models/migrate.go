@@ -187,11 +187,29 @@ func AutoMigrate(db *gorm.DB) error {
 		}
 	}
 
+	// V2 Group N: drop 6 legacy tables not in target-schema.dbml (Commit Group N).
+	// Defense-in-depth alongside Liquibase 024 — idempotent DROP TABLE IF EXISTS.
+	// session_events (replaced by session_event_log), runtime_config (replaced by
+	// settings), runtime_paired_devices + runtime_sessions (bridge uses SQLite /
+	// replaced by sessions), agent_spawn_targets (replaced by agent_relations),
+	// tenants (CE single-tenant, tenant_id column is sufficient).
+	for _, legacyTable := range []string{
+		"session_events",
+		"runtime_config",
+		"runtime_paired_devices",
+		"runtime_sessions",
+		"agent_spawn_targets",
+		"tenants",
+	} {
+		if err := db.Migrator().DropTable(legacyTable); err != nil {
+			slog.Warn("[Migration] dropping legacy table failed (may already be absent)", "table", legacyTable, "error", err)
+		}
+	}
+
 	if err := db.AutoMigrate(
-		// Config tables (9)
+		// Config tables (7)
 		&AgentModel{},
 		&AgentToolModel{},
-		&AgentSpawnTarget{},
 		&LLMProviderModel{},
 		&MCPServerModel{},
 		&MCPCatalogModel{},
@@ -199,18 +217,14 @@ func AutoMigrate(db *gorm.DB) error {
 		&TriggerModel{},
 		&SettingModel{},
 
-		// Dashboard runtime tables (5)
+		// Dashboard runtime tables (3)
 		&SessionModel{},
 		&TaskModel{},
-		&SessionEventModel{},
 		&APITokenModel{},
 		&AuditLogModel{},
 
 		// Agent runtime tables
-		&RuntimeSessionModel{},
 		&AgentRunModel{},
-		&RuntimeDeviceModel{},
-		&RuntimeConfigKV{},
 		&SessionEventLogModel{},
 		&MessageModel{},
 		&AgentContextSnapshotModel{},
@@ -233,9 +247,6 @@ func AutoMigrate(db *gorm.DB) error {
 
 		// Memory table (1)
 		&MemoryModel{},
-
-		// Tenant table (1)
-		&TenantModel{},
 	); err != nil {
 		return err
 	}

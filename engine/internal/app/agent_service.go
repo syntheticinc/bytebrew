@@ -9,7 +9,6 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agents"
 	licenseinfra "github.com/syntheticinc/bytebrew/engine/internal/infrastructure/license"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/taskrunner"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
@@ -28,7 +27,6 @@ type InfraComponents struct {
 	TaskRepo         *configrepo.GORMTaskRepository
 	AgentPool        *agentservice.AgentPool
 	AgentPoolAdapter *agentservice.AgentPoolAdapter
-	SessionStorage   *persistence.SessionStorage
 	ChatModel        model.ToolCallingChatModel // kept for backward compatibility
 	ModelSelector    *llm.ModelSelector
 	// Engine components
@@ -147,7 +145,6 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 		TaskRepo:          storageCmp.TaskRepo,
 		AgentPool:         agentPool,
 		AgentPoolAdapter:  agentPoolAdapter,
-		SessionStorage:    storageCmp.SessionStorage,
 		ChatModel:         chatModel,
 		ModelSelector:     modelSelector,
 		Engine:            ec.Engine,

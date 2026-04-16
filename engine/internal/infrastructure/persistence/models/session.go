@@ -14,9 +14,8 @@ type SessionModel struct {
 	UpdatedAt   time.Time  `gorm:"autoUpdateTime"`
 	CompletedAt *time.Time
 
-	Agent  *AgentModel         `gorm:"foreignKey:AgentID"`
-	Events []SessionEventModel `gorm:"foreignKey:SessionID"`
-	Tasks  []TaskModel         `gorm:"foreignKey:SessionID"`
+	Agent *AgentModel `gorm:"foreignKey:AgentID"`
+	Tasks []TaskModel `gorm:"foreignKey:SessionID"`
 }
 
 func (SessionModel) TableName() string { return "sessions" }

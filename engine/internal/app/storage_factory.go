@@ -25,7 +25,6 @@ import (
 type storageComponents struct {
 	TaskManager      *taskrunner.EngineTaskManagerAdapter // unified task manager (EngineTask-based)
 	TaskRepo         *configrepo.GORMTaskRepository
-	SessionStorage   *persistence.SessionStorage
 	AgentRunStorage  agentservice.AgentRunStorage
 	ContextReminders []turnexecutor.ContextReminderProvider
 }
@@ -49,22 +48,12 @@ func initWorkComponents(db *gorm.DB) *storageComponents {
 	result.AgentRunStorage = agentRunStorage
 	result.TaskRepo = taskRepo
 
-	sessionStorage := persistence.NewSessionStorage(db)
-	result.SessionStorage = sessionStorage
-
-	// Startup cleanup: orphaned agent runs and active sessions from previous crash
+	// Startup cleanup: orphaned agent runs from previous crash
 	cleaned, cleanErr := agentRunStorage.CleanupOrphanedRuns(ctx)
 	if cleanErr != nil {
 		slog.Error("failed to cleanup orphaned agent runs", "error", cleanErr)
 	} else if cleaned > 0 {
 		slog.Info("cleaned up orphaned agent runs from previous crash", "count", cleaned)
-	}
-
-	suspended, suspendErr := sessionStorage.SuspendActiveSessions(ctx)
-	if suspendErr != nil {
-		slog.Error("failed to suspend active sessions", "error", suspendErr)
-	} else if suspended > 0 {
-		slog.Info("suspended active sessions from previous crash", "count", suspended)
 	}
 
 	// Unified task manager (replaces old work.Manager, uses EngineTask).

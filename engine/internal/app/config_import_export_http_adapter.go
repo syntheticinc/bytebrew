@@ -70,7 +70,7 @@ func (a *configImportExportHTTPAdapter) exportAgents(_ context.Context) ([]agent
 	var agents []models.AgentModel
 	if err := a.db.Preload("Model").Preload("Tools", func(db *gorm.DB) *gorm.DB {
 		return db.Order("sort_order ASC")
-	}).Preload("SpawnTargets.TargetAgent").Find(&agents).Error; err != nil {
+	}).Find(&agents).Error; err != nil {
 		return nil, fmt.Errorf("query agents: %w", err)
 	}
 
@@ -82,6 +82,16 @@ func (a *configImportExportHTTPAdapter) exportAgents(_ context.Context) ([]agent
 	mcpByAgent := make(map[string][]string)
 	for _, am := range agentMCPs {
 		mcpByAgent[am.AgentID] = append(mcpByAgent[am.AgentID], am.MCPServer.Name)
+	}
+
+	// Load CanSpawn from agent_relations (V2 replaces agent_spawn_targets).
+	var rels []models.AgentRelationModel
+	if err := a.db.Find(&rels).Error; err != nil {
+		return nil, fmt.Errorf("query agent relations: %w", err)
+	}
+	spawnByAgent := make(map[string][]string)
+	for _, rel := range rels {
+		spawnByAgent[rel.SourceAgentName] = append(spawnByAgent[rel.SourceAgentName], rel.TargetAgentName)
 	}
 
 	result := make([]agentYAML, 0, len(agents))
@@ -115,9 +125,7 @@ func (a *configImportExportHTTPAdapter) exportAgents(_ context.Context) ([]agent
 			ay.Tools = append(ay.Tools, t.ToolName)
 		}
 
-		for _, st := range ag.SpawnTargets {
-			ay.CanSpawn = append(ay.CanSpawn, st.TargetAgent.Name)
-		}
+		ay.CanSpawn = spawnByAgent[ag.Name]
 
 		result = append(result, ay)
 	}
@@ -458,23 +466,8 @@ func (a *configImportExportHTTPAdapter) syncAgentRelations(tx *gorm.DB, agentID 
 		}
 	}
 
-	// Spawn targets: delete old, insert new.
-	if err := tx.Where("agent_id = ?", agentID).Delete(&models.AgentSpawnTarget{}).Error; err != nil {
-		return fmt.Errorf("delete old spawn targets: %w", err)
-	}
-	for _, targetName := range ag.CanSpawn {
-		var target models.AgentModel
-		if err := tx.Where("name = ?", targetName).First(&target).Error; err != nil {
-			return fmt.Errorf("spawn target %q not found: %w", targetName, err)
-		}
-		st := models.AgentSpawnTarget{
-			AgentID:       agentID,
-			TargetAgentID: target.ID,
-		}
-		if err := tx.Create(&st).Error; err != nil {
-			return fmt.Errorf("create spawn target %q: %w", targetName, err)
-		}
-	}
+	// CanSpawn is now derived from agent_relations (V2). Config import does not
+	// create agent_relations — those are managed via the schema/canvas UI.
 
 	// MCP servers: delete old, insert new.
 	if err := tx.Where("agent_id = ?", agentID).Delete(&models.AgentMCPServer{}).Error; err != nil {

@@ -96,11 +96,14 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			sort_order INTEGER NOT NULL DEFAULT 0,
 			UNIQUE(agent_id, tool_type, tool_name)
 		)`,
-		`CREATE TABLE agent_spawn_targets (
+		`CREATE TABLE agent_relations (
 			id TEXT PRIMARY KEY,
-			agent_id TEXT NOT NULL REFERENCES agents(id),
-			target_agent_id TEXT NOT NULL REFERENCES agents(id),
-			UNIQUE(agent_id, target_agent_id)
+			schema_id TEXT NOT NULL,
+			source_agent_name VARCHAR(255) NOT NULL,
+			target_agent_name VARCHAR(255) NOT NULL,
+			config TEXT,
+			created_at DATETIME,
+			updated_at DATETIME
 		)`,
 		`CREATE TABLE agent_mcp_servers (
 			agent_id TEXT NOT NULL REFERENCES agents(id),
@@ -191,9 +194,10 @@ func seedTestData(t *testing.T, db *gorm.DB) {
 	}
 	require.NoError(t, db.Create(&researcher).Error)
 
-	// Spawn target
-	require.NoError(t, db.Create(&models.AgentSpawnTarget{
-		AgentID: agent.ID, TargetAgentID: researcher.ID,
+	// Agent relation (V2 replaces agent_spawn_targets)
+	require.NoError(t, db.Create(&models.AgentRelationModel{
+		SchemaID: "00000000-0000-0000-0000-000000000001",
+		SourceAgentName: "sales", TargetAgentName: "researcher",
 	}).Error)
 
 	// Trigger

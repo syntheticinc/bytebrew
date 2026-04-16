@@ -1,0 +1,85 @@
+databaseChangeLog:
+  # V2 Group N — drop 6 legacy tables not in target-schema.dbml.
+  #
+  # Tables removed:
+  #   session_events       — admin dashboard events, replaced by session_event_log
+  #   runtime_config       — key-value config, replaced by settings table
+  #   runtime_paired_devices — bridge device pairing, stored in bridge SQLite
+  #   runtime_sessions     — legacy work sessions, replaced by sessions table
+  #   agent_spawn_targets  — spawn permissions, replaced by agent_relations
+  #   tenants              — CE is single-tenant, tenant_id column is sufficient
+  #
+  # Clean-schema policy: pure DDL only (DROP TABLE IF EXISTS).
+  # Idempotent: applies cleanly on fresh DBs (no-op) and on pre-V2 DBs.
+
+  - changeSet:
+      id: 024-v2-drop-session-events
+      author: system
+      changes:
+        - sql:
+            sql: |
+              DROP TABLE IF EXISTS session_events;
+      rollback:
+        - sql:
+            sql: |
+              SELECT 1;
+
+  - changeSet:
+      id: 024-v2-drop-runtime-config
+      author: system
+      changes:
+        - sql:
+            sql: |
+              DROP TABLE IF EXISTS runtime_config;
+      rollback:
+        - sql:
+            sql: |
+              SELECT 1;
+
+  - changeSet:
+      id: 024-v2-drop-runtime-paired-devices
+      author: system
+      changes:
+        - sql:
+            sql: |
+              DROP TABLE IF EXISTS runtime_paired_devices;
+      rollback:
+        - sql:
+            sql: |
+              SELECT 1;
+
+  - changeSet:
+      id: 024-v2-drop-runtime-sessions
+      author: system
+      changes:
+        - sql:
+            sql: |
+              DROP TABLE IF EXISTS runtime_sessions;
+      rollback:
+        - sql:
+            sql: |
+              SELECT 1;
+
+  - changeSet:
+      id: 024-v2-drop-agent-spawn-targets
+      author: system
+      changes:
+        - sql:
+            sql: |
+              DROP TABLE IF EXISTS agent_spawn_targets;
+      rollback:
+        - sql:
+            sql: |
+              SELECT 1;
+
+  - changeSet:
+      id: 024-v2-drop-tenants
+      author: system
+      changes:
+        - sql:
+            sql: |
+              DROP TABLE IF EXISTS tenants;
+      rollback:
+        - sql:
+            sql: |
+              SELECT 1;

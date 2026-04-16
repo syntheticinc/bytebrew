@@ -4,7 +4,6 @@ import "time"
 
 // SessionEventLogModel maps to the "session_event_log" table.
 // Stores session events for reliable replay on reconnect.
-// Not to be confused with SessionEventModel (admin dashboard events).
 type SessionEventLogModel struct {
 	ID        string    `gorm:"primaryKey;type:uuid"`
 	SessionID string    `gorm:"type:varchar(36);not null;index:idx_session_event_log_lookup"`
