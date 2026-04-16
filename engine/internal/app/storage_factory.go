@@ -149,16 +149,4 @@ func wireEngineToPool(
 
 	agentPool.SetEngine(ec.Engine, ec.FlowManager, ec.AgentToolResolver, ec.ToolDepsProvider, nil, nil)
 	slog.Info("engine wired to agent pool")
-
-	// Set MaxConcurrent from supervisor flow (legacy: uses "supervisor" as default flow for spawn config)
-	ctx := context.Background()
-	supervisorFlow, err := ec.FlowManager.GetFlow(ctx, "supervisor")
-	if err != nil {
-		slog.Warn("failed to get supervisor flow for MaxConcurrent config", "error", err)
-		return
-	}
-	if supervisorFlow.Spawn.MaxConcurrent > 0 {
-		agentPool.SetMaxConcurrent(supervisorFlow.Spawn.MaxConcurrent)
-		slog.Info("max concurrent agents configured", "limit", supervisorFlow.Spawn.MaxConcurrent)
-	}
 }
