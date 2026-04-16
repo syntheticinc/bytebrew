@@ -319,6 +319,13 @@ func (a *triggerServiceHTTPAdapter) CreateTrigger(ctx context.Context, req deliv
 	if req.SchemaID != nil {
 		schemaID = *req.SchemaID
 	}
+	// CE mode: schema_id not provided — auto-assign to the first available schema.
+	// In Cloud mode the caller must pass schema_id explicitly.
+	if schemaID == "" {
+		if err := a.db.WithContext(ctx).Raw("SELECT id FROM schemas ORDER BY created_at LIMIT 1").Scan(&schemaID).Error; err != nil || schemaID == "" {
+			return nil, fmt.Errorf("schema_id is required: no schemas found")
+		}
+	}
 	model := &models.TriggerModel{
 		Type:        req.Type,
 		Title:       req.Title,
