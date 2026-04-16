@@ -14,32 +14,35 @@ func TestInProcessTransport_ImplementsTransport(t *testing.T) {
 	var _ Transport = (*InProcessTransport)(nil)
 }
 
-func TestNewInProcessTransport_NilHandler_Panics(t *testing.T) {
-	assert.Panics(t, func() {
-		NewInProcessTransport(nil)
-	})
+func TestNewInProcessTransport_NilHandler_ReturnsError(t *testing.T) {
+	_, err := NewInProcessTransport(nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "handler must not be nil")
 }
 
 func TestInProcessTransport_Start_NoOp(t *testing.T) {
-	transport := NewInProcessTransport(func(_ context.Context, _ *Request) (*Response, error) {
+	transport, err := NewInProcessTransport(func(_ context.Context, _ *Request) (*Response, error) {
 		return nil, nil
 	})
-	err := transport.Start(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, transport)
+	err = transport.Start(context.Background())
 	require.NoError(t, err)
 }
 
 func TestInProcessTransport_Close_NoOp(t *testing.T) {
-	transport := NewInProcessTransport(func(_ context.Context, _ *Request) (*Response, error) {
+	transport, err := NewInProcessTransport(func(_ context.Context, _ *Request) (*Response, error) {
 		return nil, nil
 	})
-	err := transport.Close()
+	require.NoError(t, err)
+	err = transport.Close()
 	require.NoError(t, err)
 }
 
 func TestInProcessTransport_Send_RoutesToHandler(t *testing.T) {
 	expectedResult, _ := json.Marshal(map[string]string{"status": "ok"})
 
-	transport := NewInProcessTransport(func(_ context.Context, req *Request) (*Response, error) {
+	transport, err := NewInProcessTransport(func(_ context.Context, req *Request) (*Response, error) {
 		assert.Equal(t, "test/method", req.Method)
 		return &Response{
 			JSONRPC: "2.0",
@@ -47,6 +50,7 @@ func TestInProcessTransport_Send_RoutesToHandler(t *testing.T) {
 			Result:  expectedResult,
 		}, nil
 	})
+	require.NoError(t, err)
 
 	resp, err := transport.Send(context.Background(), &Request{
 		JSONRPC: "2.0",
@@ -60,18 +64,20 @@ func TestInProcessTransport_Send_RoutesToHandler(t *testing.T) {
 }
 
 func TestInProcessTransport_Send_NilRequest(t *testing.T) {
-	transport := NewInProcessTransport(func(_ context.Context, _ *Request) (*Response, error) {
+	transport, err := NewInProcessTransport(func(_ context.Context, _ *Request) (*Response, error) {
 		return nil, nil
 	})
-	_, err := transport.Send(context.Background(), nil)
+	require.NoError(t, err)
+	_, err = transport.Send(context.Background(), nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "request must not be nil")
 }
 
 func TestInProcessTransport_Send_HandlerError(t *testing.T) {
-	transport := NewInProcessTransport(func(_ context.Context, _ *Request) (*Response, error) {
+	transport, err := NewInProcessTransport(func(_ context.Context, _ *Request) (*Response, error) {
 		return nil, fmt.Errorf("handler failed")
 	})
+	require.NoError(t, err)
 
 	resp, err := transport.Send(context.Background(), &Request{
 		JSONRPC: "2.0",
@@ -87,12 +93,13 @@ func TestInProcessTransport_Send_PassesContext(t *testing.T) {
 	type ctxKey string
 	key := ctxKey("test-key")
 
-	transport := NewInProcessTransport(func(ctx context.Context, _ *Request) (*Response, error) {
+	transport, err := NewInProcessTransport(func(ctx context.Context, _ *Request) (*Response, error) {
 		val, ok := ctx.Value(key).(string)
 		assert.True(t, ok)
 		assert.Equal(t, "test-value", val)
 		return &Response{JSONRPC: "2.0", ID: 1}, nil
 	})
+	require.NoError(t, err)
 
 	ctx := context.WithValue(context.Background(), key, "test-value")
 	resp, err := transport.Send(ctx, &Request{JSONRPC: "2.0", ID: 1, Method: "ctx/test"})
@@ -102,10 +109,11 @@ func TestInProcessTransport_Send_PassesContext(t *testing.T) {
 
 func TestInProcessTransport_Notify_NoOp(t *testing.T) {
 	called := false
-	transport := NewInProcessTransport(func(_ context.Context, _ *Request) (*Response, error) {
+	transport, err := NewInProcessTransport(func(_ context.Context, _ *Request) (*Response, error) {
 		called = true
 		return nil, nil
 	})
+	require.NoError(t, err)
 
 	// Notify should not call the handler
 	transport.Notify(context.Background(), &Request{
@@ -120,13 +128,13 @@ func TestInProcessTransport_WorksWithClient(t *testing.T) {
 	// Client sends: initialize → notifications/initialized (notify) → tools/list
 	callCount := 0
 
-	transport := NewInProcessTransport(func(_ context.Context, req *Request) (*Response, error) {
+	transport, err := NewInProcessTransport(func(_ context.Context, req *Request) (*Response, error) {
 		callCount++
 		switch req.Method {
 		case "initialize":
 			result, _ := json.Marshal(map[string]interface{}{
 				"protocolVersion": "2024-11-05",
-				"capabilities":   map[string]interface{}{},
+				"capabilities":    map[string]interface{}{},
 				"serverInfo": map[string]interface{}{
 					"name":    "test-server",
 					"version": "1.0.0",
@@ -144,9 +152,10 @@ func TestInProcessTransport_WorksWithClient(t *testing.T) {
 			return nil, fmt.Errorf("unexpected method: %s", req.Method)
 		}
 	})
+	require.NoError(t, err)
 
 	client := NewClient("test-server", transport)
-	err := client.Connect(context.Background())
+	err = client.Connect(context.Background())
 	require.NoError(t, err)
 
 	assert.True(t, client.IsConnected())

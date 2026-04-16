@@ -145,7 +145,7 @@ func (h *KnowledgeHandler) Reindex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.reindexer == nil {
-		writeJSONError(w, http.StatusNotImplemented, "knowledge reindexing not available")
+		writeJSONError(w, http.StatusNotImplemented, "Knowledge indexing requires an embedding model. Configure one in Models → select type Embeddings.")
 		return
 	}
 
@@ -171,7 +171,7 @@ func (h *KnowledgeHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.fileLister == nil {
-		writeJSONError(w, http.StatusNotImplemented, "file listing not available")
+		writeJSONError(w, http.StatusNotImplemented, "Knowledge indexing requires an embedding model. Configure one in Models → select type Embeddings.")
 		return
 	}
 
@@ -198,7 +198,7 @@ func (h *KnowledgeHandler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.fileLister == nil {
-		writeJSONError(w, http.StatusNotImplemented, "file management not available")
+		writeJSONError(w, http.StatusNotImplemented, "Knowledge indexing requires an embedding model. Configure one in Models → select type Embeddings.")
 		return
 	}
 
@@ -220,7 +220,7 @@ func (h *KnowledgeHandler) ReindexFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.fileLister == nil {
-		writeJSONError(w, http.StatusNotImplemented, "file management not available")
+		writeJSONError(w, http.StatusNotImplemented, "Knowledge indexing requires an embedding model. Configure one in Models → select type Embeddings.")
 		return
 	}
 
@@ -265,7 +265,7 @@ func (h *KnowledgeHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.fileUploader == nil {
-		writeJSONError(w, http.StatusNotImplemented, "file upload not available")
+		writeJSONError(w, http.StatusNotImplemented, "Knowledge indexing requires an embedding model. Configure one in Models → select type Embeddings.")
 		return
 	}
 

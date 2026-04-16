@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -131,7 +130,7 @@ func Run(sc ServerConfig) error {
 				if err := generateDefaultConfig(managedConfigPath, sc.LicenseInfo != nil); err != nil {
 					return fmt.Errorf("generate default config: %w", err)
 				}
-				log.Printf("Generated default config at %s", managedConfigPath)
+				slog.Info("Generated default config", "path", managedConfigPath)
 			}
 			configPath = managedConfigPath
 		}
@@ -142,7 +141,7 @@ func Run(sc ServerConfig) error {
 			if err := os.WriteFile(managedPromptsPath, embedded.DefaultPrompts, 0644); err != nil {
 				return fmt.Errorf("write default prompts: %w", err)
 			}
-			log.Printf("Generated default prompts at %s", managedPromptsPath)
+			slog.Info("Generated default prompts", "path", managedPromptsPath)
 		}
 
 		// Generate default flows.yaml if missing (from embedded)
@@ -151,7 +150,7 @@ func Run(sc ServerConfig) error {
 			if err := os.WriteFile(managedFlowsPath, embedded.DefaultFlows, 0644); err != nil {
 				return fmt.Errorf("write default flows: %w", err)
 			}
-			log.Printf("Generated default flows at %s", managedFlowsPath)
+			slog.Info("Generated default flows", "path", managedFlowsPath)
 		}
 	}
 
@@ -169,7 +168,7 @@ func Run(sc ServerConfig) error {
 	// Load configuration — if config file doesn't exist, use defaults (env-var mode for Docker)
 	var cfg *config.Config
 	if _, statErr := os.Stat(configPath); os.IsNotExist(statErr) && !sc.ConfigExplicit {
-		log.Printf("No config file at %s — using defaults (configure via environment variables or Admin Dashboard)", configPath)
+		slog.Info("No config file found, using defaults (configure via environment variables or Admin Dashboard)", "path", configPath)
 		cfg = config.DefaultConfig()
 	} else {
 		var loadErr error
@@ -177,7 +176,7 @@ func Run(sc ServerConfig) error {
 		if loadErr != nil {
 			return fmt.Errorf("load config: %w", loadErr)
 		}
-		log.Printf("Config loaded: default_provider=%s, ollama_model=%s", cfg.LLM.DefaultProvider, cfg.LLM.Ollama.Model)
+		slog.Info("Config loaded", "default_provider", cfg.LLM.DefaultProvider, "ollama_model", cfg.LLM.Ollama.Model)
 	}
 
 	// Override bridge config from flag
@@ -198,9 +197,9 @@ func Run(sc ServerConfig) error {
 		// Stale port file from a crashed/killed server — clean up.
 		stalePortFile := filepath.Join(dataDir, "server.port")
 		if err := os.Remove(stalePortFile); err != nil && !os.IsNotExist(err) {
-			log.Printf("Warning: failed to remove stale port file: %v", err)
+			slog.Warn("failed to remove stale port file", "error", err)
 		} else {
-			log.Printf("Removed stale port file (PID %d no longer running)", existingInfo.PID)
+			slog.Info("Removed stale port file", "pid", existingInfo.PID)
 		}
 	}
 
@@ -218,9 +217,9 @@ func Run(sc ServerConfig) error {
 		}
 		removedCount, err := logger.ClearLogsDir(logsDir)
 		if err != nil {
-			log.Printf("Warning: failed to clear logs directory: %v", err)
+			slog.Warn("failed to clear logs directory", "error", err)
 		} else if removedCount > 0 {
-			log.Printf("Cleared %d old log files from %s", removedCount, logsDir)
+			slog.Info("Cleared old log files", "count", removedCount, "dir", logsDir)
 		}
 	}
 
@@ -857,7 +856,7 @@ func Run(sc ServerConfig) error {
 			// Gates removed in V2 (see docs/architecture/agent-first-runtime.md §3).
 			agentRelationRepo := configrepo.NewGORMAgentRelationRepository(pgDB)
 			schemaHandler := deliveryhttp.NewSchemaHandler(
-				&schemaServiceHTTPAdapter{repo: schemaRepo},
+				&schemaServiceHTTPAdapter{repo: schemaRepo, db: pgDB},
 				&agentRelationServiceHTTPAdapter{repo: agentRelationRepo},
 			)
 			schemaHandler.SetAgentDetailer(agentManager)
@@ -964,7 +963,7 @@ func Run(sc ServerConfig) error {
 			}
 
 			// Usage (CE mode — unlimited)
-			usageHandler := deliveryhttp.NewUsageHandler()
+			usageHandler := deliveryhttp.NewUsageHandler(pgDB)
 			r.Get("/api/v1/usage", usageHandler.GetUsage)
 
 			// Resilience admin endpoints (AC-RESIL-08: dead letters visible, circuit breaker management)
@@ -1637,7 +1636,8 @@ func UserDataDir() string {
 	case "darwin":
 		home, err := os.UserHomeDir()
 		if err != nil {
-			log.Fatalf("failed to get user home directory: %v", err)
+			slog.Error("failed to get user home directory", "error", err)
+			os.Exit(1)
 		}
 		return filepath.Join(home, "Library", "Application Support", "bytebrew")
 	default:
@@ -1647,7 +1647,8 @@ func UserDataDir() string {
 		}
 		home, err := os.UserHomeDir()
 		if err != nil {
-			log.Fatalf("failed to get user home directory: %v", err)
+			slog.Error("failed to get user home directory", "error", err)
+			os.Exit(1)
 		}
 		return filepath.Join(home, ".local", "share", "bytebrew")
 	}

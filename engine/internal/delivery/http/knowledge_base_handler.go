@@ -202,7 +202,7 @@ func (h *KnowledgeBaseHandler) UnlinkAgent(w http.ResponseWriter, r *http.Reques
 func (h *KnowledgeBaseHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 	kbID := chi.URLParam(r, "id")
 	if h.fileManager == nil {
-		writeJSONError(w, http.StatusNotImplemented, "file management not available")
+		writeJSONError(w, http.StatusNotImplemented, "Knowledge indexing requires an embedding model. Configure one in Models → select type Embeddings.")
 		return
 	}
 	files, err := h.fileManager.ListFiles(r.Context(), kbID)
@@ -220,7 +220,7 @@ func (h *KnowledgeBaseHandler) ListFiles(w http.ResponseWriter, r *http.Request)
 func (h *KnowledgeBaseHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	kbID := chi.URLParam(r, "id")
 	if h.fileManager == nil {
-		writeJSONError(w, http.StatusNotImplemented, "file upload not available")
+		writeJSONError(w, http.StatusNotImplemented, "Knowledge indexing requires an embedding model. Configure one in Models → select type Embeddings.")
 		return
 	}
 
@@ -300,7 +300,7 @@ func (h *KnowledgeBaseHandler) DeleteFile(w http.ResponseWriter, r *http.Request
 	kbID := chi.URLParam(r, "id")
 	fileID := chi.URLParam(r, "file_id")
 	if h.fileManager == nil {
-		writeJSONError(w, http.StatusNotImplemented, "file management not available")
+		writeJSONError(w, http.StatusNotImplemented, "Knowledge indexing requires an embedding model. Configure one in Models → select type Embeddings.")
 		return
 	}
 	if err := h.fileManager.DeleteFile(r.Context(), kbID, fileID); err != nil {
@@ -315,7 +315,7 @@ func (h *KnowledgeBaseHandler) ReindexFile(w http.ResponseWriter, r *http.Reques
 	kbID := chi.URLParam(r, "id")
 	fileID := chi.URLParam(r, "file_id")
 	if h.fileManager == nil {
-		writeJSONError(w, http.StatusNotImplemented, "file management not available")
+		writeJSONError(w, http.StatusNotImplemented, "Knowledge indexing requires an embedding model. Configure one in Models → select type Embeddings.")
 		return
 	}
 

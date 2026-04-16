@@ -17,11 +17,12 @@ type InProcessTransport struct {
 }
 
 // NewInProcessTransport creates a new InProcessTransport with the given handler.
-func NewInProcessTransport(handler Handler) *InProcessTransport {
+// Returns an error if handler is nil.
+func NewInProcessTransport(handler Handler) (*InProcessTransport, error) {
 	if handler == nil {
-		panic("mcp: InProcessTransport handler must not be nil")
+		return nil, fmt.Errorf("mcp: InProcessTransport handler must not be nil")
 	}
-	return &InProcessTransport{handler: handler}
+	return &InProcessTransport{handler: handler}, nil
 }
 
 // Start is a no-op for in-process transport (no network connection to establish).

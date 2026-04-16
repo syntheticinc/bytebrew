@@ -16,12 +16,13 @@ import (
 // `schema_agents` join table — see docs/architecture/agent-first-runtime.md
 // §2.1.
 type SchemaRecord struct {
-	ID          string
-	Name        string
-	Description string
-	IsSystem    bool
-	AgentNames  []string // derived: distinct agents referenced by agent_relations of this schema
-	CreatedAt   time.Time
+	ID           string
+	Name         string
+	Description  string
+	IsSystem     bool
+	AgentNames   []string // derived: distinct agents referenced by agent_relations of this schema
+	EntryAgentID *string  // FK to agents.id; may be nil
+	CreatedAt    time.Time
 }
 
 // GORMSchemaRepository implements schema CRUD using GORM.
@@ -48,12 +49,13 @@ func (r *GORMSchemaRepository) List(ctx context.Context) ([]SchemaRecord, error)
 			return nil, fmt.Errorf("derive agents for schema %q: %w", s.Name, err)
 		}
 		records = append(records, SchemaRecord{
-			ID:          s.ID,
-			Name:        s.Name,
-			Description: s.Description,
-			IsSystem:    s.IsSystem,
-			AgentNames:  agentNames,
-			CreatedAt:   s.CreatedAt,
+			ID:           s.ID,
+			Name:         s.Name,
+			Description:  s.Description,
+			IsSystem:     s.IsSystem,
+			AgentNames:   agentNames,
+			EntryAgentID: s.EntryAgentID,
+			CreatedAt:    s.CreatedAt,
 		})
 	}
 	return records, nil
@@ -72,12 +74,13 @@ func (r *GORMSchemaRepository) GetByID(ctx context.Context, id string) (*SchemaR
 	}
 
 	return &SchemaRecord{
-		ID:          schema.ID,
-		Name:        schema.Name,
-		Description: schema.Description,
-		IsSystem:    schema.IsSystem,
-		AgentNames:  agentNames,
-		CreatedAt:   schema.CreatedAt,
+		ID:           schema.ID,
+		Name:         schema.Name,
+		Description:  schema.Description,
+		IsSystem:     schema.IsSystem,
+		AgentNames:   agentNames,
+		EntryAgentID: schema.EntryAgentID,
+		CreatedAt:    schema.CreatedAt,
 	}, nil
 }
 

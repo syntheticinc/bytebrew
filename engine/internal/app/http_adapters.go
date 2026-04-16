@@ -16,6 +16,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/mcp"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
+	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 )
 
 // agentCounterHTTPAdapter bridges AgentRegistry to the http.AgentCounter interface.
@@ -64,7 +65,7 @@ func (a *agentListerHTTPAdapter) ListAgents(_ context.Context) ([]deliveryhttp.A
 func (a *agentListerHTTPAdapter) GetAgent(_ context.Context, name string) (*deliveryhttp.AgentDetail, error) {
 	agent, err := a.registry.Get(name)
 	if err != nil {
-		return nil, nil
+		return nil, pkgerrors.NotFound(fmt.Sprintf("agent not found: %s", name))
 	}
 	rec := agent.Record
 	tools := make([]string, 0, len(rec.BuiltinTools)+len(rec.CustomTools))

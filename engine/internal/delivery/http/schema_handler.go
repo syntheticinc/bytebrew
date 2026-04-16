@@ -14,12 +14,14 @@ import (
 
 // SchemaInfo is a summary of a schema returned in list responses.
 type SchemaInfo struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description,omitempty"`
-	Agents      []string  `json:"agents,omitempty"`
-	IsSystem    bool      `json:"is_system,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	Description    string    `json:"description,omitempty"`
+	Agents         []string  `json:"agents,omitempty"`
+	IsSystem       bool      `json:"is_system,omitempty"`
+	EntryAgentName string    `json:"entry_agent_name,omitempty"`
+	AgentsCount    int       `json:"agents_count"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // CreateSchemaRequest is the body for POST /api/v1/schemas.

@@ -49,7 +49,7 @@ func (a *agentManagerHTTPAdapter) ListAgents(ctx context.Context) ([]deliveryhtt
 func (a *agentManagerHTTPAdapter) GetAgent(ctx context.Context, name string) (*deliveryhttp.AgentDetail, error) {
 	rec, err := a.repo.GetByName(ctx, name)
 	if err != nil {
-		return nil, nil
+		return nil, pkgerrors.NotFound(fmt.Sprintf("agent not found: %s", name))
 	}
 
 	tools := make([]string, 0, len(rec.BuiltinTools)+len(rec.CustomTools))

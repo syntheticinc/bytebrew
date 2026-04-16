@@ -12,9 +12,34 @@ import (
 	"gorm.io/gorm"
 )
 
+// resolveAgentNameByID resolves an agent UUID to its name via a raw DB query.
+// Returns an empty string when the ID is nil or the agent is not found.
+func (a *schemaServiceHTTPAdapter) resolveAgentNameByID(ctx context.Context, agentID *string) string {
+	if agentID == nil || *agentID == "" {
+		return ""
+	}
+	var name string
+	_ = a.db.WithContext(ctx).Raw("SELECT name FROM agents WHERE id = ? LIMIT 1", *agentID).Scan(&name).Error
+	return name
+}
+
+// countAgentsInSchema returns the number of distinct agents linked to the schema
+// through agent_relations (union of source and target).
+func (a *schemaServiceHTTPAdapter) countAgentsInSchema(ctx context.Context, schemaID string) int {
+	var count int64
+	_ = a.db.WithContext(ctx).Raw(`
+		SELECT COUNT(DISTINCT agent_id) FROM (
+			SELECT source_agent_id AS agent_id FROM agent_relations WHERE schema_id = ?
+			UNION
+			SELECT target_agent_id AS agent_id FROM agent_relations WHERE schema_id = ?
+		) members`, schemaID, schemaID).Scan(&count).Error
+	return int(count)
+}
+
 // schemaServiceHTTPAdapter bridges GORMSchemaRepository to the http.SchemaService interface.
 type schemaServiceHTTPAdapter struct {
 	repo *configrepo.GORMSchemaRepository
+	db   *gorm.DB
 }
 
 func (a *schemaServiceHTTPAdapter) ListSchemas(ctx context.Context) ([]deliveryhttp.SchemaInfo, error) {
@@ -26,12 +51,14 @@ func (a *schemaServiceHTTPAdapter) ListSchemas(ctx context.Context) ([]deliveryh
 	result := make([]deliveryhttp.SchemaInfo, 0, len(records))
 	for _, r := range records {
 		result = append(result, deliveryhttp.SchemaInfo{
-			ID:          r.ID,
-			Name:        r.Name,
-			Description: r.Description,
-			Agents:      r.AgentNames,
-			IsSystem:    r.IsSystem,
-			CreatedAt:   r.CreatedAt,
+			ID:             r.ID,
+			Name:           r.Name,
+			Description:    r.Description,
+			Agents:         r.AgentNames,
+			IsSystem:       r.IsSystem,
+			EntryAgentName: a.resolveAgentNameByID(ctx, r.EntryAgentID),
+			AgentsCount:    a.countAgentsInSchema(ctx, r.ID),
+			CreatedAt:      r.CreatedAt,
 		})
 	}
 	return result, nil
@@ -47,12 +74,14 @@ func (a *schemaServiceHTTPAdapter) GetSchema(ctx context.Context, id string) (*d
 	}
 
 	return &deliveryhttp.SchemaInfo{
-		ID:          record.ID,
-		Name:        record.Name,
-		Description: record.Description,
-		Agents:      record.AgentNames,
-		IsSystem:    record.IsSystem,
-		CreatedAt:   record.CreatedAt,
+		ID:             record.ID,
+		Name:           record.Name,
+		Description:    record.Description,
+		Agents:         record.AgentNames,
+		IsSystem:       record.IsSystem,
+		EntryAgentName: a.resolveAgentNameByID(ctx, record.EntryAgentID),
+		AgentsCount:    a.countAgentsInSchema(ctx, record.ID),
+		CreatedAt:      record.CreatedAt,
 	}, nil
 }
 
