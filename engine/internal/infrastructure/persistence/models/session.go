@@ -8,7 +8,7 @@ import "time"
 // (schema_id), not a single agent. The entry agent is resolved via
 // schemas.entry_agent_id at dispatch time. schema_id is now NOT NULL.
 type SessionModel struct {
-	ID          string     `gorm:"primaryKey;type:varchar(36)"`
+	ID          string     `gorm:"primaryKey;type:uuid"`
 	Title       string     `gorm:"type:varchar(500)"`
 	UserID      *string    `gorm:"type:uuid;index"`
 	Status      string     `gorm:"type:varchar(20);not null;default:active;index"`

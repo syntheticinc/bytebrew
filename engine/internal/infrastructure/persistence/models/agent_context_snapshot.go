@@ -5,8 +5,8 @@ import "time"
 // AgentContextSnapshotModel maps to the "agent_context_snapshots" table.
 // Stores agent context snapshots for session resume.
 type AgentContextSnapshotModel struct {
-	ID            string    `gorm:"primaryKey;type:varchar(36)"`
-	SessionID     string    `gorm:"type:varchar(36);not null;uniqueIndex:idx_rt_ctx_session_agent"`
+	ID            string    `gorm:"primaryKey;type:uuid"`
+	SessionID     string    `gorm:"type:uuid;not null;uniqueIndex:idx_rt_ctx_session_agent"`
 	AgentID       string    `gorm:"type:uuid;not null;uniqueIndex:idx_rt_ctx_session_agent"`
 	SchemaVersion int       `gorm:"not null;default:1"`
 	ContextData   []byte    `gorm:"type:bytea;not null"`

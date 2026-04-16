@@ -61,3 +61,5 @@ databaseChangeLog:
       file: migrations/030_v2_flowtype_purge.yaml
   - include:
       file: migrations/031_v2_restructure_relations_sessions_tasks.yaml
+  - include:
+      file: migrations/032_v2_varchar_to_uuid_final.yaml

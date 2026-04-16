@@ -17,7 +17,7 @@ type TaskModel struct {
 	Description        string     `gorm:"type:text"`
 	AcceptanceCriteria string     `gorm:"type:text"` // JSON array
 	UserID             string     `gorm:"type:varchar(255);index"`
-	SessionID          *string    `gorm:"type:varchar(36);index"`
+	SessionID          *string    `gorm:"type:uuid;index"`
 	ParentTaskID       *uuid.UUID `gorm:"type:uuid;index"`
 	Status             string     `gorm:"type:varchar(20);not null;default:pending;index"`
 	Mode               string     `gorm:"type:varchar(20);not null;default:interactive"`

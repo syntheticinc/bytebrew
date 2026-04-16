@@ -11,7 +11,7 @@ type AuditLogModel struct {
 	Action    string    `gorm:"type:varchar(50);not null;index"`
 	Resource  string    `gorm:"type:varchar(500)"`
 	Details   string    `gorm:"type:jsonb"`
-	SessionID *string   `gorm:"type:varchar(36);index"`
+	SessionID *string   `gorm:"type:uuid;index"`
 	TaskID    *string   `gorm:"type:uuid;index"`
 	TenantID  string    `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`
 

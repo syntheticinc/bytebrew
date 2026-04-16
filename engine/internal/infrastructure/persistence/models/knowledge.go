@@ -34,7 +34,7 @@ func (KnowledgeBaseAgent) TableName() string { return "knowledge_base_agents" }
 // file_name dropped in migration 029 — derivable as filepath.Base(FilePath).
 // agent_name dropped in migration 029 — pre-KB migration legacy.
 type KnowledgeDocument struct {
-	ID              string    `gorm:"primaryKey;type:varchar(36)"`
+	ID              string    `gorm:"primaryKey;type:uuid"`
 	KnowledgeBaseID string    `gorm:"type:varchar(36);index:idx_knowledge_docs_kb"`
 	TenantID        string    `gorm:"type:varchar(36);not null;default:'default';index:idx_knowledge_docs_tenant"`
 	FilePath        string    `gorm:"type:text;not null"`
@@ -59,7 +59,7 @@ func (d *KnowledgeDocument) FileName() string {
 // KnowledgeChunk represents a single chunk of a document with its embedding.
 // agent_name and knowledge_base_id dropped in migration 029 — derive via document->KB joins.
 type KnowledgeChunk struct {
-	ID         string          `gorm:"primaryKey;type:varchar(36)"`
+	ID         string          `gorm:"primaryKey;type:uuid"`
 	DocumentID string          `gorm:"type:varchar(36);not null;index"`
 	TenantID   string          `gorm:"type:varchar(36);not null;default:'default';index:idx_knowledge_chunks_tenant"`
 	Content    string          `gorm:"type:text;not null"`
