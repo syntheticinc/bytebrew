@@ -1,0 +1,53 @@
+databaseChangeLog:
+  - changeSet:
+      id: 034-knowledge-tenant-id-to-uuid
+      author: bytebrew
+      comment: >
+        Cast knowledge_bases, knowledge_documents, knowledge_chunks tenant_id
+        from varchar(36) to uuid. All values are valid UUIDs (default was 'default'
+        string — replaced with sentinel CE tenant UUID first).
+        Also cast knowledge_documents.knowledge_base_id and
+        knowledge_chunks.document_id from varchar(36) to uuid.
+      changes:
+        - sql:
+            sql: |
+              -- Replace legacy 'default' string with sentinel CE tenant UUID
+              UPDATE knowledge_bases
+                SET tenant_id = '00000000-0000-0000-0000-000000000001'
+                WHERE tenant_id = 'default' OR tenant_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+
+              UPDATE knowledge_documents
+                SET tenant_id = '00000000-0000-0000-0000-000000000001'
+                WHERE tenant_id = 'default' OR tenant_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+
+              UPDATE knowledge_chunks
+                SET tenant_id = '00000000-0000-0000-0000-000000000001'
+                WHERE tenant_id = 'default' OR tenant_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+
+              -- Cast tenant_id varchar → uuid
+              ALTER TABLE knowledge_bases
+                ALTER COLUMN tenant_id TYPE uuid USING tenant_id::uuid;
+              ALTER TABLE knowledge_bases
+                ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-0000-0000-000000000001';
+
+              ALTER TABLE knowledge_documents
+                ALTER COLUMN tenant_id TYPE uuid USING tenant_id::uuid;
+              ALTER TABLE knowledge_documents
+                ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-0000-0000-000000000001';
+              ALTER TABLE knowledge_documents
+                ALTER COLUMN knowledge_base_id TYPE uuid USING knowledge_base_id::uuid;
+
+              ALTER TABLE knowledge_chunks
+                ALTER COLUMN tenant_id TYPE uuid USING tenant_id::uuid;
+              ALTER TABLE knowledge_chunks
+                ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-0000-0000-000000000001';
+              ALTER TABLE knowledge_chunks
+                ALTER COLUMN document_id TYPE uuid USING document_id::uuid;
+      rollback:
+        - sql:
+            sql: |
+              ALTER TABLE knowledge_bases ALTER COLUMN tenant_id TYPE varchar(36) USING tenant_id::varchar;
+              ALTER TABLE knowledge_documents ALTER COLUMN tenant_id TYPE varchar(36) USING tenant_id::varchar;
+              ALTER TABLE knowledge_documents ALTER COLUMN knowledge_base_id TYPE varchar(36) USING knowledge_base_id::varchar;
+              ALTER TABLE knowledge_chunks ALTER COLUMN tenant_id TYPE varchar(36) USING tenant_id::varchar;
+              ALTER TABLE knowledge_chunks ALTER COLUMN document_id TYPE varchar(36) USING document_id::varchar;

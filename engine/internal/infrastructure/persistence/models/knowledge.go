@@ -11,7 +11,7 @@ import (
 // Analogous to LLMProviderModel (Models): a global entity that agents reference.
 type KnowledgeBase struct {
 	ID               string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
-	TenantID         string    `gorm:"type:varchar(36);not null;default:'default';index:idx_kb_tenant"`
+	TenantID         string    `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001';index:idx_kb_tenant"`
 	Name             string    `gorm:"type:varchar(255);not null"`
 	Description      string    `gorm:"type:text"`
 	EmbeddingModelID *string   `gorm:"type:uuid"` // FK to models table (type=embedding)
@@ -35,8 +35,8 @@ func (KnowledgeBaseAgent) TableName() string { return "knowledge_base_agents" }
 // agent_name dropped in migration 029 — pre-KB migration legacy.
 type KnowledgeDocument struct {
 	ID              string    `gorm:"primaryKey;type:uuid"`
-	KnowledgeBaseID string    `gorm:"type:varchar(36);index:idx_knowledge_docs_kb"`
-	TenantID        string    `gorm:"type:varchar(36);not null;default:'default';index:idx_knowledge_docs_tenant"`
+	KnowledgeBaseID string    `gorm:"type:uuid;not null;index:idx_knowledge_docs_kb"`
+	TenantID        string    `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001';index:idx_knowledge_docs_tenant"`
 	FilePath        string    `gorm:"type:text;not null"`
 	FileType        string    `gorm:"type:varchar(20);not null;default:txt"` // pdf, docx, doc, txt, md, csv
 	FileSize        int64     `gorm:"not null;default:0"`
@@ -60,8 +60,8 @@ func (d *KnowledgeDocument) FileName() string {
 // agent_name and knowledge_base_id dropped in migration 029 — derive via document->KB joins.
 type KnowledgeChunk struct {
 	ID         string          `gorm:"primaryKey;type:uuid"`
-	DocumentID string          `gorm:"type:varchar(36);not null;index"`
-	TenantID   string          `gorm:"type:varchar(36);not null;default:'default';index:idx_knowledge_chunks_tenant"`
+	DocumentID string          `gorm:"type:uuid;not null;index"`
+	TenantID   string          `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001';index:idx_knowledge_chunks_tenant"`
 	Content    string          `gorm:"type:text;not null"`
 	ChunkOrder int
 	Embedding  pgvector.Vector `gorm:"type:vector"` // variable dimension

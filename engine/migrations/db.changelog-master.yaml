@@ -63,3 +63,7 @@ databaseChangeLog:
       file: migrations/031_v2_restructure_relations_sessions_tasks.yaml
   - include:
       file: migrations/032_v2_varchar_to_uuid_final.yaml
+  - include:
+      file: migrations/033_v2_schema_final_alignment.yaml
+  - include:
+      file: migrations/034_v2_knowledge_tenant_id_to_uuid.yaml
