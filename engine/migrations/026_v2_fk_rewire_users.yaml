@@ -15,14 +15,15 @@ databaseChangeLog:
               -- sessions.user_id: varchar(255) → uuid, nullable (cron/webhook sessions)
               ALTER TABLE sessions
                 ALTER COLUMN user_id DROP NOT NULL,
-                ALTER COLUMN user_id TYPE uuid USING user_id::uuid;
+                ALTER COLUMN user_id TYPE uuid USING CASE WHEN user_id ~* '^[0-9a-f]{8}-' THEN user_id::uuid ELSE NULL END;
               ALTER TABLE sessions
                 ADD CONSTRAINT fk_sessions_user
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
 
               -- memories.user_id: varchar(255) → uuid, not null
               ALTER TABLE memories
-                ALTER COLUMN user_id TYPE uuid USING user_id::uuid;
+                ALTER COLUMN user_id DROP NOT NULL,
+                ALTER COLUMN user_id TYPE uuid USING CASE WHEN user_id ~* '^[0-9a-f]{8}-' THEN user_id::uuid ELSE NULL END;
               ALTER TABLE memories
                 ADD CONSTRAINT fk_memories_user
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
@@ -31,7 +32,7 @@ databaseChangeLog:
               ALTER TABLE audit_logs
                 RENAME COLUMN actor_id TO actor_user_id;
               ALTER TABLE audit_logs
-                ALTER COLUMN actor_user_id TYPE uuid USING actor_user_id::uuid;
+                ALTER COLUMN actor_user_id TYPE uuid USING CASE WHEN actor_user_id ~* '^[0-9a-f]{8}-' THEN actor_user_id::uuid ELSE NULL END;
               ALTER TABLE audit_logs
                 ADD CONSTRAINT fk_audit_logs_user
                 FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL;
