@@ -734,8 +734,9 @@ func Run(sc ServerConfig) error {
 						registry: agentRegistry,
 					}
 				}
+				kbRepo := configrepo.NewGORMKnowledgeBaseRepository(pgDB)
 				knowledgeHandler := deliveryhttp.NewKnowledgeHandler(
-					&knowledgeStatsHTTPAdapter{repo: knowledgeRepo},
+					&knowledgeStatsHTTPAdapter{repo: knowledgeRepo, kbRepo: kbRepo},
 					reindexer,
 				)
 
@@ -748,10 +749,9 @@ func Run(sc ServerConfig) error {
 				uploadSvc.SetEmbeddingResolver(&embeddingModelResolver{db: pgDB})
 				uploadSvc.SetKBEmbeddingResolver(&kbEmbeddingResolver{db: pgDB})
 				knowledgeHandler.SetFileUploader(&knowledgeUploadHTTPAdapter{svc: uploadSvc})
-				knowledgeHandler.SetFileLister(&knowledgeFileListerHTTPAdapter{svc: uploadSvc})
+				knowledgeHandler.SetFileLister(&knowledgeFileListerHTTPAdapter{svc: uploadSvc, kbRepo: kbRepo})
 
 				// Knowledge Bases (many-to-many) handler
-				kbRepo := configrepo.NewGORMKnowledgeBaseRepository(pgDB)
 				kbHandler := deliveryhttp.NewKnowledgeBaseHandler(
 					&kbStoreAdapter{repo: kbRepo, db: pgDB},
 					&kbFileManagerAdapter{svc: uploadSvc},

@@ -78,8 +78,7 @@ func (c *KnowledgeConfig) Validate() error {
 // KnowledgeFileInfo represents file info for the listing API (AC-KB-LIST-02).
 type KnowledgeFileInfo struct {
 	ID         string
-	AgentName  string
-	FileName   string
+	FileName   string // derived from file path
 	FileType   string
 	FileSize   int64
 	Status     KnowledgeFileStatus

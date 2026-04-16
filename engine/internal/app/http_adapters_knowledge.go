@@ -31,24 +31,44 @@ func (a *knowledgeUploadHTTPAdapter) UploadFile(ctx context.Context, tenantID, a
 }
 
 // knowledgeFileListerHTTPAdapter bridges svcknowledge.UploadService to deliveryhttp.KnowledgeFileLister.
+// Uses KB-scoped queries by resolving agent name → linked KB IDs.
 type knowledgeFileListerHTTPAdapter struct {
-	svc *svcknowledge.UploadService
+	svc    *svcknowledge.UploadService
+	kbRepo *configrepo.GORMKnowledgeBaseRepository
 }
 
 func (a *knowledgeFileListerHTTPAdapter) ListFiles(ctx context.Context, agentName string) ([]deliveryhttp.KnowledgeFileResponse, error) {
-	files, err := a.svc.ListFiles(ctx, agentName)
-	if err != nil {
-		return nil, err
+	kbIDs, err := a.kbRepo.ListKBsByAgentName(ctx, agentName)
+	if err != nil || len(kbIDs) == 0 {
+		return []deliveryhttp.KnowledgeFileResponse{}, nil
 	}
-	return svcFilesToHTTP(files), nil
+	var allFiles []deliveryhttp.KnowledgeFileResponse
+	for _, kbID := range kbIDs {
+		files, err := a.svc.ListFilesByKB(ctx, kbID)
+		if err != nil {
+			return nil, err
+		}
+		allFiles = append(allFiles, svcFilesToHTTP(files)...)
+	}
+	return allFiles, nil
 }
 
 func (a *knowledgeFileListerHTTPAdapter) DeleteFile(ctx context.Context, agentName, fileID string) error {
-	return a.svc.DeleteFile(ctx, agentName, fileID)
+	kbIDs, err := a.kbRepo.ListKBsByAgentName(ctx, agentName)
+	if err != nil || len(kbIDs) == 0 {
+		return fmt.Errorf("file not found")
+	}
+	for _, kbID := range kbIDs {
+		if err := a.svc.DeleteFileByKB(ctx, kbID, fileID); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("file not found")
 }
 
 func (a *knowledgeFileListerHTTPAdapter) ReindexFile(ctx context.Context, agentName, fileID string) error {
-	return a.svc.ReindexFile(ctx, agentName, fileID)
+	// Legacy reindex not supported without KB context
+	return fmt.Errorf("reindex requires KB-scoped endpoint")
 }
 
 // --- KB-scoped adapters (new many-to-many architecture) ---
@@ -130,17 +150,44 @@ func (a *kbStoreAdapter) Delete(ctx context.Context, id string) error {
 }
 
 func (a *kbStoreAdapter) LinkAgent(ctx context.Context, kbID, agentName string) error {
-	return a.repo.LinkAgent(ctx, kbID, agentName)
+	// Resolve agent name → ID
+	agentID, err := a.resolveAgentID(ctx, agentName)
+	if err != nil {
+		return err
+	}
+	return a.repo.LinkAgent(ctx, kbID, agentID)
 }
 
 func (a *kbStoreAdapter) UnlinkAgent(ctx context.Context, kbID, agentName string) error {
-	return a.repo.UnlinkAgent(ctx, kbID, agentName)
+	// Resolve agent name → ID
+	agentID, err := a.resolveAgentID(ctx, agentName)
+	if err != nil {
+		return err
+	}
+	return a.repo.UnlinkAgent(ctx, kbID, agentID)
+}
+
+func (a *kbStoreAdapter) resolveAgentID(ctx context.Context, agentName string) (string, error) {
+	var agentID string
+	if err := a.db.WithContext(ctx).
+		Raw("SELECT id FROM agents WHERE name = ?", agentName).
+		Scan(&agentID).Error; err != nil || agentID == "" {
+		return "", fmt.Errorf("agent %q not found", agentName)
+	}
+	return agentID, nil
 }
 
 func (a *kbStoreAdapter) toInfo(ctx context.Context, kb *models.KnowledgeBase) (*deliveryhttp.KnowledgeBaseInfo, error) {
-	agents, _ := a.repo.ListLinkedAgents(ctx, kb.ID)
-	if agents == nil {
-		agents = []string{}
+	agentIDs, _ := a.repo.ListLinkedAgentIDs(ctx, kb.ID)
+	// Resolve agent IDs to names for the API response
+	agents := make([]string, 0, len(agentIDs))
+	for _, id := range agentIDs {
+		var name string
+		if err := a.db.WithContext(ctx).
+			Raw("SELECT name FROM agents WHERE id = ?", id).
+			Scan(&name).Error; err == nil && name != "" {
+			agents = append(agents, name)
+		}
 	}
 
 	var fileCount int64

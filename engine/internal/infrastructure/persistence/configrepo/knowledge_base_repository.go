@@ -91,14 +91,14 @@ func (r *GORMKnowledgeBaseRepository) Delete(ctx context.Context, id string) err
 	return nil
 }
 
-// LinkAgent links an agent (by name) to a knowledge base.
-func (r *GORMKnowledgeBaseRepository) LinkAgent(ctx context.Context, kbID, agentName string) error {
+// LinkAgent links an agent (by ID) to a knowledge base.
+func (r *GORMKnowledgeBaseRepository) LinkAgent(ctx context.Context, kbID, agentID string) error {
 	link := models.KnowledgeBaseAgent{
 		KnowledgeBaseID: kbID,
-		AgentName:       agentName,
+		AgentID:         agentID,
 	}
 	if err := r.db.WithContext(ctx).
-		Where("knowledge_base_id = ? AND agent_name = ?", kbID, agentName).
+		Where("knowledge_base_id = ? AND agent_id = ?", kbID, agentID).
 		FirstOrCreate(&link).Error; err != nil {
 		return fmt.Errorf("link agent to KB: %w", err)
 	}
@@ -106,37 +106,49 @@ func (r *GORMKnowledgeBaseRepository) LinkAgent(ctx context.Context, kbID, agent
 }
 
 // UnlinkAgent removes the link between an agent and a knowledge base.
-func (r *GORMKnowledgeBaseRepository) UnlinkAgent(ctx context.Context, kbID, agentName string) error {
+func (r *GORMKnowledgeBaseRepository) UnlinkAgent(ctx context.Context, kbID, agentID string) error {
 	if err := r.db.WithContext(ctx).
-		Where("knowledge_base_id = ? AND agent_name = ?", kbID, agentName).
+		Where("knowledge_base_id = ? AND agent_id = ?", kbID, agentID).
 		Delete(&models.KnowledgeBaseAgent{}).Error; err != nil {
 		return fmt.Errorf("unlink agent from KB: %w", err)
 	}
 	return nil
 }
 
-// ListLinkedAgents returns agent names linked to a knowledge base.
-func (r *GORMKnowledgeBaseRepository) ListLinkedAgents(ctx context.Context, kbID string) ([]string, error) {
-	var names []string
+// ListLinkedAgentIDs returns agent IDs linked to a knowledge base.
+func (r *GORMKnowledgeBaseRepository) ListLinkedAgentIDs(ctx context.Context, kbID string) ([]string, error) {
+	var ids []string
 	if err := r.db.WithContext(ctx).
 		Model(&models.KnowledgeBaseAgent{}).
 		Where("knowledge_base_id = ?", kbID).
-		Pluck("agent_name", &names).Error; err != nil {
+		Pluck("agent_id", &ids).Error; err != nil {
 		return nil, fmt.Errorf("list linked agents: %w", err)
 	}
-	return names, nil
+	return ids, nil
 }
 
-// ListKBsByAgentName returns knowledge base IDs linked to an agent (by name).
-func (r *GORMKnowledgeBaseRepository) ListKBsByAgentName(ctx context.Context, agentName string) ([]string, error) {
+// ListKBsByAgentID returns knowledge base IDs linked to an agent (by UUID).
+func (r *GORMKnowledgeBaseRepository) ListKBsByAgentID(ctx context.Context, agentID string) ([]string, error) {
 	var kbIDs []string
 	if err := r.db.WithContext(ctx).
 		Model(&models.KnowledgeBaseAgent{}).
-		Where("agent_name = ?", agentName).
+		Where("agent_id = ?", agentID).
 		Pluck("knowledge_base_id", &kbIDs).Error; err != nil {
 		return nil, fmt.Errorf("list KBs by agent: %w", err)
 	}
 	return kbIDs, nil
+}
+
+// ListKBsByAgentName resolves agent name → ID, then returns linked KB IDs.
+// Implements KnowledgeKBResolver interface for builtin_tool_store.
+func (r *GORMKnowledgeBaseRepository) ListKBsByAgentName(ctx context.Context, agentName string) ([]string, error) {
+	var agentID string
+	if err := r.db.WithContext(ctx).
+		Raw("SELECT id FROM agents WHERE name = ?", agentName).
+		Scan(&agentID).Error; err != nil || agentID == "" {
+		return nil, nil // agent not found — no KBs
+	}
+	return r.ListKBsByAgentID(ctx, agentID)
 }
 
 // GetKBsWithEmbeddingModel returns knowledge bases with their embedding model info for an agent.

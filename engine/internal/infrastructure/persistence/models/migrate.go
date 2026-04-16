@@ -280,8 +280,16 @@ func AutoMigrate(db *gorm.DB) error {
 }
 
 // migrateKnowledgeToKB migrates legacy agent_name-scoped knowledge documents to KB-scoped.
-// Idempotent: skips documents that already have a knowledge_base_id set.
+// Idempotent: skips if agent_name column was already dropped by migration 029.
 func migrateKnowledgeToKB(db *gorm.DB) error {
+	// Check if legacy agent_name column still exists (dropped by migration 029).
+	var colExists int64
+	db.Raw(`SELECT COUNT(*) FROM information_schema.columns
+		WHERE table_name = 'knowledge_documents' AND column_name = 'agent_name'`).Scan(&colExists)
+	if colExists == 0 {
+		return nil // Column already dropped — migration 029 applied, nothing to do.
+	}
+
 	// Find legacy documents: have agent_name but no knowledge_base_id.
 	type legacyPair struct {
 		TenantID  string
@@ -321,8 +329,6 @@ func migrateKnowledgeToKB(db *gorm.DB) error {
 			var config string
 			db.Raw("SELECT config FROM capabilities WHERE agent_id = ? AND type = 'knowledge'", agentID).Scan(&config)
 			if config != "" {
-				// Simple JSON extraction — avoid importing encoding/json in models package.
-				// Look for "embedding_model_id":"<uuid>"
 				if idx := findJSONString(config, "embedding_model_id"); idx != "" {
 					embModelID = &idx
 				}
@@ -336,19 +342,32 @@ func migrateKnowledgeToKB(db *gorm.DB) error {
 			continue
 		}
 
-		// Link agent if found
+		// Link agent if found (use agent_id column if available, fallback to agent_name)
 		if agentID != "" {
-			db.Exec("INSERT INTO knowledge_base_agents (knowledge_base_id, agent_name) VALUES (?, ?) ON CONFLICT DO NOTHING",
-				kbID, p.AgentName)
+			var hasAgentID int64
+			db.Raw(`SELECT COUNT(*) FROM information_schema.columns
+				WHERE table_name = 'knowledge_base_agents' AND column_name = 'agent_id'`).Scan(&hasAgentID)
+			if hasAgentID > 0 {
+				db.Exec("INSERT INTO knowledge_base_agents (knowledge_base_id, agent_id) VALUES (?, ?::uuid) ON CONFLICT DO NOTHING",
+					kbID, agentID)
+			} else {
+				db.Exec("INSERT INTO knowledge_base_agents (knowledge_base_id, agent_name) VALUES (?, ?) ON CONFLICT DO NOTHING",
+					kbID, p.AgentName)
+			}
 		}
 
 		// Update documents
 		db.Exec("UPDATE knowledge_documents SET knowledge_base_id = ? WHERE tenant_id = ? AND agent_name = ? AND (knowledge_base_id IS NULL OR knowledge_base_id = '')",
 			kbID, p.TenantID, p.AgentName)
 
-		// Update chunks
-		db.Exec("UPDATE knowledge_chunks SET knowledge_base_id = ? WHERE tenant_id = ? AND agent_name = ? AND (knowledge_base_id IS NULL OR knowledge_base_id = '')",
-			kbID, p.TenantID, p.AgentName)
+		// Update chunks (knowledge_base_id may already be dropped)
+		var chunkHasKBID int64
+		db.Raw(`SELECT COUNT(*) FROM information_schema.columns
+			WHERE table_name = 'knowledge_chunks' AND column_name = 'knowledge_base_id'`).Scan(&chunkHasKBID)
+		if chunkHasKBID > 0 {
+			db.Exec("UPDATE knowledge_chunks SET knowledge_base_id = ? WHERE tenant_id = ? AND agent_name = ? AND (knowledge_base_id IS NULL OR knowledge_base_id = '')",
+				kbID, p.TenantID, p.AgentName)
+		}
 
 		slog.Info("[Migration] migrated knowledge to KB",
 			"kb_id", kbID, "tenant", p.TenantID, "agent", p.AgentName)

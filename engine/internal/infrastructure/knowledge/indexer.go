@@ -23,11 +23,11 @@ type EmbeddingProvider interface {
 
 // KnowledgeRepository persists knowledge documents and chunks.
 type KnowledgeRepository interface {
-	GetDocumentByPath(ctx context.Context, agentName, filePath string) (*models.KnowledgeDocument, error)
+	GetDocumentByPath(ctx context.Context, kbID, filePath string) (*models.KnowledgeDocument, error)
 	SaveDocument(ctx context.Context, doc *models.KnowledgeDocument) error
 	SaveChunks(ctx context.Context, chunks []models.KnowledgeChunk) error
 	DeleteChunksByDocument(ctx context.Context, documentID string) error
-	ListDocumentsByAgent(ctx context.Context, agentName string) ([]models.KnowledgeDocument, error)
+	ListDocumentsByKB(ctx context.Context, kbID string) ([]models.KnowledgeDocument, error)
 }
 
 // Indexer scans folders, chunks documents, embeds them, and stores in the database.
@@ -54,9 +54,10 @@ var supportedExtensions = map[string]bool{
 
 // IndexFolder scans a folder, chunks documents, embeds, and saves to DB.
 // Incremental: skips files with unchanged SHA256 hash.
-func (idx *Indexer) IndexFolder(ctx context.Context, agentName string, folderPath string) error {
-	if agentName == "" {
-		return fmt.Errorf("agent name is required")
+// kbID is the knowledge base to scope documents to.
+func (idx *Indexer) IndexFolder(ctx context.Context, kbID string, folderPath string) error {
+	if kbID == "" {
+		return fmt.Errorf("knowledge base ID is required")
 	}
 	if folderPath == "" {
 		return fmt.Errorf("folder path is required")
@@ -77,13 +78,13 @@ func (idx *Indexer) IndexFolder(ctx context.Context, agentName string, folderPat
 	}
 
 	idx.logger.InfoContext(ctx, "starting knowledge indexing",
-		"agent", agentName, "folder", folderPath, "files_found", len(files))
+		"kb_id", kbID, "folder", folderPath, "files_found", len(files))
 
 	var docsIndexed, chunksCreated int
 
 	// Index each file
 	for _, filePath := range files {
-		indexed, chunks, err := idx.indexFile(ctx, agentName, folderPath, filePath)
+		indexed, chunks, err := idx.indexFile(ctx, kbID, folderPath, filePath)
 		if err != nil {
 			idx.logger.WarnContext(ctx, "failed to index file",
 				"file", filePath, "error", err)
@@ -96,13 +97,13 @@ func (idx *Indexer) IndexFolder(ctx context.Context, agentName string, folderPat
 	}
 
 	// Remove orphaned documents (files that no longer exist on disk)
-	if err := idx.removeOrphans(ctx, agentName, files); err != nil {
+	if err := idx.removeOrphans(ctx, kbID, files); err != nil {
 		idx.logger.WarnContext(ctx, "failed to remove orphaned documents",
-			"agent", agentName, "error", err)
+			"kb_id", kbID, "error", err)
 	}
 
 	idx.logger.InfoContext(ctx, "knowledge indexing complete",
-		"agent", agentName, "docs_indexed", docsIndexed, "chunks_created", chunksCreated)
+		"kb_id", kbID, "docs_indexed", docsIndexed, "chunks_created", chunksCreated)
 
 	return nil
 }
@@ -127,7 +128,7 @@ func (idx *Indexer) collectFiles(root string) ([]string, error) {
 }
 
 // indexFile indexes a single file. Returns (wasIndexed, chunkCount, error).
-func (idx *Indexer) indexFile(ctx context.Context, agentName, folderRoot, filePath string) (bool, int, error) {
+func (idx *Indexer) indexFile(ctx context.Context, kbID, folderRoot, filePath string) (bool, int, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return false, 0, fmt.Errorf("read file: %w", err)
@@ -141,7 +142,7 @@ func (idx *Indexer) indexFile(ctx context.Context, agentName, folderRoot, filePa
 		relPath = filePath
 	}
 
-	existing, err := idx.repo.GetDocumentByPath(ctx, agentName, relPath)
+	existing, err := idx.repo.GetDocumentByPath(ctx, kbID, relPath)
 	if err != nil {
 		return false, 0, fmt.Errorf("check existing document: %w", err)
 	}
@@ -179,13 +180,12 @@ func (idx *Indexer) indexFile(ctx context.Context, agentName, folderRoot, filePa
 	}
 
 	doc := &models.KnowledgeDocument{
-		ID:         docID,
-		AgentName:  agentName,
-		FilePath:   relPath,
-		FileName:   filepath.Base(filePath),
-		FileHash:   hash,
-		ChunkCount: len(chunks),
-		IndexedAt:  time.Now(),
+		ID:              docID,
+		KnowledgeBaseID: kbID,
+		FilePath:        relPath,
+		FileHash:        hash,
+		ChunkCount:      len(chunks),
+		IndexedAt:       time.Now(),
 	}
 
 	if err := idx.repo.SaveDocument(ctx, doc); err != nil {
@@ -201,7 +201,6 @@ func (idx *Indexer) indexFile(ctx context.Context, agentName, folderRoot, filePa
 		chunkModels = append(chunkModels, models.KnowledgeChunk{
 			ID:         uuid.New().String(),
 			DocumentID: docID,
-			AgentName:  agentName,
 			Content:    c.Content,
 			ChunkOrder: c.Order,
 			Embedding:  pgvector.NewVector(embeddings[i]),
@@ -218,17 +217,10 @@ func (idx *Indexer) indexFile(ctx context.Context, agentName, folderRoot, filePa
 }
 
 // removeOrphans deletes documents from DB that no longer exist on disk.
-func (idx *Indexer) removeOrphans(ctx context.Context, agentName string, currentFiles []string) error {
-	docs, err := idx.repo.ListDocumentsByAgent(ctx, agentName)
+func (idx *Indexer) removeOrphans(ctx context.Context, kbID string, currentFiles []string) error {
+	docs, err := idx.repo.ListDocumentsByKB(ctx, kbID)
 	if err != nil {
 		return fmt.Errorf("list documents: %w", err)
-	}
-
-	// Build set of current relative paths (we need the folder root to compute relative paths,
-	// but documents already store relative paths).
-	currentSet := make(map[string]bool, len(currentFiles))
-	for _, f := range currentFiles {
-		currentSet[f] = true
 	}
 
 	// For orphan detection, we check if any current file ends with the stored relative path.
@@ -246,7 +238,7 @@ func (idx *Indexer) removeOrphans(ctx context.Context, agentName string, current
 		}
 
 		idx.logger.InfoContext(ctx, "removing orphaned document",
-			"agent", agentName, "file", doc.FilePath)
+			"kb_id", kbID, "file", doc.FilePath)
 
 		if err := idx.repo.DeleteChunksByDocument(ctx, doc.ID); err != nil {
 			idx.logger.WarnContext(ctx, "failed to delete orphan chunks",

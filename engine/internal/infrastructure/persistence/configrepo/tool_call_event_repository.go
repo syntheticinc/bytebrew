@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/eventformat"
+	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 )
 
@@ -80,7 +83,7 @@ func (r *ToolCallEventRepository) QueryToolCalls(ctx context.Context, filters To
 			return nil, 0, fmt.Errorf("query tool call end events: %w", err)
 		}
 		for _, e := range endEvents {
-			callID := extractCallID(e.JSONData)
+			callID := extractCallIDFromProto(e.ProtoData)
 			if callID != "" {
 				endMap[e.SessionID+"::"+callID] = e
 			}
@@ -124,8 +127,8 @@ func (r *ToolCallEventRepository) QueryToolCalls(ctx context.Context, filters To
 }
 
 func (r *ToolCallEventRepository) buildEntry(start models.SessionEventLogModel, endMap map[string]models.SessionEventLogModel) (ToolCallEntry, bool) {
-	startData, err := parseJSON(start.JSONData)
-	if err != nil {
+	startData := protoToJSON(start.ProtoData)
+	if startData == nil {
 		return ToolCallEntry{}, false
 	}
 
@@ -147,8 +150,8 @@ func (r *ToolCallEventRepository) buildEntry(start models.SessionEventLogModel, 
 
 	endKey := start.SessionID + "::" + callID
 	if endEvt, found := endMap[endKey]; found && callID != "" {
-		endData, parseErr := parseJSON(endEvt.JSONData)
-		if parseErr == nil {
+		endData := protoToJSON(endEvt.ProtoData)
+		if endData != nil {
 			summary, _ := endData["result_summary"].(string)
 			entry.Output = truncate(summary, maxOutputSize)
 
@@ -175,21 +178,26 @@ func uniqueSessionIDs(events []models.SessionEventLogModel) []string {
 	return result
 }
 
-func extractCallID(jsonData string) string {
-	data, err := parseJSON(jsonData)
-	if err != nil {
+// protoToJSON deserializes ProtoData and converts to JSON map via eventformat.SerializeForMobile.
+func protoToJSON(protoData []byte) map[string]interface{} {
+	if len(protoData) == 0 {
+		return nil
+	}
+	pbEvent := &pb.SessionEvent{}
+	if err := proto.Unmarshal(protoData, pbEvent); err != nil {
+		return nil
+	}
+	return eventformat.SerializeForMobile(pbEvent)
+}
+
+// extractCallIDFromProto extracts call_id from ProtoData via JSON conversion.
+func extractCallIDFromProto(protoData []byte) string {
+	data := protoToJSON(protoData)
+	if data == nil {
 		return ""
 	}
 	callID, _ := data["call_id"].(string)
 	return callID
-}
-
-func parseJSON(raw string) (map[string]interface{}, error) {
-	var data map[string]interface{}
-	if err := json.Unmarshal([]byte(raw), &data); err != nil {
-		return nil, err
-	}
-	return data, nil
 }
 
 func formatArguments(v interface{}) string {

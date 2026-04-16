@@ -33,7 +33,6 @@ type DocumentRepository interface {
 	DeleteChunksByDocument(ctx context.Context, documentID string) error
 	DeleteDocument(ctx context.Context, id string) error
 	GetDocumentByID(ctx context.Context, id string) (*models.KnowledgeDocument, error)
-	ListDocumentsByAgent(ctx context.Context, agentName string) ([]models.KnowledgeDocument, error)
 	ListDocumentsByKB(ctx context.Context, kbID string) ([]models.KnowledgeDocument, error)
 	DeleteDocumentsByKB(ctx context.Context, kbID string) error
 	DeleteChunksByKB(ctx context.Context, kbID string) error
@@ -134,7 +133,6 @@ func (s *UploadService) UploadFileToKB(ctx context.Context, tenantID, kbID, embe
 		KnowledgeBaseID: kbID,
 		TenantID:        tenantID,
 		FilePath:        filePath,
-		FileName:        fileName,
 		FileType:        fileType,
 		FileSize:        fileSize,
 		FileHash:        fileHash,
@@ -161,7 +159,7 @@ func (s *UploadService) UploadFileToKB(ctx context.Context, tenantID, kbID, embe
 	}, nil
 }
 
-// UploadFile stores a file on disk (legacy agent-scoped path).
+// UploadFile stores a file on disk (legacy agent-scoped path, creates KB-scoped record).
 func (s *UploadService) UploadFile(ctx context.Context, tenantID, agentName, fileName, fileType string, fileSize int64, fileHash string, content []byte) (*FileResponse, error) {
 	if _, err := s.resolveEmbeddingProvider(ctx, agentName); err != nil {
 		return nil, fmt.Errorf("cannot upload: %w", err)
@@ -183,9 +181,7 @@ func (s *UploadService) UploadFile(ctx context.Context, tenantID, agentName, fil
 	doc := &models.KnowledgeDocument{
 		ID:        docID,
 		TenantID:  tenantID,
-		AgentName: agentName,
 		FilePath:  filePath,
-		FileName:  fileName,
 		FileType:  fileType,
 		FileSize:  fileSize,
 		FileHash:  fileHash,
@@ -288,13 +284,12 @@ func (s *UploadService) indexFileAsyncKB(docID, tenantID, kbID, embeddingModelID
 			continue
 		}
 		chunkModels = append(chunkModels, models.KnowledgeChunk{
-			ID:              uuid.New().String(),
-			DocumentID:      docID,
-			KnowledgeBaseID: kbID,
-			TenantID:        tenantID,
-			Content:         c.Content,
-			ChunkOrder:      c.Order,
-			Embedding:       pgvector.NewVector(embeddings[i]),
+			ID:         uuid.New().String(),
+			DocumentID: docID,
+			TenantID:   tenantID,
+			Content:    c.Content,
+			ChunkOrder: c.Order,
+			Embedding:  pgvector.NewVector(embeddings[i]),
 		})
 	}
 
@@ -371,7 +366,6 @@ func (s *UploadService) indexFileAsync(docID, tenantID, agentName, fileName, con
 			ID:         uuid.New().String(),
 			DocumentID: docID,
 			TenantID:   tenantID,
-			AgentName:  agentName,
 			Content:    c.Content,
 			ChunkOrder: c.Order,
 			Embedding:  pgvector.NewVector(embeddings[i]),
@@ -421,15 +415,6 @@ func (s *UploadService) updateDocStatus(ctx context.Context, docID, status, stat
 	}
 }
 
-// ListFiles returns knowledge files for an agent (legacy, tenant-scoped).
-func (s *UploadService) ListFiles(ctx context.Context, agentName string) ([]FileResponse, error) {
-	docs, err := s.repo.ListDocumentsByAgent(ctx, agentName)
-	if err != nil {
-		return nil, fmt.Errorf("list documents: %w", err)
-	}
-	return docsToResponse(docs), nil
-}
-
 // ListFilesByKB returns knowledge files for a knowledge base (tenant-scoped).
 func (s *UploadService) ListFilesByKB(ctx context.Context, kbID string) ([]FileResponse, error) {
 	docs, err := s.repo.ListDocumentsByKB(ctx, kbID)
@@ -445,7 +430,7 @@ func docsToResponse(docs []models.KnowledgeDocument) []FileResponse {
 		f := FileResponse{
 			ID:              doc.ID,
 			KnowledgeBaseID: doc.KnowledgeBaseID,
-			FileName:        doc.FileName,
+			FileName:        doc.FileName(),
 			FileType:        doc.FileType,
 			FileSize:        doc.FileSize,
 			Status:          doc.Status,
@@ -459,23 +444,6 @@ func docsToResponse(docs []models.KnowledgeDocument) []FileResponse {
 		files = append(files, f)
 	}
 	return files
-}
-
-// DeleteFile removes a file, its chunks, and the physical file.
-// Verifies ownership (agent_name + tenant_id) before deletion to prevent cross-tenant access.
-func (s *UploadService) DeleteFile(ctx context.Context, agentName, fileID string) error {
-	doc, err := s.repo.GetDocumentByID(ctx, fileID)
-	if err != nil {
-		return fmt.Errorf("get document: %w", err)
-	}
-	if doc == nil || doc.AgentName != agentName {
-		return fmt.Errorf("file not found")
-	}
-	tenantID := tenantFromCtx(ctx)
-	if doc.TenantID != tenantID {
-		return fmt.Errorf("file not found")
-	}
-	return s.deleteDocFull(ctx, doc)
 }
 
 // DeleteFileByKB removes a file belonging to a KB.
@@ -507,32 +475,6 @@ func (s *UploadService) deleteDocFull(ctx context.Context, doc *models.Knowledge
 	return nil
 }
 
-// ReindexFile re-indexes a single file by deleting old chunks and re-chunking.
-func (s *UploadService) ReindexFile(ctx context.Context, agentName, fileID string) error {
-	doc, err := s.repo.GetDocumentByID(ctx, fileID)
-	if err != nil || doc == nil || doc.AgentName != agentName {
-		return fmt.Errorf("file not found")
-	}
-	tenantID := tenantFromCtx(ctx)
-	if doc.TenantID != tenantID {
-		return fmt.Errorf("file not found")
-	}
-
-	content, err := os.ReadFile(doc.FilePath)
-	if err != nil {
-		s.updateDocStatus(ctx, fileID, "error", fmt.Sprintf("read file failed: %v", err), 0)
-		return fmt.Errorf("read file: %w", err)
-	}
-
-	if err := s.repo.DeleteChunksByDocument(ctx, fileID); err != nil {
-		return fmt.Errorf("delete old chunks: %w", err)
-	}
-
-	s.updateDocStatus(ctx, fileID, "indexing", "", 0)
-	go s.indexFileAsync(fileID, doc.TenantID, agentName, doc.FileName, string(content))
-	return nil
-}
-
 // ReindexFileByKB re-indexes a file belonging to a KB.
 func (s *UploadService) ReindexFileByKB(ctx context.Context, kbID, embeddingModelID, fileID string) error {
 	doc, err := s.repo.GetDocumentByID(ctx, fileID)
@@ -555,7 +497,7 @@ func (s *UploadService) ReindexFileByKB(ctx context.Context, kbID, embeddingMode
 	}
 
 	s.updateDocStatus(ctx, fileID, "indexing", "", 0)
-	go s.indexFileAsyncKB(fileID, doc.TenantID, kbID, embeddingModelID, doc.FileName, string(content))
+	go s.indexFileAsyncKB(fileID, doc.TenantID, kbID, embeddingModelID, doc.FileName(), string(content))
 	return nil
 }
 

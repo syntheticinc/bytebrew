@@ -1,13 +1,13 @@
 package eventstore
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/eventformat"
 	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 )
@@ -35,15 +35,11 @@ func New(db *gorm.DB) (*Store, error) {
 // Append persists a session event and returns the UUID.
 // The proto is marshaled WITHOUT EventId (unknown pre-insert). Callers should
 // set event.EventId = id after Append returns.
+// jsonData is accepted for API compatibility but no longer persisted (json_data column dropped in migration 029).
 func (s *Store) Append(sessionID, eventType string, event *pb.SessionEvent, jsonData map[string]interface{}) (string, error) {
 	protoBytes, err := proto.Marshal(event)
 	if err != nil {
 		return "", fmt.Errorf("marshal proto: %w", err)
-	}
-
-	jsonBytes, err := json.Marshal(jsonData)
-	if err != nil {
-		return "", fmt.Errorf("marshal json: %w", err)
 	}
 
 	m := models.SessionEventLogModel{
@@ -51,7 +47,6 @@ func (s *Store) Append(sessionID, eventType string, event *pb.SessionEvent, json
 		SessionID: sessionID,
 		EventType: eventType,
 		ProtoData: protoBytes,
-		JSONData:  string(jsonBytes),
 	}
 
 	if err := s.db.Create(&m).Error; err != nil {
@@ -111,10 +106,8 @@ func scanEventModels(ms []models.SessionEventLogModel) ([]StoredEvent, error) {
 		}
 		pbEvent.EventId = m.ID
 
-		var jsonData map[string]interface{}
-		if err := json.Unmarshal([]byte(m.JSONData), &jsonData); err != nil {
-			return nil, fmt.Errorf("unmarshal json for event %s: %w", m.ID, err)
-		}
+		// Generate JSON on-the-fly from proto (json_data column dropped in migration 029).
+		jsonData := eventformat.SerializeForMobile(pbEvent)
 
 		events = append(events, StoredEvent{
 			ID:        m.ID,

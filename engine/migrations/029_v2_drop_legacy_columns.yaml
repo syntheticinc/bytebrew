@@ -1,0 +1,25 @@
+databaseChangeLog:
+  - changeSet:
+      id: 029-drop-legacy-columns
+      author: bytebrew
+      comment: >
+        Group Q.3: drop legacy columns per target-schema.dbml.
+        session_event_log.json_data (proto_data canonical, JSON on-the-fly).
+        knowledge_documents.file_name (derivable as basename(file_path)).
+        knowledge_documents.agent_name (pre-KB migration legacy).
+        knowledge_chunks.agent_name (pre-KB legacy).
+        knowledge_chunks.knowledge_base_id (derive via document->KB joins).
+        knowledge_base_agents: agent_name varchar -> agent_id uuid.
+      changes:
+        - sql:
+            sql: >
+              ALTER TABLE session_event_log DROP COLUMN IF EXISTS json_data;
+
+              ALTER TABLE knowledge_documents DROP COLUMN IF EXISTS file_name;
+              ALTER TABLE knowledge_documents DROP COLUMN IF EXISTS agent_name;
+
+              ALTER TABLE knowledge_chunks DROP COLUMN IF EXISTS agent_name;
+              ALTER TABLE knowledge_chunks DROP COLUMN IF EXISTS knowledge_base_id;
+
+              ALTER TABLE knowledge_base_agents DROP COLUMN IF EXISTS agent_name;
+              ALTER TABLE knowledge_base_agents ADD COLUMN IF NOT EXISTS agent_id uuid;

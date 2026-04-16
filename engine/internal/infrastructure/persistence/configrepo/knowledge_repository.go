@@ -30,12 +30,12 @@ func (r *GORMKnowledgeRepository) tenantID(ctx context.Context) string {
 	return tid
 }
 
-// GetDocumentByPath returns a document by agent name and file path, or nil if not found.
-func (r *GORMKnowledgeRepository) GetDocumentByPath(ctx context.Context, agentName, filePath string) (*models.KnowledgeDocument, error) {
+// GetDocumentByPath returns a document by KB ID and file path, or nil if not found.
+func (r *GORMKnowledgeRepository) GetDocumentByPath(ctx context.Context, kbID, filePath string) (*models.KnowledgeDocument, error) {
 	tenantID := r.tenantID(ctx)
 	var doc models.KnowledgeDocument
 	err := r.db.WithContext(ctx).
-		Where("tenant_id = ? AND agent_name = ? AND file_path = ?", tenantID, agentName, filePath).
+		Where("tenant_id = ? AND knowledge_base_id = ? AND file_path = ?", tenantID, kbID, filePath).
 		First(&doc).Error
 	if err == gorm.ErrRecordNotFound {
 		return nil, nil
@@ -54,20 +54,14 @@ func (r *GORMKnowledgeRepository) SaveDocument(ctx context.Context, doc *models.
 	return nil
 }
 
-// DeleteDocumentsByAgent removes all documents for a given agent.
-func (r *GORMKnowledgeRepository) DeleteDocumentsByAgent(ctx context.Context, agentName string) error {
-	if err := r.db.WithContext(ctx).Where("agent_name = ?", agentName).Delete(&models.KnowledgeDocument{}).Error; err != nil {
-		return fmt.Errorf("delete documents by agent: %w", err)
-	}
-	return nil
-}
-
-// ListDocumentsByAgent returns all documents belonging to a given agent (tenant-scoped).
-func (r *GORMKnowledgeRepository) ListDocumentsByAgent(ctx context.Context, agentName string) ([]models.KnowledgeDocument, error) {
+// ListDocumentsByKB returns all documents belonging to a knowledge base (tenant-scoped).
+func (r *GORMKnowledgeRepository) ListDocumentsByKB(ctx context.Context, kbID string) ([]models.KnowledgeDocument, error) {
 	tenantID := r.tenantID(ctx)
 	var docs []models.KnowledgeDocument
-	if err := r.db.WithContext(ctx).Where("tenant_id = ? AND agent_name = ?", tenantID, agentName).Find(&docs).Error; err != nil {
-		return nil, fmt.Errorf("list documents by agent: %w", err)
+	if err := r.db.WithContext(ctx).
+		Where("tenant_id = ? AND knowledge_base_id = ?", tenantID, kbID).
+		Find(&docs).Error; err != nil {
+		return nil, fmt.Errorf("list documents by KB: %w", err)
 	}
 	return docs, nil
 }
@@ -112,73 +106,35 @@ func (r *GORMKnowledgeRepository) DeleteChunksByDocument(ctx context.Context, do
 	return nil
 }
 
-// DeleteChunksByAgent removes all chunks belonging to an agent.
-func (r *GORMKnowledgeRepository) DeleteChunksByAgent(ctx context.Context, agentName string) error {
-	if err := r.db.WithContext(ctx).Where("agent_name = ?", agentName).Delete(&models.KnowledgeChunk{}).Error; err != nil {
-		return fmt.Errorf("delete chunks by agent: %w", err)
-	}
-	return nil
-}
-
-// SearchSimilar finds the most similar chunks by cosine distance using pgvector.
-// Scoped by tenant_id + agent_name for tenant isolation.
-func (r *GORMKnowledgeRepository) SearchSimilar(ctx context.Context, agentName string, embedding pgvector.Vector, limit int, similarityThreshold float64) ([]models.KnowledgeChunk, error) {
-	tenantID := r.tenantID(ctx)
-	var chunks []models.KnowledgeChunk
-	var err error
-	if similarityThreshold > 0 {
-		err = r.db.WithContext(ctx).
-			Raw("SELECT * FROM knowledge_chunks WHERE tenant_id = ? AND agent_name = ? AND (1 - (embedding <=> ?)) >= ? ORDER BY embedding <=> ? LIMIT ?",
-				tenantID, agentName, embedding, similarityThreshold, embedding, limit).
-			Scan(&chunks).Error
-	} else {
-		err = r.db.WithContext(ctx).
-			Raw("SELECT * FROM knowledge_chunks WHERE tenant_id = ? AND agent_name = ? ORDER BY embedding <=> ? LIMIT ?",
-				tenantID, agentName, embedding, limit).
-			Scan(&chunks).Error
-	}
-	if err != nil {
-		return nil, fmt.Errorf("search similar: %w", err)
-	}
-	return chunks, nil
-}
-
 // SearchSimilarByKBs finds the most similar chunks across multiple knowledge bases.
 func (r *GORMKnowledgeRepository) SearchSimilarByKBs(ctx context.Context, kbIDs []string, embedding pgvector.Vector, limit int, similarityThreshold float64) ([]models.KnowledgeChunk, error) {
 	if len(kbIDs) == 0 {
 		return nil, nil
 	}
 	tenantID := r.tenantID(ctx)
+	// Join through knowledge_documents to get KB-scoped chunks (knowledge_base_id dropped from chunks).
 	var chunks []models.KnowledgeChunk
 	var err error
 	if similarityThreshold > 0 {
 		err = r.db.WithContext(ctx).
-			Raw("SELECT * FROM knowledge_chunks WHERE tenant_id = ? AND knowledge_base_id IN ? AND (1 - (embedding <=> ?)) >= ? ORDER BY embedding <=> ? LIMIT ?",
+			Raw(`SELECT kc.* FROM knowledge_chunks kc
+				JOIN knowledge_documents kd ON kd.id = kc.document_id
+				WHERE kc.tenant_id = ? AND kd.knowledge_base_id IN ?
+				AND (1 - (kc.embedding <=> ?)) >= ?
+				ORDER BY kc.embedding <=> ? LIMIT ?`,
 				tenantID, kbIDs, embedding, similarityThreshold, embedding, limit).
 			Scan(&chunks).Error
 	} else {
 		err = r.db.WithContext(ctx).
-			Raw("SELECT * FROM knowledge_chunks WHERE tenant_id = ? AND knowledge_base_id IN ? ORDER BY embedding <=> ? LIMIT ?",
+			Raw(`SELECT kc.* FROM knowledge_chunks kc
+				JOIN knowledge_documents kd ON kd.id = kc.document_id
+				WHERE kc.tenant_id = ? AND kd.knowledge_base_id IN ?
+				ORDER BY kc.embedding <=> ? LIMIT ?`,
 				tenantID, kbIDs, embedding, limit).
 			Scan(&chunks).Error
 	}
 	if err != nil {
 		return nil, fmt.Errorf("search similar by KBs: %w", err)
-	}
-	return chunks, nil
-}
-
-// SearchByKeyword finds chunks containing the keyword in their content (case-insensitive).
-// Scoped by tenant_id + agent_name for tenant isolation.
-func (r *GORMKnowledgeRepository) SearchByKeyword(ctx context.Context, agentName string, keyword string, limit int) ([]models.KnowledgeChunk, error) {
-	tenantID := r.tenantID(ctx)
-	var chunks []models.KnowledgeChunk
-	err := r.db.WithContext(ctx).
-		Where("tenant_id = ? AND agent_name = ? AND content ILIKE ?", tenantID, agentName, "%"+keyword+"%").
-		Limit(limit).
-		Find(&chunks).Error
-	if err != nil {
-		return nil, fmt.Errorf("search by keyword: %w", err)
 	}
 	return chunks, nil
 }
@@ -191,25 +147,16 @@ func (r *GORMKnowledgeRepository) SearchByKeywordKBs(ctx context.Context, kbIDs 
 	tenantID := r.tenantID(ctx)
 	var chunks []models.KnowledgeChunk
 	err := r.db.WithContext(ctx).
-		Where("tenant_id = ? AND knowledge_base_id IN ? AND content ILIKE ?", tenantID, kbIDs, "%"+keyword+"%").
-		Limit(limit).
-		Find(&chunks).Error
+		Raw(`SELECT kc.* FROM knowledge_chunks kc
+			JOIN knowledge_documents kd ON kd.id = kc.document_id
+			WHERE kc.tenant_id = ? AND kd.knowledge_base_id IN ? AND kc.content ILIKE ?
+			LIMIT ?`,
+			tenantID, kbIDs, "%"+keyword+"%", limit).
+		Scan(&chunks).Error
 	if err != nil {
 		return nil, fmt.Errorf("search by keyword KBs: %w", err)
 	}
 	return chunks, nil
-}
-
-// ListDocumentsByKB returns all documents belonging to a knowledge base (tenant-scoped).
-func (r *GORMKnowledgeRepository) ListDocumentsByKB(ctx context.Context, kbID string) ([]models.KnowledgeDocument, error) {
-	tenantID := r.tenantID(ctx)
-	var docs []models.KnowledgeDocument
-	if err := r.db.WithContext(ctx).
-		Where("tenant_id = ? AND knowledge_base_id = ?", tenantID, kbID).
-		Find(&docs).Error; err != nil {
-		return nil, fmt.Errorf("list documents by KB: %w", err)
-	}
-	return docs, nil
 }
 
 // DeleteDocumentsByKB removes all documents for a given knowledge base.
@@ -222,32 +169,40 @@ func (r *GORMKnowledgeRepository) DeleteDocumentsByKB(ctx context.Context, kbID 
 	return nil
 }
 
-// DeleteChunksByKB removes all chunks for a given knowledge base.
+// DeleteChunksByKB removes all chunks for documents belonging to a knowledge base.
 func (r *GORMKnowledgeRepository) DeleteChunksByKB(ctx context.Context, kbID string) error {
 	if err := r.db.WithContext(ctx).
-		Where("knowledge_base_id = ?", kbID).
-		Delete(&models.KnowledgeChunk{}).Error; err != nil {
+		Exec(`DELETE FROM knowledge_chunks WHERE document_id IN
+			(SELECT id FROM knowledge_documents WHERE knowledge_base_id = ?)`, kbID).Error; err != nil {
 		return fmt.Errorf("delete chunks by KB: %w", err)
 	}
 	return nil
 }
 
-// GetStats returns document count, chunk count, and last indexed time for an agent (tenant-scoped).
-func (r *GORMKnowledgeRepository) GetStats(ctx context.Context, agentName string) (docCount int, chunkCount int, lastIndexed *time.Time, err error) {
+// GetStatsByKBs returns document count, chunk count, and last indexed time for given KB IDs (tenant-scoped).
+func (r *GORMKnowledgeRepository) GetStatsByKBs(ctx context.Context, kbIDs []string) (docCount int, chunkCount int, lastIndexed *time.Time, err error) {
+	if len(kbIDs) == 0 {
+		return 0, 0, nil, nil
+	}
 	tenantID := r.tenantID(ctx)
 	var dc int64
-	if err := r.db.WithContext(ctx).Model(&models.KnowledgeDocument{}).Where("tenant_id = ? AND agent_name = ?", tenantID, agentName).Count(&dc).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&models.KnowledgeDocument{}).
+		Where("tenant_id = ? AND knowledge_base_id IN ?", tenantID, kbIDs).Count(&dc).Error; err != nil {
 		return 0, 0, nil, fmt.Errorf("count documents: %w", err)
 	}
 
 	var cc int64
-	if err := r.db.WithContext(ctx).Model(&models.KnowledgeChunk{}).Where("tenant_id = ? AND agent_name = ?", tenantID, agentName).Count(&cc).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Raw(`SELECT COUNT(*) FROM knowledge_chunks kc
+			JOIN knowledge_documents kd ON kd.id = kc.document_id
+			WHERE kc.tenant_id = ? AND kd.knowledge_base_id IN ?`, tenantID, kbIDs).
+		Scan(&cc).Error; err != nil {
 		return 0, 0, nil, fmt.Errorf("count chunks: %w", err)
 	}
 
 	var doc models.KnowledgeDocument
 	result := r.db.WithContext(ctx).
-		Where("tenant_id = ? AND agent_name = ?", tenantID, agentName).
+		Where("tenant_id = ? AND knowledge_base_id IN ?", tenantID, kbIDs).
 		Order("indexed_at DESC").
 		First(&doc)
 	if result.Error != nil && result.Error != gorm.ErrRecordNotFound {

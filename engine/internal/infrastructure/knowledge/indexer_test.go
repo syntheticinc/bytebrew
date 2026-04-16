@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
-	"log/slog"
 )
 
 // mockEmbeddingProvider returns fixed embeddings.
@@ -37,7 +37,7 @@ func (m *mockEmbeddingProvider) EmbedBatch(ctx context.Context, texts []string) 
 
 // mockKnowledgeRepository stores documents and chunks in memory.
 type mockKnowledgeRepository struct {
-	documents     map[string]*models.KnowledgeDocument // key: agentName+filePath
+	documents     map[string]*models.KnowledgeDocument // key: kbID+filePath
 	chunks        map[string][]models.KnowledgeChunk   // key: documentID
 	savedDocs     []*models.KnowledgeDocument
 	savedChunks   []models.KnowledgeChunk
@@ -51,13 +51,13 @@ func newMockRepo() *mockKnowledgeRepository {
 	}
 }
 
-func (m *mockKnowledgeRepository) GetDocumentByPath(_ context.Context, agentName, filePath string) (*models.KnowledgeDocument, error) {
-	key := agentName + ":" + filePath
+func (m *mockKnowledgeRepository) GetDocumentByPath(_ context.Context, kbID, filePath string) (*models.KnowledgeDocument, error) {
+	key := kbID + ":" + filePath
 	return m.documents[key], nil
 }
 
 func (m *mockKnowledgeRepository) SaveDocument(_ context.Context, doc *models.KnowledgeDocument) error {
-	key := doc.AgentName + ":" + doc.FilePath
+	key := doc.KnowledgeBaseID + ":" + doc.FilePath
 	m.documents[key] = doc
 	m.savedDocs = append(m.savedDocs, doc)
 	return nil
@@ -77,10 +77,10 @@ func (m *mockKnowledgeRepository) DeleteChunksByDocument(_ context.Context, docu
 	return nil
 }
 
-func (m *mockKnowledgeRepository) ListDocumentsByAgent(_ context.Context, agentName string) ([]models.KnowledgeDocument, error) {
+func (m *mockKnowledgeRepository) ListDocumentsByKB(_ context.Context, kbID string) ([]models.KnowledgeDocument, error) {
 	var result []models.KnowledgeDocument
 	for _, doc := range m.documents {
-		if doc.AgentName == agentName {
+		if doc.KnowledgeBaseID == kbID {
 			result = append(result, *doc)
 		}
 	}
@@ -96,7 +96,7 @@ func TestIndexer_IndexFolder_NewFiles(t *testing.T) {
 	embedder := &mockEmbeddingProvider{}
 	indexer := NewIndexer(embedder, repo, slog.Default())
 
-	err := indexer.IndexFolder(context.Background(), "test-agent", dir)
+	err := indexer.IndexFolder(context.Background(), "kb-test-1", dir)
 	require.NoError(t, err)
 
 	assert.Equal(t, 2, len(repo.savedDocs), "should index 2 documents")
@@ -114,12 +114,12 @@ func TestIndexer_IndexFolder_SkipsUnchanged(t *testing.T) {
 	indexer := NewIndexer(embedder, repo, slog.Default())
 
 	// First index
-	err := indexer.IndexFolder(context.Background(), "agent1", dir)
+	err := indexer.IndexFolder(context.Background(), "kb-1", dir)
 	require.NoError(t, err)
 	assert.Equal(t, 1, embedder.callCount)
 
 	// Second index — same content, should skip
-	err = indexer.IndexFolder(context.Background(), "agent1", dir)
+	err = indexer.IndexFolder(context.Background(), "kb-1", dir)
 	require.NoError(t, err)
 	assert.Equal(t, 1, embedder.callCount, "should not re-embed unchanged file")
 }
@@ -134,7 +134,7 @@ func TestIndexer_IndexFolder_ReindexesChanged(t *testing.T) {
 	indexer := NewIndexer(embedder, repo, slog.Default())
 
 	// First index
-	err := indexer.IndexFolder(context.Background(), "agent1", dir)
+	err := indexer.IndexFolder(context.Background(), "kb-1", dir)
 	require.NoError(t, err)
 	assert.Equal(t, 1, embedder.callCount)
 
@@ -142,7 +142,7 @@ func TestIndexer_IndexFolder_ReindexesChanged(t *testing.T) {
 	require.NoError(t, os.WriteFile(filePath, []byte("# Version 2 with more content"), 0644))
 
 	// Second index — content changed, should re-embed
-	err = indexer.IndexFolder(context.Background(), "agent1", dir)
+	err = indexer.IndexFolder(context.Background(), "kb-1", dir)
 	require.NoError(t, err)
 	assert.Equal(t, 2, embedder.callCount, "should re-embed changed file")
 	assert.True(t, len(repo.deletedChunks) > 0, "should delete old chunks")
@@ -158,7 +158,7 @@ func TestIndexer_IndexFolder_IgnoresUnsupportedFiles(t *testing.T) {
 	embedder := &mockEmbeddingProvider{}
 	indexer := NewIndexer(embedder, repo, slog.Default())
 
-	err := indexer.IndexFolder(context.Background(), "agent1", dir)
+	err := indexer.IndexFolder(context.Background(), "kb-1", dir)
 	require.NoError(t, err)
 
 	assert.Equal(t, 1, len(repo.savedDocs), "should only index .md file")
@@ -175,22 +175,22 @@ func TestIndexer_IndexFolder_SubdirectoryFiles(t *testing.T) {
 	embedder := &mockEmbeddingProvider{}
 	indexer := NewIndexer(embedder, repo, slog.Default())
 
-	err := indexer.IndexFolder(context.Background(), "agent1", dir)
+	err := indexer.IndexFolder(context.Background(), "kb-1", dir)
 	require.NoError(t, err)
 
 	assert.Equal(t, 2, len(repo.savedDocs), "should index files in subdirectories")
 }
 
-func TestIndexer_IndexFolder_EmptyAgent(t *testing.T) {
+func TestIndexer_IndexFolder_EmptyKBID(t *testing.T) {
 	indexer := NewIndexer(&mockEmbeddingProvider{}, newMockRepo(), slog.Default())
 	err := indexer.IndexFolder(context.Background(), "", "/tmp")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "agent name")
+	assert.Contains(t, err.Error(), "knowledge base ID")
 }
 
 func TestIndexer_IndexFolder_InvalidPath(t *testing.T) {
 	indexer := NewIndexer(&mockEmbeddingProvider{}, newMockRepo(), slog.Default())
-	err := indexer.IndexFolder(context.Background(), "agent1", "/nonexistent/path/abc123")
+	err := indexer.IndexFolder(context.Background(), "kb-1", "/nonexistent/path/abc123")
 	assert.Error(t, err)
 }
 
@@ -200,7 +200,7 @@ func TestIndexer_IndexFolder_EmptyDirectory(t *testing.T) {
 	repo := newMockRepo()
 	indexer := NewIndexer(&mockEmbeddingProvider{}, repo, slog.Default())
 
-	err := indexer.IndexFolder(context.Background(), "agent1", dir)
+	err := indexer.IndexFolder(context.Background(), "kb-1", dir)
 	require.NoError(t, err)
 	assert.Equal(t, 0, len(repo.savedDocs))
 }

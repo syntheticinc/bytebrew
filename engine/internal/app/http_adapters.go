@@ -315,12 +315,21 @@ func (r *agentSchemaIDResolver) ResolveSchemaID(ctx context.Context, agentName s
 // taskServiceHTTPAdapter and its helpers live in task_http_adapter.go.
 
 // knowledgeStatsHTTPAdapter bridges GORMKnowledgeRepository to the http.KnowledgeStats interface.
+// Resolves agent name → linked KB IDs, then aggregates stats across KBs.
 type knowledgeStatsHTTPAdapter struct {
-	repo *configrepo.GORMKnowledgeRepository
+	repo   *configrepo.GORMKnowledgeRepository
+	kbRepo *configrepo.GORMKnowledgeBaseRepository
 }
 
 func (a *knowledgeStatsHTTPAdapter) GetStats(ctx context.Context, agentName string) (int, int, *time.Time, error) {
-	return a.repo.GetStats(ctx, agentName)
+	if a.kbRepo == nil {
+		return 0, 0, nil, nil
+	}
+	kbIDs, err := a.kbRepo.ListKBsByAgentName(ctx, agentName)
+	if err != nil || len(kbIDs) == 0 {
+		return 0, 0, nil, nil
+	}
+	return a.repo.GetStatsByKBs(ctx, kbIDs)
 }
 
 // knowledgeReindexerHTTPAdapter bridges knowledge.Indexer to the http.KnowledgeReindexer interface.
@@ -331,7 +340,7 @@ type knowledgeReindexerHTTPAdapter struct {
 
 // knowledgeIndexer is the consumer-side interface for indexing.
 type knowledgeIndexer interface {
-	IndexFolder(ctx context.Context, agentName string, folderPath string) error
+	IndexFolder(ctx context.Context, kbID string, folderPath string) error
 }
 
 func (a *knowledgeReindexerHTTPAdapter) Reindex(ctx context.Context, agentName string) error {

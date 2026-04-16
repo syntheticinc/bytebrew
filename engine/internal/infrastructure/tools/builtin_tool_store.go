@@ -287,16 +287,14 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 				}
 			}
 		}
-		// Try KB-scoped search (many-to-many) first, fall back to legacy agent_name search.
-		var knowledgeTool tool.InvokableTool
+		// Resolve linked KB IDs for the agent.
+		var kbIDs []string
 		if r.knowledgeKBResolver != nil {
-			if kbIDs, err := r.knowledgeKBResolver.ListKBsByAgentName(ctx, rc.Agent.Record.Name); err == nil && len(kbIDs) > 0 {
-				knowledgeTool = NewKnowledgeSearchToolKB(rc.Agent.Record.Name, kbIDs, ks, ke, topK, simThreshold)
+			if ids, err := r.knowledgeKBResolver.ListKBsByAgentName(ctx, rc.Agent.Record.Name); err == nil {
+				kbIDs = ids
 			}
 		}
-		if knowledgeTool == nil {
-			knowledgeTool = NewKnowledgeSearchTool(rc.Agent.Record.Name, ks, ke, topK, simThreshold)
-		}
+		knowledgeTool := NewKnowledgeSearchTool(rc.Agent.Record.Name, kbIDs, ks, ke, topK, simThreshold)
 		tools = append(tools, knowledgeTool)
 	} else if hasToolInList(rc.Agent.Record.BuiltinTools, "knowledge_search") {
 		slog.WarnContext(ctx, "agent has knowledge_search in tools but knowledge not available — skipping",
@@ -412,16 +410,14 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 				}
 			}
 		}
-		// Try KB-scoped search (many-to-many) first, fall back to legacy agent_name search.
-		var knowledgeTool tool.InvokableTool
+		// Resolve linked KB IDs for the agent.
+		var kbIDs []string
 		if r.knowledgeKBResolver != nil && deps.AgentName != "" {
-			if kbIDs, err := r.knowledgeKBResolver.ListKBsByAgentName(ctx, deps.AgentName); err == nil && len(kbIDs) > 0 {
-				knowledgeTool = NewKnowledgeSearchToolKB(deps.AgentName, kbIDs, r.knowledgeSearcher, legacyEmbedder, legacyTopK, legacySimThreshold)
+			if ids, err := r.knowledgeKBResolver.ListKBsByAgentName(ctx, deps.AgentName); err == nil {
+				kbIDs = ids
 			}
 		}
-		if knowledgeTool == nil {
-			knowledgeTool = NewKnowledgeSearchTool(deps.AgentName, r.knowledgeSearcher, legacyEmbedder, legacyTopK, legacySimThreshold)
-		}
+		knowledgeTool := NewKnowledgeSearchTool(deps.AgentName, kbIDs, r.knowledgeSearcher, legacyEmbedder, legacyTopK, legacySimThreshold)
 		resolved = append(resolved, knowledgeTool)
 	} else if hasToolInList(allToolNames, "knowledge_search") {
 		slog.WarnContext(ctx, "knowledge_search in tool list but knowledge not available — skipping",
