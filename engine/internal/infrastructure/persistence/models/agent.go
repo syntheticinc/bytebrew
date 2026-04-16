@@ -16,8 +16,8 @@ type AgentModel struct {
 	Temperature    *float64  `gorm:"type:double precision"`
 	TopP           *float64  `gorm:"type:double precision"`
 	MaxTokens      *int      `gorm:""`
-	StopSequences  string    `gorm:"type:text"`
-	ConfirmBefore  string    `gorm:"type:text"`
+	StopSequences  string    `gorm:"type:jsonb"`
+	ConfirmBefore  string    `gorm:"type:jsonb"`
 	IsSystem       bool      `gorm:"not null;default:false"`
 	TenantID       string    `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`
 	CreatedAt      time.Time `gorm:"autoCreateTime"`

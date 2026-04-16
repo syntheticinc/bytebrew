@@ -40,7 +40,7 @@ func (m *modelServiceHTTPAdapter) ListModels(ctx context.Context) ([]deliveryhtt
 			ModelName:    p.ModelName,
 			HasAPIKey:    p.APIKeyEncrypted != "",
 			APIVersion:   p.APIVersion,
-			EmbeddingDim: p.EmbeddingDim,
+			EmbeddingDim: p.EmbeddingDim(),
 			CreatedAt:    p.CreatedAt.Format(time.RFC3339),
 		})
 	}
@@ -55,7 +55,9 @@ func (m *modelServiceHTTPAdapter) CreateModel(ctx context.Context, req deliveryh
 		ModelName:       req.ModelName,
 		APIKeyEncrypted: req.APIKey,
 		APIVersion:      req.APIVersion,
-		EmbeddingDim:    req.EmbeddingDim,
+	}
+	if req.EmbeddingDim > 0 {
+		provider.SetConfig(models.ModelConfig{EmbeddingDim: req.EmbeddingDim})
 	}
 
 	if err := m.repo.Create(ctx, provider); err != nil {
@@ -73,7 +75,7 @@ func (m *modelServiceHTTPAdapter) CreateModel(ctx context.Context, req deliveryh
 		ModelName:    provider.ModelName,
 		HasAPIKey:    provider.APIKeyEncrypted != "",
 		APIVersion:   provider.APIVersion,
-		EmbeddingDim: provider.EmbeddingDim,
+		EmbeddingDim: provider.EmbeddingDim(),
 		CreatedAt:    provider.CreatedAt.Format(time.RFC3339),
 	}, nil
 }
@@ -96,12 +98,14 @@ func (m *modelServiceHTTPAdapter) UpdateModel(ctx context.Context, name string, 
 	}
 
 	update := &models.LLMProviderModel{
-		Name:         req.Name,
-		Type:         req.Type,
-		BaseURL:      req.BaseURL,
-		ModelName:    req.ModelName,
-		APIVersion:   req.APIVersion,
-		EmbeddingDim: req.EmbeddingDim,
+		Name:       req.Name,
+		Type:       req.Type,
+		BaseURL:    req.BaseURL,
+		ModelName:  req.ModelName,
+		APIVersion: req.APIVersion,
+	}
+	if req.EmbeddingDim > 0 {
+		update.SetConfig(models.ModelConfig{EmbeddingDim: req.EmbeddingDim})
 	}
 	// Only update API key if provided (empty means keep existing).
 	if req.APIKey != "" {

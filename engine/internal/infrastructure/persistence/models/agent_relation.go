@@ -13,7 +13,7 @@ type AgentRelationModel struct {
 	SchemaID        string    `gorm:"type:uuid;not null;index"`
 	SourceAgentName string    `gorm:"type:varchar(255);not null"`
 	TargetAgentName string    `gorm:"type:varchar(255);not null"`
-	Config          string    `gorm:"type:text"` // JSON, optional routing hints (priority, conditions)
+	Config          string    `gorm:"type:jsonb"` // JSON, optional routing hints (priority, conditions)
 	TenantID        string    `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`
 	CreatedAt       time.Time `gorm:"autoCreateTime"`
 	UpdatedAt       time.Time `gorm:"autoUpdateTime"`

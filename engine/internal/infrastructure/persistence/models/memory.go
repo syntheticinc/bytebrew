@@ -9,7 +9,7 @@ type MemoryModel struct {
 	SchemaID  string    `gorm:"type:uuid;not null;index:idx_memories_schema_user"`
 	UserID    string    `gorm:"type:uuid;not null;index:idx_memories_schema_user"`
 	Content   string    `gorm:"type:text;not null"`
-	Metadata  string    `gorm:"type:text"` // JSON
+	Metadata  string    `gorm:"type:jsonb"` // JSON
 	TenantID  string    `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`
 	CreatedAt time.Time `gorm:"autoCreateTime;index:idx_memories_created"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime"`

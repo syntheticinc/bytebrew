@@ -53,3 +53,5 @@ databaseChangeLog:
       file: migrations/026_v2_fk_rewire_users.yaml
   - include:
       file: migrations/027_v2_add_tenant_id_and_fk_columns.yaml
+  - include:
+      file: migrations/028_v2_text_to_jsonb.yaml

@@ -15,10 +15,10 @@ type MCPServerModel struct {
 	Name           string    `gorm:"uniqueIndex;not null"`
 	Type           string    `gorm:"type:varchar(20);not null"`
 	Command        string    `gorm:"type:varchar(500)"`
-	Args           string    `gorm:"type:text"`
+	Args           string    `gorm:"type:jsonb"`
 	URL            string    `gorm:"type:varchar(500)"`
-	EnvVars        string    `gorm:"type:text"`
-	ForwardHeaders string    `gorm:"type:text"`                              // JSON array of HTTP header names to forward
+	EnvVars        string    `gorm:"type:jsonb"`
+	ForwardHeaders string    `gorm:"type:jsonb"`                             // JSON array of HTTP header names to forward
 	AuthType       string    `gorm:"type:varchar(30);not null;default:none"` // none, api_key, forward_headers, oauth2, service_account (AC-AUTH-01)
 	AuthKeyEnv     string    `gorm:"type:varchar(255)"`                      // env var for api_key
 	AuthTokenEnv   string    `gorm:"type:varchar(255)"`                      // env var for service_account/oauth2 token

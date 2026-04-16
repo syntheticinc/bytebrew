@@ -1,0 +1,63 @@
+databaseChangeLog:
+  # V2 Group Q.2 — text → jsonb type changes + models.embedding_dim → models.config
+  #
+  # 10 columns changed from text to jsonb per target-schema.dbml.
+  # models.embedding_dim moved into models.config jsonb.
+  # Pure DDL — ALTER COLUMN TYPE + ADD/DROP.
+
+  - changeSet:
+      id: 028-v2-text-to-jsonb
+      author: system
+      changes:
+        - sql:
+            sql: |
+              -- capabilities.config: text → jsonb (stores JSON like {"retention_days":30})
+              ALTER TABLE capabilities ALTER COLUMN config TYPE jsonb USING CASE WHEN config IS NOT NULL AND config != '' THEN config::jsonb ELSE NULL END;
+
+              -- agent_tools.config: text → jsonb (stores JSON config or empty)
+              ALTER TABLE agent_tools ALTER COLUMN config TYPE jsonb USING CASE WHEN config IS NOT NULL AND config != '' THEN config::jsonb ELSE NULL END;
+
+              -- agent_relations.config: text → jsonb (stores JSON routing hints)
+              ALTER TABLE agent_relations ALTER COLUMN config TYPE jsonb USING CASE WHEN config IS NOT NULL AND config != '' THEN config::jsonb ELSE NULL END;
+
+              -- memories.metadata: text → jsonb (stores JSON metadata)
+              ALTER TABLE memories ALTER COLUMN metadata TYPE jsonb USING CASE WHEN metadata IS NOT NULL AND metadata != '' THEN metadata::jsonb ELSE NULL END;
+
+              -- mcp_servers.args: text → jsonb (stores JSON array of args)
+              ALTER TABLE mcp_servers ALTER COLUMN args TYPE jsonb USING CASE WHEN args IS NOT NULL AND args != '' THEN args::jsonb ELSE NULL END;
+
+              -- mcp_servers.env_vars: text → jsonb (stores JSON object of env vars)
+              ALTER TABLE mcp_servers ALTER COLUMN env_vars TYPE jsonb USING CASE WHEN env_vars IS NOT NULL AND env_vars != '' THEN env_vars::jsonb ELSE NULL END;
+
+              -- mcp_servers.forward_headers: text → jsonb (stores JSON array of header names)
+              ALTER TABLE mcp_servers ALTER COLUMN forward_headers TYPE jsonb USING CASE WHEN forward_headers IS NOT NULL AND forward_headers != '' THEN forward_headers::jsonb ELSE NULL END;
+
+              -- agents.stop_sequences: text → jsonb (stores JSON array)
+              ALTER TABLE agents ALTER COLUMN stop_sequences TYPE jsonb USING CASE WHEN stop_sequences IS NOT NULL AND stop_sequences != '' THEN stop_sequences::jsonb ELSE NULL END;
+
+              -- agents.confirm_before: text → jsonb (stores JSON array of tool names)
+              ALTER TABLE agents ALTER COLUMN confirm_before TYPE jsonb USING CASE WHEN confirm_before IS NOT NULL AND confirm_before != '' THEN confirm_before::jsonb ELSE NULL END;
+
+              -- audit_logs.details: text → jsonb (stores JSON details)
+              ALTER TABLE audit_logs ALTER COLUMN details TYPE jsonb USING CASE WHEN details IS NOT NULL AND details != '' THEN details::jsonb ELSE NULL END;
+
+              -- models: add config jsonb, drop embedding_dim
+              ALTER TABLE models ADD COLUMN IF NOT EXISTS config jsonb NOT NULL DEFAULT '{}';
+              UPDATE models SET config = jsonb_build_object('embedding_dim', embedding_dim) WHERE embedding_dim IS NOT NULL AND embedding_dim > 0;
+              ALTER TABLE models DROP COLUMN IF EXISTS embedding_dim;
+      rollback:
+        - sql:
+            sql: |
+              ALTER TABLE capabilities ALTER COLUMN config TYPE text USING config::text;
+              ALTER TABLE agent_tools ALTER COLUMN config TYPE text USING config::text;
+              ALTER TABLE agent_relations ALTER COLUMN config TYPE text USING config::text;
+              ALTER TABLE memories ALTER COLUMN metadata TYPE text USING metadata::text;
+              ALTER TABLE mcp_servers ALTER COLUMN args TYPE text USING args::text;
+              ALTER TABLE mcp_servers ALTER COLUMN env_vars TYPE text USING env_vars::text;
+              ALTER TABLE mcp_servers ALTER COLUMN forward_headers TYPE text USING forward_headers::text;
+              ALTER TABLE agents ALTER COLUMN stop_sequences TYPE text USING stop_sequences::text;
+              ALTER TABLE agents ALTER COLUMN confirm_before TYPE text USING confirm_before::text;
+              ALTER TABLE audit_logs ALTER COLUMN details TYPE text USING details::text;
+              ALTER TABLE models ADD COLUMN IF NOT EXISTS embedding_dim integer DEFAULT 0;
+              UPDATE models SET embedding_dim = COALESCE((config->>'embedding_dim')::integer, 0);
+              ALTER TABLE models DROP COLUMN IF EXISTS config;

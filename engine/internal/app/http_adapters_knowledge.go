@@ -253,7 +253,7 @@ func resolveEmbeddingModelByID(db *gorm.DB, ctx context.Context, modelID string)
 		BaseURL:      llm.BaseURL,
 		APIKey:       llm.APIKeyEncrypted,
 		ModelName:    llm.ModelName,
-		EmbeddingDim: llm.EmbeddingDim,
+		EmbeddingDim: llm.EmbeddingDim(),
 	}, nil
 }
 
