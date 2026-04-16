@@ -1,0 +1,31 @@
+databaseChangeLog:
+  - changeSet:
+      id: 031-restructure-relations-sessions-tasks
+      author: bytebrew
+      comment: >
+        Group Q.5: Final column-level migration to target-schema.dbml.
+        agent_relations: source/target_agent_name varchar -> source/target_agent_id uuid.
+        sessions: drop agent_name, agent_id (session belongs to schema via schema_id).
+        tasks: drop agent_name, source, source_id, assigned_agent_id, depth.
+        triggers: drop agent_id (trigger targets schema via schema_id only).
+        messages.agent_id: varchar -> uuid.
+      changes:
+        - sql:
+            sql: >
+              ALTER TABLE agent_relations ADD COLUMN IF NOT EXISTS source_agent_id uuid;
+              ALTER TABLE agent_relations ADD COLUMN IF NOT EXISTS target_agent_id uuid;
+              ALTER TABLE agent_relations DROP COLUMN IF EXISTS source_agent_name;
+              ALTER TABLE agent_relations DROP COLUMN IF EXISTS target_agent_name;
+
+              ALTER TABLE sessions DROP COLUMN IF EXISTS agent_name;
+              ALTER TABLE sessions DROP COLUMN IF EXISTS agent_id;
+
+              ALTER TABLE tasks DROP COLUMN IF EXISTS agent_name;
+              ALTER TABLE tasks DROP COLUMN IF EXISTS source;
+              ALTER TABLE tasks DROP COLUMN IF EXISTS source_id;
+              ALTER TABLE tasks DROP COLUMN IF EXISTS assigned_agent_id;
+              ALTER TABLE tasks DROP COLUMN IF EXISTS depth;
+
+              ALTER TABLE triggers DROP COLUMN IF EXISTS agent_id;
+
+              ALTER TABLE messages ALTER COLUMN agent_id TYPE uuid USING CASE WHEN agent_id ~* '^[0-9a-f]{8}-' THEN agent_id::uuid ELSE NULL END;

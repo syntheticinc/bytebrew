@@ -97,9 +97,10 @@ func (e *TaskExecutor) Execute(ctx context.Context, taskID uuid.UUID) error {
 	ownSession := false
 	if sessionID == "" {
 		sessionID = uuid.NewString()
-		// Autonomous session: no user, no project, platform="cron". Schema scope is
-		// resolved per-tool-call from AgentSchemaResolver(t.AgentName) downstream.
-		e.sessionRegistry.CreateSession(sessionID, "", "", "", "cron", t.AgentName)
+		// Autonomous session: no user, no project, platform="cron". Agent name is
+		// no longer stored on the task (Q.5) — pass empty; schema scope is resolved
+		// per-tool-call from the session's schema downstream.
+		e.sessionRegistry.CreateSession(sessionID, "", "", "", "cron", "")
 		ownSession = true
 		// Persist the session id onto the task so admin / Inspect UI can trace
 		// which session produced the events for this cron-run. Best-effort — if
@@ -149,25 +150,13 @@ func (e *TaskExecutor) Execute(ctx context.Context, taskID uuid.UUID) error {
 	return nil
 }
 
-// isAutonomous returns true when a task cannot have a human in the loop:
-// Background mode, or any non-dashboard source (cron/webhook/API).
-//
-// Interactive dashboard tasks keep the existing needs_input → cancellation flow.
-// For V2 there is no HTTP ProvideInput endpoint — dashboard users who reach
-// needs_input can only cancel the task (until a future release re-introduces
-// explicit input delivery).
+// isAutonomous returns true when a task cannot have a human in the loop.
+// Q.5: Source field is dropped. Background mode is the only remaining signal.
 func isAutonomous(t *domain.EngineTask) bool {
 	if t == nil {
 		return false
 	}
-	if t.Mode == domain.TaskModeBackground {
-		return true
-	}
-	switch t.Source {
-	case domain.TaskSourceCron, domain.TaskSourceWebhook, domain.TaskSourceAPI:
-		return true
-	}
-	return false
+	return t.Mode == domain.TaskModeBackground
 }
 
 // finalizeSession stops the processor and removes the session iff the executor

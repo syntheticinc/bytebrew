@@ -14,8 +14,6 @@ import (
 
 // TaskFilter holds optional criteria for listing tasks.
 type TaskFilter struct {
-	Source       *domain.TaskSource
-	AgentName    *string
 	Status       *domain.EngineTaskStatus
 	UserID       *string
 	SessionID    *string
@@ -226,12 +224,6 @@ func cancelRecursive(tx *gorm.DB, id uuid.UUID, reason string, depth int, visite
 
 // applyTaskFilter adds WHERE clauses based on non-nil filter fields.
 func applyTaskFilter(q *gorm.DB, f TaskFilter) *gorm.DB {
-	if f.Source != nil {
-		q = q.Where("source = ?", string(*f.Source))
-	}
-	if f.AgentName != nil {
-		q = q.Where("agent_name = ?", *f.AgentName)
-	}
 	if f.Status != nil {
 		q = q.Where("status = ?", string(*f.Status))
 	}
@@ -372,23 +364,20 @@ func (r *GORMTaskRepository) GetReadySubtasks(ctx context.Context, parentID uuid
 }
 
 // toTaskModel maps a domain EngineTask to a GORM TaskModel.
+// toTaskModel maps a domain EngineTask to a GORM TaskModel.
+// Q.5: agent_name, source, source_id, assigned_agent_id, depth dropped.
 func toTaskModel(t *domain.EngineTask) models.TaskModel {
 	return models.TaskModel{
 		ID:                 t.ID,
 		Title:              t.Title,
 		Description:        t.Description,
 		AcceptanceCriteria: marshalStringSlice(t.AcceptanceCriteria),
-		AgentName:          t.AgentName,
-		Source:             string(t.Source),
-		SourceID:           t.SourceID,
 		UserID:             t.UserID,
 		SessionID:          strPtr(t.SessionID),
 		ParentTaskID:       t.ParentTaskID,
-		Depth:              t.Depth,
 		Status:             string(t.Status),
 		Mode:               string(t.Mode),
 		Priority:           t.Priority,
-		AssignedAgentID:    t.AssignedAgentID,
 		BlockedBy:          marshalUUIDSlice(t.BlockedBy),
 		Result:             t.Result,
 		Error:              t.Error,
@@ -462,23 +451,19 @@ func unmarshalUUIDSlice(s string) []uuid.UUID {
 }
 
 // toEngineTask maps a GORM TaskModel to a domain EngineTask.
+// Q.5: agent_name, source, source_id, assigned_agent_id, depth dropped.
 func toEngineTask(m *models.TaskModel) *domain.EngineTask {
 	return &domain.EngineTask{
 		ID:                 m.ID,
 		Title:              m.Title,
 		Description:        m.Description,
 		AcceptanceCriteria: unmarshalStringSlice(m.AcceptanceCriteria),
-		AgentName:          m.AgentName,
-		Source:             domain.TaskSource(m.Source),
-		SourceID:           m.SourceID,
 		UserID:             m.UserID,
 		SessionID:          derefStr(m.SessionID),
 		ParentTaskID:       m.ParentTaskID,
-		Depth:              m.Depth,
 		Status:             domain.EngineTaskStatus(m.Status),
 		Mode:               domain.TaskMode(m.Mode),
 		Priority:           m.Priority,
-		AssignedAgentID:    m.AssignedAgentID,
 		BlockedBy:          unmarshalUUIDSlice(m.BlockedBy),
 		Result:             m.Result,
 		Error:              m.Error,

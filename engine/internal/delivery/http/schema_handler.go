@@ -41,12 +41,15 @@ type UpdateSchemaRequest struct {
 // V2 has a single implicit DELEGATION relationship type (see
 // docs/architecture/agent-first-runtime.md §3.1). Optional Config carries
 // non-typing routing hints.
+// AgentRelationInfo is an agent_relation returned in API responses.
+// Q.5: source/target are now agent UUIDs internally but the JSON keys
+// remain "source"/"target" for API backward compatibility.
 type AgentRelationInfo struct {
-	ID              string                 `json:"id"`
-	SchemaID        string                 `json:"schema_id"`
-	SourceAgentName string                 `json:"source"`
-	TargetAgentName string                 `json:"target"`
-	Config          map[string]interface{} `json:"config,omitempty"`
+	ID            string                 `json:"id"`
+	SchemaID      string                 `json:"schema_id"`
+	SourceAgentID string                 `json:"source"`
+	TargetAgentID string                 `json:"target"`
+	Config        map[string]interface{} `json:"config,omitempty"`
 }
 
 // CreateAgentRelationRequest is the body for POST /api/v1/schemas/{id}/agent-relations.

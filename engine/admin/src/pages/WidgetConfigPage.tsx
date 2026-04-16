@@ -66,7 +66,7 @@ export default function WidgetConfigPage() {
     [triggers, config.triggerId],
   );
 
-  const agentName = selectedTrigger?.agent_name ?? '';
+  const agentName = selectedTrigger?.title ?? '';
 
   const snippet = useMemo(() => {
     if (!agentName) return '';
@@ -138,7 +138,7 @@ export default function WidgetConfigPage() {
                   onChange={(v) => update('triggerId', v)}
                   options={triggers.map((t) => ({
                     value: t.id,
-                    label: t.agent_name ? `${t.title} → ${t.agent_name}` : t.title,
+                    label: t.title,
                   }))}
                   hint="Each chat trigger routes incoming widget chats to a specific agent."
                 />

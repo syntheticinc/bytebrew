@@ -39,9 +39,7 @@ func toHTTPTaskResponse(t domain.EngineTask) deliveryhttp.TaskResponse {
 	return deliveryhttp.TaskResponse{
 		ID:           t.ID.String(),
 		Title:        t.Title,
-		AgentName:    t.AgentName,
 		Status:       string(t.Status),
-		Source:       string(t.Source),
 		Priority:     t.Priority,
 		ParentTaskID: parentID,
 		CreatedAt:    t.CreatedAt.Format(time.RFC3339),
@@ -125,8 +123,6 @@ func (a *taskServiceHTTPAdapter) CreateTask(ctx context.Context, req deliveryhtt
 		Title:              req.Title,
 		Description:        req.Description,
 		AcceptanceCriteria: req.AcceptanceCriteria,
-		AgentName:          req.AgentName,
-		Source:             string(domain.TaskSourceDashboard),
 		UserID:             actor.ID,
 		Priority:           req.Priority,
 		BlockedBy:          blockers,
@@ -149,13 +145,6 @@ func (a *taskServiceHTTPAdapter) buildRepoFilter(filter deliveryhttp.TaskListFil
 	repoFilter := configrepo.TaskFilter{
 		Limit:  filter.Limit,
 		Offset: filter.Offset,
-	}
-	if filter.AgentName != "" {
-		repoFilter.AgentName = &filter.AgentName
-	}
-	if filter.Source != "" {
-		src := domain.TaskSource(filter.Source)
-		repoFilter.Source = &src
 	}
 	if filter.Status != "" {
 		st := domain.EngineTaskStatus(filter.Status)
@@ -201,7 +190,6 @@ func (a *taskServiceHTTPAdapter) GetTask(ctx context.Context, id uuid.UUID, acto
 		Description:        t.Description,
 		AcceptanceCriteria: t.AcceptanceCriteria,
 		BlockedBy:          blockedByStrings(t.BlockedBy),
-		AssignedAgentID:    t.AssignedAgentID,
 		Mode:               string(t.Mode),
 		Result:             t.Result,
 		Error:              t.Error,

@@ -46,9 +46,6 @@ func (c *triggerTaskCreator) CreateFromTrigger(ctx context.Context, params task.
 	taskID, err := c.manager.CreateTask(ctx, tools.CreateEngineTaskParams{
 		Title:       params.Title,
 		Description: params.Description,
-		AgentName:   params.AgentName,
-		Source:      params.Source,
-		SourceID:    params.SourceID,
 	})
 	if err != nil {
 		return uuid.Nil, err
@@ -111,13 +108,8 @@ func StartCronScheduler(
 			continue
 		}
 		considered++
-		title, agentName, description := triggerTaskMetadata(&t)
-		if agentName == "" {
-			slog.Warn("cron trigger has no agent, skipping", "trigger_id", t.ID, "title", t.Title)
-			skipped++
-			continue
-		}
-		if err := scheduler.AddTrigger(t.Config.Schedule, title, description, agentName, t.ID); err != nil {
+		title, _, description := triggerTaskMetadata(&t)
+		if err := scheduler.AddTrigger(t.Config.Schedule, title, description, t.ID); err != nil {
 			slog.Warn("invalid cron schedule, skipping trigger", "trigger_id", t.ID, "schedule", t.Config.Schedule, "error", err)
 			skipped++
 			continue
@@ -140,16 +132,14 @@ func StartCronScheduler(
 }
 
 // triggerTaskMetadata extracts task fields from a trigger model.
-// Falls back to the trigger title/description/agent name as sensible defaults.
-// Schema scope is resolved downstream from the agent (see AgentSchemaResolver),
-// so it's not returned here.
+// Q.5: Agent FK dropped from triggers. The agent name is no longer directly
+// available. agentName is left empty — tasks no longer carry agent_name.
 func triggerTaskMetadata(t *models.TriggerModel) (title, agentName, description string) {
 	title = t.Title
 	if title == "" {
 		title = "Cron task"
 	}
 	description = t.Description
-	agentName = t.Agent.Name
 	return
 }
 

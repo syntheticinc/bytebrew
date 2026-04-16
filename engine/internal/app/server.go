@@ -1075,17 +1075,9 @@ func Run(sc ServerConfig) error {
 			if body.Message != "" && description == "" {
 				description = body.Message
 			}
-			agentName := trigger.Agent.Name
-			if agentName == "" {
-				agentName = "supervisor"
-			}
-
 			t := &domain.EngineTask{
 				Title:       title,
 				Description: description,
-				AgentName:   agentName,
-				Source:      domain.TaskSourceWebhook,
-				SourceID:    trigger.ID,
 				Status:      domain.EngineTaskStatusPending,
 				Mode:        domain.TaskModeBackground,
 			}
@@ -1912,10 +1904,18 @@ func runMemoryRetentionCleanup(ctx context.Context, db *gorm.DB) {
 				"agent_id", cap.AgentID, "error", err)
 			continue
 		}
+		var agentID string
+		if err := db.WithContext(ctx).
+			Raw("SELECT id FROM agents WHERE name = ?", agentName).
+			Scan(&agentID).Error; err != nil || agentID == "" {
+			slog.WarnContext(ctx, "memory retention cleanup: failed to resolve agent id",
+				"agent_name", agentName, "error", err)
+			continue
+		}
 		var schemaIDs []string
 		if err := db.WithContext(ctx).
 			Raw(`SELECT DISTINCT schema_id FROM agent_relations
-				WHERE source_agent_name = ? OR target_agent_name = ?`, agentName, agentName).
+				WHERE source_agent_id = ? OR target_agent_id = ?`, agentID, agentID).
 			Scan(&schemaIDs).Error; err != nil {
 			slog.WarnContext(ctx, "memory retention cleanup: failed to get schemas",
 				"agent", agentName, "error", err)

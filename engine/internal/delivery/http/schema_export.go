@@ -124,8 +124,8 @@ func (h *SchemaHandler) ExportSchema(w http.ResponseWriter, r *http.Request) {
 	// Build agent relations
 	for _, rel := range relations {
 		export.AgentRelations = append(export.AgentRelations, AgentRelationYAML{
-			Source: rel.SourceAgentName,
-			Target: rel.TargetAgentName,
+			Source: rel.SourceAgentID,
+			Target: rel.TargetAgentID,
 			Config: rel.Config,
 		})
 	}

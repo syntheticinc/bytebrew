@@ -53,8 +53,8 @@ CREATE TABLE agents (
 CREATE TABLE agent_relations (
     id                TEXT PRIMARY KEY,
     schema_id         TEXT NOT NULL,
-    source_agent_name TEXT NOT NULL,
-    target_agent_name TEXT NOT NULL,
+    source_agent_id TEXT NOT NULL,
+    target_agent_id TEXT NOT NULL,
     config            TEXT,
     tenant_id         TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
     created_at        DATETIME,
@@ -257,17 +257,15 @@ func TestFork_HappyPath(t *testing.T) {
 	assert.Equal(t, int64(1), relCount)
 	var rel models.AgentRelationModel
 	require.NoError(t, db.Where("schema_id = ?", forked.SchemaID).First(&rel).Error)
-	assert.Equal(t, "acme-support__triage", rel.SourceAgentName)
-	assert.Equal(t, "acme-support__resolver", rel.TargetAgentName)
+	assert.Equal(t, forked.AgentIDs["triage"], rel.SourceAgentID)
+	assert.Equal(t, forked.AgentIDs["resolver"], rel.TargetAgentID)
 
-	// 4. One chat trigger pointing at the entry agent + new schema.
+	// 4. One chat trigger pointing at the new schema (Q.5: no agent_id on triggers).
 	var triggers []models.TriggerModel
 	require.NoError(t, db.Where("schema_id = ?", forked.SchemaID).Find(&triggers).Error)
 	require.Len(t, triggers, 1)
 	assert.Equal(t, "chat", triggers[0].Type)
 	assert.Equal(t, "Main Chat", triggers[0].Title)
-	require.NotNil(t, triggers[0].AgentID)
-	assert.Equal(t, forked.AgentIDs["triage"], *triggers[0].AgentID)
 
 	// 5. Capabilities attached per-agent.
 	var triageCapCount, resolverCapCount int64

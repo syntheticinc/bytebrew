@@ -86,12 +86,12 @@ func (a *configImportExportHTTPAdapter) exportAgents(_ context.Context) ([]agent
 
 	// Load CanSpawn from agent_relations (V2 replaces agent_spawn_targets).
 	var rels []models.AgentRelationModel
-	if err := a.db.Find(&rels).Error; err != nil {
+	if err := a.db.Preload("SourceAgent").Preload("TargetAgent").Find(&rels).Error; err != nil {
 		return nil, fmt.Errorf("query agent relations: %w", err)
 	}
 	spawnByAgent := make(map[string][]string)
 	for _, rel := range rels {
-		spawnByAgent[rel.SourceAgentName] = append(spawnByAgent[rel.SourceAgentName], rel.TargetAgentName)
+		spawnByAgent[rel.SourceAgent.Name] = append(spawnByAgent[rel.SourceAgent.Name], rel.TargetAgent.Name)
 	}
 
 	result := make([]agentYAML, 0, len(agents))
@@ -195,7 +195,7 @@ func (a *configImportExportHTTPAdapter) exportMCPServers(_ context.Context) ([]m
 
 func (a *configImportExportHTTPAdapter) exportTriggers(_ context.Context) ([]triggerYAML, error) {
 	var triggers []models.TriggerModel
-	if err := a.db.Preload("Agent").Find(&triggers).Error; err != nil {
+	if err := a.db.Find(&triggers).Error; err != nil {
 		return nil, fmt.Errorf("query triggers: %w", err)
 	}
 
@@ -204,7 +204,6 @@ func (a *configImportExportHTTPAdapter) exportTriggers(_ context.Context) ([]tri
 		result = append(result, triggerYAML{
 			Title:       t.Title,
 			Type:        t.Type,
-			AgentName:   t.Agent.Name,
 			Schedule:    t.Config.Schedule,
 			WebhookPath: t.Config.WebhookPath,
 			Description: t.Description,
@@ -490,15 +489,11 @@ func (a *configImportExportHTTPAdapter) syncAgentRelations(tx *gorm.DB, agentID 
 	return nil
 }
 
+// Q.5: triggers no longer have agent_id. Import creates triggers without agent binding.
 func (a *configImportExportHTTPAdapter) importTriggers(tx *gorm.DB, items []triggerYAML) error {
 	for _, t := range items {
-		var agent models.AgentModel
-		if err := tx.Where("name = ?", t.AgentName).First(&agent).Error; err != nil {
-			return fmt.Errorf("agent %q referenced by trigger %q not found: %w", t.AgentName, t.Title, err)
-		}
-
 		var existing models.TriggerModel
-		err := tx.Where("title = ? AND agent_id = ?", t.Title, agent.ID).First(&existing).Error
+		err := tx.Where("title = ? AND type = ?", t.Title, t.Type).First(&existing).Error
 		if err == nil {
 			existing.Type = t.Type
 			existing.Config = models.TriggerConfig{Schedule: t.Schedule, WebhookPath: t.WebhookPath}
@@ -513,7 +508,6 @@ func (a *configImportExportHTTPAdapter) importTriggers(tx *gorm.DB, items []trig
 		newTrigger := models.TriggerModel{
 			Type:        t.Type,
 			Title:       t.Title,
-			AgentID:     ptrString(agent.ID),
 			Description: t.Description,
 			Enabled:     t.Enabled,
 			Config:      models.TriggerConfig{Schedule: t.Schedule, WebhookPath: t.WebhookPath},

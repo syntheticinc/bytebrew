@@ -103,8 +103,8 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE agent_relations (
 			id TEXT PRIMARY KEY,
 			schema_id TEXT NOT NULL,
-			source_agent_name VARCHAR(255) NOT NULL,
-			target_agent_name VARCHAR(255) NOT NULL,
+			source_agent_id TEXT NOT NULL,
+			target_agent_id TEXT NOT NULL,
 			config TEXT,
 			tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
 			created_at DATETIME,
@@ -123,7 +123,6 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			id TEXT PRIMARY KEY,
 			type VARCHAR(10) NOT NULL,
 			title VARCHAR(255) NOT NULL,
-			agent_id TEXT REFERENCES agents(id),
 			schema_id TEXT,
 			description TEXT,
 			enabled BOOLEAN NOT NULL DEFAULT 1,
@@ -203,14 +202,13 @@ func seedTestData(t *testing.T, db *gorm.DB) {
 
 	// Agent relation (V2 replaces agent_spawn_targets)
 	require.NoError(t, db.Create(&models.AgentRelationModel{
-		SchemaID: "00000000-0000-0000-0000-000000000001",
-		SourceAgentName: "sales", TargetAgentName: "researcher",
+		SchemaID:      "00000000-0000-0000-0000-000000000001",
+		SourceAgentID: agent.ID, TargetAgentID: researcher.ID,
 	}).Error)
 
 	// Trigger
-	agentIDPtr := agent.ID
 	require.NoError(t, db.Create(&models.TriggerModel{
-		Type: "cron", Title: "Morning report", AgentID: &agentIDPtr,
+		Type: "cron", Title: "Morning report",
 		Config:      models.TriggerConfig{Schedule: "0 9 * * *"},
 		Description: "Daily report", Enabled: true,
 	}).Error)
@@ -260,7 +258,6 @@ func TestExportYAML(t *testing.T) {
 	// Triggers
 	require.Len(t, cfg.Triggers.Items, 1)
 	assert.Equal(t, "Morning report", cfg.Triggers.Items[0].Title)
-	assert.Equal(t, "sales", cfg.Triggers.Items[0].AgentName)
 	assert.Equal(t, "0 9 * * *", cfg.Triggers.Items[0].Schedule)
 }
 
@@ -330,8 +327,6 @@ triggers:
 	require.NoError(t, db.Find(&triggers).Error)
 	require.Len(t, triggers, 1)
 	assert.Equal(t, "Hourly check", triggers[0].Title)
-	require.NotNil(t, triggers[0].AgentID)
-	assert.Equal(t, agents[0].ID, *triggers[0].AgentID)
 }
 
 func TestImportYAML_UpdateExisting(t *testing.T) {

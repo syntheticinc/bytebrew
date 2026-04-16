@@ -184,14 +184,10 @@ func (a *adminTriggerRepoAdapter) GetByID(ctx context.Context, id string) (*admi
 }
 
 func (a *adminTriggerRepoAdapter) Create(ctx context.Context, record *admintools.TriggerRecord) error {
-	agentID, err := resolveAgentID(ctx, a.db, record.AgentName)
-	if err != nil {
-		return fmt.Errorf("resolve agent %q: %w", record.AgentName, err)
-	}
 	m := &models.TriggerModel{
 		Type:        record.Type,
 		Title:       record.Title,
-		AgentID:     ptrString(agentID),
+		SchemaID:    record.SchemaID,
 		Description: record.Description,
 		Enabled:     record.Enabled,
 		Config: models.TriggerConfig{
@@ -210,20 +206,12 @@ func (a *adminTriggerRepoAdapter) Update(ctx context.Context, id string, record 
 	m := &models.TriggerModel{
 		Type:        record.Type,
 		Title:       record.Title,
-		AgentID:     ptrString(record.AgentID),
 		Description: record.Description,
 		Enabled:     record.Enabled,
 		Config: models.TriggerConfig{
 			Schedule:    record.Schedule,
 			WebhookPath: record.WebhookPath,
 		},
-	}
-	if record.AgentName != "" {
-		agentID, err := resolveAgentID(ctx, a.db, record.AgentName)
-		if err != nil {
-			return fmt.Errorf("resolve agent for trigger update: %w", err)
-		}
-		m.AgentID = ptrString(agentID)
 	}
 	return a.repo.Update(ctx, id, m)
 }
@@ -233,16 +221,10 @@ func (a *adminTriggerRepoAdapter) Delete(ctx context.Context, id string) error {
 }
 
 func toAdminTriggerRecord(t models.TriggerModel) admintools.TriggerRecord {
-	agentName := ""
-	if t.Agent.Name != "" {
-		agentName = t.Agent.Name
-	}
 	return admintools.TriggerRecord{
 		ID:          t.ID,
 		Type:        t.Type,
 		Title:       t.Title,
-		AgentName:   agentName,
-		AgentID:     derefString(t.AgentID),
 		SchemaID:    t.SchemaID,
 		Schedule:    t.Config.Schedule,
 		WebhookPath: t.Config.WebhookPath,
@@ -437,8 +419,8 @@ func (a *adminAgentRelationRepoAdapter) List(ctx context.Context, schemaID strin
 		out = append(out, admintools.AgentRelationRecord{
 			ID:        r.ID,
 			SchemaID:  r.SchemaID,
-			FromAgent: r.SourceAgentName,
-			ToAgent:   r.TargetAgentName,
+			FromAgent: r.SourceAgentID,
+			ToAgent:   r.TargetAgentID,
 			Label:     label,
 		})
 	}
@@ -451,10 +433,10 @@ func (a *adminAgentRelationRepoAdapter) Create(ctx context.Context, record *admi
 		config["label"] = record.Label
 	}
 	cr := &configrepo.AgentRelationRecord{
-		SchemaID:        record.SchemaID,
-		SourceAgentName: record.FromAgent,
-		TargetAgentName: record.ToAgent,
-		Config:          config,
+		SchemaID:      record.SchemaID,
+		SourceAgentID: record.FromAgent,
+		TargetAgentID: record.ToAgent,
+		Config:        config,
 	}
 	if err := a.repo.Create(ctx, cr); err != nil {
 		return err
@@ -490,7 +472,6 @@ func (a *adminSessionRepoAdapter) List(ctx context.Context) ([]admintools.Sessio
 		}
 		out = append(out, admintools.SessionRecord{
 			ID:        s.ID,
-			AgentName: s.AgentName,
 			UserID:    userID,
 			StartedAt: s.CreatedAt.Format("2006-01-02T15:04:05Z"),
 			Status:    s.Status,
@@ -513,7 +494,6 @@ func (a *adminSessionRepoAdapter) GetByID(ctx context.Context, id string) (*admi
 	}
 	return &admintools.SessionRecord{
 		ID:        s.ID,
-		AgentName: s.AgentName,
 		UserID:    userID,
 		StartedAt: s.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		Status:    s.Status,

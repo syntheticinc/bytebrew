@@ -178,7 +178,6 @@ func TestEngineManageTasksTool_Create_Single(t *testing.T) {
 	assert.Equal(t, 1, len(mgr.tasks))
 	created := mgr.tasks[mgr.lastCreatedID]
 	assert.Equal(t, "Fix bug", created.Title)
-	assert.Equal(t, "agent", created.Source)
 	assert.Equal(t, "session-1", created.SessionID)
 }
 
@@ -309,8 +308,8 @@ func TestEngineManageTasksTool_List(t *testing.T) {
 	parentID := uuid.New().String()
 	mgr := newMockEngineTaskManager()
 	mgr.listResult = []EngineTaskSummary{
-		{ID: uuid.New().String(), Title: "Task 1", Status: "pending", AgentName: "supervisor"},
-		{ID: uuid.New().String(), Title: "Task 2", Status: "completed", AgentName: "coder", ParentID: &parentID},
+		{ID: uuid.New().String(), Title: "Task 1", Status: "pending"},
+		{ID: uuid.New().String(), Title: "Task 2", Status: "completed", ParentID: &parentID},
 	}
 	tl := NewEngineManageTasksTool(mgr, "session-1")
 

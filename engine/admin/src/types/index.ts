@@ -220,12 +220,11 @@ export interface TriggerConfig {
   webhook_path?: string;
 }
 
+// Q.5: agent_id/agent_name dropped — trigger targets schema only.
 export interface Trigger {
   id: string;
   type: 'cron' | 'webhook' | 'chat';
   title: string;
-  agent_id: string;
-  agent_name?: string;
   schema_id?: string;
   description?: string;
   enabled: boolean;
@@ -237,8 +236,6 @@ export interface Trigger {
 export interface CreateTriggerRequest {
   type: string;
   title: string;
-  agent_id?: string;
-  agent_name?: string;
   schema_id?: string;
   description?: string;
   enabled?: boolean;

@@ -83,12 +83,11 @@ func domainToEntries(tasks []domain.EngineTask) []taskListEntry {
 	out := make([]taskListEntry, 0, len(tasks))
 	for _, t := range tasks {
 		out = append(out, taskListEntry{
-			ID:              t.ID.String(),
-			Title:           t.Title,
-			Status:          string(t.Status),
-			Priority:        t.Priority,
-			AssignedAgentID: t.AssignedAgentID,
-			CreatedAt:       t.CreatedAt,
+			ID:        t.ID.String(),
+			Title:     t.Title,
+			Status:    string(t.Status),
+			Priority:  t.Priority,
+			CreatedAt: t.CreatedAt,
 		})
 	}
 	return out

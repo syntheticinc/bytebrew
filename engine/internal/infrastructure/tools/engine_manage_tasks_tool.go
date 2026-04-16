@@ -51,14 +51,13 @@ type EngineTaskManager interface {
 // CreateEngineTaskParams holds parameters for creating an engine task.
 // BlockedBy is a list of pre-parsed task UUIDs (the tool layer converts the
 // agent-supplied JSON strings to UUIDs before calling the manager).
+// CreateEngineTaskParams holds the input for creating a new task.
+// Q.5: AgentName, Source, SourceID dropped from DB — not persisted.
 type CreateEngineTaskParams struct {
 	Title              string
 	Description        string
 	AcceptanceCriteria []string
-	AgentName          string
 	SessionID          string
-	Source             string
-	SourceID           string // e.g. trigger id that originated the task
 	UserID             string
 	Priority           int
 	BlockedBy          []uuid.UUID
@@ -67,15 +66,13 @@ type CreateEngineTaskParams struct {
 }
 
 // EngineTaskSummary is a lightweight view of an engine task.
-// IDs are serialized as string for the JSON contract with admin UI / agents.
+// Q.5: AgentName, AssignedAgentID dropped (no longer persisted).
 type EngineTaskSummary struct {
-	ID              string  `json:"id"`
-	Title           string  `json:"title"`
-	Status          string  `json:"status"`
-	AgentName       string  `json:"agent_name"`
-	ParentID        *string `json:"parent_id,omitempty"`
-	Priority        int     `json:"priority"`
-	AssignedAgentID string  `json:"assigned_agent_id,omitempty"`
+	ID       string  `json:"id"`
+	Title    string  `json:"title"`
+	Status   string  `json:"status"`
+	ParentID *string `json:"parent_id,omitempty"`
+	Priority int     `json:"priority"`
 }
 
 type engineManageTasksArgs struct {
@@ -247,7 +244,6 @@ func (t *EngineManageTasksTool) handleCreate(ctx context.Context, args engineMan
 			Description:        task.Description,
 			AcceptanceCriteria: task.AcceptanceCriteria,
 			SessionID:          t.sessionID,
-			Source:             "agent",
 			Priority:           task.Priority,
 			RequireApproval:    args.RequireApproval,
 		})
@@ -296,7 +292,6 @@ func (t *EngineManageTasksTool) handleCreateSubtask(ctx context.Context, args en
 		Description:        args.Description,
 		AcceptanceCriteria: args.AcceptanceCriteria,
 		SessionID:          t.sessionID,
-		Source:             "agent",
 		Priority:           priority,
 		BlockedBy:          blockers,
 	})
@@ -566,9 +561,6 @@ func formatTaskList(tasks []EngineTaskSummary) string {
 		if tk.ParentID != nil {
 			line += fmt.Sprintf(" (parent: %s)", *tk.ParentID)
 		}
-		if tk.AssignedAgentID != "" {
-			line += fmt.Sprintf(" (agent: %s)", tk.AssignedAgentID)
-		}
 		sb.WriteString(line + "\n")
 	}
 	return sb.String()
@@ -591,9 +583,6 @@ func formatTaskDetail(t *domain.EngineTask) string {
 	}
 	if t.ParentTaskID != nil {
 		sb.WriteString(fmt.Sprintf("  Parent: %s\n", t.ParentTaskID.String()))
-	}
-	if t.AssignedAgentID != "" {
-		sb.WriteString(fmt.Sprintf("  Assigned Agent: %s\n", t.AssignedAgentID))
 	}
 	if len(t.BlockedBy) > 0 {
 		blockerStrs := make([]string, 0, len(t.BlockedBy))

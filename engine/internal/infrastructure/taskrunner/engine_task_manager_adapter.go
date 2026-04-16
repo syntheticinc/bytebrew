@@ -56,8 +56,11 @@ func (a *EngineTaskManagerAdapter) validateBlockers(ctx context.Context, blocker
 	return nil
 }
 
-// validateParent fetches the parent, rejects cycles, and returns parent.Depth.
-// Called before creating a subtask. Also enforces MaxTaskDepth.
+// validateParent fetches the parent, rejects cycles, and computes depth by
+// walking the parent chain. Called before creating a subtask. Also enforces
+// MaxTaskDepth.
+//
+// Q.5: depth is no longer stored in DB — computed from parent_task_id chain.
 func (a *EngineTaskManagerAdapter) validateParent(ctx context.Context, parentID uuid.UUID) (int, error) {
 	if parentID == uuid.Nil {
 		return 0, fmt.Errorf("parent_task_id is required for subtask")
@@ -72,13 +75,8 @@ func (a *EngineTaskManagerAdapter) validateParent(ctx context.Context, parentID 
 	if parent.IsTerminal() {
 		return 0, fmt.Errorf("cannot add subtask to terminal task %s (status=%s)", parentID, parent.Status)
 	}
-	newDepth := parent.Depth + 1
-	if newDepth >= MaxTaskDepth {
-		return 0, fmt.Errorf("subtask depth %d exceeds maximum %d", newDepth, MaxTaskDepth)
-	}
-	// Cycle defence: walk up the parent chain, ensuring we don't revisit a node.
-	// (Impossible via API today because reparenting is not supported, but protects
-	// against direct DB tampering.)
+	// Compute depth by walking up the parent chain. Also serves as cycle defence.
+	depth := 1
 	visited := map[uuid.UUID]bool{parent.ID: true}
 	current := parent
 	for current.ParentTaskID != nil {
@@ -86,14 +84,17 @@ func (a *EngineTaskManagerAdapter) validateParent(ctx context.Context, parentID 
 			return 0, fmt.Errorf("parent_task_id cycle detected at %s", *current.ParentTaskID)
 		}
 		visited[*current.ParentTaskID] = true
+		depth++
 		next, err := a.repo.GetByID(ctx, *current.ParentTaskID)
 		if err != nil {
-			// Broken link — treat as a cycle risk and reject.
 			return 0, fmt.Errorf("walk parent chain at %s: %w", *current.ParentTaskID, err)
 		}
 		current = next
 	}
-	return newDepth, nil
+	if depth >= MaxTaskDepth {
+		return 0, fmt.Errorf("subtask depth %d exceeds maximum %d", depth, MaxTaskDepth)
+	}
+	return depth, nil
 }
 
 // --- tools.EngineTaskManager ---
@@ -118,16 +119,12 @@ func (a *EngineTaskManagerAdapter) CreateTask(ctx context.Context, params tools.
 		Title:              params.Title,
 		Description:        params.Description,
 		AcceptanceCriteria: params.AcceptanceCriteria,
-		AgentName:          params.AgentName,
 		SessionID:          params.SessionID,
-		Source:             domain.TaskSource(params.Source),
-		SourceID:           params.SourceID,
 		UserID:             params.UserID,
 		Priority:           params.Priority,
 		BlockedBy:          params.BlockedBy,
 		Status:             status,
 		Mode:               mode,
-		Depth:              0,
 	}
 	if err := a.repo.Create(ctx, task); err != nil {
 		return uuid.Nil, err
@@ -187,8 +184,7 @@ func (a *EngineTaskManagerAdapter) CreateSubTask(ctx context.Context, parentID u
 	if parentID == uuid.Nil {
 		return uuid.Nil, fmt.Errorf("parent task not found: %s", parentID)
 	}
-	depth, err := a.validateParent(ctx, parentID)
-	if err != nil {
+	if _, err := a.validateParent(ctx, parentID); err != nil {
 		return uuid.Nil, err
 	}
 	if err := a.validateBlockers(ctx, params.BlockedBy); err != nil {
@@ -207,13 +203,9 @@ func (a *EngineTaskManagerAdapter) CreateSubTask(ctx context.Context, parentID u
 		Title:              params.Title,
 		Description:        params.Description,
 		AcceptanceCriteria: params.AcceptanceCriteria,
-		AgentName:          params.AgentName,
 		SessionID:          params.SessionID,
-		Source:             domain.TaskSource(params.Source),
-		SourceID:           params.SourceID,
 		UserID:             params.UserID,
 		ParentTaskID:       &parentID,
-		Depth:              depth,
 		Priority:           params.Priority,
 		BlockedBy:          params.BlockedBy,
 		Status:             status,
@@ -310,23 +302,25 @@ func (a *EngineTaskManagerAdapter) GetNextTask(ctx context.Context, sessionID st
 	return nil, nil
 }
 
+// AssignTaskToAgent is a no-op in V2 (Q.5: assigned_agent_id dropped from DB).
+// Auto-transitions the task to in_progress if pending/approved.
 func (a *EngineTaskManagerAdapter) AssignTaskToAgent(ctx context.Context, id uuid.UUID, agentID string) error {
 	task, err := a.repo.GetByID(ctx, id)
 	if err != nil {
 		return err
 	}
-	task.AssignToAgent(agentID)
-	// Auto-transition to in_progress if not already running.
 	if task.Status == domain.EngineTaskStatusApproved || task.Status == domain.EngineTaskStatusPending {
 		if err := task.Start(); err != nil {
 			return err
 		}
+		return a.repo.Update(ctx, task)
 	}
-	return a.repo.Update(ctx, task)
+	return nil
 }
 
+// GetTaskByAgentID is a no-op in V2 (Q.5: assigned_agent_id dropped).
 func (a *EngineTaskManagerAdapter) GetTaskByAgentID(ctx context.Context, agentID string) (*domain.EngineTask, error) {
-	return a.repo.GetByAgentID(ctx, agentID)
+	return nil, nil
 }
 
 // --- task.ReminderSource (for context reminder) ---
@@ -350,13 +344,11 @@ func toTaskSummaries(tasks []domain.EngineTask) []tools.EngineTaskSummary {
 			parentID = &s
 		}
 		result = append(result, tools.EngineTaskSummary{
-			ID:              t.ID.String(),
-			Title:           t.Title,
-			Status:          string(t.Status),
-			AgentName:       t.AgentName,
-			ParentID:        parentID,
-			Priority:        t.Priority,
-			AssignedAgentID: t.AssignedAgentID,
+			ID:       t.ID.String(),
+			Title:    t.Title,
+			Status:   string(t.Status),
+			ParentID: parentID,
+			Priority: t.Priority,
 		})
 	}
 	return result

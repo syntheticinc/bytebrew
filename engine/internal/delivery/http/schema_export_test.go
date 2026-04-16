@@ -112,8 +112,8 @@ func (m *mockAgentRelationService) CreateAgentRelation(_ context.Context, schema
 	rel := AgentRelationInfo{
 		ID:              id,
 		SchemaID:        schemaID,
-		SourceAgentName: req.Source,
-		TargetAgentName: req.Target,
+		SourceAgentID: req.Source,
+		TargetAgentID: req.Target,
 		Config:          req.Config,
 	}
 	m.relations[schemaID] = append(m.relations[schemaID], rel)
@@ -185,7 +185,7 @@ func TestExportSchema_Basic(t *testing.T) {
 	}
 
 	relationSvc.relations[schema.ID] = []AgentRelationInfo{
-		{ID: "1", SchemaID: schema.ID, SourceAgentName: "classifier", TargetAgentName: "support-agent"},
+		{ID: "1", SchemaID: schema.ID, SourceAgentID: "classifier", TargetAgentID: "support-agent"},
 	}
 
 	handler := NewSchemaHandler(schemaSvc, relationSvc)
@@ -293,8 +293,8 @@ agent_relations:
 	// imported relation expresses both endpoints as members.
 	rels := relationSvc.relations[createdSchema.ID]
 	require.Len(t, rels, 1)
-	assert.Equal(t, "agent-a", rels[0].SourceAgentName)
-	assert.Equal(t, "agent-b", rels[0].TargetAgentName)
+	assert.Equal(t, "agent-a", rels[0].SourceAgentID)
+	assert.Equal(t, "agent-b", rels[0].TargetAgentID)
 }
 
 func TestImportSchema_EmptyName(t *testing.T) {
@@ -345,7 +345,7 @@ func TestRoundTrip_ExportImport(t *testing.T) {
 	srcSchemaSvc.addSchemaAgent(schema.ID, "agent-x")
 	srcSchemaSvc.addSchemaAgent(schema.ID, "agent-y")
 	srcRelationSvc.relations[schema.ID] = []AgentRelationInfo{
-		{ID: "1", SchemaID: schema.ID, SourceAgentName: "agent-x", TargetAgentName: "agent-y"},
+		{ID: "1", SchemaID: schema.ID, SourceAgentID: "agent-x", TargetAgentID: "agent-y"},
 	}
 
 	srcHandler := NewSchemaHandler(srcSchemaSvc, srcRelationSvc)
@@ -386,8 +386,8 @@ func TestRoundTrip_ExportImport(t *testing.T) {
 	// endpoints are implicit members.
 	rels := dstRelationSvc.relations[importedSchema.ID]
 	require.Len(t, rels, 1)
-	assert.Equal(t, "agent-x", rels[0].SourceAgentName)
-	assert.Equal(t, "agent-y", rels[0].TargetAgentName)
+	assert.Equal(t, "agent-x", rels[0].SourceAgentID)
+	assert.Equal(t, "agent-y", rels[0].TargetAgentID)
 }
 
 func TestSanitizeFilename(t *testing.T) {

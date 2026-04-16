@@ -134,8 +134,8 @@ func (a *agentRelationServiceHTTPAdapter) ListAgentRelations(ctx context.Context
 		result = append(result, deliveryhttp.AgentRelationInfo{
 			ID:              r.ID,
 			SchemaID:        r.SchemaID,
-			SourceAgentName: r.SourceAgentName,
-			TargetAgentName: r.TargetAgentName,
+			SourceAgentID: r.SourceAgentID,
+			TargetAgentID: r.TargetAgentID,
 			Config:          r.Config,
 		})
 	}
@@ -154,8 +154,8 @@ func (a *agentRelationServiceHTTPAdapter) GetAgentRelation(ctx context.Context, 
 	return &deliveryhttp.AgentRelationInfo{
 		ID:              record.ID,
 		SchemaID:        record.SchemaID,
-		SourceAgentName: record.SourceAgentName,
-		TargetAgentName: record.TargetAgentName,
+		SourceAgentID: record.SourceAgentID,
+		TargetAgentID: record.TargetAgentID,
 		Config:          record.Config,
 	}, nil
 }
@@ -163,8 +163,8 @@ func (a *agentRelationServiceHTTPAdapter) GetAgentRelation(ctx context.Context, 
 func (a *agentRelationServiceHTTPAdapter) CreateAgentRelation(ctx context.Context, schemaID string, req deliveryhttp.CreateAgentRelationRequest) (*deliveryhttp.AgentRelationInfo, error) {
 	record := &configrepo.AgentRelationRecord{
 		SchemaID:        schemaID,
-		SourceAgentName: req.Source,
-		TargetAgentName: req.Target,
+		SourceAgentID: req.Source,
+		TargetAgentID: req.Target,
 		Config:          req.Config,
 	}
 	if err := a.repo.Create(ctx, record); err != nil {
@@ -174,16 +174,16 @@ func (a *agentRelationServiceHTTPAdapter) CreateAgentRelation(ctx context.Contex
 	return &deliveryhttp.AgentRelationInfo{
 		ID:              record.ID,
 		SchemaID:        record.SchemaID,
-		SourceAgentName: record.SourceAgentName,
-		TargetAgentName: record.TargetAgentName,
+		SourceAgentID: record.SourceAgentID,
+		TargetAgentID: record.TargetAgentID,
 		Config:          record.Config,
 	}, nil
 }
 
 func (a *agentRelationServiceHTTPAdapter) UpdateAgentRelation(ctx context.Context, id string, req deliveryhttp.CreateAgentRelationRequest) error {
 	record := &configrepo.AgentRelationRecord{
-		SourceAgentName: req.Source,
-		TargetAgentName: req.Target,
+		SourceAgentID: req.Source,
+		TargetAgentID: req.Target,
 		Config:          req.Config,
 	}
 	if err := a.repo.Update(ctx, id, record); err != nil {

@@ -12,11 +12,11 @@ func TestNewAgentRelation_Valid(t *testing.T) {
 	if r.SchemaID != "schema-1" {
 		t.Errorf("expected schema_id %q, got %q", "schema-1", r.SchemaID)
 	}
-	if r.SourceAgentName != "agent-a" {
-		t.Errorf("expected source %q, got %q", "agent-a", r.SourceAgentName)
+	if r.SourceAgentID != "agent-a" {
+		t.Errorf("expected source %q, got %q", "agent-a", r.SourceAgentID)
 	}
-	if r.TargetAgentName != "agent-b" {
-		t.Errorf("expected target %q, got %q", "agent-b", r.TargetAgentName)
+	if r.TargetAgentID != "agent-b" {
+		t.Errorf("expected target %q, got %q", "agent-b", r.TargetAgentID)
 	}
 }
 
@@ -33,11 +33,11 @@ func TestAgentRelation_Validate(t *testing.T) {
 		rel     AgentRelation
 		wantErr bool
 	}{
-		{"valid", AgentRelation{SchemaID: "s", SourceAgentName: "a", TargetAgentName: "b"}, false},
-		{"empty schema_id", AgentRelation{SourceAgentName: "a", TargetAgentName: "b"}, true},
-		{"empty source", AgentRelation{SchemaID: "s", TargetAgentName: "b"}, true},
-		{"empty target", AgentRelation{SchemaID: "s", SourceAgentName: "a"}, true},
-		{"same src/tgt", AgentRelation{SchemaID: "s", SourceAgentName: "a", TargetAgentName: "a"}, true},
+		{"valid", AgentRelation{SchemaID: "s", SourceAgentID: "a", TargetAgentID: "b"}, false},
+		{"empty schema_id", AgentRelation{SourceAgentID: "a", TargetAgentID: "b"}, true},
+		{"empty source", AgentRelation{SchemaID: "s", TargetAgentID: "b"}, true},
+		{"empty target", AgentRelation{SchemaID: "s", SourceAgentID: "a"}, true},
+		{"same src/tgt", AgentRelation{SchemaID: "s", SourceAgentID: "a", TargetAgentID: "a"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

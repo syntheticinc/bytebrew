@@ -298,15 +298,18 @@ type agentSchemaIDResolver struct {
 }
 
 func (r *agentSchemaIDResolver) ResolveSchemaID(ctx context.Context, agentName string) (string, error) {
-	// V2: schema membership is derived from agent_relations
-	// (docs/architecture/agent-first-runtime.md §2.1 — the legacy
-	// `schema_agents` join table no longer exists). Pick the first schema
-	// where the agent appears as source or target of any relation.
+	// Q.5: agent_relations uses agent UUIDs. Resolve name → id first,
+	// then find the schema where this agent participates.
+	var agentID string
+	if err := r.db.WithContext(ctx).Raw(
+		"SELECT id FROM agents WHERE name = ? LIMIT 1", agentName).Scan(&agentID).Error; err != nil || agentID == "" {
+		return "", fmt.Errorf("no schema for agent %q", agentName)
+	}
 	var schemaID string
 	if err := r.db.WithContext(ctx).Raw(
 		`SELECT schema_id FROM agent_relations
-			WHERE source_agent_name = ? OR target_agent_name = ?
-			LIMIT 1`, agentName, agentName).Scan(&schemaID).Error; err != nil || schemaID == "" {
+			WHERE source_agent_id = ? OR target_agent_id = ?
+			LIMIT 1`, agentID, agentID).Scan(&schemaID).Error; err != nil || schemaID == "" {
 		return "", fmt.Errorf("no schema for agent %q", agentName)
 	}
 	return schemaID, nil

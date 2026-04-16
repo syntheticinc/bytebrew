@@ -45,8 +45,8 @@ func (t *adminListSessionsTool) InvokableRun(ctx context.Context, _ string, _ ..
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("## %d sessions\n\n", len(sessions)))
 	for _, s := range sessions {
-		sb.WriteString(fmt.Sprintf("- id=%s agent=%s user=%s status=%s started=%s\n",
-			s.ID, s.AgentName, coalesce(s.UserID, "anonymous"), s.Status, s.StartedAt))
+		sb.WriteString(fmt.Sprintf("- id=%s user=%s status=%s started=%s\n",
+			s.ID, coalesce(s.UserID, "anonymous"), s.Status, s.StartedAt))
 	}
 	return sb.String(), nil
 }

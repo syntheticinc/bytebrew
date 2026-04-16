@@ -14,15 +14,11 @@ type TaskCreator interface {
 }
 
 // TriggerTaskParams holds parameters for creating a task from a trigger.
-// Schema scope is resolved downstream via AgentSchemaResolver(AgentName) — the
-// agent already carries its schema binding, so duplicating it here would be
-// redundant state.
+// Q.5: AgentName and Source dropped — no longer persisted on tasks.
 type TriggerTaskParams struct {
 	Title       string
 	Description string
-	AgentName   string
-	Source      string // "cron" or "webhook"
-	SourceID    string
+	SourceID    string // trigger id, used for MarkFired
 }
 
 // CronScheduler manages cron-based triggers that create tasks on schedule.
@@ -45,13 +41,11 @@ func NewCronScheduler(creator TaskCreator) *CronScheduler {
 }
 
 // AddTrigger registers a cron trigger that creates a task on the given schedule.
-func (s *CronScheduler) AddTrigger(schedule, title, description, agentName, sourceID string) error {
+func (s *CronScheduler) AddTrigger(schedule, title, description, sourceID string) error {
 	_, err := s.cron.AddFunc(schedule, func() {
 		_, createErr := s.creator.CreateFromTrigger(s.ctx, TriggerTaskParams{
 			Title:       title,
 			Description: description,
-			AgentName:   agentName,
-			Source:      "cron",
 			SourceID:    sourceID,
 		})
 		if createErr != nil {

@@ -164,17 +164,12 @@ CREATE TABLE tasks (
 	title TEXT NOT NULL,
 	description TEXT,
 	acceptance_criteria TEXT,
-	agent_name TEXT NOT NULL,
-	source TEXT NOT NULL,
-	source_id TEXT,
 	user_id TEXT,
 	session_id TEXT,
 	parent_task_id TEXT,
-	depth INTEGER NOT NULL DEFAULT 0,
 	status TEXT NOT NULL DEFAULT 'pending',
 	mode TEXT NOT NULL DEFAULT 'interactive',
 	priority INTEGER NOT NULL DEFAULT 0,
-	assigned_agent_id TEXT,
 	blocked_by TEXT,
 	result TEXT,
 	error TEXT,
@@ -195,7 +190,6 @@ CREATE TABLE triggers (
 	id TEXT PRIMARY KEY,
 	type TEXT NOT NULL,
 	title TEXT NOT NULL,
-	agent_id TEXT,
 	schema_id TEXT,
 	description TEXT,
 	enabled INTEGER NOT NULL DEFAULT 1,
@@ -206,7 +200,7 @@ CREATE TABLE triggers (
 	updated_at DATETIME
 )`).Error)
 
-	// Minimal agents table — only Name + ID are read by triggerTaskMetadata via Preload("Agent").
+	// Minimal agents table — needed for schema.entry_agent_id resolution.
 	require.NoError(t, db.Exec(`
 CREATE TABLE agents (
 	id TEXT PRIMARY KEY,
@@ -222,10 +216,23 @@ CREATE TABLE agents (
 	updated_at DATETIME
 )`).Error)
 
+	// Schemas table needed for trigger → schema → entry_agent resolution.
+	require.NoError(t, db.Exec(`
+CREATE TABLE schemas (
+	id TEXT PRIMARY KEY,
+	name TEXT NOT NULL,
+	description TEXT,
+	is_system INTEGER NOT NULL DEFAULT 0,
+	tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+	entry_agent_id TEXT,
+	created_at DATETIME,
+	updated_at DATETIME
+)`).Error)
+
 	return db
 }
 
-// seedAgentAndTrigger inserts an agent + a cron trigger.
+// seedAgentAndTrigger inserts an agent + schema + cron trigger.
 // Returns the trigger id (caller uses it to assert last_fired_at is stamped).
 func seedAgentAndTrigger(t *testing.T, db *gorm.DB, agentName string) string {
 	t.Helper()
@@ -235,11 +242,17 @@ func seedAgentAndTrigger(t *testing.T, db *gorm.DB, agentName string) string {
 		agentID, agentName, "you are a test agent", "persistent", "sequential", 1, 4000, time.Now(), time.Now(),
 	).Error)
 
+	schemaID := uuid.NewString()
+	require.NoError(t, db.Exec(
+		`INSERT INTO schemas (id, name, entry_agent_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+		schemaID, "test-schema", agentID, time.Now(), time.Now(),
+	).Error)
+
 	triggerID := uuid.NewString()
 	cfg, _ := models.TriggerConfig{Schedule: "0 * * * *"}.Value()
 	require.NoError(t, db.Exec(
-		`INSERT INTO triggers (id, type, title, agent_id, enabled, config, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		triggerID, models.TriggerTypeCron, "Hourly health check", agentID, 1, cfg, time.Now(), time.Now(),
+		`INSERT INTO triggers (id, type, title, schema_id, enabled, config, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		triggerID, models.TriggerTypeCron, "Hourly health check", schemaID, 1, cfg, time.Now(), time.Now(),
 	).Error)
 
 	return triggerID
@@ -293,8 +306,6 @@ func (p *platform) fireCron(t *testing.T, triggerID, agentName string) uuid.UUID
 	taskID, err := p.creator.CreateFromTrigger(context.Background(), task.TriggerTaskParams{
 		Title:       "Hourly health check",
 		Description: "Run health probes",
-		AgentName:   agentName,
-		Source:      string(domain.TaskSourceCron),
 		SourceID:    triggerID,
 	})
 	require.NoError(t, err)
@@ -343,8 +354,6 @@ func TestTaskPlatform_CronFire_MarksLastFiredAt(t *testing.T) {
 	completed := waitForTaskStatus(t, p.taskRepo, taskID, domain.EngineTaskStatusCompleted, 5*time.Second)
 	assert.NotNil(t, completed.CompletedAt, "CompletedAt must be set on terminal transition")
 	assert.Equal(t, "health probes passed", completed.Result)
-	assert.Equal(t, domain.TaskSourceCron, completed.Source)
-	assert.Equal(t, triggerID, completed.SourceID)
 
 	// §4.1: every cron fire stamps last_fired_at. The window must include
 	// the moment we invoked the creator.

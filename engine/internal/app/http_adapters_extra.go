@@ -238,8 +238,6 @@ func triggerModelToResponse(t models.TriggerModel) deliveryhttp.TriggerResponse 
 		ID:          t.ID,
 		Type:        t.Type,
 		Title:       t.Title,
-		AgentID:     derefString(t.AgentID),
-		AgentName:   t.Agent.Name,
 		SchemaID:    t.SchemaID,
 		Description: t.Description,
 		Enabled:     t.Enabled,
@@ -303,46 +301,12 @@ func (a *triggerServiceHTTPAdapter) ListTriggersBySchema(ctx context.Context, sc
 	return result, nil
 }
 
-func (a *triggerServiceHTTPAdapter) resolveAgentID(ctx context.Context, req *deliveryhttp.CreateTriggerRequest) error {
-	if req.AgentID != "" || req.AgentName == "" {
-		return nil
-	}
-	var agent models.AgentModel
-	if err := a.db.WithContext(ctx).Where("name = ?", req.AgentName).First(&agent).Error; err != nil {
-		return fmt.Errorf("agent not found: %s", req.AgentName)
-	}
-	req.AgentID = agent.ID
-	return nil
-}
-
-func (a *triggerServiceHTTPAdapter) isEntryAgent(ctx context.Context, agentID string) error {
-	var agent models.AgentModel
-	if err := a.db.WithContext(ctx).Where("id = ?", agentID).First(&agent).Error; err != nil {
-		return pkgerrors.NotFound("agent not found")
-	}
-	var count int64
-	a.db.WithContext(ctx).Model(&models.AgentRelationModel{}).
-		Where("target_agent_name = ?", agent.Name).
-		Count(&count)
-	if count > 0 {
-		return pkgerrors.InvalidInput(fmt.Sprintf("agent %q has incoming agent relations and cannot be a trigger target", agent.Name))
-	}
-	return nil
-}
+// Q.5: triggers no longer have agent_id — they target schemas only.
 
 func (a *triggerServiceHTTPAdapter) CreateTrigger(ctx context.Context, req deliveryhttp.CreateTriggerRequest) (*deliveryhttp.TriggerResponse, error) {
-	if err := a.resolveAgentID(ctx, &req); err != nil {
-		return nil, err
-	}
-	if req.AgentID != "" {
-		if err := a.isEntryAgent(ctx, req.AgentID); err != nil {
-			return nil, err
-		}
-	}
 	model := &models.TriggerModel{
 		Type:        req.Type,
 		Title:       req.Title,
-		AgentID:     ptrString(req.AgentID),
 		SchemaID:    req.SchemaID,
 		Description: req.Description,
 		Enabled:     true,
@@ -359,13 +323,9 @@ func (a *triggerServiceHTTPAdapter) CreateTrigger(ctx context.Context, req deliv
 }
 
 func (a *triggerServiceHTTPAdapter) UpdateTrigger(ctx context.Context, id string, req deliveryhttp.CreateTriggerRequest) (*deliveryhttp.TriggerResponse, error) {
-	if err := a.resolveAgentID(ctx, &req); err != nil {
-		return nil, err
-	}
 	model := &models.TriggerModel{
 		Type:        req.Type,
 		Title:       req.Title,
-		AgentID:     ptrString(req.AgentID),
 		Description: req.Description,
 		Config:      triggerConfigFromMap(req.Config),
 	}
@@ -384,15 +344,17 @@ func (a *triggerServiceHTTPAdapter) UpdateTrigger(ctx context.Context, id string
 	return &resp, nil
 }
 
+// SetTriggerTarget resolves agent → schema and sets the trigger's schema_id.
+// Q.5: triggers no longer have agent_id; they target schemas only.
 func (a *triggerServiceHTTPAdapter) SetTriggerTarget(ctx context.Context, id string, agentName string) (*deliveryhttp.TriggerResponse, error) {
-	var agent models.AgentModel
-	if err := a.db.WithContext(ctx).Where("name = ?", agentName).First(&agent).Error; err != nil {
-		return nil, pkgerrors.NotFound(fmt.Sprintf("agent not found: %s", agentName))
+	// Resolve agent name → find schema where this agent is the entry agent
+	var schemaID string
+	if err := a.db.WithContext(ctx).
+		Raw("SELECT id FROM schemas WHERE entry_agent_id = (SELECT id FROM agents WHERE name = ? LIMIT 1) LIMIT 1", agentName).
+		Scan(&schemaID).Error; err != nil || schemaID == "" {
+		return nil, pkgerrors.NotFound(fmt.Sprintf("no schema with entry agent %q", agentName))
 	}
-	if err := a.isEntryAgent(ctx, agent.ID); err != nil {
-		return nil, err
-	}
-	if err := a.repo.SetAgentID(ctx, id, agent.ID); err != nil {
+	if err := a.repo.SetSchemaID(ctx, id, &schemaID); err != nil {
 		return nil, err
 	}
 	t, err := a.repo.GetByID(ctx, id)
@@ -403,8 +365,9 @@ func (a *triggerServiceHTTPAdapter) SetTriggerTarget(ctx context.Context, id str
 	return &resp, nil
 }
 
+// ClearTriggerTarget clears the trigger's schema_id.
 func (a *triggerServiceHTTPAdapter) ClearTriggerTarget(ctx context.Context, id string) error {
-	return a.repo.ClearAgentID(ctx, id)
+	return a.repo.SetSchemaID(ctx, id, nil)
 }
 
 func (a *triggerServiceHTTPAdapter) DeleteTrigger(ctx context.Context, id string) error {
@@ -485,7 +448,7 @@ func (a *sessionServiceHTTPAdapter) ListSessions(ctx context.Context, agentName,
 		result = append(result, deliveryhttp.SessionResponse{
 			ID:        s.ID,
 			Title:     s.Title,
-			AgentName: s.AgentName,
+			AgentName: "", // Q.5: agent_name dropped from sessions
 			UserID:    userID,
 			Status:    s.Status,
 			CreatedAt: s.CreatedAt.Format(time.RFC3339),
@@ -510,7 +473,7 @@ func (a *sessionServiceHTTPAdapter) GetSession(ctx context.Context, id string) (
 	return &deliveryhttp.SessionResponse{
 		ID:        s.ID,
 		Title:     s.Title,
-		AgentName: s.AgentName,
+		AgentName: "", // Q.5: agent_name dropped from sessions
 		UserID:    userID,
 		Status:    s.Status,
 		CreatedAt: s.CreatedAt.Format(time.RFC3339),
@@ -528,11 +491,10 @@ func (a *sessionServiceHTTPAdapter) CreateSession(ctx context.Context, req deliv
 		userID = &req.UserID
 	}
 	session := &models.SessionModel{
-		ID:        id,
-		Title:     req.Title,
-		AgentName: req.AgentName,
-		UserID:    userID,
-		Status:    "active",
+		ID:     id,
+		Title:  req.Title,
+		UserID: userID,
+		Status: "active",
 	}
 	if err := a.repo.Create(ctx, session); err != nil {
 		return nil, err
@@ -544,7 +506,7 @@ func (a *sessionServiceHTTPAdapter) CreateSession(ctx context.Context, req deliv
 	return &deliveryhttp.SessionResponse{
 		ID:        session.ID,
 		Title:     session.Title,
-		AgentName: session.AgentName,
+		AgentName: "", // Q.5: agent_name dropped from sessions
 		UserID:    respUserID,
 		Status:    session.Status,
 		CreatedAt: session.CreatedAt.Format(time.RFC3339),

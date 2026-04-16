@@ -96,7 +96,6 @@ func (m *MockEngineTaskManager) CreateTask(ctx context.Context, params tools.Cre
 		Description:        params.Description,
 		AcceptanceCriteria: params.AcceptanceCriteria,
 		SessionID:          params.SessionID,
-		Source:             domain.TaskSource(params.Source),
 		UserID:             params.UserID,
 		Priority:           params.Priority,
 		BlockedBy:          params.BlockedBy,
@@ -187,7 +186,6 @@ func (m *MockEngineTaskManager) CreateSubTask(ctx context.Context, parentID uuid
 		Description:        params.Description,
 		AcceptanceCriteria: params.AcceptanceCriteria,
 		SessionID:          params.SessionID,
-		Source:             domain.TaskSource(params.Source),
 		UserID:             params.UserID,
 		ParentTaskID:       &parentID,
 		Priority:           params.Priority,
@@ -310,7 +308,7 @@ func (m *MockEngineTaskManager) AssignTaskToAgent(ctx context.Context, id uuid.U
 	if !ok {
 		return fmt.Errorf("task not found: %s", id)
 	}
-	task.AssignToAgent(agentID)
+	// Q.5: AssignedAgentID is no longer persisted. Start the task if pending/approved.
 	if task.Status == domain.EngineTaskStatusApproved || task.Status == domain.EngineTaskStatusPending {
 		return task.Start()
 	}
@@ -318,13 +316,7 @@ func (m *MockEngineTaskManager) AssignTaskToAgent(ctx context.Context, id uuid.U
 }
 
 func (m *MockEngineTaskManager) GetTaskByAgentID(ctx context.Context, agentID string) (*domain.EngineTask, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for _, t := range m.Tasks {
-		if t.AssignedAgentID == agentID && t.Status == domain.EngineTaskStatusInProgress {
-			return t, nil
-		}
-	}
+	// Q.5: AssignedAgentID is no longer persisted — always returns nil.
 	return nil, nil
 }
 

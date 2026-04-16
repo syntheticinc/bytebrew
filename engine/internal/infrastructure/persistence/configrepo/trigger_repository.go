@@ -22,7 +22,7 @@ func NewGORMTriggerRepository(db *gorm.DB) *GORMTriggerRepository {
 // List returns all trigger models with agent preloaded.
 func (r *GORMTriggerRepository) List(ctx context.Context) ([]models.TriggerModel, error) {
 	var triggers []models.TriggerModel
-	if err := r.db.WithContext(ctx).Preload("Agent").Order("created_at DESC").Find(&triggers).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Schema").Order("created_at DESC").Find(&triggers).Error; err != nil {
 		return nil, fmt.Errorf("list triggers: %w", err)
 	}
 	return triggers, nil
@@ -31,7 +31,7 @@ func (r *GORMTriggerRepository) List(ctx context.Context) ([]models.TriggerModel
 // ListBySchemaID returns triggers scoped to a specific schema.
 func (r *GORMTriggerRepository) ListBySchemaID(ctx context.Context, schemaID string) ([]models.TriggerModel, error) {
 	var triggers []models.TriggerModel
-	if err := r.db.WithContext(ctx).Preload("Agent").Where("schema_id = ?", schemaID).Order("created_at DESC").Find(&triggers).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Schema").Where("schema_id = ?", schemaID).Order("created_at DESC").Find(&triggers).Error; err != nil {
 		return nil, fmt.Errorf("list triggers by schema %s: %w", schemaID, err)
 	}
 	return triggers, nil
@@ -40,7 +40,7 @@ func (r *GORMTriggerRepository) ListBySchemaID(ctx context.Context, schemaID str
 // GetByID returns a single trigger model by ID with agent preloaded.
 func (r *GORMTriggerRepository) GetByID(ctx context.Context, id string) (*models.TriggerModel, error) {
 	var trigger models.TriggerModel
-	if err := r.db.WithContext(ctx).Preload("Agent").Where("id = ?", id).First(&trigger).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Schema").Where("id = ?", id).First(&trigger).Error; err != nil {
 		return nil, fmt.Errorf("get trigger %s: %w", id, err)
 	}
 	return &trigger, nil
@@ -81,12 +81,15 @@ func (r *GORMTriggerRepository) SetSchemaID(ctx context.Context, triggerID strin
 	return nil
 }
 
-// HasEnabledChatTrigger returns true if the agent has at least one enabled chat trigger.
+// HasEnabledChatTrigger returns true if the agent has at least one enabled chat
+// trigger. Q.5: triggers no longer have agent_id — we resolve agent → schema
+// (via schemas.entry_agent_id) → triggers.schema_id.
 func (r *GORMTriggerRepository) HasEnabledChatTrigger(ctx context.Context, agentName string) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).
 		Table("triggers").
-		Joins("JOIN agents ON agents.id = triggers.agent_id").
+		Joins("JOIN schemas ON schemas.id = triggers.schema_id").
+		Joins("JOIN agents ON agents.id = schemas.entry_agent_id").
 		Where("agents.name = ? AND triggers.type = ? AND triggers.enabled = ?", agentName, models.TriggerTypeChat, true).
 		Count(&count).Error
 	if err != nil {
@@ -96,13 +99,13 @@ func (r *GORMTriggerRepository) HasEnabledChatTrigger(ctx context.Context, agent
 }
 
 // FindEnabledChatTrigger returns the first enabled chat trigger for the given
-// agent, or nil when there is none. Used by the chat dispatcher to stamp
-// last_fired_at on the originating channel when a new session opens (§4.1).
+// agent, or nil when there is none. Q.5: resolves via schema.entry_agent_id.
 func (r *GORMTriggerRepository) FindEnabledChatTrigger(ctx context.Context, agentName string) (*models.TriggerModel, error) {
 	var trigger models.TriggerModel
 	err := r.db.WithContext(ctx).
 		Table("triggers").
-		Joins("JOIN agents ON agents.id = triggers.agent_id").
+		Joins("JOIN schemas ON schemas.id = triggers.schema_id").
+		Joins("JOIN agents ON agents.id = schemas.entry_agent_id").
 		Where("agents.name = ? AND triggers.type = ? AND triggers.enabled = ?", agentName, models.TriggerTypeChat, true).
 		Select("triggers.*").
 		First(&trigger).Error
@@ -113,30 +116,6 @@ func (r *GORMTriggerRepository) FindEnabledChatTrigger(ctx context.Context, agen
 		return nil, fmt.Errorf("find enabled chat trigger for %q: %w", agentName, err)
 	}
 	return &trigger, nil
-}
-
-// SetAgentID sets the target agent for a trigger (canvas edge → routing enabled).
-func (r *GORMTriggerRepository) SetAgentID(ctx context.Context, triggerID string, agentID string) error {
-	result := r.db.WithContext(ctx).Model(&models.TriggerModel{}).Where("id = ?", triggerID).Update("agent_id", agentID)
-	if result.Error != nil {
-		return fmt.Errorf("set trigger agent: %w", result.Error)
-	}
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("trigger not found: %s", triggerID)
-	}
-	return nil
-}
-
-// ClearAgentID removes the target agent from a trigger (canvas edge deleted → routing disabled).
-func (r *GORMTriggerRepository) ClearAgentID(ctx context.Context, triggerID string) error {
-	result := r.db.WithContext(ctx).Model(&models.TriggerModel{}).Where("id = ?", triggerID).Update("agent_id", nil)
-	if result.Error != nil {
-		return fmt.Errorf("clear trigger agent: %w", result.Error)
-	}
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("trigger not found: %s", triggerID)
-	}
-	return nil
 }
 
 // Delete removes a trigger model by ID.
@@ -160,7 +139,7 @@ func (r *GORMTriggerRepository) Delete(ctx context.Context, id string) error {
 func (r *GORMTriggerRepository) FindByWebhookPath(ctx context.Context, path string) (*models.TriggerModel, error) {
 	var trigger models.TriggerModel
 	err := r.db.WithContext(ctx).
-		Preload("Agent").
+		Preload("Schema").
 		Where("type = ? AND enabled = ? AND config->>'webhook_path' = ?", models.TriggerTypeWebhook, true, path).
 		First(&trigger).Error
 	if err != nil {

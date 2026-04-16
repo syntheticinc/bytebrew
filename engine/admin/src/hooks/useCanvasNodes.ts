@@ -73,7 +73,7 @@ export function makeTriggerNode(
       schedule: trigger.config?.schedule,
       webhook_path: trigger.config?.webhook_path,
       enabled: trigger.enabled,
-      agentName: trigger.agent_name,
+      agentName: undefined,
     },
   };
 }
@@ -267,8 +267,6 @@ export function useCanvasNodes({
           type: triggerType,
           title,
           enabled: true,
-          agent_id: '',
-          agent_name: '',
           description: '',
           config: triggerType === 'webhook' ? { webhook_path: webhookPath } : {},
           created_at: new Date().toISOString(),

@@ -14,12 +14,14 @@ import (
 // V2 has a single implicit DELEGATION relationship type (see
 // docs/architecture/agent-first-runtime.md §3.1). Optional Config carries
 // non-typing routing hints (priority, conditions).
+//
+// Q.5: source/target are now agent UUIDs (was agent names).
 type AgentRelationRecord struct {
-	ID              string
-	SchemaID        string
-	SourceAgentName string
-	TargetAgentName string
-	Config          map[string]interface{}
+	ID            string
+	SchemaID      string
+	SourceAgentID string
+	TargetAgentID string
+	Config        map[string]interface{}
 }
 
 // GORMAgentRelationRepository implements agent-relation CRUD using GORM.
@@ -71,10 +73,10 @@ func (r *GORMAgentRelationRepository) Create(ctx context.Context, record *AgentR
 	}
 
 	model := models.AgentRelationModel{
-		SchemaID:        record.SchemaID,
-		SourceAgentName: record.SourceAgentName,
-		TargetAgentName: record.TargetAgentName,
-		Config:          string(configJSON),
+		SchemaID:      record.SchemaID,
+		SourceAgentID: record.SourceAgentID,
+		TargetAgentID: record.TargetAgentID,
+		Config:        string(configJSON),
 	}
 	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
 		return fmt.Errorf("create agent relation: %w", err)
@@ -91,9 +93,9 @@ func (r *GORMAgentRelationRepository) Update(ctx context.Context, id string, rec
 	}
 
 	result := r.db.WithContext(ctx).Model(&models.AgentRelationModel{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"source_agent_name": record.SourceAgentName,
-		"target_agent_name": record.TargetAgentName,
-		"config":            string(configJSON),
+		"source_agent_id": record.SourceAgentID,
+		"target_agent_id": record.TargetAgentID,
+		"config":          string(configJSON),
 	})
 	if result.Error != nil {
 		return fmt.Errorf("update agent relation %s: %w", id, result.Error)
@@ -124,10 +126,10 @@ func toAgentRelationRecord(rel models.AgentRelationModel) (AgentRelationRecord, 
 		}
 	}
 	return AgentRelationRecord{
-		ID:              rel.ID,
-		SchemaID:        rel.SchemaID,
-		SourceAgentName: rel.SourceAgentName,
-		TargetAgentName: rel.TargetAgentName,
-		Config:          config,
+		ID:            rel.ID,
+		SchemaID:      rel.SchemaID,
+		SourceAgentID: rel.SourceAgentID,
+		TargetAgentID: rel.TargetAgentID,
+		Config:        config,
 	}, nil
 }

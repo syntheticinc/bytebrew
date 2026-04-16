@@ -188,25 +188,32 @@ func (s *ForkService) forkInTx(tx *gorm.DB, tmpl *domain.SchemaTemplate, newSche
 	//    exists in the agents list.
 	entryAgentID := agentIDByLogical[def.EntryAgentName]
 
-	// 5. Create delegation relations. Each relation stores the new
-	//    namespaced agent names (AgentRelationModel is name-based, not
-	//    id-based — see agent_relation.go).
+	// Set the entry agent on the schema.
+	if entryAgentID != "" {
+		if err := tx.Model(&models.SchemaModel{}).Where("id = ?", schema.ID).
+			Update("entry_agent_id", entryAgentID).Error; err != nil {
+			return ForkedSchema{}, fmt.Errorf("set entry agent: %w", err)
+		}
+	}
+
+	// 5. Create delegation relations. Each relation stores source/target
+	//    agent UUIDs (Q.5: was name-based, now id-based).
 	for _, rel := range def.Relations {
-		sourceName, ok := agentNameByLogical[rel.Source]
+		sourceID, ok := agentIDByLogical[rel.Source]
 		if !ok {
 			return ForkedSchema{}, fmt.Errorf("relation source %q: %w", rel.Source, ErrInvalidTemplate)
 		}
-		targetName, ok := agentNameByLogical[rel.Target]
+		targetID, ok := agentIDByLogical[rel.Target]
 		if !ok {
 			return ForkedSchema{}, fmt.Errorf("relation target %q: %w", rel.Target, ErrInvalidTemplate)
 		}
 		relModel := models.AgentRelationModel{
-			SchemaID:        schema.ID,
-			SourceAgentName: sourceName,
-			TargetAgentName: targetName,
+			SchemaID:      schema.ID,
+			SourceAgentID: sourceID,
+			TargetAgentID: targetID,
 		}
 		if err := tx.Create(&relModel).Error; err != nil {
-			return ForkedSchema{}, fmt.Errorf("create relation %s → %s: %w", sourceName, targetName, err)
+			return ForkedSchema{}, fmt.Errorf("create relation %s → %s: %w", rel.Source, rel.Target, err)
 		}
 	}
 
@@ -223,12 +230,10 @@ func (s *ForkService) forkInTx(tx *gorm.DB, tmpl *domain.SchemaTemplate, newSche
 		if err != nil {
 			return ForkedSchema{}, fmt.Errorf("trigger %q: %w", t.Title, err)
 		}
-		agentID := entryAgentID
 		schemaID := schema.ID
 		trigger := models.TriggerModel{
 			Type:     triggerType,
 			Title:    t.Title,
-			AgentID:  &agentID,
 			SchemaID: &schemaID,
 			Enabled:  t.Enabled,
 			Config:   config,

@@ -51,8 +51,8 @@ func (t *adminListTriggersTool) InvokableRun(ctx context.Context, _ string, _ ..
 		default:
 			detail = tr.Type
 		}
-		sb.WriteString(fmt.Sprintf("- id=%s **%s** (type=%s, %s, agent=%s, enabled=%v)\n",
-			tr.ID, tr.Title, tr.Type, detail, tr.AgentName, tr.Enabled))
+		sb.WriteString(fmt.Sprintf("- id=%s **%s** (type=%s, %s, enabled=%v)\n",
+			tr.ID, tr.Title, tr.Type, detail, tr.Enabled))
 	}
 	return sb.String(), nil
 }
@@ -105,10 +105,6 @@ func (t *adminCreateTriggerTool) InvokableRun(ctx context.Context, argsJSON stri
 	if args.Title == "" {
 		return "[ERROR] title is required", nil
 	}
-	if args.AgentName == "" {
-		return "[ERROR] agent_name is required", nil
-	}
-
 	enabled := true
 	if args.Enabled != nil {
 		enabled = *args.Enabled
@@ -117,7 +113,6 @@ func (t *adminCreateTriggerTool) InvokableRun(ctx context.Context, argsJSON stri
 	record := &TriggerRecord{
 		Type:        args.Type,
 		Title:       args.Title,
-		AgentName:   args.AgentName,
 		Schedule:    args.Schedule,
 		WebhookPath: args.WebhookPath,
 		Description: args.Description,
@@ -132,8 +127,8 @@ func (t *adminCreateTriggerTool) InvokableRun(ctx context.Context, argsJSON stri
 		t.reloader()
 	}
 
-	slog.InfoContext(ctx, "[AdminCreateTrigger] created", "title", args.Title, "type", args.Type, "agent", args.AgentName)
-	return fmt.Sprintf("Trigger %q created (id=%s, type=%s, agent=%s).", args.Title, record.ID, args.Type, args.AgentName), nil
+	slog.InfoContext(ctx, "[AdminCreateTrigger] created", "title", args.Title, "type", args.Type)
+	return fmt.Sprintf("Trigger %q created (id=%s, type=%s).", args.Title, record.ID, args.Type), nil
 }
 
 // --- admin_update_trigger ---
@@ -194,8 +189,6 @@ func (t *adminUpdateTriggerTool) InvokableRun(ctx context.Context, argsJSON stri
 	record := &TriggerRecord{
 		Type:        coalesce(args.Type, existing.Type),
 		Title:       coalesce(args.Title, existing.Title),
-		AgentName:   coalesce(args.AgentName, existing.AgentName),
-		AgentID:     existing.AgentID,
 		Schedule:    coalesce(args.Schedule, existing.Schedule),
 		WebhookPath: coalesce(args.WebhookPath, existing.WebhookPath),
 		Description: coalesce(args.Description, existing.Description),

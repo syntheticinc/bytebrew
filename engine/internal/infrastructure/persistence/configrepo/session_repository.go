@@ -22,9 +22,8 @@ func NewGORMSessionRepository(db *gorm.DB) *GORMSessionRepository {
 func (r *GORMSessionRepository) List(ctx context.Context, agentName, userID, status, from, to string, page, perPage int) ([]models.SessionModel, int64, error) {
 	q := r.db.WithContext(ctx).Model(&models.SessionModel{})
 
-	if agentName != "" {
-		q = q.Where("agent_name = ?", agentName)
-	}
+	// Q.5: agent_name column dropped from sessions. agentName filter is a no-op.
+	_ = agentName
 	if userID != "" {
 		q = q.Where("user_id = ?", userID)
 	}

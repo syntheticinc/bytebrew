@@ -54,11 +54,13 @@ func (c TriggerConfig) Value() (driver.Value, error) {
 // `schedule` / `webhook_path` columns and the `on_complete_url` /
 // `on_complete_headers` webhook feature are removed entirely.
 // See docs/architecture/agent-first-runtime.md §4.1 / §4.2.
+//
+// Q.5: dropped agent_id — trigger targets schema via schema_id only.
+// The executing orchestrator is resolved via schemas.entry_agent_id.
 type TriggerModel struct {
 	ID          string        `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	Type        string        `gorm:"type:varchar(10);not null;index"`
 	Title       string        `gorm:"type:varchar(255);not null"`
-	AgentID     *string       `gorm:"type:uuid;index"`
 	SchemaID    *string       `gorm:"type:uuid;index;constraint:OnDelete:CASCADE"`
 	Description string        `gorm:"type:text"`
 	Enabled     bool          `gorm:"not null;default:true"`
@@ -68,7 +70,6 @@ type TriggerModel struct {
 	CreatedAt   time.Time `gorm:"autoCreateTime"`
 	UpdatedAt   time.Time `gorm:"autoUpdateTime"`
 
-	Agent  AgentModel  `gorm:"foreignKey:AgentID"`
 	Schema SchemaModel `gorm:"foreignKey:SchemaID"`
 }
 

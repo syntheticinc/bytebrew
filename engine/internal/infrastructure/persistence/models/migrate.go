@@ -195,6 +195,41 @@ func AutoMigrate(db *gorm.DB) error {
 		}
 	}
 
+	// V2 Group Q.5: agent_relations name→id + session/task/trigger restructure.
+	// Defense-in-depth alongside Liquibase 031 — idempotent column drops.
+	if db.Migrator().HasTable("agent_relations") {
+		for _, col := range []string{"source_agent_name", "target_agent_name"} {
+			if db.Migrator().HasColumn("agent_relations", col) {
+				if err := db.Migrator().DropColumn("agent_relations", col); err != nil {
+					slog.Warn("[Migration] dropping legacy agent_relations column failed", "column", col, "error", err)
+				}
+			}
+		}
+	}
+	if db.Migrator().HasTable("sessions") {
+		for _, col := range []string{"agent_name", "agent_id"} {
+			if db.Migrator().HasColumn("sessions", col) {
+				if err := db.Migrator().DropColumn("sessions", col); err != nil {
+					slog.Warn("[Migration] dropping legacy sessions column failed", "column", col, "error", err)
+				}
+			}
+		}
+	}
+	if db.Migrator().HasTable("tasks") {
+		for _, col := range []string{"agent_name", "source", "source_id", "assigned_agent_id", "depth"} {
+			if db.Migrator().HasColumn("tasks", col) {
+				if err := db.Migrator().DropColumn("tasks", col); err != nil {
+					slog.Warn("[Migration] dropping legacy tasks column failed", "column", col, "error", err)
+				}
+			}
+		}
+	}
+	if db.Migrator().HasTable("triggers") && db.Migrator().HasColumn("triggers", "agent_id") {
+		if err := db.Migrator().DropColumn("triggers", "agent_id"); err != nil {
+			slog.Warn("[Migration] dropping legacy triggers.agent_id column failed", "error", err)
+		}
+	}
+
 	// V2 Group N: drop 6 legacy tables not in target-schema.dbml (Commit Group N).
 	// Defense-in-depth alongside Liquibase 024 — idempotent DROP TABLE IF EXISTS.
 	// session_events (replaced by session_event_log), runtime_config (replaced by

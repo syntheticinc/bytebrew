@@ -30,17 +30,12 @@ CREATE TABLE tasks (
 	title TEXT NOT NULL,
 	description TEXT,
 	acceptance_criteria TEXT,
-	agent_name TEXT NOT NULL,
-	source TEXT NOT NULL,
-	source_id TEXT,
 	user_id TEXT,
 	session_id TEXT,
 	parent_task_id TEXT,
-	depth INTEGER NOT NULL DEFAULT 0,
 	status TEXT NOT NULL DEFAULT 'pending',
 	mode TEXT NOT NULL DEFAULT 'interactive',
 	priority INTEGER NOT NULL DEFAULT 0,
-	assigned_agent_id TEXT,
 	blocked_by TEXT,
 	result TEXT,
 	error TEXT,
@@ -65,10 +60,8 @@ func newPendingSubtask(parentID uuid.UUID, priority int) *domain.EngineTask {
 	return &domain.EngineTask{
 		ID:           uuid.New(),
 		Title:        "Subtask",
-		AgentName:    "coder",
 		Status:       domain.EngineTaskStatusPending,
 		Mode:         domain.TaskModeInteractive,
-		Source:       domain.TaskSourceAgent,
 		ParentTaskID: &parentID,
 		Priority:     priority,
 		CreatedAt:    time.Now(),
@@ -79,8 +72,8 @@ func newPendingSubtask(parentID uuid.UUID, priority int) *domain.EngineTask {
 func newParent(t *testing.T, repo *GORMTaskRepository) *domain.EngineTask {
 	t.Helper()
 	parent := &domain.EngineTask{
-		ID: uuid.New(), Title: "Parent", AgentName: "lead", Status: domain.EngineTaskStatusInProgress,
-		Mode: domain.TaskModeInteractive, Source: domain.TaskSourceAgent,
+		ID: uuid.New(), Title: "Parent", Status: domain.EngineTaskStatusInProgress,
+		Mode: domain.TaskModeInteractive,
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	mustCreateTask(t, repo, parent)
@@ -112,8 +105,8 @@ func TestGORMTaskRepository_GetReadySubtasks_BlockedUntilTerminal(t *testing.T) 
 	// Blocker in progress — lives OUTSIDE parent's subtree so it doesn't
 	// compete for the "ready subtask" slot of our dependent task.
 	blocker := &domain.EngineTask{
-		ID: uuid.New(), Title: "Blocker", AgentName: "coder", Status: domain.EngineTaskStatusInProgress,
-		Mode: domain.TaskModeInteractive, Source: domain.TaskSourceAgent,
+		ID: uuid.New(), Title: "Blocker", Status: domain.EngineTaskStatusInProgress,
+		Mode: domain.TaskModeInteractive,
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	mustCreateTask(t, repo, blocker)
@@ -149,13 +142,13 @@ func TestGORMTaskRepository_GetReadySubtasks_PartialBlockerResolution(t *testing
 
 	// Blockers live OUTSIDE parent's subtree (another branch of the task graph).
 	doneBlk := &domain.EngineTask{
-		ID: uuid.New(), Title: "Done blocker", AgentName: "coder", Status: domain.EngineTaskStatusCompleted,
-		Mode: domain.TaskModeInteractive, Source: domain.TaskSourceAgent,
+		ID: uuid.New(), Title: "Done blocker", Status: domain.EngineTaskStatusCompleted,
+		Mode: domain.TaskModeInteractive,
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	openBlk := &domain.EngineTask{
-		ID: uuid.New(), Title: "Open blocker", AgentName: "coder", Status: domain.EngineTaskStatusPending,
-		Mode: domain.TaskModeInteractive, Source: domain.TaskSourceAgent,
+		ID: uuid.New(), Title: "Open blocker", Status: domain.EngineTaskStatusPending,
+		Mode: domain.TaskModeInteractive,
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	mustCreateTask(t, repo, doneBlk)

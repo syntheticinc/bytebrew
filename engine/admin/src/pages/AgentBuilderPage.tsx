@@ -33,7 +33,7 @@ import CanvasToolbar from '../components/builder/CanvasToolbar';
 import { CanvasContextMenu, NodeContextMenu, EdgeContextMenu } from '../components/builder/CanvasContextMenus';
 import TriggerConfigPanel from '../components/builder/TriggerConfigPanel';
 import { useCanvasNodes, makeNode, makeTriggerNode, NODE_WIDTH, NODE_HEIGHT, TRIGGER_NODE_WIDTH, TRIGGER_NODE_HEIGHT } from '../hooks/useCanvasNodes';
-import { useCanvasEdges, makeEdge, makeTriggerEdge } from '../hooks/useCanvasEdges';
+import { useCanvasEdges, makeEdge } from '../hooks/useCanvasEdges';
 import { useCanvasInteraction } from '../hooks/useCanvasInteraction';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -331,9 +331,9 @@ function AgentBuilderInner() {
           );
           rawNodes.push(triggerNode);
 
-          if (trigger.agent_name && agentNames.has(trigger.agent_name)) {
-            rawEdges.push(makeTriggerEdge(nodeId, trigger.agent_name));
-          }
+          // Q.5: triggers no longer carry agent_name; trigger-to-agent edges
+          // would need schema.entry_agent_id resolution. Skipped for now.
+          void trigger;
         }
 
         // Apply dagre only to nodes without saved positions (new nodes).

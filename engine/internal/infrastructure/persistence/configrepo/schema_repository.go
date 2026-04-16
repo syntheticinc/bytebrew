@@ -139,11 +139,19 @@ func (r *GORMSchemaRepository) ListAgents(ctx context.Context, schemaID string) 
 //
 // V2 derivation: schemas where the agent appears as source or target of any
 // agent_relation. See docs/architecture/agent-first-runtime.md §2.1.
+//
+// Q.5: agent_relations uses source_agent_id/target_agent_id UUIDs. We first
+// resolve agentName → agent.id, then query agent_relations by UUID.
 func (r *GORMSchemaRepository) ListSchemasForAgent(ctx context.Context, agentName string) ([]string, error) {
+	var agentID string
+	if err := r.db.WithContext(ctx).Raw("SELECT id FROM agents WHERE name = ?", agentName).Scan(&agentID).Error; err != nil || agentID == "" {
+		return nil, nil
+	}
+
 	var schemaIDs []string
 	if err := r.db.WithContext(ctx).
 		Raw(`SELECT DISTINCT schema_id FROM agent_relations
-			WHERE source_agent_name = ? OR target_agent_name = ?`, agentName, agentName).
+			WHERE source_agent_id = ? OR target_agent_id = ?`, agentID, agentID).
 		Scan(&schemaIDs).Error; err != nil {
 		return nil, fmt.Errorf("list schema ids for agent %q: %w", agentName, err)
 	}
@@ -165,19 +173,22 @@ func (r *GORMSchemaRepository) ListSchemasForAgent(ctx context.Context, agentNam
 }
 
 // deriveAgentNames returns the distinct agent names participating in a schema
-// via agent_relations (union of source_agent_name and target_agent_name).
+// via agent_relations (union of source_agent_id and target_agent_id, joined to
+// agents for the name).
 //
 // Per docs/architecture/agent-first-runtime.md §2.1, an isolated agent in a
 // schema with no relations is not a supported state — schema membership is
 // expressed through delegation relations.
+//
+// Q.5: queries by agent UUID, joins agents table to resolve names.
 func (r *GORMSchemaRepository) deriveAgentNames(ctx context.Context, schemaID string) ([]string, error) {
 	var names []string
 	if err := r.db.WithContext(ctx).
-		Raw(`SELECT DISTINCT name FROM (
-				SELECT source_agent_name AS name FROM agent_relations WHERE schema_id = ?
+		Raw(`SELECT DISTINCT a.name FROM (
+				SELECT source_agent_id AS agent_id FROM agent_relations WHERE schema_id = ?
 				UNION
-				SELECT target_agent_name AS name FROM agent_relations WHERE schema_id = ?
-			) members ORDER BY name`, schemaID, schemaID).
+				SELECT target_agent_id AS agent_id FROM agent_relations WHERE schema_id = ?
+			) members JOIN agents a ON a.id = members.agent_id ORDER BY a.name`, schemaID, schemaID).
 		Scan(&names).Error; err != nil {
 		return nil, fmt.Errorf("derive agent names: %w", err)
 	}

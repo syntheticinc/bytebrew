@@ -30,17 +30,12 @@ CREATE TABLE tasks (
 	title TEXT NOT NULL,
 	description TEXT,
 	acceptance_criteria TEXT,
-	agent_name TEXT NOT NULL,
-	source TEXT NOT NULL,
-	source_id TEXT,
 	user_id TEXT,
 	session_id TEXT,
 	parent_task_id TEXT,
-	depth INTEGER NOT NULL DEFAULT 0,
 	status TEXT NOT NULL DEFAULT 'pending',
 	mode TEXT NOT NULL DEFAULT 'interactive',
 	priority INTEGER NOT NULL DEFAULT 0,
-	assigned_agent_id TEXT,
 	blocked_by TEXT,
 	result TEXT,
 	error TEXT,
@@ -66,8 +61,6 @@ func createTopLevelTask(t *testing.T, adapter *EngineTaskManagerAdapter, title s
 	t.Helper()
 	id, err := adapter.CreateTask(context.Background(), tools.CreateEngineTaskParams{
 		Title:     title,
-		AgentName: "coder",
-		Source:    string(domain.TaskSourceAgent),
 	})
 	require.NoError(t, err)
 	return id
@@ -76,8 +69,6 @@ func createTopLevelTask(t *testing.T, adapter *EngineTaskManagerAdapter, title s
 func TestAdapter_CreateTask_RequiresTitle(t *testing.T) {
 	adapter, _ := newAdapter(t)
 	_, err := adapter.CreateTask(context.Background(), tools.CreateEngineTaskParams{
-		AgentName: "coder",
-		Source:    "agent",
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "title is required")
@@ -88,8 +79,6 @@ func TestAdapter_CreateTask_BlockedByMustExist(t *testing.T) {
 	// Use a well-formed but non-existent UUID so we exercise the existence check.
 	_, err := adapter.CreateTask(context.Background(), tools.CreateEngineTaskParams{
 		Title:     "dependent",
-		AgentName: "coder",
-		Source:    "agent",
 		BlockedBy: []uuid.UUID{uuid.New()},
 	})
 	require.Error(t, err)
@@ -101,8 +90,6 @@ func TestAdapter_CreateTask_BlockedByNilRejected(t *testing.T) {
 	adapter, _ := newAdapter(t)
 	_, err := adapter.CreateTask(context.Background(), tools.CreateEngineTaskParams{
 		Title:     "dependent",
-		AgentName: "coder",
-		Source:    "agent",
 		BlockedBy: []uuid.UUID{uuid.Nil},
 	})
 	require.Error(t, err)
@@ -114,8 +101,6 @@ func TestAdapter_CreateTask_BlockedByExisting(t *testing.T) {
 	blockerID := createTopLevelTask(t, adapter, "blocker")
 	id, err := adapter.CreateTask(context.Background(), tools.CreateEngineTaskParams{
 		Title:     "dependent",
-		AgentName: "coder",
-		Source:    "agent",
 		BlockedBy: []uuid.UUID{blockerID},
 	})
 	require.NoError(t, err)
@@ -126,8 +111,6 @@ func TestAdapter_CreateSubTask_ParentMustExist(t *testing.T) {
 	adapter, _ := newAdapter(t)
 	_, err := adapter.CreateSubTask(context.Background(), uuid.New(), tools.CreateEngineTaskParams{
 		Title:     "child",
-		AgentName: "coder",
-		Source:    "agent",
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "parent task not found")
@@ -142,8 +125,6 @@ func TestAdapter_CreateSubTask_ParentTerminalRejected(t *testing.T) {
 
 	_, err := adapter.CreateSubTask(context.Background(), parentID, tools.CreateEngineTaskParams{
 		Title:     "child",
-		AgentName: "coder",
-		Source:    "agent",
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot add subtask to terminal task")
@@ -158,13 +139,11 @@ func TestAdapter_CreateSubTask_SetsIncrementedDepth(t *testing.T) {
 	for level := 1; level <= 3; level++ {
 		id, err := adapter.CreateSubTask(context.Background(), previous, tools.CreateEngineTaskParams{
 			Title:     "child",
-			AgentName: "coder",
-			Source:    "agent",
 		})
 		require.NoError(t, err)
-		task, err := repo.GetByID(context.Background(), id)
+		_, err = repo.GetByID(context.Background(), id)
 		require.NoError(t, err)
-		assert.Equal(t, level, task.Depth, "level %d", level)
+		// Q.5: depth is no longer stored — just verify the subtask was created.
 		previous = id
 	}
 }
@@ -179,8 +158,6 @@ func TestAdapter_CreateSubTask_DepthLimitEnforced(t *testing.T) {
 	for level := 1; level < MaxTaskDepth; level++ {
 		id, err := adapter.CreateSubTask(context.Background(), previous, tools.CreateEngineTaskParams{
 			Title:     "child",
-			AgentName: "coder",
-			Source:    "agent",
 		})
 		require.NoError(t, err, "level %d within limit", level)
 		previous = id
@@ -188,8 +165,6 @@ func TestAdapter_CreateSubTask_DepthLimitEnforced(t *testing.T) {
 
 	_, err := adapter.CreateSubTask(context.Background(), previous, tools.CreateEngineTaskParams{
 		Title:     "too deep",
-		AgentName: "coder",
-		Source:    "agent",
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "exceeds maximum")
@@ -202,8 +177,6 @@ func TestAdapter_CreateSubTask_BlockedByPropagated(t *testing.T) {
 
 	childID, err := adapter.CreateSubTask(context.Background(), parentID, tools.CreateEngineTaskParams{
 		Title:     "child",
-		AgentName: "coder",
-		Source:    "agent",
 		BlockedBy: []uuid.UUID{blockerID},
 	})
 	require.NoError(t, err)
@@ -219,8 +192,6 @@ func TestAdapter_CancelTask_StoresReasonOnRoot(t *testing.T) {
 	parentID := createTopLevelTask(t, adapter, "parent")
 	childID, err := adapter.CreateSubTask(context.Background(), parentID, tools.CreateEngineTaskParams{
 		Title:     "child",
-		AgentName: "coder",
-		Source:    "agent",
 	})
 	require.NoError(t, err)
 
@@ -259,8 +230,6 @@ func TestAdapter_CreateTask_InvalidPriorityAllowedAtAdapter(t *testing.T) {
 	adapter, repo := newAdapter(t)
 	id, err := adapter.CreateTask(context.Background(), tools.CreateEngineTaskParams{
 		Title:     "no-validation-at-adapter",
-		AgentName: "coder",
-		Source:    "agent",
 		Priority:  7,
 	})
 	require.NoError(t, err)
@@ -274,8 +243,6 @@ func TestAdapter_ValidateParent_RejectsMissingParent(t *testing.T) {
 	badID := uuid.New()
 	_, err := adapter.CreateSubTask(context.Background(), badID, tools.CreateEngineTaskParams{
 		Title:     "child",
-		AgentName: "coder",
-		Source:    "agent",
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "parent task not found")

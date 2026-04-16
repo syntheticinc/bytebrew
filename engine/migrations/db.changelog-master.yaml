@@ -57,3 +57,7 @@ databaseChangeLog:
       file: migrations/028_v2_text_to_jsonb.yaml
   - include:
       file: migrations/029_v2_drop_legacy_columns.yaml
+  - include:
+      file: migrations/030_v2_flowtype_purge.yaml
+  - include:
+      file: migrations/031_v2_restructure_relations_sessions_tasks.yaml

@@ -66,13 +66,13 @@ func TestV2_SchemaMembership_DerivedFromRelations(t *testing.T) {
 	// Adding a delegation makes both endpoints implicit members.
 	require.NoError(t, relRepo.Create(ctx, &configrepo.AgentRelationRecord{
 		SchemaID:        schema.ID,
-		SourceAgentName: "triage",
-		TargetAgentName: "faq",
+		SourceAgentID: "triage",
+		TargetAgentID: "faq",
 	}))
 	require.NoError(t, relRepo.Create(ctx, &configrepo.AgentRelationRecord{
 		SchemaID:        schema.ID,
-		SourceAgentName: "triage",
-		TargetAgentName: "billing",
+		SourceAgentID: "triage",
+		TargetAgentID: "billing",
 	}))
 
 	members, err = schemaRepo.ListAgents(ctx, schema.ID)
@@ -97,20 +97,20 @@ func TestV2_ListSchemasForAgent_DerivedFromRelations(t *testing.T) {
 	// faq used in support only.
 	require.NoError(t, relRepo.Create(ctx, &configrepo.AgentRelationRecord{
 		SchemaID:        supportSchema.ID,
-		SourceAgentName: "triage",
-		TargetAgentName: "faq",
+		SourceAgentID: "triage",
+		TargetAgentID: "faq",
 	}))
 	// closer used in sales only.
 	require.NoError(t, relRepo.Create(ctx, &configrepo.AgentRelationRecord{
 		SchemaID:        salesSchema.ID,
-		SourceAgentName: "lead",
-		TargetAgentName: "closer",
+		SourceAgentID: "lead",
+		TargetAgentID: "closer",
 	}))
 	// triage appears in both schemas.
 	require.NoError(t, relRepo.Create(ctx, &configrepo.AgentRelationRecord{
 		SchemaID:        salesSchema.ID,
-		SourceAgentName: "triage",
-		TargetAgentName: "lead",
+		SourceAgentID: "triage",
+		TargetAgentID: "lead",
 	}))
 
 	faqSchemas, err := schemaRepo.ListSchemasForAgent(ctx, "faq")
@@ -140,8 +140,8 @@ func TestV2_DeleteSchema_CascadesAgentRelations(t *testing.T) {
 
 	require.NoError(t, relRepo.Create(ctx, &configrepo.AgentRelationRecord{
 		SchemaID:        schema.ID,
-		SourceAgentName: "a",
-		TargetAgentName: "b",
+		SourceAgentID: "a",
+		TargetAgentID: "b",
 	}))
 
 	require.NoError(t, schemaRepo.Delete(ctx, schema.ID))

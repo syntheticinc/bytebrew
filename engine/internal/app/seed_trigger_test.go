@@ -56,7 +56,6 @@ CREATE TABLE triggers (
 	id TEXT PRIMARY KEY,
 	type TEXT NOT NULL,
 	title TEXT NOT NULL,
-	agent_id TEXT,
 	schema_id TEXT,
 	description TEXT,
 	enabled INTEGER NOT NULL DEFAULT 1,
@@ -90,11 +89,11 @@ func TestSeedBuilderChatTrigger_V2Shape(t *testing.T) {
 	schemaID := uuid.NewString()
 	seedBuilderChatTrigger(context.Background(), db, schemaID)
 
-	// Trigger must exist for (agent, schema, chat).
+	// Trigger must exist for (schema, chat).
 	var triggers []models.TriggerModel
 	require.NoError(t, db.Where(
-		"agent_id = ? AND schema_id = ? AND type = ?",
-		agent.ID, schemaID, models.TriggerTypeChat,
+		"schema_id = ? AND type = ?",
+		schemaID, models.TriggerTypeChat,
 	).Find(&triggers).Error)
 	require.Len(t, triggers, 1, "seedBuilderChatTrigger must create exactly one chat trigger")
 	tr := triggers[0]
@@ -108,7 +107,7 @@ func TestSeedBuilderChatTrigger_V2Shape(t *testing.T) {
 	seedBuilderChatTrigger(context.Background(), db, schemaID)
 	var count int64
 	require.NoError(t, db.Model(&models.TriggerModel{}).
-		Where("agent_id = ? AND type = ?", agent.ID, models.TriggerTypeChat).
+		Where("schema_id = ? AND type = ?", schemaID, models.TriggerTypeChat).
 		Count(&count).Error)
 	assert.Equal(t, int64(1), count, "seedBuilderChatTrigger must be idempotent")
 }

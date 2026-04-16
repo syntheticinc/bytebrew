@@ -115,12 +115,11 @@ type SchemaRecord struct {
 }
 
 // TriggerRecord represents a trigger for admin tools.
+// Q.5: AgentName/AgentID dropped — trigger targets schema only.
 type TriggerRecord struct {
 	ID          string
 	Type        string
 	Title       string
-	AgentName   string
-	AgentID     string
 	SchemaID    *string
 	Schedule    string
 	WebhookPath string
@@ -161,9 +160,9 @@ type AgentRelationRecord struct {
 }
 
 // SessionRecord represents a session for admin tools.
+// Q.5: AgentName dropped — session belongs to schema.
 type SessionRecord struct {
 	ID        string
-	AgentName string
 	UserID    string
 	StartedAt string
 	Status    string

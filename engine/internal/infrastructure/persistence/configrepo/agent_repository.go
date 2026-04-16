@@ -355,30 +355,36 @@ func (r *GORMAgentRepository) toAgentModelWithDB(db *gorm.DB, rec *AgentRecord) 
 }
 
 // loadAllCanSpawn loads CanSpawn (delegation targets) from agent_relations for all agents.
-// In V2, agent_relations replaces agent_spawn_targets — source_agent_name → target_agent_name.
+// Q.5: agent_relations uses source_agent_id/target_agent_id UUIDs. We join
+// agents to resolve names for the CanSpawn map (keyed by source agent name).
 func (r *GORMAgentRepository) loadAllCanSpawn(ctx context.Context) (map[string][]string, error) {
 	var rels []models.AgentRelationModel
-	if err := r.db.WithContext(ctx).Find(&rels).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("SourceAgent").Preload("TargetAgent").Find(&rels).Error; err != nil {
 		return nil, fmt.Errorf("load agent relations: %w", err)
 	}
 
 	result := make(map[string][]string)
 	for _, rel := range rels {
-		result[rel.SourceAgentName] = append(result[rel.SourceAgentName], rel.TargetAgentName)
+		result[rel.SourceAgent.Name] = append(result[rel.SourceAgent.Name], rel.TargetAgent.Name)
 	}
 	return result, nil
 }
 
 // loadCanSpawnForAgent loads CanSpawn targets for a single agent from agent_relations.
+// Q.5: resolves agent name → id, then queries by source_agent_id.
 func (r *GORMAgentRepository) loadCanSpawnForAgent(ctx context.Context, agentName string) []string {
+	var agent models.AgentModel
+	if err := r.db.WithContext(ctx).Where("name = ?", agentName).First(&agent).Error; err != nil {
+		return nil
+	}
 	var rels []models.AgentRelationModel
-	if err := r.db.WithContext(ctx).Where("source_agent_name = ?", agentName).Find(&rels).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("TargetAgent").Where("source_agent_id = ?", agent.ID).Find(&rels).Error; err != nil {
 		return nil
 	}
 
 	names := make([]string, 0, len(rels))
 	for _, rel := range rels {
-		names = append(names, rel.TargetAgentName)
+		names = append(names, rel.TargetAgent.Name)
 	}
 	return names
 }

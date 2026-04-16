@@ -301,10 +301,10 @@ func seedBuilderChatTrigger(ctx context.Context, db *gorm.DB, schemaID string) {
 		return
 	}
 
-	// Check if chat trigger already exists for this agent in this schema.
+	// Check if chat trigger already exists for this schema.
 	var count int64
 	db.WithContext(ctx).Model(&models.TriggerModel{}).
-		Where("agent_id = ? AND type = ? AND schema_id = ?", agent.ID, models.TriggerTypeChat, schemaID).
+		Where("type = ? AND schema_id = ?", models.TriggerTypeChat, schemaID).
 		Count(&count)
 	if count > 0 {
 		return // already exists
@@ -313,7 +313,6 @@ func seedBuilderChatTrigger(ctx context.Context, db *gorm.DB, schemaID string) {
 	trigger := &models.TriggerModel{
 		Type:     models.TriggerTypeChat,
 		Title:    "Builder Assistant Chat",
-		AgentID:  &agent.ID,
 		SchemaID: &schemaID,
 		Enabled:  true,
 	}

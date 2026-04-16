@@ -10,25 +10,27 @@ import (
 // implicitly by the agent-first runtime: the orchestrator delegates to the
 // target agent via a tool call. See docs/architecture/agent-first-runtime.md
 // §3.1. Optional Config carries non-typing routing hints (e.g. priority).
+//
+// Q.5: source/target are now agent UUIDs (was agent names).
 type AgentRelation struct {
-	ID              string
-	SchemaID        string
-	SourceAgentName string
-	TargetAgentName string
-	Config          map[string]interface{}
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID            string
+	SchemaID      string
+	SourceAgentID string
+	TargetAgentID string
+	Config        map[string]interface{}
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // NewAgentRelation creates a new AgentRelation with validation.
-func NewAgentRelation(schemaID, source, target string) (*AgentRelation, error) {
+func NewAgentRelation(schemaID, sourceAgentID, targetAgentID string) (*AgentRelation, error) {
 	r := &AgentRelation{
-		SchemaID:        schemaID,
-		SourceAgentName: source,
-		TargetAgentName: target,
-		Config:          make(map[string]interface{}),
-		CreatedAt:       time.Now(),
-		UpdatedAt:       time.Now(),
+		SchemaID:      schemaID,
+		SourceAgentID: sourceAgentID,
+		TargetAgentID: targetAgentID,
+		Config:        make(map[string]interface{}),
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 	}
 	if err := r.Validate(); err != nil {
 		return nil, err
@@ -41,13 +43,13 @@ func (r *AgentRelation) Validate() error {
 	if r.SchemaID == "" {
 		return fmt.Errorf("agent relation schema_id is required")
 	}
-	if r.SourceAgentName == "" {
+	if r.SourceAgentID == "" {
 		return fmt.Errorf("agent relation source is required")
 	}
-	if r.TargetAgentName == "" {
+	if r.TargetAgentID == "" {
 		return fmt.Errorf("agent relation target is required")
 	}
-	if r.SourceAgentName == r.TargetAgentName {
+	if r.SourceAgentID == r.TargetAgentID {
 		return fmt.Errorf("agent relation source and target must be different")
 	}
 	return nil

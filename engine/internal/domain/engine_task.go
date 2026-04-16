@@ -7,17 +7,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// TaskSource identifies how an EngineTask was created.
-type TaskSource string
-
-const (
-	TaskSourceAgent     TaskSource = "agent"
-	TaskSourceCron      TaskSource = "cron"
-	TaskSourceWebhook   TaskSource = "webhook"
-	TaskSourceAPI       TaskSource = "api"
-	TaskSourceDashboard TaskSource = "dashboard"
-)
-
 // EngineTaskStatus represents the lifecycle stage of an EngineTask.
 type EngineTaskStatus string
 
@@ -45,28 +34,27 @@ const (
 // Created by agents, cron triggers, webhooks, API, or dashboard.
 // Subtasks are EngineTask with ParentTaskID set (no separate entity).
 //
+// Q.5: dropped agent_name, source, source_id, assigned_agent_id, depth
+// from DB. These are derived at runtime:
+//   - agent info: derived from session's schema
+//   - depth: computed from parent_task_id chain
+//   - source/source_id: tracked on session origin (messages.trigger_id)
+//
 // ID types:
 //   - ID, ParentTaskID, BlockedBy — uuid.UUID (DB-generated UUIDs)
-//   - SourceID — string (external identifier: trigger id, cron expr, webhook path, etc.)
 //   - UserID, SessionID — string (opaque identifiers; stored as-is across subsystems)
-//   - AssignedAgentID — string (agent name, not a UUID)
 type EngineTask struct {
 	ID                 uuid.UUID
 	TenantID           string
 	Title              string
 	Description        string
 	AcceptanceCriteria []string
-	AgentName          string
-	Source             TaskSource
-	SourceID           string
 	UserID             string
 	SessionID          string
 	ParentTaskID       *uuid.UUID
-	Depth              int
 	Status             EngineTaskStatus
 	Mode               TaskMode
 	Priority           int // 0 = normal, 1 = high, 2 = critical
-	AssignedAgentID    string
 	BlockedBy          []uuid.UUID // Task IDs that block this task
 	Result             string
 	Error              string
@@ -184,12 +172,6 @@ func (t *EngineTask) SetPriority(priority int) error {
 	t.Priority = priority
 	t.UpdatedAt = time.Now()
 	return nil
-}
-
-// AssignToAgent assigns this task to an agent.
-func (t *EngineTask) AssignToAgent(agentID string) {
-	t.AssignedAgentID = agentID
-	t.UpdatedAt = time.Now()
 }
 
 // HasBlockers returns true if this task declares any blockers.

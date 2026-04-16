@@ -162,8 +162,8 @@ describe('V2OverviewPage', () => {
 
     it('shows enabled trigger ratio', async () => {
       mockApi.listTriggers.mockResolvedValue([
-        { id: '1', title: 'Trigger 1', type: 'cron', enabled: true, agent_id: 'a', created_at: '' },
-        { id: '2', title: 'Trigger 2', type: 'webhook', enabled: false, agent_id: 'b', created_at: '' },
+        { id: '1', title: 'Trigger 1', type: 'cron', enabled: true, created_at: '' },
+        { id: '2', title: 'Trigger 2', type: 'webhook', enabled: false, created_at: '' },
       ]);
 
       renderPage(false);
