@@ -7,7 +7,7 @@ import "time"
 type MemoryModel struct {
 	ID        string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	SchemaID  string    `gorm:"type:uuid;not null;index:idx_memories_schema_user"`
-	UserID    string    `gorm:"type:varchar(255);not null;index:idx_memories_schema_user"`
+	UserID    string    `gorm:"type:uuid;not null;index:idx_memories_schema_user"`
 	Content   string    `gorm:"type:text;not null"`
 	Metadata  string    `gorm:"type:text"` // JSON
 	CreatedAt time.Time `gorm:"autoCreateTime;index:idx_memories_created"`

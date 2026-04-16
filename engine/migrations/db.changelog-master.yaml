@@ -49,3 +49,5 @@ databaseChangeLog:
       file: migrations/024_v2_drop_legacy_tables.yaml
   - include:
       file: migrations/025_v2_create_users.yaml
+  - include:
+      file: migrations/026_v2_fk_rewire_users.yaml

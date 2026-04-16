@@ -52,15 +52,20 @@ func (l *Logger) Log(ctx context.Context, entry Entry) error {
 		ts = time.Now()
 	}
 
+	var actorUserID *string
+	if entry.ActorID != "" {
+		actorUserID = &entry.ActorID
+	}
+
 	model := models.AuditLogModel{
-		Timestamp: ts,
-		ActorType: entry.ActorType,
-		ActorID:   entry.ActorID,
-		Action:    entry.Action,
-		Resource:  entry.Resource,
-		Details:   string(detailsJSON),
-		SessionID: sessionID,
-		TaskID:    entry.TaskID,
+		Timestamp:   ts,
+		ActorType:   entry.ActorType,
+		ActorUserID: actorUserID,
+		Action:      entry.Action,
+		Resource:    entry.Resource,
+		Details:     string(detailsJSON),
+		SessionID:   sessionID,
+		TaskID:      entry.TaskID,
 	}
 
 	if err := l.db.WithContext(ctx).Create(&model).Error; err != nil {

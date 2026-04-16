@@ -477,11 +477,15 @@ func (a *sessionServiceHTTPAdapter) ListSessions(ctx context.Context, agentName,
 	}
 	result := make([]deliveryhttp.SessionResponse, 0, len(sessions))
 	for _, s := range sessions {
+		userID := ""
+		if s.UserID != nil {
+			userID = *s.UserID
+		}
 		result = append(result, deliveryhttp.SessionResponse{
 			ID:        s.ID,
 			Title:     s.Title,
 			AgentName: s.AgentName,
-			UserID:    s.UserID,
+			UserID:    userID,
 			Status:    s.Status,
 			CreatedAt: s.CreatedAt.Format(time.RFC3339),
 			UpdatedAt: s.UpdatedAt.Format(time.RFC3339),
@@ -498,11 +502,15 @@ func (a *sessionServiceHTTPAdapter) GetSession(ctx context.Context, id string) (
 	if s == nil {
 		return nil, nil
 	}
+	userID := ""
+	if s.UserID != nil {
+		userID = *s.UserID
+	}
 	return &deliveryhttp.SessionResponse{
 		ID:        s.ID,
 		Title:     s.Title,
 		AgentName: s.AgentName,
-		UserID:    s.UserID,
+		UserID:    userID,
 		Status:    s.Status,
 		CreatedAt: s.CreatedAt.Format(time.RFC3339),
 		UpdatedAt: s.UpdatedAt.Format(time.RFC3339),
@@ -514,21 +522,29 @@ func (a *sessionServiceHTTPAdapter) CreateSession(ctx context.Context, req deliv
 	if id == "" {
 		id = fmt.Sprintf("web-%d", time.Now().UnixNano())
 	}
+	var userID *string
+	if req.UserID != "" {
+		userID = &req.UserID
+	}
 	session := &models.SessionModel{
 		ID:        id,
 		Title:     req.Title,
 		AgentName: req.AgentName,
-		UserID:    req.UserID,
+		UserID:    userID,
 		Status:    "active",
 	}
 	if err := a.repo.Create(ctx, session); err != nil {
 		return nil, err
 	}
+	respUserID := ""
+	if session.UserID != nil {
+		respUserID = *session.UserID
+	}
 	return &deliveryhttp.SessionResponse{
 		ID:        session.ID,
 		Title:     session.Title,
 		AgentName: session.AgentName,
-		UserID:    session.UserID,
+		UserID:    respUserID,
 		Status:    session.Status,
 		CreatedAt: session.CreatedAt.Format(time.RFC3339),
 		UpdatedAt: session.UpdatedAt.Format(time.RFC3339),

@@ -484,10 +484,14 @@ func (a *adminSessionRepoAdapter) List(ctx context.Context) ([]admintools.Sessio
 	}
 	out := make([]admintools.SessionRecord, 0, len(sessions))
 	for _, s := range sessions {
+		userID := ""
+		if s.UserID != nil {
+			userID = *s.UserID
+		}
 		out = append(out, admintools.SessionRecord{
 			ID:        s.ID,
 			AgentName: s.AgentName,
-			UserID:    s.UserID,
+			UserID:    userID,
 			StartedAt: s.CreatedAt.Format("2006-01-02T15:04:05Z"),
 			Status:    s.Status,
 		})
@@ -503,10 +507,14 @@ func (a *adminSessionRepoAdapter) GetByID(ctx context.Context, id string) (*admi
 	if s == nil {
 		return nil, fmt.Errorf("session %q not found", id)
 	}
+	userID := ""
+	if s.UserID != nil {
+		userID = *s.UserID
+	}
 	return &admintools.SessionRecord{
 		ID:        s.ID,
 		AgentName: s.AgentName,
-		UserID:    s.UserID,
+		UserID:    userID,
 		StartedAt: s.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		Status:    s.Status,
 	}, nil

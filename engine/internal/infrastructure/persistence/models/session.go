@@ -8,7 +8,7 @@ type SessionModel struct {
 	Title       string     `gorm:"type:varchar(500)"`
 	AgentName   string     `gorm:"type:varchar(255);not null"`
 	AgentID     *string    `gorm:"type:uuid;index"`
-	UserID      string     `gorm:"type:varchar(255);index"`
+	UserID      *string    `gorm:"type:uuid;index"`
 	Status      string     `gorm:"type:varchar(20);not null;default:active;index"`
 	CreatedAt   time.Time  `gorm:"autoCreateTime"`
 	UpdatedAt   time.Time  `gorm:"autoUpdateTime"`

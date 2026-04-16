@@ -235,11 +235,15 @@ func (a *auditServiceHTTPAdapter) ListAuditLogs(ctx context.Context, actorType, 
 
 	result := make([]deliveryhttp.AuditResponse, 0, len(logs))
 	for _, l := range logs {
+		actorID := ""
+		if l.ActorUserID != nil {
+			actorID = *l.ActorUserID
+		}
 		result = append(result, deliveryhttp.AuditResponse{
 			ID:        l.ID,
 			Timestamp: l.Timestamp.Format(time.RFC3339),
 			ActorType: l.ActorType,
-			ActorID:   l.ActorID,
+			ActorID:   actorID,
 			Action:    l.Action,
 			Resource:  l.Resource,
 			Details:   l.Details,

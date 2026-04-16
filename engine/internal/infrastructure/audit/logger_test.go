@@ -26,7 +26,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		timestamp DATETIME,
 		actor_type VARCHAR(20) NOT NULL,
-		actor_id VARCHAR(255),
+		actor_user_id VARCHAR(255),
 		action VARCHAR(50) NOT NULL,
 		resource VARCHAR(500),
 		details TEXT,
@@ -63,7 +63,8 @@ func TestLogger_Log(t *testing.T) {
 	require.NoError(t, db.First(&result).Error)
 
 	assert.Equal(t, "admin", result.ActorType)
-	assert.Equal(t, "user-1", result.ActorID)
+	require.NotNil(t, result.ActorUserID)
+	assert.Equal(t, "user-1", *result.ActorUserID)
 	assert.Equal(t, "api_call", result.Action)
 	assert.Equal(t, "GET /api/v1/agents", result.Resource)
 	assert.Contains(t, result.Details, `"method":"GET"`)

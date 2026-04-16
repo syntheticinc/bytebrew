@@ -5,6 +5,7 @@ import "time"
 // APITokenModel maps to the "api_tokens" table.
 type APITokenModel struct {
 	ID         string     `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
+	UserID     *string    `gorm:"type:uuid"`
 	Name       string     `gorm:"uniqueIndex;not null"`
 	TokenHash  string     `gorm:"uniqueIndex;not null"`
 	ScopesMask int        `gorm:"not null;default:0"`

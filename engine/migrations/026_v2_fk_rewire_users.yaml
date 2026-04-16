@@ -1,0 +1,59 @@
+databaseChangeLog:
+  # V2 Group P.1 — FK rewiring from sessions/memories/audit_logs/api_tokens → users.id
+  #
+  # No production data exists — clean-schema policy allows type changes.
+  # user_id columns changed from varchar to uuid with FK to users(id).
+  # audit_logs.actor_id renamed to actor_user_id per target-schema.dbml.
+  # api_tokens gets a new user_id column (did not exist before).
+
+  - changeSet:
+      id: 026-v2-fk-rewire-users
+      author: system
+      changes:
+        - sql:
+            sql: |
+              -- sessions.user_id: varchar(255) → uuid, nullable (cron/webhook sessions)
+              ALTER TABLE sessions
+                ALTER COLUMN user_id DROP NOT NULL,
+                ALTER COLUMN user_id TYPE uuid USING user_id::uuid;
+              ALTER TABLE sessions
+                ADD CONSTRAINT fk_sessions_user
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
+
+              -- memories.user_id: varchar(255) → uuid, not null
+              ALTER TABLE memories
+                ALTER COLUMN user_id TYPE uuid USING user_id::uuid;
+              ALTER TABLE memories
+                ADD CONSTRAINT fk_memories_user
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+
+              -- audit_logs: rename actor_id → actor_user_id, varchar(255) → uuid, nullable
+              ALTER TABLE audit_logs
+                RENAME COLUMN actor_id TO actor_user_id;
+              ALTER TABLE audit_logs
+                ALTER COLUMN actor_user_id TYPE uuid USING actor_user_id::uuid;
+              ALTER TABLE audit_logs
+                ADD CONSTRAINT fk_audit_logs_user
+                FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL;
+
+              -- api_tokens: add user_id uuid not null with FK
+              ALTER TABLE api_tokens
+                ADD COLUMN user_id uuid;
+              ALTER TABLE api_tokens
+                ADD CONSTRAINT fk_api_tokens_user
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;
+      rollback:
+        - sql:
+            sql: |
+              ALTER TABLE api_tokens DROP CONSTRAINT IF EXISTS fk_api_tokens_user;
+              ALTER TABLE api_tokens DROP COLUMN IF EXISTS user_id;
+
+              ALTER TABLE audit_logs DROP CONSTRAINT IF EXISTS fk_audit_logs_user;
+              ALTER TABLE audit_logs ALTER COLUMN actor_user_id TYPE varchar(255);
+              ALTER TABLE audit_logs RENAME COLUMN actor_user_id TO actor_id;
+
+              ALTER TABLE memories DROP CONSTRAINT IF EXISTS fk_memories_user;
+              ALTER TABLE memories ALTER COLUMN user_id TYPE varchar(255);
+
+              ALTER TABLE sessions DROP CONSTRAINT IF EXISTS fk_sessions_user;
+              ALTER TABLE sessions ALTER COLUMN user_id TYPE varchar(255);

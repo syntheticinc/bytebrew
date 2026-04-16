@@ -7,7 +7,7 @@ type AuditLogModel struct {
 	ID        string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	Timestamp time.Time `gorm:"not null;default:now();index"`
 	ActorType string    `gorm:"type:varchar(20);not null;index"`
-	ActorID   string    `gorm:"type:varchar(255)"`
+	ActorUserID *string `gorm:"column:actor_user_id;type:uuid"`
 	Action    string    `gorm:"type:varchar(50);not null;index"`
 	Resource  string    `gorm:"type:varchar(500)"`
 	Details   string    `gorm:"type:text"`

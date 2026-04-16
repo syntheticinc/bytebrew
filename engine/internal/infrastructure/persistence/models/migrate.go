@@ -187,6 +187,14 @@ func AutoMigrate(db *gorm.DB) error {
 		}
 	}
 
+	// V2 Group P.1: FK rewire — rename audit_logs.actor_id → actor_user_id.
+	// Defense-in-depth alongside Liquibase 026 — idempotent column rename.
+	if db.Migrator().HasTable("audit_logs") && db.Migrator().HasColumn("audit_logs", "actor_id") {
+		if err := db.Migrator().RenameColumn(&AuditLogModel{}, "actor_id", "actor_user_id"); err != nil {
+			slog.Warn("[Migration] renaming audit_logs.actor_id to actor_user_id failed (may already be renamed)", "error", err)
+		}
+	}
+
 	// V2 Group N: drop 6 legacy tables not in target-schema.dbml (Commit Group N).
 	// Defense-in-depth alongside Liquibase 024 — idempotent DROP TABLE IF EXISTS.
 	// session_events (replaced by session_event_log), runtime_config (replaced by
