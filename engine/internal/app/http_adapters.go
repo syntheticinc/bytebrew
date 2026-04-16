@@ -131,6 +131,19 @@ func (a *tokenRepoHTTPAdapter) VerifyToken(ctx context.Context, tokenHash string
 	return a.repo.VerifyToken(ctx, tokenHash)
 }
 
+// userResolverHTTPAdapter bridges GORMUserRepository to the http.UserResolver interface.
+type userResolverHTTPAdapter struct {
+	repo *configrepo.GORMUserRepository
+}
+
+func (a *userResolverHTTPAdapter) GetOrCreate(ctx context.Context, tenantID, externalID string) (string, error) {
+	user, err := a.repo.GetOrCreate(ctx, tenantID, externalID)
+	if err != nil {
+		return "", err
+	}
+	return user.ID, nil
+}
+
 // configReloaderHTTPAdapter bridges AgentRegistry and MCP reconnection to the http.ConfigReloader interface.
 type configReloaderHTTPAdapter struct {
 	registry            *agentregistry.AgentRegistry

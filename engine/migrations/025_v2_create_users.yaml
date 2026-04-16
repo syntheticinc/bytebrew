@@ -1,0 +1,38 @@
+databaseChangeLog:
+  # V2 Group P — create users table for lazy identity management.
+  #
+  # Users are lazy-created on first authenticated request (JWT sub →
+  # GetOrCreate upsert). No password storage — auth is external.
+  #
+  # FK rewiring from sessions/memories/audit_logs/api_tokens → users.id
+  # is deferred: existing columns store string user_id (varchar), converting
+  # to uuid FK requires data migration which violates clean-schema policy.
+  #
+  # Clean-schema policy: pure DDL only (CREATE TABLE).
+
+  - changeSet:
+      id: 025-v2-create-users
+      author: system
+      changes:
+        - sql:
+            sql: |
+              CREATE TABLE IF NOT EXISTS users (
+                id           uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
+                tenant_id    uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                external_id  varchar(255) NOT NULL,
+                email        varchar(255),
+                display_name varchar(255),
+                disabled     boolean      NOT NULL DEFAULT false,
+                created_at   timestamptz  NOT NULL DEFAULT now(),
+                updated_at   timestamptz  NOT NULL DEFAULT now()
+              );
+
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_users_tenant_external
+                ON users (tenant_id, external_id);
+
+              CREATE INDEX IF NOT EXISTS idx_users_tenant_id
+                ON users (tenant_id);
+      rollback:
+        - sql:
+            sql: |
+              DROP TABLE IF EXISTS users;

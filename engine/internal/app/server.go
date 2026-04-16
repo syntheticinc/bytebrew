@@ -530,6 +530,7 @@ func Run(sc ServerConfig) error {
 	var internalHTTPPort int
 	var httpAuthMW *deliveryhttp.AuthMiddleware
 	var byokMW *deliveryhttp.BYOKMiddleware
+	var userResolveMW func(http.Handler) http.Handler
 	var configurableRL *deliveryhttp.ConfigurableRateLimiter
 	if agentRegistry != nil && bootstrapCfg != nil {
 		httpPort = bootstrapCfg.Engine.Port
@@ -566,6 +567,12 @@ func Run(sc ServerConfig) error {
 		jwtSecret := bootstrapCfg.Security.AdminPassword
 		authMW := deliveryhttp.NewAuthMiddleware(jwtSecret, &tokenRepoHTTPAdapter{repo: apiTokenRepo})
 		httpAuthMW = authMW
+
+		// V2 Group P: lazy user creation middleware. After auth resolves the
+		// actor (JWT sub / API token name), GetOrCreate ensures a users table
+		// row exists and stores the resolved user UUID in context.
+		userRepo := configrepo.NewGORMUserRepository(pgDB)
+		userResolveMW = deliveryhttp.UserResolveMiddleware(&userResolverHTTPAdapter{repo: userRepo})
 
 		// V2 §5.8: per-end-user BYOK middleware. Reads the live config from
 		// `settings` (admin UI updates take effect on the next request via
@@ -615,6 +622,7 @@ func Run(sc ServerConfig) error {
 		// Protected management routes — on internalRouter (= r in single-port mode)
 		internalRouter.Group(func(r chi.Router) {
 			r.Use(authMW.Authenticate)
+			r.Use(userResolveMW)
 			r.Use(deliveryhttp.AuditMiddleware(&auditHTTPAdapter{logger: auditLogger}))
 
 			// Schema repo (created early because agent manager needs it for used_in_schemas)
@@ -1006,6 +1014,7 @@ func Run(sc ServerConfig) error {
 
 			internalRouter.Group(func(r chi.Router) {
 				r.Use(authMW.Authenticate)
+				r.Use(userResolveMW)
 				r.Use(eeMW.RequireEE)
 
 				// Tool call audit log (EE) — detailed per-tool-call log
@@ -1359,6 +1368,9 @@ func Run(sc ServerConfig) error {
 			router.Group(func(r chi.Router) {
 				if httpAuthMW != nil {
 					r.Use(httpAuthMW.Authenticate)
+					if userResolveMW != nil {
+						r.Use(userResolveMW)
+					}
 				}
 				// V2 §5.8: BYOK runs AFTER auth so unauthenticated traffic
 				// never reaches the header-parsing path; the LLM factory
@@ -1395,6 +1407,9 @@ func Run(sc ServerConfig) error {
 			router.Group(func(r chi.Router) {
 				if httpAuthMW != nil {
 					r.Use(httpAuthMW.Authenticate)
+					if userResolveMW != nil {
+						r.Use(userResolveMW)
+					}
 					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
 				}
 				r.Post("/api/v1/admin/assistant/chat", adminAssistantHandler.Chat)

@@ -247,6 +247,10 @@ func AutoMigrate(db *gorm.DB) error {
 
 		// Memory table (1)
 		&MemoryModel{},
+
+		// User identity table (1) — V2 Commit Group P.
+		// Lazy-created on first authenticated request.
+		&UserModel{},
 	); err != nil {
 		return err
 	}
