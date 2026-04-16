@@ -89,7 +89,7 @@ func TestEventToModel_GeneratesUUID(t *testing.T) {
 
 func TestEventFromModel_UserMessage(t *testing.T) {
 	payload, _ := json.Marshal(domain.ContentPayload{Content: "Hello"})
-	model := &models.RuntimeEventModel{
+	model := &models.MessageModel{
 		ID:        uuid.New().String(),
 		SessionID: "session-1",
 		EventType: "user_message",
@@ -118,7 +118,7 @@ func TestEventFromModel_ToolCall(t *testing.T) {
 		Tool:      "search",
 		Arguments: map[string]string{"q": "test"},
 	})
-	model := &models.RuntimeEventModel{
+	model := &models.MessageModel{
 		ID:        uuid.New().String(),
 		SessionID: "session-1",
 		EventType: "tool_call",

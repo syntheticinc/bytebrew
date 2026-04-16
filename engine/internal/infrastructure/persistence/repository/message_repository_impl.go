@@ -34,7 +34,7 @@ func (r *MessageRepositoryImpl) Create(ctx context.Context, message *domain.Mess
 
 // GetBySessionID retrieves events by session ID in chronological order
 func (r *MessageRepositoryImpl) GetBySessionID(ctx context.Context, sessionID string, limit, offset int) ([]*domain.Message, error) {
-	var eventModels []models.RuntimeEventModel
+	var eventModels []models.MessageModel
 	query := r.db.WithContext(ctx).Where("session_id = ?", sessionID).Order("created_at ASC")
 
 	if limit > 0 {
@@ -64,7 +64,7 @@ func (r *MessageRepositoryImpl) GetBySessionID(ctx context.Context, sessionID st
 
 // GetBySessionAndAgent retrieves events by session ID and agent ID
 func (r *MessageRepositoryImpl) GetBySessionAndAgent(ctx context.Context, sessionID, agentID string, limit, offset int) ([]*domain.Message, error) {
-	var eventModels []models.RuntimeEventModel
+	var eventModels []models.MessageModel
 	query := r.db.WithContext(ctx).Where("session_id = ? AND agent_id = ?", sessionID, agentID).Order("created_at ASC")
 
 	if limit > 0 {

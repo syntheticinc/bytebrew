@@ -20,8 +20,8 @@ func NewGORMMessageRepository(db *gorm.DB) *GORMMessageRepository {
 }
 
 // ListBySession returns events for a session, sorted by created_at ASC.
-func (r *GORMMessageRepository) ListBySession(ctx context.Context, sessionID string) ([]models.RuntimeEventModel, error) {
-	var events []models.RuntimeEventModel
+func (r *GORMMessageRepository) ListBySession(ctx context.Context, sessionID string) ([]models.MessageModel, error) {
+	var events []models.MessageModel
 	if err := r.db.WithContext(ctx).
 		Where("session_id = ?", sessionID).
 		Order("created_at ASC").
@@ -35,7 +35,7 @@ func (r *GORMMessageRepository) ListBySession(ctx context.Context, sessionID str
 func (r *GORMMessageRepository) DeleteBySession(ctx context.Context, sessionID string) error {
 	if err := r.db.WithContext(ctx).
 		Where("session_id = ?", sessionID).
-		Delete(&models.RuntimeEventModel{}).Error; err != nil {
+		Delete(&models.MessageModel{}).Error; err != nil {
 		return fmt.Errorf("delete events by session: %w", err)
 	}
 	return nil

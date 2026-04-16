@@ -20,7 +20,7 @@ func setupEventTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err, "failed to open in-memory SQLite")
 
 	// Create table manually — SQLite doesn't support uuid/jsonb/gen_random_uuid()
-	err = db.Exec(`CREATE TABLE runtime_events (
+	err = db.Exec(`CREATE TABLE messages (
 		id         TEXT PRIMARY KEY,
 		session_id TEXT NOT NULL,
 		event_type TEXT NOT NULL,
@@ -29,7 +29,7 @@ func setupEventTestDB(t *testing.T) *gorm.DB {
 		payload    TEXT NOT NULL DEFAULT '{}',
 		created_at DATETIME
 	)`).Error
-	require.NoError(t, err, "failed to create runtime_events table")
+	require.NoError(t, err, "failed to create messages table")
 
 	return db
 }

@@ -9,8 +9,8 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 )
 
-// EventToModel converts a domain Message (event) to RuntimeEventModel.
-func EventToModel(event *domain.Message) (*models.RuntimeEventModel, error) {
+// EventToModel converts a domain Message to MessageModel.
+func EventToModel(event *domain.Message) (*models.MessageModel, error) {
 	if event == nil {
 		return nil, nil
 	}
@@ -25,7 +25,7 @@ func EventToModel(event *domain.Message) (*models.RuntimeEventModel, error) {
 		payload = json.RawMessage("{}")
 	}
 
-	return &models.RuntimeEventModel{
+	return &models.MessageModel{
 		ID:        id,
 		SessionID: event.SessionID,
 		EventType: string(event.Type),
@@ -36,8 +36,8 @@ func EventToModel(event *domain.Message) (*models.RuntimeEventModel, error) {
 	}, nil
 }
 
-// EventFromModel converts a RuntimeEventModel to a domain Message (event).
-func EventFromModel(model *models.RuntimeEventModel) (*domain.Message, error) {
+// EventFromModel converts a MessageModel to a domain Message.
+func EventFromModel(model *models.MessageModel) (*domain.Message, error) {
 	if model == nil {
 		return nil, nil
 	}
@@ -61,13 +61,13 @@ func EventFromModel(model *models.RuntimeEventModel) (*domain.Message, error) {
 // Legacy aliases for transition period (used by code that still references old names).
 
 // MessageToModel wraps EventToModel for backward compatibility during refactor.
-func MessageToModel(message *domain.Message) (*models.RuntimeEventModel, error) {
+func MessageToModel(message *domain.Message) (*models.MessageModel, error) {
 	slog.Warn("MessageToModel is deprecated, use EventToModel")
 	return EventToModel(message)
 }
 
 // MessageFromModel wraps EventFromModel for backward compatibility during refactor.
-func MessageFromModel(model *models.RuntimeEventModel) (*domain.Message, error) {
+func MessageFromModel(model *models.MessageModel) (*domain.Message, error) {
 	slog.Warn("MessageFromModel is deprecated, use EventFromModel")
 	return EventFromModel(model)
 }
