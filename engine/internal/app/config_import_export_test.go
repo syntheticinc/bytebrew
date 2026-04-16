@@ -47,6 +47,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			api_key_encrypted VARCHAR(1000),
 			api_version VARCHAR(30) DEFAULT '',
 			embedding_dim INTEGER DEFAULT 0,
+			tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
 			created_at DATETIME,
 			updated_at DATETIME
 		)`,
@@ -65,6 +66,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			auth_key_env VARCHAR(255),
 			auth_token_env VARCHAR(255),
 			auth_client_id VARCHAR(255),
+			tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
 			created_at DATETIME,
 			updated_at DATETIME
 		)`,
@@ -84,6 +86,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			stop_sequences TEXT,
 			confirm_before TEXT,
 			is_system BOOLEAN NOT NULL DEFAULT 0,
+			tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
 			created_at DATETIME,
 			updated_at DATETIME
 		)`,
@@ -94,6 +97,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			tool_name VARCHAR(255) NOT NULL,
 			config TEXT,
 			sort_order INTEGER NOT NULL DEFAULT 0,
+			tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
 			UNIQUE(agent_id, tool_type, tool_name)
 		)`,
 		`CREATE TABLE agent_relations (
@@ -102,12 +106,14 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			source_agent_name VARCHAR(255) NOT NULL,
 			target_agent_name VARCHAR(255) NOT NULL,
 			config TEXT,
+			tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
 			created_at DATETIME,
 			updated_at DATETIME
 		)`,
 		`CREATE TABLE agent_mcp_servers (
 			agent_id TEXT NOT NULL REFERENCES agents(id),
 			mcp_server_id TEXT NOT NULL REFERENCES mcp_servers(id),
+			tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
 			PRIMARY KEY (agent_id, mcp_server_id)
 		)`,
 		// V2 (§4.1): type-specific trigger config is a single jsonb column.
@@ -122,6 +128,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			description TEXT,
 			enabled BOOLEAN NOT NULL DEFAULT 1,
 			config TEXT NOT NULL DEFAULT '{}',
+			tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
 			last_fired_at DATETIME,
 			created_at DATETIME,
 			updated_at DATETIME

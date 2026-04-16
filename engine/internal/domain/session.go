@@ -19,6 +19,8 @@ type Session struct {
 	ID             string
 	ProjectKey     string
 	Status         SessionStatus
+	TenantID       string
+	SchemaID       string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	LastActivityAt time.Time

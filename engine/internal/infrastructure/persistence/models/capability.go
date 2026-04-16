@@ -9,6 +9,7 @@ type CapabilityModel struct {
 	Type      string    `gorm:"type:varchar(50);not null"`
 	Config    string    `gorm:"type:text"` // JSON
 	Enabled   bool      `gorm:"not null;default:true"`
+	TenantID  string    `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`
 	CreatedAt time.Time `gorm:"autoCreateTime"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime"`
 

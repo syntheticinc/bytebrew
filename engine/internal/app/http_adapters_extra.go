@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
@@ -520,7 +521,7 @@ func (a *sessionServiceHTTPAdapter) GetSession(ctx context.Context, id string) (
 func (a *sessionServiceHTTPAdapter) CreateSession(ctx context.Context, req deliveryhttp.CreateSessionRequest) (*deliveryhttp.SessionResponse, error) {
 	id := req.ID
 	if id == "" {
-		id = fmt.Sprintf("web-%d", time.Now().UnixNano())
+		id = uuid.New().String()
 	}
 	var userID *string
 	if req.UserID != "" {

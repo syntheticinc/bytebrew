@@ -10,6 +10,7 @@ type SessionEventLogModel struct {
 	EventType string    `gorm:"type:varchar(50);not null"`
 	ProtoData []byte    `gorm:"type:bytea;not null"`
 	JSONData  string    `gorm:"type:text;not null"`
+	TenantID  string    `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`
 	CreatedAt time.Time `gorm:"autoCreateTime"`
 }
 

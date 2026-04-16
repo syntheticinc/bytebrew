@@ -31,7 +31,8 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		resource VARCHAR(500),
 		details TEXT,
 		session_id VARCHAR(36),
-		task_id TEXT
+		task_id TEXT,
+		tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001'
 	)`).Error
 	require.NoError(t, err)
 

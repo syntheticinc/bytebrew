@@ -14,6 +14,8 @@ type MessageModel struct {
 	AgentID   string          `gorm:"type:varchar(100);index:idx_messages_agent"`
 	CallID    string          `gorm:"type:varchar(100)"`
 	Payload   json.RawMessage `gorm:"type:jsonb;not null;default:'{}'"`
+	TenantID  string          `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`
+	TriggerID *string         `gorm:"type:uuid" json:"trigger_id"`
 	CreatedAt time.Time       `gorm:"autoCreateTime;index:idx_messages_created"`
 }
 

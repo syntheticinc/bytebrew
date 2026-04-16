@@ -27,6 +27,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		api_key_encrypted VARCHAR(1000),
 		api_version VARCHAR(30) DEFAULT '',
 		embedding_dim INTEGER DEFAULT 0,
+		tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
 		created_at DATETIME,
 		updated_at DATETIME
 	)`).Error

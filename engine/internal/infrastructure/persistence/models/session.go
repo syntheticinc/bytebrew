@@ -10,6 +10,8 @@ type SessionModel struct {
 	AgentID     *string    `gorm:"type:uuid;index"`
 	UserID      *string    `gorm:"type:uuid;index"`
 	Status      string     `gorm:"type:varchar(20);not null;default:active;index"`
+	TenantID    string     `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`
+	SchemaID    *string    `gorm:"type:uuid" json:"schema_id"`
 	CreatedAt   time.Time  `gorm:"autoCreateTime"`
 	UpdatedAt   time.Time  `gorm:"autoUpdateTime"`
 	CompletedAt *time.Time

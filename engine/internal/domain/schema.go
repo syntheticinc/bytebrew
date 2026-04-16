@@ -8,12 +8,14 @@ import (
 // Schema represents a named group of agents + agent_relations + triggers.
 // Agents are global entities referenced by schemas, not owned by them.
 type Schema struct {
-	ID          string
-	Name        string
-	Description string
-	IsSystem    bool // system schemas (e.g. builder-schema) are managed by the engine
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID           string
+	Name         string
+	Description  string
+	IsSystem     bool // system schemas (e.g. builder-schema) are managed by the engine
+	TenantID     string
+	EntryAgentID string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // NewSchema creates a new Schema with validation.

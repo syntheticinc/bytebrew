@@ -51,3 +51,5 @@ databaseChangeLog:
       file: migrations/025_v2_create_users.yaml
   - include:
       file: migrations/026_v2_fk_rewire_users.yaml
+  - include:
+      file: migrations/027_v2_add_tenant_id_and_fk_columns.yaml

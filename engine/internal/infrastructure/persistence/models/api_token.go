@@ -9,6 +9,7 @@ type APITokenModel struct {
 	Name       string     `gorm:"uniqueIndex;not null"`
 	TokenHash  string     `gorm:"uniqueIndex;not null"`
 	ScopesMask int        `gorm:"not null;default:0"`
+	TenantID   string     `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`
 	CreatedAt  time.Time  `gorm:"autoCreateTime"`
 	LastUsedAt *time.Time
 	RevokedAt  *time.Time

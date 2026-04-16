@@ -21,12 +21,14 @@ import (
 // manually via stubInsertModel hooks where necessary.
 const forkTestTablesDDL = `
 CREATE TABLE schemas (
-    id          TEXT PRIMARY KEY,
-    name        TEXT NOT NULL UNIQUE,
-    description TEXT,
-    is_system   INTEGER NOT NULL DEFAULT 0,
-    created_at  DATETIME,
-    updated_at  DATETIME
+    id             TEXT PRIMARY KEY,
+    name           TEXT NOT NULL UNIQUE,
+    description    TEXT,
+    is_system      INTEGER NOT NULL DEFAULT 0,
+    tenant_id      TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    entry_agent_id TEXT,
+    created_at     DATETIME,
+    updated_at     DATETIME
 );
 CREATE TABLE agents (
     id                 TEXT PRIMARY KEY,
@@ -44,6 +46,7 @@ CREATE TABLE agents (
     stop_sequences     TEXT,
     confirm_before     TEXT,
     is_system          INTEGER NOT NULL DEFAULT 0,
+    tenant_id          TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
     created_at         DATETIME,
     updated_at         DATETIME
 );
@@ -53,6 +56,7 @@ CREATE TABLE agent_relations (
     source_agent_name TEXT NOT NULL,
     target_agent_name TEXT NOT NULL,
     config            TEXT,
+    tenant_id         TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
     created_at        DATETIME,
     updated_at        DATETIME
 );
@@ -65,6 +69,7 @@ CREATE TABLE triggers (
     description   TEXT,
     enabled       INTEGER NOT NULL DEFAULT 1,
     config        TEXT NOT NULL DEFAULT '{}',
+    tenant_id     TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
     last_fired_at DATETIME,
     created_at    DATETIME,
     updated_at    DATETIME
@@ -75,6 +80,7 @@ CREATE TABLE capabilities (
     type        TEXT NOT NULL,
     config      TEXT,
     enabled     INTEGER NOT NULL DEFAULT 1,
+    tenant_id   TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
     created_at  DATETIME,
     updated_at  DATETIME
 );

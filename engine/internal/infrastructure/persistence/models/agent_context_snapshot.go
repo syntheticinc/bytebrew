@@ -14,6 +14,7 @@ type AgentContextSnapshotModel struct {
 	StepNumber    int       `gorm:"not null;default:0"`
 	TokenCount    int       `gorm:"not null;default:0"`
 	Status        string    `gorm:"type:varchar(20);not null;default:active"`
+	TenantID      string    `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`
 	CreatedAt     time.Time `gorm:"autoCreateTime"`
 	UpdatedAt     time.Time `gorm:"autoUpdateTime"`
 }

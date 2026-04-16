@@ -26,6 +26,7 @@ type TaskModel struct {
 	BlockedBy          string     `gorm:"type:text"` // JSON array of task UUIDs
 	Result             string     `gorm:"type:text"`
 	Error              string     `gorm:"type:text"`
+	TenantID           string     `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`
 	CreatedAt          time.Time  `gorm:"autoCreateTime;index"`
 	UpdatedAt          time.Time  `gorm:"autoUpdateTime"`
 	ApprovedAt         *time.Time

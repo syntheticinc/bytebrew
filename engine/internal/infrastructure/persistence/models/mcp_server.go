@@ -23,6 +23,7 @@ type MCPServerModel struct {
 	AuthKeyEnv     string    `gorm:"type:varchar(255)"`                      // env var for api_key
 	AuthTokenEnv   string    `gorm:"type:varchar(255)"`                      // env var for service_account/oauth2 token
 	AuthClientID   string    `gorm:"type:varchar(255)"`                      // oauth2 client ID
+	TenantID       string    `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`
 	CreatedAt      time.Time `gorm:"autoCreateTime"`
 	UpdatedAt      time.Time `gorm:"autoUpdateTime"`
 }

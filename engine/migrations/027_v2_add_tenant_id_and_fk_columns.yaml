@@ -1,0 +1,63 @@
+databaseChangeLog:
+  # V2 Group Q.1 — Additive columns: tenant_id + entry_agent_id + schema_id + trigger_id
+  #
+  # Purely additive — no existing columns removed or renamed.
+  # tenant_id uuid with sentinel default added to 18 tables.
+  # schemas.entry_agent_id, sessions.schema_id, messages.trigger_id
+  # added as nullable preparatory columns (FKs deferred to Q.5).
+
+  - changeSet:
+      id: 027-v2-add-tenant-id-and-fk-columns
+      author: system
+      changes:
+        - sql:
+            sql: |
+              -- tenant_id uuid NOT NULL DEFAULT sentinel for 18 tables
+              ALTER TABLE agents ADD COLUMN IF NOT EXISTS tenant_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001';
+              ALTER TABLE agent_tools ADD COLUMN IF NOT EXISTS tenant_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001';
+              ALTER TABLE agent_mcp_servers ADD COLUMN IF NOT EXISTS tenant_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001';
+              ALTER TABLE capabilities ADD COLUMN IF NOT EXISTS tenant_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001';
+              ALTER TABLE models ADD COLUMN IF NOT EXISTS tenant_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001';
+              ALTER TABLE mcp_servers ADD COLUMN IF NOT EXISTS tenant_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001';
+              ALTER TABLE schemas ADD COLUMN IF NOT EXISTS tenant_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001';
+              ALTER TABLE agent_relations ADD COLUMN IF NOT EXISTS tenant_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001';
+              ALTER TABLE sessions ADD COLUMN IF NOT EXISTS tenant_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001';
+              ALTER TABLE messages ADD COLUMN IF NOT EXISTS tenant_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001';
+              ALTER TABLE tasks ADD COLUMN IF NOT EXISTS tenant_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001';
+              ALTER TABLE memories ADD COLUMN IF NOT EXISTS tenant_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001';
+              ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS tenant_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001';
+              ALTER TABLE agent_context_snapshots ADD COLUMN IF NOT EXISTS tenant_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001';
+              ALTER TABLE session_event_log ADD COLUMN IF NOT EXISTS tenant_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001';
+              ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS tenant_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001';
+              ALTER TABLE api_tokens ADD COLUMN IF NOT EXISTS tenant_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001';
+              ALTER TABLE triggers ADD COLUMN IF NOT EXISTS tenant_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001';
+
+              -- Preparatory nullable columns (FKs added in Q.5)
+              ALTER TABLE schemas ADD COLUMN IF NOT EXISTS entry_agent_id uuid;
+              ALTER TABLE sessions ADD COLUMN IF NOT EXISTS schema_id uuid;
+              ALTER TABLE messages ADD COLUMN IF NOT EXISTS trigger_id uuid;
+      rollback:
+        - sql:
+            sql: |
+              ALTER TABLE messages DROP COLUMN IF EXISTS trigger_id;
+              ALTER TABLE sessions DROP COLUMN IF EXISTS schema_id;
+              ALTER TABLE schemas DROP COLUMN IF EXISTS entry_agent_id;
+
+              ALTER TABLE triggers DROP COLUMN IF EXISTS tenant_id;
+              ALTER TABLE api_tokens DROP COLUMN IF EXISTS tenant_id;
+              ALTER TABLE audit_logs DROP COLUMN IF EXISTS tenant_id;
+              ALTER TABLE session_event_log DROP COLUMN IF EXISTS tenant_id;
+              ALTER TABLE agent_context_snapshots DROP COLUMN IF EXISTS tenant_id;
+              ALTER TABLE agent_runs DROP COLUMN IF EXISTS tenant_id;
+              ALTER TABLE memories DROP COLUMN IF EXISTS tenant_id;
+              ALTER TABLE tasks DROP COLUMN IF EXISTS tenant_id;
+              ALTER TABLE messages DROP COLUMN IF EXISTS tenant_id;
+              ALTER TABLE sessions DROP COLUMN IF EXISTS tenant_id;
+              ALTER TABLE agent_relations DROP COLUMN IF EXISTS tenant_id;
+              ALTER TABLE schemas DROP COLUMN IF EXISTS tenant_id;
+              ALTER TABLE mcp_servers DROP COLUMN IF EXISTS tenant_id;
+              ALTER TABLE models DROP COLUMN IF EXISTS tenant_id;
+              ALTER TABLE capabilities DROP COLUMN IF EXISTS tenant_id;
+              ALTER TABLE agent_mcp_servers DROP COLUMN IF EXISTS tenant_id;
+              ALTER TABLE agent_tools DROP COLUMN IF EXISTS tenant_id;
+              ALTER TABLE agents DROP COLUMN IF EXISTS tenant_id;

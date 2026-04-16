@@ -12,6 +12,7 @@ type LLMProviderModel struct {
 	APIKeyEncrypted string    `gorm:"type:varchar(1000)"`
 	APIVersion      string    `gorm:"type:varchar(30);default:''"`
 	EmbeddingDim    int       `gorm:"type:int;default:0"` // >0 for embedding models (e.g. 1536 for text-embedding-3-small)
+	TenantID        string    `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`
 	CreatedAt       time.Time `gorm:"autoCreateTime"`
 	UpdatedAt       time.Time `gorm:"autoUpdateTime"`
 }

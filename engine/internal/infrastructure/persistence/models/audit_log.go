@@ -13,6 +13,7 @@ type AuditLogModel struct {
 	Details   string    `gorm:"type:text"`
 	SessionID *string   `gorm:"type:varchar(36);index"`
 	TaskID    *string   `gorm:"type:uuid;index"`
+	TenantID  string    `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`
 
 	Session *SessionModel `gorm:"foreignKey:SessionID"`
 	Task    *TaskModel    `gorm:"foreignKey:TaskID"`

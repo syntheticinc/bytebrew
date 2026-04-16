@@ -12,6 +12,7 @@ type AgentRunModel struct {
 	Status      string     `gorm:"type:varchar(20);not null;index:idx_agent_runs_session_status"`
 	Result      string     `gorm:"type:text"`
 	Error       string     `gorm:"type:text"`
+	TenantID    string     `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`
 	StartedAt   time.Time  `gorm:"not null"`
 	CompletedAt *time.Time
 }

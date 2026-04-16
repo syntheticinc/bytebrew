@@ -4,6 +4,7 @@ package models
 type AgentMCPServer struct {
 	AgentID     string `gorm:"primaryKey;type:uuid"`
 	MCPServerID string `gorm:"primaryKey;type:uuid"`
+	TenantID    string `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`
 
 	Agent     AgentModel   `gorm:"foreignKey:AgentID"`
 	MCPServer MCPServerModel `gorm:"foreignKey:MCPServerID"`

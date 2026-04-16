@@ -22,6 +22,7 @@ func setupMemoryDB(t *testing.T) *gorm.DB {
 		user_id TEXT NOT NULL,
 		content TEXT NOT NULL,
 		metadata TEXT,
+		tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
 		created_at DATETIME,
 		updated_at DATETIME
 	)`).Error)

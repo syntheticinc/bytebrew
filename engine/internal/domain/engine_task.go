@@ -52,6 +52,7 @@ const (
 //   - AssignedAgentID — string (agent name, not a UUID)
 type EngineTask struct {
 	ID                 uuid.UUID
+	TenantID           string
 	Title              string
 	Description        string
 	AcceptanceCriteria []string

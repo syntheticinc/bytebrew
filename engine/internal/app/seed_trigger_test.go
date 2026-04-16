@@ -43,6 +43,7 @@ CREATE TABLE agents (
 	stop_sequences TEXT,
 	confirm_before TEXT,
 	is_system BOOLEAN NOT NULL DEFAULT 0,
+	tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
 	created_at DATETIME,
 	updated_at DATETIME
 )`).Error)
@@ -60,6 +61,7 @@ CREATE TABLE triggers (
 	description TEXT,
 	enabled INTEGER NOT NULL DEFAULT 1,
 	config TEXT NOT NULL DEFAULT '{}',
+	tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
 	last_fired_at DATETIME,
 	created_at DATETIME,
 	updated_at DATETIME

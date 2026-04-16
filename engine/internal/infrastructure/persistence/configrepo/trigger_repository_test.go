@@ -34,6 +34,7 @@ CREATE TABLE triggers (
 	description TEXT,
 	enabled INTEGER NOT NULL DEFAULT 1,
 	config TEXT NOT NULL DEFAULT '{}',
+	tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
 	last_fired_at DATETIME,
 	created_at DATETIME,
 	updated_at DATETIME

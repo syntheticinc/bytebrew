@@ -178,6 +178,7 @@ CREATE TABLE tasks (
 	blocked_by TEXT,
 	result TEXT,
 	error TEXT,
+	tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
 	created_at DATETIME,
 	updated_at DATETIME,
 	approved_at DATETIME,
@@ -199,6 +200,7 @@ CREATE TABLE triggers (
 	description TEXT,
 	enabled INTEGER NOT NULL DEFAULT 1,
 	config TEXT NOT NULL DEFAULT '{}',
+	tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
 	last_fired_at DATETIME,
 	created_at DATETIME,
 	updated_at DATETIME
@@ -215,6 +217,7 @@ CREATE TABLE agents (
 	tool_execution TEXT,
 	max_steps INTEGER,
 	max_context_size INTEGER,
+	tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
 	created_at DATETIME,
 	updated_at DATETIME
 )`).Error)

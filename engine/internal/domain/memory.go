@@ -10,6 +10,7 @@ import (
 // share memories across all sessions.
 type Memory struct {
 	ID        string
+	TenantID  string
 	SchemaID  string
 	UserID    string
 	Content   string
