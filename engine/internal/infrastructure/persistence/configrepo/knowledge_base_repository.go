@@ -22,7 +22,7 @@ func NewGORMKnowledgeBaseRepository(db *gorm.DB) *GORMKnowledgeBaseRepository {
 func (r *GORMKnowledgeBaseRepository) tenantID(ctx context.Context) string {
 	tid := domain.TenantIDFromContext(ctx)
 	if tid == "" {
-		return "default"
+		return domain.CETenantID
 	}
 	return tid
 }

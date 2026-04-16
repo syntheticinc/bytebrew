@@ -21,11 +21,11 @@ func NewGORMKnowledgeRepository(db *gorm.DB) *GORMKnowledgeRepository {
 	return &GORMKnowledgeRepository{db: db}
 }
 
-// tenantID extracts tenant from context, falling back to "default" for CE mode.
+// tenantID extracts tenant from context, falling back to CETenantID for CE mode.
 func (r *GORMKnowledgeRepository) tenantID(ctx context.Context) string {
 	tid := domain.TenantIDFromContext(ctx)
 	if tid == "" {
-		return "default"
+		return domain.CETenantID
 	}
 	return tid
 }

@@ -41,6 +41,10 @@ func (t *Tenant) Validate() error {
 	return nil
 }
 
+// CETenantID is the fixed tenant UUID used in Community Edition (single-tenant) mode.
+// All tenant-scoped tables default to this value so CE works without multi-tenancy.
+const CETenantID = "00000000-0000-0000-0000-000000000001"
+
 // --- Tenant context key ---
 
 type tenantCtxKey struct{}

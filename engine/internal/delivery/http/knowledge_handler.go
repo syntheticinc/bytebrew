@@ -326,10 +326,10 @@ func (h *KnowledgeHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	// Determine file type from extension
 	fileType := strings.TrimPrefix(ext, ".")
 
-	// Extract tenant from context (CE mode → "default")
+	// Extract tenant from context (CE mode → CETenantID)
 	tenantID := domain.TenantIDFromContext(r.Context())
 	if tenantID == "" {
-		tenantID = "default"
+		tenantID = domain.CETenantID
 	}
 
 	resp, err := h.fileUploader.UploadFile(r.Context(), tenantID, agentName, originalName, fileType, int64(len(content)), fileHash, content)

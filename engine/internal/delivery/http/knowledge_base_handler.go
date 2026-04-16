@@ -113,7 +113,7 @@ func (h *KnowledgeBaseHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	tenantID := domain.TenantIDFromContext(r.Context())
 	if tenantID == "" {
-		tenantID = "default"
+		tenantID = domain.CETenantID
 	}
 
 	kb, err := h.store.Create(r.Context(), req.Name, req.Description, req.EmbeddingModelID, tenantID)
@@ -284,7 +284,7 @@ func (h *KnowledgeBaseHandler) UploadFile(w http.ResponseWriter, r *http.Request
 
 	tenantID := domain.TenantIDFromContext(r.Context())
 	if tenantID == "" {
-		tenantID = "default"
+		tenantID = domain.CETenantID
 	}
 
 	resp, err := h.fileManager.UploadFile(r.Context(), tenantID, kbID, kb.EmbeddingModelID, originalName, fileType, int64(len(content)), fileHash, content)

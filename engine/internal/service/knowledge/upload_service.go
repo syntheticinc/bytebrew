@@ -17,11 +17,11 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 )
 
-// tenantFromCtx extracts tenant_id from context, falling back to "default" for CE mode.
+// tenantFromCtx extracts tenant_id from context, falling back to CETenantID for CE mode.
 func tenantFromCtx(ctx context.Context) string {
 	tid := domain.TenantIDFromContext(ctx)
 	if tid == "" {
-		return "default"
+		return domain.CETenantID
 	}
 	return tid
 }
