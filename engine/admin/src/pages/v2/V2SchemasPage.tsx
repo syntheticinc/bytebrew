@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { v2Schemas, getAgentById } from '../../mocks/v2';
 import { api } from '../../api/client';
+import { useApi } from '../../hooks/useApi';
 import type { SchemaTemplate, SchemaTemplateCategory } from '../../types';
 
 function formatRelativeTime(iso: string) {
@@ -214,6 +214,7 @@ function TemplatePicker({ onClose, onForked }: TemplatePickerProps) {
 export default function V2SchemasPage() {
   const [picking, setPicking] = useState(false);
   const navigate = useNavigate();
+  const { data: schemas, loading, error } = useApi(() => api.listSchemas());
 
   function handleForked(schemaId: string) {
     setPicking(false);
@@ -237,7 +238,15 @@ export default function V2SchemasPage() {
         </button>
       </div>
 
-      {v2Schemas.length === 0 && (
+      {loading && (
+        <div className="text-[13px] text-brand-shade3">Loading schemas…</div>
+      )}
+
+      {error && (
+        <div className="text-[13px] text-rose-400">Failed to load schemas: {error}</div>
+      )}
+
+      {!loading && !error && schemas !== null && schemas.length === 0 && (
         <div className="bg-brand-dark-surface border border-dashed border-brand-shade3/25 rounded-card p-10 text-center">
           <h3 className="text-base font-semibold text-brand-light mb-2">No schemas yet</h3>
           <p className="text-[13px] text-brand-shade3 max-w-md mx-auto mb-4">
@@ -253,66 +262,53 @@ export default function V2SchemasPage() {
       )}
 
       <div className="grid grid-cols-2 gap-4">
-        {v2Schemas.map((s) => {
-          const entry = getAgentById(s.entryAgentId);
-          return (
-            <Link
-              key={s.id}
-              to={`/v2/schemas/${s.id}`}
-              className="block bg-brand-dark-surface border border-brand-shade3/15 rounded-card hover:border-brand-shade3/35 transition-all group"
-            >
-              <div className="px-5 py-4 border-b border-brand-shade3/10">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-base font-semibold text-brand-light truncate">{s.name}</div>
-                    <div className="text-[12px] text-brand-shade3 mt-1 line-clamp-2">{s.description}</div>
-                  </div>
-                  {s.activeSessions > 0 && (
-                    <span className="flex items-center gap-1.5 text-[11px] text-emerald-400 shrink-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      {s.activeSessions} active
-                    </span>
-                  )}
+        {(schemas ?? []).map((s) => (
+          <Link
+            key={s.id}
+            to={`/v2/schemas/${s.id}`}
+            className="block bg-brand-dark-surface border border-brand-shade3/15 rounded-card hover:border-brand-shade3/35 transition-all group"
+          >
+            <div className="px-5 py-4 border-b border-brand-shade3/10">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-base font-semibold text-brand-light truncate">{s.name}</div>
+                  <div className="text-[12px] text-brand-shade3 mt-1 line-clamp-2">{s.description ?? ''}</div>
                 </div>
               </div>
+            </div>
 
-              <div className="px-5 py-3 flex items-center gap-4">
+            <div className="px-5 py-3 flex items-center gap-4">
+              {s.entry_agent_name && (
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="shrink-0 w-7 h-7 rounded-full bg-gradient-to-br from-brand-shade3/30 to-brand-shade3/10 flex items-center justify-center text-[10px] font-semibold text-brand-light border border-brand-shade3/20">
-                    {entry?.avatarInitials ?? '??'}
+                    {s.entry_agent_name.slice(0, 2).toUpperCase()}
                   </span>
                   <div className="min-w-0">
                     <div className="text-[10px] uppercase tracking-wider text-brand-shade3">Entry</div>
                     <div className="text-[12px] font-medium text-brand-light truncate">
-                      {entry?.name ?? 'unknown'}
+                      {s.entry_agent_name}
                     </div>
                   </div>
                 </div>
-                <div className="flex-1" />
-                <div className="flex items-center gap-4 text-[11px] text-brand-shade3">
-                  <span>
-                    <span className="text-brand-light font-medium">{s.agentIds.length}</span> agents
-                  </span>
-                  <span>
-                    <span className="text-brand-light font-medium">{s.triggerIds.length}</span> triggers
-                  </span>
-                  <span>
-                    <span className="text-brand-light font-medium">{s.sessionsToday}</span> today
-                  </span>
-                </div>
+              )}
+              <div className="flex-1" />
+              <div className="flex items-center gap-4 text-[11px] text-brand-shade3">
+                <span>
+                  <span className="text-brand-light font-medium">{s.agents_count}</span> agents
+                </span>
               </div>
+            </div>
 
-              <div className="px-5 py-2 border-t border-brand-shade3/10 flex items-center justify-between">
-                <span className="text-[10px] text-brand-shade3">
-                  Last activity {formatRelativeTime(s.lastActivityAt)}
-                </span>
-                <span className="text-[11px] text-brand-shade3 group-hover:text-brand-accent transition-colors">
-                  Open →
-                </span>
-              </div>
-            </Link>
-          );
-        })}
+            <div className="px-5 py-2 border-t border-brand-shade3/10 flex items-center justify-between">
+              <span className="text-[10px] text-brand-shade3">
+                Created {formatRelativeTime(s.created_at)}
+              </span>
+              <span className="text-[11px] text-brand-shade3 group-hover:text-brand-accent transition-colors">
+                Open →
+              </span>
+            </div>
+          </Link>
+        ))}
       </div>
 
       {picking && <TemplatePicker onClose={() => setPicking(false)} onForked={handleForked} />}

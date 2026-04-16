@@ -20,8 +20,6 @@ import TriggersPage from './pages/TriggersPage';
 import V2OverviewPage from './pages/v2/V2OverviewPage';
 import V2SchemasPage from './pages/v2/V2SchemasPage';
 import V2SchemaDetailPage from './pages/v2/V2SchemaDetailPage';
-import V2FlowEditorPage from './pages/v2/V2FlowEditorPage';
-
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('jwt');
   if (!token) return <Navigate to="/login" replace />;
@@ -64,8 +62,7 @@ export default function App() {
             <Route path="/v2/overview" element={<V2OverviewPage />} />
             <Route path="/v2/schemas" element={<V2SchemasPage />} />
             <Route path="/v2/schemas/:schemaId" element={<V2SchemaDetailPage />} />
-            <Route path="/v2/agents/:agentId/flows/:flowId" element={<V2FlowEditorPage />} />
-            <Route path="/" element={<Navigate to="/builder" replace />} />
+<Route path="/" element={<Navigate to="/builder" replace />} />
           </Route>
           <Route path="*" element={<Navigate to="/builder" replace />} />
         </Routes>

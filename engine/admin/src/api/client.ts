@@ -391,6 +391,13 @@ class APIClient {
     return this.request<Schema[]>('GET', '/schemas');
   }
 
+  getSchema(schemaId: string) {
+    if (this.isPrototype) {
+      return this.mock<Schema>({ id: schemaId, name: 'Schema', agents_count: 0, created_at: new Date().toISOString() });
+    }
+    return this.request<Schema>('GET', `/schemas/${schemaId}`);
+  }
+
   createSchema(data: { name: string; description?: string }) {
     if (this.isPrototype) return this.mock({ id: String(Date.now()), name: data.name, description: data.description, agents_count: 0, created_at: new Date().toISOString() } as Schema);
     return this.request<Schema>('POST', '/schemas', data);

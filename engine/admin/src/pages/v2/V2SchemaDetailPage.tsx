@@ -2,21 +2,48 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import V2DelegationTree from '../../components/v2/V2DelegationTree';
 import V2DebugPanel from '../../components/v2/V2DebugPanel';
-import {
-  getSchemaById,
-  getSchemaAgents,
-  getSchemaRelations,
-  getSchemaTriggers,
-  getSchemaActiveSessions,
-  v2Sessions,
-  getAgentById,
-  v2Agents,
-  v2AgentRelations,
-  type V2Session,
-  type V2SessionMessage,
-} from '../../mocks/v2';
+import { api } from '../../api/client';
+import { useApi } from '../../hooks/useApi';
+import type { AgentDetail } from '../../types';
+import type { V2Agent, V2AgentRelation, V2Session, V2SessionMessage } from '../../mocks/v2';
 
-type TabKey = 'canvas' | 'triggers' | 'flows' | 'settings';
+type TabKey = 'canvas' | 'triggers' | 'settings';
+
+// ─── Type adapters ───────────────────────────────────────────────────────────
+// V2DelegationTree expects V2Agent/V2AgentRelation (prototype mock shapes).
+// We adapt real API types to these shapes here at the boundary.
+
+function agentDetailToV2Agent(a: AgentDetail): V2Agent {
+  const initials = a.name
+    .split(/[-_\s]/)
+    .map((p) => p[0] ?? '')
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || a.name.slice(0, 2).toUpperCase();
+  return {
+    id: a.name,
+    name: a.name,
+    model: a.model_id ?? '',
+    description: a.description,
+    avatarInitials: initials,
+    lifecycle: a.lifecycle ?? 'persistent',
+    toolsCount: a.tools_count ?? 0,
+    knowledgeCount: 0,
+    flowsCount: 0,
+    activeSessions: 0,
+    state: 'idle',
+  };
+}
+
+function apiRelationToV2(r: { id: string; schema_id: string; source: string; target: string }): V2AgentRelation {
+  return {
+    id: r.id,
+    sourceAgentId: r.source,
+    targetAgentId: r.target,
+  };
+}
+
+// ─── computeDebugHighlights ──────────────────────────────────────────────────
 
 function computeDebugHighlights(session: V2Session, stepIdx: number) {
   const msg: V2SessionMessage | undefined = session.messages[stepIdx];
@@ -35,18 +62,22 @@ function computeDebugHighlights(session: V2Session, stepIdx: number) {
   return { agentIds, relationKeys };
 }
 
+// ─── AddAgentPanel ────────────────────────────────────────────────────────────
+
 function AddAgentPanel({
-  schemaAgentIds,
+  schemaAgentNames,
   parentAgentName,
   onAdd,
   onClose,
 }: {
-  schemaAgentIds: string[];
+  schemaAgentNames: string[];
   parentAgentName?: string;
-  onAdd: (agentId: string) => void;
+  onAdd: (agentName: string) => void;
   onClose: () => void;
 }) {
-  const available = v2Agents.filter((a) => !schemaAgentIds.includes(a.id));
+  const { data: allAgents, loading } = useApi(() => api.listAgents());
+  const available = (allAgents ?? []).filter((a) => !schemaAgentNames.includes(a.name));
+
   return (
     <div className="absolute top-4 right-4 z-20 w-[320px] bg-brand-dark-surface border border-brand-shade3/30 rounded-card shadow-2xl">
       <div className="px-4 py-3 border-b border-brand-shade3/15 flex items-center justify-between">
@@ -63,26 +94,37 @@ function AddAgentPanel({
         <button onClick={onClose} className="text-brand-shade3 hover:text-brand-light text-[14px]">✕</button>
       </div>
       <div className="max-h-[340px] overflow-y-auto">
-        {available.length === 0 && (
+        {loading && (
+          <div className="px-4 py-4 text-center text-[11px] text-brand-shade3">Loading agents…</div>
+        )}
+        {!loading && available.length === 0 && (
           <div className="px-4 py-4 text-center text-[11px] text-brand-shade3">
             All agents already added. Create a new one from Agents page.
           </div>
         )}
-        {available.map((a) => (
-          <button
-            key={a.id}
-            onClick={() => onAdd(a.id)}
-            className="w-full text-left flex items-center gap-3 px-4 py-2.5 hover:bg-brand-shade3/5 border-b border-brand-shade3/5 last:border-b-0 transition-colors"
-          >
-            <div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-brand-shade3/30 to-brand-shade3/10 flex items-center justify-center text-[11px] font-semibold text-brand-light border border-brand-shade3/20">
-              {a.avatarInitials}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[12px] text-brand-light truncate">{a.name}</div>
-              <div className="text-[10px] text-brand-shade3 font-mono truncate">{a.model}</div>
-            </div>
-          </button>
-        ))}
+        {available.map((a) => {
+          const initials = a.name
+            .split(/[-_\s]/)
+            .map((p) => p[0] ?? '')
+            .join('')
+            .slice(0, 2)
+            .toUpperCase() || a.name.slice(0, 2).toUpperCase();
+          return (
+            <button
+              key={a.name}
+              onClick={() => onAdd(a.name)}
+              className="w-full text-left flex items-center gap-3 px-4 py-2.5 hover:bg-brand-shade3/5 border-b border-brand-shade3/5 last:border-b-0 transition-colors"
+            >
+              <div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-brand-shade3/30 to-brand-shade3/10 flex items-center justify-center text-[11px] font-semibold text-brand-light border border-brand-shade3/20">
+                {initials}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[12px] text-brand-light truncate">{a.name}</div>
+                <div className="text-[10px] text-brand-shade3 truncate">{a.description ?? ''}</div>
+              </div>
+            </button>
+          );
+        })}
       </div>
       <div className="px-4 py-2 border-t border-brand-shade3/15 bg-brand-dark/50">
         <Link to="/agents" className="text-[11px] text-brand-accent hover:underline">
@@ -92,6 +134,8 @@ function AddAgentPanel({
     </div>
   );
 }
+
+// ─── SessionsMenu ─────────────────────────────────────────────────────────────
 
 function SessionsMenu({
   sessions,
@@ -144,11 +188,13 @@ function SessionsMenu({
   );
 }
 
+// ─── Main page ────────────────────────────────────────────────────────────────
+
 export default function V2SchemaDetailPage() {
-  const { schemaId = '' } = useParams();
+  const { schemaId = '' } = useParams<{ schemaId: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const validTabs: TabKey[] = ['canvas', 'triggers', 'flows', 'settings'];
+  const validTabs: TabKey[] = ['canvas', 'triggers', 'settings'];
   const rawTab = searchParams.get('tab') as TabKey | null;
   const [tab, setTab] = useState<TabKey>(
     rawTab && validTabs.includes(rawTab) ? rawTab : 'canvas',
@@ -158,29 +204,74 @@ export default function V2SchemaDetailPage() {
     searchParams.get('session'),
   );
   const [showAddAgent, setShowAddAgent] = useState(false);
-  const [addChildParentId, setAddChildParentId] = useState<string | null>(null);
-  const [mutationVersion, setMutationVersion] = useState(0); // bumped on prototype-mock mutations to force re-render
+  const [addChildParentName, setAddChildParentName] = useState<string | null>(null);
   const [debugHighlight, setDebugHighlight] = useState<{
     agentIds: Set<string>;
     relationKeys: Set<string>;
   }>({ agentIds: new Set(), relationKeys: new Set() });
 
-  const schema = getSchemaById(schemaId);
-  const agents = useMemo(() => getSchemaAgents(schemaId), [schemaId, mutationVersion]);
-  const relations = useMemo(() => getSchemaRelations(schemaId), [schemaId, mutationVersion]);
-  const triggers = useMemo(() => getSchemaTriggers(schemaId), [schemaId, mutationVersion]);
-  const _activeSessions = useMemo(() => getSchemaActiveSessions(schemaId), [schemaId]);
-  void _activeSessions;
-  const allSchemaSessions = useMemo(
-    () => v2Sessions.filter((s) => s.schemaId === schemaId),
+  // ─── Data fetching ───────────────────────────────────────────────────────────
+  const { data: schema, loading: schemaLoading } = useApi(
+    () => api.getSchema(schemaId),
     [schemaId],
   );
 
-  const debugSessions = useMemo(() => {
-    if (!activeDebugSessionId) return allSchemaSessions;
-    const chosen = allSchemaSessions.find((s) => s.id === activeDebugSessionId);
-    return chosen ? [chosen, ...allSchemaSessions.filter((s) => s.id !== activeDebugSessionId)] : allSchemaSessions;
-  }, [allSchemaSessions, activeDebugSessionId]);
+  const { data: agentNames, loading: agentNamesLoading } = useApi(
+    () => api.listSchemaAgents(schemaId),
+    [schemaId],
+  );
+
+  const { data: rawRelations, loading: relationsLoading, refetch: refetchRelations } = useApi(
+    () => api.listAgentRelations(schemaId),
+    [schemaId],
+  );
+
+  const { data: triggers, loading: triggersLoading } = useApi(
+    () => api.listTriggers(schemaId),
+    [schemaId],
+  );
+
+  // Load full agent details by name
+  const [agents, setAgents] = useState<AgentDetail[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!agentNames || agentNames.length === 0) {
+      setAgents([]);
+      return;
+    }
+    let cancelled = false;
+    setAgentsLoading(true);
+    Promise.all(agentNames.map((name) => api.getAgent(name)))
+      .then((result) => {
+        if (!cancelled) setAgents(result);
+      })
+      .catch(() => {
+        if (!cancelled) setAgents([]);
+      })
+      .finally(() => {
+        if (!cancelled) setAgentsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [agentNames]);
+
+  // Adapt to V2 types for V2DelegationTree
+  const v2Agents = useMemo<V2Agent[]>(
+    () => agents.map(agentDetailToV2Agent),
+    [agents],
+  );
+
+  const v2Relations = useMemo<V2AgentRelation[]>(
+    () => (rawRelations ?? []).map(apiRelationToV2),
+    [rawRelations],
+  );
+
+  // Entry agent name: from schema or first agent in list
+  const entryAgentId = schema?.entry_agent_name ?? agentNames?.[0] ?? '';
+
+  const isLoading = schemaLoading || agentNamesLoading || relationsLoading || agentsLoading || triggersLoading;
+
+  // ─── Handlers ────────────────────────────────────────────────────────────────
 
   const onAgentOpen = useCallback(
     (agentId: string) => navigate(`/agents/${agentId}`),
@@ -188,74 +279,40 @@ export default function V2SchemaDetailPage() {
   );
 
   const onAddChildRequest = useCallback((parentAgentId: string) => {
-    setAddChildParentId(parentAgentId);
+    setAddChildParentName(parentAgentId);
     setShowAddAgent(true);
   }, []);
 
   const handleAddAgent = useCallback(
-    (agentId: string) => {
-      if (!schema) return;
-      // Mutate prototype mocks in place (safe: isPrototype guards real API).
-      const parentId = addChildParentId ?? schema.entryAgentId;
-      if (!schema.agentIds.includes(agentId)) {
-        schema.agentIds.push(agentId);
+    async (agentName: string) => {
+      const parent = addChildParentName ?? entryAgentId;
+      if (!parent) return;
+      try {
+        await api.createAgentRelation(schemaId, parent, agentName);
+        refetchRelations();
+      } catch {
+        // silently ignore — user sees stale state
       }
-      const relExists = v2AgentRelations.some(
-        (r) => r.sourceAgentId === parentId && r.targetAgentId === agentId,
-      );
-      if (!relExists) {
-        v2AgentRelations.push({
-          id: `rel-${parentId}-${agentId}-${Date.now()}`,
-          sourceAgentId: parentId,
-          targetAgentId: agentId,
-        });
-      }
-      setMutationVersion((v) => v + 1);
       setShowAddAgent(false);
-      setAddChildParentId(null);
+      setAddChildParentName(null);
     },
-    [schema, addChildParentId],
+    [schemaId, addChildParentName, entryAgentId, refetchRelations],
   );
 
   const handleRemoveDelegation = useCallback(
-    (agentId: string) => {
-      if (!schema) return;
-      if (agentId === schema.entryAgentId) return; // entry cannot be removed
-      const currentRelations = v2AgentRelations.filter(
-        (r) =>
-          schema.agentIds.includes(r.sourceAgentId) &&
-          schema.agentIds.includes(r.targetAgentId),
-      );
-      // Collect subtree (this agent + all descendants reachable via delegation).
-      const subtreeIds = new Set<string>([agentId]);
-      const queue = [agentId];
-      while (queue.length > 0) {
-        const current = queue.shift()!;
-        for (const r of currentRelations) {
-          if (r.sourceAgentId === current && !subtreeIds.has(r.targetAgentId)) {
-            subtreeIds.add(r.targetAgentId);
-            queue.push(r.targetAgentId);
-          }
-        }
+    async (agentId: string) => {
+      if (agentId === entryAgentId) return;
+      // Find all relations involving this agent as target and delete them
+      const toDelete = (rawRelations ?? []).filter((r) => r.target === agentId);
+      try {
+        await Promise.all(toDelete.map((r) => api.deleteAgentRelation(schemaId, r.id)));
+        refetchRelations();
+      } catch {
+        // silently ignore
       }
-      // Mutate: drop subtree agents from schema.agentIds; drop relations where source or target is in subtree.
-      schema.agentIds = schema.agentIds.filter((id) => !subtreeIds.has(id));
-      for (let i = v2AgentRelations.length - 1; i >= 0; i--) {
-        const r = v2AgentRelations[i];
-        if (!r) continue;
-        if (subtreeIds.has(r.sourceAgentId) || subtreeIds.has(r.targetAgentId)) {
-          v2AgentRelations.splice(i, 1);
-        }
-      }
-      setMutationVersion((v) => v + 1);
     },
-    [schema],
+    [schemaId, entryAgentId, rawRelations, refetchRelations],
   );
-
-  const parentAgentName = useMemo(() => {
-    if (!addChildParentId) return undefined;
-    return getAgentById(addChildParentId)?.name;
-  }, [addChildParentId]);
 
   const onStepChange = useCallback((session: V2Session, stepIdx: number) => {
     setDebugHighlight(computeDebugHighlights(session, stepIdx));
@@ -270,7 +327,9 @@ export default function V2SchemaDetailPage() {
     setSearchParams(sp, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  if (!schema) {
+  // ─── Render guards ───────────────────────────────────────────────────────────
+
+  if (!schemaLoading && schema === null) {
     return (
       <div className="max-w-[800px] mx-auto text-center py-12">
         <p className="text-brand-shade3">Schema not found.</p>
@@ -281,7 +340,8 @@ export default function V2SchemaDetailPage() {
     );
   }
 
-  const canvasEmpty = agents.length === 0;
+  const canvasEmpty = v2Agents.length === 0 && !isLoading;
+  const schemaAgentNames = agentNames ?? [];
 
   return (
     <div className="h-full flex flex-col">
@@ -291,16 +351,12 @@ export default function V2SchemaDetailPage() {
           ← Schemas
         </Link>
         <div className="flex items-center gap-3 mt-2">
-          <h1 className="text-xl font-semibold text-brand-light">{schema.name}</h1>
-          {schema.activeSessions > 0 && (
-            <span className="flex items-center gap-1.5 text-[11px] text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 rounded">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              {schema.activeSessions} active
-            </span>
-          )}
+          <h1 className="text-xl font-semibold text-brand-light">
+            {schema?.name ?? schemaId}
+          </h1>
           <div className="flex-1" />
           <SessionsMenu
-            sessions={allSchemaSessions}
+            sessions={[]}
             onPick={openDebugForSession}
           />
           <button
@@ -321,8 +377,7 @@ export default function V2SchemaDetailPage() {
         <div className="flex items-center gap-1 mt-3">
           {([
             ['canvas', 'Canvas'],
-            ['triggers', `Triggers (${triggers.length})`],
-            ['flows', 'Flows'],
+            ['triggers', `Triggers (${triggers?.length ?? 0})`],
             ['settings', 'Settings'],
           ] as const).map(([key, label]) => (
             <button
@@ -344,7 +399,11 @@ export default function V2SchemaDetailPage() {
       <div className="flex-1 min-h-0 relative">
         {tab === 'canvas' && (
           <div className="absolute inset-0">
-            {canvasEmpty ? (
+            {isLoading ? (
+              <div className="h-full flex items-center justify-center">
+                <span className="text-[13px] text-brand-shade3">Loading…</span>
+              </div>
+            ) : canvasEmpty ? (
               <div className="h-full flex items-center justify-center p-6">
                 <div className="bg-brand-dark-surface border border-dashed border-brand-shade3/25 rounded-card p-8 max-w-md text-center">
                   <h3 className="text-[14px] font-semibold text-brand-light mb-2">Empty schema</h3>
@@ -363,10 +422,10 @@ export default function V2SchemaDetailPage() {
             ) : (
               <>
                 <V2DelegationTree
-                  triggers={triggers}
-                  agents={agents}
-                  relations={relations}
-                  entryAgentId={schema.entryAgentId}
+                  triggers={[]}
+                  agents={v2Agents}
+                  relations={v2Relations}
+                  entryAgentId={entryAgentId}
                   highlightAgentIds={debugHighlight.agentIds}
                   onAgentOpen={onAgentOpen}
                   onAddChild={onAddChildRequest}
@@ -377,7 +436,7 @@ export default function V2SchemaDetailPage() {
                 <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
                   <button
                     onClick={() => {
-                      setAddChildParentId(schema.entryAgentId);
+                      setAddChildParentName(entryAgentId);
                       setShowAddAgent(true);
                     }}
                     className="px-3 py-1.5 text-[11px] font-medium bg-brand-dark-surface/95 backdrop-blur border border-brand-shade3/25 rounded-btn text-brand-light hover:border-brand-shade3/50 transition-colors"
@@ -395,12 +454,12 @@ export default function V2SchemaDetailPage() {
 
                 {showAddAgent && (
                   <AddAgentPanel
-                    schemaAgentIds={schema.agentIds}
-                    parentAgentName={parentAgentName}
+                    schemaAgentNames={schemaAgentNames}
+                    parentAgentName={addChildParentName ?? undefined}
                     onAdd={handleAddAgent}
                     onClose={() => {
                       setShowAddAgent(false);
-                      setAddChildParentId(null);
+                      setAddChildParentName(null);
                     }}
                   />
                 )}
@@ -422,7 +481,13 @@ export default function V2SchemaDetailPage() {
                 + New Trigger
               </button>
             </div>
-            {triggers.map((t) => (
+            {triggersLoading && (
+              <div className="text-[12px] text-brand-shade3">Loading triggers…</div>
+            )}
+            {!triggersLoading && (triggers ?? []).length === 0 && (
+              <div className="text-[12px] text-brand-shade3">No triggers configured for this schema.</div>
+            )}
+            {(triggers ?? []).map((t) => (
               <div
                 key={t.id}
                 className="bg-brand-dark-surface border border-brand-shade3/15 rounded-card px-4 py-3 flex items-center gap-4"
@@ -433,13 +498,10 @@ export default function V2SchemaDetailPage() {
                 <div className="min-w-0 flex-1">
                   <div className="text-[13px] font-medium text-brand-light truncate">{t.title}</div>
                   <div className="text-[10px] text-brand-shade3 font-mono truncate">
-                    {t.type === 'webhook' && typeof t.config.webhookPath === 'string' && t.config.webhookPath}
-                    {t.type === 'cron' && typeof t.config.schedule === 'string' && `schedule: ${t.config.schedule}`}
+                    {t.type === 'webhook' && t.config?.webhook_path && t.config.webhook_path}
+                    {t.type === 'cron' && t.config?.schedule && `schedule: ${t.config.schedule}`}
                     {t.type === 'chat' && 'POST /api/v1/triggers/' + t.id + '/chat'}
                   </div>
-                </div>
-                <div className="text-[10px] text-brand-shade3">
-                  → {getAgentById(t.agentId)?.name ?? t.agentId}
                 </div>
                 <span className={`text-[10px] ${t.enabled ? 'text-emerald-400' : 'text-brand-shade3/50'}`}>
                   {t.enabled ? 'enabled' : 'disabled'}
@@ -449,41 +511,13 @@ export default function V2SchemaDetailPage() {
           </div>
         )}
 
-        {tab === 'flows' && (
-          <div className="p-6 max-w-[800px] mx-auto">
-            <div className="bg-brand-dark-surface border border-dashed border-brand-shade3/25 rounded-card p-8 text-center">
-              <h3 className="text-base font-semibold text-brand-light mb-2">
-                Flows live inside agents
-              </h3>
-              <p className="text-[13px] text-brand-shade3 leading-relaxed max-w-md mx-auto">
-                A flow is internal structured thinking for <span className="text-brand-light">one agent</span>,
-                just like capabilities or tools. Open an agent to create or edit its flows.
-              </p>
-              <div className="flex items-center justify-center gap-2 mt-4">
-                {agents.slice(0, 3).map((a) => (
-                  <Link
-                    key={a.id}
-                    to={`/agents/${a.id}`}
-                    className="px-3 py-1.5 text-[11px] text-brand-accent border border-brand-accent/40 rounded-btn hover:bg-brand-accent/10 transition-colors"
-                  >
-                    {a.name}
-                  </Link>
-                ))}
-                {agents.length > 3 && (
-                  <span className="text-[11px] text-brand-shade3">+{agents.length - 3} more</span>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
         {tab === 'settings' && (
           <div className="p-6 max-w-[600px] mx-auto space-y-4">
             <div>
               <label className="block text-[11px] uppercase tracking-wider text-brand-shade3 mb-1.5">Name</label>
               <input
                 readOnly
-                value={schema.name}
+                value={schema?.name ?? ''}
                 className="w-full bg-brand-dark border border-brand-shade3/20 rounded-btn px-3 py-2 text-[13px] text-brand-light"
               />
             </div>
@@ -493,27 +527,29 @@ export default function V2SchemaDetailPage() {
               </label>
               <textarea
                 readOnly
-                value={schema.description}
+                value={schema?.description ?? ''}
                 rows={2}
                 className="w-full bg-brand-dark border border-brand-shade3/20 rounded-btn px-3 py-2 text-[13px] text-brand-light"
               />
             </div>
-            <div>
-              <label className="block text-[11px] uppercase tracking-wider text-brand-shade3 mb-1.5">
-                Entry Orchestrator
-              </label>
-              <div className="bg-brand-dark border border-brand-shade3/20 rounded-btn px-3 py-2 text-[13px] text-brand-light">
-                {getAgentById(schema.entryAgentId)?.name}{' '}
-                <span className="text-brand-shade3">— all triggers dispatch here</span>
+            {entryAgentId && (
+              <div>
+                <label className="block text-[11px] uppercase tracking-wider text-brand-shade3 mb-1.5">
+                  Entry Orchestrator
+                </label>
+                <div className="bg-brand-dark border border-brand-shade3/20 rounded-btn px-3 py-2 text-[13px] text-brand-light">
+                  {entryAgentId}{' '}
+                  <span className="text-brand-shade3">— all triggers dispatch here</span>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>
 
-      {debugOpen && debugSessions.length > 0 && (
+      {debugOpen && activeDebugSessionId && (
         <V2DebugPanel
-          sessions={debugSessions}
+          sessions={[]}
           onStepChange={onStepChange}
           onClose={() => {
             setDebugOpen(false);

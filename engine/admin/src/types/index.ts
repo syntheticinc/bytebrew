@@ -355,6 +355,7 @@ export interface Schema {
   agents?: string[];
   agents_count: number;
   is_system?: boolean;
+  entry_agent_name?: string;
   created_at: string;
 }
 
