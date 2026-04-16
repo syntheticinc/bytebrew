@@ -16,6 +16,7 @@ import AgentsPage from './pages/AgentsPage';
 import SchemaListPage from './pages/SchemaListPage';
 import WidgetConfigPage from './pages/WidgetConfigPage';
 import KnowledgePage from './pages/KnowledgePage';
+import TriggersPage from './pages/TriggersPage';
 import V2OverviewPage from './pages/v2/V2OverviewPage';
 import V2SchemasPage from './pages/v2/V2SchemasPage';
 import V2SchemaDetailPage from './pages/v2/V2SchemaDetailPage';
@@ -54,6 +55,7 @@ export default function App() {
             <Route path="/config" element={<ConfigPage />} />
             <Route path="/audit" element={<AuditPage />} />
             <Route path="/knowledge" element={<KnowledgePage />} />
+            <Route path="/triggers" element={<TriggersPage />} />
             <Route path="/widget" element={<WidgetConfigPage />} />
             <Route path="/agents" element={<AgentsPage />} />
             <Route path="/agents/:agent" element={<AgentDrillInPage />} />

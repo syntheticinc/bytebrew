@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
 
 const STORAGE_KEY = 'bytebrew_prototype_mode';
 const PROTOTYPE_ENABLED = import.meta.env.VITE_PROTOTYPE_ENABLED === 'true'
@@ -17,27 +17,16 @@ const PrototypeContext = createContext<PrototypeContextValue>({
 });
 
 export function PrototypeProvider({ children }: { children: ReactNode }) {
-  const [prototypeEnabled, setPrototypeEnabled] = useState(PROTOTYPE_ENABLED);
+  const prototypeEnabled = PROTOTYPE_ENABLED;
   const [isPrototype, setIsPrototype] = useState(() => {
     if (!PROTOTYPE_ENABLED) return false;
     return localStorage.getItem(STORAGE_KEY) === 'true';
   });
 
-  // Check runtime setting from API (overrides build-time if available)
-  useEffect(() => {
-    if (!PROTOTYPE_ENABLED) return;
-    fetch(`${import.meta.env.BASE_URL}../api/v1/settings`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((settings: Array<{ key: string; value: string }> | null) => {
-        if (!settings) return;
-        const setting = settings.find((s) => s.key === 'prototype_mode_enabled');
-        if (setting?.value === 'false') {
-          setPrototypeEnabled(false);
-          setIsPrototype(false);
-        }
-      })
-      .catch(() => { /* API unavailable — use build-time default */ });
-  }, []);
+  // Prototype mode availability is determined entirely by build-time env var
+  // (VITE_PROTOTYPE_ENABLED) + localStorage toggle. No server-side API call is
+  // made here — doing so would fire an unauthenticated request on every app
+  // load, causing a 401 in the console before the user has logged in.
 
   const togglePrototype = () => {
     setIsPrototype((prev) => {
