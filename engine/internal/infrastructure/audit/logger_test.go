@@ -22,7 +22,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 
 	// Create table manually to avoid PostgreSQL-specific syntax in GORM tags.
-	err = db.Exec(`CREATE TABLE audit_log (
+	err = db.Exec(`CREATE TABLE audit_logs (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		timestamp DATETIME,
 		actor_type VARCHAR(20) NOT NULL,

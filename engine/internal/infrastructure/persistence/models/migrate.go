@@ -158,6 +158,15 @@ func AutoMigrate(db *gorm.DB) error {
 		}
 	}
 
+	// V2 audit_log → audit_logs rename (Commit Group M.5).
+	// Defense-in-depth alongside Liquibase 023 — idempotent rename.
+	// See docs/database/target-schema.dbml: Table audit_logs.
+	if db.Migrator().HasTable("audit_log") && !db.Migrator().HasTable("audit_logs") {
+		if err := db.Migrator().RenameTable("audit_log", "audit_logs"); err != nil {
+			slog.Warn("[Migration] renaming legacy audit_log table to audit_logs failed", "error", err)
+		}
+	}
+
 	// V2 runtime_agent_runs → agent_runs rename (Commit Group M.4).
 	// Defense-in-depth alongside Liquibase 022 — idempotent rename.
 	// See docs/database/target-schema.dbml: Table agent_runs.

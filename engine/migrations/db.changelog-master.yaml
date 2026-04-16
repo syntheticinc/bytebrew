@@ -43,3 +43,5 @@ databaseChangeLog:
       file: migrations/021_v2_rename_runtime_agent_contexts_to_agent_context_snapshots.yaml
   - include:
       file: migrations/022_v2_rename_runtime_agent_runs_to_agent_runs.yaml
+  - include:
+      file: migrations/023_v2_rename_audit_log_to_audit_logs.yaml

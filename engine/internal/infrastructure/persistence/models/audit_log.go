@@ -2,7 +2,7 @@ package models
 
 import "time"
 
-// AuditLogModel maps to the "audit_log" table.
+// AuditLogModel maps to the "audit_logs" table.
 type AuditLogModel struct {
 	ID        string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	Timestamp time.Time `gorm:"not null;default:now();index"`
@@ -18,4 +18,4 @@ type AuditLogModel struct {
 	Task    *TaskModel    `gorm:"foreignKey:TaskID"`
 }
 
-func (AuditLogModel) TableName() string { return "audit_log" }
+func (AuditLogModel) TableName() string { return "audit_logs" }

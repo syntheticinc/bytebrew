@@ -18,7 +18,7 @@ type AuditFilters struct {
 	To        *time.Time
 }
 
-// GORMAuditRepository provides read access to the audit_log table.
+// GORMAuditRepository provides read access to the audit_logs table.
 type GORMAuditRepository struct {
 	db *gorm.DB
 }
