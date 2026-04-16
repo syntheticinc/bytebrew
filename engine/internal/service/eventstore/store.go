@@ -46,7 +46,7 @@ func (s *Store) Append(sessionID, eventType string, event *pb.SessionEvent, json
 		return "", fmt.Errorf("marshal json: %w", err)
 	}
 
-	m := models.RuntimeSessionEventModel{
+	m := models.SessionEventLogModel{
 		ID:        uuid.New().String(),
 		SessionID: sessionID,
 		EventType: eventType,
@@ -68,7 +68,7 @@ func (s *Store) GetAfter(sessionID string, afterCreatedAt time.Time) ([]StoredEv
 		return s.GetAll(sessionID)
 	}
 
-	var ms []models.RuntimeSessionEventModel
+	var ms []models.SessionEventLogModel
 	if err := s.db.
 		Where("session_id = ? AND created_at > ?", sessionID, afterCreatedAt).
 		Order("created_at ASC").
@@ -81,7 +81,7 @@ func (s *Store) GetAfter(sessionID string, afterCreatedAt time.Time) ([]StoredEv
 
 // GetAll returns all events for a session ordered by creation time.
 func (s *Store) GetAll(sessionID string) ([]StoredEvent, error) {
-	var ms []models.RuntimeSessionEventModel
+	var ms []models.SessionEventLogModel
 	if err := s.db.
 		Where("session_id = ?", sessionID).
 		Order("created_at ASC").
@@ -95,13 +95,13 @@ func (s *Store) GetAll(sessionID string) ([]StoredEvent, error) {
 // CleanupSession deletes all events for a session.
 func (s *Store) CleanupSession(sessionID string) error {
 	if err := s.db.Where("session_id = ?", sessionID).
-		Delete(&models.RuntimeSessionEventModel{}).Error; err != nil {
+		Delete(&models.SessionEventLogModel{}).Error; err != nil {
 		return fmt.Errorf("cleanup session events: %w", err)
 	}
 	return nil
 }
 
-func scanEventModels(ms []models.RuntimeSessionEventModel) ([]StoredEvent, error) {
+func scanEventModels(ms []models.SessionEventLogModel) ([]StoredEvent, error) {
 	events := make([]StoredEvent, 0, len(ms))
 
 	for _, m := range ms {

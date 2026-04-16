@@ -37,7 +37,7 @@ type ToolCallEntry struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-// ToolCallEventRepository queries runtime_session_events for tool call audit data.
+// ToolCallEventRepository queries session_event_log for tool call audit data.
 type ToolCallEventRepository struct {
 	db *gorm.DB
 }
@@ -50,7 +50,7 @@ func NewToolCallEventRepository(db *gorm.DB) *ToolCallEventRepository {
 // QueryToolCalls returns tool call entries matching the filters with pagination.
 func (r *ToolCallEventRepository) QueryToolCalls(ctx context.Context, filters ToolCallFilters, page, perPage int) ([]ToolCallEntry, int64, error) {
 	// Step 1: Query tool_call_start events with filters.
-	startQuery := r.db.WithContext(ctx).Model(&models.RuntimeSessionEventModel{}).
+	startQuery := r.db.WithContext(ctx).Model(&models.SessionEventLogModel{}).
 		Where("event_type = ?", "tool_call_start")
 
 	if filters.SessionID != "" {
@@ -64,16 +64,16 @@ func (r *ToolCallEventRepository) QueryToolCalls(ctx context.Context, filters To
 	}
 
 	// Count total before pagination (we'll refine after JSON filtering).
-	var startEvents []models.RuntimeSessionEventModel
+	var startEvents []models.SessionEventLogModel
 	if err := startQuery.Order("created_at DESC").Find(&startEvents).Error; err != nil {
 		return nil, 0, fmt.Errorf("query tool call start events: %w", err)
 	}
 
 	// Step 2: Query all tool_call_end events for the same sessions.
 	sessionIDs := uniqueSessionIDs(startEvents)
-	endMap := make(map[string]models.RuntimeSessionEventModel)
+	endMap := make(map[string]models.SessionEventLogModel)
 	if len(sessionIDs) > 0 {
-		var endEvents []models.RuntimeSessionEventModel
+		var endEvents []models.SessionEventLogModel
 		if err := r.db.WithContext(ctx).
 			Where("event_type = ? AND session_id IN ?", "tool_call_end", sessionIDs).
 			Find(&endEvents).Error; err != nil {
@@ -123,7 +123,7 @@ func (r *ToolCallEventRepository) QueryToolCalls(ctx context.Context, filters To
 	return allEntries[offset:end], total, nil
 }
 
-func (r *ToolCallEventRepository) buildEntry(start models.RuntimeSessionEventModel, endMap map[string]models.RuntimeSessionEventModel) (ToolCallEntry, bool) {
+func (r *ToolCallEventRepository) buildEntry(start models.SessionEventLogModel, endMap map[string]models.SessionEventLogModel) (ToolCallEntry, bool) {
 	startData, err := parseJSON(start.JSONData)
 	if err != nil {
 		return ToolCallEntry{}, false
@@ -162,7 +162,7 @@ func (r *ToolCallEventRepository) buildEntry(start models.RuntimeSessionEventMod
 	return entry, true
 }
 
-func uniqueSessionIDs(events []models.RuntimeSessionEventModel) []string {
+func uniqueSessionIDs(events []models.SessionEventLogModel) []string {
 	seen := make(map[string]struct{}, len(events))
 	result := make([]string, 0, len(events))
 	for _, e := range events {

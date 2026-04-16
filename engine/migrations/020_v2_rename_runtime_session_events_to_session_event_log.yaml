@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 020-v2-rename-runtime-session-events-to-session-event-log
+      author: bytebrew
+      changes:
+        - sql:
+            sql: ALTER TABLE runtime_session_events RENAME TO session_event_log;
+      rollback:
+        - sql:
+            sql: ALTER TABLE session_event_log RENAME TO runtime_session_events;

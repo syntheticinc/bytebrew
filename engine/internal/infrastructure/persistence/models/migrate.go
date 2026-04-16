@@ -140,6 +140,15 @@ func AutoMigrate(db *gorm.DB) error {
 		}
 	}
 
+	// V2 runtime_session_events → session_event_log rename (Commit Group M.2).
+	// Defense-in-depth alongside Liquibase 020 — idempotent rename.
+	// See docs/database/target-schema.dbml: Table session_event_log.
+	if db.Migrator().HasTable("runtime_session_events") && !db.Migrator().HasTable("session_event_log") {
+		if err := db.Migrator().RenameTable("runtime_session_events", "session_event_log"); err != nil {
+			slog.Warn("[Migration] renaming legacy runtime_session_events table to session_event_log failed", "error", err)
+		}
+	}
+
 	// V2 settings final shape (Commit Group G, §5.8).
 	// Defense-in-depth alongside Liquibase 018 — idempotent DropColumn for the
 	// legacy `scope` column. The composite PK (tenant_id, key) and the jsonb
@@ -175,7 +184,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&RuntimeAgentRunModel{},
 		&RuntimeDeviceModel{},
 		&RuntimeConfigKV{},
-		&RuntimeSessionEventModel{},
+		&SessionEventLogModel{},
 		&MessageModel{},
 		&RuntimeAgentContextModel{},
 

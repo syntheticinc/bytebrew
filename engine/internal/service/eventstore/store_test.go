@@ -21,7 +21,7 @@ func newTestGormDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&models.RuntimeSessionEventModel{}))
+	require.NoError(t, db.AutoMigrate(&models.SessionEventLogModel{}))
 	return db
 }
 
@@ -29,7 +29,7 @@ func newTestGormFileDB(t *testing.T, dbPath string) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&models.RuntimeSessionEventModel{}))
+	require.NoError(t, db.AutoMigrate(&models.SessionEventLogModel{}))
 	return db
 }
 

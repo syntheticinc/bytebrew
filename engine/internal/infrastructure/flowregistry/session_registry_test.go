@@ -21,7 +21,7 @@ func newTestEventStore(t *testing.T) *eventstore.Store {
 	t.Helper()
 	gormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, gormDB.AutoMigrate(&models.RuntimeSessionEventModel{}))
+	require.NoError(t, gormDB.AutoMigrate(&models.SessionEventLogModel{}))
 	store, err := eventstore.New(gormDB)
 	require.NoError(t, err)
 	return store
