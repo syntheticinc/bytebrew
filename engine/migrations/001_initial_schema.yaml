@@ -1,0 +1,532 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001_initial_schema
+      author: bytebrew
+      changes:
+        - sql:
+            sql: |
+              -- Extensions
+              CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+              CREATE EXTENSION IF NOT EXISTS "vector";
+
+              -- =============================================================================
+              -- IDENTITY
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS users (
+                id            uuid        NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id     uuid        NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                external_id   varchar(255) NOT NULL,
+                email         varchar(255),
+                display_name  varchar(255),
+                disabled      boolean     NOT NULL DEFAULT false,
+                created_at    timestamptz NOT NULL DEFAULT now(),
+                updated_at    timestamptz NOT NULL DEFAULT now(),
+                PRIMARY KEY (id),
+                UNIQUE (external_id)
+              );
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_users_tenant_external ON users (tenant_id, external_id);
+              CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON users (tenant_id);
+
+              -- =============================================================================
+              -- CONFIG — Models
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS models (
+                id                  uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id           uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                name                varchar(255) NOT NULL,
+                type                varchar(30)  NOT NULL,
+                base_url            varchar(500),
+                model_name          varchar(255) NOT NULL,
+                api_key_encrypted   varchar(1000),
+                api_version         varchar(30)  DEFAULT '',
+                config              jsonb        NOT NULL DEFAULT '{}',
+                created_at          timestamptz  NOT NULL DEFAULT now(),
+                updated_at          timestamptz  NOT NULL DEFAULT now(),
+                PRIMARY KEY (id)
+              );
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_models_tenant_name ON models (tenant_id, name);
+              CREATE INDEX IF NOT EXISTS idx_models_tenant_id ON models (tenant_id);
+
+              -- =============================================================================
+              -- CONFIG — MCP Catalog
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS mcp_catalog (
+                id              uuid         NOT NULL DEFAULT gen_random_uuid(),
+                name            varchar(255) NOT NULL,
+                display         varchar(255) NOT NULL,
+                description     text,
+                category        varchar(30)  NOT NULL,
+                verified        boolean      NOT NULL DEFAULT false,
+                packages        jsonb        NOT NULL,
+                provided_tools  jsonb,
+                created_at      timestamptz  NOT NULL DEFAULT now(),
+                updated_at      timestamptz  NOT NULL DEFAULT now(),
+                PRIMARY KEY (id),
+                UNIQUE (name)
+              );
+
+              -- =============================================================================
+              -- CONFIG — Schema Templates
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS schema_templates (
+                id          uuid         NOT NULL DEFAULT gen_random_uuid(),
+                name        varchar(255) NOT NULL,
+                display     varchar(255) NOT NULL,
+                description text,
+                category    varchar(30)  NOT NULL,
+                icon        varchar(64),
+                version     varchar(32)  NOT NULL DEFAULT '1.0',
+                definition  jsonb        NOT NULL,
+                created_at  timestamptz  NOT NULL DEFAULT now(),
+                updated_at  timestamptz  NOT NULL DEFAULT now(),
+                PRIMARY KEY (id),
+                UNIQUE (name)
+              );
+
+              -- =============================================================================
+              -- CONFIG — Agents
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS agents (
+                id                uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id         uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                name              varchar(255) NOT NULL,
+                model_id          uuid         REFERENCES models(id) ON DELETE SET NULL,
+                system_prompt     text         NOT NULL,
+                lifecycle         varchar(20)  NOT NULL DEFAULT 'persistent',
+                tool_execution    varchar(20)  NOT NULL DEFAULT 'sequential',
+                max_steps         int          NOT NULL DEFAULT 0,
+                max_context_size  int          NOT NULL DEFAULT 16000,
+                max_turn_duration int          NOT NULL DEFAULT 120,
+                temperature       double precision,
+                top_p             double precision,
+                max_tokens        int,
+                stop_sequences    jsonb,
+                confirm_before    jsonb,
+                is_system         boolean      NOT NULL DEFAULT false,
+                created_at        timestamptz  NOT NULL DEFAULT now(),
+                updated_at        timestamptz  NOT NULL DEFAULT now(),
+                PRIMARY KEY (id),
+                CONSTRAINT chk_agents_lifecycle      CHECK (lifecycle IN ('persistent','spawn')),
+                CONSTRAINT chk_agents_tool_execution CHECK (tool_execution IN ('sequential','parallel'))
+              );
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_tenant_name ON agents (tenant_id, name);
+              CREATE INDEX IF NOT EXISTS idx_agents_model_id ON agents (model_id);
+              CREATE INDEX IF NOT EXISTS idx_agents_tenant_id ON agents (tenant_id);
+
+              -- =============================================================================
+              -- CONFIG — Agent Tools
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS agent_tools (
+                id          uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id   uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                agent_id    uuid         NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+                tool_type   varchar(20)  NOT NULL,
+                tool_name   varchar(255) NOT NULL,
+                config      jsonb,
+                sort_order  int          NOT NULL DEFAULT 0,
+                PRIMARY KEY (id)
+              );
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_tool_type_name ON agent_tools (agent_id, tool_type, tool_name);
+              CREATE INDEX IF NOT EXISTS idx_agent_tools_tenant_id ON agent_tools (tenant_id);
+
+              -- =============================================================================
+              -- CONFIG — MCP Servers (must precede agent_mcp_servers)
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS mcp_servers (
+                id                uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id         uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                name              varchar(255) NOT NULL,
+                type              varchar(20)  NOT NULL,
+                command           varchar(500),
+                args              jsonb,
+                url               varchar(500),
+                env_vars          jsonb,
+                forward_headers   jsonb,
+                auth_type         varchar(30)  NOT NULL DEFAULT 'none',
+                auth_key_env      varchar(255),
+                auth_token_env    varchar(255),
+                auth_client_id    varchar(255),
+                created_at        timestamptz  NOT NULL DEFAULT now(),
+                updated_at        timestamptz  NOT NULL DEFAULT now(),
+                PRIMARY KEY (id)
+              );
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_mcp_servers_tenant_name ON mcp_servers (tenant_id, name);
+
+              -- =============================================================================
+              -- CONFIG — Agent MCP Servers (M2M)
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS agent_mcp_servers (
+                tenant_id     uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                agent_id      uuid NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+                mcp_server_id uuid NOT NULL REFERENCES mcp_servers(id) ON DELETE CASCADE,
+                PRIMARY KEY (agent_id, mcp_server_id)
+              );
+              CREATE INDEX IF NOT EXISTS idx_agent_mcp_servers_mcp ON agent_mcp_servers (mcp_server_id);
+              CREATE INDEX IF NOT EXISTS idx_agent_mcp_servers_tenant_id ON agent_mcp_servers (tenant_id);
+
+              -- =============================================================================
+              -- CONFIG — Capabilities
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS capabilities (
+                id          uuid        NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id   uuid        NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                agent_id    uuid        NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+                type        varchar(50) NOT NULL,
+                config      jsonb,
+                enabled     boolean     NOT NULL DEFAULT true,
+                created_at  timestamptz NOT NULL DEFAULT now(),
+                updated_at  timestamptz NOT NULL DEFAULT now(),
+                PRIMARY KEY (id)
+              );
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_capabilities_agent_type ON capabilities (agent_id, type);
+
+              -- =============================================================================
+              -- CONFIG — Settings
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS settings (
+                tenant_id  uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                key        varchar(255) NOT NULL,
+                value      jsonb        NOT NULL DEFAULT '{}',
+                updated_at timestamptz  NOT NULL DEFAULT now(),
+                PRIMARY KEY (tenant_id, key)
+              );
+              CREATE INDEX IF NOT EXISTS idx_settings_tenant_id ON settings (tenant_id);
+
+              -- =============================================================================
+              -- SCHEMAS — Schemas (needs agents for entry_agent_id FK)
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS schemas (
+                id              uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id       uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                name            varchar(255) NOT NULL,
+                description     text,
+                entry_agent_id  uuid         REFERENCES agents(id) ON DELETE RESTRICT,
+                is_system       boolean      NOT NULL DEFAULT false,
+                created_at      timestamptz  NOT NULL DEFAULT now(),
+                updated_at      timestamptz  NOT NULL DEFAULT now(),
+                PRIMARY KEY (id)
+              );
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_schemas_tenant_name ON schemas (tenant_id, name);
+              CREATE INDEX IF NOT EXISTS idx_schemas_entry_agent_id ON schemas (entry_agent_id);
+              CREATE INDEX IF NOT EXISTS idx_schemas_tenant_id ON schemas (tenant_id);
+
+              -- =============================================================================
+              -- SCHEMAS — Agent Relations
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS agent_relations (
+                id               uuid        NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id        uuid        NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                schema_id        uuid        NOT NULL REFERENCES schemas(id) ON DELETE CASCADE,
+                source_agent_id  uuid        NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+                target_agent_id  uuid        NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+                config           jsonb,
+                created_at       timestamptz NOT NULL DEFAULT now(),
+                updated_at       timestamptz NOT NULL DEFAULT now(),
+                PRIMARY KEY (id)
+              );
+              CREATE INDEX IF NOT EXISTS idx_agent_relations_schema_id ON agent_relations (schema_id);
+              CREATE INDEX IF NOT EXISTS idx_agent_relations_tenant_id ON agent_relations (tenant_id);
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_relations_pair ON agent_relations (source_agent_id, target_agent_id);
+              CREATE INDEX IF NOT EXISTS idx_agent_relations_target_agent_id ON agent_relations (target_agent_id);
+
+              -- =============================================================================
+              -- CONFIG — Triggers (needs schemas)
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS triggers (
+                id            uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id     uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                type          varchar(20)  NOT NULL,
+                title         varchar(255) NOT NULL,
+                schema_id     uuid         NOT NULL REFERENCES schemas(id) ON DELETE CASCADE,
+                description   text,
+                enabled       boolean      NOT NULL DEFAULT true,
+                config        jsonb        NOT NULL DEFAULT '{}',
+                last_fired_at timestamptz,
+                created_at    timestamptz  NOT NULL DEFAULT now(),
+                updated_at    timestamptz  NOT NULL DEFAULT now(),
+                PRIMARY KEY (id),
+                CONSTRAINT chk_triggers_type CHECK (type IN ('cron','webhook','chat'))
+              );
+              CREATE INDEX IF NOT EXISTS idx_triggers_schema_id ON triggers (schema_id);
+              CREATE INDEX IF NOT EXISTS idx_triggers_tenant_id ON triggers (tenant_id);
+              CREATE INDEX IF NOT EXISTS idx_triggers_type ON triggers (type);
+
+              -- =============================================================================
+              -- KNOWLEDGE — Knowledge Bases
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS knowledge_bases (
+                id                   uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id            uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                name                 varchar(255) NOT NULL,
+                description          text,
+                embedding_model_id   uuid         REFERENCES models(id) ON DELETE SET NULL,
+                created_at           timestamptz  NOT NULL DEFAULT now(),
+                updated_at           timestamptz  NOT NULL DEFAULT now(),
+                PRIMARY KEY (id)
+              );
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_bases_tenant_name ON knowledge_bases (tenant_id, name);
+              CREATE INDEX IF NOT EXISTS idx_knowledge_bases_embedding_model_id ON knowledge_bases (embedding_model_id);
+              CREATE INDEX IF NOT EXISTS idx_knowledge_bases_tenant_id ON knowledge_bases (tenant_id);
+
+              -- =============================================================================
+              -- KNOWLEDGE — Knowledge Base Agents (M2M)
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS knowledge_base_agents (
+                tenant_id         uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                knowledge_base_id uuid NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
+                agent_id          uuid NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+                PRIMARY KEY (knowledge_base_id, agent_id)
+              );
+              CREATE INDEX IF NOT EXISTS idx_knowledge_base_agents_agent_id ON knowledge_base_agents (agent_id);
+              CREATE INDEX IF NOT EXISTS idx_knowledge_base_agents_tenant_id ON knowledge_base_agents (tenant_id);
+
+              -- =============================================================================
+              -- KNOWLEDGE — Knowledge Documents
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS knowledge_documents (
+                id                 uuid        NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id          uuid        NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                knowledge_base_id  uuid        NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
+                file_path          text        NOT NULL,
+                file_type          varchar(20) NOT NULL DEFAULT 'txt',
+                file_size          bigint      NOT NULL DEFAULT 0,
+                file_hash          varchar(64) NOT NULL,
+                status             varchar(20) NOT NULL DEFAULT 'uploading',
+                status_msg         text,
+                chunk_count        int         DEFAULT 0,
+                indexed_at         timestamptz,
+                created_at         timestamptz NOT NULL DEFAULT now(),
+                updated_at         timestamptz NOT NULL DEFAULT now(),
+                PRIMARY KEY (id)
+              );
+              CREATE INDEX IF NOT EXISTS idx_knowledge_documents_knowledge_base_id ON knowledge_documents (knowledge_base_id);
+              CREATE INDEX IF NOT EXISTS idx_knowledge_documents_tenant_id ON knowledge_documents (tenant_id);
+
+              -- =============================================================================
+              -- KNOWLEDGE — Knowledge Chunks
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS knowledge_chunks (
+                id               uuid        NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id        uuid        NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                document_id      uuid        NOT NULL REFERENCES knowledge_documents(id) ON DELETE CASCADE,
+                content          text        NOT NULL,
+                chunk_order      int         NOT NULL,
+                embedding_vector vector,
+                created_at       timestamptz NOT NULL DEFAULT now(),
+                PRIMARY KEY (id)
+              );
+              CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_document_id ON knowledge_chunks (document_id);
+              CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_tenant_id ON knowledge_chunks (tenant_id);
+
+              -- =============================================================================
+              -- RUNTIME — Sessions (needs schemas, users)
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS sessions (
+                id           uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id    uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                schema_id    uuid         NOT NULL REFERENCES schemas(id) ON DELETE RESTRICT,
+                user_id      uuid         REFERENCES users(id) ON DELETE SET NULL,
+                title        varchar(500),
+                status       varchar(20)  NOT NULL DEFAULT 'active',
+                created_at   timestamptz  NOT NULL DEFAULT now(),
+                updated_at   timestamptz  NOT NULL DEFAULT now(),
+                completed_at timestamptz,
+                PRIMARY KEY (id),
+                CONSTRAINT chk_sessions_status CHECK (status IN ('active','completed','expired','failed'))
+              );
+              CREATE INDEX IF NOT EXISTS idx_sessions_tenant_user_chrono ON sessions (tenant_id, user_id, created_at);
+              CREATE INDEX IF NOT EXISTS idx_sessions_schema_id ON sessions (schema_id);
+              CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions (status);
+
+              -- =============================================================================
+              -- RUNTIME — Messages (needs sessions, agents, triggers)
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS messages (
+                id          uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id   uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                session_id  uuid         NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                event_type  varchar(20)  NOT NULL,
+                agent_id    uuid         REFERENCES agents(id) ON DELETE SET NULL,
+                trigger_id  uuid         REFERENCES triggers(id) ON DELETE SET NULL,
+                call_id     varchar(100),
+                payload     jsonb        NOT NULL DEFAULT '{}',
+                created_at  timestamptz  NOT NULL DEFAULT now(),
+                PRIMARY KEY (id),
+                CONSTRAINT chk_messages_event_type CHECK (event_type IN ('user_message','assistant_message','tool_call','tool_result','reasoning','system'))
+              );
+              CREATE INDEX IF NOT EXISTS idx_messages_tenant_session_chrono ON messages (tenant_id, session_id, created_at);
+              CREATE INDEX IF NOT EXISTS idx_messages_call_id ON messages (session_id, call_id);
+              CREATE INDEX IF NOT EXISTS idx_messages_agent_id ON messages (agent_id);
+              CREATE INDEX IF NOT EXISTS idx_messages_trigger_id ON messages (trigger_id);
+
+              -- =============================================================================
+              -- RUNTIME — Session Event Log
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS session_event_log (
+                id          uuid        NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id   uuid        NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                session_id  uuid        NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                event_type  varchar(50) NOT NULL,
+                proto_data  bytea       NOT NULL,
+                created_at  timestamptz NOT NULL DEFAULT now(),
+                PRIMARY KEY (id)
+              );
+              CREATE INDEX IF NOT EXISTS idx_session_event_log_lookup ON session_event_log (session_id, created_at);
+
+              -- =============================================================================
+              -- RUNTIME — Tasks (needs sessions; self-ref)
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS tasks (
+                id                   uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id            uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                session_id           uuid         NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                parent_task_id       uuid         REFERENCES tasks(id) ON DELETE CASCADE,
+                title                varchar(500) NOT NULL,
+                description          text,
+                acceptance_criteria  jsonb,
+                status               varchar(20)  NOT NULL DEFAULT 'pending',
+                mode                 varchar(20)  NOT NULL DEFAULT 'interactive',
+                priority             int          NOT NULL DEFAULT 0,
+                blocked_by           jsonb,
+                result               text,
+                error                text,
+                created_at           timestamptz  NOT NULL DEFAULT now(),
+                updated_at           timestamptz  NOT NULL DEFAULT now(),
+                approved_at          timestamptz,
+                started_at           timestamptz,
+                completed_at         timestamptz,
+                PRIMARY KEY (id),
+                CONSTRAINT chk_tasks_status CHECK (status IN ('pending','in_progress','completed','failed','needs_input','escalated','cancelled')),
+                CONSTRAINT chk_tasks_mode   CHECK (mode IN ('interactive','background'))
+              );
+              CREATE INDEX IF NOT EXISTS idx_tasks_tenant_status_chrono ON tasks (tenant_id, status, created_at);
+              CREATE INDEX IF NOT EXISTS idx_tasks_session_id ON tasks (session_id);
+              CREATE INDEX IF NOT EXISTS idx_tasks_parent_task_id ON tasks (parent_task_id);
+
+              -- =============================================================================
+              -- RUNTIME — Memories
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS memories (
+                id          uuid        NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id   uuid        NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                schema_id   uuid        NOT NULL REFERENCES schemas(id) ON DELETE CASCADE,
+                user_id     uuid        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                content     text        NOT NULL,
+                metadata    jsonb,
+                created_at  timestamptz NOT NULL DEFAULT now(),
+                updated_at  timestamptz NOT NULL DEFAULT now(),
+                PRIMARY KEY (id)
+              );
+              CREATE INDEX IF NOT EXISTS idx_memories_schema_user ON memories (schema_id, user_id);
+              CREATE INDEX IF NOT EXISTS idx_memories_created_at ON memories (created_at);
+
+              -- =============================================================================
+              -- RUNTIME — Agent Runs
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS agent_runs (
+                id           uuid        NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id    uuid        NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                task_id      uuid        REFERENCES tasks(id) ON DELETE SET NULL,
+                session_id   uuid        NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                agent_id     uuid        NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+                status       varchar(20) NOT NULL,
+                result       text,
+                error        text,
+                started_at   timestamptz NOT NULL DEFAULT now(),
+                completed_at timestamptz,
+                PRIMARY KEY (id),
+                CONSTRAINT chk_agent_runs_status CHECK (status IN ('running','completed','failed','cancelled'))
+              );
+              CREATE INDEX IF NOT EXISTS idx_agent_runs_session_status ON agent_runs (session_id, status);
+              CREATE INDEX IF NOT EXISTS idx_agent_runs_task_id ON agent_runs (task_id);
+              CREATE INDEX IF NOT EXISTS idx_agent_runs_agent_id ON agent_runs (agent_id);
+              CREATE INDEX IF NOT EXISTS idx_agent_runs_tenant_id ON agent_runs (tenant_id);
+
+              -- =============================================================================
+              -- RUNTIME — Agent Context Snapshots
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS agent_context_snapshots (
+                id             uuid        NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id      uuid        NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                session_id     uuid        NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                agent_id       uuid        NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+                schema_version int         NOT NULL DEFAULT 1,
+                context_data   bytea       NOT NULL,
+                step_number    int         NOT NULL DEFAULT 0,
+                token_count    int         NOT NULL DEFAULT 0,
+                status         varchar(20) NOT NULL DEFAULT 'active',
+                created_at     timestamptz NOT NULL DEFAULT now(),
+                updated_at     timestamptz NOT NULL DEFAULT now(),
+                PRIMARY KEY (id),
+                CONSTRAINT chk_agent_context_snapshots_status CHECK (status IN ('active','compacted','expired'))
+              );
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_ctx_snapshots_session_agent ON agent_context_snapshots (session_id, agent_id);
+
+              -- =============================================================================
+              -- OBSERVABILITY — Audit Logs
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS audit_logs (
+                id            uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id     uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                occurred_at   timestamptz  NOT NULL DEFAULT now(),
+                actor_type    varchar(20)  NOT NULL,
+                actor_user_id uuid         REFERENCES users(id) ON DELETE SET NULL,
+                action        varchar(50)  NOT NULL,
+                resource      varchar(500),
+                details       jsonb,
+                session_id    uuid         REFERENCES sessions(id) ON DELETE SET NULL,
+                task_id       uuid         REFERENCES tasks(id) ON DELETE SET NULL,
+                PRIMARY KEY (id),
+                CONSTRAINT chk_audit_logs_actor_type CHECK (actor_type IN ('admin','api_token','system','cron'))
+              );
+              CREATE INDEX IF NOT EXISTS idx_audit_tenant_time ON audit_logs (tenant_id, occurred_at);
+              CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_user_id ON audit_logs (actor_user_id);
+              CREATE INDEX IF NOT EXISTS idx_audit_logs_session_id ON audit_logs (session_id);
+              CREATE INDEX IF NOT EXISTS idx_audit_logs_task_id ON audit_logs (task_id);
+              CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_type ON audit_logs (actor_type);
+              CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs (action);
+
+              -- =============================================================================
+              -- AUTH — API Tokens
+              -- =============================================================================
+
+              CREATE TABLE IF NOT EXISTS api_tokens (
+                id           uuid        NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id    uuid        NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                user_id      uuid        NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+                name         varchar(255) NOT NULL,
+                token_hash   char(64)    NOT NULL,
+                scopes_mask  int         NOT NULL DEFAULT 0,
+                created_at   timestamptz NOT NULL DEFAULT now(),
+                last_used_at timestamptz,
+                revoked_at   timestamptz,
+                PRIMARY KEY (id),
+                UNIQUE (token_hash)
+              );
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_api_tokens_tenant_name ON api_tokens (tenant_id, name);
+              CREATE INDEX IF NOT EXISTS idx_api_tokens_user_id ON api_tokens (user_id);

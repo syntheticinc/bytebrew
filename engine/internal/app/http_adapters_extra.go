@@ -56,14 +56,14 @@ func (a *mcpServiceHTTPAdapter) ListMCPServers(ctx context.Context) ([]deliveryh
 			AuthClientID: s.AuthClientID,
 			Agents:       agents,
 		}
-		if s.Args != "" {
-			_ = json.Unmarshal([]byte(s.Args), &resp.Args)
+		if s.Args != nil && *s.Args != "" {
+			_ = json.Unmarshal([]byte(*s.Args), &resp.Args)
 		}
-		if s.EnvVars != "" {
-			_ = json.Unmarshal([]byte(s.EnvVars), &resp.EnvVars)
+		if s.EnvVars != nil && *s.EnvVars != "" {
+			_ = json.Unmarshal([]byte(*s.EnvVars), &resp.EnvVars)
 		}
-		if s.ForwardHeaders != "" {
-			_ = json.Unmarshal([]byte(s.ForwardHeaders), &resp.ForwardHeaders)
+		if s.ForwardHeaders != nil && *s.ForwardHeaders != "" {
+			_ = json.Unmarshal([]byte(*s.ForwardHeaders), &resp.ForwardHeaders)
 		}
 		// V2 Commit Group C (§5.6): connection status is no longer persisted
 		// — callers query the live MCP client registry separately.
@@ -85,15 +85,18 @@ func (a *mcpServiceHTTPAdapter) CreateMCPServer(ctx context.Context, req deliver
 	}
 	if len(req.Args) > 0 {
 		data, _ := json.Marshal(req.Args)
-		model.Args = string(data)
+		s := string(data)
+		model.Args = &s
 	}
 	if len(req.EnvVars) > 0 {
 		data, _ := json.Marshal(req.EnvVars)
-		model.EnvVars = string(data)
+		s := string(data)
+		model.EnvVars = &s
 	}
 	if len(req.ForwardHeaders) > 0 {
 		data, _ := json.Marshal(req.ForwardHeaders)
-		model.ForwardHeaders = string(data)
+		s := string(data)
+		model.ForwardHeaders = &s
 	}
 	if err := a.repo.Create(ctx, model); err != nil {
 		return nil, err
@@ -143,15 +146,18 @@ func (a *mcpServiceHTTPAdapter) UpdateMCPServer(ctx context.Context, name string
 	}
 	if len(req.Args) > 0 {
 		data, _ := json.Marshal(req.Args)
-		model.Args = string(data)
+		s := string(data)
+		model.Args = &s
 	}
 	if len(req.EnvVars) > 0 {
 		data, _ := json.Marshal(req.EnvVars)
-		model.EnvVars = string(data)
+		s := string(data)
+		model.EnvVars = &s
 	}
 	if len(req.ForwardHeaders) > 0 {
 		data, _ := json.Marshal(req.ForwardHeaders)
-		model.ForwardHeaders = string(data)
+		s := string(data)
+		model.ForwardHeaders = &s
 	}
 	if err := a.repo.Update(ctx, targetID, model); err != nil {
 		return nil, err
@@ -182,14 +188,14 @@ func (a *mcpServiceHTTPAdapter) UpdateMCPServer(ctx context.Context, name string
 				AuthClientID: s.AuthClientID,
 				Agents:       agents,
 			}
-			if s.Args != "" {
-				_ = json.Unmarshal([]byte(s.Args), &resp.Args)
+			if s.Args != nil && *s.Args != "" {
+				_ = json.Unmarshal([]byte(*s.Args), &resp.Args)
 			}
-			if s.EnvVars != "" {
-				_ = json.Unmarshal([]byte(s.EnvVars), &resp.EnvVars)
+			if s.EnvVars != nil && *s.EnvVars != "" {
+				_ = json.Unmarshal([]byte(*s.EnvVars), &resp.EnvVars)
 			}
-			if s.ForwardHeaders != "" {
-				_ = json.Unmarshal([]byte(s.ForwardHeaders), &resp.ForwardHeaders)
+			if s.ForwardHeaders != nil && *s.ForwardHeaders != "" {
+				_ = json.Unmarshal([]byte(*s.ForwardHeaders), &resp.ForwardHeaders)
 			}
 			// V2 Commit Group C (§5.6): live status no longer persisted.
 			return resp, nil

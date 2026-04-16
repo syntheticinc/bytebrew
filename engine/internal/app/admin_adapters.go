@@ -274,15 +274,13 @@ func (a *adminMCPServerRepoAdapter) GetByID(ctx context.Context, id string) (*ad
 }
 
 func (a *adminMCPServerRepoAdapter) Create(ctx context.Context, record *admintools.MCPServerRecord) error {
-	argsJSON, _ := json.Marshal(record.Args)
-	envJSON, _ := json.Marshal(record.EnvVars)
 	m := &models.MCPServerModel{
 		Name:    record.Name,
 		Type:    record.Type,
 		Command: record.Command,
 		URL:     record.URL,
-		Args:    string(argsJSON),
-		EnvVars: string(envJSON),
+		Args:    marshalJSONPtr(record.Args),
+		EnvVars: marshalJSONPtr(record.EnvVars),
 	}
 	if err := a.repo.Create(ctx, m); err != nil {
 		return err
@@ -292,15 +290,13 @@ func (a *adminMCPServerRepoAdapter) Create(ctx context.Context, record *admintoo
 }
 
 func (a *adminMCPServerRepoAdapter) Update(ctx context.Context, id string, record *admintools.MCPServerRecord) error {
-	argsJSON, _ := json.Marshal(record.Args)
-	envJSON, _ := json.Marshal(record.EnvVars)
 	m := &models.MCPServerModel{
 		Name:    record.Name,
 		Type:    record.Type,
 		Command: record.Command,
 		URL:     record.URL,
-		Args:    string(argsJSON),
-		EnvVars: string(envJSON),
+		Args:    marshalJSONPtr(record.Args),
+		EnvVars: marshalJSONPtr(record.EnvVars),
 	}
 	return a.repo.Update(ctx, id, m)
 }
@@ -311,12 +307,12 @@ func (a *adminMCPServerRepoAdapter) Delete(ctx context.Context, id string) error
 
 func toAdminMCPServerRecord(s models.MCPServerModel) admintools.MCPServerRecord {
 	var args []string
-	if s.Args != "" {
-		_ = json.Unmarshal([]byte(s.Args), &args)
+	if s.Args != nil && *s.Args != "" {
+		_ = json.Unmarshal([]byte(*s.Args), &args)
 	}
 	var envVars map[string]string
-	if s.EnvVars != "" {
-		_ = json.Unmarshal([]byte(s.EnvVars), &envVars)
+	if s.EnvVars != nil && *s.EnvVars != "" {
+		_ = json.Unmarshal([]byte(*s.EnvVars), &envVars)
 	}
 	return admintools.MCPServerRecord{
 		ID:      s.ID,
@@ -327,6 +323,22 @@ func toAdminMCPServerRecord(s models.MCPServerModel) admintools.MCPServerRecord 
 		Args:    args,
 		EnvVars: envVars,
 	}
+}
+
+// marshalJSONPtr marshals v to a JSON string pointer; returns nil if v is nil or empty slice/map.
+func marshalJSONPtr(v interface{}) *string {
+	if v == nil {
+		return nil
+	}
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	s := string(data)
+	if s == "null" || s == "[]" || s == "{}" {
+		return nil
+	}
+	return &s
 }
 
 // --- Model (LLM Provider) adapter ---

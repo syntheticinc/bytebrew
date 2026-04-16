@@ -114,11 +114,11 @@ func (a *configImportExportHTTPAdapter) exportAgents(_ context.Context) ([]agent
 			ay.ModelName = ag.Model.Name
 		}
 
-		if ag.ConfirmBefore != "" {
-			ay.ConfirmBefore = splitCSV(ag.ConfirmBefore)
+		if ag.ConfirmBefore != nil && *ag.ConfirmBefore != "" {
+			_ = json.Unmarshal([]byte(*ag.ConfirmBefore), &ay.ConfirmBefore)
 		}
-		if ag.StopSequences != "" {
-			_ = json.Unmarshal([]byte(ag.StopSequences), &ay.StopSequences)
+		if ag.StopSequences != nil && *ag.StopSequences != "" {
+			_ = json.Unmarshal([]byte(*ag.StopSequences), &ay.StopSequences)
 		}
 
 		for _, t := range ag.Tools {
@@ -165,15 +165,15 @@ func (a *configImportExportHTTPAdapter) exportMCPServers(_ context.Context) ([]m
 			Command: s.Command,
 			URL:     s.URL,
 		}
-		if s.Args != "" {
+		if s.Args != nil && *s.Args != "" {
 			var args []string
-			if err := json.Unmarshal([]byte(s.Args), &args); err == nil {
+			if err := json.Unmarshal([]byte(*s.Args), &args); err == nil {
 				my.Args = args
 			}
 		}
-		if s.EnvVars != "" {
+		if s.EnvVars != nil && *s.EnvVars != "" {
 			var envVars map[string]string
-			if err := json.Unmarshal([]byte(s.EnvVars), &envVars); err == nil {
+			if err := json.Unmarshal([]byte(*s.EnvVars), &envVars); err == nil {
 				// Mask env var values for security.
 				masked := make(map[string]string, len(envVars))
 				for k := range envVars {
@@ -182,9 +182,9 @@ func (a *configImportExportHTTPAdapter) exportMCPServers(_ context.Context) ([]m
 				my.EnvVars = masked
 			}
 		}
-		if s.ForwardHeaders != "" {
+		if s.ForwardHeaders != nil && *s.ForwardHeaders != "" {
 			var fh []string
-			if err := json.Unmarshal([]byte(s.ForwardHeaders), &fh); err == nil {
+			if err := json.Unmarshal([]byte(*s.ForwardHeaders), &fh); err == nil {
 				my.ForwardHeaders = fh
 			}
 		}
@@ -280,13 +280,14 @@ func (a *configImportExportHTTPAdapter) importMCPServers(tx *gorm.DB, items []mc
 		var existing models.MCPServerModel
 		err := tx.Where("name = ?", s.Name).First(&existing).Error
 
-		argsJSON := ""
+		var argsJSON *string
 		if len(s.Args) > 0 {
 			data, _ := json.Marshal(s.Args)
-			argsJSON = string(data)
+			s := string(data)
+			argsJSON = &s
 		}
 
-		envJSON := ""
+		var envJSON *string
 		if len(s.EnvVars) > 0 {
 			// Filter out placeholder values like "${VAR_NAME}".
 			clean := make(map[string]string)
@@ -297,27 +298,29 @@ func (a *configImportExportHTTPAdapter) importMCPServers(tx *gorm.DB, items []mc
 			}
 			if len(clean) > 0 {
 				data, _ := json.Marshal(clean)
-				envJSON = string(data)
+				s := string(data)
+				envJSON = &s
 			}
 		}
 
-		forwardHeadersJSON := ""
+		var forwardHeadersJSON *string
 		if len(s.ForwardHeaders) > 0 {
 			data, _ := json.Marshal(s.ForwardHeaders)
-			forwardHeadersJSON = string(data)
+			s := string(data)
+			forwardHeadersJSON = &s
 		}
 
 		if err == nil {
 			existing.Type = s.Type
 			existing.Command = s.Command
 			existing.URL = s.URL
-			if argsJSON != "" {
+			if argsJSON != nil {
 				existing.Args = argsJSON
 			}
-			if envJSON != "" {
+			if envJSON != nil {
 				existing.EnvVars = envJSON
 			}
-			if forwardHeadersJSON != "" {
+			if forwardHeadersJSON != nil {
 				existing.ForwardHeaders = forwardHeadersJSON
 			}
 			if err := tx.Save(&existing).Error; err != nil {
@@ -387,15 +390,21 @@ func (a *configImportExportHTTPAdapter) importAgents(tx *gorm.DB, items []agentY
 			existing.Temperature = ag.Temperature
 			existing.TopP = ag.TopP
 			existing.MaxTokens = ag.MaxTokens
-			if ssJSON, err := json.Marshal(ag.StopSequences); err == nil && len(ag.StopSequences) > 0 {
-				existing.StopSequences = string(ssJSON)
+			if len(ag.StopSequences) > 0 {
+				if ssJSON, err := json.Marshal(ag.StopSequences); err == nil {
+					s := string(ssJSON)
+					existing.StopSequences = &s
+				}
 			} else {
-				existing.StopSequences = ""
+				existing.StopSequences = nil
 			}
-			if cbJSON, err := json.Marshal(ag.ConfirmBefore); err == nil && len(ag.ConfirmBefore) > 0 {
-				existing.ConfirmBefore = string(cbJSON)
+			if len(ag.ConfirmBefore) > 0 {
+				if cbJSON, err := json.Marshal(ag.ConfirmBefore); err == nil {
+					s := string(cbJSON)
+					existing.ConfirmBefore = &s
+				}
 			} else {
-				existing.ConfirmBefore = ""
+				existing.ConfirmBefore = nil
 			}
 			if err := tx.Save(&existing).Error; err != nil {
 				return fmt.Errorf("update agent %q: %w", ag.Name, err)
@@ -416,19 +425,21 @@ func (a *configImportExportHTTPAdapter) importAgents(tx *gorm.DB, items []agentY
 			Temperature:     ag.Temperature,
 			TopP:            ag.TopP,
 			MaxTokens:       ag.MaxTokens,
-			StopSequences: func() string {
+			StopSequences: func() *string {
 				if len(ag.StopSequences) == 0 {
-					return ""
+					return nil
 				}
 				d, _ := json.Marshal(ag.StopSequences)
-				return string(d)
+				s := string(d)
+				return &s
 			}(),
-			ConfirmBefore: func() string {
+			ConfirmBefore: func() *string {
 				if len(ag.ConfirmBefore) == 0 {
-					return ""
+					return nil
 				}
 				d, _ := json.Marshal(ag.ConfirmBefore)
-				return string(d)
+				s := string(d)
+				return &s
 			}(),
 		}
 		if err := tx.Create(&newAgent).Error; err != nil {

@@ -141,18 +141,20 @@ func (r *GORMTriggerRepository) Delete(ctx context.Context, id string) error {
 // V2 (§4.1): webhook_path lives inside `config` jsonb; the legacy flat
 // column is gone.
 func (r *GORMTriggerRepository) FindByWebhookPath(ctx context.Context, path string) (*models.TriggerModel, error) {
-	var trigger models.TriggerModel
+	var triggers []models.TriggerModel
 	err := r.db.WithContext(ctx).
 		Preload("Schema").
-		Where("type = ? AND enabled = ? AND config->>'webhook_path' = ?", models.TriggerTypeWebhook, true, path).
-		First(&trigger).Error
+		Where("type = ? AND enabled = ?", models.TriggerTypeWebhook, true).
+		Find(&triggers).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, nil
-		}
 		return nil, fmt.Errorf("find webhook trigger %q: %w", path, err)
 	}
-	return &trigger, nil
+	for i := range triggers {
+		if triggers[i].Config.WebhookPath == path {
+			return &triggers[i], nil
+		}
+	}
+	return nil, nil
 }
 
 // MarkFired stamps the trigger's last_fired_at to now(). Called from

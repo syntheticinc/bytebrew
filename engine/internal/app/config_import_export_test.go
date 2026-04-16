@@ -154,16 +154,19 @@ func seedTestData(t *testing.T, db *gorm.DB) {
 	// MCP Server
 	envJSON, _ := json.Marshal(map[string]string{"API_KEY": "secret123"})
 	argsJSON, _ := json.Marshal([]string{"--port", "3000"})
+	envJSONStr := string(envJSON)
+	argsJSONStr := string(argsJSON)
 	mcpServer := models.MCPServerModel{
 		Name:    "shop-api",
 		Type:    "http",
 		URL:     "http://shop-api:3000/mcp",
-		Args:    string(argsJSON),
-		EnvVars: string(envJSON),
+		Args:    &argsJSONStr,
+		EnvVars: &envJSONStr,
 	}
 	require.NoError(t, db.Create(&mcpServer).Error)
 
 	// Agent
+	confirmBefore := `["delete_order","refund"]`
 	agent := models.AgentModel{
 		Name:           "sales",
 		ModelID:        &model.ID,
@@ -172,7 +175,7 @@ func seedTestData(t *testing.T, db *gorm.DB) {
 		ToolExecution:  "sequential",
 		MaxSteps:       30,
 		MaxContextSize: 16000,
-		ConfirmBefore:  "delete_order,refund",
+		ConfirmBefore:  &confirmBefore,
 	}
 	require.NoError(t, db.Create(&agent).Error)
 

@@ -195,11 +195,11 @@ func collectForwardHeaders(mcpServers []models.MCPServerModel) []string {
 	seen := make(map[string]bool)
 	var headers []string
 	for _, srv := range mcpServers {
-		if srv.ForwardHeaders == "" {
+		if srv.ForwardHeaders == nil || *srv.ForwardHeaders == "" {
 			continue
 		}
 		var fh []string
-		if err := json.Unmarshal([]byte(srv.ForwardHeaders), &fh); err != nil {
+		if err := json.Unmarshal([]byte(*srv.ForwardHeaders), &fh); err != nil {
 			continue
 		}
 		for _, h := range fh {

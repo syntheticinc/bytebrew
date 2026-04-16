@@ -1803,16 +1803,16 @@ func startBridge(
 func connectMCPServers(ctx context.Context, mcpServers []models.MCPServerModel, registry *mcp.ClientRegistry) {
 	for _, srv := range mcpServers {
 		var forwardHeaders []string
-		if srv.ForwardHeaders != "" {
-			_ = json.Unmarshal([]byte(srv.ForwardHeaders), &forwardHeaders)
+		if srv.ForwardHeaders != nil && *srv.ForwardHeaders != "" {
+			_ = json.Unmarshal([]byte(*srv.ForwardHeaders), &forwardHeaders)
 		}
 
 		var transport mcp.Transport
 		switch srv.Type {
 		case "stdio":
 			var args []string
-			if srv.Args != "" {
-				_ = json.Unmarshal([]byte(srv.Args), &args)
+			if srv.Args != nil && *srv.Args != "" {
+				_ = json.Unmarshal([]byte(*srv.Args), &args)
 			}
 			transport = mcp.NewStdioTransport(srv.Command, args, nil, forwardHeaders)
 		case "http":

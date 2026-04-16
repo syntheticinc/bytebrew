@@ -243,8 +243,8 @@ func toAgentRecord(a models.AgentModel) (AgentRecord, error) {
 	}
 
 	// StopSequences: JSON array -> []string
-	if a.StopSequences != "" {
-		if err := json.Unmarshal([]byte(a.StopSequences), &rec.StopSequences); err != nil {
+	if a.StopSequences != nil && *a.StopSequences != "" {
+		if err := json.Unmarshal([]byte(*a.StopSequences), &rec.StopSequences); err != nil {
 			return AgentRecord{}, fmt.Errorf("parse stop_sequences: %w", err)
 		}
 	}
@@ -256,8 +256,8 @@ func toAgentRecord(a models.AgentModel) (AgentRecord, error) {
 	}
 
 	// ConfirmBefore: JSON array -> []string
-	if a.ConfirmBefore != "" {
-		if err := json.Unmarshal([]byte(a.ConfirmBefore), &rec.ConfirmBefore); err != nil {
+	if a.ConfirmBefore != nil && *a.ConfirmBefore != "" {
+		if err := json.Unmarshal([]byte(*a.ConfirmBefore), &rec.ConfirmBefore); err != nil {
 			return AgentRecord{}, fmt.Errorf("parse confirm_before: %w", err)
 		}
 	}
@@ -268,9 +268,13 @@ func toAgentRecord(a models.AgentModel) (AgentRecord, error) {
 		case "builtin":
 			rec.BuiltinTools = append(rec.BuiltinTools, t.ToolName)
 		case "custom":
+			config := ""
+			if t.Config != nil {
+				config = *t.Config
+			}
 			rec.CustomTools = append(rec.CustomTools, CustomToolRecord{
 				Name:   t.ToolName,
-				Config: t.Config,
+				Config: config,
 			})
 		}
 	}
@@ -311,7 +315,8 @@ func (r *GORMAgentRepository) toAgentModelWithDB(db *gorm.DB, rec *AgentRecord) 
 		if err != nil {
 			return models.AgentModel{}, fmt.Errorf("marshal stop_sequences: %w", err)
 		}
-		agent.StopSequences = string(data)
+		s := string(data)
+		agent.StopSequences = &s
 	}
 
 	// Resolve model name -> ID
@@ -329,7 +334,8 @@ func (r *GORMAgentRepository) toAgentModelWithDB(db *gorm.DB, rec *AgentRecord) 
 		if err != nil {
 			return models.AgentModel{}, fmt.Errorf("marshal confirm_before: %w", err)
 		}
-		agent.ConfirmBefore = string(data)
+		s := string(data)
+		agent.ConfirmBefore = &s
 	}
 
 	// Builtin tools
@@ -343,10 +349,15 @@ func (r *GORMAgentRepository) toAgentModelWithDB(db *gorm.DB, rec *AgentRecord) 
 
 	// Custom tools
 	for i, ct := range rec.CustomTools {
+		var cfgPtr *string
+		if ct.Config != "" {
+			s := ct.Config
+			cfgPtr = &s
+		}
 		agent.Tools = append(agent.Tools, models.AgentToolModel{
 			ToolType:  "custom",
 			ToolName:  ct.Name,
-			Config:    ct.Config,
+			Config:    cfgPtr,
 			SortOrder: len(rec.BuiltinTools) + i,
 		})
 	}
