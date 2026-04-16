@@ -34,8 +34,8 @@ func DeserializeSchemaMessages(data []byte) ([]*schema.Message, error) {
 	return messages, nil
 }
 
-// AgentContextSnapshotToModel converts domain snapshot to RuntimeAgentContextModel
-func AgentContextSnapshotToModel(snapshot *domain.AgentContextSnapshot) *models.RuntimeAgentContextModel {
+// AgentContextSnapshotToModel converts domain snapshot to AgentContextSnapshotModel
+func AgentContextSnapshotToModel(snapshot *domain.AgentContextSnapshot) *models.AgentContextSnapshotModel {
 	if snapshot == nil {
 		return nil
 	}
@@ -45,7 +45,7 @@ func AgentContextSnapshotToModel(snapshot *domain.AgentContextSnapshot) *models.
 		id = uuid.New().String()
 	}
 
-	return &models.RuntimeAgentContextModel{
+	return &models.AgentContextSnapshotModel{
 		ID:            id,
 		SessionID:     snapshot.SessionID,
 		AgentID:       snapshot.AgentID,
@@ -60,8 +60,8 @@ func AgentContextSnapshotToModel(snapshot *domain.AgentContextSnapshot) *models.
 	}
 }
 
-// AgentContextSnapshotFromModel converts RuntimeAgentContextModel to domain snapshot
-func AgentContextSnapshotFromModel(model *models.RuntimeAgentContextModel) *domain.AgentContextSnapshot {
+// AgentContextSnapshotFromModel converts AgentContextSnapshotModel to domain snapshot
+func AgentContextSnapshotFromModel(model *models.AgentContextSnapshotModel) *domain.AgentContextSnapshot {
 	if model == nil {
 		return nil
 	}

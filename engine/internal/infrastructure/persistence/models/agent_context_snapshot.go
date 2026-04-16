@@ -2,9 +2,9 @@ package models
 
 import "time"
 
-// RuntimeAgentContextModel maps to the "runtime_agent_contexts" table.
+// AgentContextSnapshotModel maps to the "agent_context_snapshots" table.
 // Stores agent context snapshots for session resume.
-type RuntimeAgentContextModel struct {
+type AgentContextSnapshotModel struct {
 	ID            string    `gorm:"primaryKey;type:varchar(36)"`
 	SessionID     string    `gorm:"type:varchar(36);not null;uniqueIndex:idx_rt_ctx_session_agent"`
 	AgentID       string    `gorm:"type:varchar(100);not null;uniqueIndex:idx_rt_ctx_session_agent"`
@@ -18,4 +18,4 @@ type RuntimeAgentContextModel struct {
 	UpdatedAt     time.Time `gorm:"autoUpdateTime"`
 }
 
-func (RuntimeAgentContextModel) TableName() string { return "runtime_agent_contexts" }
+func (AgentContextSnapshotModel) TableName() string { return "agent_context_snapshots" }

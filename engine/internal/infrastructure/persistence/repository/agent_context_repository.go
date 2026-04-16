@@ -48,7 +48,7 @@ func (r *AgentContextRepository) Save(ctx context.Context, snapshot *domain.Agen
 
 // Load loads snapshot by session+agent ID
 func (r *AgentContextRepository) Load(ctx context.Context, sessionID, agentID string) (*domain.AgentContextSnapshot, error) {
-	var model models.RuntimeAgentContextModel
+	var model models.AgentContextSnapshotModel
 	result := r.db.WithContext(ctx).Where("session_id = ? AND agent_id = ?", sessionID, agentID).First(&model)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
@@ -62,7 +62,7 @@ func (r *AgentContextRepository) Load(ctx context.Context, sessionID, agentID st
 
 // Delete removes snapshot by session+agent ID
 func (r *AgentContextRepository) Delete(ctx context.Context, sessionID, agentID string) error {
-	result := r.db.WithContext(ctx).Where("session_id = ? AND agent_id = ?", sessionID, agentID).Delete(&models.RuntimeAgentContextModel{})
+	result := r.db.WithContext(ctx).Where("session_id = ? AND agent_id = ?", sessionID, agentID).Delete(&models.AgentContextSnapshotModel{})
 	if result.Error != nil {
 		return errors.Wrap(result.Error, errors.CodeInternal, "delete agent context snapshot")
 	}
@@ -71,7 +71,7 @@ func (r *AgentContextRepository) Delete(ctx context.Context, sessionID, agentID 
 
 // FindActive returns all snapshots with status "active"
 func (r *AgentContextRepository) FindActive(ctx context.Context) ([]*domain.AgentContextSnapshot, error) {
-	var dbModels []models.RuntimeAgentContextModel
+	var dbModels []models.AgentContextSnapshotModel
 	result := r.db.WithContext(ctx).Where("status = ?", string(domain.AgentContextStatusActive)).Find(&dbModels)
 	if result.Error != nil {
 		return nil, errors.Wrap(result.Error, errors.CodeInternal, "find active snapshots")

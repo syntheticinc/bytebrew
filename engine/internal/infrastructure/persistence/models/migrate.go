@@ -149,6 +149,15 @@ func AutoMigrate(db *gorm.DB) error {
 		}
 	}
 
+	// V2 runtime_agent_contexts → agent_context_snapshots rename (Commit Group M.3).
+	// Defense-in-depth alongside Liquibase 021 — idempotent rename.
+	// See docs/database/target-schema.dbml: Table agent_context_snapshots.
+	if db.Migrator().HasTable("runtime_agent_contexts") && !db.Migrator().HasTable("agent_context_snapshots") {
+		if err := db.Migrator().RenameTable("runtime_agent_contexts", "agent_context_snapshots"); err != nil {
+			slog.Warn("[Migration] renaming legacy runtime_agent_contexts table to agent_context_snapshots failed", "error", err)
+		}
+	}
+
 	// V2 settings final shape (Commit Group G, §5.8).
 	// Defense-in-depth alongside Liquibase 018 — idempotent DropColumn for the
 	// legacy `scope` column. The composite PK (tenant_id, key) and the jsonb
@@ -186,7 +195,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&RuntimeConfigKV{},
 		&SessionEventLogModel{},
 		&MessageModel{},
-		&RuntimeAgentContextModel{},
+		&AgentContextSnapshotModel{},
 
 		// Knowledge / RAG tables (4)
 		&KnowledgeBase{},

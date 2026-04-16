@@ -21,7 +21,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	})
 	require.NoError(t, err, "failed to open in-memory SQLite")
 
-	err = db.AutoMigrate(&models.RuntimeAgentContextModel{})
+	err = db.AutoMigrate(&models.AgentContextSnapshotModel{})
 	require.NoError(t, err, "failed to migrate table")
 
 	return db
@@ -112,7 +112,7 @@ func TestAgentContextRepository_Upsert(t *testing.T) {
 
 	// Verify no duplicates in DB
 	var count int64
-	db.Model(&models.RuntimeAgentContextModel{}).Where("agent_id = ?", agentID).Count(&count)
+	db.Model(&models.AgentContextSnapshotModel{}).Where("agent_id = ?", agentID).Count(&count)
 	assert.Equal(t, int64(1), count, "should have exactly 1 record, not duplicated")
 }
 

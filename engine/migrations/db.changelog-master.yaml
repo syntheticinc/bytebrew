@@ -39,3 +39,5 @@ databaseChangeLog:
       file: migrations/019_v2_rename_runtime_events_to_messages.yaml
   - include:
       file: migrations/020_v2_rename_runtime_session_events_to_session_event_log.yaml
+  - include:
+      file: migrations/021_v2_rename_runtime_agent_contexts_to_agent_context_snapshots.yaml
