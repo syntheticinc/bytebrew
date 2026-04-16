@@ -1239,6 +1239,12 @@ func Run(sc ServerConfig) error {
 	// Declared at this scope so both consumers can see it.
 	var platformTriggerRepo *configrepo.GORMTriggerRepository
 
+	// Wire agent UUID resolver so engine execution context uses uuid FK, not agent name.
+	if agentRegistry != nil {
+		factory.SetAgentUUIDResolver(agentRegistry)
+		loggerInstance.InfoContext(ctx, "AgentUUIDResolver wired into TurnExecutorFactory")
+	}
+
 	// Wire memory storage into factory for memory_recall/memory_store tools (US-001 Memory capability)
 	if pgDB != nil {
 		memStorage := persistence.NewMemoryStorage(pgDB)

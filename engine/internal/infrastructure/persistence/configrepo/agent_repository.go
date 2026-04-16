@@ -13,6 +13,7 @@ import (
 // Contains all agent config from DB (agent + tools + MCP).
 // CanSpawn is derived from agent_relations (V2).
 type AgentRecord struct {
+	ID              string
 	Name            string
 	ModelID         *string
 	ModelName       string
@@ -229,6 +230,7 @@ func (r *GORMAgentRepository) Delete(ctx context.Context, name string) error {
 // toAgentRecord converts AgentModel to AgentRecord.
 func toAgentRecord(a models.AgentModel) (AgentRecord, error) {
 	rec := AgentRecord{
+		ID:             a.ID,
 		Name:           a.Name,
 		SystemPrompt:   a.SystemPrompt,
 		Lifecycle:      a.Lifecycle,

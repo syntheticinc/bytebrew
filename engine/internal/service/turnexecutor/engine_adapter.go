@@ -91,6 +91,7 @@ type EngineAdapter struct {
 	agentConfig      *config.AgentConfig
 	modelName        string
 	agentName        string
+	agentUUID        string // uuid FK → agents.id (for engine execution context)
 	// pass-through deps
 	contextReminders []ContextReminderProvider
 	toolCallRecorder ToolCallRecorder
@@ -111,6 +112,7 @@ type Config struct {
 	AgentConfig      *config.AgentConfig
 	ModelName        string
 	AgentName        string
+	AgentUUID        string // uuid FK → agents.id (for engine execution context)
 	ContextReminders []ContextReminderProvider
 	ToolCallRecorder ToolCallRecorder
 	// Schema scope (empty = no explicit schema context)
@@ -147,6 +149,7 @@ func NewEngineAdapter(cfg Config) (*EngineAdapter, error) {
 		agentConfig:      cfg.AgentConfig,
 		modelName:        cfg.ModelName,
 		agentName:        cfg.AgentName,
+		agentUUID:        cfg.AgentUUID,
 		contextReminders: cfg.ContextReminders,
 		toolCallRecorder: cfg.ToolCallRecorder,
 		schemaID:         cfg.SchemaID,
@@ -226,7 +229,7 @@ func (e *EngineAdapter) ExecuteTurn(
 
 	execCfg := engine.ExecutionConfig{
 		SessionID:         sessionID,
-		AgentID:           e.agentName,
+		AgentID:           e.agentUUID,
 		Flow:              flow,
 		Tools:             baseTools,
 		Input:             question,

@@ -27,6 +27,12 @@ type AgentSchemaResolver interface {
 	ResolveSchemaID(ctx context.Context, agentName string) (string, error)
 }
 
+// AgentUUIDResolver resolves the UUID for an agent by name.
+// Used to pass the correct uuid FK into engine.ExecutionConfig.AgentID.
+type AgentUUIDResolver interface {
+	ResolveAgentUUID(agentName string) string
+}
+
 // GuardrailConfigResolver resolves guardrail capability config for an agent.
 // Returns nil when the agent has no guardrail capability configured.
 type GuardrailConfigResolver interface {
@@ -60,6 +66,8 @@ type Factory struct {
 	guardrailConfigResolver GuardrailConfigResolver
 	// Per-agent capability config reader (memory max_entries, etc.)
 	capConfigReader tools.CapabilityConfigReader
+	// Agent UUID resolver: name → uuid FK (for engine_adapter ExecutionConfig.AgentID)
+	agentUUIDResolver AgentUUIDResolver
 }
 
 // New creates a new factory for Engine-based TurnExecutors.
@@ -114,6 +122,11 @@ func (f *Factory) SetGuardrail(checker turnexecutor.GuardrailChecker, resolver G
 // SetCapabilityConfigReader configures per-agent capability config resolution.
 func (f *Factory) SetCapabilityConfigReader(reader tools.CapabilityConfigReader) {
 	f.capConfigReader = reader
+}
+
+// SetAgentUUIDResolver configures name→UUID resolution for engine execution context.
+func (f *Factory) SetAgentUUIDResolver(resolver AgentUUIDResolver) {
+	f.agentUUIDResolver = resolver
 }
 
 // userMemoryDepsProvider wraps DefaultToolDepsProvider and injects userID + memory refs per session.
@@ -243,6 +256,12 @@ func (f *Factory) CreateForSession(
 		}
 	}
 
+	// Resolve agent UUID for engine execution context (agent_context_snapshots.agent_id = uuid FK).
+	var agentUUID string
+	if f.agentUUIDResolver != nil {
+		agentUUID = f.agentUUIDResolver.ResolveAgentUUID(agentName)
+	}
+
 	// Create EngineAdapter (implements TurnExecutor interface)
 	adapter, err := turnexecutor.NewEngineAdapter(turnexecutor.Config{
 		Engine:           f.engine,
@@ -253,6 +272,7 @@ func (f *Factory) CreateForSession(
 		AgentConfig:      f.agentConfig,
 		ModelName:        modelName,
 		AgentName:        agentName,
+		AgentUUID:        agentUUID,
 		SchemaID:         schemaID,
 		ContextReminders: contextReminders,
 		Guardrail:        f.guardrailChecker,

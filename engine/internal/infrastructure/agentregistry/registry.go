@@ -131,6 +131,19 @@ func (r *AgentRegistry) GetDefault() (*RegisteredAgent, error) {
 	return r.agents[firstName], nil
 }
 
+// ResolveAgentUUID returns the UUID for the given agent name, or "" if not found.
+// Implements turnexecutorfactory.AgentUUIDResolver interface.
+func (r *AgentRegistry) ResolveAgentUUID(agentName string) string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	agent, ok := r.agents[agentName]
+	if !ok {
+		return ""
+	}
+	return agent.Record.ID
+}
+
 // ResolveModelID returns the ModelID for the given agent name, or nil if not found.
 // Implements turnexecutorfactory.AgentModelResolver interface.
 func (r *AgentRegistry) ResolveModelID(agentName string) *string {

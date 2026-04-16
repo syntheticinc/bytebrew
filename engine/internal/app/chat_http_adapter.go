@@ -52,6 +52,8 @@ func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, agentName, message, u
 	isNewSession := sessionID == ""
 	if isNewSession {
 		sessionID = uuid.New().String()
+	} else if _, err := uuid.Parse(sessionID); err != nil {
+		return nil, pkgerrors.InvalidInput("session_id must be a valid UUID")
 	}
 
 	// Create session in registry (idempotent — reuses existing if already present).

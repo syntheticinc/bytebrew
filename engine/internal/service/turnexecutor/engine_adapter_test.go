@@ -261,6 +261,7 @@ func TestEngineAdapter_ExecuteTurn(t *testing.T) {
 		AgentConfig:  agentConfig,
 		ModelName:    "test-model",
 		AgentName:    "supervisor",
+		AgentUUID:    "supervisor",
 	})
 	require.NoError(t, err)
 
