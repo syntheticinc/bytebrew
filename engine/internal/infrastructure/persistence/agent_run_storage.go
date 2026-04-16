@@ -34,7 +34,7 @@ func (s *AgentRunStorage) Save(ctx context.Context, run *domain.AgentRun) error 
 
 // Update updates an existing agent run.
 func (s *AgentRunStorage) Update(ctx context.Context, run *domain.AgentRun) error {
-	result := s.db.WithContext(ctx).Model(&models.RuntimeAgentRunModel{}).
+	result := s.db.WithContext(ctx).Model(&models.AgentRunModel{}).
 		Where("id = ?", run.ID).
 		Updates(map[string]interface{}{
 			"status":       string(run.Status),
@@ -54,7 +54,7 @@ func (s *AgentRunStorage) Update(ctx context.Context, run *domain.AgentRun) erro
 
 // GetByID retrieves an agent run by ID.
 func (s *AgentRunStorage) GetByID(ctx context.Context, id string) (*domain.AgentRun, error) {
-	var m models.RuntimeAgentRunModel
+	var m models.AgentRunModel
 	err := s.db.WithContext(ctx).Where("id = ?", id).First(&m).Error
 	if err == gorm.ErrRecordNotFound {
 		return nil, nil
@@ -67,7 +67,7 @@ func (s *AgentRunStorage) GetByID(ctx context.Context, id string) (*domain.Agent
 
 // GetBySessionID retrieves all agent runs for a session.
 func (s *AgentRunStorage) GetBySessionID(ctx context.Context, sessionID string) ([]*domain.AgentRun, error) {
-	var ms []models.RuntimeAgentRunModel
+	var ms []models.AgentRunModel
 	err := s.db.WithContext(ctx).
 		Where("session_id = ?", sessionID).
 		Order("started_at DESC").
@@ -80,7 +80,7 @@ func (s *AgentRunStorage) GetBySessionID(ctx context.Context, sessionID string) 
 
 // GetRunningBySession retrieves all running agent runs for a session.
 func (s *AgentRunStorage) GetRunningBySession(ctx context.Context, sessionID string) ([]*domain.AgentRun, error) {
-	var ms []models.RuntimeAgentRunModel
+	var ms []models.AgentRunModel
 	err := s.db.WithContext(ctx).
 		Where("session_id = ? AND status = ?", sessionID, "running").
 		Order("started_at ASC").
@@ -95,7 +95,7 @@ func (s *AgentRunStorage) GetRunningBySession(ctx context.Context, sessionID str
 func (s *AgentRunStorage) CountRunningBySession(ctx context.Context, sessionID string) (int, error) {
 	var count int64
 	err := s.db.WithContext(ctx).
-		Model(&models.RuntimeAgentRunModel{}).
+		Model(&models.AgentRunModel{}).
 		Where("session_id = ? AND status = ?", sessionID, "running").
 		Count(&count).Error
 	if err != nil {
@@ -109,7 +109,7 @@ func (s *AgentRunStorage) CountRunningBySession(ctx context.Context, sessionID s
 func (s *AgentRunStorage) CleanupOrphanedRuns(ctx context.Context) (int64, error) {
 	now := time.Now()
 	result := s.db.WithContext(ctx).
-		Model(&models.RuntimeAgentRunModel{}).
+		Model(&models.AgentRunModel{}).
 		Where("status = ?", "running").
 		Updates(map[string]interface{}{
 			"status":       "stopped",
@@ -126,8 +126,8 @@ func (s *AgentRunStorage) Close() error {
 	return nil
 }
 
-func agentRunToModel(run *domain.AgentRun) models.RuntimeAgentRunModel {
-	return models.RuntimeAgentRunModel{
+func agentRunToModel(run *domain.AgentRun) models.AgentRunModel {
+	return models.AgentRunModel{
 		ID:          run.ID,
 		SubtaskID:   run.SubtaskID,
 		SessionID:   run.SessionID,
@@ -140,7 +140,7 @@ func agentRunToModel(run *domain.AgentRun) models.RuntimeAgentRunModel {
 	}
 }
 
-func modelToAgentRun(m *models.RuntimeAgentRunModel) *domain.AgentRun {
+func modelToAgentRun(m *models.AgentRunModel) *domain.AgentRun {
 	return &domain.AgentRun{
 		ID:          m.ID,
 		SubtaskID:   m.SubtaskID,
@@ -154,7 +154,7 @@ func modelToAgentRun(m *models.RuntimeAgentRunModel) *domain.AgentRun {
 	}
 }
 
-func modelsToAgentRuns(ms []models.RuntimeAgentRunModel) []*domain.AgentRun {
+func modelsToAgentRuns(ms []models.AgentRunModel) []*domain.AgentRun {
 	runs := make([]*domain.AgentRun, 0, len(ms))
 	for i := range ms {
 		runs = append(runs, modelToAgentRun(&ms[i]))

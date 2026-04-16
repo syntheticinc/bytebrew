@@ -2,9 +2,9 @@ package models
 
 import "time"
 
-// RuntimeAgentRunModel maps to the "runtime_agent_runs" table.
+// AgentRunModel maps to the "agent_runs" table.
 // Stores domain.AgentRun data for Code Agent execution tracking.
-type RuntimeAgentRunModel struct {
+type AgentRunModel struct {
 	ID          string     `gorm:"primaryKey;type:varchar(36)"`
 	SubtaskID   string     `gorm:"type:varchar(36);not null"`
 	SessionID   string     `gorm:"type:varchar(36);not null;index"`
@@ -16,4 +16,4 @@ type RuntimeAgentRunModel struct {
 	CompletedAt *time.Time
 }
 
-func (RuntimeAgentRunModel) TableName() string { return "runtime_agent_runs" }
+func (AgentRunModel) TableName() string { return "agent_runs" }

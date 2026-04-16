@@ -158,6 +158,15 @@ func AutoMigrate(db *gorm.DB) error {
 		}
 	}
 
+	// V2 runtime_agent_runs → agent_runs rename (Commit Group M.4).
+	// Defense-in-depth alongside Liquibase 022 — idempotent rename.
+	// See docs/database/target-schema.dbml: Table agent_runs.
+	if db.Migrator().HasTable("runtime_agent_runs") && !db.Migrator().HasTable("agent_runs") {
+		if err := db.Migrator().RenameTable("runtime_agent_runs", "agent_runs"); err != nil {
+			slog.Warn("[Migration] renaming legacy runtime_agent_runs table to agent_runs failed", "error", err)
+		}
+	}
+
 	// V2 settings final shape (Commit Group G, §5.8).
 	// Defense-in-depth alongside Liquibase 018 — idempotent DropColumn for the
 	// legacy `scope` column. The composite PK (tenant_id, key) and the jsonb
@@ -190,7 +199,7 @@ func AutoMigrate(db *gorm.DB) error {
 
 		// Agent runtime tables
 		&RuntimeSessionModel{},
-		&RuntimeAgentRunModel{},
+		&AgentRunModel{},
 		&RuntimeDeviceModel{},
 		&RuntimeConfigKV{},
 		&SessionEventLogModel{},
