@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 
 	"gorm.io/gorm"
 
@@ -150,18 +151,21 @@ func ensureDefaultModel(ctx context.Context, db *gorm.DB) string {
 		return allModels[0].Name
 	}
 
-	// No models — create a default one.
+	// No models — create a default one. Pull LLM_API_KEY from env so the
+	// default model is usable out of the box; if the env is empty the user
+	// must add a key via the Models page before chatting.
 	m := &models.LLMProviderModel{
-		Name:      defaultModelName,
-		Type:      defaultModelType,
-		BaseURL:   defaultModelBaseURL,
-		ModelName: defaultModelLLM,
+		Name:            defaultModelName,
+		Type:            defaultModelType,
+		BaseURL:         defaultModelBaseURL,
+		ModelName:       defaultModelLLM,
+		APIKeyEncrypted: os.Getenv("LLM_API_KEY"),
 	}
 	if err := llmRepo.Create(ctx, m); err != nil {
 		slog.WarnContext(ctx, "failed to seed default model", "error", err)
 		return ""
 	}
-	slog.InfoContext(ctx, "seeded default model", "name", defaultModelName, "llm", defaultModelLLM)
+	slog.InfoContext(ctx, "seeded default model", "name", defaultModelName, "llm", defaultModelLLM, "has_api_key", m.APIKeyEncrypted != "")
 	return defaultModelName
 }
 
