@@ -100,7 +100,7 @@ const icons = {
       <line x1="12" y1="19" x2="20" y2="19" />
     </svg>
   ),
-  builder: (
+  schemas: (
     <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="5" cy="6" r="2" />
       <circle cx="19" cy="6" r="2" />
@@ -159,7 +159,7 @@ const sections: NavSection[] = [
     label: 'Core',
     items: [
       { to: '/overview', label: 'Overview', icon: overviewIcon },
-      { to: '/schemas', label: 'Schemas', icon: icons.builder },
+      { to: '/schemas', label: 'Schemas', icon: icons.schemas },
     ],
   },
   {
