@@ -64,7 +64,7 @@ import {
 import { MOCK_AGENTS } from '../mocks/agents';
 import { MOCK_SESSIONS_LIST, MOCK_TRACE, MOCK_TRACE_ERROR } from '../mocks/inspect';
 import { MOCK_SCHEMA_TEMPLATES } from '../mocks/schemaTemplates';
-import { v2Schemas, v2AgentRelations } from '../mocks/v2';
+import { mockSchemas, mockAgentRelations } from '../mocks/schemas';
 
 const BASE_URL = '/api/v1';
 const PROTOTYPE_KEY = 'bytebrew_prototype_mode';
@@ -395,7 +395,7 @@ class APIClient {
   listSchemas() {
     if (this.isPrototype) {
       return this.mock<Schema[]>(
-        v2Schemas.map((s) => ({
+        mockSchemas.map((s) => ({
           id: s.id,
           name: s.name,
           description: s.description,
@@ -410,7 +410,7 @@ class APIClient {
 
   getSchema(schemaId: string) {
     if (this.isPrototype) {
-      const s = v2Schemas.find((x) => x.id === schemaId) ?? v2Schemas[0]!;
+      const s = mockSchemas.find((x) => x.id === schemaId) ?? mockSchemas[0]!;
       return this.mock<Schema>({
         id: s.id,
         name: s.name,
@@ -440,7 +440,7 @@ class APIClient {
   // the last relation that referenced an agent removes it from the schema.
   listSchemaAgents(schemaId: string) {
     if (this.isPrototype) {
-      const s = v2Schemas.find((x) => x.id === schemaId);
+      const s = mockSchemas.find((x) => x.id === schemaId);
       return this.mock<string[]>([...(s?.agentIds ?? [])]);
     }
     return this.request<string[]>('GET', `/schemas/${schemaId}/agents`);
@@ -520,9 +520,9 @@ class APIClient {
 
   listAgentRelations(schemaId: string) {
     if (this.isPrototype) {
-      const s = v2Schemas.find((x) => x.id === schemaId);
+      const s = mockSchemas.find((x) => x.id === schemaId);
       const members = new Set(s?.agentIds ?? []);
-      const rels = v2AgentRelations
+      const rels = mockAgentRelations
         .filter((r) => members.has(r.sourceAgentId) && members.has(r.targetAgentId))
         .map((r) => ({ id: r.id, schema_id: schemaId, source: r.sourceAgentId, target: r.targetAgentId }));
       return this.mock<{ id: string; schema_id: string; source: string; target: string }[]>(rels);
@@ -535,8 +535,8 @@ class APIClient {
   createAgentRelation(schemaId: string, source: string, target: string) {
     if (this.isPrototype) {
       const id = `rel-${Date.now()}`;
-      v2AgentRelations.push({ id, sourceAgentId: source, targetAgentId: target });
-      const schema = v2Schemas.find((s) => s.id === schemaId);
+      mockAgentRelations.push({ id, sourceAgentId: source, targetAgentId: target });
+      const schema = mockSchemas.find((s) => s.id === schemaId);
       if (schema && !schema.agentIds.includes(target)) {
         schema.agentIds.push(target);
       }
@@ -549,12 +549,12 @@ class APIClient {
 
   deleteAgentRelation(schemaId: string, relationId: string) {
     if (this.isPrototype) {
-      const idx = v2AgentRelations.findIndex((r) => r.id === relationId);
+      const idx = mockAgentRelations.findIndex((r) => r.id === relationId);
       if (idx >= 0) {
-        const [removed] = v2AgentRelations.splice(idx, 1);
-        const schema = v2Schemas.find((s) => s.id === schemaId);
+        const [removed] = mockAgentRelations.splice(idx, 1);
+        const schema = mockSchemas.find((s) => s.id === schemaId);
         if (schema && removed && removed.targetAgentId !== schema.entryAgentId) {
-          const stillReferenced = v2AgentRelations.some(
+          const stillReferenced = mockAgentRelations.some(
             (r) => r.sourceAgentId === removed.targetAgentId || r.targetAgentId === removed.targetAgentId,
           );
           if (!stillReferenced) {

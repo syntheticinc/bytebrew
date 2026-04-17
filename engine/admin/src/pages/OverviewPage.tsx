@@ -1,15 +1,15 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import {
-  v2OverviewEvents,
-  v2Sessions,
-  v2Schemas,
-  v2Triggers,
+  mockOverviewEvents,
+  mockSessions,
+  mockSchemas,
+  mockTriggers,
   getSchemaById,
-} from '../../mocks/v2';
-import { usePrototype } from '../../hooks/usePrototype';
-import { api } from '../../api/client';
-import type { SessionSummary, Schema, Trigger, HealthResponse } from '../../types';
+} from '../mocks/schemas';
+import { usePrototype } from '../hooks/usePrototype';
+import { api } from '../api/client';
+import type { SessionSummary, Schema, Trigger, HealthResponse } from '../types';
 
 function formatRelativeTime(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -40,11 +40,11 @@ const eventColor: Record<string, string> = {
 // ── Prototype mode component — uses mock data ────────────────────────────────
 
 function OverviewPrototype() {
-  const activeSessions = v2Sessions.filter((s) => s.status === 'active');
-  const completedSessions = v2Sessions.filter((s) => s.status === 'completed');
-  const failedSessions = v2Sessions.filter((s) => s.status === 'failed');
-  const sessionsToday = v2Schemas.reduce((sum, s) => sum + s.sessionsToday, 0);
-  const enabledTriggers = v2Triggers.filter((t) => t.enabled).length;
+  const activeSessions = mockSessions.filter((s) => s.status === 'active');
+  const completedSessions = mockSessions.filter((s) => s.status === 'completed');
+  const failedSessions = mockSessions.filter((s) => s.status === 'failed');
+  const sessionsToday = mockSchemas.reduce((sum, s) => sum + s.sessionsToday, 0);
+  const enabledTriggers = mockTriggers.filter((t) => t.enabled).length;
   const finishedTotal = completedSessions.length + failedSessions.length;
   const successRate =
     finishedTotal > 0
@@ -58,7 +58,7 @@ function OverviewPrototype() {
         <Stat
           label="Active Sessions"
           value={String(activeSessions.length)}
-          hint={`${v2Schemas.length} schemas`}
+          hint={`${mockSchemas.length} schemas`}
         />
         <Stat
           label="Sessions Today"
@@ -67,8 +67,8 @@ function OverviewPrototype() {
         />
         <Stat
           label="Enabled Triggers"
-          value={`${enabledTriggers} / ${v2Triggers.length}`}
-          hint={`${v2Triggers.length - enabledTriggers} paused`}
+          value={`${enabledTriggers} / ${mockTriggers.length}`}
+          hint={`${mockTriggers.length - enabledTriggers} paused`}
         />
         <Stat
           label="Success Rate"
@@ -91,7 +91,7 @@ function OverviewPrototype() {
             {activeSessions.length === 0 && (
               <div className="px-5 py-6 text-center text-[12px] text-brand-shade3">
                 No live sessions right now. Create your first{' '}
-                <Link to="/v2/schemas" className="text-brand-accent hover:underline">
+                <Link to="/schemas" className="text-brand-accent hover:underline">
                   schema
                 </Link>{' '}
                 to get started.
@@ -102,7 +102,7 @@ function OverviewPrototype() {
               return (
                 <Link
                   key={s.id}
-                  to={`/v2/schemas/${s.schemaId}?session=${s.id}`}
+                  to={`/schemas/${s.schemaId}?session=${s.id}`}
                   className="flex items-center gap-3 px-5 py-3 hover:bg-brand-shade3/5 transition-colors group"
                 >
                   <span className="font-mono text-[11px] text-brand-shade3 shrink-0">{s.id}</span>
@@ -128,7 +128,7 @@ function OverviewPrototype() {
             <h2 className="text-sm font-semibold text-brand-light">Recent Events</h2>
           </div>
           <div className="divide-y divide-brand-shade3/10 max-h-[400px] overflow-y-auto">
-            {v2OverviewEvents.map((e, idx) => (
+            {mockOverviewEvents.map((e, idx) => (
               <div key={idx} className="px-5 py-2.5 hover:bg-brand-shade3/5 transition-colors">
                 <div className="flex items-center gap-2 mb-1">
                   <span
@@ -152,17 +152,17 @@ function OverviewPrototype() {
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-brand-light">Schemas</h2>
           <Link
-            to="/v2/schemas"
+            to="/schemas"
             className="text-[11px] text-brand-shade3 hover:text-brand-accent transition-colors"
           >
             View all →
           </Link>
         </div>
         <div className="grid grid-cols-3 gap-3">
-          {v2Schemas.map((s) => (
+          {mockSchemas.map((s) => (
             <Link
               key={s.id}
-              to={`/v2/schemas/${s.id}`}
+              to={`/schemas/${s.id}`}
               className="bg-brand-dark-surface border border-brand-shade3/15 rounded-card px-4 py-3 hover:border-brand-shade3/35 transition-colors"
             >
               <div className="text-[13px] font-semibold text-brand-light truncate">{s.name}</div>
@@ -395,7 +395,7 @@ function OverviewProduction() {
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-brand-light">Schemas</h2>
             <Link
-              to="/builder"
+              to="/schemas"
               className="text-[11px] text-brand-shade3 hover:text-brand-accent transition-colors"
             >
               View all →
@@ -405,7 +405,7 @@ function OverviewProduction() {
             {schemas.slice(0, 6).map((s) => (
               <Link
                 key={s.id}
-                to={`/builder/${encodeURIComponent(s.name)}`}
+                to={`/schemas/${s.id}`}
                 className="bg-brand-dark-surface border border-brand-shade3/15 rounded-card px-4 py-3 hover:border-brand-shade3/35 transition-colors"
               >
                 <div className="text-[13px] font-semibold text-brand-light truncate">{s.name}</div>
@@ -423,7 +423,7 @@ function OverviewProduction() {
 
 // ── Top-level page — mode-aware ───────────────────────────────────────────────
 
-export default function V2OverviewPage() {
+export default function OverviewPage() {
   const { isPrototype } = usePrototype();
 
   return (

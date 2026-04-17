@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import V2DelegationTree from '../../components/v2/V2DelegationTree';
-import { api } from '../../api/client';
-import { useApi } from '../../hooks/useApi';
-import type { AgentDetail, Trigger } from '../../types';
-import type { V2Agent, V2AgentRelation, V2Trigger } from '../../mocks/v2';
+import DelegationTree from '../components/DelegationTree';
+import { api } from '../api/client';
+import { useApi } from '../hooks/useApi';
+import type { AgentDetail, Trigger } from '../types';
+import type { TreeAgent, TreeRelation, TreeTrigger } from '../mocks/schemas';
 
 type TabKey = 'canvas' | 'triggers' | 'settings';
 
 // ─── Type adapters ───────────────────────────────────────────────────────────
-// V2DelegationTree expects V2Agent/V2AgentRelation/V2Trigger (prototype mock
+// DelegationTree expects TreeAgent/TreeRelation/TreeTrigger (prototype mock
 // shapes). We adapt real API types to these shapes here at the boundary.
 
-function agentDetailToV2Agent(a: AgentDetail): V2Agent {
+function agentDetailToTreeAgent(a: AgentDetail): TreeAgent {
   const initials = a.name
     .split(/[-_\s]/)
     .map((p) => p[0] ?? '')
@@ -34,7 +34,7 @@ function agentDetailToV2Agent(a: AgentDetail): V2Agent {
   };
 }
 
-function apiRelationToV2(r: { id: string; schema_id: string; source: string; target: string }): V2AgentRelation {
+function apiRelationToTreeRelation(r: { id: string; schema_id: string; source: string; target: string }): TreeRelation {
   return {
     id: r.id,
     sourceAgentId: r.source,
@@ -42,11 +42,11 @@ function apiRelationToV2(r: { id: string; schema_id: string; source: string; tar
   };
 }
 
-// triggerToV2 maps a real Trigger (from the API) to the V2Trigger shape
-// that V2DelegationTree expects. V2 semantics: all triggers point at the
+// triggerToTreeTrigger maps a real Trigger (from the API) to the TreeTrigger
+// shape that DelegationTree expects. Semantics: all triggers point at the
 // schema's entry orchestrator. The server-side trigger type is a subset of
-// V2TriggerType (cron | webhook | chat) — V2 UI exposes only these three.
-function triggerToV2(t: Trigger, schemaId: string, entryAgentId: string): V2Trigger {
+// TriggerType (cron | webhook | chat) — the UI exposes only these three.
+function triggerToTreeTrigger(t: Trigger, schemaId: string, entryAgentId: string): TreeTrigger {
   return {
     id: t.id,
     type: t.type,
@@ -134,7 +134,7 @@ function AddAgentPanel({
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-export default function V2SchemaDetailPage() {
+export default function SchemaDetailPage() {
   const { schemaId = '' } = useParams<{ schemaId: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -191,22 +191,22 @@ export default function V2SchemaDetailPage() {
     return () => { cancelled = true; };
   }, [agentNames]);
 
-  // Adapt to V2 types for V2DelegationTree
-  const v2Agents = useMemo<V2Agent[]>(
-    () => agents.map(agentDetailToV2Agent),
+  // Adapt API shapes to Tree* types expected by DelegationTree
+  const treeAgents = useMemo<TreeAgent[]>(
+    () => agents.map(agentDetailToTreeAgent),
     [agents],
   );
 
-  const v2Relations = useMemo<V2AgentRelation[]>(
-    () => (rawRelations ?? []).map(apiRelationToV2),
+  const treeRelations = useMemo<TreeRelation[]>(
+    () => (rawRelations ?? []).map(apiRelationToTreeRelation),
     [rawRelations],
   );
 
   // Entry agent name: from schema or first agent in list
   const entryAgentId = schema?.entry_agent_name ?? agentNames?.[0] ?? '';
 
-  const v2Triggers = useMemo<V2Trigger[]>(
-    () => (triggers ?? []).map((t) => triggerToV2(t, schemaId, entryAgentId)),
+  const treeTriggers = useMemo<TreeTrigger[]>(
+    () => (triggers ?? []).map((t) => triggerToTreeTrigger(t, schemaId, entryAgentId)),
     [triggers, schemaId, entryAgentId],
   );
 
@@ -270,7 +270,7 @@ export default function V2SchemaDetailPage() {
     );
   }
 
-  const canvasEmpty = v2Agents.length === 0 && !isLoading;
+  const canvasEmpty = treeAgents.length === 0 && !isLoading;
   const schemaAgentNames = agentNames ?? [];
 
   return (
@@ -335,10 +335,10 @@ export default function V2SchemaDetailPage() {
               </div>
             ) : (
               <>
-                <V2DelegationTree
-                  triggers={v2Triggers}
-                  agents={v2Agents}
-                  relations={v2Relations}
+                <DelegationTree
+                  triggers={treeTriggers}
+                  agents={treeAgents}
+                  relations={treeRelations}
                   entryAgentId={entryAgentId}
                   onAgentOpen={onAgentOpen}
                   onAddChild={onAddChildRequest}

@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { PrototypeProvider } from '../../hooks/usePrototype';
-import V2OverviewPage from './V2OverviewPage';
+import { PrototypeProvider } from '../hooks/usePrototype';
+import OverviewPage from './OverviewPage';
 
 // ── API mock ──────────────────────────────────────────────────────────────────
 
-vi.mock('../../api/client', () => ({
+vi.mock('../api/client', () => ({
   api: {
     listSessions: vi.fn(),
     listTriggers: vi.fn(),
@@ -15,7 +15,7 @@ vi.mock('../../api/client', () => ({
   },
 }));
 
-import { api } from '../../api/client';
+import { api } from '../api/client';
 const mockApi = vi.mocked(api);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -30,7 +30,7 @@ function renderPage(prototypeMode = false) {
   return render(
     <MemoryRouter>
       <PrototypeProvider>
-        <V2OverviewPage />
+        <OverviewPage />
       </PrototypeProvider>
     </MemoryRouter>,
   );
@@ -41,7 +41,7 @@ const emptyHealth = { status: 'ok', version: '0.1.0', uptime: '1h', agents_count
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('V2OverviewPage', () => {
+describe('OverviewPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.removeItem('bytebrew_prototype_mode');

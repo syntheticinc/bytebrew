@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
-import type { V2Agent, V2AgentRelation, V2Trigger } from '../../mocks/v2';
+import type { TreeAgent, TreeRelation, TreeTrigger } from '../mocks/schemas';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-interface V2DelegationTreeProps {
-  triggers: V2Trigger[];
-  agents: V2Agent[];
-  relations: V2AgentRelation[];
+interface DelegationTreeProps {
+  triggers: TreeTrigger[];
+  agents: TreeAgent[];
+  relations: TreeRelation[];
   entryAgentId: string;
   highlightAgentIds?: Set<string>;
   highlightTriggerIds?: Set<string>;
@@ -17,7 +17,7 @@ interface V2DelegationTreeProps {
 }
 
 interface TreeNode {
-  agent: V2Agent;
+  agent: TreeAgent;
   children: TreeNode[];
   depth: number;
 }
@@ -31,8 +31,8 @@ const LINE_COLOR = 'rgba(148, 163, 184, 0.55)'; // slate-400/55 — visible on d
 // ─── Tree building ──────────────────────────────────────────────────────────
 
 function buildTree(
-  agents: V2Agent[],
-  relations: V2AgentRelation[],
+  agents: TreeAgent[],
+  relations: TreeRelation[],
   entryId: string,
 ): TreeNode | null {
   const byId = new Map(agents.map((a) => [a.id, a]));
@@ -66,7 +66,7 @@ function TriggerCard({
   highlighted,
   onClick,
 }: {
-  trigger: V2Trigger;
+  trigger: TreeTrigger;
   highlighted: boolean;
   onClick?: () => void;
 }) {
@@ -105,7 +105,7 @@ function AgentCard({
   onAddChild,
   onRemove,
 }: {
-  agent: V2Agent;
+  agent: TreeAgent;
   isEntry: boolean;
   highlighted: boolean;
   onClick?: () => void;
@@ -122,7 +122,7 @@ function AgentCard({
         ? 'bg-amber-400'
         : 'bg-brand-shade3/50';
   return (
-    <div className="group relative v2tree-card-wrap">
+    <div className="group relative tree-card-wrap">
       <button
         onClick={onClick}
         className={`relative w-[220px] rounded-card bg-brand-dark-surface cursor-pointer transition-all duration-200 ${ring}`}
@@ -209,7 +209,7 @@ function TreeBranch({
 }) {
   const hasChildren = node.children.length > 0;
   return (
-    <li className="v2tree-node">
+    <li className="tree-node">
       <AgentCard
         agent={node.agent}
         isEntry={node.agent.id === entryId}
@@ -220,8 +220,8 @@ function TreeBranch({
       />
       {hasChildren && (
         <>
-          <div className="v2tree-parent-stub" />
-          <ul className="v2tree-children">
+          <div className="tree-parent-stub" />
+          <ul className="tree-children">
             {node.children.map((child) => (
               <TreeBranch
                 key={child.agent.id}
@@ -242,7 +242,7 @@ function TreeBranch({
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
-export default function V2DelegationTree({
+export default function DelegationTree({
   triggers,
   agents,
   relations,
@@ -253,7 +253,7 @@ export default function V2DelegationTree({
   onTriggerOpen,
   onAddChild,
   onRemoveDelegation,
-}: V2DelegationTreeProps) {
+}: DelegationTreeProps) {
   const tree = useMemo(
     () => buildTree(agents, relations, entryAgentId),
     [agents, relations, entryAgentId],
@@ -274,9 +274,9 @@ export default function V2DelegationTree({
         {/* Triggers row */}
         {triggers.length > 0 && (
           <>
-            <ul className="v2tree-triggers">
+            <ul className="tree-triggers">
               {triggers.map((t) => (
-                <li key={t.id} className="v2tree-trigger-node">
+                <li key={t.id} className="tree-trigger-node">
                   <TriggerCard
                     trigger={t}
                     highlighted={highlightTriggerIds?.has(t.id) ?? false}
@@ -286,12 +286,12 @@ export default function V2DelegationTree({
               ))}
             </ul>
             {/* Stub from triggers bus to entry card */}
-            <div className="v2tree-triggers-to-entry-stub" />
+            <div className="tree-triggers-to-entry-stub" />
           </>
         )}
 
         {/* Tree */}
-        <ul className="v2tree-root">
+        <ul className="tree-root">
           <TreeBranch
             node={tree}
             entryId={entryAgentId}
@@ -319,12 +319,12 @@ export default function V2DelegationTree({
 //     and the result is a continuous 2×STUB_PX vertical line.
 
 const TREE_CSS = `
-.v2tree-node,
-.v2tree-trigger-node { --v2line: ${LINE_COLOR}; }
+.tree-node,
+.tree-trigger-node { --tree-line: ${LINE_COLOR}; }
 
 /* Root and children containers */
-.v2tree-root,
-.v2tree-children {
+.tree-root,
+.tree-children {
   list-style: none;
   padding: 0;
   margin: 0;
@@ -334,7 +334,7 @@ const TREE_CSS = `
   gap: 0;
 }
 
-.v2tree-node {
+.tree-node {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -343,29 +343,25 @@ const TREE_CSS = `
   position: relative;
 }
 
-/* Parent down-stub: solid vertical between parent card and children ul.
-   Use 1px-wide background div (not border on 0-width) for pixel-perfect
-   alignment with the children bus and up-stubs. */
-.v2tree-parent-stub {
+/* Parent down-stub: solid vertical between parent card and children ul. */
+.tree-parent-stub {
   width: 1px;
   height: ${STUB_PX}px;
   background-color: ${LINE_COLOR};
 }
 
 /* Children row: no padding; each child reserves its own top space */
-.v2tree-children {
+.tree-children {
   position: relative;
 }
 
 /* Each child node: padding-top reserves STUB_PX for up-stub (card pushed down) */
-.v2tree-children > .v2tree-node {
+.tree-children > .tree-node {
   padding-top: ${STUB_PX}px;
 }
 
-/* Horizontal bus at TOP of child node (y=0 of node, above the card).
-   1px-tall background div (not border-top) so sub-pixel snapping is
-   consistent across segments. Clipped at center for first/last child. */
-.v2tree-children > .v2tree-node::before {
+/* Horizontal bus at TOP of child node. */
+.tree-children > .tree-node::before {
   content: '';
   position: absolute;
   top: 0;
@@ -374,13 +370,12 @@ const TREE_CSS = `
   height: 1px;
   background-color: ${LINE_COLOR};
 }
-.v2tree-children > .v2tree-node:first-child::before { left: calc(50% - 0.5px); }
-.v2tree-children > .v2tree-node:last-child::before  { right: calc(50% - 0.5px); }
-.v2tree-children > .v2tree-node:only-child::before  { display: none; }
+.tree-children > .tree-node:first-child::before { left: calc(50% - 0.5px); }
+.tree-children > .tree-node:last-child::before  { right: calc(50% - 0.5px); }
+.tree-children > .tree-node:only-child::before  { display: none; }
 
-/* Up-stub from bus (y=0) down to card top (y=STUB_PX). 1px-wide div centered
-   at 50% minus half-pixel — pixel-perfect with parent-stub and bus. */
-.v2tree-children > .v2tree-node::after {
+/* Up-stub from bus (y=0) down to card top (y=STUB_PX). */
+.tree-children > .tree-node::after {
   content: '';
   position: absolute;
   top: 0;
@@ -392,7 +387,7 @@ const TREE_CSS = `
 
 /* ─── Triggers row (mirrored layout) ────────────────────────────────────── */
 
-.v2tree-triggers {
+.tree-triggers {
   list-style: none;
   padding: 0;
   margin: 0;
@@ -402,13 +397,13 @@ const TREE_CSS = `
   gap: 0;
 }
 
-.v2tree-trigger-node {
+.tree-trigger-node {
   position: relative;
   padding: 0 ${SIBLING_PAD_PX}px ${STUB_PX}px ${SIBLING_PAD_PX}px;
 }
 
 /* Bus at bottom of each trigger column */
-.v2tree-trigger-node::before {
+.tree-trigger-node::before {
   content: '';
   position: absolute;
   bottom: 0;
@@ -417,12 +412,12 @@ const TREE_CSS = `
   height: 1px;
   background-color: ${LINE_COLOR};
 }
-.v2tree-triggers > .v2tree-trigger-node:first-child::before { left: calc(50% - 0.5px); }
-.v2tree-triggers > .v2tree-trigger-node:last-child::before  { right: calc(50% - 0.5px); }
-.v2tree-triggers > .v2tree-trigger-node:only-child::before  { display: none; }
+.tree-triggers > .tree-trigger-node:first-child::before { left: calc(50% - 0.5px); }
+.tree-triggers > .tree-trigger-node:last-child::before  { right: calc(50% - 0.5px); }
+.tree-triggers > .tree-trigger-node:only-child::before  { display: none; }
 
 /* Down-stub from trigger card bottom to bus */
-.v2tree-trigger-node::after {
+.tree-trigger-node::after {
   content: '';
   position: absolute;
   bottom: 0;
@@ -433,7 +428,7 @@ const TREE_CSS = `
 }
 
 /* Continuous vertical from triggers bus to entry card */
-.v2tree-triggers-to-entry-stub {
+.tree-triggers-to-entry-stub {
   width: 1px;
   height: ${STUB_PX}px;
   background-color: ${LINE_COLOR};

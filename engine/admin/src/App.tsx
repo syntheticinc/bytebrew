@@ -19,9 +19,9 @@ import SchemaListPage from './pages/SchemaListPage';
 import WidgetConfigPage from './pages/WidgetConfigPage';
 import KnowledgePage from './pages/KnowledgePage';
 import TriggersPage from './pages/TriggersPage';
-import V2OverviewPage from './pages/v2/V2OverviewPage';
-import V2SchemasPage from './pages/v2/V2SchemasPage';
-import V2SchemaDetailPage from './pages/v2/V2SchemaDetailPage';
+import OverviewPage from './pages/OverviewPage';
+import SchemasPage from './pages/SchemasPage';
+import SchemaDetailPage from './pages/SchemaDetailPage';
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('jwt');
   if (!token) return <Navigate to="/login" replace />;
@@ -62,10 +62,10 @@ export default function App() {
             <Route path="/agents" element={<AgentsPage />} />
             <Route path="/agents/:agent" element={<AgentDrillInPage />} />
             {/* Overview — Core landing. Also served at /v2/overview for backward compat. */}
-            <Route path="/overview" element={<V2OverviewPage />} />
-            <Route path="/v2/overview" element={<V2OverviewPage />} />
-            <Route path="/v2/schemas" element={<V2SchemasPage />} />
-            <Route path="/v2/schemas/:schemaId" element={<V2SchemaDetailPage />} />
+            <Route path="/overview" element={<OverviewPage />} />
+            <Route path="/v2/overview" element={<OverviewPage />} />
+            <Route path="/v2/schemas" element={<SchemasPage />} />
+            <Route path="/v2/schemas/:schemaId" element={<SchemaDetailPage />} />
 <Route path="/" element={<Navigate to="/builder" replace />} />
           </Route>
           <Route path="*" element={<Navigate to="/builder" replace />} />

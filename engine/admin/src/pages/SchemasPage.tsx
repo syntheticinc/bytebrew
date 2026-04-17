@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../../api/client';
-import { useApi } from '../../hooks/useApi';
-import type { SchemaTemplate, SchemaTemplateCategory } from '../../types';
+import { api } from '../api/client';
+import { useApi } from '../hooks/useApi';
+import type { SchemaTemplate, SchemaTemplateCategory } from '../types';
 
 function formatRelativeTime(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -211,14 +211,14 @@ function TemplatePicker({ onClose, onForked }: TemplatePickerProps) {
   );
 }
 
-export default function V2SchemasPage() {
+export default function SchemasPage() {
   const [picking, setPicking] = useState(false);
   const navigate = useNavigate();
   const { data: schemas, loading, error } = useApi(() => api.listSchemas());
 
   function handleForked(schemaId: string) {
     setPicking(false);
-    navigate(`/v2/schemas/${schemaId}`);
+    navigate(`/schemas/${schemaId}`);
   }
 
   return (
@@ -265,7 +265,7 @@ export default function V2SchemasPage() {
         {(schemas ?? []).map((s) => (
           <Link
             key={s.id}
-            to={`/v2/schemas/${s.id}`}
+            to={`/schemas/${s.id}`}
             className="block bg-brand-dark-surface border border-brand-shade3/15 rounded-card hover:border-brand-shade3/35 transition-all group"
           >
             <div className="px-5 py-4 border-b border-brand-shade3/10">
