@@ -186,23 +186,23 @@ func (r *GORMSchemaRepository) ListSchemasForAgent(ctx context.Context, agentNam
 	return names, nil
 }
 
-// deriveAgentNames returns the distinct agent names participating in a schema
-// via agent_relations (union of source_agent_id and target_agent_id, joined to
-// agents for the name).
+// deriveAgentNames returns the distinct agent names participating in a schema.
+// Membership is the union of:
+//   - the schema's entry agent (schemas.entry_agent_id), if set
+//   - all source/target agents of the schema's delegation relations
 //
-// Per docs/architecture/agent-first-runtime.md §2.1, an isolated agent in a
-// schema with no relations is not a supported state — schema membership is
-// expressed through delegation relations.
-//
-// Q.5: queries by agent UUID, joins agents table to resolve names.
+// A schema with an entry agent and no delegations is a valid single-agent
+// state (template fork from Generic Assistant, or the system builder-schema).
 func (r *GORMSchemaRepository) deriveAgentNames(ctx context.Context, schemaID string) ([]string, error) {
 	var names []string
 	if err := r.db.WithContext(ctx).
 		Raw(`SELECT DISTINCT a.name FROM (
+				SELECT entry_agent_id AS agent_id FROM schemas WHERE id = ? AND entry_agent_id IS NOT NULL
+				UNION
 				SELECT source_agent_id AS agent_id FROM agent_relations WHERE schema_id = ?
 				UNION
 				SELECT target_agent_id AS agent_id FROM agent_relations WHERE schema_id = ?
-			) members JOIN agents a ON a.id = members.agent_id ORDER BY a.name`, schemaID, schemaID).
+			) members JOIN agents a ON a.id = members.agent_id ORDER BY a.name`, schemaID, schemaID, schemaID).
 		Scan(&names).Error; err != nil {
 		return nil, fmt.Errorf("derive agent names: %w", err)
 	}

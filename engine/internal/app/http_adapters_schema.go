@@ -23,16 +23,18 @@ func (a *schemaServiceHTTPAdapter) resolveAgentNameByID(ctx context.Context, age
 	return name
 }
 
-// countAgentsInSchema returns the number of distinct agents linked to the schema
-// through agent_relations (union of source and target).
+// countAgentsInSchema returns the number of distinct agents linked to the schema.
+// Membership mirrors deriveAgentNames: entry agent + all relation endpoints.
 func (a *schemaServiceHTTPAdapter) countAgentsInSchema(ctx context.Context, schemaID string) int {
 	var count int64
 	_ = a.db.WithContext(ctx).Raw(`
 		SELECT COUNT(DISTINCT agent_id) FROM (
+			SELECT entry_agent_id AS agent_id FROM schemas WHERE id = ? AND entry_agent_id IS NOT NULL
+			UNION
 			SELECT source_agent_id AS agent_id FROM agent_relations WHERE schema_id = ?
 			UNION
 			SELECT target_agent_id AS agent_id FROM agent_relations WHERE schema_id = ?
-		) members`, schemaID, schemaID).Scan(&count).Error
+		) members`, schemaID, schemaID, schemaID).Scan(&count).Error
 	return int(count)
 }
 

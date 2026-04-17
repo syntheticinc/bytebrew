@@ -164,7 +164,7 @@ func (s *ForkService) forkInTx(tx *gorm.DB, tmpl *domain.SchemaTemplate, newSche
 
 		// 3. Attach capabilities to the newly created agent.
 		for _, cap := range a.Capabilities {
-			configJSON := ""
+			configJSON := "{}"
 			if len(cap.Config) > 0 {
 				raw, err := json.Marshal(cap.Config)
 				if err != nil {
