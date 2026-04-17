@@ -10,6 +10,7 @@ import FormModal from '../components/FormModal';
 import FormField from '../components/FormField';
 import ConfirmDialog from '../components/ConfirmDialog';
 import TierBadge, { CustomModelBadge } from '../components/TierBadge';
+import { ToastProvider, useToast } from '../components/builder/Toast';
 import type { Model, CreateModelRequest, ModelRegistryEntry } from '../types';
 
 const PROVIDER_TYPES = [
@@ -46,6 +47,15 @@ const emptyForm: CreateModelRequest = {
 };
 
 export default function ModelsPage() {
+  return (
+    <ToastProvider>
+      <ModelsPageInner />
+    </ToastProvider>
+  );
+}
+
+function ModelsPageInner() {
+  const { addToast } = useToast();
   const { data: models, loading, error, refetch } = useApi(() => api.listModels());
   useAdminRefresh(refetch);
   const { registry, registryByModelName } = useModelRegistry();
@@ -123,8 +133,8 @@ export default function ModelsPage() {
       closeForm();
       setSelected(null);
       refetch();
-    } catch {
-      // visible in console
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Failed to save model', 'error');
     } finally {
       setSaving(false);
     }
@@ -137,8 +147,9 @@ export default function ModelsPage() {
       setDeleteTarget(null);
       setSelected(null);
       refetch();
-    } catch {
-      // visible in console
+    } catch (err) {
+      setDeleteTarget(null);
+      addToast(err instanceof Error ? err.message : 'Failed to delete model', 'error');
     }
   }
 

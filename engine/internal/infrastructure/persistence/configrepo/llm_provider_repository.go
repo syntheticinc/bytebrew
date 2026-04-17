@@ -67,3 +67,16 @@ func (r *GORMLLMProviderRepository) Delete(ctx context.Context, id string) error
 	}
 	return nil
 }
+
+// AgentsUsingModel returns the names of agents that reference the given model ID.
+func (r *GORMLLMProviderRepository) AgentsUsingModel(ctx context.Context, modelID string) ([]string, error) {
+	var names []string
+	if err := r.db.WithContext(ctx).
+		Model(&models.AgentModel{}).
+		Where("model_id = ?", modelID).
+		Order("name").
+		Pluck("name", &names).Error; err != nil {
+		return nil, fmt.Errorf("list agents using model %s: %w", modelID, err)
+	}
+	return names, nil
+}

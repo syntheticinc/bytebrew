@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -91,6 +92,12 @@ func loadBYOKConfig(ctx context.Context, db *gorm.DB, fallback config.BYOKConfig
 		var enabled bool
 		if jsonErr := json.Unmarshal(rec.Value, &enabled); jsonErr == nil {
 			out.Enabled = enabled
+		} else {
+			// HTTP API writes the value as a JSON string ("true"/"false").
+			var s string
+			if jsonErr2 := json.Unmarshal(rec.Value, &s); jsonErr2 == nil {
+				out.Enabled = strings.EqualFold(s, "true")
+			}
 		}
 	}
 

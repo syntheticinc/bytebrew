@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	sp "github.com/syntheticinc/bytebrew/engine/internal/service/sessionprocessor"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
@@ -51,49 +50,26 @@ func (f *mockTurnExecutorFactory) CreateForSession(_ interface{ Dispose() }, _, 
 
 // --- helpers ---
 
-func activeLicense() *domain.LicenseInfo {
-	return &domain.LicenseInfo{Status: domain.LicenseActive}
-}
-
 func setupTestServer(t *testing.T) (*httptest.Server, *websocket.Conn) {
 	t.Helper()
-	return setupTestServerWithLicense(t, activeLicense())
-}
-
-func setupTestServerWithLicense(t *testing.T, license *domain.LicenseInfo) (*httptest.Server, *websocket.Conn) {
-	t.Helper()
-
-	registry := flowregistry.NewSessionRegistry(nil)
-	processor := sp.New(registry, nil, nil) // nil factory/store is OK — we don't send messages in ping/create tests
-	agentSvc := &mockAgentEnvSetter{}
-
-	handler := NewConnectionHandler(registry, processor, agentSvc, nil, license)
-
-	server := httptest.NewServer(http.HandlerFunc(handler.ServeHTTP))
-	t.Cleanup(server.Close)
-
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
-
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	require.NoError(t, err)
-	t.Cleanup(func() { conn.Close() })
-
+	server, conn, _, _ := setupTestServerFull(t)
 	return server, conn
 }
 
 func setupTestServerWithRegistry(t *testing.T) (*httptest.Server, *websocket.Conn, *flowregistry.SessionRegistry, *ConnectionHandler) {
 	t.Helper()
-	return setupTestServerWithRegistryAndLicense(t, activeLicense())
+	server, conn, registry, handler := setupTestServerFull(t)
+	return server, conn, registry, handler
 }
 
-func setupTestServerWithRegistryAndLicense(t *testing.T, license *domain.LicenseInfo) (*httptest.Server, *websocket.Conn, *flowregistry.SessionRegistry, *ConnectionHandler) {
+func setupTestServerFull(t *testing.T) (*httptest.Server, *websocket.Conn, *flowregistry.SessionRegistry, *ConnectionHandler) {
 	t.Helper()
 
 	registry := flowregistry.NewSessionRegistry(nil)
 	processor := sp.New(registry, nil, nil)
 	agentSvc := &mockAgentEnvSetter{}
 
-	handler := NewConnectionHandler(registry, processor, agentSvc, nil, license)
+	handler := NewConnectionHandler(registry, processor, agentSvc, nil, nil)
 
 	server := httptest.NewServer(http.HandlerFunc(handler.ServeHTTP))
 	t.Cleanup(server.Close)
@@ -415,99 +391,3 @@ func TestAskUserReply(t *testing.T) {
 	}
 }
 
-// TC-WS-13: Create session with blocked license — error.
-func TestCreateSession_LicenseBlocked(t *testing.T) {
-	_, conn := setupTestServerWithLicense(t, domain.BlockedLicense())
-
-	resp := sendAndReceive(t, conn, WsMessage{
-		Type:      "create_session",
-		RequestID: "req-blocked",
-		Payload: map[string]interface{}{
-			"project_root": "/my/project",
-			"platform":     "linux",
-		},
-	})
-
-	assert.Equal(t, "error", resp.Type)
-	assert.Equal(t, "req-blocked", resp.RequestID)
-	assert.Contains(t, resp.Payload["error"], "LICENSE_REQUIRED")
-}
-
-// TC-WS-14: Send message with blocked license — error.
-func TestSendMessage_LicenseBlocked(t *testing.T) {
-	_, conn := setupTestServerWithLicense(t, domain.BlockedLicense())
-
-	resp := sendAndReceive(t, conn, WsMessage{
-		Type:      "send_message",
-		RequestID: "req-blocked-msg",
-		Payload: map[string]interface{}{
-			"session_id": "any-session",
-			"content":    "hello",
-		},
-	})
-
-	assert.Equal(t, "error", resp.Type)
-	assert.Equal(t, "req-blocked-msg", resp.RequestID)
-	assert.Contains(t, resp.Payload["error"], "LICENSE_REQUIRED")
-}
-
-// TC-WS-15: Create session with grace license — allowed with warning.
-func TestCreateSession_LicenseGrace(t *testing.T) {
-	graceLicense := &domain.LicenseInfo{Status: domain.LicenseGrace}
-	_, conn, registry, _ := setupTestServerWithRegistryAndLicense(t, graceLicense)
-
-	resp := sendAndReceive(t, conn, WsMessage{
-		Type:      "create_session",
-		RequestID: "req-grace",
-		Payload: map[string]interface{}{
-			"project_root": "/my/project",
-			"platform":     "linux",
-		},
-	})
-
-	assert.Equal(t, "create_session_ack", resp.Type)
-	assert.Equal(t, "req-grace", resp.RequestID)
-
-	sessionID, ok := resp.Payload["session_id"].(string)
-	require.True(t, ok, "session_id should be a string")
-	assert.NotEmpty(t, sessionID)
-	assert.True(t, registry.HasSession(sessionID))
-
-	// Verify warning is present
-	assert.Equal(t, "license expiring soon", resp.Payload["warning"])
-}
-
-// TC-WS-16: Send message with grace license — passes license check (not blocked).
-// Verifies grace license doesn't block: sends to non-existent session,
-// expects "session not found" (not LICENSE_REQUIRED), proving license check passed.
-func TestSendMessage_LicenseGrace(t *testing.T) {
-	graceLicense := &domain.LicenseInfo{Status: domain.LicenseGrace}
-	_, conn := setupTestServerWithLicense(t, graceLicense)
-
-	resp := sendAndReceive(t, conn, WsMessage{
-		Type:      "send_message",
-		RequestID: "req-msg-grace",
-		Payload: map[string]interface{}{
-			"session_id": "nonexistent",
-			"content":    "hello",
-		},
-	})
-
-	// Grace license passes the check — we get "session not found", not LICENSE_REQUIRED
-	assert.Equal(t, "error", resp.Type)
-	assert.Contains(t, resp.Payload["error"], "session not found")
-}
-
-// TC-WS-17: Ping works regardless of license status (even blocked).
-func TestPing_LicenseBlocked_StillWorks(t *testing.T) {
-	_, conn := setupTestServerWithLicense(t, domain.BlockedLicense())
-
-	resp := sendAndReceive(t, conn, WsMessage{
-		Type:      "ping",
-		RequestID: "req-ping-blocked",
-	})
-
-	assert.Equal(t, "pong", resp.Type)
-	assert.Equal(t, "req-ping-blocked", resp.RequestID)
-	assert.NotNil(t, resp.Payload["timestamp"])
-}

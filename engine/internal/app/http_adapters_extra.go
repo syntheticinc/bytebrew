@@ -433,8 +433,13 @@ func (a *triggerServiceHTTPAdapter) DeleteTrigger(ctx context.Context, id string
 }
 
 // settingServiceHTTPAdapter bridges GORMSettingRepository to the http.SettingService interface.
+// byokMW, db, and fallback are optional — when set, any write to a byok.*
+// key triggers a live SetConfig so the middleware hot-swaps without restart.
 type settingServiceHTTPAdapter struct {
-	repo *configrepo.GORMSettingRepository
+	repo        *configrepo.GORMSettingRepository
+	byokMW      *deliveryhttp.BYOKMiddleware
+	db          *gorm.DB
+	byokFallback config.BYOKConfig
 }
 
 // settingValueAsString renders a jsonb value for the HTTP layer:
@@ -478,6 +483,13 @@ func (a *settingServiceHTTPAdapter) UpdateSetting(ctx context.Context, key, valu
 	setting, err := a.repo.Get(ctx, key)
 	if err != nil {
 		return nil, err
+	}
+	if a.byokMW != nil && strings.HasPrefix(key, "byok.") {
+		cfg := loadBYOKConfig(ctx, a.db, a.byokFallback)
+		a.byokMW.SetConfig(deliveryhttp.BYOKConfig{
+			Enabled:          cfg.Enabled,
+			AllowedProviders: cfg.AllowedProviders,
+		})
 	}
 	return &deliveryhttp.SettingResponse{
 		Key:       setting.Key,
@@ -641,25 +653,3 @@ func (a *toolMetadataHTTPAdapter) GetAllToolMetadata() []deliveryhttp.ToolMetada
 	return result
 }
 
-// convertRateLimitRules converts config rate limit rules to delivery HTTP types.
-func convertRateLimitRules(cfgRules []config.RateLimitRule) []deliveryhttp.RateLimitRule {
-	rules := make([]deliveryhttp.RateLimitRule, 0, len(cfgRules))
-	for _, cr := range cfgRules {
-		tiers := make(map[string]deliveryhttp.RateLimitTier, len(cr.Tiers))
-		for name, ct := range cr.Tiers {
-			tiers[name] = deliveryhttp.RateLimitTier{
-				Requests:  ct.Requests,
-				Window:    ct.Window,
-				Unlimited: ct.Unlimited,
-			}
-		}
-		rules = append(rules, deliveryhttp.RateLimitRule{
-			Name:        cr.Name,
-			KeyHeader:   cr.KeyHeader,
-			TierHeader:  cr.TierHeader,
-			Tiers:       tiers,
-			DefaultTier: cr.DefaultTier,
-		})
-	}
-	return rules
-}

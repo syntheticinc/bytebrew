@@ -20,7 +20,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	googlegrpc "google.golang.org/grpc"
+
 	"github.com/syntheticinc/bytebrew/engine/internal/delivery/grpc"
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/engine/internal/delivery/ws"
@@ -56,6 +57,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/service/sessionprocessor"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/turnexecutor"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
+	"github.com/syntheticinc/bytebrew/engine/pkg/ee"
 	"github.com/syntheticinc/bytebrew/engine/pkg/logger"
 	"github.com/glebarez/sqlite"
 	"gorm.io/driver/postgres"
@@ -63,18 +65,7 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
-// LicenseProvider gives read access to the current license and its atomic pointer.
-// Implemented by license.LicenseWatcher for live-reloading, or nil for CE mode.
-type LicenseProvider interface {
-	// Current returns the latest validated license, or nil (CE mode).
-	Current() *domain.LicenseInfo
-	// Pointer returns the atomic pointer for use by HTTP middleware.
-	Pointer() *atomic.Pointer[domain.LicenseInfo]
-	// Stop terminates the background refresh goroutine.
-	Stop()
-}
-
-// ServerConfig holds parameters for Run that differ between CE and server (legacy).
+// ServerConfig holds parameters for Run.
 type ServerConfig struct {
 	// ConfigPath is the path to the config file (resolved by the caller).
 	ConfigPath string
@@ -91,13 +82,9 @@ type ServerConfig struct {
 	// BridgeURL overrides the bridge WebSocket URL from config.
 	BridgeURL string
 
-	// LicenseInfo is the validated license. nil = CE mode (no restrictions).
-	LicenseInfo *domain.LicenseInfo
-
-	// LicenseProvider enables live license reloading for EE middleware.
-	// nil = CE mode (no EE gating). When set, LicenseInfo is also populated
-	// from its Current() at startup for backward compatibility with gRPC/WS.
-	LicenseProvider LicenseProvider
+	// EEExtension plugs Enterprise Edition behavior into the CE server.
+	// nil in CE builds — all EE-gated code is silently skipped.
+	EEExtension ee.Extension
 
 	// Version, Commit, Date are build-time metadata.
 	Version string
@@ -129,7 +116,7 @@ func Run(sc ServerConfig) error {
 		if !sc.ConfigExplicit {
 			managedConfigPath := filepath.Join(dataDir, "config.yaml")
 			if _, err := os.Stat(managedConfigPath); os.IsNotExist(err) {
-				if err := generateDefaultConfig(managedConfigPath, sc.LicenseInfo != nil); err != nil {
+				if err := generateDefaultConfig(managedConfigPath); err != nil {
 					return fmt.Errorf("generate default config: %w", err)
 				}
 				slog.Info("Generated default config", "path", managedConfigPath)
@@ -322,9 +309,8 @@ func Run(sc ServerConfig) error {
 
 	// Create infrastructure components (AgentService + WorkManager + AgentPool)
 	components, err := NewInfraComponents(InfraComponentsConfig{
-		Config:      *cfg,
-		LicenseInfo: sc.LicenseInfo,
-		DB:          pgDB,
+		Config: *cfg,
+		DB:     pgDB,
 	})
 	if err != nil {
 		return fmt.Errorf("create infrastructure components: %w", err)
@@ -446,10 +432,12 @@ func Run(sc ServerConfig) error {
 	var lifecycleManager *lifecycle.Manager
 	var lifecycleDispatcher *lifecycle.Dispatcher
 	var agentLifecycleReader AgentLifecycleReader
+	var poolRunner *poolBasedRunner
 	if components.AgentPoolAdapter != nil && agentRegistry != nil {
 		agentLifecycleReader = newAgentRegistryLifecycleAdapter(agentRegistry)
-		poolRunner := &poolBasedRunner{pool: components.AgentPoolAdapter}
+		poolRunner = &poolBasedRunner{pool: components.AgentPoolAdapter}
 		lifecycleManager = lifecycle.NewManager(poolRunner)
+		lifecycleManager.SetUUIDResolver(agentRegistry)
 		lifecycleDispatcher = lifecycle.NewDispatcher(lifecycleManager)
 
 		if components.AgentToolResolver != nil {
@@ -515,7 +503,6 @@ func Run(sc ServerConfig) error {
 	var httpAuthMW *deliveryhttp.AuthMiddleware
 	var byokMW *deliveryhttp.BYOKMiddleware
 	var userResolveMW func(http.Handler) http.Handler
-	var configurableRL *deliveryhttp.ConfigurableRateLimiter
 	if agentRegistry != nil && bootstrapCfg != nil {
 		httpPort = bootstrapCfg.Engine.Port
 		if httpPort == 0 {
@@ -776,24 +763,10 @@ func Run(sc ServerConfig) error {
 				})
 			}
 
-			// Audit log READ API — always registered so Admin UI doesn't get 404.
-			// Returns 403 "EE required" when no license is active.
 			auditRepo := configrepo.NewGORMAuditRepository(pgDB)
 			auditHandler := deliveryhttp.NewAuditHandler(&auditServiceHTTPAdapter{repo: auditRepo})
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireAdminSession)
-				if sc.LicenseProvider != nil {
-					eeMWAudit := deliveryhttp.NewEEMiddleware(sc.LicenseProvider.Pointer())
-					r.Use(eeMWAudit.RequireEE)
-				} else {
-					r.Use(func(next http.Handler) http.Handler {
-						return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-							w.Header().Set("Content-Type", "application/json")
-							w.WriteHeader(http.StatusForbidden)
-							_, _ = w.Write([]byte(`{"error":"Enterprise Edition license required","upgrade_url":"https://bytebrew.ai/billing"}`))
-						})
-					})
-				}
 				r.Get("/api/v1/audit", auditHandler.List)
 			})
 
@@ -842,7 +815,7 @@ func Run(sc ServerConfig) error {
 			agentRelationRepo := configrepo.NewGORMAgentRelationRepository(pgDB)
 			schemaHandler := deliveryhttp.NewSchemaHandler(
 				&schemaServiceHTTPAdapter{repo: schemaRepo, db: pgDB},
-				&agentRelationServiceHTTPAdapter{repo: agentRelationRepo, agentRepo: agentRepo},
+				&agentRelationServiceHTTPAdapter{repo: agentRelationRepo, agentRepo: agentRepo, db: pgDB},
 			)
 			schemaHandler.SetAgentDetailer(agentManager)
 			r.Group(func(r chi.Router) {
@@ -875,7 +848,12 @@ func Run(sc ServerConfig) error {
 
 			// Settings (admin-only)
 			settingRepo := configrepo.NewGORMSettingRepository(pgDB)
-			settingHandler := deliveryhttp.NewSettingHandler(&settingServiceHTTPAdapter{repo: settingRepo})
+			settingHandler := deliveryhttp.NewSettingHandler(&settingServiceHTTPAdapter{
+				repo:         settingRepo,
+				byokMW:       byokMW,
+				db:           pgDB,
+				byokFallback: cfg.BYOK,
+			})
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireAdminSession)
 				r.Get("/api/v1/settings", settingHandler.List)
@@ -978,47 +956,10 @@ func Run(sc ServerConfig) error {
 			// capRepo is also used here for capability CRUD HTTP handlers.
 		})
 
-		// EE-only routes (require auth + valid Enterprise license) — on internal router.
-		if sc.LicenseProvider != nil {
-			eeMW := deliveryhttp.NewEEMiddleware(sc.LicenseProvider.Pointer())
-
-			// Prometheus /metrics endpoint (EE, no auth — Prometheus scrapes without tokens).
-			internalRouter.Group(func(r chi.Router) {
-				r.Use(eeMW.RequireEE)
-				r.Handle("/metrics", promhttp.Handler())
-			})
-
-			// Configurable rate limiter (EE) — per-header rate limiting
-			rateLimitRules := cfg.RateLimits
-			if len(rateLimitRules) == 0 {
-				// Fallback: read rate limits from env var (Docker/env-based deployments)
-				if envRL := os.Getenv("BYTEBREW_RATE_LIMITS"); envRL != "" {
-					var envRules []config.RateLimitRule
-					if err := json.Unmarshal([]byte(envRL), &envRules); err != nil {
-						slog.Warn("failed to parse BYTEBREW_RATE_LIMITS env var", "error", err)
-					} else {
-						rateLimitRules = envRules
-					}
-				}
-			}
-			if len(rateLimitRules) > 0 {
-				rules := convertRateLimitRules(rateLimitRules)
-				configurableRL = deliveryhttp.NewConfigurableRateLimiter(rules, sc.LicenseProvider.Pointer())
-			}
-
-			internalRouter.Group(func(r chi.Router) {
-				r.Use(authMW.Authenticate)
-				r.Use(userResolveMW)
-				r.Use(eeMW.RequireEE)
-
-				// Tool call audit log moved to OSS block (Phase 4).
-
-				// Rate limit usage API (EE)
-				if configurableRL != nil {
-					usageHandler := deliveryhttp.NewRateLimitUsageHandler(configurableRL)
-					r.Get("/api/v1/rate-limits/usage", usageHandler.Usage)
-				}
-			})
+		// EE-only routes (metrics, rate limiting, etc.) are registered by the
+		// EE extension. CE builds set EEExtension = nil and skip this entirely.
+		if sc.EEExtension != nil {
+			sc.EEExtension.RegisterHTTP(r, internalRouter)
 		}
 
 		// Webhook route (internal only — triggered by external services, requires network access)
@@ -1165,7 +1106,11 @@ func Run(sc ServerConfig) error {
 	if grpcUsesRandomPort {
 		cfg.Server.Port = 0 // force random port for gRPC
 	}
-	grpcServer, err := initializeGRPCServer(cfg, loggerInstance, sc.LicenseInfo, sc.Managed || grpcUsesRandomPort)
+	var extraGRPCOpts []googlegrpc.ServerOption
+	if sc.EEExtension != nil {
+		extraGRPCOpts = sc.EEExtension.GRPCServerOptions()
+	}
+	grpcServer, err := initializeGRPCServer(cfg, loggerInstance, extraGRPCOpts, sc.Managed || grpcUsesRandomPort)
 	if err != nil {
 		return fmt.Errorf("initialize gRPC server: %w", err)
 	}
@@ -1271,6 +1216,13 @@ func Run(sc ServerConfig) error {
 	sessProcessor := sessionprocessor.New(sessionRegistry, factory, eventStore)
 	flowHandlerCfg.SessionProcessor = sessProcessor
 
+	// Wire TurnExecutorFactory into poolBasedRunner so chat agents delegated via
+	// lifecycle.Manager use the SSE path instead of the code-agent pool path.
+	if poolRunner != nil {
+		poolRunner.SetChatFactory(factory)
+		slog.InfoContext(ctx, "TurnExecutorFactory wired into poolBasedRunner for chat agent delegation")
+	}
+
 	// Autonomous task executor: cron/webhook triggers create a task, the worker picks it
 	// up, opens a session scoped to the trigger's schema, runs the agent, records the
 	// final answer. Wiring lives here because the executor needs sessProcessor and the
@@ -1361,9 +1313,6 @@ func Run(sc ServerConfig) error {
 				if byokMW != nil {
 					r.Use(byokMW.InjectBYOK)
 				}
-				if configurableRL != nil {
-					r.Use(configurableRL.Middleware)
-				}
 				r.Group(func(r chi.Router) {
 					if httpAuthMW != nil {
 						r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeChat))
@@ -1448,7 +1397,7 @@ func Run(sc ServerConfig) error {
 	if components.AgentPool != nil {
 		agentCanceller = components.AgentPool
 	}
-	wsHandler := ws.NewConnectionHandler(sessionRegistry, sessProcessor, components.AgentService, agentCanceller, sc.LicenseInfo)
+	wsHandler := ws.NewConnectionHandler(sessionRegistry, sessProcessor, components.AgentService, agentCanceller, sc.EEExtension)
 
 	// Create WS server (localhost only, random port)
 	wsServer, err := ws.NewServer(wsHandler)
@@ -1538,10 +1487,10 @@ func Run(sc ServerConfig) error {
 
 	// Cron scheduler is stopped via defer inside the platform-services block above.
 
-	// Stop license watcher
-	if sc.LicenseProvider != nil {
-		sc.LicenseProvider.Stop()
-		slog.Info("License watcher stopped")
+	// Stop EE extension (license watcher, etc.) — no-op in CE.
+	if sc.EEExtension != nil {
+		sc.EEExtension.Stop()
+		slog.Info("EE extension stopped")
 	}
 
 	// Close MCP client connections
@@ -1581,17 +1530,18 @@ func Run(sc ServerConfig) error {
 }
 
 // initializeGRPCServer creates the gRPC server, choosing between config-based
-// listener and OS-assigned port based on managed mode.
-func initializeGRPCServer(cfg *config.Config, log *logger.Logger, licenseInfo *domain.LicenseInfo, managed bool) (*grpc.Server, error) {
+// listener and OS-assigned port based on managed mode. extraOpts are appended
+// to the CE option chain (used by EE to inject license interceptors).
+func initializeGRPCServer(cfg *config.Config, log *logger.Logger, extraOpts []googlegrpc.ServerOption, managed bool) (*grpc.Server, error) {
 	if managed && cfg.Server.Port == 0 {
 		listener, err := net.Listen("tcp4", "127.0.0.1:0")
 		if err != nil {
 			return nil, fmt.Errorf("listen on random port: %w", err)
 		}
-		return grpc.NewServerWithListener(listener, cfg.Server, log, licenseInfo), nil
+		return grpc.NewServerWithListener(listener, cfg.Server, log, extraOpts), nil
 	}
 
-	server, err := grpc.NewServer(cfg.Server, log, licenseInfo)
+	server, err := grpc.NewServer(cfg.Server, log, extraOpts)
 	if err != nil {
 		slog.Warn("Configured port busy, using random port",
 			"port", cfg.Server.Port, "error", err)
@@ -1603,7 +1553,7 @@ func initializeGRPCServer(cfg *config.Config, log *logger.Logger, licenseInfo *d
 		if listenErr != nil {
 			return nil, fmt.Errorf("listen on random port after fallback: %w", listenErr)
 		}
-		return grpc.NewServerWithListener(listener, cfg.Server, log, licenseInfo), nil
+		return grpc.NewServerWithListener(listener, cfg.Server, log, extraOpts), nil
 	}
 	return server, nil
 }
@@ -1651,8 +1601,7 @@ func ensureManagedDirs(dataDir string) error {
 }
 
 // generateDefaultConfig writes a minimal config.yaml suitable for managed mode.
-// If includeLicense is true, adds the default license public key section.
-func generateDefaultConfig(path string, includeLicense bool) error {
+func generateDefaultConfig(path string) error {
 	content := `# ByteBrew Server Config (auto-generated for managed mode)
 server:
   host: "127.0.0.1"
@@ -1679,12 +1628,6 @@ llm:
     base_url: "http://localhost:11434"
     timeout: 300s
 `
-	if includeLicense {
-		content += `
-license:
-  public_key_hex: "5395bf9bb925ce56d86005104951984709670126f95a635e4e2ccf79ac58e395"
-`
-	}
 	return os.WriteFile(path, []byte(content), 0644)
 }
 

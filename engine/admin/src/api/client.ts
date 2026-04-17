@@ -615,9 +615,18 @@ class APIClient {
     if (params?.to) qs.set('to', params.to);
     if (params?.agent_name) qs.set('agent_name', params.agent_name);
     const q = qs.toString() ? '?' + qs.toString() : '';
-    // Backend returns { data: [...], total, page, per_page } — map to PaginatedSessions
-    const raw = await this.request<{ data?: SessionSummary[]; sessions?: SessionSummary[]; total: number; page: number; per_page: number }>('GET', `/sessions${q}`);
-    return { sessions: raw.data ?? raw.sessions ?? [], total: raw.total, page: raw.page, per_page: raw.per_page };
+    // Backend returns { data: [...], total, page, per_page } with fields id/agent_name — map to SessionSummary
+    type RawSession = { id?: string; session_id?: string; agent_name?: string; entry_agent?: string; status: string; duration_ms?: number; total_tokens?: number; created_at: string };
+    const raw = await this.request<{ data?: RawSession[]; sessions?: RawSession[]; total: number; page: number; per_page: number }>('GET', `/sessions${q}`);
+    const sessions: SessionSummary[] = (raw.data ?? raw.sessions ?? []).map((s) => ({
+      session_id: s.session_id ?? s.id ?? '',
+      entry_agent: s.entry_agent ?? s.agent_name ?? '',
+      status: s.status as SessionSummary['status'],
+      duration_ms: s.duration_ms ?? 0,
+      total_tokens: s.total_tokens ?? 0,
+      created_at: s.created_at,
+    }));
+    return { sessions, total: raw.total, page: raw.page, per_page: raw.per_page };
   }
 
   deleteSession(sessionId: string): Promise<void> {

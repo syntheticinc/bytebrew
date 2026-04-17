@@ -4,11 +4,19 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/lifecycle"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/orchestrator"
 )
+
+// chatAgentFactory is the consumer-side subset of TurnExecutorFactory needed by poolBasedRunner.
+type chatAgentFactory interface {
+	CreateForSession(ctx context.Context, proxy tools.ClientOperationsProxy,
+		sessionID, projectKey, projectRoot, platform, agentName, userID string) orchestrator.TurnExecutor
+}
 
 // AgentLifecycleReader reads the lifecycle mode for an agent by name.
 type AgentLifecycleReader interface {
@@ -38,16 +46,25 @@ func NewCompositeAgentSpawner(
 	}
 }
 
-// SpawnAgent implements tools.GenericAgentSpawner by routing based on lifecycle mode.
+// SpawnAgent implements tools.GenericAgentSpawner by routing based on lifecycle mode
+// and agent type.
+//
+// Chat agents (any agent that is not a code-agent like coder/researcher/reviewer)
+// always run through lifecycle.Manager regardless of lifecycle mode, because
+// AgentPool.SpawnWithDescription is a code-agent-only path that requires a gRPC
+// session proxy and a registered code-agent flow — neither of which chat agents have.
+//
+// Code agents in spawn mode continue to use the original gRPC pool path.
 func (c *CompositeAgentSpawner) SpawnAgent(ctx context.Context, params tools.SpawnParams) (string, error) {
 	mode := c.agents.GetLifecycleMode(ctx, params.AgentName)
 
-	if mode != domain.LifecycleModePersistent {
+	if mode != domain.LifecycleModePersistent && !isChatAgent(params.AgentName) {
 		return c.pool.SpawnAgent(ctx, params)
 	}
 
-	slog.InfoContext(ctx, "lifecycle: routing to persistent manager",
+	slog.InfoContext(ctx, "lifecycle: routing to manager",
 		"agent", params.AgentName,
+		"mode", mode,
 		"session", params.SessionID,
 	)
 
@@ -60,7 +77,7 @@ func (c *CompositeAgentSpawner) SpawnAgent(ctx context.Context, params tools.Spa
 		params.Description,
 		mode,
 		maxContext,
-		nil, // eventStream — pool handles event emission internally
+		nil,
 	)
 	if err != nil {
 		return "", fmt.Errorf("lifecycle execute task: %w", err)
@@ -104,18 +121,42 @@ type agentSpawnerWaiter interface {
 // poolBasedRunner wraps an agentSpawnerWaiter to implement lifecycle.AgentRunner.
 // RunAgent spawns the agent, then blocks until it completes, returning its actual output.
 type poolBasedRunner struct {
-	pool agentSpawnerWaiter
+	pool        agentSpawnerWaiter
+	chatFactory chatAgentFactory
+}
+
+// SetChatFactory wires the TurnExecutorFactory so chat agents can be executed
+// via the SSE path rather than the code-agent pool path (which requires a gRPC proxy).
+func (r *poolBasedRunner) SetChatFactory(f chatAgentFactory) {
+	r.chatFactory = f
+}
+
+// isChatAgent returns true for schema-bound agents (delegated via can_spawn).
+// Code agents ("coder", "researcher", "reviewer") use the pool path.
+func isChatAgent(name string) bool {
+	switch name {
+	case "coder", "researcher", "reviewer":
+		return false
+	}
+	return true
 }
 
 // RunAgent implements lifecycle.AgentRunner.
-// Spawns the agent via the pool, then blocks until completion and returns the actual output.
-// This is required for the lifecycle.Manager to store real outputs (not agent IDs) in context.
+// For chat agents (schema agents) it uses the TurnExecutorFactory SSE path.
+// For code agents it uses the pool path (spawn + wait).
 func (r *poolBasedRunner) RunAgent(ctx context.Context, agentName, input, sessionID string, eventStream domain.AgentEventStream) (string, error) {
+	if r.chatFactory != nil && isChatAgent(agentName) {
+		return r.runChatAgent(ctx, agentName, input, sessionID, eventStream)
+	}
+	return r.runCodeAgent(ctx, agentName, input, sessionID)
+}
+
+func (r *poolBasedRunner) runCodeAgent(ctx context.Context, agentName, input, sessionID string) (string, error) {
 	agentID, err := r.pool.SpawnAgent(ctx, tools.SpawnParams{
 		SessionID:   sessionID,
 		AgentName:   agentName,
 		Description: input,
-		Blocking:    false, // agent runs on session-scoped context; we wait separately
+		Blocking:    false,
 	})
 	if err != nil {
 		return "", fmt.Errorf("spawn agent: %w", err)
@@ -126,4 +167,36 @@ func (r *poolBasedRunner) RunAgent(ctx context.Context, agentName, input, sessio
 		return "", fmt.Errorf("wait for agent %s: %w", agentID, err)
 	}
 	return info.Result, nil
+}
+
+func (r *poolBasedRunner) runChatAgent(ctx context.Context, agentName, input, sessionID string, eventStream domain.AgentEventStream) (string, error) {
+	proxy := tools.NewInProcessProxy()
+	defer proxy.Dispose()
+
+	executor := r.chatFactory.CreateForSession(ctx, proxy, sessionID, "", "", "", agentName, "")
+	if executor == nil {
+		return "", fmt.Errorf("no executor available for chat agent %q — check model configuration", agentName)
+	}
+
+	slog.InfoContext(ctx, "lifecycle: running chat agent via TurnExecutor",
+		"agent", agentName,
+		"session", sessionID,
+	)
+
+	var answer strings.Builder
+	chunkCb := func(chunk string) error {
+		answer.WriteString(chunk)
+		return nil
+	}
+	eventCb := func(event *domain.AgentEvent) error {
+		if eventStream != nil {
+			return eventStream.Send(event)
+		}
+		return nil
+	}
+
+	if err := executor.ExecuteTurn(ctx, sessionID, "", input, chunkCb, eventCb); err != nil {
+		return "", fmt.Errorf("chat agent %q execution: %w", agentName, err)
+	}
+	return answer.String(), nil
 }

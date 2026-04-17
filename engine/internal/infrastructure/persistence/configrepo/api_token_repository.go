@@ -20,8 +20,9 @@ func NewGORMAPITokenRepository(db *gorm.DB) *GORMAPITokenRepository {
 }
 
 // Create inserts a new API token and returns its ID.
-func (r *GORMAPITokenRepository) Create(ctx context.Context, name, tokenHash string, scopesMask int) (string, error) {
+func (r *GORMAPITokenRepository) Create(ctx context.Context, userID, name, tokenHash string, scopesMask int) (string, error) {
 	m := models.APITokenModel{
+		UserID:     userID,
 		Name:       name,
 		TokenHash:  tokenHash,
 		ScopesMask: scopesMask,

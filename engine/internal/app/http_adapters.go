@@ -102,8 +102,8 @@ type tokenRepoHTTPAdapter struct {
 	repo *configrepo.GORMAPITokenRepository
 }
 
-func (a *tokenRepoHTTPAdapter) Create(ctx context.Context, name, tokenHash string, scopesMask int) (string, error) {
-	return a.repo.Create(ctx, name, tokenHash, scopesMask)
+func (a *tokenRepoHTTPAdapter) Create(ctx context.Context, userID, name, tokenHash string, scopesMask int) (string, error) {
+	return a.repo.Create(ctx, userID, name, tokenHash, scopesMask)
 }
 
 func (a *tokenRepoHTTPAdapter) List(ctx context.Context) ([]deliveryhttp.TokenInfo, error) {

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 
@@ -24,8 +23,9 @@ type Server struct {
 }
 
 // buildGRPCOpts creates the common gRPC server options shared by all constructors.
-func buildGRPCOpts(cfg config.ServerConfig, log *logger.Logger, licenseInfo *domain.LicenseInfo) []grpc.ServerOption {
-	return []grpc.ServerOption{
+// extraOpts are appended to the CE chain; EE uses this to inject license interceptors.
+func buildGRPCOpts(cfg config.ServerConfig, log *logger.Logger, extraOpts []grpc.ServerOption) []grpc.ServerOption {
+	opts := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(cfg.GRPC.MaxRecvMsgSize),
 		grpc.MaxSendMsgSize(cfg.GRPC.MaxSendMsgSize),
 		grpc.KeepaliveParams(keepalive.ServerParameters{
@@ -37,22 +37,22 @@ func buildGRPCOpts(cfg config.ServerConfig, log *logger.Logger, licenseInfo *dom
 		grpc.ChainUnaryInterceptor(
 			RecoveryInterceptor(log),
 			LoggingInterceptor(log),
-			LicenseUnaryInterceptor(licenseInfo),
 			ErrorMappingInterceptor(),
 		),
 		// Stream interceptors
 		grpc.ChainStreamInterceptor(
 			StreamRecoveryInterceptor(log),
 			StreamLoggingInterceptor(log),
-			LicenseStreamInterceptor(licenseInfo),
 			StreamErrorMappingInterceptor(),
 		),
 	}
+	opts = append(opts, extraOpts...)
+	return opts
 }
 
 // newServerFromListener creates a Server from an already-established listener.
-func newServerFromListener(listener net.Listener, log *logger.Logger, cfg config.ServerConfig, licenseInfo *domain.LicenseInfo) *Server {
-	opts := buildGRPCOpts(cfg, log, licenseInfo)
+func newServerFromListener(listener net.Listener, log *logger.Logger, cfg config.ServerConfig, extraOpts []grpc.ServerOption) *Server {
+	opts := buildGRPCOpts(cfg, log, extraOpts)
 	grpcServer := grpc.NewServer(opts...)
 
 	return &Server{
@@ -64,22 +64,22 @@ func newServerFromListener(listener net.Listener, log *logger.Logger, cfg config
 }
 
 // NewServer creates a new gRPC server that listens on the address from config.
-// licenseInfo controls license enforcement: Blocked rejects sessions, Grace adds warning headers.
-func NewServer(cfg config.ServerConfig, log *logger.Logger, licenseInfo *domain.LicenseInfo) (*Server, error) {
+// extraOpts are appended to the CE option chain (used by EE to inject interceptors).
+func NewServer(cfg config.ServerConfig, log *logger.Logger, extraOpts []grpc.ServerOption) (*Server, error) {
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen on %s: %w", addr, err)
 	}
 
-	return newServerFromListener(listener, log, cfg, licenseInfo), nil
+	return newServerFromListener(listener, log, cfg, extraOpts), nil
 }
 
 // NewServerWithListener creates a gRPC server with a pre-existing listener.
 // Used in managed mode and port fallback where the OS assigns a random port.
-// cfg provides gRPC options (keepalive, message sizes, timeouts).
-func NewServerWithListener(listener net.Listener, cfg config.ServerConfig, log *logger.Logger, licenseInfo *domain.LicenseInfo) *Server {
-	return newServerFromListener(listener, log, cfg, licenseInfo)
+// extraOpts are appended to the CE option chain (used by EE to inject interceptors).
+func NewServerWithListener(listener net.Listener, cfg config.ServerConfig, log *logger.Logger, extraOpts []grpc.ServerOption) *Server {
+	return newServerFromListener(listener, log, cfg, extraOpts)
 }
 
 // ActualPort returns the port the server is listening on.

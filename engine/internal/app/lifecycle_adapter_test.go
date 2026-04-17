@@ -66,11 +66,14 @@ func (m *mockLifecycleReader) GetMaxContextSize(_ context.Context, agentName str
 	return 16000
 }
 
-func TestCompositeAgentSpawner_SpawnMode_DelegatesToPool(t *testing.T) {
+// TestCompositeAgentSpawner_SpawnMode_CodeAgent_DelegatesToPool verifies that
+// spawn-mode code agents (coder/researcher/reviewer) bypass lifecycle.Manager
+// and go directly to the gRPC pool.
+func TestCompositeAgentSpawner_SpawnMode_CodeAgent_DelegatesToPool(t *testing.T) {
 	pool := &mockAgentSpawner{spawnID: "agent-123"}
 	reader := &mockLifecycleReader{
 		modes: map[string]domain.LifecycleMode{
-			"worker": domain.LifecycleModeSpawn,
+			"coder": domain.LifecycleModeSpawn,
 		},
 	}
 	manager := newTestManager(pool)
@@ -79,20 +82,24 @@ func TestCompositeAgentSpawner_SpawnMode_DelegatesToPool(t *testing.T) {
 	ctx := context.Background()
 	params := tools.SpawnParams{
 		SessionID:   "sess-1",
-		AgentName:   "worker",
+		AgentName:   "coder",
 		Description: "do something",
 		Blocking:    true,
 	}
 
 	result, err := spawner.SpawnAgent(ctx, params)
 	require.NoError(t, err)
+	// Code agents: CompositeAgentSpawner calls pool.SpawnAgent directly → returns spawnID.
 	assert.Equal(t, "agent-123", result)
 	assert.Len(t, pool.spawnCalls, 1)
-	assert.Equal(t, "worker", pool.spawnCalls[0].AgentName)
+	assert.Equal(t, "coder", pool.spawnCalls[0].AgentName)
 }
 
-func TestCompositeAgentSpawner_UnknownAgent_FallsBackToSpawn(t *testing.T) {
-	pool := &mockAgentSpawner{spawnID: "agent-456"}
+// TestCompositeAgentSpawner_UnknownChatAgent_UsesManager verifies that unknown
+// agents (treated as chat agents) are routed through lifecycle.Manager even in
+// spawn mode, ensuring they don't require a gRPC session proxy.
+func TestCompositeAgentSpawner_UnknownChatAgent_UsesManager(t *testing.T) {
+	pool := &mockAgentSpawner{spawnID: "agent-456", waitResult: "chat-output"}
 	reader := &mockLifecycleReader{
 		modes: map[string]domain.LifecycleMode{},
 	}
@@ -108,7 +115,9 @@ func TestCompositeAgentSpawner_UnknownAgent_FallsBackToSpawn(t *testing.T) {
 
 	result, err := spawner.SpawnAgent(ctx, params)
 	require.NoError(t, err)
-	assert.Equal(t, "agent-456", result)
+	// Chat agents go through lifecycle.Manager → poolBasedRunner.runCodeAgent (no chatFactory wired).
+	// runCodeAgent: SpawnAgent (returns spawnID) + WaitForAgent (returns waitResult).
+	assert.Equal(t, "chat-output", result)
 	assert.Len(t, pool.spawnCalls, 1)
 }
 

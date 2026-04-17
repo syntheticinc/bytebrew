@@ -9,11 +9,12 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 )
 
 // TokenRepository manages API tokens in the database.
 type TokenRepository interface {
-	Create(ctx context.Context, name, tokenHash string, scopesMask int) (id string, err error)
+	Create(ctx context.Context, userID, name, tokenHash string, scopesMask int) (id string, err error)
 	List(ctx context.Context) ([]TokenInfo, error)
 	Delete(ctx context.Context, id string) error
 }
@@ -67,8 +68,9 @@ func (h *TokenHandler) CreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userID := domain.UserIDFromContext(r.Context())
 	hash := sha256Hash(rawToken)
-	id, err := h.repo.Create(r.Context(), req.Name, hash, req.ScopesMask)
+	id, err := h.repo.Create(r.Context(), userID, req.Name, hash, req.ScopesMask)
 	if err != nil {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": fmt.Sprintf("create token: %s", err)})
 		return

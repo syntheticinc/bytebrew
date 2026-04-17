@@ -43,10 +43,10 @@ func (r *GORMAuditRepository) List(ctx context.Context, filters AuditFilters, pa
 		query = query.Where("resource = ?", filters.Resource)
 	}
 	if filters.From != nil {
-		query = query.Where("timestamp >= ?", *filters.From)
+		query = query.Where("occurred_at >= ?", *filters.From)
 	}
 	if filters.To != nil {
-		query = query.Where("timestamp <= ?", *filters.To)
+		query = query.Where("occurred_at <= ?", *filters.To)
 	}
 
 	var total int64
@@ -56,7 +56,7 @@ func (r *GORMAuditRepository) List(ctx context.Context, filters AuditFilters, pa
 
 	offset := (page - 1) * perPage
 	var logs []models.AuditLogModel
-	if err := query.Order("timestamp DESC").Offset(offset).Limit(perPage).Find(&logs).Error; err != nil {
+	if err := query.Order("occurred_at DESC").Offset(offset).Limit(perPage).Find(&logs).Error; err != nil {
 		return nil, 0, fmt.Errorf("list audit logs: %w", err)
 	}
 

@@ -2,12 +2,8 @@ package app
 
 import (
 	"log/slog"
-	"os"
-	"path/filepath"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agents"
-	licenseinfra "github.com/syntheticinc/bytebrew/engine/internal/infrastructure/license"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/taskrunner"
@@ -36,15 +32,12 @@ type InfraComponents struct {
 	ModelName   string
 	ModelCache  *llm.ModelCache
 	AgentConfig *config.AgentConfig // effective config with defaults applied
-	LicenseInfo *domain.LicenseInfo
 }
 
 // InfraComponentsConfig holds optional parameters for NewInfraComponents.
-// LicenseInfo is nil in CE mode (no restrictions).
 type InfraComponentsConfig struct {
-	Config      config.Config
-	LicenseInfo *domain.LicenseInfo // nil = CE mode (all features enabled)
-	DB          *gorm.DB            // PostgreSQL GORM DB for runtime storage
+	Config config.Config
+	DB     *gorm.DB // PostgreSQL GORM DB for runtime storage
 }
 
 // NewInfraComponents creates all infrastructure components including WorkManager and AgentPool.
@@ -86,19 +79,7 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 		slog.Info("agent pool initialized")
 	}
 
-	// 4. License info (passed from caller; nil = CE mode)
-	licenseInfo := icc.LicenseInfo
-	if licenseInfo != nil {
-		slog.Info("license status",
-			"tier", licenseInfo.Tier,
-			"status", licenseInfo.Status,
-			"expires", licenseInfo.ExpiresAt,
-		)
-	} else {
-		slog.Info("running in CE mode (no license)")
-	}
-
-	// 5. Fill empty AgentConfig fields with defaults
+	// 4. Fill empty AgentConfig fields with defaults
 	agentConfig := applyAgentConfigDefaults(&cfg.Agent)
 
 	// 6. Create Engine and wire to AgentPool
@@ -148,10 +129,9 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 		FlowManager:       ec.FlowManager,
 		AgentToolResolver: ec.AgentToolResolver,
 		ToolDepsProvider:  ec.ToolDepsProvider,
-		ModelName:         modelName,
-		ModelCache:        modelCache,
-		AgentConfig:       agentConfig,
-		LicenseInfo:       licenseInfo,
+		ModelName:   modelName,
+		ModelCache:  modelCache,
+		AgentConfig: agentConfig,
 	}, nil
 }
 
@@ -175,28 +155,3 @@ func applyAgentConfigDefaults(agentConfig *config.AgentConfig) *config.AgentConf
 	return agentConfig
 }
 
-// ValidateLicense validates the license from config. Always returns a LicenseInfo (fallback to Blocked).
-// Called from legacy code. CE binary skips this entirely.
-func ValidateLicense(cfg config.LicenseConfig) *domain.LicenseInfo {
-	if cfg.PublicKeyHex == "" {
-		return domain.BlockedLicense()
-	}
-
-	validator, err := licenseinfra.New(cfg.PublicKeyHex)
-	if err != nil {
-		slog.Error("invalid license public key, running as Blocked", "error", err)
-		return domain.BlockedLicense()
-	}
-
-	licensePath := cfg.LicensePath
-	if licensePath == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			slog.Warn("failed to get home directory for license path", "error", err)
-			return domain.BlockedLicense()
-		}
-		licensePath = filepath.Join(home, ".bytebrew", "license.jwt")
-	}
-
-	return validator.Validate(licensePath)
-}

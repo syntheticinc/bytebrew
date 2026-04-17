@@ -181,6 +181,20 @@ func (a *schemaServiceHTTPAdapter) ListSchemaAgents(ctx context.Context, schemaI
 type agentRelationServiceHTTPAdapter struct {
 	repo      *configrepo.GORMAgentRelationRepository
 	agentRepo *configrepo.GORMAgentRepository
+	db        *gorm.DB
+}
+
+// resolveNameByID resolves an agent UUID to its name via a raw DB query.
+// Returns the UUID unchanged if the agent is not found (safe fallback).
+func (a *agentRelationServiceHTTPAdapter) resolveNameByID(ctx context.Context, id string) string {
+	if id == "" {
+		return ""
+	}
+	var name string
+	if err := a.db.WithContext(ctx).Raw("SELECT name FROM agents WHERE id = ? LIMIT 1", id).Scan(&name).Error; err != nil || name == "" {
+		return id
+	}
+	return name
 }
 
 // resolveAgentRef returns the agent UUID for a name or UUID reference.
@@ -229,11 +243,11 @@ func (a *agentRelationServiceHTTPAdapter) ListAgentRelations(ctx context.Context
 	result := make([]deliveryhttp.AgentRelationInfo, 0, len(records))
 	for _, r := range records {
 		result = append(result, deliveryhttp.AgentRelationInfo{
-			ID:              r.ID,
-			SchemaID:        r.SchemaID,
-			SourceAgentID: r.SourceAgentID,
-			TargetAgentID: r.TargetAgentID,
-			Config:          r.Config,
+			ID:            r.ID,
+			SchemaID:      r.SchemaID,
+			SourceAgentID: a.resolveNameByID(ctx, r.SourceAgentID),
+			TargetAgentID: a.resolveNameByID(ctx, r.TargetAgentID),
+			Config:        r.Config,
 		})
 	}
 	return result, nil
@@ -249,11 +263,11 @@ func (a *agentRelationServiceHTTPAdapter) GetAgentRelation(ctx context.Context, 
 	}
 
 	return &deliveryhttp.AgentRelationInfo{
-		ID:              record.ID,
-		SchemaID:        record.SchemaID,
-		SourceAgentID: record.SourceAgentID,
-		TargetAgentID: record.TargetAgentID,
-		Config:          record.Config,
+		ID:            record.ID,
+		SchemaID:      record.SchemaID,
+		SourceAgentID: a.resolveNameByID(ctx, record.SourceAgentID),
+		TargetAgentID: a.resolveNameByID(ctx, record.TargetAgentID),
+		Config:        record.Config,
 	}, nil
 }
 

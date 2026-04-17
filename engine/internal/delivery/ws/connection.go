@@ -12,8 +12,8 @@ import (
 	"github.com/gorilla/websocket"
 
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	sp "github.com/syntheticinc/bytebrew/engine/internal/service/sessionprocessor"
+	"github.com/syntheticinc/bytebrew/engine/pkg/ee"
 )
 
 // SessionRegistry provides session management for WS clients (consumer-side interface).
@@ -71,7 +71,7 @@ type ConnectionHandler struct {
 	agentCanceller   AgentCanceller      // optional, cancels running agents on user cancel
 	pairingProvider  PairingDataProvider // optional, nil when bridge not configured
 	agentLister      AgentLister         // optional, nil when agent registry not available
-	licenseInfo      *domain.LicenseInfo
+	eeExtension      ee.Extension        // optional, nil in CE mode
 }
 
 // NewConnectionHandler creates a new WebSocket connection handler.
@@ -80,7 +80,7 @@ func NewConnectionHandler(
 	processor *sp.Processor,
 	agentService AgentEnvironmentSetter,
 	agentCanceller AgentCanceller,
-	licenseInfo *domain.LicenseInfo,
+	eeExtension ee.Extension,
 ) *ConnectionHandler {
 	return &ConnectionHandler{
 		upgrader: websocket.Upgrader{
@@ -93,7 +93,7 @@ func NewConnectionHandler(
 		sessionProcessor: processor,
 		agentService:     agentService,
 		agentCanceller:   agentCanceller,
-		licenseInfo:      licenseInfo,
+		eeExtension:      eeExtension,
 	}
 }
 
@@ -239,21 +239,14 @@ func (h *ConnectionHandler) handleMessage(writer *wsWriter, msg WsMessage, state
 
 // checkLicense verifies the license status. Returns true if the request should be blocked.
 func (h *ConnectionHandler) checkLicense(writer *wsWriter, msg *WsMessage) (blocked bool) {
-	if h.licenseInfo == nil {
+	if h.eeExtension == nil {
 		return false
 	}
-
-	if h.licenseInfo.Status == domain.LicenseBlocked {
-		writer.sendError(msg.RequestID, "LICENSE_REQUIRED: valid license needed to use this service")
+	if reason := h.eeExtension.CheckSessionAllowed(); reason != "" {
+		writer.sendError(msg.RequestID, reason)
 		return true
 	}
-
 	return false
-}
-
-// isLicenseGrace returns true if the license is in grace period.
-func (h *ConnectionHandler) isLicenseGrace() bool {
-	return h.licenseInfo != nil && h.licenseInfo.Status == domain.LicenseGrace
 }
 
 func (h *ConnectionHandler) handleCreateSession(writer *wsWriter, msg *WsMessage) {
@@ -275,15 +268,10 @@ func (h *ConnectionHandler) handleCreateSession(writer *wsWriter, msg *WsMessage
 
 	slog.Info("[WS] session created", "session_id", sessionID, "project_root", projectRoot)
 
-	payload := map[string]interface{}{"session_id": sessionID}
-	if h.isLicenseGrace() {
-		payload["warning"] = "license expiring soon"
-	}
-
 	writer.send(&WsMessage{
 		Type:      "create_session_ack",
 		RequestID: msg.RequestID,
-		Payload:   payload,
+		Payload:   map[string]interface{}{"session_id": sessionID},
 	})
 }
 
@@ -313,15 +301,10 @@ func (h *ConnectionHandler) handleSendMessage(writer *wsWriter, msg *WsMessage, 
 	// Start processing (idempotent) — uses connection context so goroutine stops on disconnect
 	h.sessionProcessor.StartProcessing(state.ctx, sessionID)
 
-	payload := map[string]interface{}{"session_id": sessionID}
-	if h.isLicenseGrace() {
-		payload["warning"] = "license expiring soon"
-	}
-
 	writer.send(&WsMessage{
 		Type:      "send_message_ack",
 		RequestID: msg.RequestID,
-		Payload:   payload,
+		Payload:   map[string]interface{}{"session_id": sessionID},
 	})
 }
 

@@ -35,7 +35,6 @@ import (
 func main() {
 	scenario := flag.String("scenario", "echo", "Scenario name (echo|server-tool|reasoning|error|proxied-read|proxied-write|proxied-exec|ask-user|multi-tool|tool-error|task-create|proxied-edit|proxied-tree|proxied-search|multi-agent|agent-interrupt|agent-failure|multi-agent-read)")
 	port := flag.Int("port", 0, "Port (0 = random)")
-	licenseStatus := flag.String("license", "active", "License status (active|grace|blocked)")
 	flag.Parse()
 
 	// 1. Create mock ChatModel
@@ -166,29 +165,17 @@ func main() {
 		log.Fatalf("Failed to create flow handler: %v", err)
 	}
 
-	// 10. Build license info from CLI flag
-	licenseInfo := &domain.LicenseInfo{Status: domain.LicenseActive}
-	switch *licenseStatus {
-	case "grace":
-		licenseInfo.Status = domain.LicenseGrace
-	case "blocked":
-		licenseInfo.Status = domain.LicenseBlocked
-	}
-
-	// 11. Start gRPC server with license interceptors
+	// 10. Start gRPC server
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
 
-	grpcServer := grpc.NewServer(
-		grpc.UnaryInterceptor(deliverygrpc.LicenseUnaryInterceptor(licenseInfo)),
-		grpc.StreamInterceptor(deliverygrpc.LicenseStreamInterceptor(licenseInfo)),
-	)
+	grpcServer := grpc.NewServer()
 	pb.RegisterFlowServiceServer(grpcServer, flowHandler)
 
-	// 12. Create WS server (SAME as production!)
-	wsHandler := ws.NewConnectionHandler(sessionRegistry, sessProcessor, &testutil.NoopAgentService{}, nil, &domain.LicenseInfo{Status: domain.LicenseActive})
+	// 11. Create WS server (SAME as production!)
+	wsHandler := ws.NewConnectionHandler(sessionRegistry, sessProcessor, &testutil.NoopAgentService{}, nil, nil)
 	wsServer, err := ws.NewServer(wsHandler)
 	if err != nil {
 		log.Fatalf("Failed to create WS server: %v", err)

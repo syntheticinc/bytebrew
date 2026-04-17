@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSSEChat, type SSEMessage } from '../hooks/useSSEChat';
 import { useBottomPanel } from '../hooks/useBottomPanel';
@@ -7,6 +7,7 @@ import { api } from '../api/client';
 import type { AgentDetail, SessionSummary } from '../types';
 import HeadersEditor, { type HeaderEntry } from './HeadersEditor';
 import ContextUsageBar from './ContextUsageBar';
+import BrewingSpinner from './BrewingSpinner';
 
 // ─── Mock streaming for prototype mode ──────────────────────────────────────
 
@@ -65,6 +66,13 @@ export default function TestFlowTab() {
   const [sessionDropdownOpen, setSessionDropdownOpen] = useState(false);
   const sessionDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Local session history in localStorage (supplements API list — in-memory chat sessions aren't in DB)
+  const localSessionsKey = selectedAgent ? `bb_testflow_sessions__${selectedAgent}` : '';
+  const [localSessions, setLocalSessions] = useState<SessionSummary[]>(() => {
+    if (!selectedAgent) return [];
+    try { return JSON.parse(localStorage.getItem(`bb_testflow_sessions__${selectedAgent}`) ?? '[]'); } catch { return []; }
+  });
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const headersRef = useRef(headers);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -82,8 +90,10 @@ export default function TestFlowTab() {
     return result;
   }, []);
 
-  const testflowPersistenceKey = selectedAgent && selectedSchema
-    ? `bb_testflow_${selectedSchema}_${selectedAgent}`
+  const testflowPersistenceKey = selectedAgent
+    ? selectedSchema
+      ? `bb_testflow_${selectedSchema}_${selectedAgent}`
+      : `bb_testflow__${selectedAgent}`
     : undefined;
   const sseChat = useSSEChat({
     endpoint: selectedAgent ? `/api/v1/agents/${encodeURIComponent(selectedAgent)}/chat` : '',
@@ -163,6 +173,44 @@ export default function TestFlowTab() {
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sseChat.sessionId]);
+
+  // Reload local sessions when agent changes
+  useEffect(() => {
+    if (!selectedAgent) { setLocalSessions([]); return; }
+    try { setLocalSessions(JSON.parse(localStorage.getItem(`bb_testflow_sessions__${selectedAgent}`) ?? '[]')); }
+    catch { setLocalSessions([]); }
+  }, [selectedAgent]);
+
+  // Add newly created session to local list
+  useEffect(() => {
+    if (!sseChat.sessionId || !localSessionsKey) return;
+    setLocalSessions((prev) => {
+      if (prev.some((s) => s.session_id === sseChat.sessionId)) return prev;
+      const entry: SessionSummary = {
+        session_id: sseChat.sessionId,
+        entry_agent: selectedAgent,
+        status: 'running',
+        duration_ms: 0,
+        total_tokens: 0,
+        created_at: new Date().toISOString(),
+      };
+      const updated = [entry, ...prev].slice(0, 20);
+      try { localStorage.setItem(localSessionsKey, JSON.stringify(updated)); } catch { /* no-op */ }
+      return updated;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sseChat.sessionId]);
+
+  // Merge API sessions + local sessions (dedup by session_id, newest first)
+  const allSessions = useMemo(() => {
+    const map = new Map<string, SessionSummary>();
+    for (const s of [...sessions, ...localSessions]) {
+      if (!map.has(s.session_id)) map.set(s.session_id, s);
+    }
+    return [...map.values()].sort((a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+  }, [sessions, localSessions]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -284,12 +332,17 @@ export default function TestFlowTab() {
     if (!confirm('Delete this session?')) return;
     try {
       await api.deleteSession(sid);
-      setSessions((prev) => prev.filter((s) => s.session_id !== sid));
-      if (sseChat.sessionId === sid) {
-        sseChat.resetSession();
+    } catch { /* session may not be in DB — continue with local removal */ }
+    setSessions((prev) => prev.filter((s) => s.session_id !== sid));
+    setLocalSessions((prev) => {
+      const updated = prev.filter((s) => s.session_id !== sid);
+      if (localSessionsKey) {
+        try { localStorage.setItem(localSessionsKey, JSON.stringify(updated)); } catch { /* no-op */ }
       }
-    } catch {
-      // ignore
+      return updated;
+    });
+    if (sseChat.sessionId === sid) {
+      sseChat.resetSession();
     }
   }
 
@@ -332,8 +385,8 @@ export default function TestFlowTab() {
               ))
             )}
           </select>
-          {selectedSchema && (
-            <span className="text-[10px] text-brand-shade3/60 shrink-0">Schema: {selectedSchema}</span>
+          {(agentDetail?.used_in_schemas?.[0] || selectedSchema) && (
+            <span className="text-[10px] text-brand-shade3/60 shrink-0">Schema: {agentDetail?.used_in_schemas?.[0] ?? selectedSchema}</span>
           )}
           {messages.length > 0 && (
             <button
@@ -376,7 +429,7 @@ export default function TestFlowTab() {
                     </svg>
                     New Session
                   </button>
-                  {sessions.map((s) => (
+                  {allSessions.map((s) => (
                     <div
                       key={s.session_id}
                       onClick={() => handleSwitchSession(s.session_id)}
@@ -399,7 +452,7 @@ export default function TestFlowTab() {
                       </button>
                     </div>
                   ))}
-                  {sessions.length === 0 && (
+                  {allSessions.length === 0 && (
                     <div className="px-2 py-1.5 text-[10px] text-brand-shade3">No sessions yet</div>
                   )}
                 </div>
@@ -482,81 +535,145 @@ export default function TestFlowTab() {
                   );
                 })()}
 
-                {/* Content */}
-                {msg.content && !msg.content.startsWith('Error:') && (
-                  <div className="text-xs text-brand-light leading-relaxed whitespace-pre-wrap">
-                    {msg.content.replace(/\[thinking\][\s\S]*?\[\/thinking\]/g, '').trim()}
-                    {msg.streaming && (
-                      <span className="inline-block w-1.5 h-3 bg-brand-accent ml-0.5 animate-pulse" />
-                    )}
-                  </div>
-                )}
-
-                {/* Tool calls rendered AFTER text */}
-                {msg.toolCalls && msg.toolCalls.length > 0 && (
-                  <div className="space-y-1">
-                    {msg.toolCalls.map((tc, i) => {
-                      const key = `${msg.id}-tc-${i}`;
-                      const isExpanded = expandedItems[key] ?? false;
+                {/* Render segments in chronological order (tool_calls interleaved with text) */}
+                {msg.segments && msg.segments.length > 0 ? (
+                  msg.segments.map((seg, i) => {
+                    if (seg.type === 'text') {
+                      const text = seg.content.replace(/\[thinking\][\s\S]*?\[\/thinking\]/g, '').trim();
+                      if (!text && !msg.streaming) return null;
                       return (
-                        <button
-                          key={i}
-                          onClick={() => toggleItem(key)}
-                          className="w-full text-left px-2 py-1 bg-brand-dark border border-brand-shade3/15 rounded text-[11px] font-mono hover:border-brand-shade3/30 transition-colors"
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-blue-400">
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="inline">
-                                <circle cx="12" cy="12" r="3" />
-                                <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
-                              </svg>
-                            </span>
-                            <span className="text-blue-400 font-medium">{tc.tool}</span>
-                            {tc.output !== undefined && (
-                              <span className="text-emerald-400/60 ml-1">done</span>
-                            )}
-                            <svg
-                              width="8" height="8" viewBox="0 0 24 24" fill="currentColor"
-                              className={`text-brand-shade3 transition-transform ml-auto ${isExpanded ? 'rotate-90' : ''}`}
-                            >
-                              <path d="M8 5l10 7-10 7V5z" />
-                            </svg>
-                          </div>
-                          {isExpanded && (
-                            <div className="mt-1 space-y-1 text-[10px]">
-                              {tc.input && (
-                                <div className="text-brand-shade3 whitespace-pre-wrap break-all">
-                                  <span className="text-brand-shade3/60">Input: </span>{tc.input}
-                                </div>
-                              )}
-                              {tc.output !== undefined && (
-                                <div className="text-emerald-400/80 whitespace-pre-wrap break-all">
-                                  <span className="text-emerald-400/50">Output: </span>{tc.output}
-                                </div>
-                              )}
-                            </div>
+                        <div key={i} className="text-xs text-brand-light leading-relaxed whitespace-pre-wrap">
+                          {text}
+                          {msg.streaming && i === msg.segments!.length - 1 && (
+                            <span className="inline-block w-1.5 h-3 bg-brand-accent ml-0.5 animate-pulse" />
                           )}
-                        </button>
+                        </div>
                       );
-                    })}
-                  </div>
+                    }
+                    const tc = seg.toolCall;
+                    const key = `${msg.id}-tc-${i}`;
+                    const isExpanded = expandedItems[key] ?? false;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => toggleItem(key)}
+                        className="w-full text-left px-2 py-1 bg-brand-dark border border-brand-shade3/15 rounded text-[11px] font-mono hover:border-brand-shade3/30 transition-colors"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-blue-400">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="inline">
+                              <circle cx="12" cy="12" r="3" />
+                              <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+                            </svg>
+                          </span>
+                          <span className="text-blue-400 font-medium">{tc.tool}</span>
+                          {tc.output !== undefined && (
+                            <span className="text-emerald-400/60 ml-1">done</span>
+                          )}
+                          <svg
+                            width="8" height="8" viewBox="0 0 24 24" fill="currentColor"
+                            className={`text-brand-shade3 transition-transform ml-auto ${isExpanded ? 'rotate-90' : ''}`}
+                          >
+                            <path d="M8 5l10 7-10 7V5z" />
+                          </svg>
+                        </div>
+                        {isExpanded && (
+                          <div className="mt-1 space-y-1 text-[10px]">
+                            {tc.input && (
+                              <div className="text-brand-shade3 whitespace-pre-wrap break-all">
+                                <span className="text-brand-shade3/60">Input: </span>{tc.input}
+                              </div>
+                            )}
+                            {tc.output !== undefined && (
+                              <div className="text-emerald-400/80 whitespace-pre-wrap break-all">
+                                <span className="text-emerald-400/50">Output: </span>{tc.output}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })
+                ) : (
+                  <>
+                    {/* Fallback for history messages without segments */}
+                    {msg.content && !msg.content.startsWith('Error:') && (
+                      <div className="text-xs text-brand-light leading-relaxed whitespace-pre-wrap">
+                        {msg.content.replace(/\[thinking\][\s\S]*?\[\/thinking\]/g, '').trim()}
+                        {msg.streaming && (
+                          <span className="inline-block w-1.5 h-3 bg-brand-accent ml-0.5 animate-pulse" />
+                        )}
+                      </div>
+                    )}
+                    {msg.toolCalls && msg.toolCalls.length > 0 && (
+                      <div className="space-y-1">
+                        {msg.toolCalls.map((tc, i) => {
+                          const key = `${msg.id}-tc-${i}`;
+                          const isExpanded = expandedItems[key] ?? false;
+                          return (
+                            <button
+                              key={i}
+                              onClick={() => toggleItem(key)}
+                              className="w-full text-left px-2 py-1 bg-brand-dark border border-brand-shade3/15 rounded text-[11px] font-mono hover:border-brand-shade3/30 transition-colors"
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-blue-400">
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="inline">
+                                    <circle cx="12" cy="12" r="3" />
+                                    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+                                  </svg>
+                                </span>
+                                <span className="text-blue-400 font-medium">{tc.tool}</span>
+                                {tc.output !== undefined && (
+                                  <span className="text-emerald-400/60 ml-1">done</span>
+                                )}
+                                <svg
+                                  width="8" height="8" viewBox="0 0 24 24" fill="currentColor"
+                                  className={`text-brand-shade3 transition-transform ml-auto ${isExpanded ? 'rotate-90' : ''}`}
+                                >
+                                  <path d="M8 5l10 7-10 7V5z" />
+                                </svg>
+                              </div>
+                              {isExpanded && (
+                                <div className="mt-1 space-y-1 text-[10px]">
+                                  {tc.input && (
+                                    <div className="text-brand-shade3 whitespace-pre-wrap break-all">
+                                      <span className="text-brand-shade3/60">Input: </span>{tc.input}
+                                    </div>
+                                  )}
+                                  {tc.output !== undefined && (
+                                    <div className="text-emerald-400/80 whitespace-pre-wrap break-all">
+                                      <span className="text-emerald-400/50">Output: </span>{tc.output}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
                 )}
 
-                {/* Waiting indicator */}
-                {msg.streaming && !msg.content && (!msg.toolCalls || msg.toolCalls.length === 0) && (
-                  <span className="text-brand-shade3/50 text-[11px]">Waiting for response...</span>
-                )}
               </div>
             )}
           </div>
         ))}
 
-        {/* Streaming indicator */}
-        {isStreaming && (
-          <div className="flex justify-end">
-            <span className="text-[10px] text-brand-accent animate-pulse">streaming...</span>
-          </div>
-        )}
+        {/* Brewing spinner — mirrors AI Assistant logic */}
+        {isStreaming && (() => {
+          const lastMsg = messages[messages.length - 1];
+          if (!lastMsg || lastMsg.role !== 'assistant') return null;
+          if (lastMsg.content === '' || (lastMsg.toolCalls && lastMsg.toolCalls.length > 0 && lastMsg.streaming)) {
+            return (
+              <div className="flex justify-start">
+                <BrewingSpinner />
+              </div>
+            );
+          }
+          return null;
+        })()}
 
         <div ref={messagesEndRef} />
       </div>

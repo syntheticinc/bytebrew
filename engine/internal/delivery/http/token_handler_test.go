@@ -26,7 +26,7 @@ func newMockTokenRepository() *mockTokenRepository {
 	return &mockTokenRepository{nextID: 1}
 }
 
-func (m *mockTokenRepository) Create(_ context.Context, name, tokenHash string, scopesMask int) (string, error) {
+func (m *mockTokenRepository) Create(_ context.Context, _, name, tokenHash string, scopesMask int) (string, error) {
 	if m.createErr != nil {
 		return "", m.createErr
 	}

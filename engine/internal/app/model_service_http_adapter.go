@@ -151,15 +151,28 @@ func (m *modelServiceHTTPAdapter) DeleteModel(ctx context.Context, name string) 
 	}
 
 	for _, p := range providers {
-		if p.Name == name {
-			if err := m.repo.Delete(ctx, p.ID); err != nil {
-				return err
-			}
-			if m.modelCache != nil {
-				m.modelCache.Invalidate(p.ID)
-			}
-			return nil
+		if p.Name != name {
+			continue
 		}
+
+		users, err := m.repo.AgentsUsingModel(ctx, p.ID)
+		if err != nil {
+			return fmt.Errorf("check agents using model: %w", err)
+		}
+		if len(users) > 0 {
+			return pkgerrors.InvalidInput(fmt.Sprintf(
+				"cannot delete model %q: it is used by %d agent(s): %s",
+				name, len(users), strings.Join(users, ", "),
+			))
+		}
+
+		if err := m.repo.Delete(ctx, p.ID); err != nil {
+			return err
+		}
+		if m.modelCache != nil {
+			m.modelCache.Invalidate(p.ID)
+		}
+		return nil
 	}
 	return pkgerrors.NotFound(fmt.Sprintf("model not found: %s", name))
 }
