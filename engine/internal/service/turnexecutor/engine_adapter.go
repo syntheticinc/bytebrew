@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
@@ -51,30 +50,6 @@ type ContextReminderProvider interface {
 	GetContextReminder(ctx context.Context, sessionID string) (string, int, bool)
 }
 
-// GuardrailChecker evaluates agent output against guardrail rules (consumer-side interface).
-type GuardrailChecker interface {
-	Evaluate(ctx context.Context, config *GuardrailCheckConfig, output string) (*GuardrailCheckResult, error)
-}
-
-// GuardrailCheckConfig holds guardrail configuration for a check.
-type GuardrailCheckConfig struct {
-	Mode         string
-	OnFailure    string
-	MaxRetries   int
-	FallbackText string
-	JSONSchema   string
-	JudgePrompt  string
-	JudgeModel   string
-	WebhookURL   string
-	Strict       bool // when true, overrides OnFailure to "error" (block output)
-}
-
-// GuardrailCheckResult holds the result of a guardrail check.
-type GuardrailCheckResult struct {
-	Passed bool
-	Reason string
-}
-
 // EngineAdapter adapts Engine to TurnExecutor interface (orchestrator.TurnExecutor)
 // It bridges the Orchestrator event loop with the new Engine.
 //
@@ -97,9 +72,6 @@ type EngineAdapter struct {
 	toolCallRecorder ToolCallRecorder
 	// Schema scope for memory tools (empty = no explicit schema context)
 	schemaID string
-	// US-003: Guardrail pipeline
-	guardrail       GuardrailChecker
-	guardrailConfig *GuardrailCheckConfig
 }
 
 // Config holds configuration for EngineAdapter
@@ -117,9 +89,6 @@ type Config struct {
 	ToolCallRecorder ToolCallRecorder
 	// Schema scope (empty = no explicit schema context)
 	SchemaID string
-	// US-003: Guardrail pipeline (nil = no guardrails)
-	Guardrail       GuardrailChecker
-	GuardrailConfig *GuardrailCheckConfig
 }
 
 // NewEngineAdapter creates a new EngineAdapter
@@ -153,8 +122,6 @@ func NewEngineAdapter(cfg Config) (*EngineAdapter, error) {
 		contextReminders: cfg.ContextReminders,
 		toolCallRecorder: cfg.ToolCallRecorder,
 		schemaID:         cfg.SchemaID,
-		guardrail:        cfg.Guardrail,
-		guardrailConfig:  cfg.GuardrailConfig,
 	}, nil
 }
 
@@ -206,18 +173,6 @@ func (e *EngineAdapter) ExecuteTurn(
 	if flow.MaxContextSize > 0 {
 		compressor = engine.MessageCompressor(agents.NewContextRewriter(flow.MaxContextSize))
 	}
-	// US-003: When guardrail is configured, intercept answer events from the stream
-	// to collect the full answer text for post-execution validation.
-	var collectedAnswer strings.Builder
-	wrappedEventCallback := eventCallback
-	if e.guardrail != nil && e.guardrailConfig != nil && eventCallback != nil {
-		wrappedEventCallback = func(event *domain.AgentEvent) error {
-			if event.Type == domain.EventTypeAnswer && !event.IsComplete {
-				collectedAnswer.WriteString(event.Content)
-			}
-			return eventCallback(event)
-		}
-	}
 
 	// Wrap ChatModel with per-agent model parameters (temperature, top_p, etc.)
 	chatModel := llm.WrapWithModelParams(e.chatModel, llm.ModelParams{
@@ -236,7 +191,7 @@ func (e *EngineAdapter) ExecuteTurn(
 		ChatModel:         chatModel,
 		Streaming:         true,
 		ChunkCallback:     chunkCallback,
-		EventCallback:     wrappedEventCallback,
+		EventCallback:     eventCallback,
 		ContextReminders:  engineReminders,
 		ToolCallRecorder:  convertToolCallRecorderToEngine(e.toolCallRecorder),
 		ModelName:         e.modelName,
@@ -255,33 +210,6 @@ func (e *EngineAdapter) ExecuteTurn(
 		"status", result.Status,
 		"suspended_at", result.SuspendedAt)
 
-	// Use result.Answer for non-streaming, collected answer for streaming.
-	answer := result.Answer
-	if answer == "" {
-		answer = collectedAnswer.String()
-	}
-
-	// US-003: Guardrail check on agent output before sending to user
-	if e.guardrail != nil && e.guardrailConfig != nil && answer != "" {
-		checkResult, grErr := e.guardrail.Evaluate(ctx, e.guardrailConfig, answer)
-		if grErr != nil {
-			slog.ErrorContext(ctx, "[EngineAdapter] guardrail evaluation failed",
-				"agent", e.agentName, "error", grErr)
-			// On guardrail error with fallback configured, use fallback text
-			if e.guardrailConfig.OnFailure == "fallback" && e.guardrailConfig.FallbackText != "" {
-				answer = e.guardrailConfig.FallbackText
-			} else {
-				return fmt.Errorf("guardrail check failed: %w", grErr)
-			}
-		} else if !checkResult.Passed {
-			slog.WarnContext(ctx, "[EngineAdapter] guardrail check failed",
-				"agent", e.agentName, "reason", checkResult.Reason)
-			if e.guardrailConfig.OnFailure == "fallback" && e.guardrailConfig.FallbackText != "" {
-				answer = e.guardrailConfig.FallbackText
-			}
-		}
-	}
-
 	// 8. Send final completion signal so the client knows the turn is done.
 	// agent.Stream() only emits IsComplete=false; we must emit IsComplete=true
 	// after the engine finishes so the gRPC layer sends IsFinal=true to the client.
@@ -289,7 +217,7 @@ func (e *EngineAdapter) ExecuteTurn(
 		eventCallback(&domain.AgentEvent{
 			Type:       domain.EventTypeAnswer,
 			Timestamp:  time.Now(),
-			Content:    answer,
+			Content:    result.Answer,
 			IsComplete: true,
 			AgentID:    e.agentName,
 		})
@@ -352,4 +280,3 @@ func convertToolCallRecorderToEngine(recorder ToolCallRecorder) react.ToolCallRe
 	}
 	return &toolCallRecorderEngineAdapter{recorder: recorder}
 }
-

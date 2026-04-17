@@ -100,6 +100,22 @@ func TestHeartbeatMonitor_MultipleAgents(t *testing.T) {
 	assert.Equal(t, "agent-2", stuck[0])
 }
 
+func TestHeartbeatMonitor_StuckSnapshots(t *testing.T) {
+	monitor := NewHeartbeatMonitor(HeartbeatConfig{Interval: 20 * time.Millisecond}, nil)
+	monitor.Register("fresh", AgentTypeSpawn)
+	monitor.Register("old", AgentTypePersistent)
+
+	// Fresh agent stays fresh; old crosses the 2× interval threshold.
+	time.Sleep(50 * time.Millisecond)
+	monitor.RecordHeartbeat(HeartbeatEvent{AgentID: "fresh", Timestamp: time.Now()})
+
+	stuck := monitor.StuckSnapshots()
+	assert.Len(t, stuck, 1, "only the silent agent should be reported as stuck")
+	assert.Equal(t, "old", stuck[0].AgentID)
+	assert.Equal(t, "stuck", stuck[0].Status)
+	assert.Greater(t, stuck[0].ElapsedMs, int64(40), "elapsed_ms should reflect real time")
+}
+
 func TestHeartbeatMonitor_Snapshots(t *testing.T) {
 	cfg := HeartbeatConfig{Interval: 1 * time.Second}
 	monitor := NewHeartbeatMonitor(cfg, nil)

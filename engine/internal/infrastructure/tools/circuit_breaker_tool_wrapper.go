@@ -35,9 +35,15 @@ func (w *CircuitBreakerToolWrapper) Info(ctx context.Context) (*schema.ToolInfo,
 }
 
 func (w *CircuitBreakerToolWrapper) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
-	// Check circuit breaker before calling
+	// Check circuit breaker before calling.
+	//
+	// Return a Go error so Eino's tool framework fires OnToolError (not
+	// OnToolEnd). This lets the session_event_log record `tool_has_error=true`
+	// for CB-open rejections, which is what the Tool Call Log UI filters on
+	// (status=failed). Returning nil would misleadingly mark the call as
+	// completed in the observability view.
 	if err := w.breaker.AllowRequest(); err != nil {
-		return fmt.Sprintf("[UNAVAILABLE] %s", err.Error()), nil
+		return "", fmt.Errorf("[UNAVAILABLE] %s", err.Error())
 	}
 
 	// Execute tool

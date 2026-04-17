@@ -198,3 +198,43 @@ func (m *HeartbeatMonitor) Snapshots() []HeartbeatSnapshot {
 	}
 	return result
 }
+
+// StuckSnapshot is a point-in-time view of an agent believed to be stuck.
+// Returned by StuckSnapshots — the caller gets elapsed time already computed
+// so the UI does not need to know the stuck threshold.
+type StuckSnapshot struct {
+	AgentID       string    `json:"agent_id"`
+	AgentType     AgentType `json:"agent_type"`
+	LastHeartbeat time.Time `json:"last_heartbeat"`
+	ElapsedMs     int64     `json:"elapsed_ms"`
+	Status        string    `json:"status"`
+	CurrentStep   string    `json:"current_step,omitempty"`
+}
+
+// StuckSnapshots returns snapshots of agents whose last heartbeat is older
+// than the stuck threshold (2× Interval). An agent is reported at most
+// once per call. Unlike CheckStuck, this is a pure read — it does not
+// invoke the stuck callback.
+func (m *HeartbeatMonitor) StuckSnapshots() []StuckSnapshot {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	stuckTimeout := 2 * m.config.Interval
+	now := time.Now()
+	out := make([]StuckSnapshot, 0)
+	for agentID, entry := range m.agents {
+		elapsed := now.Sub(entry.lastHeartbeat)
+		if elapsed <= stuckTimeout {
+			continue
+		}
+		out = append(out, StuckSnapshot{
+			AgentID:       agentID,
+			AgentType:     entry.agentType,
+			LastHeartbeat: entry.lastHeartbeat,
+			ElapsedMs:     elapsed.Milliseconds(),
+			Status:        "stuck",
+			CurrentStep:   entry.currentStep,
+		})
+	}
+	return out
+}

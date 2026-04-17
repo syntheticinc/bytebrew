@@ -103,7 +103,7 @@ func (h *ToolCallLogHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	entries, total, err := h.querier.QueryToolCalls(r.Context(), filters, page, perPage)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 

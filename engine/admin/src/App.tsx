@@ -10,6 +10,8 @@ import SettingsPage from './pages/SettingsPage';
 import APIKeysPage from './pages/APIKeysPage';
 import ConfigPage from './pages/ConfigPage';
 import AuditPage from './pages/AuditPage';
+import ResiliencePage from './pages/ResiliencePage';
+import ToolCallLogPage from './pages/ToolCallLogPage';
 import AgentBuilderPage from './pages/AgentBuilderPage';
 import AgentDrillInPage from './pages/AgentDrillInPage';
 import AgentsPage from './pages/AgentsPage';
@@ -52,6 +54,8 @@ export default function App() {
             <Route path="/api-keys" element={<APIKeysPage />} />
             <Route path="/config" element={<ConfigPage />} />
             <Route path="/audit" element={<AuditPage />} />
+            <Route path="/resilience" element={<ResiliencePage />} />
+            <Route path="/tool-call-log" element={<ToolCallLogPage />} />
             <Route path="/knowledge" element={<KnowledgePage />} />
             <Route path="/triggers" element={<TriggersPage />} />
             <Route path="/widget" element={<WidgetConfigPage />} />

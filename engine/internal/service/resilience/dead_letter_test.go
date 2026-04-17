@@ -103,3 +103,31 @@ func TestDeadLetterQueue_Remove(t *testing.T) {
 	q.Remove("task-1")
 	assert.Equal(t, 0, q.RunningCount())
 }
+
+func TestDeadLetterQueue_TimeoutAnnotatesReasonAndMovedAt(t *testing.T) {
+	q := NewDeadLetterQueue(DeadLetterConfig{TaskTimeout: 20 * time.Millisecond}, nil)
+	q.TrackWithName("task-1", "agent-1", "Support Agent")
+
+	time.Sleep(30 * time.Millisecond)
+	q.CheckTimeouts()
+
+	dead := q.DeadLetters()
+	require.Len(t, dead, 1)
+	assert.Equal(t, "task_timeout", dead[0].Reason)
+	assert.Equal(t, "Support Agent", dead[0].AgentName)
+	assert.False(t, dead[0].MovedAt.IsZero(), "MovedAt should be set after timeout")
+}
+
+func TestDeadLetterQueue_RecordError(t *testing.T) {
+	q := NewDeadLetterQueue(DeadLetterConfig{TaskTimeout: 10 * time.Millisecond}, nil)
+	q.Track("task-1", "agent-1")
+	q.RecordError("task-1", "context deadline exceeded")
+
+	time.Sleep(20 * time.Millisecond)
+	q.CheckTimeouts()
+
+	dead := q.DeadLetters()
+	require.Len(t, dead, 1)
+	assert.Equal(t, "context deadline exceeded", dead[0].LastError)
+}
+

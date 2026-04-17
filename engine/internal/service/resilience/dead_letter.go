@@ -32,9 +32,15 @@ const (
 type TrackedTask struct {
 	TaskID    string
 	AgentID   string
+	AgentName string
 	StartedAt time.Time
 	Status    TaskStatus
 	Timeout   time.Duration
+
+	// Populated when the task is moved to dead-letter (Status == TaskStatusTimeout).
+	Reason    string    // human-readable reason, e.g. "task_timeout"
+	MovedAt   time.Time // when the task was moved to dead-letter
+	LastError string    // last error message observed (optional)
 }
 
 // TimeoutCallback is called when a task times out (AC-RESIL-07).
@@ -61,12 +67,19 @@ func NewDeadLetterQueue(config DeadLetterConfig, callback TimeoutCallback) *Dead
 
 // Track begins tracking a task for timeout.
 func (q *DeadLetterQueue) Track(taskID, agentID string) {
+	q.TrackWithName(taskID, agentID, "")
+}
+
+// TrackWithName begins tracking a task and records a human-readable agent name.
+// Callers that know the agent's display name should prefer this over Track.
+func (q *DeadLetterQueue) TrackWithName(taskID, agentID, agentName string) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	q.tasks[taskID] = &TrackedTask{
 		TaskID:    taskID,
 		AgentID:   agentID,
+		AgentName: agentName,
 		StartedAt: time.Now(),
 		Status:    TaskStatusRunning,
 		Timeout:   q.config.TaskTimeout,
@@ -84,6 +97,17 @@ func (q *DeadLetterQueue) TrackWithTimeout(taskID, agentID string, timeout time.
 		StartedAt: time.Now(),
 		Status:    TaskStatusRunning,
 		Timeout:   timeout,
+	}
+}
+
+// RecordError stores a last-error message for a tracked task so the dead
+// letter UI can surface why a task timed out or failed.
+func (q *DeadLetterQueue) RecordError(taskID, message string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	if task, ok := q.tasks[taskID]; ok {
+		task.LastError = message
 	}
 }
 
@@ -123,6 +147,10 @@ func (q *DeadLetterQueue) CheckTimeouts() []TrackedTask {
 		elapsed := now.Sub(task.StartedAt)
 		if elapsed > task.Timeout {
 			task.Status = TaskStatusTimeout
+			task.MovedAt = now
+			if task.Reason == "" {
+				task.Reason = "task_timeout"
+			}
 			timedOut = append(timedOut, *task)
 
 			slog.Warn("[DeadLetter] task timeout",

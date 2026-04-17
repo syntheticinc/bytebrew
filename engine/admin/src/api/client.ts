@@ -22,6 +22,7 @@ import type {
   LoginResponse,
   ToolMetadata,
   AuditEntry,
+  ToolCallEntry,
   PaginatedResponse,
   ModelRegistryEntry,
   RegistryProviderInfo,
@@ -43,6 +44,8 @@ import type {
   KnowledgeFile,
   KnowledgeStatus,
   CircuitBreakerState,
+  DeadLetterEntry,
+  StuckAgentEntry,
   MessageResponse,
   EventResponse,
 } from '../types';
@@ -360,6 +363,18 @@ class APIClient {
     if (this.isPrototype) return this.mock(MOCK_AUDIT_LOGS);
     const qs = Object.keys(params).length ? '?' + new URLSearchParams(params).toString() : '';
     return this.request<PaginatedResponse<AuditEntry>>('GET', `/audit${qs}`);
+  }
+
+  // ---- Tool Call Log (per-call observability — OSS Phase 4) ----
+  // Filters: session_id, agent, tool, status (completed|failed), user_id,
+  // from, to (RFC3339 or YYYY-MM-DD), page, per_page.
+  listToolCalls(params: Record<string, string> = {}) {
+    if (this.isPrototype) {
+      // No mock data yet — prototype mode shows empty state.
+      return this.mock({ data: [], total: 0, page: 1, per_page: 50, total_pages: 0 });
+    }
+    const qs = Object.keys(params).length ? '?' + new URLSearchParams(params).toString() : '';
+    return this.request<PaginatedResponse<ToolCallEntry>>('GET', `/audit/tool-calls${qs}`);
   }
 
   // ---- Model Registry ----
@@ -891,15 +906,29 @@ class APIClient {
     return this.request<void>('POST', `/knowledge-bases/${encodeURIComponent(kbId)}/files/${encodeURIComponent(fileId)}/reindex`);
   }
 
-  // ─── Circuit Breakers ────────────────────────────────────────────────────────
+  // ─── Resilience ──────────────────────────────────────────────────────────────
 
   async listCircuitBreakers(): Promise<CircuitBreakerState[]> {
     if (this.isPrototype) return [];
-    const res = await fetch(`${BASE_URL}/admin/resilience/circuit-breakers`, {
-      headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
-    });
-    if (!res.ok) return [];
-    return res.json();
+    const data = await this.request<{ breakers: CircuitBreakerState[] }>('GET', '/resilience/circuit-breakers');
+    return data.breakers ?? [];
+  }
+
+  async resetCircuitBreaker(name: string): Promise<void> {
+    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    await this.request<void>('POST', `/resilience/circuit-breakers/${encodeURIComponent(name)}/reset`);
+  }
+
+  async listDeadLetterTasks(): Promise<DeadLetterEntry[]> {
+    if (this.isPrototype) return [];
+    const data = await this.request<{ tasks: DeadLetterEntry[] }>('GET', '/resilience/dead-letter');
+    return data.tasks ?? [];
+  }
+
+  async listStuckAgents(): Promise<StuckAgentEntry[]> {
+    if (this.isPrototype) return [];
+    const data = await this.request<{ agents: StuckAgentEntry[] }>('GET', '/resilience/stuck-agents');
+    return data.agents ?? [];
   }
 
   // ─── Builder Assistant ───────────────────────────────────────────────────────

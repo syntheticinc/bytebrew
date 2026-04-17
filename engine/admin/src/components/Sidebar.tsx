@@ -89,6 +89,17 @@ const icons = {
       <polyline points="10 9 9 9 8 9" />
     </svg>
   ),
+  resilience: (
+    <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  ),
+  toolCallLog: (
+    <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="4 17 10 11 4 5" />
+      <line x1="12" y1="19" x2="20" y2="19" />
+    </svg>
+  ),
   builder: (
     <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="5" cy="6" r="2" />
@@ -175,6 +186,13 @@ const sections: NavSection[] = [
       { to: '/settings', label: 'Settings', icon: icons.settings },
       { to: '/config', label: 'Config', icon: icons.config },
       { to: '/audit', label: 'Audit Log', icon: icons.audit },
+    ],
+  },
+  {
+    label: 'Observability',
+    items: [
+      { to: '/resilience', label: 'Resilience', icon: icons.resilience },
+      { to: '/tool-call-log', label: 'Tool Call Log', icon: icons.toolCallLog },
     ],
   },
 ];
