@@ -628,16 +628,17 @@ func helperCollectorWithMessages(sessionID, agentID string, messages []*schema.M
 	return mc
 }
 
-// TestSaveSnapshot_IncludesUserMessage verifies that saveSnapshot() includes
-// the user message from cfg.Input in the saved context data.
+// TestSaveSnapshot_IncludesUserMessage verifies that the user message captured
+// via CollectUserMessage ends up in the saved context data.
 func TestSaveSnapshot_IncludesUserMessage(t *testing.T) {
 	ctx := context.Background()
 	snapshotRepo := newMockSnapshotRepo()
 	historyRepo := newMockHistoryRepo()
 	eng := New(snapshotRepo, historyRepo)
 
-	// Collector has one assistant answer message
+	// Collector simulates production flow: CollectUserMessage ran, then the answer came in.
 	collectorMessages := []*schema.Message{
+		{Role: schema.User, Content: "What is the meaning of life?"},
 		{Role: schema.Assistant, Content: "Here is the answer"},
 	}
 	collector := helperCollectorWithMessages("session-1", "supervisor", collectorMessages)
@@ -686,8 +687,10 @@ func TestSaveSnapshot_PreservesUserMessageOrder(t *testing.T) {
 		{Role: schema.Assistant, Content: "Previous answer"},
 	}
 
-	// New messages from this execution (collector captures tool_call, tool_result, answer)
+	// New messages from this execution: CollectUserMessage adds the user turn, then
+	// the collector captures tool_call, tool_result, answer.
 	collectorMessages := []*schema.Message{
+		{Role: schema.User, Content: "New user question"},
 		{
 			Role:    schema.Assistant,
 			Content: "Let me check",

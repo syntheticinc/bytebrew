@@ -301,17 +301,7 @@ func (e *Engine) saveSnapshot(
 	historyMessages []*schema.Message,
 	status ExecutionStatus,
 ) error {
-	// Merge history + current user message + new messages from this execution.
-	// The user message must be persisted so the next turn sees it in history —
-	// MessageCollector only captures agent events (tool_call, tool_result, answer),
-	// not the user input.
 	allMessages := historyMessages
-	if cfg.Input != "" {
-		allMessages = append(allMessages, &schema.Message{
-			Role:    schema.User,
-			Content: cfg.Input,
-		})
-	}
 	newMessages := collector.GetAccumulatedMessages()
 	if len(newMessages) > 0 {
 		allMessages = append(allMessages, newMessages...)
