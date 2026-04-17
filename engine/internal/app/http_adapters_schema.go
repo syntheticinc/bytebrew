@@ -87,8 +87,9 @@ func (a *schemaServiceHTTPAdapter) GetSchema(ctx context.Context, id string) (*d
 
 func (a *schemaServiceHTTPAdapter) CreateSchema(ctx context.Context, req deliveryhttp.CreateSchemaRequest) (*deliveryhttp.SchemaInfo, error) {
 	record := &configrepo.SchemaRecord{
-		Name:        req.Name,
-		Description: req.Description,
+		Name:         req.Name,
+		Description:  req.Description,
+		EntryAgentID: req.EntryAgentID,
 	}
 	if err := a.repo.Create(ctx, record); err != nil {
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "UNIQUE constraint") {
@@ -106,16 +107,40 @@ func (a *schemaServiceHTTPAdapter) CreateSchema(ctx context.Context, req deliver
 }
 
 func (a *schemaServiceHTTPAdapter) UpdateSchema(ctx context.Context, id string, req deliveryhttp.UpdateSchemaRequest) error {
-	record := &configrepo.SchemaRecord{
-		Name:        req.Name,
-		Description: req.Description,
+	existing, err := a.repo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return pkgerrors.NotFound(fmt.Sprintf("schema not found: %s", id))
+		}
+		return fmt.Errorf("load schema for update: %w", err)
 	}
+
+	record := &configrepo.SchemaRecord{
+		Name:         existing.Name,
+		Description:  existing.Description,
+		EntryAgentID: existing.EntryAgentID,
+	}
+	if req.Name != nil {
+		record.Name = *req.Name
+	}
+	if req.Description != nil {
+		record.Description = *req.Description
+	}
+	if req.EntryAgentID != nil {
+		if *req.EntryAgentID == "" {
+			record.EntryAgentID = nil
+		} else {
+			v := *req.EntryAgentID
+			record.EntryAgentID = &v
+		}
+	}
+
 	if err := a.repo.Update(ctx, id, record); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return pkgerrors.NotFound(fmt.Sprintf("schema not found: %s", id))
 		}
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "UNIQUE constraint") {
-			return pkgerrors.AlreadyExists(fmt.Sprintf("schema with name %q already exists", req.Name))
+			return pkgerrors.AlreadyExists(fmt.Sprintf("schema with name %q already exists", record.Name))
 		}
 		return fmt.Errorf("update schema: %w", err)
 	}
@@ -148,8 +173,49 @@ func (a *schemaServiceHTTPAdapter) ListSchemaAgents(ctx context.Context, schemaI
 
 // agentRelationServiceHTTPAdapter bridges GORMAgentRelationRepository to the
 // http.AgentRelationService interface.
+//
+// agentRepo is used to resolve agent names to UUIDs — the API accepts either
+// form in source/target fields so admin UI can work directly with agent names.
 type agentRelationServiceHTTPAdapter struct {
-	repo *configrepo.GORMAgentRelationRepository
+	repo      *configrepo.GORMAgentRelationRepository
+	agentRepo *configrepo.GORMAgentRepository
+}
+
+// resolveAgentRef returns the agent UUID for a name or UUID reference.
+// UUIDs pass through verbatim. Names are looked up via agentRepo.
+// Returns InvalidInput error for unknown names so the caller can surface 400.
+func (a *agentRelationServiceHTTPAdapter) resolveAgentRef(ctx context.Context, ref string) (string, error) {
+	if ref == "" {
+		return "", pkgerrors.InvalidInput("agent reference is empty")
+	}
+	if isUUID(ref) {
+		return ref, nil
+	}
+	rec, err := a.agentRepo.GetByName(ctx, ref)
+	if err != nil || rec == nil {
+		return "", pkgerrors.InvalidInput(fmt.Sprintf("agent not found: %s", ref))
+	}
+	return rec.ID, nil
+}
+
+// isUUID returns true for canonical 8-4-4-4-12 hex strings.
+func isUUID(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+	for i, c := range s {
+		switch i {
+		case 8, 13, 18, 23:
+			if c != '-' {
+				return false
+			}
+		default:
+			if !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F') {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (a *agentRelationServiceHTTPAdapter) ListAgentRelations(ctx context.Context, schemaID string) ([]deliveryhttp.AgentRelationInfo, error) {
@@ -190,30 +256,54 @@ func (a *agentRelationServiceHTTPAdapter) GetAgentRelation(ctx context.Context, 
 }
 
 func (a *agentRelationServiceHTTPAdapter) CreateAgentRelation(ctx context.Context, schemaID string, req deliveryhttp.CreateAgentRelationRequest) (*deliveryhttp.AgentRelationInfo, error) {
+	sourceID, err := a.resolveAgentRef(ctx, req.Source)
+	if err != nil {
+		return nil, err
+	}
+	targetID, err := a.resolveAgentRef(ctx, req.Target)
+	if err != nil {
+		return nil, err
+	}
+	if sourceID == targetID {
+		return nil, pkgerrors.InvalidInput("source and target must be different agents")
+	}
+
 	record := &configrepo.AgentRelationRecord{
-		SchemaID:        schemaID,
-		SourceAgentID: req.Source,
-		TargetAgentID: req.Target,
-		Config:          req.Config,
+		SchemaID:      schemaID,
+		SourceAgentID: sourceID,
+		TargetAgentID: targetID,
+		Config:        req.Config,
 	}
 	if err := a.repo.Create(ctx, record); err != nil {
 		return nil, fmt.Errorf("create agent relation: %w", err)
 	}
 
 	return &deliveryhttp.AgentRelationInfo{
-		ID:              record.ID,
-		SchemaID:        record.SchemaID,
+		ID:            record.ID,
+		SchemaID:      record.SchemaID,
 		SourceAgentID: record.SourceAgentID,
 		TargetAgentID: record.TargetAgentID,
-		Config:          record.Config,
+		Config:        record.Config,
 	}, nil
 }
 
 func (a *agentRelationServiceHTTPAdapter) UpdateAgentRelation(ctx context.Context, id string, req deliveryhttp.CreateAgentRelationRequest) error {
+	sourceID, err := a.resolveAgentRef(ctx, req.Source)
+	if err != nil {
+		return err
+	}
+	targetID, err := a.resolveAgentRef(ctx, req.Target)
+	if err != nil {
+		return err
+	}
+	if sourceID == targetID {
+		return pkgerrors.InvalidInput("source and target must be different agents")
+	}
+
 	record := &configrepo.AgentRelationRecord{
-		SourceAgentID: req.Source,
-		TargetAgentID: req.Target,
-		Config:          req.Config,
+		SourceAgentID: sourceID,
+		TargetAgentID: targetID,
+		Config:        req.Config,
 	}
 	if err := a.repo.Update(ctx, id, record); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

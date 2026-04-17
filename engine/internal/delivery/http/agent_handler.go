@@ -136,7 +136,7 @@ func (h *AgentHandler) Routes() http.Handler {
 func (h *AgentHandler) List(w http.ResponseWriter, r *http.Request) {
 	agents, err := h.lister.ListAgents(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 
@@ -153,7 +153,7 @@ func (h *AgentHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	agent, err := h.lister.GetAgent(r.Context(), name)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	if agent == nil {

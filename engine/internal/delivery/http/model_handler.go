@@ -78,7 +78,7 @@ func (h *ModelHandler) Routes() http.Handler {
 func (h *ModelHandler) List(w http.ResponseWriter, r *http.Request) {
 	allModels, err := h.service.ListModels(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 

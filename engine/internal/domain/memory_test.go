@@ -17,7 +17,7 @@ func TestNewMemory(t *testing.T) {
 	}{
 		{"valid", "schema-1", "user-1", "remember this", false},
 		{"empty schema_id", "", "user-1", "content", true},
-		{"empty user_id", "schema-1", "", "content", true},
+		{"empty user_id is schema-wide", "schema-1", "", "content", false},
 		{"empty content", "schema-1", "user-1", "", true},
 	}
 	for _, tt := range tests {
@@ -29,7 +29,11 @@ func TestNewMemory(t *testing.T) {
 			}
 			require.NoError(t, err)
 			assert.Equal(t, tt.schemaID, mem.SchemaID)
-			assert.Equal(t, tt.userID, mem.UserID)
+			expectedUserID := tt.userID
+			if expectedUserID == "" {
+				expectedUserID = AnonymousMemoryUserID
+			}
+			assert.Equal(t, expectedUserID, mem.UserID)
 			assert.Equal(t, tt.content, mem.Content)
 			assert.NotNil(t, mem.Metadata)
 		})

@@ -49,7 +49,7 @@ func (h *SettingHandler) Routes() http.Handler {
 func (h *SettingHandler) List(w http.ResponseWriter, r *http.Request) {
 	settings, err := h.service.ListSettings(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, settings)
@@ -71,7 +71,7 @@ func (h *SettingHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	setting, err := h.service.UpdateSetting(r.Context(), key, req.Value)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, setting)

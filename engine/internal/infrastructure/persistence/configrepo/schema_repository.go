@@ -87,9 +87,10 @@ func (r *GORMSchemaRepository) GetByID(ctx context.Context, id string) (*SchemaR
 // Create inserts a new schema.
 func (r *GORMSchemaRepository) Create(ctx context.Context, record *SchemaRecord) error {
 	model := models.SchemaModel{
-		Name:        record.Name,
-		Description: record.Description,
-		IsSystem:    record.IsSystem,
+		Name:         record.Name,
+		Description:  record.Description,
+		IsSystem:     record.IsSystem,
+		EntryAgentID: record.EntryAgentID,
 	}
 	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
 		return fmt.Errorf("create schema %q: %w", record.Name, err)
@@ -99,11 +100,15 @@ func (r *GORMSchemaRepository) Create(ctx context.Context, record *SchemaRecord)
 }
 
 // Update updates an existing schema by ID.
+// Includes entry_agent_id so admins can re-point a schema's entry without a
+// delete+recreate cycle. Nil EntryAgentID clears the column.
 func (r *GORMSchemaRepository) Update(ctx context.Context, id string, record *SchemaRecord) error {
-	result := r.db.WithContext(ctx).Model(&models.SchemaModel{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"name":        record.Name,
-		"description": record.Description,
-	})
+	updates := map[string]interface{}{
+		"name":            record.Name,
+		"description":     record.Description,
+		"entry_agent_id":  record.EntryAgentID,
+	}
+	result := r.db.WithContext(ctx).Model(&models.SchemaModel{}).Where("id = ?", id).Updates(updates)
 	if result.Error != nil {
 		return fmt.Errorf("update schema %s: %w", id, result.Error)
 	}
@@ -113,9 +118,15 @@ func (r *GORMSchemaRepository) Update(ctx context.Context, id string, record *Sc
 	return nil
 }
 
-// Delete removes a schema and all its agent_relations by ID.
+// Delete removes a schema and all its agent_relations + triggers by ID.
+// V2: triggers are schema-scoped, so deleting the schema must also remove
+// them; otherwise the trigger FK blocks the schema delete with a 500.
 func (r *GORMSchemaRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Delete triggers bound to this schema (trigger.schema_id FK).
+		if err := tx.Where("schema_id = ?", id).Delete(&models.TriggerModel{}).Error; err != nil {
+			return fmt.Errorf("delete schema triggers: %w", err)
+		}
 		// Delete agent relations bound to this schema (membership cascade).
 		if err := tx.Where("schema_id = ?", id).Delete(&models.AgentRelationModel{}).Error; err != nil {
 			return fmt.Errorf("delete schema agent relations: %w", err)

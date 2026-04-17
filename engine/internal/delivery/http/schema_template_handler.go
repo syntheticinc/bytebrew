@@ -111,7 +111,7 @@ func (h *SchemaTemplateHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	t, err := h.uc.GetByName(r.Context(), name)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	if t == nil {
@@ -158,7 +158,7 @@ func (h *SchemaTemplateHandler) Fork(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	case err != nil:
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 

@@ -143,18 +143,14 @@ func (a *agentYAML) UnmarshalYAML(node *yaml.Node) error {
 type modelYAML struct {
 	Name      string `yaml:"name"`
 	Type      string `yaml:"type"`
-	Provider  string `yaml:"provider,omitempty"` // alias for type (used in agents.yaml)
 	BaseURL   string `yaml:"base_url,omitempty"`
 	ModelName string `yaml:"model_name"`
 	APIKey    string `yaml:"api_key,omitempty"`
 }
 
-// resolvedType returns Type, falling back to Provider for backwards compatibility.
+// resolvedType returns the canonical model type.
 func (m modelYAML) resolvedType() string {
-	if m.Type != "" {
-		return m.Type
-	}
-	return m.Provider
+	return m.Type
 }
 
 type mcpServerYAML struct {

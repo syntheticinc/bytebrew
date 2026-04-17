@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/robfig/cron/v3"
 	"gorm.io/gorm"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
@@ -16,6 +18,33 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 )
+
+// cronParser validates 5-field POSIX cron expressions (same set the scheduler runs).
+var cronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+
+// validateTriggerRequest rejects triggers with missing or malformed config.
+func validateTriggerRequest(req deliveryhttp.CreateTriggerRequest) error {
+	switch req.Type {
+	case "cron":
+		schedule, _ := req.Config["schedule"].(string)
+		if strings.TrimSpace(schedule) == "" {
+			return pkgerrors.InvalidInput("cron trigger requires config.schedule")
+		}
+		if _, err := cronParser.Parse(schedule); err != nil {
+			return pkgerrors.InvalidInput(fmt.Sprintf("invalid cron schedule %q: %v", schedule, err))
+		}
+	case "webhook":
+		path, _ := req.Config["webhook_path"].(string)
+		if strings.TrimSpace(path) == "" {
+			return pkgerrors.InvalidInput("webhook trigger requires config.webhook_path")
+		}
+	case "chat", "":
+		// chat triggers are system-owned; empty type is rejected by the handler.
+	default:
+		return pkgerrors.InvalidInput(fmt.Sprintf("unknown trigger type: %s", req.Type))
+	}
+	return nil
+}
 
 // mcpServiceHTTPAdapter bridges GORMMCPServerRepository to the http.MCPService interface.
 type mcpServiceHTTPAdapter struct {
@@ -315,6 +344,9 @@ func (a *triggerServiceHTTPAdapter) ListTriggersBySchema(ctx context.Context, sc
 // Q.5: triggers no longer have agent_id — they target schemas only.
 
 func (a *triggerServiceHTTPAdapter) CreateTrigger(ctx context.Context, req deliveryhttp.CreateTriggerRequest) (*deliveryhttp.TriggerResponse, error) {
+	if err := validateTriggerRequest(req); err != nil {
+		return nil, err
+	}
 	schemaID := ""
 	if req.SchemaID != nil {
 		schemaID = *req.SchemaID
@@ -345,6 +377,9 @@ func (a *triggerServiceHTTPAdapter) CreateTrigger(ctx context.Context, req deliv
 }
 
 func (a *triggerServiceHTTPAdapter) UpdateTrigger(ctx context.Context, id string, req deliveryhttp.CreateTriggerRequest) (*deliveryhttp.TriggerResponse, error) {
+	if err := validateTriggerRequest(req); err != nil {
+		return nil, err
+	}
 	model := &models.TriggerModel{
 		Type:        req.Type,
 		Title:       req.Title,
@@ -454,7 +489,7 @@ func (a *settingServiceHTTPAdapter) UpdateSetting(ctx context.Context, key, valu
 // sessionServiceHTTPAdapter bridges GORMSessionRepository to the http.SessionService interface.
 type sessionServiceHTTPAdapter struct {
 	repo        *configrepo.GORMSessionRepository
-	messageRepo *configrepo.GORMMessageRepository
+	messageRepo *configrepo.GORMEventRepository
 }
 
 func (a *sessionServiceHTTPAdapter) ListSessions(ctx context.Context, agentName, userID, status, from, to string, page, perPage int) ([]deliveryhttp.SessionResponse, int64, error) {
@@ -561,9 +596,9 @@ func (a *sessionServiceHTTPAdapter) DeleteSession(ctx context.Context, id string
 	return a.repo.Delete(ctx, id)
 }
 
-// eventServiceHTTPAdapter bridges GORMMessageRepository to the http.EventService interface.
+// eventServiceHTTPAdapter bridges GORMEventRepository to the http.EventService interface.
 type eventServiceHTTPAdapter struct {
-	repo *configrepo.GORMMessageRepository
+	repo *configrepo.GORMEventRepository
 }
 
 func (a *eventServiceHTTPAdapter) ListEvents(ctx context.Context, sessionID string) ([]deliveryhttp.EventResponse, error) {

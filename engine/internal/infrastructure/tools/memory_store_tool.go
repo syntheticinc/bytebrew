@@ -31,7 +31,12 @@ type MemoryStoreTool struct {
 }
 
 // NewMemoryStoreTool creates a new memory_store tool.
+// An empty userID becomes domain.AnonymousMemoryUserID so downstream SQL on
+// the uuid-typed user_id column never hits an empty-string cast failure.
 func NewMemoryStoreTool(schemaID, userID string, storer MemoryStorer, maxEntries int) tool.InvokableTool {
+	if userID == "" {
+		userID = domain.AnonymousMemoryUserID
+	}
 	return &MemoryStoreTool{
 		schemaID:   schemaID,
 		userID:     userID,

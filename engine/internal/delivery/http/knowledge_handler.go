@@ -87,7 +87,7 @@ func (h *KnowledgeHandler) Status(w http.ResponseWriter, r *http.Request) {
 	if h.fileLister != nil {
 		files, err := h.fileLister.ListFiles(r.Context(), name)
 		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			writeDomainError(w, err)
 			return
 		}
 		totalFiles := len(files)
@@ -121,7 +121,7 @@ func (h *KnowledgeHandler) Status(w http.ResponseWriter, r *http.Request) {
 	// Fallback: use stats (no per-file granularity).
 	docCount, _, _, err := h.stats.GetStats(r.Context(), name)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	status := "empty"
@@ -177,7 +177,7 @@ func (h *KnowledgeHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 
 	files, err := h.fileLister.ListFiles(r.Context(), name)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 
@@ -334,7 +334,7 @@ func (h *KnowledgeHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.fileUploader.UploadFile(r.Context(), tenantID, agentName, originalName, fileType, int64(len(content)), fileHash, content)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 

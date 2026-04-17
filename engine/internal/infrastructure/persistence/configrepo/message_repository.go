@@ -8,19 +8,18 @@ import (
 	"gorm.io/gorm"
 )
 
-// GORMMessageRepository implements event persistence using GORM.
-// Named GORMMessageRepository for backward compatibility with wiring code.
-type GORMMessageRepository struct {
+// GORMEventRepository implements event persistence using GORM.
+type GORMEventRepository struct {
 	db *gorm.DB
 }
 
-// NewGORMMessageRepository creates a new GORMMessageRepository.
-func NewGORMMessageRepository(db *gorm.DB) *GORMMessageRepository {
-	return &GORMMessageRepository{db: db}
+// NewGORMEventRepository creates a new GORMEventRepository.
+func NewGORMEventRepository(db *gorm.DB) *GORMEventRepository {
+	return &GORMEventRepository{db: db}
 }
 
 // ListBySession returns events for a session, sorted by created_at ASC.
-func (r *GORMMessageRepository) ListBySession(ctx context.Context, sessionID string) ([]models.MessageModel, error) {
+func (r *GORMEventRepository) ListBySession(ctx context.Context, sessionID string) ([]models.MessageModel, error) {
 	var events []models.MessageModel
 	if err := r.db.WithContext(ctx).
 		Where("session_id = ?", sessionID).
@@ -32,7 +31,7 @@ func (r *GORMMessageRepository) ListBySession(ctx context.Context, sessionID str
 }
 
 // DeleteBySession deletes all events for a session.
-func (r *GORMMessageRepository) DeleteBySession(ctx context.Context, sessionID string) error {
+func (r *GORMEventRepository) DeleteBySession(ctx context.Context, sessionID string) error {
 	if err := r.db.WithContext(ctx).
 		Where("session_id = ?", sessionID).
 		Delete(&models.MessageModel{}).Error; err != nil {

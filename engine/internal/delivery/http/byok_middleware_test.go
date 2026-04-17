@@ -75,36 +75,6 @@ func TestBYOKMiddleware_ValidHeaders(t *testing.T) {
 	assert.Equal(t, "https://example.com/v1", capturedBaseURL)
 }
 
-// LegacyHeaders verifies that pre-V2 X-Model-* headers still work as a
-// transitional fallback for clients that have not migrated to the
-// canonical X-BYOK-* names yet.
-func TestBYOKMiddleware_LegacyHeaders(t *testing.T) {
-	mw := NewBYOKMiddleware(BYOKConfig{
-		Enabled:          true,
-		AllowedProviders: []string{"openai"},
-	})
-
-	var capturedProvider, capturedKey, capturedModel string
-	handler := mw.InjectBYOK(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedProvider, _ = r.Context().Value(ContextKeyBYOKProvider).(string)
-		capturedKey, _ = r.Context().Value(ContextKeyBYOKAPIKey).(string)
-		capturedModel, _ = r.Context().Value(ContextKeyBYOKModel).(string)
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("X-Model-Provider", "openai")
-	req.Header.Set("X-Model-API-Key", "sk-legacy")
-	req.Header.Set("X-Model-Name", "gpt-4o")
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "openai", capturedProvider)
-	assert.Equal(t, "sk-legacy", capturedKey)
-	assert.Equal(t, "gpt-4o", capturedModel)
-}
-
 func TestBYOKMiddleware_ProviderNotAllowed(t *testing.T) {
 	mw := NewBYOKMiddleware(BYOKConfig{
 		Enabled:          true,

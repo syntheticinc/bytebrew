@@ -31,7 +31,12 @@ type MemoryRecallTool struct {
 }
 
 // NewMemoryRecallTool creates a new memory_recall tool.
+// Empty userID is rewritten to domain.AnonymousMemoryUserID to match the
+// store path and keep queries on uuid-typed columns valid.
 func NewMemoryRecallTool(schemaID, userID string, recaller MemoryRecaller) tool.InvokableTool {
+	if userID == "" {
+		userID = domain.AnonymousMemoryUserID
+	}
 	return &MemoryRecallTool{
 		schemaID: schemaID,
 		userID:   userID,

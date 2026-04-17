@@ -18,18 +18,12 @@ const (
 	ContextKeyBYOKBaseURL contextKey = "byok_base_url"
 )
 
-// BYOK request header names (V2 §5.8). The legacy `X-Model-*` names are
-// honoured as fallback so existing clients keep working during the
-// transition; new clients should use the canonical `X-BYOK-*` names.
+// BYOK request header names (V2 §5.8).
 const (
 	headerBYOKProvider = "X-BYOK-Provider"
 	headerBYOKAPIKey   = "X-BYOK-API-Key"
 	headerBYOKModel    = "X-BYOK-Model"
 	headerBYOKBaseURL  = "X-BYOK-Base-URL"
-
-	legacyHeaderBYOKProvider = "X-Model-Provider"
-	legacyHeaderBYOKAPIKey   = "X-Model-API-Key"
-	legacyHeaderBYOKModel    = "X-Model-Name"
 )
 
 // BYOKConfig holds BYOK middleware configuration. Loaded from the
@@ -84,25 +78,14 @@ func (m *BYOKMiddleware) SetConfig(cfg BYOKConfig) {
 	m.state.Store(newByokState(cfg))
 }
 
-// firstNonEmpty returns the first non-empty header value, looking at the
-// canonical name first then the legacy fallback.
-func firstNonEmpty(r *http.Request, names ...string) string {
-	for _, n := range names {
-		if v := r.Header.Get(n); v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
 // InjectBYOK is middleware that reads BYOK headers and adds them to context.
 // If BYOK is disabled or headers are absent, the request passes through unchanged.
 func (m *BYOKMiddleware) InjectBYOK(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		provider := firstNonEmpty(r, headerBYOKProvider, legacyHeaderBYOKProvider)
-		apiKey := firstNonEmpty(r, headerBYOKAPIKey, legacyHeaderBYOKAPIKey)
-		modelName := firstNonEmpty(r, headerBYOKModel, legacyHeaderBYOKModel)
-		baseURL := firstNonEmpty(r, headerBYOKBaseURL)
+		provider := r.Header.Get(headerBYOKProvider)
+		apiKey := r.Header.Get(headerBYOKAPIKey)
+		modelName := r.Header.Get(headerBYOKModel)
+		baseURL := r.Header.Get(headerBYOKBaseURL)
 
 		// No BYOK headers present — pass through.
 		if provider == "" && apiKey == "" && modelName == "" && baseURL == "" {

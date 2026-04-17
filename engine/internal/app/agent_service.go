@@ -16,7 +16,6 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/service/engine"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	"github.com/syntheticinc/bytebrew/engine/pkg/errors"
-	"github.com/cloudwego/eino/components/model"
 	"gorm.io/gorm"
 )
 
@@ -27,7 +26,6 @@ type InfraComponents struct {
 	TaskRepo         *configrepo.GORMTaskRepository
 	AgentPool        *agentservice.AgentPool
 	AgentPoolAdapter *agentservice.AgentPoolAdapter
-	ChatModel        model.ToolCallingChatModel // kept for backward compatibility
 	ModelSelector    *llm.ModelSelector
 	// Engine components
 	Engine            *engine.Engine
@@ -145,7 +143,6 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 		TaskRepo:          storageCmp.TaskRepo,
 		AgentPool:         agentPool,
 		AgentPoolAdapter:  agentPoolAdapter,
-		ChatModel:         chatModel,
 		ModelSelector:     modelSelector,
 		Engine:            ec.Engine,
 		FlowManager:       ec.FlowManager,

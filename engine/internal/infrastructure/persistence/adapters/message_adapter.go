@@ -2,7 +2,6 @@ package adapters
 
 import (
 	"encoding/json"
-	"log/slog"
 
 	"github.com/google/uuid"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
@@ -68,16 +67,3 @@ func EventFromModel(model *models.MessageModel) (*domain.Message, error) {
 	}, nil
 }
 
-// Legacy aliases for transition period (used by code that still references old names).
-
-// MessageToModel wraps EventToModel for backward compatibility during refactor.
-func MessageToModel(message *domain.Message) (*models.MessageModel, error) {
-	slog.Warn("MessageToModel is deprecated, use EventToModel")
-	return EventToModel(message)
-}
-
-// MessageFromModel wraps EventFromModel for backward compatibility during refactor.
-func MessageFromModel(model *models.MessageModel) (*domain.Message, error) {
-	slog.Warn("MessageFromModel is deprecated, use EventFromModel")
-	return EventFromModel(model)
-}

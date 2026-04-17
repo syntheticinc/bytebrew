@@ -123,7 +123,7 @@ func (h *SessionHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	sessions, total, err := h.service.ListSessions(r.Context(), agentName, userID, status, from, to, page, perPage)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 
@@ -151,7 +151,7 @@ func (h *SessionHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	session, err := h.service.GetSession(r.Context(), id)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	if session == nil {
@@ -176,7 +176,7 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	session, err := h.service.CreateSession(r.Context(), req)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 
@@ -199,7 +199,7 @@ func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	session, err := h.service.UpdateSession(r.Context(), id, req)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	if session == nil {
@@ -219,7 +219,7 @@ func (h *SessionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.service.DeleteSession(r.Context(), id); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 
@@ -242,7 +242,7 @@ func (h *SessionHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 
 	events, err := h.eventSvc.ListEvents(r.Context(), id)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 

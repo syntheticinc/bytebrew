@@ -101,7 +101,7 @@ Only after the user confirms ("yes", "go ahead", "build it", "looks good") — e
 - **Suggest improvements.** Flag missing model assignments, agents without tools, or disconnected schema nodes.
 - **Know the entities:**
    - An **Agent** needs: name (lowercase letters/digits/hyphens, starts with letter), system_prompt. Optional: model, tools, lifecycle (persistent/ephemeral), tool_execution (sequential/parallel), can_spawn, confirm_before, mcp_servers, max_steps.
-   - A **Schema** groups agents into a multi-agent flow. Agents are added/removed via add/remove tools.
+   - A **Schema** groups agents into a multi-agent flow. Agents become members by creating an agent_relation (delegation edge) into them; removing the relation removes them from the schema.
    - A **Model** needs: name, type (openai_compatible/anthropic/etc.), model_name. Optional: base_url, api_key.
    - A **Trigger** needs: type (cron/webhook), title, agent_name. For cron: schedule (cron expression). For webhook: webhook_path.
    - A **Capability**: type (memory/knowledge) + config (JSON object with type-specific settings).`
@@ -117,8 +117,6 @@ var builderAssistantBuiltinTools = []string{
 	"admin_create_schema",
 	"admin_update_schema",
 	"admin_delete_schema",
-	"admin_add_agent_to_schema",
-	"admin_remove_agent_from_schema",
 	"admin_list_agent_relations",
 	"admin_create_agent_relation",
 	"admin_delete_agent_relation",
@@ -223,9 +221,21 @@ func seedBuilderAssistant(ctx context.Context, db *gorm.DB) {
 	agentRepo := configrepo.NewGORMAgentRepository(db)
 
 	// Check if builder-assistant already exists.
-	_, err := agentRepo.GetByName(ctx, builderAssistantName)
+	existing, err := agentRepo.GetByName(ctx, builderAssistantName)
 	if err == nil {
-		slog.InfoContext(ctx, "builder-assistant agent already exists, skipping seed")
+		// System agent — code owns prompt, tools, mcp servers, lifecycle.
+		// Refresh them on every startup so refactors propagate without manual DB edits.
+		// Model assignment is preserved (user may have customized it).
+		defaults := builderAssistantDefaults()
+		defaults.ModelName = existing.ModelName
+		if defaults.ModelName == "" {
+			defaults.ModelName = ensureDefaultModel(ctx, db)
+		}
+		if err := agentRepo.Update(ctx, builderAssistantName, defaults); err != nil {
+			slog.ErrorContext(ctx, "failed to sync builder-assistant agent", "error", err)
+			return
+		}
+		slog.InfoContext(ctx, "builder-assistant: synced system config", "tools", len(defaults.BuiltinTools))
 		return
 	}
 
@@ -246,6 +256,15 @@ func seedBuilderAssistant(ctx context.Context, db *gorm.DB) {
 	slog.InfoContext(ctx, msg)
 }
 
+// resolveBuilderAgentID returns the UUID of builder-assistant, or "" if not found.
+func resolveBuilderAgentID(ctx context.Context, db *gorm.DB) string {
+	var agent models.AgentModel
+	if err := db.WithContext(ctx).Where("name = ?", builderAssistantName).First(&agent).Error; err != nil {
+		return ""
+	}
+	return agent.ID
+}
+
 const builderSchemaName = "builder-schema"
 
 // seedBuilderSchema creates the system builder schema and associates builder-assistant with it.
@@ -257,6 +276,9 @@ func seedBuilderSchema(ctx context.Context, db *gorm.DB) {
 
 	schemaRepo := configrepo.NewGORMSchemaRepository(db)
 
+	// Resolve builder-assistant agent ID for entry_agent_id.
+	agentID := resolveBuilderAgentID(ctx, db)
+
 	schemas, err := schemaRepo.List(ctx)
 	if err != nil {
 		slog.ErrorContext(ctx, "seed builder schema: list", "error", err)
@@ -264,7 +286,14 @@ func seedBuilderSchema(ctx context.Context, db *gorm.DB) {
 	}
 	for _, s := range schemas {
 		if s.Name == builderSchemaName {
-			// Schema exists — still ensure chat trigger is seeded (upgrade path).
+			// Schema exists — ensure entry_agent_id is set (upgrade path).
+			if s.EntryAgentID == nil && agentID != "" {
+				db.WithContext(ctx).Model(&models.SchemaModel{}).
+					Where("id = ?", s.ID).
+					Update("entry_agent_id", agentID)
+				slog.InfoContext(ctx, "builder-schema: set entry_agent_id", "agent_id", agentID)
+			}
+			// Still ensure chat trigger is seeded (upgrade path).
 			seedBuilderChatTrigger(ctx, db, s.ID)
 			return
 		}
@@ -274,6 +303,9 @@ func seedBuilderSchema(ctx context.Context, db *gorm.DB) {
 		Name:        builderSchemaName,
 		Description: "System schema for the AI builder assistant",
 		IsSystem:    true,
+	}
+	if agentID != "" {
+		record.EntryAgentID = &agentID
 	}
 	if err := schemaRepo.Create(ctx, record); err != nil {
 		slog.ErrorContext(ctx, "seed builder schema: save", "error", err)

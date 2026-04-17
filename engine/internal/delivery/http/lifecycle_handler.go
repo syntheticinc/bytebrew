@@ -43,7 +43,7 @@ func (h *LifecycleHandler) Status(w http.ResponseWriter, r *http.Request) {
 
 	status, err := h.provider.GetLifecycleStatus(r.Context(), name, sessionID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	if status == nil {

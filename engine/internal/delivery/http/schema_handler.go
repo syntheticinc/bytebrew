@@ -26,14 +26,18 @@ type SchemaInfo struct {
 
 // CreateSchemaRequest is the body for POST /api/v1/schemas.
 type CreateSchemaRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
+	Name         string  `json:"name"`
+	Description  string  `json:"description,omitempty"`
+	EntryAgentID *string `json:"entry_agent_id,omitempty"`
 }
 
 // UpdateSchemaRequest is the body for PUT /api/v1/schemas/{id}.
+// All fields are pointers so callers can send partial updates — nil fields
+// preserve their current value instead of being overwritten with a zero value.
 type UpdateSchemaRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
+	Name          *string `json:"name,omitempty"`
+	Description   *string `json:"description,omitempty"`
+	EntryAgentID  *string `json:"entry_agent_id,omitempty"`
 }
 
 // --- AgentRelation DTOs ---
@@ -137,7 +141,7 @@ func (h *SchemaHandler) Routes() http.Handler {
 func (h *SchemaHandler) ListSchemas(w http.ResponseWriter, r *http.Request) {
 	schemas, err := h.schemas.ListSchemas(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, schemas)

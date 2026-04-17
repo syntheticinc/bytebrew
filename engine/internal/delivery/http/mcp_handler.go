@@ -79,7 +79,7 @@ func (h *MCPHandler) Routes() http.Handler {
 func (h *MCPHandler) List(w http.ResponseWriter, r *http.Request) {
 	servers, err := h.service.ListMCPServers(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, servers)
@@ -103,7 +103,7 @@ func (h *MCPHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	server, err := h.service.CreateMCPServer(r.Context(), req)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, server)
@@ -125,7 +125,7 @@ func (h *MCPHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.service.UpdateMCPServer(r.Context(), name, req)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -140,7 +140,7 @@ func (h *MCPHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.service.DeleteMCPServer(r.Context(), name); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

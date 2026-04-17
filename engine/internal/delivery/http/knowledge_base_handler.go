@@ -75,7 +75,7 @@ func NewKnowledgeBaseHandler(store KBStore, fileManager KBFileManager) *Knowledg
 func (h *KnowledgeBaseHandler) List(w http.ResponseWriter, r *http.Request) {
 	kbs, err := h.store.List(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	if kbs == nil {
@@ -89,7 +89,7 @@ func (h *KnowledgeBaseHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	kb, err := h.store.GetByID(r.Context(), id)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	if kb == nil {
@@ -118,7 +118,7 @@ func (h *KnowledgeBaseHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	kb, err := h.store.Create(r.Context(), req.Name, req.Description, req.EmbeddingModelID, tenantID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, kb)
@@ -139,7 +139,7 @@ func (h *KnowledgeBaseHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	kb, err := h.store.Update(r.Context(), id, req.Name, req.Description, req.EmbeddingModelID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	if kb == nil {
@@ -156,13 +156,13 @@ func (h *KnowledgeBaseHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Delete all files first
 	if h.fileManager != nil {
 		if err := h.fileManager.DeleteAllFiles(r.Context(), id); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			writeDomainError(w, err)
 			return
 		}
 	}
 
 	if err := h.store.Delete(r.Context(), id); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
@@ -177,7 +177,7 @@ func (h *KnowledgeBaseHandler) LinkAgent(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := h.store.LinkAgent(r.Context(), kbID, agentName); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "linked"})
@@ -192,7 +192,7 @@ func (h *KnowledgeBaseHandler) UnlinkAgent(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if err := h.store.UnlinkAgent(r.Context(), kbID, agentName); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "unlinked"})
@@ -207,7 +207,7 @@ func (h *KnowledgeBaseHandler) ListFiles(w http.ResponseWriter, r *http.Request)
 	}
 	files, err := h.fileManager.ListFiles(r.Context(), kbID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	if files == nil {
@@ -289,7 +289,7 @@ func (h *KnowledgeBaseHandler) UploadFile(w http.ResponseWriter, r *http.Request
 
 	resp, err := h.fileManager.UploadFile(r.Context(), tenantID, kbID, kb.EmbeddingModelID, originalName, fileType, int64(len(content)), fileHash, content)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, resp)

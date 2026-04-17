@@ -85,7 +85,7 @@ func (h *AuditHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	logs, total, err := h.service.ListAuditLogs(r.Context(), actorType, action, resource, from, to, page, perPage)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeDomainError(w, err)
 		return
 	}
 

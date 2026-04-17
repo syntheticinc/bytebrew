@@ -326,13 +326,13 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	tasks, err := h.service.ListTasks(r.Context(), filter, actor)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeJSONError(w, mapTaskError(err), err.Error())
 		return
 	}
 
 	total, err := h.service.CountTasks(r.Context(), filter, actor)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeJSONError(w, mapTaskError(err), err.Error())
 		return
 	}
 

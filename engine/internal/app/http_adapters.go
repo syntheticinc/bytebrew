@@ -301,6 +301,10 @@ type agentSchemaIDResolver struct {
 func (r *agentSchemaIDResolver) ResolveSchemaID(ctx context.Context, agentName string) (string, error) {
 	// Q.5: agent_relations uses agent UUIDs. Resolve name → id first,
 	// then find the schema where this agent participates.
+	//
+	// A single-agent schema has no relations, so also treat an entry_agent_id
+	// match on schemas as membership — otherwise memory/knowledge tools stay
+	// disabled for solo entry agents.
 	var agentID string
 	if err := r.db.WithContext(ctx).Raw(
 		"SELECT id FROM agents WHERE name = ? LIMIT 1", agentName).Scan(&agentID).Error; err != nil || agentID == "" {
@@ -310,7 +314,11 @@ func (r *agentSchemaIDResolver) ResolveSchemaID(ctx context.Context, agentName s
 	if err := r.db.WithContext(ctx).Raw(
 		`SELECT schema_id FROM agent_relations
 			WHERE source_agent_id = ? OR target_agent_id = ?
-			LIMIT 1`, agentID, agentID).Scan(&schemaID).Error; err != nil || schemaID == "" {
+			LIMIT 1`, agentID, agentID).Scan(&schemaID).Error; err == nil && schemaID != "" {
+		return schemaID, nil
+	}
+	if err := r.db.WithContext(ctx).Raw(
+		"SELECT id FROM schemas WHERE entry_agent_id = ? LIMIT 1", agentID).Scan(&schemaID).Error; err != nil || schemaID == "" {
 		return "", fmt.Errorf("no schema for agent %q", agentName)
 	}
 	return schemaID, nil

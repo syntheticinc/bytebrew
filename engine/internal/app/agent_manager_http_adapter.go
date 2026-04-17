@@ -177,18 +177,31 @@ func (a *agentManagerHTTPAdapter) DeleteAgent(ctx context.Context, name string) 
 		return pkgerrors.Forbidden(fmt.Sprintf("system agent %q cannot be deleted", name))
 	}
 
-	// BUG-014: Delete triggers before agent to avoid FK constraint on fk_triggers_agent.
-	if err := a.db.WithContext(ctx).
-		Where("agent_id IN (SELECT id FROM agents WHERE name = ?)", name).
-		Delete(&models.TriggerModel{}).Error; err != nil {
-		slog.WarnContext(ctx, "failed to cascade-delete triggers", "agent", name, "error", err)
-	}
+	// V2: triggers are schema-scoped (no agent_id column) and agent_relations
+	// are owned by schemas — both are torn down when the schema is deleted,
+	// not when a member agent is deleted. We only need to drop artefacts that
+	// reference the agent directly: capabilities and any schema entry_agent_id.
 
 	// BUG-004: Delete capabilities before agent to avoid FK constraint violation.
 	if err := a.db.WithContext(ctx).
 		Where("agent_id IN (SELECT id FROM agents WHERE name = ?)", name).
 		Delete(&models.CapabilityModel{}).Error; err != nil {
 		slog.WarnContext(ctx, "failed to cascade-delete capabilities", "agent", name, "error", err)
+	}
+
+	// Clear schemas.entry_agent_id that reference this agent so the FK does
+	// not block deletion. The schema itself remains so the admin can reassign.
+	if err := a.db.WithContext(ctx).Exec(
+		"UPDATE schemas SET entry_agent_id = NULL WHERE entry_agent_id IN (SELECT id FROM agents WHERE name = ?)", name).Error; err != nil {
+		slog.WarnContext(ctx, "failed to clear schema entry_agent references", "agent", name, "error", err)
+	}
+
+	// Drop any agent_relations that reference this agent (source or target).
+	if err := a.db.WithContext(ctx).Exec(
+		`DELETE FROM agent_relations
+			WHERE source_agent_id IN (SELECT id FROM agents WHERE name = ?)
+			   OR target_agent_id IN (SELECT id FROM agents WHERE name = ?)`, name, name).Error; err != nil {
+		slog.WarnContext(ctx, "failed to cascade-delete agent relations", "agent", name, "error", err)
 	}
 
 	if err := a.repo.Delete(ctx, name); err != nil {
