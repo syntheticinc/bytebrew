@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthContext, useAuthProvider } from './hooks/useAuth';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
-import HealthPage from './pages/HealthPage';
 import MCPPage from './pages/MCPPage';
 import ModelsPage from './pages/ModelsPage';
 import TasksPage from './pages/TasksPage';
@@ -46,7 +45,6 @@ export default function App() {
             <Route path="/schemas" element={<SchemasPage />} />
             <Route path="/schemas/:schemaId" element={<SchemaDetailPage />} />
             <Route path="/schemas/:schema/:agent" element={<AgentDrillInPage />} />
-            <Route path="/health" element={<HealthPage />} />
             <Route path="/mcp" element={<MCPPage />} />
             <Route path="/models" element={<ModelsPage />} />
             <Route path="/tasks" element={<TasksPage />} />

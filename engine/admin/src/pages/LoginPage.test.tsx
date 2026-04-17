@@ -50,7 +50,7 @@ describe('LoginPage', () => {
 
     await waitFor(() => {
       expect(login).toHaveBeenCalledWith('admin', 'secret');
-      expect(mockNavigate).toHaveBeenCalledWith('/health');
+      expect(mockNavigate).toHaveBeenCalledWith('/');
     });
   });
 

@@ -364,19 +364,19 @@ export default function SchemaDetailPage() {
                     Hover a card to add a delegate under that agent
                   </div>
                 </div>
-
-                {showAddAgent && (
-                  <AddAgentPanel
-                    schemaAgentNames={schemaAgentNames}
-                    parentAgentName={addChildParentName ?? undefined}
-                    onAdd={handleAddAgent}
-                    onClose={() => {
-                      setShowAddAgent(false);
-                      setAddChildParentName(null);
-                    }}
-                  />
-                )}
               </>
+            )}
+
+            {showAddAgent && (
+              <AddAgentPanel
+                schemaAgentNames={schemaAgentNames}
+                parentAgentName={addChildParentName ?? undefined}
+                onAdd={handleAddAgent}
+                onClose={() => {
+                  setShowAddAgent(false);
+                  setAddChildParentName(null);
+                }}
+              />
             )}
           </div>
         )}

@@ -379,13 +379,24 @@ function OverviewProduction() {
         </div>
       </div>
 
-      {/* System status badge */}
+      {/* System Health */}
       {health && (
-        <div className="mt-4 flex items-center gap-2">
-          <SystemBadge health={health} />
-          <Link to="/health" className="text-[11px] text-brand-shade3 hover:text-brand-accent transition-colors">
-            Full diagnostics →
-          </Link>
+        <div className="mt-6">
+          <div className="flex items-center gap-3 mb-3">
+            <h2 className="text-sm font-semibold text-brand-light">System Health</h2>
+            <SystemBadge health={health} />
+            {health.update_available && (
+              <span className="text-[11px] text-amber-300 border border-amber-500/40 bg-amber-500/10 rounded-btn px-2 py-0.5">
+                Update available: v{health.update_available}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-4 gap-4">
+            <Stat label="Status" value={health.status ?? 'ok'} />
+            <Stat label="Version" value={health.version || 'dev'} />
+            <Stat label="Uptime" value={health.uptime || '—'} />
+            <Stat label="Agents" value={String(health.agents_count ?? 0)} />
+          </div>
         </div>
       )}
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
-import type { SchemaTemplate, SchemaTemplateCategory } from '../types';
+import type { Schema, SchemaTemplate } from '../types';
 
 function formatRelativeTime(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -11,14 +11,6 @@ function formatRelativeTime(iso: string) {
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
   return `${Math.floor(diff / 86_400_000)}d ago`;
 }
-
-const CATEGORIES: Array<{ key: 'all' | SchemaTemplateCategory; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'support', label: 'Support' },
-  { key: 'sales', label: 'Sales' },
-  { key: 'internal', label: 'Internal' },
-  { key: 'generic', label: 'Generic' },
-];
 
 // sanitizeSchemaName makes a human-entered schema name safe for the DB's
 // unique constraint — lowercase, alphanumerics + hyphens, collapsed
@@ -38,8 +30,6 @@ interface TemplatePickerProps {
 }
 
 function TemplatePicker({ onClose, onForked }: TemplatePickerProps) {
-  const [category, setCategory] = useState<'all' | SchemaTemplateCategory>('all');
-  const [query, setQuery] = useState('');
   const [templates, setTemplates] = useState<SchemaTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -52,11 +42,8 @@ function TemplatePicker({ onClose, onForked }: TemplatePickerProps) {
     let cancelled = false;
     setLoading(true);
     setListError(null);
-    const filter: { category?: SchemaTemplateCategory; q?: string } = {};
-    if (category !== 'all') filter.category = category;
-    if (query.trim() !== '') filter.q = query.trim();
     api
-      .listSchemaTemplates(filter)
+      .listSchemaTemplates()
       .then((resp) => {
         if (!cancelled) setTemplates(resp.templates);
       })
@@ -69,7 +56,7 @@ function TemplatePicker({ onClose, onForked }: TemplatePickerProps) {
     return () => {
       cancelled = true;
     };
-  }, [category, query]);
+  }, []);
 
   async function handleFork() {
     if (!selected) return;
@@ -101,32 +88,6 @@ function TemplatePicker({ onClose, onForked }: TemplatePickerProps) {
         </div>
         <div className="px-5 py-3 text-[12px] text-brand-shade3 border-b border-brand-shade3/10">
           Pick a starter template. The fork operation creates a new schema with its agents, delegations, and triggers — independent of the catalog.
-        </div>
-
-        {/* Filters */}
-        <div className="px-5 py-3 border-b border-brand-shade3/10 flex flex-wrap items-center gap-3">
-          <div className="flex gap-1">
-            {CATEGORIES.map((c) => (
-              <button
-                key={c.key}
-                onClick={() => setCategory(c.key)}
-                className={`px-3 py-1 text-[11px] rounded-btn transition-colors ${
-                  category === c.key
-                    ? 'bg-brand-accent text-white'
-                    : 'bg-brand-dark text-brand-shade3 hover:text-brand-light border border-brand-shade3/20'
-                }`}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-          <input
-            type="search"
-            placeholder="Search templates..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="flex-1 min-w-[180px] bg-brand-dark border border-brand-shade3/20 rounded-btn px-3 py-1 text-[12px] text-brand-light placeholder:text-brand-shade3 focus:outline-none focus:border-brand-accent/60"
-          />
         </div>
 
         {/* Template grid */}
@@ -211,15 +172,87 @@ function TemplatePicker({ onClose, onForked }: TemplatePickerProps) {
   );
 }
 
+function SchemaCard({ schema }: { schema: Schema }) {
+  return (
+    <Link
+      to={`/schemas/${schema.id}`}
+      className="block bg-brand-dark-surface border border-brand-shade3/15 rounded-card hover:border-brand-shade3/35 transition-all group"
+    >
+      <div className="px-5 py-4 border-b border-brand-shade3/10">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-base font-semibold text-brand-light truncate">{schema.name}</div>
+            <div className="text-[12px] text-brand-shade3 mt-1 line-clamp-2">{schema.description ?? ''}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-5 py-3 flex items-center gap-4">
+        {schema.entry_agent_name && (
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="shrink-0 w-7 h-7 rounded-full bg-gradient-to-br from-brand-shade3/30 to-brand-shade3/10 flex items-center justify-center text-[10px] font-semibold text-brand-light border border-brand-shade3/20">
+              {schema.entry_agent_name.slice(0, 2).toUpperCase()}
+            </span>
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-wider text-brand-shade3">Entry</div>
+              <div className="text-[12px] font-medium text-brand-light truncate">
+                {schema.entry_agent_name}
+              </div>
+            </div>
+          </div>
+        )}
+        <div className="flex-1" />
+        <div className="flex items-center gap-4 text-[11px] text-brand-shade3">
+          <span>
+            <span className="text-brand-light font-medium">{schema.agents_count}</span> agents
+          </span>
+        </div>
+      </div>
+
+      <div className="px-5 py-2 border-t border-brand-shade3/10 flex items-center justify-between">
+        <span className="text-[10px] text-brand-shade3">
+          Created {formatRelativeTime(schema.created_at)}
+        </span>
+        <span className="text-[11px] text-brand-shade3 group-hover:text-brand-accent transition-colors">
+          Open →
+        </span>
+      </div>
+    </Link>
+  );
+}
+
 export default function SchemasPage() {
   const [picking, setPicking] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { data: schemas, loading, error } = useApi(() => api.listSchemas());
+  const { data: schemas, loading, error, refetch } = useApi(() => api.listSchemas());
 
   function handleForked(schemaId: string) {
     setPicking(false);
     navigate(`/schemas/${schemaId}`);
   }
+
+  async function handleResetBuilder() {
+    const confirmed = window.confirm(
+      'Reset builder-schema to factory defaults? This restores the system agent, schema, and chat trigger. User schemas are not affected.',
+    );
+    if (!confirmed) return;
+    setResetting(true);
+    setResetError(null);
+    try {
+      await api.restoreBuilderAssistant();
+      refetch();
+    } catch (err) {
+      setResetError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  const all = schemas ?? [];
+  const userSchemas = all.filter((s) => !s.is_system);
+  const systemSchemas = all.filter((s) => s.is_system);
 
   return (
     <div className="max-w-[1200px] mx-auto">
@@ -246,7 +279,7 @@ export default function SchemasPage() {
         <div className="text-[13px] text-rose-400">Failed to load schemas: {error}</div>
       )}
 
-      {!loading && !error && schemas !== null && schemas.length === 0 && (
+      {!loading && !error && userSchemas.length === 0 && (
         <div className="bg-brand-dark-surface border border-dashed border-brand-shade3/25 rounded-card p-10 text-center">
           <h3 className="text-base font-semibold text-brand-light mb-2">No schemas yet</h3>
           <p className="text-[13px] text-brand-shade3 max-w-md mx-auto mb-4">
@@ -261,55 +294,41 @@ export default function SchemasPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
-        {(schemas ?? []).map((s) => (
-          <Link
-            key={s.id}
-            to={`/schemas/${s.id}`}
-            className="block bg-brand-dark-surface border border-brand-shade3/15 rounded-card hover:border-brand-shade3/35 transition-all group"
-          >
-            <div className="px-5 py-4 border-b border-brand-shade3/10">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="text-base font-semibold text-brand-light truncate">{s.name}</div>
-                  <div className="text-[12px] text-brand-shade3 mt-1 line-clamp-2">{s.description ?? ''}</div>
-                </div>
-              </div>
-            </div>
+      {userSchemas.length > 0 && (
+        <div className="grid grid-cols-2 gap-4">
+          {userSchemas.map((s) => (
+            <SchemaCard key={s.id} schema={s} />
+          ))}
+        </div>
+      )}
 
-            <div className="px-5 py-3 flex items-center gap-4">
-              {s.entry_agent_name && (
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="shrink-0 w-7 h-7 rounded-full bg-gradient-to-br from-brand-shade3/30 to-brand-shade3/10 flex items-center justify-center text-[10px] font-semibold text-brand-light border border-brand-shade3/20">
-                    {s.entry_agent_name.slice(0, 2).toUpperCase()}
-                  </span>
-                  <div className="min-w-0">
-                    <div className="text-[10px] uppercase tracking-wider text-brand-shade3">Entry</div>
-                    <div className="text-[12px] font-medium text-brand-light truncate">
-                      {s.entry_agent_name}
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div className="flex-1" />
-              <div className="flex items-center gap-4 text-[11px] text-brand-shade3">
-                <span>
-                  <span className="text-brand-light font-medium">{s.agents_count}</span> agents
-                </span>
-              </div>
+      {systemSchemas.length > 0 && (
+        <div className="mt-10 pt-6 border-t border-brand-shade3/10">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-sm font-semibold text-brand-light">System schemas</h2>
+              <p className="text-[11px] text-brand-shade3 mt-0.5">
+                Reserved for platform internals. Cannot be deleted. Reset restores factory defaults.
+              </p>
             </div>
-
-            <div className="px-5 py-2 border-t border-brand-shade3/10 flex items-center justify-between">
-              <span className="text-[10px] text-brand-shade3">
-                Created {formatRelativeTime(s.created_at)}
-              </span>
-              <span className="text-[11px] text-brand-shade3 group-hover:text-brand-accent transition-colors">
-                Open →
-              </span>
-            </div>
-          </Link>
-        ))}
-      </div>
+            <button
+              onClick={handleResetBuilder}
+              disabled={resetting}
+              className="px-3 py-1.5 text-[11px] font-medium rounded-btn border bg-brand-dark-surface text-brand-shade2 border-brand-shade3/25 hover:border-brand-shade3/50 hover:text-brand-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {resetting ? 'Resetting…' : 'Reset to factory defaults'}
+            </button>
+          </div>
+          {resetError && (
+            <div className="mb-3 text-[11px] text-rose-400">Reset failed: {resetError}</div>
+          )}
+          <div className="grid grid-cols-2 gap-4">
+            {systemSchemas.map((s) => (
+              <SchemaCard key={s.id} schema={s} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {picking && <TemplatePicker onClose={() => setPicking(false)} onForked={handleForked} />}
     </div>
