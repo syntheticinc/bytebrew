@@ -11,6 +11,7 @@ import (
 
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
@@ -27,14 +28,22 @@ type chatTriggerMarker interface {
 	MarkFired(ctx context.Context, id string) error
 }
 
+// chatSessionPersister persists chat sessions to the DB.
+// Narrowed consumer-side interface — only Create and Update are needed here.
+type chatSessionPersister interface {
+	Create(ctx context.Context, session *models.SessionModel) error
+	Update(ctx context.Context, id string, updates map[string]interface{}) error
+}
+
 // chatServiceHTTPAdapter bridges SessionRegistry + SessionProcessor to the
 // deliveryhttp.ChatService interface for the REST chat endpoint.
 type chatServiceHTTPAdapter struct {
 	registry    *flowregistry.SessionRegistry
 	processor   *sessionprocessor.Processor
 	agents      *agentregistry.AgentRegistry
-	triggers    chatTriggerMarker // optional — nil in tests / no-DB mode
-	chatEnabled bool              // false when no LLM model configured
+	triggers    chatTriggerMarker    // optional — nil in tests / no-DB mode
+	sessions    chatSessionPersister // optional — nil when no DB
+	chatEnabled bool                 // false when no LLM model configured
 }
 
 // Chat creates (or resumes) a session, enqueues the message, subscribes to
@@ -65,12 +74,26 @@ func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, agentName, message, u
 	}
 
 	// §4.1: first message of a session → stamp the chat trigger's
-	// last_fired_at. Non-fatal on any error — chat must still work when the
-	// trigger lookup misbehaves.
+	// last_fired_at and persist the session to DB using trigger.SchemaID.
+	// Non-fatal on any error — chat must still work when trigger lookup fails.
 	if isNewSession && a.triggers != nil {
 		if trigger, lookupErr := a.triggers.FindEnabledChatTrigger(ctx, agentName); lookupErr == nil && trigger != nil {
 			if markErr := a.triggers.MarkFired(ctx, trigger.ID); markErr != nil {
 				slog.WarnContext(ctx, "mark chat trigger fired failed", "trigger_id", trigger.ID, "error", markErr)
+			}
+			if a.sessions != nil {
+				m := &models.SessionModel{
+					ID:       sessionID,
+					SchemaID: trigger.SchemaID,
+					Status:   "running",
+					TenantID: domain.CETenantID,
+				}
+				if userID != "" {
+					m.UserID = &userID
+				}
+				if createErr := a.sessions.Create(ctx, m); createErr != nil {
+					slog.WarnContext(ctx, "persist chat session failed", "session_id", sessionID, "error", createErr)
+				}
 			}
 		}
 	}
@@ -106,6 +129,11 @@ func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, agentName, message, u
 			sseCh <- *sseEvent
 
 			if sseEvent.Type == "done" {
+				if a.sessions != nil {
+					if updateErr := a.sessions.Update(context.Background(), sessionID, map[string]interface{}{"status": "completed"}); updateErr != nil {
+						slog.Warn("update chat session status failed", "session_id", sessionID, "error", updateErr)
+					}
+				}
 				return
 			}
 		}

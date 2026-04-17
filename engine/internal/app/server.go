@@ -1291,6 +1291,8 @@ func Run(sc ServerConfig) error {
 			triggerChecker = &chatTriggerCheckerAdapter{repo: chatTriggerRepo}
 			// §4.1: stamp last_fired_at on the first message of a chat session.
 			chatService.triggers = chatTriggerRepo
+			// Persist chat sessions to DB using trigger.SchemaID for resolution.
+			chatService.sessions = configrepo.NewGORMSessionRepository(pgDB)
 		}
 		chatHandler := deliveryhttp.NewChatHandler(chatService, triggerChecker, func() []string {
 			return forwardHeadersStore.Load().([]string)
