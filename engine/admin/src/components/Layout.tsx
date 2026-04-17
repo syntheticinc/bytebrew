@@ -37,9 +37,9 @@ function ModeToggle() {
 
 function LayoutInner() {
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen overflow-hidden">
       <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <ModeToggle />
         <QuotaBanner />
         <main className="flex-1 min-h-0 bg-brand-dark p-6 overflow-auto animate-fade-in">

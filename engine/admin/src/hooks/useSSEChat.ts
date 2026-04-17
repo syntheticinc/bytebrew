@@ -71,16 +71,26 @@ function safeRemoveItem(key: string): void {
 
 /** Convert EventResponse[] from backend into SSEMessage[] for rendering.
  *  Groups consecutive assistant events + tool calls into one SSEMessage,
- *  preserving chronological tool call order. */
+ *  preserving chronological order of text <-> tool interleaving via segments. */
 function mapEventsToMessages(events: EventResponse[]): SSEMessage[] {
   const messages: SSEMessage[] = [];
   let currentAssistant: SSEMessage | null = null;
+  let lastSegmentIsText = false;
 
   const flushAssistant = () => {
     if (currentAssistant) {
       messages.push(currentAssistant);
       currentAssistant = null;
+      lastSegmentIsText = false;
     }
+  };
+
+  const ensureAssistant = (id: string) => {
+    if (!currentAssistant) {
+      currentAssistant = { id, role: 'assistant', content: '', toolCalls: [], segments: [], streaming: false };
+      lastSegmentIsText = false;
+    }
+    return currentAssistant;
   };
 
   for (const ev of events) {
@@ -96,32 +106,66 @@ function mapEventsToMessages(events: EventResponse[]): SSEMessage[] {
         });
         break;
 
-      case 'assistant_message':
-        if (!currentAssistant) {
-          currentAssistant = { id: ev.id, role: 'assistant', content: '', toolCalls: [], streaming: false };
+      case 'assistant_message': {
+        const a = ensureAssistant(ev.id);
+        const delta = (payload.content as string) ?? '';
+        a.content += delta;
+        const segs = a.segments ?? [];
+        if (lastSegmentIsText && segs.length > 0) {
+          const last = segs[segs.length - 1]!;
+          if (last.type === 'text') {
+            a.segments = [...segs.slice(0, -1), { type: 'text', content: last.content + delta }];
+          } else {
+            a.segments = [...segs, { type: 'text', content: delta }];
+          }
+        } else {
+          a.segments = [...segs, { type: 'text', content: delta }];
+          lastSegmentIsText = true;
         }
-        currentAssistant.content += (payload.content as string) ?? '';
         break;
+      }
 
       case 'tool_call': {
-        if (!currentAssistant) {
-          currentAssistant = { id: ev.id, role: 'assistant', content: '', toolCalls: [], streaming: false };
-        }
-        const args = payload.arguments as Record<string, string> | undefined;
-        currentAssistant.toolCalls = [...(currentAssistant.toolCalls ?? []), {
+        const a = ensureAssistant(ev.id);
+        const args = payload.arguments as Record<string, unknown> | undefined;
+        const tc: ToolCall = {
           tool: (payload.tool as string) ?? '',
           input: args ? JSON.stringify(args) : '',
-        }];
+        };
+        a.toolCalls = [...(a.toolCalls ?? []), tc];
+        a.segments = [...(a.segments ?? []), { type: 'tool_call', toolCall: tc }];
+        lastSegmentIsText = false;
         break;
       }
 
       case 'tool_result': {
-        if (currentAssistant?.toolCalls) {
-          const toolName = (payload.tool as string) ?? '';
-          const output = (payload.content as string) ?? '';
-          currentAssistant.toolCalls = currentAssistant.toolCalls.map((tc) =>
-            tc.tool === toolName && !tc.output ? { ...tc, output, status: 'done' as const } : tc,
-          );
+        const a = currentAssistant as SSEMessage | null;
+        if (!a) break;
+        const toolName = (payload.tool as string) ?? '';
+        const output = (payload.content as string) ?? '';
+        // Match against the most-recent still-open tool call (by name).
+        const tcs: ToolCall[] = a.toolCalls ?? [];
+        let matched = false;
+        const updatedTcs: ToolCall[] = tcs.slice();
+        for (let i = updatedTcs.length - 1; i >= 0; i--) {
+          const existing = updatedTcs[i]!;
+          if (existing.tool === toolName && existing.output === undefined) {
+            updatedTcs[i] = { ...existing, output };
+            matched = true;
+            break;
+          }
+        }
+        a.toolCalls = updatedTcs;
+        if (matched && a.segments) {
+          const segs: MessageSegment[] = a.segments.slice();
+          for (let i = segs.length - 1; i >= 0; i--) {
+            const s = segs[i]!;
+            if (s.type === 'tool_call' && s.toolCall.tool === toolName && s.toolCall.output === undefined) {
+              segs[i] = { type: 'tool_call', toolCall: { ...s.toolCall, output } };
+              break;
+            }
+          }
+          a.segments = segs;
         }
         break;
       }

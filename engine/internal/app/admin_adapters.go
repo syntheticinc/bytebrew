@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
@@ -422,11 +423,51 @@ func toAdminModelRecord(p models.LLMProviderModel) admintools.ModelRecord {
 // --- AgentRelation adapter ---
 
 type adminAgentRelationRepoAdapter struct {
-	repo *configrepo.GORMAgentRelationRepository
+	repo      *configrepo.GORMAgentRelationRepository
+	agentRepo *configrepo.GORMAgentRepository
 }
 
-func newAdminAgentRelationRepoAdapter(repo *configrepo.GORMAgentRelationRepository) *adminAgentRelationRepoAdapter {
-	return &adminAgentRelationRepoAdapter{repo: repo}
+func newAdminAgentRelationRepoAdapter(repo *configrepo.GORMAgentRelationRepository, agentRepo *configrepo.GORMAgentRepository) *adminAgentRelationRepoAdapter {
+	return &adminAgentRelationRepoAdapter{repo: repo, agentRepo: agentRepo}
+}
+
+// resolveAgentRef accepts either an agent UUID or an agent name and returns
+// the agent UUID. The admin tool surface (admin_create_agent_relation)
+// exposes names to the LLM; the DB column is a uuid FK, so we must translate.
+func (a *adminAgentRelationRepoAdapter) resolveAgentRef(ctx context.Context, ref string) (string, error) {
+	if ref == "" {
+		return "", fmt.Errorf("empty agent reference")
+	}
+	// Heuristic: UUIDs are 36 chars with dashes. Anything else must be a name.
+	if len(ref) == 36 && strings.Count(ref, "-") == 4 {
+		return ref, nil
+	}
+	rec, err := a.agentRepo.GetByName(ctx, ref)
+	if err != nil {
+		return "", fmt.Errorf("agent %q not found: %w", ref, err)
+	}
+	return rec.ID, nil
+}
+
+// agentNameByID resolves a UUID to a name for display. Falls back to the ID
+// string when the agent row has been deleted but relations still reference it.
+func (a *adminAgentRelationRepoAdapter) agentNameByID(ctx context.Context, id string, cache map[string]string) string {
+	if n, ok := cache[id]; ok {
+		return n
+	}
+	agents, err := a.agentRepo.List(ctx)
+	if err != nil {
+		cache[id] = id
+		return id
+	}
+	for _, ag := range agents {
+		cache[ag.ID] = ag.Name
+	}
+	if n, ok := cache[id]; ok {
+		return n
+	}
+	cache[id] = id
+	return id
 }
 
 func (a *adminAgentRelationRepoAdapter) List(ctx context.Context, schemaID string) ([]admintools.AgentRelationRecord, error) {
@@ -434,14 +475,15 @@ func (a *adminAgentRelationRepoAdapter) List(ctx context.Context, schemaID strin
 	if err != nil {
 		return nil, err
 	}
+	nameCache := map[string]string{}
 	out := make([]admintools.AgentRelationRecord, 0, len(records))
 	for _, r := range records {
 		label, _ := r.Config["label"].(string)
 		out = append(out, admintools.AgentRelationRecord{
 			ID:        r.ID,
 			SchemaID:  r.SchemaID,
-			FromAgent: r.SourceAgentID,
-			ToAgent:   r.TargetAgentID,
+			FromAgent: a.agentNameByID(ctx, r.SourceAgentID, nameCache),
+			ToAgent:   a.agentNameByID(ctx, r.TargetAgentID, nameCache),
 			Label:     label,
 		})
 	}
@@ -449,14 +491,22 @@ func (a *adminAgentRelationRepoAdapter) List(ctx context.Context, schemaID strin
 }
 
 func (a *adminAgentRelationRepoAdapter) Create(ctx context.Context, record *admintools.AgentRelationRecord) error {
+	sourceID, err := a.resolveAgentRef(ctx, record.FromAgent)
+	if err != nil {
+		return fmt.Errorf("resolve from_agent: %w", err)
+	}
+	targetID, err := a.resolveAgentRef(ctx, record.ToAgent)
+	if err != nil {
+		return fmt.Errorf("resolve to_agent: %w", err)
+	}
 	config := map[string]interface{}{}
 	if record.Label != "" {
 		config["label"] = record.Label
 	}
 	cr := &configrepo.AgentRelationRecord{
 		SchemaID:      record.SchemaID,
-		SourceAgentID: record.FromAgent,
-		TargetAgentID: record.ToAgent,
+		SourceAgentID: sourceID,
+		TargetAgentID: targetID,
 		Config:        config,
 	}
 	if err := a.repo.Create(ctx, cr); err != nil {

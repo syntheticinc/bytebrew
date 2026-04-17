@@ -7,6 +7,24 @@
     @apply h-full;
   }
 
+  /* Admin layout owns its own vertical scroll — prevent the document
+   * itself from scrolling. */
+  html, body {
+    overflow: hidden;
+  }
+
+  /* Tailwind's .sr-only uses position: absolute without top/left, so
+   * each sr-only element anchors at its "static" flow position. When
+   * placed deep inside a long inner-scrollable form, the static
+   * position is far below the viewport, which inflates
+   * html.scrollHeight and causes programmatic/keyboard scroll of the
+   * whole page. Pin to 0,0 so they never contribute to document
+   * scroll size; visibility is still handled by clip + width/height. */
+  .sr-only {
+    top: 0 !important;
+    left: 0 !important;
+  }
+
   body {
     @apply bg-brand-dark font-mono text-brand-light antialiased;
     color-scheme: dark;

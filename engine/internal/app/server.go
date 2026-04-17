@@ -408,7 +408,7 @@ func Run(sc ServerConfig) error {
 				TriggerRepo:    newAdminTriggerRepoAdapter(configrepo.NewGORMTriggerRepository(pgDB), pgDB),
 				MCPServerRepo:  newAdminMCPServerRepoAdapter(configrepo.NewGORMMCPServerRepository(pgDB)),
 				ModelRepo:      newAdminModelRepoAdapter(configrepo.NewGORMLLMProviderRepository(pgDB)),
-				AgentRelationRepo: newAdminAgentRelationRepoAdapter(configrepo.NewGORMAgentRelationRepository(pgDB)),
+				AgentRelationRepo: newAdminAgentRelationRepoAdapter(configrepo.NewGORMAgentRelationRepository(pgDB), configrepo.NewGORMAgentRepository(pgDB)),
 				SessionRepo:    newAdminSessionRepoAdapter(configrepo.NewGORMSessionRepository(pgDB)),
 				CapabilityRepo: newAdminCapabilityRepoAdapter(configrepo.NewGORMCapabilityRepository(pgDB)),
 				Reloader: func() {
