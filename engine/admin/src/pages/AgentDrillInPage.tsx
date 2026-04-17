@@ -598,7 +598,7 @@ function AgentDrillInInner() {
             </div>
           </div>
           {capabilities.length === 0 ? (
-            <p className="text-sm text-brand-shade3 font-mono">No capabilities configured. Click + Add to extend agent with memory, knowledge, guardrails, and more.</p>
+            <p className="text-sm text-brand-shade3 font-mono">No capabilities configured. Click + Add to extend agent with memory or knowledge.</p>
           ) : (
             <div className="space-y-2">
               {capabilities.map((cap, i) => (

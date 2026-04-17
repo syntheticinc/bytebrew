@@ -11,9 +11,6 @@ type CapabilityType string
 const (
 	CapabilityTypeMemory    CapabilityType = "memory"
 	CapabilityTypeKnowledge CapabilityType = "knowledge"
-	CapabilityTypeGuardrail CapabilityType = "guardrail"
-	CapabilityTypeRecovery  CapabilityType = "recovery"
-	CapabilityTypePolicies  CapabilityType = "policies"
 )
 
 // AllCapabilityTypes returns all valid capability types.
@@ -21,9 +18,6 @@ func AllCapabilityTypes() []CapabilityType {
 	return []CapabilityType{
 		CapabilityTypeMemory,
 		CapabilityTypeKnowledge,
-		CapabilityTypeGuardrail,
-		CapabilityTypeRecovery,
-		CapabilityTypePolicies,
 	}
 }
 
@@ -71,8 +65,7 @@ func (c *Capability) Validate() error {
 // IsValid returns true if the capability type is one of the known types.
 func (ct CapabilityType) IsValid() bool {
 	switch ct {
-	case CapabilityTypeMemory, CapabilityTypeKnowledge, CapabilityTypeGuardrail,
-		CapabilityTypeRecovery, CapabilityTypePolicies:
+	case CapabilityTypeMemory, CapabilityTypeKnowledge:
 		return true
 	}
 	return false

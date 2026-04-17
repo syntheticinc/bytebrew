@@ -50,9 +50,7 @@ import (
 	svcknowledge "github.com/syntheticinc/bytebrew/engine/internal/service/knowledge"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/eventstore"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/lifecycle"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/guardrail"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/service/recovery"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/resilience"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/sessionprocessor"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/turnexecutor"
@@ -110,7 +108,10 @@ type ServerConfig struct {
 // This is the common entry point shared by CE and server (legacy) binaries.
 func Run(sc ServerConfig) error {
 	// Always resolve data dir (needed for port file discovery)
-	dataDir := UserDataDir()
+	dataDir, err := UserDataDir()
+	if err != nil {
+		return fmt.Errorf("resolve user data directory: %w", err)
+	}
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return fmt.Errorf("create data directory: %w", err)
 	}
@@ -469,12 +470,6 @@ func Run(sc ServerConfig) error {
 		slog.InfoContext(ctx, "Capability injector wired into AgentToolResolver")
 	}
 
-	// US-004: Wire dynamic policy evaluator — loads rules from capabilities DB per-agent.
-	if components.AgentToolResolver != nil && pgDB != nil {
-		components.AgentToolResolver.SetPolicyEvaluator(&dynamicPolicyEvaluatorAdapter{db: pgDB})
-		slog.InfoContext(ctx, "Dynamic policy evaluator wired into AgentToolResolver")
-	}
-
 	// US-006: Wire circuit breaker registry into AgentToolResolver
 	var cbRegistry *resilience.CircuitBreakerRegistry
 	if components.AgentToolResolver != nil {
@@ -488,7 +483,7 @@ func Run(sc ServerConfig) error {
 	}
 
 	// Resilience: HeartbeatMonitor — detects stuck agents (AC-RESIL-01/02)
-	heartbeatMonitor := resilience.NewHeartbeatMonitor(resilience.DefaultHeartbeatConfig(), stubHeartbeatCallback)
+	heartbeatMonitor := resilience.NewHeartbeatMonitor(resilience.DefaultHeartbeatConfig(), heartbeatStuckCallback)
 	heartbeatMonitor.Start(ctx)
 	slog.InfoContext(ctx, "Heartbeat monitor started")
 
@@ -498,14 +493,7 @@ func Run(sc ServerConfig) error {
 			"task_id", t.TaskID, "agent_id", t.AgentID, "elapsed", elapsed)
 	})
 
-	// US-005: Wire recovery executor into AgentToolResolver
-	if components.AgentToolResolver != nil {
-		recoveryExec := recovery.New(nil) // nil recorder — events logged via slog
-		components.AgentToolResolver.SetRecoveryExecutor(&recoveryExecutorAdapter{executor: recoveryExec})
-		slog.InfoContext(ctx, "Recovery executor wired into AgentToolResolver")
-	}
-
-	// Wire per-agent capability config reader (recovery recipes, memory max_entries, knowledge top_k)
+	// Wire per-agent capability config reader (memory max_entries, knowledge top_k)
 	var capReader *capabilityConfigReader
 	if pgDB != nil {
 		capReader = &capabilityConfigReader{db: pgDB}
@@ -514,10 +502,6 @@ func Run(sc ServerConfig) error {
 			slog.InfoContext(ctx, "Capability config reader wired into AgentToolResolver")
 		}
 	}
-
-	// US-003: Guardrail pipeline — wired into factory after factory creation (see below).
-	guardrailPipeline := guardrail.NewPipeline()
-	_ = guardrailPipeline
 
 	// HTTP REST API server — starts only when bootstrap config is available.
 	// Supports two modes:
@@ -857,7 +841,7 @@ func Run(sc ServerConfig) error {
 			agentRelationRepo := configrepo.NewGORMAgentRelationRepository(pgDB)
 			schemaHandler := deliveryhttp.NewSchemaHandler(
 				&schemaServiceHTTPAdapter{repo: schemaRepo, db: pgDB},
-				&agentRelationServiceHTTPAdapter{repo: agentRelationRepo},
+				&agentRelationServiceHTTPAdapter{repo: agentRelationRepo, agentRepo: agentRepo},
 			)
 			schemaHandler.SetAgentDetailer(agentManager)
 			r.Group(func(r chi.Router) {
@@ -906,7 +890,7 @@ func Run(sc ServerConfig) error {
 
 			// Sessions (admin-only)
 			sessionRepo := configrepo.NewGORMSessionRepository(pgDB)
-			messageRepo := configrepo.NewGORMMessageRepository(pgDB)
+			messageRepo := configrepo.NewGORMEventRepository(pgDB)
 			sessionHandler := deliveryhttp.NewSessionHandler(&sessionServiceHTTPAdapter{repo: sessionRepo, messageRepo: messageRepo})
 			sessionHandler.SetEventService(&eventServiceHTTPAdapter{repo: messageRepo})
 			r.Group(func(r chi.Router) {
@@ -966,6 +950,13 @@ func Run(sc ServerConfig) error {
 			usageHandler := deliveryhttp.NewUsageHandler(pgDB)
 			r.Get("/api/v1/usage", usageHandler.GetUsage)
 
+			// Tool Call Log — per-tool-call observability (OSS Phase 4).
+			// OSS users rely on this to debug agent behavior: which tools were called,
+			// with what args, how long they took, and whether they failed.
+			toolCallRepoOSS := configrepo.NewToolCallEventRepository(pgDB)
+			toolCallLogHandlerOSS := deliveryhttp.NewToolCallLogHandler(&toolCallLogHTTPAdapter{repo: toolCallRepoOSS})
+			r.Get("/api/v1/audit/tool-calls", toolCallLogHandlerOSS.List)
+
 			// Resilience admin endpoints (AC-RESIL-08: dead letters visible, circuit breaker management)
 			resilienceHandler := deliveryhttp.NewResilienceHandler(
 				&circuitBreakerQuerierHTTPAdapter{registry: cbRegistry},
@@ -974,10 +965,12 @@ func Run(sc ServerConfig) error {
 			)
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireAdminSession)
-				r.Get("/api/v1/admin/resilience/circuit-breakers", resilienceHandler.ListCircuitBreakers)
-				r.Post("/api/v1/admin/resilience/circuit-breakers/{name}/reset", resilienceHandler.ResetCircuitBreaker)
-				r.Get("/api/v1/admin/resilience/dead-letters", resilienceHandler.ListDeadLetters)
-				r.Get("/api/v1/admin/resilience/heartbeats", resilienceHandler.ListHeartbeats)
+				// Resilience Observability page (admin UI). Read-only.
+				r.Get("/api/v1/resilience/circuit-breakers", resilienceHandler.ListCircuitBreakers)
+				r.Post("/api/v1/resilience/circuit-breakers/{name}/reset", resilienceHandler.ResetCircuitBreaker)
+				r.Get("/api/v1/resilience/dead-letter", resilienceHandler.ListDeadLetters)
+				r.Get("/api/v1/resilience/stuck-agents", resilienceHandler.ListStuckAgents)
+				r.Get("/api/v1/resilience/heartbeats", resilienceHandler.ListHeartbeats)
 			})
 
 			// Capability injector is wired into AgentToolResolver above (US-001).
@@ -1017,10 +1010,7 @@ func Run(sc ServerConfig) error {
 				r.Use(userResolveMW)
 				r.Use(eeMW.RequireEE)
 
-				// Tool call audit log (EE) — detailed per-tool-call log
-				toolCallRepo := configrepo.NewToolCallEventRepository(pgDB)
-				toolCallLogHandler := deliveryhttp.NewToolCallLogHandler(&toolCallLogHTTPAdapter{repo: toolCallRepo})
-				r.Get("/api/v1/audit/tool-calls", toolCallLogHandler.List)
+				// Tool call audit log moved to OSS block (Phase 4).
 
 				// Rate limit usage API (EE)
 				if configurableRL != nil {
@@ -1269,13 +1259,6 @@ func Run(sc ServerConfig) error {
 		if taskRepo != nil {
 			platformTriggerRepo = configrepo.NewGORMTriggerRepository(pgDB)
 		}
-
-		// US-003: Wire guardrail pipeline with per-agent config resolver
-		factory.SetGuardrail(
-			&guardrailCheckerAdapter{pipeline: guardrailPipeline},
-			&guardrailConfigResolver{db: pgDB},
-		)
-		loggerInstance.InfoContext(ctx, "Guardrail pipeline wired into TurnExecutorFactory")
 
 		// Wire per-agent capability config reader for memory max_entries
 		if capReader != nil {
@@ -1625,32 +1608,30 @@ func initializeGRPCServer(cfg *config.Config, log *logger.Logger, licenseInfo *d
 }
 
 // UserDataDir returns the platform-specific user data directory for ByteBrew.
-func UserDataDir() string {
+func UserDataDir() (string, error) {
 	switch runtime.GOOS {
 	case "windows":
 		appData := os.Getenv("APPDATA")
 		if appData == "" {
 			appData = filepath.Join(os.Getenv("USERPROFILE"), "AppData", "Roaming")
 		}
-		return filepath.Join(appData, "bytebrew")
+		return filepath.Join(appData, "bytebrew"), nil
 	case "darwin":
 		home, err := os.UserHomeDir()
 		if err != nil {
-			slog.Error("failed to get user home directory", "error", err)
-			os.Exit(1)
+			return "", fmt.Errorf("get user home directory: %w", err)
 		}
-		return filepath.Join(home, "Library", "Application Support", "bytebrew")
+		return filepath.Join(home, "Library", "Application Support", "bytebrew"), nil
 	default:
 		xdgData := os.Getenv("XDG_DATA_HOME")
 		if xdgData != "" {
-			return filepath.Join(xdgData, "bytebrew")
+			return filepath.Join(xdgData, "bytebrew"), nil
 		}
 		home, err := os.UserHomeDir()
 		if err != nil {
-			slog.Error("failed to get user home directory", "error", err)
-			os.Exit(1)
+			return "", fmt.Errorf("get user home directory: %w", err)
 		}
-		return filepath.Join(home, ".local", "share", "bytebrew")
+		return filepath.Join(home, ".local", "share", "bytebrew"), nil
 	}
 }
 

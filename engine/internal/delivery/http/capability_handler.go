@@ -85,10 +85,9 @@ func (h *CapabilityHandler) Add(w http.ResponseWriter, r *http.Request) {
 	// BUG-001: Validate capability type against allowed list.
 	validTypes := map[string]bool{
 		"memory": true, "knowledge": true,
-		"guardrail": true, "recovery": true, "policies": true,
 	}
 	if !validTypes[req.Type] {
-		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid capability type %q: must be one of memory, knowledge, guardrail, recovery, policies", req.Type))
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid capability type %q: must be one of memory, knowledge", req.Type))
 		return
 	}
 

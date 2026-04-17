@@ -276,6 +276,28 @@ export interface CircuitBreakerState {
   last_failure?: string | null;
 }
 
+export interface DeadLetterEntry {
+  task_id: string;
+  agent_id: string;
+  agent_name?: string;
+  started_at: string;
+  moved_at?: string;
+  status: string;
+  reason?: string;
+  elapsed_ms?: number;
+  last_error?: string;
+}
+
+export interface StuckAgentEntry {
+  agent_id: string;
+  agent_name?: string;
+  agent_type: string;
+  last_heartbeat: string;
+  elapsed_ms: number;
+  status: string;
+  current_step?: string;
+}
+
 // ============================================================================
 // Health types
 // ============================================================================
@@ -310,6 +332,22 @@ export interface AuditEntry {
   action: string;
   resource: string;
   details: string;
+}
+
+// ToolCallEntry is a single row in the Tool Call Log — one tool call, its
+// arguments, its result, its status and duration. Shape matches the Go
+// handler in internal/delivery/http/tool_call_log_handler.go.
+export interface ToolCallEntry {
+  id: string;
+  session_id: string;
+  agent_name: string;
+  tool_name: string;
+  input: string;
+  output: string;
+  status: 'completed' | 'failed' | string;
+  duration_ms: number;
+  user_id: string;
+  created_at: string;
 }
 
 export interface PaginatedResponse<T> {
@@ -423,10 +461,7 @@ export interface ForkTemplateResponse {
 
 export type CapabilityType =
   | 'memory'
-  | 'knowledge'
-  | 'guardrail'
-  | 'recovery'
-  | 'policies';
+  | 'knowledge';
 
 export interface CapabilityConfig {
   id?: string;
@@ -476,10 +511,6 @@ export interface MemoryEntry {
 export const CAPABILITY_META: Record<CapabilityType, { label: string; icon: string; description: string }> = {
   memory:        { label: 'Memory',           icon: 'brain',          description: 'Per-schema cross-session persistence' },
   knowledge:     { label: 'Knowledge',        icon: 'book-open',      description: 'RAG sources (PDF, DOCX, TXT, MD, CSV)' },
-  guardrail:     { label: 'Output Guardrail', icon: 'shield-check',   description: 'JSON Schema, LLM judge, webhook validation' },
-
-  recovery:      { label: 'Recovery Policy',  icon: 'refresh-cw',     description: 'Retry rules per failure type (per-session scope)' },
-  policies:      { label: 'Agent Policies',   icon: 'settings',       description: 'When [condition] → Do [action] rules' },
 };
 
 // ============================================================================
@@ -615,36 +646,6 @@ export interface WebhookConfig {
   client_id?: string;
   client_secret?: string;
   timeout_ms?: number;
-}
-
-// ============================================================================
-// V2: Policy types
-// ============================================================================
-
-export type PolicyConditionType =
-  | 'before_tool_call'
-  | 'after_tool_call'
-  | 'tool_matches'
-  | 'time_range'
-  | 'error_occurred';
-
-export type PolicyActionType =
-  | 'block'
-  | 'log_to_webhook'
-  | 'notify'
-  | 'inject_header'
-  | 'write_audit';
-
-export interface PolicyRule {
-  condition: PolicyConditionType;
-  action: PolicyActionType;
-  tool_pattern?: string;
-  time_start?: string;
-  time_end?: string;
-  webhook_url?: string;
-  webhook_auth?: WebhookAuthType;
-  header_name?: string;
-  header_value?: string;
 }
 
 // ============================================================================

@@ -93,13 +93,11 @@ func TestInjectedTools_NoCapabilities(t *testing.T) {
 	}
 }
 
-func TestInjectedTools_GuardrailNoTools(t *testing.T) {
+func TestInjectedTools_UnknownCapabilityNoTools(t *testing.T) {
 	reader := &mockCapReader{
 		caps: map[string][]CapabilityRecord{
 			"agent-a": {
-				{ID: "1", AgentName: "agent-a", Type: "guardrail", Enabled: true},
-				{ID: "2", AgentName: "agent-a", Type: "output_schema", Enabled: true},
-				{ID: "3", AgentName: "agent-a", Type: "policies", Enabled: true},
+				{ID: "1", AgentName: "agent-a", Type: "unknown_cap", Enabled: true},
 			},
 		},
 	}
@@ -110,6 +108,6 @@ func TestInjectedTools_GuardrailNoTools(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(tools) != 0 {
-		t.Errorf("expected 0 tools for guardrail/schema/policies, got %d: %v", len(tools), tools)
+		t.Errorf("expected 0 tools for unknown capability type, got %d: %v", len(tools), tools)
 	}
 }

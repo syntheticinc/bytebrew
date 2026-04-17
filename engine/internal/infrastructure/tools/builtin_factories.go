@@ -77,15 +77,6 @@ func RegisterAllBuiltins(store *BuiltinToolStore) {
 		return NewGetFileStructureTool(deps.ChunkStore, deps.ProjectRoot)
 	})
 
-	// Legacy alias — kept for backward compatibility with existing agent configs.
-	// Same unified tool registered under both names.
-	store.Register("engine_manage_tasks", func(deps ToolDependencies) tool.InvokableTool {
-		if deps.EngineTaskManager == nil {
-			return nil
-		}
-		return NewEngineManageTasksTool(deps.EngineTaskManager, deps.SessionID)
-	})
-
 	// Web search is available only via MCP servers (Tavily, Brave, Exa, etc.) — attach via Admin UI.
 
 	// Memory capability tools (US-001: auto-injected by capability injector when agent has Memory)

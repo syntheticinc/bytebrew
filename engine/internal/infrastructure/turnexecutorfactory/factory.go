@@ -33,12 +33,6 @@ type AgentUUIDResolver interface {
 	ResolveAgentUUID(agentName string) string
 }
 
-// GuardrailConfigResolver resolves guardrail capability config for an agent.
-// Returns nil when the agent has no guardrail capability configured.
-type GuardrailConfigResolver interface {
-	ResolveGuardrailConfig(ctx context.Context, agentName string) (*turnexecutor.GuardrailCheckConfig, error)
-}
-
 // Factory creates EngineAdapter-based TurnExecutors for Supervisor mode.
 // Implements grpc.TurnExecutorFactory interface (consumer-side).
 type Factory struct {
@@ -61,9 +55,6 @@ type Factory struct {
 	engineTaskManager tools.EngineTaskManager
 	// Schema resolver for memory/knowledge tools (BUG-007)
 	schemaResolver AgentSchemaResolver
-	// US-003: Guardrail pipeline (injected via SetGuardrail — nil = disabled)
-	guardrailChecker        turnexecutor.GuardrailChecker
-	guardrailConfigResolver GuardrailConfigResolver
 	// Per-agent capability config reader (memory max_entries, etc.)
 	capConfigReader tools.CapabilityConfigReader
 	// Agent UUID resolver: name → uuid FK (for engine_adapter ExecutionConfig.AgentID)
@@ -111,12 +102,6 @@ func (f *Factory) SetEngineTaskManager(mgr tools.EngineTaskManager) {
 // SetSchemaResolver configures schema lookup for propagating SchemaID to tool deps.
 func (f *Factory) SetSchemaResolver(resolver AgentSchemaResolver) {
 	f.schemaResolver = resolver
-}
-
-// SetGuardrail configures the guardrail checker and per-agent config resolver.
-func (f *Factory) SetGuardrail(checker turnexecutor.GuardrailChecker, resolver GuardrailConfigResolver) {
-	f.guardrailChecker = checker
-	f.guardrailConfigResolver = resolver
 }
 
 // SetCapabilityConfigReader configures per-agent capability config resolution.
@@ -248,14 +233,6 @@ func (f *Factory) CreateForSession(
 		}
 	}
 
-	// US-003: Resolve guardrail config for this agent (nil = no guardrails).
-	var guardrailConfig *turnexecutor.GuardrailCheckConfig
-	if f.guardrailConfigResolver != nil {
-		if cfg, err := f.guardrailConfigResolver.ResolveGuardrailConfig(ctx, agentName); err == nil && cfg != nil {
-			guardrailConfig = cfg
-		}
-	}
-
 	// Resolve agent UUID for engine execution context (agent_context_snapshots.agent_id = uuid FK).
 	var agentUUID string
 	if f.agentUUIDResolver != nil {
@@ -275,8 +252,6 @@ func (f *Factory) CreateForSession(
 		AgentUUID:        agentUUID,
 		SchemaID:         schemaID,
 		ContextReminders: contextReminders,
-		Guardrail:        f.guardrailChecker,
-		GuardrailConfig:  guardrailConfig,
 	})
 
 	if err != nil {

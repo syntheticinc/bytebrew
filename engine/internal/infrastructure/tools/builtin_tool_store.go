@@ -7,7 +7,6 @@ import (
 	"sort"
 
 	"github.com/cloudwego/eino/components/tool"
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 )
@@ -90,9 +89,7 @@ type AgentToolResolver struct {
 	spawner                 GenericAgentSpawner
 	inspector               GenericAgentInspector
 	capInjector             CapabilityToolInjector
-	policyEvaluator         PolicyEvaluator
 	cbRegistry              CircuitBreakerRegistry
-	recoveryExecutor        RecoveryExecutor
 	capConfigReader         CapabilityConfigReader
 	knowledgeKBResolver     KnowledgeKBResolver // resolves agent → linked KB IDs
 	toolTimeoutMs           int64 // 0 = disabled
@@ -140,19 +137,9 @@ func (r *AgentToolResolver) SetCapabilityInjector(injector CapabilityToolInjecto
 	r.capInjector = injector
 }
 
-// SetPolicyEvaluator configures the policy evaluator for wrapping tools with policy checks.
-func (r *AgentToolResolver) SetPolicyEvaluator(evaluator PolicyEvaluator) {
-	r.policyEvaluator = evaluator
-}
-
 // SetCircuitBreakerRegistry configures the circuit breaker registry for MCP tool protection.
 func (r *AgentToolResolver) SetCircuitBreakerRegistry(registry CircuitBreakerRegistry) {
 	r.cbRegistry = registry
-}
-
-// SetRecoveryExecutor configures the recovery executor for MCP tool failure recovery.
-func (r *AgentToolResolver) SetRecoveryExecutor(executor RecoveryExecutor) {
-	r.recoveryExecutor = executor
 }
 
 // SetToolTimeout configures the per-MCP-tool-call timeout in milliseconds (AC-RESIL-05).
@@ -305,24 +292,12 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 	}
 
 	// MCP tools — append tools from connected MCP servers configured for this agent.
-	// Circuit breaker (US-006) and recovery (US-005) wrapping happens inside resolveMCPTools.
+	// Circuit breaker (US-006) wrapping happens inside resolveMCPTools.
 	mcpTools, err := r.resolveMCPTools(rc)
 	if err != nil {
 		return nil, fmt.Errorf("resolve mcp tools for agent %q: %w", rc.Agent.Record.Name, err)
 	}
 	tools = append(tools, mcpTools...)
-
-	// US-004: Wrap all tools with policy evaluator
-	if r.policyEvaluator != nil {
-		for i, t := range tools {
-			info, _ := t.Info(ctx)
-			toolName := "unknown"
-			if info != nil {
-				toolName = info.Name
-			}
-			tools[i] = NewPolicyToolWrapper(t, r.policyEvaluator, rc.Agent.Record.Name, toolName)
-		}
-	}
 
 	return tools, nil
 }
@@ -435,16 +410,6 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 
 	// MCP tools via legacy Resolve path
 	if r.mcpProvider != nil && len(deps.MCPServers) > 0 {
-		// Resolve per-agent recovery executor from capability config
-		legacyRecoveryExec := r.recoveryExecutor
-		if r.capConfigReader != nil && r.recoveryExecutor != nil && deps.AgentName != "" {
-			if cfg, err := r.capConfigReader.ReadConfig(ctx, deps.AgentName, "recovery"); err == nil && cfg != nil {
-				if recipes := parseRecoveryRecipes(cfg); len(recipes) > 0 {
-					legacyRecoveryExec = &capabilityRecoveryExecutor{recipes: recipes, fallback: r.recoveryExecutor}
-				}
-			}
-		}
-
 		for _, serverName := range deps.MCPServers {
 			mcpTools, err := r.mcpProvider.GetMCPTools(serverName)
 			if err != nil {
@@ -454,7 +419,6 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 			}
 			// AC-RESIL-05: Timeout is innermost — fires first, feeds timeout error to CB
 			// US-006: Circuit breaker wraps timeout
-			// US-005: Recovery wraps circuit breaker (per-agent config)
 			for i, mt := range mcpTools {
 				if r.toolTimeoutMs > 0 {
 					mcpTools[i] = NewTimeoutToolWrapper(mt, r.toolTimeoutMs)
@@ -462,30 +426,9 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 				}
 				if r.cbRegistry != nil {
 					mcpTools[i] = NewCircuitBreakerToolWrapper(mt, r.cbRegistry.Get(serverName))
-					mt = mcpTools[i]
-				}
-				if legacyRecoveryExec != nil {
-					info, _ := mt.Info(ctx)
-					toolName := serverName
-					if info != nil {
-						toolName = info.Name
-					}
-					mcpTools[i] = NewRecoveryToolWrapper(mt, legacyRecoveryExec, deps.SessionID, toolName)
 				}
 			}
 			resolved = append(resolved, mcpTools...)
-		}
-	}
-
-	// US-004: Wrap all tools with policy evaluator
-	if r.policyEvaluator != nil && deps.AgentName != "" {
-		for i, t := range resolved {
-			info, _ := t.Info(ctx)
-			toolName := "unknown"
-			if info != nil {
-				toolName = info.Name
-			}
-			resolved[i] = NewPolicyToolWrapper(t, r.policyEvaluator, deps.AgentName, toolName)
 		}
 	}
 
@@ -493,22 +436,10 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 }
 
 // resolveMCPTools returns tools from MCP servers configured for the agent.
-// US-005/US-006: MCP tools are wrapped with circuit breaker and recovery if configured.
+// US-006: MCP tools are wrapped with circuit breaker and timeout if configured.
 func (r *AgentToolResolver) resolveMCPTools(rc ResolveContext) ([]tool.InvokableTool, error) {
 	if r.mcpProvider == nil || len(rc.Agent.Record.MCPServers) == 0 {
 		return nil, nil
-	}
-
-	ctx := context.Background()
-
-	// Resolve per-agent recovery executor from capability config
-	recoveryExec := r.recoveryExecutor
-	if r.capConfigReader != nil && r.recoveryExecutor != nil {
-		if cfg, err := r.capConfigReader.ReadConfig(ctx, rc.Agent.Record.Name, "recovery"); err == nil && cfg != nil {
-			if recipes := parseRecoveryRecipes(cfg); len(recipes) > 0 {
-				recoveryExec = &capabilityRecoveryExecutor{recipes: recipes, fallback: r.recoveryExecutor}
-			}
-		}
 	}
 
 	var result []tool.InvokableTool
@@ -521,7 +452,6 @@ func (r *AgentToolResolver) resolveMCPTools(rc ResolveContext) ([]tool.Invokable
 		}
 		// AC-RESIL-05: Timeout is innermost — fires first, feeds timeout error to CB
 		// US-006: Circuit breaker wraps timeout
-		// US-005: Recovery wraps circuit breaker (per-agent config)
 		for i, mt := range mcpTools {
 			if r.toolTimeoutMs > 0 {
 				mcpTools[i] = NewTimeoutToolWrapper(mt, r.toolTimeoutMs)
@@ -529,93 +459,11 @@ func (r *AgentToolResolver) resolveMCPTools(rc ResolveContext) ([]tool.Invokable
 			}
 			if r.cbRegistry != nil {
 				mcpTools[i] = NewCircuitBreakerToolWrapper(mt, r.cbRegistry.Get(serverName))
-				mt = mcpTools[i]
-			}
-			if recoveryExec != nil {
-				info, _ := mt.Info(ctx)
-				toolName := serverName
-				if info != nil {
-					toolName = info.Name
-				}
-				mcpTools[i] = NewRecoveryToolWrapper(mt, recoveryExec, rc.Deps.SessionID, toolName)
 			}
 		}
 		result = append(result, mcpTools...)
 	}
 	return result, nil
-}
-
-// capabilityRecoveryExecutor implements RecoveryExecutor using per-agent recovery recipes.
-type capabilityRecoveryExecutor struct {
-	recipes  map[domain.FailureType]*domain.RecoveryRecipe
-	fallback RecoveryExecutor
-}
-
-func (e *capabilityRecoveryExecutor) Execute(ctx context.Context, sessionID string, failureType domain.FailureType, detail string) RecoveryExecResult {
-	recipe, ok := e.recipes[failureType]
-	if !ok {
-		if e.fallback != nil {
-			return e.fallback.Execute(ctx, sessionID, failureType, detail)
-		}
-		return RecoveryExecResult{Recovered: false, Action: domain.RecoveryBlock, Detail: "no recipe for " + string(failureType)}
-	}
-
-	slog.InfoContext(ctx, "[Recovery] using per-agent recipe",
-		"failure_type", failureType, "action", recipe.Action,
-		"retry_count", recipe.RetryCount, "session_id", sessionID)
-
-	if recipe.Action == domain.RecoveryBlock {
-		return RecoveryExecResult{Recovered: false, Action: recipe.Action, Detail: detail}
-	}
-
-	return RecoveryExecResult{Recovered: true, Action: recipe.Action, Detail: fmt.Sprintf("recovery: %s", recipe.Action)}
-}
-
-// parseRecoveryRecipes parses recovery rules from capability config JSON.
-// UI format: {"rules": [{"failure_type": "...", "action": "...", "retry_count": N, "backoff": "..."}]}
-func parseRecoveryRecipes(config map[string]interface{}) map[domain.FailureType]*domain.RecoveryRecipe {
-	rulesRaw, ok := config["rules"]
-	if !ok {
-		return nil
-	}
-	rulesSlice, ok := rulesRaw.([]interface{})
-	if !ok {
-		return nil
-	}
-	recipes := make(map[domain.FailureType]*domain.RecoveryRecipe, len(rulesSlice))
-	for _, r := range rulesSlice {
-		ruleMap, ok := r.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		ft, _ := ruleMap["failure_type"].(string)
-		failureType := domain.FailureType(ft)
-		if !failureType.IsValid() {
-			continue
-		}
-		action, _ := ruleMap["action"].(string)
-		retryCount := 1
-		if rc, ok := ruleMap["retry_count"].(float64); ok {
-			retryCount = int(rc)
-		}
-		backoff, _ := ruleMap["backoff"].(string)
-		backoffBaseMs := 1000
-		if bb, ok := ruleMap["backoff_base_ms"].(float64); ok {
-			backoffBaseMs = int(bb)
-		}
-		fallbackModel, _ := ruleMap["fallback_model"].(string)
-
-		recipes[failureType] = &domain.RecoveryRecipe{
-			FailureType:   failureType,
-			Action:        domain.RecoveryAction(action),
-			RetryCount:    retryCount,
-			Backoff:       domain.BackoffStrategy(backoff),
-			BackoffBaseMs: backoffBaseMs,
-			FallbackModel: fallbackModel,
-			Escalation:    domain.EscalationLogAndContinue,
-		}
-	}
-	return recipes
 }
 
 // hasToolInList checks if a tool name exists in the given list.

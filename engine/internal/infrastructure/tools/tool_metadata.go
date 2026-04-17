@@ -37,11 +37,6 @@ var toolMetadataRegistry = map[string]ToolMetadata{
 		Description:  "Manages subtasks within a parent task — create, update status, mark complete. Used for granular progress tracking.",
 		SecurityZone: ZoneSafe,
 	},
-	"engine_manage_tasks": {
-		Name:         "engine_manage_tasks",
-		Description:  "Manages tasks stored in PostgreSQL. Provides persistent, DB-backed task tracking that survives server restarts.",
-		SecurityZone: ZoneSafe,
-	},
 	"spawn_agent": {
 		Name:         "spawn_agent",
 		Description:  "Spawns a specialized sub-agent (e.g. code-agent, reviewer) to handle a specific subtask. The sub-agent works independently and returns a summary when done.",
