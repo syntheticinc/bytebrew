@@ -211,6 +211,7 @@ func (s *ForkService) forkInTx(tx *gorm.DB, tmpl *domain.SchemaTemplate, newSche
 			SchemaID:      schema.ID,
 			SourceAgentID: sourceID,
 			TargetAgentID: targetID,
+			Config:        "{}",
 		}
 		if err := tx.Create(&relModel).Error; err != nil {
 			return ForkedSchema{}, fmt.Errorf("create relation %s → %s: %w", rel.Source, rel.Target, err)
