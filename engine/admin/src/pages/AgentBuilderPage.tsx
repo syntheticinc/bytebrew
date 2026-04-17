@@ -23,7 +23,6 @@ import { createMockSchemas, type SchemaName } from '../mocks/canvas';
 import type { AgentDetail, Model, Trigger, Schema } from '../types';
 import AgentNode from '../components/builder/AgentNode';
 import TriggerNode from '../components/builder/TriggerNode';
-import EdgeConfigPanel from '../components/builder/EdgeConfigPanel';
 // BuilderSidePanel removed — Details navigates to AgentDrillInPage
 import DriftNotification from '../components/builder/DriftNotification';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -515,7 +514,6 @@ function AgentBuilderInner() {
             onNodeDragStop={onNodeDragStop}
             onPaneContextMenu={interaction.onPaneContextMenu}
             onPaneClick={interaction.onPaneClick}
-            onEdgeClick={interaction.onEdgeClick}
             onEdgeContextMenu={interaction.onEdgeContextMenu}
             nodeTypes={nodeTypes}
             fitView
@@ -604,21 +602,6 @@ function AgentBuilderInner() {
         </div>
 
         {/* Side panel removed — Details navigates to AgentDrillInPage */}
-
-        {interaction.selectedEdge && (
-          <EdgeConfigPanel
-            edge={interaction.selectedEdge}
-            onClose={() => interaction.setSelectedEdge(null)}
-            onSave={(_edge, _config) => {
-              // TODO: persist edge config to API when backend is ready
-              interaction.setSelectedEdge(null);
-            }}
-            onDelete={(edgeId) => {
-              setEdges((eds) => eds.filter((e) => e.id !== edgeId));
-              interaction.setSelectedEdge(null);
-            }}
-          />
-        )}
 
         {/* Trigger config panel */}
         {interaction.selectedTrigger && (

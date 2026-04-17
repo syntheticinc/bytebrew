@@ -67,8 +67,6 @@ export function useCanvasInteraction({
   const [edgeMenu, setEdgeMenu] = useState<EdgeMenuState | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedTrigger, setSelectedTrigger] = useState<Record<string, unknown> | null>(null);
-  const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
-
   const onNodeClick: NodeMouseHandler = useCallback((_event, node) => {
     setSelectedNodeId(node.id);
 
@@ -76,7 +74,6 @@ export function useCanvasInteraction({
       // Trigger node -> show trigger config panel
       if (node.type === 'triggerNode') {
         setSelectedTrigger(node.data as Record<string, unknown>);
-        setSelectedEdge(null);
         return;
       }
       // Agent node -> navigate to drill-in
@@ -88,7 +85,6 @@ export function useCanvasInteraction({
     // Production mode — trigger node → open config panel
     if (node.type === 'triggerNode' || node.id.startsWith('trigger-')) {
       setSelectedTrigger(node.data as Record<string, unknown>);
-      setSelectedEdge(null);
       return;
     }
     // Agent node — navigate to drill-in
@@ -126,11 +122,6 @@ export function useCanvasInteraction({
     setContextMenu(null);
     setNodeMenu(null);
   }, [addToast]);
-
-  const onEdgeClick = useCallback((_event: React.MouseEvent, edge: Edge) => {
-    setSelectedEdge(edge);
-    setSelectedTrigger(null);
-  }, []);
 
   const onNodeContextMenu = useCallback((event: MouseEvent | React.MouseEvent, node: Node) => {
     event.preventDefault();
@@ -178,13 +169,10 @@ export function useCanvasInteraction({
     setSelectedNodeId,
     selectedTrigger,
     setSelectedTrigger,
-    selectedEdge,
-    setSelectedEdge,
     onNodeClick,
     onPaneContextMenu,
     onPaneClick,
     onEdgeContextMenu,
-    onEdgeClick,
     onNodeContextMenu,
     handleDeleteEdge,
   };
