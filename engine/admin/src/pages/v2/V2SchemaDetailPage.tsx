@@ -1,17 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import V2DelegationTree from '../../components/v2/V2DelegationTree';
-import V2DebugPanel from '../../components/v2/V2DebugPanel';
 import { api } from '../../api/client';
 import { useApi } from '../../hooks/useApi';
-import type { AgentDetail } from '../../types';
-import type { V2Agent, V2AgentRelation, V2Session, V2SessionMessage } from '../../mocks/v2';
+import type { AgentDetail, Trigger } from '../../types';
+import type { V2Agent, V2AgentRelation, V2Trigger } from '../../mocks/v2';
 
 type TabKey = 'canvas' | 'triggers' | 'settings';
 
 // ─── Type adapters ───────────────────────────────────────────────────────────
-// V2DelegationTree expects V2Agent/V2AgentRelation (prototype mock shapes).
-// We adapt real API types to these shapes here at the boundary.
+// V2DelegationTree expects V2Agent/V2AgentRelation/V2Trigger (prototype mock
+// shapes). We adapt real API types to these shapes here at the boundary.
 
 function agentDetailToV2Agent(a: AgentDetail): V2Agent {
   const initials = a.name
@@ -43,23 +42,21 @@ function apiRelationToV2(r: { id: string; schema_id: string; source: string; tar
   };
 }
 
-// ─── computeDebugHighlights ──────────────────────────────────────────────────
-
-function computeDebugHighlights(session: V2Session, stepIdx: number) {
-  const msg: V2SessionMessage | undefined = session.messages[stepIdx];
-  const agentIds = new Set<string>();
-  const relationKeys = new Set<string>();
-  if (!msg) return { agentIds, relationKeys };
-  agentIds.add(msg.agentId);
-  if (msg.kind === 'delegation' && msg.targetAgentId) {
-    relationKeys.add(`${msg.agentId}->${msg.targetAgentId}`);
-    agentIds.add(msg.targetAgentId);
-  }
-  if (msg.kind === 'delegation_return' && msg.sourceAgentId) {
-    relationKeys.add(`${msg.sourceAgentId}->${msg.agentId}`);
-    agentIds.add(msg.sourceAgentId);
-  }
-  return { agentIds, relationKeys };
+// triggerToV2 maps a real Trigger (from the API) to the V2Trigger shape
+// that V2DelegationTree expects. V2 semantics: all triggers point at the
+// schema's entry orchestrator. The server-side trigger type is a subset of
+// V2TriggerType (cron | webhook | chat) — V2 UI exposes only these three.
+function triggerToV2(t: Trigger, schemaId: string, entryAgentId: string): V2Trigger {
+  return {
+    id: t.id,
+    type: t.type,
+    title: t.title,
+    agentId: entryAgentId,
+    schemaId,
+    enabled: t.enabled,
+    config: (t.config ?? {}) as Record<string, unknown>,
+    lastFiredAt: t.last_fired_at,
+  };
 }
 
 // ─── AddAgentPanel ────────────────────────────────────────────────────────────
@@ -135,80 +132,19 @@ function AddAgentPanel({
   );
 }
 
-// ─── SessionsMenu ─────────────────────────────────────────────────────────────
-
-function SessionsMenu({
-  sessions,
-  onPick,
-}: {
-  sessions: V2Session[];
-  onPick: (sessionId: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, [open]);
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        disabled={sessions.length === 0}
-        className="px-3 py-1.5 text-[11px] font-medium rounded-btn border bg-brand-dark-surface text-brand-shade2 border-brand-shade3/25 hover:border-brand-shade3/50 hover:text-brand-light disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        Sessions ({sessions.length}) ▾
-      </button>
-      {open && sessions.length > 0 && (
-        <div className="absolute right-0 top-full mt-1 z-30 min-w-[320px] max-h-[360px] overflow-y-auto bg-brand-dark-alt border border-brand-shade3/25 rounded-card shadow-lg">
-          {sessions.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => {
-                onPick(s.id);
-                setOpen(false);
-              }}
-              className="w-full text-left flex items-center gap-2 px-3 py-2 border-b border-brand-shade3/10 last:border-b-0 hover:bg-brand-shade3/5 transition-colors"
-            >
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                s.status === 'active' ? 'bg-emerald-400 animate-pulse' : 'bg-brand-shade3/50'
-              }`} />
-              <span className="font-mono text-[10px] text-brand-shade3 shrink-0">{s.id}</span>
-              <span className="text-[11px] text-brand-light truncate flex-1">{s.title}</span>
-              <span className="text-[10px] text-purple-300 shrink-0">Debug →</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function V2SchemaDetailPage() {
   const { schemaId = '' } = useParams<{ schemaId: string }>();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const validTabs: TabKey[] = ['canvas', 'triggers', 'settings'];
   const rawTab = searchParams.get('tab') as TabKey | null;
   const [tab, setTab] = useState<TabKey>(
     rawTab && validTabs.includes(rawTab) ? rawTab : 'canvas',
   );
-  const [debugOpen, setDebugOpen] = useState<boolean>(!!searchParams.get('session'));
-  const [activeDebugSessionId, setActiveDebugSessionId] = useState<string | null>(
-    searchParams.get('session'),
-  );
   const [showAddAgent, setShowAddAgent] = useState(false);
   const [addChildParentName, setAddChildParentName] = useState<string | null>(null);
-  const [debugHighlight, setDebugHighlight] = useState<{
-    agentIds: Set<string>;
-    relationKeys: Set<string>;
-  }>({ agentIds: new Set(), relationKeys: new Set() });
 
   // ─── Data fetching ───────────────────────────────────────────────────────────
   const { data: schema, loading: schemaLoading } = useApi(
@@ -269,6 +205,11 @@ export default function V2SchemaDetailPage() {
   // Entry agent name: from schema or first agent in list
   const entryAgentId = schema?.entry_agent_name ?? agentNames?.[0] ?? '';
 
+  const v2Triggers = useMemo<V2Trigger[]>(
+    () => (triggers ?? []).map((t) => triggerToV2(t, schemaId, entryAgentId)),
+    [triggers, schemaId, entryAgentId],
+  );
+
   const isLoading = schemaLoading || agentNamesLoading || relationsLoading || agentsLoading || triggersLoading;
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
@@ -316,26 +257,13 @@ export default function V2SchemaDetailPage() {
     [schemaId, entryAgentId, rawRelations, refetchRelations, refetchAgentNames],
   );
 
-  const onStepChange = useCallback((session: V2Session, stepIdx: number) => {
-    setDebugHighlight(computeDebugHighlights(session, stepIdx));
-  }, []);
-
-  const openDebugForSession = useCallback((sid: string) => {
-    setActiveDebugSessionId(sid);
-    setDebugOpen(true);
-    setTab('canvas');
-    const sp = new URLSearchParams(searchParams);
-    sp.set('session', sid);
-    setSearchParams(sp, { replace: true });
-  }, [searchParams, setSearchParams]);
-
   // ─── Render guards ───────────────────────────────────────────────────────────
 
   if (!schemaLoading && schema === null) {
     return (
       <div className="max-w-[800px] mx-auto text-center py-12">
         <p className="text-brand-shade3">Schema not found.</p>
-        <Link to="/v2/schemas" className="text-brand-accent text-sm mt-4 inline-block">
+        <Link to="/schemas" className="text-brand-accent text-sm mt-4 inline-block">
           ← Back to schemas
         </Link>
       </div>
@@ -349,7 +277,7 @@ export default function V2SchemaDetailPage() {
     <div className="h-full flex flex-col">
       {/* Breadcrumb + title */}
       <div className="px-6 pt-4 pb-3 border-b border-brand-shade3/10">
-        <Link to="/v2/schemas" className="text-[11px] text-brand-shade3 hover:text-brand-accent transition-colors">
+        <Link to="/schemas" className="text-[11px] text-brand-shade3 hover:text-brand-accent transition-colors">
           ← Schemas
         </Link>
         <div className="flex items-center gap-3 mt-2">
@@ -357,22 +285,6 @@ export default function V2SchemaDetailPage() {
             {schema?.name ?? schemaId}
           </h1>
           <div className="flex-1" />
-          <SessionsMenu
-            sessions={[]}
-            onPick={openDebugForSession}
-          />
-          <button
-            onClick={() => setDebugOpen((d) => !d)}
-            disabled={!activeDebugSessionId}
-            title={activeDebugSessionId ? '' : 'Pick a past session to inspect'}
-            className={`px-3 py-1.5 text-[11px] font-medium rounded-btn border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-              debugOpen
-                ? 'bg-purple-500/20 text-purple-200 border-purple-500/40'
-                : 'bg-brand-dark-surface text-brand-shade2 border-brand-shade3/25 hover:border-brand-shade3/50 hover:text-brand-light'
-            }`}
-          >
-            {debugOpen ? '⏹ Close Debug' : 'Debug'}
-          </button>
         </div>
 
         {/* Tabs */}
@@ -424,11 +336,10 @@ export default function V2SchemaDetailPage() {
             ) : (
               <>
                 <V2DelegationTree
-                  triggers={[]}
+                  triggers={v2Triggers}
                   agents={v2Agents}
                   relations={v2Relations}
                   entryAgentId={entryAgentId}
-                  highlightAgentIds={debugHighlight.agentIds}
                   onAgentOpen={onAgentOpen}
                   onAddChild={onAddChildRequest}
                   onRemoveDelegation={handleRemoveDelegation}
@@ -548,18 +459,6 @@ export default function V2SchemaDetailPage() {
           </div>
         )}
       </div>
-
-      {debugOpen && activeDebugSessionId && (
-        <V2DebugPanel
-          sessions={[]}
-          onStepChange={onStepChange}
-          onClose={() => {
-            setDebugOpen(false);
-            setActiveDebugSessionId(null);
-            setDebugHighlight({ agentIds: new Set(), relationKeys: new Set() });
-          }}
-        />
-      )}
     </div>
   );
 }

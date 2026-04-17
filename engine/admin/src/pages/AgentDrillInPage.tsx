@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import FormField from '../components/FormField';
 import CapabilityBlock, { capabilityIcon, getCapabilityDefaultConfig } from '../components/builder/CapabilityBlock';
@@ -9,7 +9,6 @@ import type { AgentDetail, CapabilityConfig, CapabilityType, Model, MCPServer } 
 import { CAPABILITY_META } from '../types';
 import { usePrototype } from '../hooks/usePrototype';
 import { MOCK_AGENTS, MOCK_MODELS } from '../mocks/agents';
-import { getFlowsForAgent } from '../mocks/v2';
 
 const ALL_CAPABILITY_TYPES = Object.keys(CAPABILITY_META) as CapabilityType[];
 
@@ -615,57 +614,6 @@ function AgentDrillInInner() {
             </div>
           )}
         </div>
-
-        {/* Flows card (prototype only — V2 concept) */}
-        {isPrototype && agentName && (() => {
-          const flows = getFlowsForAgent(agentName);
-          return (
-            <div className="bg-brand-dark-surface border border-brand-shade3/10 rounded-card p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="flex items-center gap-2 text-xs font-semibold text-brand-shade3 uppercase tracking-widest font-mono">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="6" r="2.5" /><circle cx="6" cy="18" r="2.5" /><circle cx="18" cy="18" r="2.5" /><path d="M8.5 6H15.5M6 8.5V15.5M18 8.5V15.5M8.5 18H15.5" /></svg>
-                  Flows
-                  <span className="text-brand-shade3/60 normal-case tracking-normal ml-1">({flows.length})</span>
-                </h2>
-                <Link
-                  to={`/v2/agents/${agentName}/flows/new`}
-                  className="px-3 py-1 border border-brand-shade3/30 rounded-btn text-xs text-brand-shade2 font-mono hover:text-brand-light hover:border-brand-shade3/60 transition-colors"
-                >
-                  + New Flow
-                </Link>
-              </div>
-              <p className="text-xs text-brand-shade3 font-mono mb-3">
-                Internal structured thinking. Agent enters a flow when its trigger condition matches.
-              </p>
-              {flows.length === 0 ? (
-                <p className="text-sm text-brand-shade3 font-mono">No flows yet. Use "+ New Flow" to define structured multi-step reasoning for this agent.</p>
-              ) : (
-                <div className="space-y-2">
-                  {flows.map((f) => (
-                    <Link
-                      key={f.id}
-                      to={`/v2/agents/${agentName}/flows/${f.id}`}
-                      className="block bg-brand-dark border border-brand-shade3/15 rounded-card p-3 hover:border-brand-shade3/40 transition-colors"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-medium text-brand-light truncate">{f.name}</div>
-                          <div className="text-xs text-brand-shade3 mt-1 line-clamp-2">{f.description}</div>
-                        </div>
-                        <span className="text-xs text-brand-shade3 font-mono shrink-0">
-                          {f.checkpoints.length} checkpoint{f.checkpoints.length === 1 ? '' : 's'}
-                        </span>
-                      </div>
-                      <div className="text-[10px] text-brand-shade3/80 font-mono mt-2 truncate">
-                        Trigger: {f.triggerCondition}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })()}
 
         {/* Tools card */}
         <div className="bg-brand-dark-surface border border-brand-shade3/10 rounded-card p-4">
