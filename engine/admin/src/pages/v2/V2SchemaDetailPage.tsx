@@ -216,7 +216,7 @@ export default function V2SchemaDetailPage() {
     [schemaId],
   );
 
-  const { data: agentNames, loading: agentNamesLoading } = useApi(
+  const { data: agentNames, loading: agentNamesLoading, refetch: refetchAgentNames } = useApi(
     () => api.listSchemaAgents(schemaId),
     [schemaId],
   );
@@ -290,13 +290,14 @@ export default function V2SchemaDetailPage() {
       try {
         await api.createAgentRelation(schemaId, parent, agentName);
         refetchRelations();
+        refetchAgentNames();
       } catch {
         // silently ignore — user sees stale state
       }
       setShowAddAgent(false);
       setAddChildParentName(null);
     },
-    [schemaId, addChildParentName, entryAgentId, refetchRelations],
+    [schemaId, addChildParentName, entryAgentId, refetchRelations, refetchAgentNames],
   );
 
   const handleRemoveDelegation = useCallback(
@@ -307,11 +308,12 @@ export default function V2SchemaDetailPage() {
       try {
         await Promise.all(toDelete.map((r) => api.deleteAgentRelation(schemaId, r.id)));
         refetchRelations();
+        refetchAgentNames();
       } catch {
         // silently ignore
       }
     },
-    [schemaId, entryAgentId, rawRelations, refetchRelations],
+    [schemaId, entryAgentId, rawRelations, refetchRelations, refetchAgentNames],
   );
 
   const onStepChange = useCallback((session: V2Session, stepIdx: number) => {

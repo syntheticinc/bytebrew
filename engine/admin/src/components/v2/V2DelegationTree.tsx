@@ -168,9 +168,10 @@ function AgentCard({
             onAddChild();
           }}
           title="Add delegate under this agent"
-          className="absolute -right-2 -bottom-2 z-10 w-7 h-7 rounded-full bg-brand-accent text-white text-[16px] font-bold leading-none flex items-center justify-center shadow-lg border-2 border-brand-dark-surface hover:scale-110 transition-all opacity-0 group-hover:opacity-100"
+          className="absolute left-1/2 -translate-x-1/2 -bottom-3 z-10 h-6 px-2.5 rounded-full bg-brand-dark-surface text-brand-accent text-[10px] font-semibold leading-none flex items-center gap-1 border border-brand-accent/40 shadow-sm hover:bg-brand-accent hover:text-white hover:border-brand-accent transition-colors opacity-0 group-hover:opacity-100"
         >
-          +
+          <span className="text-[13px] leading-none">+</span>
+          <span className="tracking-wider uppercase">Delegate</span>
         </button>
       )}
       {onRemove && !isEntry && (
@@ -180,7 +181,7 @@ function AgentCard({
             onRemove();
           }}
           title="Remove delegation (detaches subtree from schema)"
-          className="absolute right-1.5 top-1.5 z-10 w-5 h-5 rounded-md text-brand-shade3/70 text-[13px] leading-none flex items-center justify-center hover:bg-red-500/15 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+          className="absolute -right-2 -top-2 z-10 w-5 h-5 rounded-full bg-brand-dark-surface text-brand-shade3/70 text-[11px] leading-none flex items-center justify-center border border-brand-shade3/25 hover:bg-red-500/15 hover:text-red-400 hover:border-red-500/40 transition-colors opacity-0 group-hover:opacity-100"
         >
           ×
         </button>
@@ -342,11 +343,13 @@ const TREE_CSS = `
   position: relative;
 }
 
-/* Parent down-stub: solid vertical between parent card and children ul */
+/* Parent down-stub: solid vertical between parent card and children ul.
+   Use 1px-wide background div (not border on 0-width) for pixel-perfect
+   alignment with the children bus and up-stubs. */
 .v2tree-parent-stub {
-  width: 0;
+  width: 1px;
   height: ${STUB_PX}px;
-  border-left: 1px solid ${LINE_COLOR};
+  background-color: ${LINE_COLOR};
 }
 
 /* Children row: no padding; each child reserves its own top space */
@@ -360,28 +363,31 @@ const TREE_CSS = `
 }
 
 /* Horizontal bus at TOP of child node (y=0 of node, above the card).
-   Borders are clipped at center for first/last child so bus only spans siblings. */
+   1px-tall background div (not border-top) so sub-pixel snapping is
+   consistent across segments. Clipped at center for first/last child. */
 .v2tree-children > .v2tree-node::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  border-top: 1px solid ${LINE_COLOR};
+  height: 1px;
+  background-color: ${LINE_COLOR};
 }
 .v2tree-children > .v2tree-node:first-child::before { left: calc(50% - 0.5px); }
 .v2tree-children > .v2tree-node:last-child::before  { right: calc(50% - 0.5px); }
 .v2tree-children > .v2tree-node:only-child::before  { display: none; }
 
-/* Up-stub from bus (y=0) down to card top (y=STUB_PX) — sits in padding area */
+/* Up-stub from bus (y=0) down to card top (y=STUB_PX). 1px-wide div centered
+   at 50% minus half-pixel — pixel-perfect with parent-stub and bus. */
 .v2tree-children > .v2tree-node::after {
   content: '';
   position: absolute;
   top: 0;
-  left: 50%;
-  width: 0;
+  left: calc(50% - 0.5px);
+  width: 1px;
   height: ${STUB_PX}px;
-  border-left: 1px solid ${LINE_COLOR};
+  background-color: ${LINE_COLOR};
 }
 
 /* ─── Triggers row (mirrored layout) ────────────────────────────────────── */
@@ -408,7 +414,8 @@ const TREE_CSS = `
   bottom: 0;
   left: 0;
   right: 0;
-  border-bottom: 1px solid ${LINE_COLOR};
+  height: 1px;
+  background-color: ${LINE_COLOR};
 }
 .v2tree-triggers > .v2tree-trigger-node:first-child::before { left: calc(50% - 0.5px); }
 .v2tree-triggers > .v2tree-trigger-node:last-child::before  { right: calc(50% - 0.5px); }
@@ -419,16 +426,16 @@ const TREE_CSS = `
   content: '';
   position: absolute;
   bottom: 0;
-  left: 50%;
-  width: 0;
+  left: calc(50% - 0.5px);
+  width: 1px;
   height: ${STUB_PX}px;
-  border-left: 1px solid ${LINE_COLOR};
+  background-color: ${LINE_COLOR};
 }
 
 /* Continuous vertical from triggers bus to entry card */
 .v2tree-triggers-to-entry-stub {
-  width: 0;
+  width: 1px;
   height: ${STUB_PX}px;
-  border-left: 1px solid ${LINE_COLOR};
+  background-color: ${LINE_COLOR};
 }
 `;

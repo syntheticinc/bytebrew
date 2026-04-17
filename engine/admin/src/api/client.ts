@@ -62,9 +62,9 @@ import {
   MOCK_CONFIG_YAML,
 } from '../mocks/pages';
 import { MOCK_AGENTS } from '../mocks/agents';
-import { SCHEMA_NAMES } from '../mocks/canvas';
 import { MOCK_SESSIONS_LIST, MOCK_TRACE, MOCK_TRACE_ERROR } from '../mocks/inspect';
 import { MOCK_SCHEMA_TEMPLATES } from '../mocks/schemaTemplates';
+import { v2Schemas, v2AgentRelations } from '../mocks/v2';
 
 const BASE_URL = '/api/v1';
 const PROTOTYPE_KEY = 'bytebrew_prototype_mode';
@@ -395,11 +395,13 @@ class APIClient {
   listSchemas() {
     if (this.isPrototype) {
       return this.mock<Schema[]>(
-        SCHEMA_NAMES.map((name, i) => ({
-          id: String(i + 1),
-          name,
-          agents_count: 3,
-          created_at: new Date().toISOString(),
+        v2Schemas.map((s) => ({
+          id: s.id,
+          name: s.name,
+          description: s.description,
+          agents_count: s.agentIds.length,
+          entry_agent_name: s.entryAgentId,
+          created_at: s.updatedAt,
         })),
       );
     }
@@ -408,7 +410,15 @@ class APIClient {
 
   getSchema(schemaId: string) {
     if (this.isPrototype) {
-      return this.mock<Schema>({ id: schemaId, name: 'Schema', agents_count: 0, created_at: new Date().toISOString() });
+      const s = v2Schemas.find((x) => x.id === schemaId) ?? v2Schemas[0]!;
+      return this.mock<Schema>({
+        id: s.id,
+        name: s.name,
+        description: s.description,
+        agents_count: s.agentIds.length,
+        entry_agent_name: s.entryAgentId,
+        created_at: s.updatedAt,
+      });
     }
     return this.request<Schema>('GET', `/schemas/${schemaId}`);
   }
@@ -429,7 +439,10 @@ class APIClient {
   // creating a relation adds both endpoints as implicit members; deleting
   // the last relation that referenced an agent removes it from the schema.
   listSchemaAgents(schemaId: string) {
-    if (this.isPrototype) return this.mock<string[]>([]);
+    if (this.isPrototype) {
+      const s = v2Schemas.find((x) => x.id === schemaId);
+      return this.mock<string[]>([...(s?.agentIds ?? [])]);
+    }
     return this.request<string[]>('GET', `/schemas/${schemaId}/agents`);
   }
 
@@ -506,7 +519,14 @@ class APIClient {
   // new agent.
 
   listAgentRelations(schemaId: string) {
-    if (this.isPrototype) return this.mock<{ id: string; schema_id: string; source: string; target: string }[]>([]);
+    if (this.isPrototype) {
+      const s = v2Schemas.find((x) => x.id === schemaId);
+      const members = new Set(s?.agentIds ?? []);
+      const rels = v2AgentRelations
+        .filter((r) => members.has(r.sourceAgentId) && members.has(r.targetAgentId))
+        .map((r) => ({ id: r.id, schema_id: schemaId, source: r.sourceAgentId, target: r.targetAgentId }));
+      return this.mock<{ id: string; schema_id: string; source: string; target: string }[]>(rels);
+    }
     return this.request<{ id: string; schema_id: string; source: string; target: string }[]>(
       'GET', `/schemas/${schemaId}/agent-relations`,
     );
@@ -514,7 +534,13 @@ class APIClient {
 
   createAgentRelation(schemaId: string, source: string, target: string) {
     if (this.isPrototype) {
-      return this.mock({ id: String(Date.now()), schema_id: schemaId, source, target });
+      const id = `rel-${Date.now()}`;
+      v2AgentRelations.push({ id, sourceAgentId: source, targetAgentId: target });
+      const schema = v2Schemas.find((s) => s.id === schemaId);
+      if (schema && !schema.agentIds.includes(target)) {
+        schema.agentIds.push(target);
+      }
+      return this.mock({ id, schema_id: schemaId, source, target });
     }
     return this.request<{ id: string; schema_id: string; source: string; target: string }>(
       'POST', `/schemas/${schemaId}/agent-relations`, { source, target },
@@ -522,7 +548,22 @@ class APIClient {
   }
 
   deleteAgentRelation(schemaId: string, relationId: string) {
-    if (this.isPrototype) return this.mock(undefined as unknown as void);
+    if (this.isPrototype) {
+      const idx = v2AgentRelations.findIndex((r) => r.id === relationId);
+      if (idx >= 0) {
+        const [removed] = v2AgentRelations.splice(idx, 1);
+        const schema = v2Schemas.find((s) => s.id === schemaId);
+        if (schema && removed && removed.targetAgentId !== schema.entryAgentId) {
+          const stillReferenced = v2AgentRelations.some(
+            (r) => r.sourceAgentId === removed.targetAgentId || r.targetAgentId === removed.targetAgentId,
+          );
+          if (!stillReferenced) {
+            schema.agentIds = schema.agentIds.filter((id) => id !== removed.targetAgentId);
+          }
+        }
+      }
+      return this.mock(undefined as unknown as void);
+    }
     return this.request<void>('DELETE', `/schemas/${schemaId}/agent-relations/${relationId}`);
   }
 
