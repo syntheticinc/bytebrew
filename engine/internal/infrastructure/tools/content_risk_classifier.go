@@ -1,35 +1,30 @@
 package tools
 
-// ContentRiskLevel represents the risk level of content returned by a tool
+// ContentRiskLevel represents the risk level of content returned by a tool.
 type ContentRiskLevel int
 
 const (
-	RiskNone     ContentRiskLevel = iota // Internal tools (manage_plan, write_file) — no wrapping
-	RiskLow                              // Structural tools (glob, get_project_tree) — light prefix
-	RiskHigh                             // File/search tools (read_file, grep_search) — content markers
-	RiskCritical                         // External content (execute_command, MCP web tools) — strong markers
+	// RiskNone — internal tools (manage_tasks, spawn_agent) — no wrapping.
+	RiskNone ContentRiskLevel = iota
+	// RiskLow — structural/metadata tools — light prefix.
+	RiskLow
+	// RiskHigh — content tools that may contain injections (MCP responses, memory, knowledge).
+	RiskHigh
+	// RiskCritical — external command execution — strong markers.
+	RiskCritical
 )
 
-// GetContentRiskLevel returns the risk level for a given tool name
+// GetContentRiskLevel returns the risk level for a given tool name.
+// After self-hosted tools were parked, the server-side runtime exposes only
+// internal coordination tools (RiskNone) and capability/MCP tools that
+// return external content. Unknown tools default to RiskHigh so any new
+// MCP tool is wrapped by default.
 func GetContentRiskLevel(toolName string) ContentRiskLevel {
 	switch toolName {
-	// Critical: shell execution. External web content comes via MCP tools and is classified
-	// by MCP-specific rules elsewhere; unknown tools default to RiskHigh below.
-	case "execute_command":
-		return RiskCritical
-	// High: project content that could contain injections
-	case "read_file", "grep_search", "smart_search", "search_code",
-		"get_function", "get_class":
-		return RiskHigh
-	// Low: structural/metadata tools
-	case "glob", "get_project_tree", "lsp", "get_file_structure":
-		return RiskLow
-	// None: internal tools that don't return untrusted content
-	case "manage_tasks", "manage_subtasks", "spawn_agent",
-		"write_file", "edit_file", "ask_user":
+	// Internal tools that don't return untrusted content.
+	case "manage_tasks", "manage_subtasks", "spawn_agent", "ask_user", "show_structured_output":
 		return RiskNone
 	default:
-		// Unknown tools default to high risk
 		return RiskHigh
 	}
 }

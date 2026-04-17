@@ -7,7 +7,20 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/syntheticinc/bytebrew/engine/internal/service/cloud"
 )
+
+// cloudBlockedMCPTransportMessage is returned when the user tries to configure
+// a transport that gives the Cloud-hosted engine arbitrary code execution
+// (stdio = exec.Command on the host, docker = container spawn).
+const cloudBlockedMCPTransportMessage = "stdio and docker MCP transports are disabled in Cloud; use http or sse"
+
+// isCloudBlockedMCPTransport reports whether the requested transport must be
+// rejected when running in Cloud mode.
+func isCloudBlockedMCPTransport(t string) bool {
+	return t == "stdio" || t == "docker"
+}
 
 // MCPServerResponse is the API representation of an MCP server.
 //
@@ -100,6 +113,10 @@ func (h *MCPHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "type is required")
 		return
 	}
+	if cloud.IsCloud() && isCloudBlockedMCPTransport(req.Type) {
+		writeJSONError(w, http.StatusBadRequest, cloudBlockedMCPTransportMessage)
+		return
+	}
 
 	server, err := h.service.CreateMCPServer(r.Context(), req)
 	if err != nil {
@@ -120,6 +137,10 @@ func (h *MCPHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var req CreateMCPServerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %s", err.Error()))
+		return
+	}
+	if cloud.IsCloud() && isCloudBlockedMCPTransport(req.Type) {
+		writeJSONError(w, http.StatusBadRequest, cloudBlockedMCPTransportMessage)
 		return
 	}
 

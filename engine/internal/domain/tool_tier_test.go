@@ -33,6 +33,12 @@ func TestClassifyToolTier(t *testing.T) {
 		{"search_code", ToolTierSelfHosted},
 		{"get_project_tree", ToolTierSelfHosted},
 		{"lsp", ToolTierSelfHosted},
+		// admin_* orchestration tools — also self-hosted so Cloud sandbox
+		// blocks them by default. Agents must not receive admin privileges
+		// through the MCP fallthrough.
+		{"admin_create_mcp_server", ToolTierSelfHosted},
+		{"admin_list_agents", ToolTierSelfHosted},
+		{"admin_reset_system_schema", ToolTierSelfHosted},
 
 		// Tier 4 — MCP (everything else)
 		{"web_search", ToolTierMCP},

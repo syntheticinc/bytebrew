@@ -9,7 +9,17 @@ import (
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
+
+	"github.com/syntheticinc/bytebrew/engine/internal/service/cloud"
 )
+
+// cloudBlockedMCPTransportMessage matches the REST layer so the agent-facing
+// error reads the same way as the API error for a copy/paste Cloud deployment.
+const cloudBlockedMCPTransportMessage = "stdio and docker MCP transports are disabled in Cloud; use http or sse"
+
+func isCloudBlockedMCPTransport(t string) bool {
+	return t == "stdio" || t == "docker"
+}
 
 // --- admin_list_mcp_servers ---
 
@@ -95,6 +105,9 @@ func (t *adminCreateMCPServerTool) InvokableRun(ctx context.Context, argsJSON st
 	if args.Type == "" {
 		return "[ERROR] type is required", nil
 	}
+	if cloud.IsCloud() && isCloudBlockedMCPTransport(args.Type) {
+		return "[ERROR] " + cloudBlockedMCPTransportMessage, nil
+	}
 
 	record := &MCPServerRecord{
 		Name:    args.Name,
@@ -164,6 +177,9 @@ func (t *adminUpdateMCPServerTool) InvokableRun(ctx context.Context, argsJSON st
 	}
 	if args.ServerID == "" {
 		return "[ERROR] server_id is required", nil
+	}
+	if cloud.IsCloud() && args.Type != "" && isCloudBlockedMCPTransport(args.Type) {
+		return "[ERROR] " + cloudBlockedMCPTransportMessage, nil
 	}
 
 	existing, err := t.repo.GetByID(ctx, args.ServerID)

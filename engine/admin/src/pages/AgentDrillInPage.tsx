@@ -21,7 +21,7 @@ const ZONE_CONFIG: Record<Zone, { label: string; labelClass: string; borderClass
 };
 
 // Tool tiers for display
-type ToolTier = 'core' | 'auto' | 'selfhost' | 'mcp';
+type ToolTier = 'core' | 'auto' | 'mcp';
 
 const TOOL_TIERS: Record<ToolTier, { label: string; description: string; tools: string[]; labelClass: string; borderClass: string; alwaysOn?: boolean }> = {
   core: {
@@ -37,13 +37,6 @@ const TOOL_TIERS: Record<ToolTier, { label: string; description: string; tools: 
     tools: ['memory_recall', 'memory_store', 'knowledge_search'],
     labelClass: 'text-purple-400',
     borderClass: 'border-purple-500/30',
-  },
-  selfhost: {
-    label: 'Self-hosted',
-    description: 'File system and shell access — available only in self-hosted deployment, blocked in Cloud',
-    tools: ['read_file', 'write_file', 'edit_file', 'execute_command', 'glob', 'grep_search', 'search_code', 'smart_search', 'get_project_tree', 'lsp'],
-    labelClass: 'text-amber-400',
-    borderClass: 'border-amber-500/30',
   },
   mcp: {
     label: 'MCP',
@@ -65,7 +58,6 @@ function AgentDrillInInner() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showCapDropdown, setShowCapDropdown] = useState(false);
-  const [dangerousExpanded, setDangerousExpanded] = useState(false);
   const [enabledTools, setEnabledTools] = useState<string[]>([]);
   const [canSpawn, setCanSpawn] = useState<string[]>([]);
   const [allAgentNames, setAllAgentNames] = useState<string[]>([]);
@@ -656,25 +648,6 @@ function AgentDrillInInner() {
                 </div>
               );
             })()}
-
-            {/* Self-hosted — toggleable */}
-            <div className={`border-2 ${TOOL_TIERS.selfhost.borderClass} rounded-card overflow-hidden`}>
-              <button
-                type="button"
-                onClick={() => setDangerousExpanded((v) => !v)}
-                className="w-full flex items-center justify-between px-3 py-2 bg-amber-500/10 text-amber-400 text-xs font-semibold font-mono hover:bg-amber-500/15 transition-colors"
-              >
-                <span>{TOOL_TIERS.selfhost.label} — {TOOL_TIERS.selfhost.description}</span>
-                <span className="text-amber-400/60">{dangerousExpanded ? '\u25B2' : '\u25BC'}</span>
-              </button>
-              {dangerousExpanded && (
-                <div className="p-3 flex flex-wrap gap-2">
-                  {TOOL_TIERS.selfhost.tools.map((tool) => (
-                    <ToolChip key={tool} name={tool} zone="caution" enabled={enabledTools.includes(tool)} onToggle={toggleTool} />
-                  ))}
-                </div>
-              )}
-            </div>
 
             {/* MCP — from connected servers */}
             <div className={`border ${TOOL_TIERS.mcp.borderClass} rounded-card p-3`}>

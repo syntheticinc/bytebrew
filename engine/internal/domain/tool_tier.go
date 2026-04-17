@@ -1,5 +1,7 @@
 package domain
 
+import "strings"
+
 // ToolTier represents the tier classification of a tool.
 type ToolTier int
 
@@ -74,8 +76,16 @@ func ClassifyToolTier(toolName string) ToolTier {
 		}
 	}
 	// spawn_* tools are also Tier 1
-	if len(toolName) > 6 && toolName[:6] == "spawn_" {
+	if strings.HasPrefix(toolName, "spawn_") {
 		return ToolTierCore
+	}
+	// admin_* tools — orchestration over other platform objects. Treated as
+	// self-hosted so that Cloud tenants don't grant arbitrary admin tool use
+	// to agents through the default MCP fallthrough. Admin HTTP layer still
+	// rejects these names at agent create/update time; this extra guard keeps
+	// seed agents / runtime-built tool lists honest.
+	if strings.HasPrefix(toolName, "admin_") {
+		return ToolTierSelfHosted
 	}
 	return ToolTierMCP
 }

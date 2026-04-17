@@ -219,7 +219,7 @@ func (p *Processor) processMessage(ctx context.Context, sessionID, message strin
 		registry:    p.registry,
 		eventStream: eventStream,
 	}
-	proxy := tools.NewLocalClientOperationsProxy(projectRoot,
+	proxy := tools.NewInProcessProxy(
 		tools.WithAskUserHandler(askUserHandler),
 		tools.WithConfirmRequester(confirmRequester),
 	)

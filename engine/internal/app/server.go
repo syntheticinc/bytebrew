@@ -47,6 +47,7 @@ import (
 	svcschematemplate "github.com/syntheticinc/bytebrew/engine/internal/service/schematemplate"
 	ucschematemplate "github.com/syntheticinc/bytebrew/engine/internal/usecase/schematemplate"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/capability"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/cloud"
 	svcknowledge "github.com/syntheticinc/bytebrew/engine/internal/service/knowledge"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/eventstore"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/lifecycle"
@@ -1798,6 +1799,10 @@ func connectMCPServers(ctx context.Context, mcpServers []models.MCPServerModel, 
 		var transport mcp.Transport
 		switch srv.Type {
 		case "stdio":
+			if cloud.IsCloud() {
+				slog.Warn("MCP stdio transport blocked in Cloud mode", "name", srv.Name)
+				continue
+			}
 			var args []string
 			if srv.Args != nil && *srv.Args != "" {
 				_ = json.Unmarshal([]byte(*srv.Args), &args)
