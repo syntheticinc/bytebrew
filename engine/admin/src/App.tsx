@@ -12,10 +12,8 @@ import ConfigPage from './pages/ConfigPage';
 import AuditPage from './pages/AuditPage';
 import ResiliencePage from './pages/ResiliencePage';
 import ToolCallLogPage from './pages/ToolCallLogPage';
-import AgentBuilderPage from './pages/AgentBuilderPage';
 import AgentDrillInPage from './pages/AgentDrillInPage';
 import AgentsPage from './pages/AgentsPage';
-import SchemaListPage from './pages/SchemaListPage';
 import WidgetConfigPage from './pages/WidgetConfigPage';
 import KnowledgePage from './pages/KnowledgePage';
 import TriggersPage from './pages/TriggersPage';
@@ -43,10 +41,12 @@ export default function App() {
               </ProtectedRoute>
             }
           >
+            <Route path="/" element={<OverviewPage />} />
+            <Route path="/overview" element={<OverviewPage />} />
+            <Route path="/schemas" element={<SchemasPage />} />
+            <Route path="/schemas/:schemaId" element={<SchemaDetailPage />} />
+            <Route path="/schemas/:schema/:agent" element={<AgentDrillInPage />} />
             <Route path="/health" element={<HealthPage />} />
-            <Route path="/builder" element={<SchemaListPage />} />
-            <Route path="/builder/:schemaName" element={<AgentBuilderPage />} />
-            <Route path="/builder/:schema/:agent" element={<AgentDrillInPage />} />
             <Route path="/mcp" element={<MCPPage />} />
             <Route path="/models" element={<ModelsPage />} />
             <Route path="/tasks" element={<TasksPage />} />
@@ -61,14 +61,8 @@ export default function App() {
             <Route path="/widget" element={<WidgetConfigPage />} />
             <Route path="/agents" element={<AgentsPage />} />
             <Route path="/agents/:agent" element={<AgentDrillInPage />} />
-            {/* Overview — Core landing. Also served at /v2/overview for backward compat. */}
-            <Route path="/overview" element={<OverviewPage />} />
-            <Route path="/v2/overview" element={<OverviewPage />} />
-            <Route path="/v2/schemas" element={<SchemasPage />} />
-            <Route path="/v2/schemas/:schemaId" element={<SchemaDetailPage />} />
-<Route path="/" element={<Navigate to="/builder" replace />} />
           </Route>
-          <Route path="*" element={<Navigate to="/builder" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthContext.Provider>

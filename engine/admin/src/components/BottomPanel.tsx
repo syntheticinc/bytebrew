@@ -110,8 +110,12 @@ const ASSISTANT_AGENT = 'builder-assistant';
 export default function BottomPanel() {
   const { height, tab, collapsed, setHeight, setTab, setCollapsed, toggleCollapsed, selectedSchema } = useBottomPanel();
   const location = useLocation();
-  const canvasMatch = matchPath({ path: '/builder/:schemaName', end: false }, location.pathname);
-  const lockedSchema = canvasMatch?.params?.schemaName ? decodeURIComponent(canvasMatch.params.schemaName) : null;
+  // Match both /schemas/:schemaId and /schemas/:schemaId/:agent so BottomPanel
+  // sees the locked schema context on all schema-scoped routes.
+  const schemaDetailMatch = matchPath({ path: '/schemas/:schemaId', end: false }, location.pathname);
+  const agentDrillMatch = matchPath({ path: '/schemas/:schemaId/:agent', end: false }, location.pathname);
+  const rawSchemaId = agentDrillMatch?.params?.schemaId ?? schemaDetailMatch?.params?.schemaId ?? null;
+  const lockedSchema = rawSchemaId ? decodeURIComponent(rawSchemaId) : null;
   const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
   const [assistantInput, setAssistantInput] = useState('');
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});

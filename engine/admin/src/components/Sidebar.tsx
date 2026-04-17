@@ -159,7 +159,7 @@ const sections: NavSection[] = [
     label: 'Core',
     items: [
       { to: '/overview', label: 'Overview', icon: overviewIcon },
-      { to: '/builder', label: 'Canvas', icon: icons.builder },
+      { to: '/schemas', label: 'Schemas', icon: icons.builder },
     ],
   },
   {

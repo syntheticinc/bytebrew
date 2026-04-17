@@ -70,7 +70,7 @@ export default function AgentsPage() {
   function handleAgentClick(agent: AgentInfo) {
     const schemas = (agent as any).used_in_schemas ?? (agent as any).schemas ?? [];
     if (schemas[0]) {
-      navigate(`/builder/${schemas[0]}/${agent.name}`);
+      navigate(`/schemas/${schemas[0]}/${agent.name}`);
     } else {
       navigate(`/agents/${agent.name}`);
     }

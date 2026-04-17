@@ -250,7 +250,7 @@ function AgentDrillInInner() {
     if (!agentName) return;
     try {
       await api.deleteAgent(agentName);
-      navigate('/builder');
+      navigate('/schemas');
     } catch (err) {
       addToast(err instanceof Error ? err.message : 'Delete failed', 'error');
     }
@@ -278,7 +278,7 @@ function AgentDrillInInner() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => navigate('/builder')}
+            onClick={() => navigate('/schemas')}
             className="flex items-center gap-2 text-brand-shade3 hover:text-brand-light transition-colors text-sm font-mono px-2 py-1 -ml-2 rounded-btn hover:bg-brand-dark-alt"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

@@ -378,7 +378,7 @@ export default function MCPPage() {
                   {selected.agents.map((a) => (
                     <button
                       key={a}
-                      onClick={() => navigate(`/builder/default/${encodeURIComponent(a)}`)}
+                      onClick={() => navigate(`/schemas/default/${encodeURIComponent(a)}`)}
                       className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/25 rounded text-xs text-blue-400 hover:bg-blue-500/20 hover:border-blue-500/40 transition-colors cursor-pointer"
                       title={`Go to ${a} detail`}
                     >
