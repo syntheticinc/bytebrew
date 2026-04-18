@@ -11,8 +11,8 @@ database:
   url: "postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/bytebrew"
 
 security:
-  admin_user: "${BYTEBREW_ADMIN_USER}"
-  admin_password: "${BYTEBREW_ADMIN_PASSWORD}"
+  jwt_secret: "${JWT_SECRET}"
+  # Admin users are created via CLI: bytebrew-ce admin create --username admin --password <pass>
 
 logging:
   level: "info"

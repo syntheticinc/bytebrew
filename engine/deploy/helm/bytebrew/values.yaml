@@ -42,9 +42,9 @@ config:
   # agents.yaml content (mounted as ConfigMap)
   agents: ""
 
-  # Admin credentials
-  adminUser: admin
-  adminPassword: ""
+  # JWT signing secret (required)
+  # Admin users are created via: kubectl exec <pod> -- bytebrew-ce admin create --username admin --password <pass>
+  jwtSecret: ""
 
   # License
   licensePath: /etc/bytebrew/license.jwt

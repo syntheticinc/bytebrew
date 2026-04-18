@@ -37,13 +37,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "bytebrew-engine.fullname" . }}-secrets
                   key: database-url
-            - name: ADMIN_USER
-              value: {{ .Values.config.adminUser | quote }}
-            - name: ADMIN_PASSWORD
+            - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ include "bytebrew-engine.fullname" . }}-secrets
-                  key: admin-password
+                  key: jwt-secret
             {{- if .Values.config.embedURL }}
             - name: EMBED_URL
               value: {{ .Values.config.embedURL | quote }}

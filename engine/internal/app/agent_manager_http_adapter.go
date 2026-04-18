@@ -104,7 +104,9 @@ func (a *agentManagerHTTPAdapter) CreateAgent(ctx context.Context, req deliveryh
 	// WP-4: Prevent using embedding models as agent model.
 	if req.ModelID != nil {
 		var llm models.LLMProviderModel
-		if err := a.db.Where("id = ?", *req.ModelID).First(&llm).Error; err == nil && llm.Type == "embedding" {
+		// DBML models.type does not contain "embedding" — embedding models are
+		// detected via positive config.embedding_dim.
+		if err := a.db.Where("id = ?", *req.ModelID).First(&llm).Error; err == nil && llm.EmbeddingDim() > 0 {
 			return nil, pkgerrors.InvalidInput("embedding models cannot be used as agent model, use a chat model instead")
 		}
 	}
@@ -128,7 +130,9 @@ func (a *agentManagerHTTPAdapter) UpdateAgent(ctx context.Context, name string, 
 	// WP-4: Prevent using embedding models as agent model.
 	if req.ModelID != nil {
 		var llm models.LLMProviderModel
-		if err := a.db.Where("id = ?", *req.ModelID).First(&llm).Error; err == nil && llm.Type == "embedding" {
+		// DBML models.type does not contain "embedding" — embedding models are
+		// detected via positive config.embedding_dim.
+		if err := a.db.Where("id = ?", *req.ModelID).First(&llm).Error; err == nil && llm.EmbeddingDim() > 0 {
 			return nil, pkgerrors.InvalidInput("embedding models cannot be used as agent model, use a chat model instead")
 		}
 	}

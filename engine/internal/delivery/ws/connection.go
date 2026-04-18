@@ -38,11 +38,6 @@ type AgentCanceller interface {
 	CancelRunningAgents(sessionID string)
 }
 
-// PairingDataProvider generates pairing data for mobile device pairing (consumer-side interface).
-type PairingDataProvider interface {
-	GeneratePairingData() (map[string]interface{}, error)
-}
-
 // AgentInfo holds agent metadata for WS list_agents response.
 type AgentInfo struct {
 	Name         string `json:"name"`
@@ -68,9 +63,8 @@ type ConnectionHandler struct {
 	sessionRegistry  SessionRegistry
 	sessionProcessor *sp.Processor
 	agentService     AgentEnvironmentSetter
-	agentCanceller   AgentCanceller      // optional, cancels running agents on user cancel
-	pairingProvider  PairingDataProvider // optional, nil when bridge not configured
-	agentLister      AgentLister         // optional, nil when agent registry not available
+	agentCanceller   AgentCanceller // optional, cancels running agents on user cancel
+	agentLister      AgentLister    // optional, nil when agent registry not available
 	eeExtension      ee.Extension        // optional, nil in CE mode
 }
 
@@ -95,11 +89,6 @@ func NewConnectionHandler(
 		agentCanceller:   agentCanceller,
 		eeExtension:      eeExtension,
 	}
-}
-
-// SetPairingProvider sets the pairing data provider (called after bridge is initialized).
-func (h *ConnectionHandler) SetPairingProvider(p PairingDataProvider) {
-	h.pairingProvider = p
 }
 
 // SetAgentLister sets the agent lister (called after agent registry is initialized).
@@ -222,9 +211,6 @@ func (h *ConnectionHandler) handleMessage(writer *wsWriter, msg WsMessage, state
 
 	case "cancel_session":
 		h.handleCancelSession(writer, &msg)
-
-	case "generate_pairing":
-		h.handleGeneratePairing(writer, &msg)
 
 	case "list_agents":
 		h.handleListAgents(writer, &msg)
@@ -430,25 +416,6 @@ func (h *ConnectionHandler) handleCancelSession(writer *wsWriter, msg *WsMessage
 		Type:      "cancel_session_ack",
 		RequestID: msg.RequestID,
 		Payload:   map[string]interface{}{"session_id": sessionID, "cancelled": cancelled},
-	})
-}
-
-func (h *ConnectionHandler) handleGeneratePairing(writer *wsWriter, msg *WsMessage) {
-	if h.pairingProvider == nil {
-		writer.sendError(msg.RequestID, "bridge not configured")
-		return
-	}
-
-	data, err := h.pairingProvider.GeneratePairingData()
-	if err != nil {
-		writer.sendError(msg.RequestID, err.Error())
-		return
-	}
-
-	writer.send(&WsMessage{
-		Type:      "pairing_data",
-		RequestID: msg.RequestID,
-		Payload:   data,
 	})
 }
 

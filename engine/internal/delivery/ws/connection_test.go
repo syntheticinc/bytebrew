@@ -29,15 +29,6 @@ func (m *mockAgentEnvSetter) SetEnvironmentContext(projectRoot, platform string)
 	m.platform = platform
 }
 
-type mockPairingProvider struct {
-	data map[string]interface{}
-	err  error
-}
-
-func (m *mockPairingProvider) GeneratePairingData() (map[string]interface{}, error) {
-	return m.data, m.err
-}
-
 // mockTurnExecutorFactory is a no-op factory for WS tests.
 // The real TurnExecutor would call LLM — we just need the processor to start without panic.
 type mockTurnExecutorFactory struct{}
@@ -179,46 +170,6 @@ func TestSendMessage_MissingFields(t *testing.T) {
 
 	assert.Equal(t, "error", resp.Type)
 	assert.Contains(t, resp.Payload["error"], "required")
-}
-
-// TC-WS-04: Generate pairing — send generate_pairing, receive pairing_data.
-func TestGeneratePairing(t *testing.T) {
-	_, conn, _, handler := setupTestServerWithRegistry(t)
-
-	handler.SetPairingProvider(&mockPairingProvider{
-		data: map[string]interface{}{
-			"server_id":         "srv-1",
-			"server_public_key": "abc123",
-			"bridge_url":        "wss://bridge.example.com",
-			"token":             "tok-xyz",
-		},
-	})
-
-	resp := sendAndReceive(t, conn, WsMessage{
-		Type:      "generate_pairing",
-		RequestID: "req-4",
-	})
-
-	assert.Equal(t, "pairing_data", resp.Type)
-	assert.Equal(t, "req-4", resp.RequestID)
-	assert.Equal(t, "srv-1", resp.Payload["server_id"])
-	assert.Equal(t, "abc123", resp.Payload["server_public_key"])
-	assert.Equal(t, "wss://bridge.example.com", resp.Payload["bridge_url"])
-	assert.Equal(t, "tok-xyz", resp.Payload["token"])
-}
-
-// TC-WS-05: Generate pairing without bridge — error.
-func TestGeneratePairing_NoBridge(t *testing.T) {
-	_, conn := setupTestServer(t)
-
-	resp := sendAndReceive(t, conn, WsMessage{
-		Type:      "generate_pairing",
-		RequestID: "req-5",
-	})
-
-	assert.Equal(t, "error", resp.Type)
-	assert.Equal(t, "req-5", resp.RequestID)
-	assert.Contains(t, resp.Payload["error"], "bridge not configured")
 }
 
 // TC-WS-06: Unknown message type — error.

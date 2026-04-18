@@ -36,17 +36,19 @@ type BootstrapLogging struct {
 	Level string `mapstructure:"level"`
 }
 
-// BootstrapSecurity holds admin credentials for initial setup.
+// BootstrapSecurity holds security settings loaded at startup.
+// Admin credentials are NO LONGER here — admin/system users live in the
+// `users` table and are created via the `ce admin` CLI subcommand.
 type BootstrapSecurity struct {
-	AdminUser     string `mapstructure:"admin_user"`
-	AdminPassword string `mapstructure:"admin_password"`
+	// JWTSecret is the HMAC key used to sign/verify admin JWT tokens.
+	// Typically supplied via the JWT_SECRET environment variable.
+	JWTSecret string `mapstructure:"jwt_secret"`
 }
 
 // LoadBootstrap loads the bootstrap config from a YAML file.
 // If the config file is not found, falls back to environment variables:
 //   - DATABASE_URL — PostgreSQL connection string (required)
-//   - ADMIN_USER — admin username (optional, default: "admin")
-//   - ADMIN_PASSWORD — admin password (optional, default: "admin")
+//   - JWT_SECRET — HMAC signing key for admin JWTs (required if no users authenticate)
 //   - ENGINE_HOST — listen host (optional, default: "0.0.0.0")
 //   - ENGINE_PORT — listen port (optional, default: 8443)
 //
@@ -121,11 +123,8 @@ func loadBootstrapFromEnv() (*BootstrapConfig, error) {
 		cfg.Engine.CORSOrigins = splitAndTrim(origins, ",")
 	}
 
-	if user := os.Getenv("ADMIN_USER"); user != "" {
-		cfg.Security.AdminUser = user
-	}
-	if pass := os.Getenv("ADMIN_PASSWORD"); pass != "" {
-		cfg.Security.AdminPassword = pass
+	if secret := os.Getenv("JWT_SECRET"); secret != "" {
+		cfg.Security.JWTSecret = secret
 	}
 
 	if err := validateBootstrap(cfg); err != nil {
@@ -147,6 +146,9 @@ func applyBootstrapEnvOverrides(cfg *BootstrapConfig) {
 	if origins := os.Getenv("BYTEBREW_CORS_ORIGINS"); origins != "" {
 		cfg.Engine.CORSOrigins = splitAndTrim(origins, ",")
 	}
+	if secret := os.Getenv("JWT_SECRET"); secret != "" {
+		cfg.Security.JWTSecret = secret
+	}
 }
 
 // expandBootstrapEnvVars expands ${VAR} placeholders in all string fields of BootstrapConfig.
@@ -154,8 +156,7 @@ func expandBootstrapEnvVars(cfg *BootstrapConfig) {
 	cfg.Engine.Host = expandEnvVars(cfg.Engine.Host)
 	cfg.Engine.DataDir = expandEnvVars(cfg.Engine.DataDir)
 	cfg.Database.URL = expandEnvVars(cfg.Database.URL)
-	cfg.Security.AdminUser = expandEnvVars(cfg.Security.AdminUser)
-	cfg.Security.AdminPassword = expandEnvVars(cfg.Security.AdminPassword)
+	cfg.Security.JWTSecret = expandEnvVars(cfg.Security.JWTSecret)
 	cfg.Logging.Level = expandEnvVars(cfg.Logging.Level)
 }
 

@@ -91,20 +91,22 @@ func TestMCPHandler_Create_Cloud_BlocksStdio(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "stdio and docker MCP transports are disabled in Cloud")
+	assert.Contains(t, rec.Body.String(), "stdio MCP transport is disabled in Cloud")
 	assert.Len(t, svc.createCalls, 0, "service must not be called when transport is blocked")
 }
 
-// TestMCPHandler_Create_Cloud_BlocksDocker verifies docker transport is also
-// rejected (same exec.Command risk class as stdio).
-func TestMCPHandler_Create_Cloud_BlocksDocker(t *testing.T) {
-	t.Setenv("BYTEBREW_MODE", "cloud")
+// TestMCPHandler_Create_RejectsDocker verifies docker transport is rejected
+// regardless of deployment mode. DBML mcp_servers.type does not include
+// "docker" — the CHECK constraint would fail at INSERT time if we let it
+// through, so the handler must reject it up front.
+func TestMCPHandler_Create_RejectsDocker(t *testing.T) {
+	t.Setenv("BYTEBREW_MODE", "ce")
 
 	svc := &stubMCPService{}
 	router := newMCPTestRouter(svc)
 
 	body, _ := json.Marshal(CreateMCPServerRequest{
-		Name:    "test-docker-cloud",
+		Name:    "test-docker",
 		Type:    "docker",
 		Command: "image:tag",
 	})
@@ -114,6 +116,7 @@ func TestMCPHandler_Create_Cloud_BlocksDocker(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "invalid transport type")
 	assert.Len(t, svc.createCalls, 0)
 }
 
@@ -159,6 +162,6 @@ func TestMCPHandler_Update_Cloud_BlocksStdio(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "stdio and docker MCP transports are disabled in Cloud")
+	assert.Contains(t, rec.Body.String(), "stdio MCP transport is disabled in Cloud")
 	assert.Len(t, svc.updateCalls, 0)
 }

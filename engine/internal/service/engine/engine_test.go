@@ -158,7 +158,7 @@ func TestEngine_FreshStart(t *testing.T) {
 	assert.Equal(t, "session-1", snapshot.SessionID)
 	assert.Equal(t, "supervisor", snapshot.AgentID)
 	assert.Equal(t, domain.CurrentSchemaVersion, snapshot.SchemaVersion)
-	assert.Equal(t, domain.AgentContextStatusCompleted, snapshot.Status)
+	assert.Equal(t, domain.AgentContextStatusCompacted, snapshot.Status)
 
 	// Check messages were deserialized successfully
 	messages, err := adapters.DeserializeSchemaMessages(snapshot.ContextData)
@@ -187,7 +187,7 @@ func TestEngine_ResumeFromSnapshot(t *testing.T) {
 		SchemaVersion: domain.CurrentSchemaVersion,
 		ContextData:   contextData,
 		StepNumber:    1,
-		Status:        domain.AgentContextStatusSuspended,
+		Status:        domain.AgentContextStatusExpired,
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
 	}
@@ -246,7 +246,7 @@ func TestEngine_SuspendFlow(t *testing.T) {
 	// Check snapshot status
 	snapshot := snapshotRepo.snapshots["supervisor"]
 	require.NotNil(t, snapshot)
-	assert.Equal(t, domain.AgentContextStatusSuspended, snapshot.Status)
+	assert.Equal(t, domain.AgentContextStatusExpired, snapshot.Status)
 }
 
 // Test 4: Failed execution
@@ -275,7 +275,7 @@ func TestEngine_FailedExecution(t *testing.T) {
 	// Check snapshot still saved for debugging
 	snapshot := snapshotRepo.snapshots["supervisor"]
 	require.NotNil(t, snapshot)
-	assert.Equal(t, domain.AgentContextStatusInterrupted, snapshot.Status)
+	assert.Equal(t, domain.AgentContextStatusExpired, snapshot.Status)
 }
 
 // Test 5: Message collection
@@ -370,7 +370,7 @@ func TestEngine_LosslessRoundTrip(t *testing.T) {
 		SchemaVersion: domain.CurrentSchemaVersion,
 		ContextData:   contextData,
 		StepNumber:    2,
-		Status:        domain.AgentContextStatusSuspended,
+		Status:        domain.AgentContextStatusExpired,
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
 	}
@@ -444,9 +444,9 @@ func TestEngine_RecoverInterrupted(t *testing.T) {
 	err := engine.RecoverInterrupted(ctx)
 	require.NoError(t, err)
 
-	// Check both marked as interrupted
-	assert.Equal(t, domain.AgentContextStatusInterrupted, snapshotRepo.snapshots["agent-1"].Status)
-	assert.Equal(t, domain.AgentContextStatusInterrupted, snapshotRepo.snapshots["agent-2"].Status)
+	// Check both marked as expired (interrupted == expired in DBML-aligned enum)
+	assert.Equal(t, domain.AgentContextStatusExpired, snapshotRepo.snapshots["agent-1"].Status)
+	assert.Equal(t, domain.AgentContextStatusExpired, snapshotRepo.snapshots["agent-2"].Status)
 }
 
 // Test 8: Validate config
@@ -555,7 +555,7 @@ func TestEngine_SnapshotCompression(t *testing.T) {
 		SchemaVersion: domain.CurrentSchemaVersion,
 		ContextData:   contextData,
 		StepNumber:    100,
-		Status:        domain.AgentContextStatusSuspended,
+		Status:        domain.AgentContextStatusExpired,
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
 	}

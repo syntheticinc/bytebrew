@@ -17,11 +17,16 @@ var (
 )
 
 func main() {
+	// Subcommand dispatch: `ce admin ...` routes to the admin CLI and exits.
+	// Anything else (or no subcommand) falls through to the server startup below.
+	if len(os.Args) > 1 && os.Args[1] == "admin" {
+		os.Exit(runAdminCommand(os.Args[2:]))
+	}
+
 	configPath := flag.String("config", "config.yaml", "Path to config file")
 	showVersion := flag.Bool("version", false, "Print version and exit")
 	port := flag.Int("port", 0, "Override server port (0 = use config)")
 	managed := flag.Bool("managed", false, "Run in managed subprocess mode")
-	bridgeFlag := flag.String("bridge", "", "Bridge WebSocket URL")
 	flag.Parse()
 
 	if *showVersion {
@@ -41,7 +46,6 @@ func main() {
 		ConfigExplicit: configExplicit,
 		Port:           *port,
 		Managed:        *managed,
-		BridgeURL:      *bridgeFlag,
 		Version:        version,
 		Commit:         commit,
 		Date:           date,

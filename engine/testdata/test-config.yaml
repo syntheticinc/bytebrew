@@ -19,10 +19,10 @@ engine:
   host: "0.0.0.0"
   port: 9443
 
-# NEW: Security for admin dashboard
+# NEW: Security for admin dashboard — admin users live in the `users` table
+# (create via `ce admin create ...`). JWT secret signs admin JWT tokens.
 security:
-  admin_user: "admin"
-  admin_password: "testpass123"
+  jwt_secret: "test-jwt-secret"
 
 logging:
   level: info

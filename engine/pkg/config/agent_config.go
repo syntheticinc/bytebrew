@@ -97,9 +97,3 @@ type BYOKConfig struct {
 	AllowedProviders []string `mapstructure:"allowed_providers"`
 }
 
-// RuntimeBridgeConfig holds bridge relay settings for the universal engine.
-// Named differently from legacy BridgeConfig to avoid conflicts during migration.
-type RuntimeBridgeConfig struct {
-	Enabled bool   `mapstructure:"enabled"`
-	URL     string `mapstructure:"url"`
-}

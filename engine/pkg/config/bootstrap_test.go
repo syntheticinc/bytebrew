@@ -40,16 +40,14 @@ engine:
 database:
   url: "postgresql://admin:pass@db.host:5432/bytebrew?sslmode=require"
 security:
-  admin_user: "admin"
-  admin_password: "s3cret"
+  jwt_secret: "s3cret-jwt-key"
 logging:
   level: "debug"
 `,
 			check: func(t *testing.T, cfg *BootstrapConfig) {
 				assert.Equal(t, "0.0.0.0", cfg.Engine.Host)
 				assert.Equal(t, 9090, cfg.Engine.Port)
-				assert.Equal(t, "admin", cfg.Security.AdminUser)
-				assert.Equal(t, "s3cret", cfg.Security.AdminPassword)
+				assert.Equal(t, "s3cret-jwt-key", cfg.Security.JWTSecret)
 				assert.Equal(t, "debug", cfg.Logging.Level)
 				assert.Contains(t, cfg.Database.URL, "sslmode=require")
 			},
@@ -60,16 +58,16 @@ logging:
 database:
   url: "postgresql://${TEST_DB_USER}:${TEST_DB_PASS}@localhost:5432/bytebrew"
 security:
-  admin_password: "${TEST_ADMIN_PASS}"
+  jwt_secret: "${TEST_JWT_SECRET}"
 `,
 			env: map[string]string{
 				"TEST_DB_USER":    "pguser",
 				"TEST_DB_PASS":    "pgpass",
-				"TEST_ADMIN_PASS": "admin123",
+				"TEST_JWT_SECRET": "jwt-xyz",
 			},
 			check: func(t *testing.T, cfg *BootstrapConfig) {
 				assert.Equal(t, "postgresql://pguser:pgpass@localhost:5432/bytebrew", cfg.Database.URL)
-				assert.Equal(t, "admin123", cfg.Security.AdminPassword)
+				assert.Equal(t, "jwt-xyz", cfg.Security.JWTSecret)
 			},
 		},
 		{

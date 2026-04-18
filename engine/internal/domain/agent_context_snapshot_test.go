@@ -93,9 +93,8 @@ func TestAgentContextSnapshot_Validate_InvalidStatus(t *testing.T) {
 func TestAgentContextStatus_IsValid(t *testing.T) {
 	validStatuses := []AgentContextStatus{
 		AgentContextStatusActive,
-		AgentContextStatusSuspended,
-		AgentContextStatusCompleted,
-		AgentContextStatusInterrupted,
+		AgentContextStatusCompacted,
+		AgentContextStatusExpired,
 	}
 
 	for _, status := range validStatuses {
@@ -132,51 +131,34 @@ func TestAgentContextSnapshot_IsCompatible_Mismatch(t *testing.T) {
 	}
 }
 
-func TestAgentContextSnapshot_MarkInterrupted(t *testing.T) {
+func TestAgentContextSnapshot_MarkExpired(t *testing.T) {
 	snapshot := &AgentContextSnapshot{
 		Status:    AgentContextStatusActive,
 		UpdatedAt: time.Now().Add(-1 * time.Hour),
 	}
 
 	oldUpdatedAt := snapshot.UpdatedAt
-	snapshot.MarkInterrupted()
+	snapshot.MarkExpired()
 
-	if snapshot.Status != AgentContextStatusInterrupted {
-		t.Errorf("expected status to be interrupted, got: %s", snapshot.Status)
+	if snapshot.Status != AgentContextStatusExpired {
+		t.Errorf("expected status to be expired, got: %s", snapshot.Status)
 	}
 	if !snapshot.UpdatedAt.After(oldUpdatedAt) {
 		t.Error("expected UpdatedAt to be updated")
 	}
 }
 
-func TestAgentContextSnapshot_MarkSuspended(t *testing.T) {
+func TestAgentContextSnapshot_MarkCompacted(t *testing.T) {
 	snapshot := &AgentContextSnapshot{
 		Status:    AgentContextStatusActive,
 		UpdatedAt: time.Now().Add(-1 * time.Hour),
 	}
 
 	oldUpdatedAt := snapshot.UpdatedAt
-	snapshot.MarkSuspended()
+	snapshot.MarkCompacted()
 
-	if snapshot.Status != AgentContextStatusSuspended {
-		t.Errorf("expected status to be suspended, got: %s", snapshot.Status)
-	}
-	if !snapshot.UpdatedAt.After(oldUpdatedAt) {
-		t.Error("expected UpdatedAt to be updated")
-	}
-}
-
-func TestAgentContextSnapshot_MarkCompleted(t *testing.T) {
-	snapshot := &AgentContextSnapshot{
-		Status:    AgentContextStatusActive,
-		UpdatedAt: time.Now().Add(-1 * time.Hour),
-	}
-
-	oldUpdatedAt := snapshot.UpdatedAt
-	snapshot.MarkCompleted()
-
-	if snapshot.Status != AgentContextStatusCompleted {
-		t.Errorf("expected status to be completed, got: %s", snapshot.Status)
+	if snapshot.Status != AgentContextStatusCompacted {
+		t.Errorf("expected status to be compacted, got: %s", snapshot.Status)
 	}
 	if !snapshot.UpdatedAt.After(oldUpdatedAt) {
 		t.Error("expected UpdatedAt to be updated")

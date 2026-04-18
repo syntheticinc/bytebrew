@@ -99,19 +99,21 @@ func (h *FlowHandler) runSupervisorMode(
 			}
 		}
 
-		// Suspend session on disconnect (deferred)
+		// Expire session on disconnect (deferred). DBML sessions.status lacks
+		// "suspended" — the closest lifecycle slot for a disconnected-but-
+		// resumable session is "expired".
 		defer func() {
 			session, err := h.sessionStorage.GetByID(context.Background(), req.SessionId)
 			if err != nil {
-				slog.Error("failed to get session for suspend", "error", err)
+				slog.Error("failed to get session for expire", "error", err)
 				return
 			}
 			if session != nil {
-				session.Suspend()
+				session.Expire()
 				if err := h.sessionStorage.Update(context.Background(), session); err != nil {
-					slog.Error("failed to suspend session", "error", err)
+					slog.Error("failed to expire session", "error", err)
 				} else {
-					slog.Info("session suspended", "session_id", session.ID)
+					slog.Info("session expired on disconnect", "session_id", session.ID)
 				}
 			}
 		}()

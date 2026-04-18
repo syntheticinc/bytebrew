@@ -5,13 +5,17 @@ import (
 	"time"
 )
 
-// SessionStatus represents the lifecycle stage of a session
+// SessionStatus represents the lifecycle stage of a session.
+// Values must match target-schema.dbml sessions.status CHECK:
+//
+//	active | completed | expired | failed
 type SessionStatus string
 
 const (
 	SessionActive    SessionStatus = "active"
-	SessionSuspended SessionStatus = "suspended"
 	SessionCompleted SessionStatus = "completed"
+	SessionExpired   SessionStatus = "expired"
+	SessionFailed    SessionStatus = "failed"
 )
 
 // Session represents a user session that can persist across server restarts
@@ -55,7 +59,7 @@ func (s *Session) Validate() error {
 	}
 
 	switch s.Status {
-	case SessionActive, SessionSuspended, SessionCompleted:
+	case SessionActive, SessionCompleted, SessionExpired, SessionFailed:
 		// Valid
 	default:
 		return fmt.Errorf("invalid session status: %s", s.Status)
@@ -71,9 +75,16 @@ func (s *Session) Activate() {
 	s.LastActivityAt = time.Now()
 }
 
-// Suspend transitions session to suspended status
-func (s *Session) Suspend() {
-	s.Status = SessionSuspended
+// Expire transitions session to expired status (replaces Suspend —
+// "suspended" is not a valid DBML value for sessions.status).
+func (s *Session) Expire() {
+	s.Status = SessionExpired
+	s.UpdatedAt = time.Now()
+}
+
+// Fail transitions session to failed status.
+func (s *Session) Fail() {
+	s.Status = SessionFailed
 	s.UpdatedAt = time.Now()
 }
 
@@ -89,7 +100,11 @@ func (s *Session) TouchActivity() {
 	s.UpdatedAt = time.Now()
 }
 
-// IsTerminal returns true if the session is in a terminal state
+// IsTerminal returns true if the session is in a terminal state.
+// Completed, expired, and failed are all terminal — only "active" allows
+// further activity.
 func (s *Session) IsTerminal() bool {
-	return s.Status == SessionCompleted
+	return s.Status == SessionCompleted ||
+		s.Status == SessionExpired ||
+		s.Status == SessionFailed
 }

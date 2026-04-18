@@ -7,8 +7,6 @@ import (
 )
 
 // serializeEvent converts a proto SessionEvent to a flat JSON map.
-// Uses the same format as bridge.EventBroadcaster for protocol consistency
-// with mobile clients.
 func serializeEvent(event *pb.SessionEvent) map[string]interface{} {
 	switch event.GetType() {
 	case pb.SessionEventType_SESSION_EVENT_ANSWER:

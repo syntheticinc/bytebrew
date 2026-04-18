@@ -10,8 +10,7 @@ services:
       - "${ENGINE_PORT:-8443}:8443"
     environment:
       - DATABASE_URL=postgresql://bytebrew:${POSTGRES_PASSWORD:-bytebrew}@db:5432/bytebrew?sslmode=disable
-      - ADMIN_USER=${ADMIN_USER:-admin}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
       - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-}
@@ -27,8 +26,8 @@ services:
       - ./config.yaml:/etc/bytebrew/bytebrew.yaml:ro
       - ${BYTEBREW_LICENSE_FILE:-/dev/null}:/root/.bytebrew/license.jwt:ro
     depends_on:
-      db:
-        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8443/api/v1/health"]
@@ -36,6 +35,21 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+  db-migrate:
+    image: liquibase/liquibase:4.30
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ../migrations:/liquibase/migrations
+    command: >
+      --url=jdbc:postgresql://db:5432/bytebrew
+      --username=bytebrew
+      --password=${POSTGRES_PASSWORD:-bytebrew}
+      --changeLogFile=migrations/db.changelog-master.yaml
+      update
+    restart: "no"
 
   db:
     image: pgvector/pgvector:pg16

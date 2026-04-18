@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,13 +29,19 @@ func NewUpdateChecker(currentVersion string) *UpdateChecker {
 	}
 }
 
-const defaultVersionsURL = "https://api.bytebrew.ai/api/v1/versions/engine"
+// versionsURL returns the version check endpoint, overridable via BYTEBREW_VERSIONS_URL env var.
+func versionsURL() string {
+	if v := strings.TrimSpace(os.Getenv("BYTEBREW_VERSIONS_URL")); v != "" {
+		return v
+	}
+	return "https://api.bytebrew.ai/api/v1/versions/engine"
+}
 
 // Start launches a background goroutine that checks for updates immediately
 // and then every 24 hours. The goroutine stops when ctx is cancelled.
 func (uc *UpdateChecker) Start(ctx context.Context) {
 	go func() {
-		uc.checkFromURL(defaultVersionsURL)
+		uc.checkFromURL(versionsURL())
 
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
@@ -44,7 +51,7 @@ func (uc *UpdateChecker) Start(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				uc.checkFromURL(defaultVersionsURL)
+				uc.checkFromURL(versionsURL())
 			}
 		}
 	}()

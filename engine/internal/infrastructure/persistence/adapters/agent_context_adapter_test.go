@@ -246,9 +246,8 @@ func TestAgentContextSnapshotToModel_AllAgentTypes(t *testing.T) {
 func TestAgentContextSnapshotToModel_AllStatuses(t *testing.T) {
 	statuses := []domain.AgentContextStatus{
 		domain.AgentContextStatusActive,
-		domain.AgentContextStatusSuspended,
-		domain.AgentContextStatusCompleted,
-		domain.AgentContextStatusInterrupted,
+		domain.AgentContextStatusCompacted,
+		domain.AgentContextStatusExpired,
 	}
 
 	for _, status := range statuses {

@@ -15,10 +15,28 @@ import (
 
 // cloudBlockedMCPTransportMessage matches the REST layer so the agent-facing
 // error reads the same way as the API error for a copy/paste Cloud deployment.
-const cloudBlockedMCPTransportMessage = "stdio and docker MCP transports are disabled in Cloud; use http or sse"
+const cloudBlockedMCPTransportMessage = "stdio MCP transport is disabled in Cloud; use http, sse or streamable-http"
 
 func isCloudBlockedMCPTransport(t string) bool {
-	return t == "stdio" || t == "docker"
+	return t == "stdio"
+}
+
+// allowedMCPTransports matches target-schema.dbml mcp_servers.type CHECK:
+//
+//	stdio | http | sse | streamable-http
+var allowedMCPTransports = map[string]struct{}{
+	"stdio":           {},
+	"http":            {},
+	"sse":             {},
+	"streamable-http": {},
+}
+
+// isAllowedMCPTransport reports whether the transport value is one of the
+// four DBML-permitted values. Legacy "docker" must be rejected here before
+// it reaches the DB CHECK constraint.
+func isAllowedMCPTransport(t string) bool {
+	_, ok := allowedMCPTransports[t]
+	return ok
 }
 
 // --- admin_list_mcp_servers ---
@@ -73,11 +91,11 @@ func NewAdminCreateMCPServerTool(repo MCPServerRepository, reloader func()) tool
 func (t *adminCreateMCPServerTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "admin_create_mcp_server",
-		Desc: "Creates an MCP server configuration. For stdio: provide command and args. For SSE/HTTP: provide url.",
+		Desc: "Creates an MCP server configuration. For stdio: provide command and args. For sse/http/streamable-http: provide url.",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"name":     {Type: schema.String, Desc: "Server name", Required: true},
-			"type":     {Type: schema.String, Desc: "Transport type: stdio, sse, http, docker", Required: true},
-			"command":  {Type: schema.String, Desc: "Command to run (for stdio/docker)", Required: false},
+			"type":     {Type: schema.String, Desc: "Transport type: stdio, http, sse, streamable-http", Required: true},
+			"command":  {Type: schema.String, Desc: "Command to run (for stdio)", Required: false},
 			"url":      {Type: schema.String, Desc: "Server URL (for sse/http)", Required: false},
 			"args":     {Type: schema.Array, Desc: "Command arguments array", Required: false},
 			"env_vars": {Type: schema.Object, Desc: "Environment variables as key-value pairs", Required: false},
@@ -104,6 +122,9 @@ func (t *adminCreateMCPServerTool) InvokableRun(ctx context.Context, argsJSON st
 	}
 	if args.Type == "" {
 		return "[ERROR] type is required", nil
+	}
+	if !isAllowedMCPTransport(args.Type) {
+		return "[ERROR] invalid transport type: must be one of stdio, http, sse, streamable-http", nil
 	}
 	if cloud.IsCloud() && isCloudBlockedMCPTransport(args.Type) {
 		return "[ERROR] " + cloudBlockedMCPTransportMessage, nil
@@ -177,6 +198,9 @@ func (t *adminUpdateMCPServerTool) InvokableRun(ctx context.Context, argsJSON st
 	}
 	if args.ServerID == "" {
 		return "[ERROR] server_id is required", nil
+	}
+	if args.Type != "" && !isAllowedMCPTransport(args.Type) {
+		return "[ERROR] invalid transport type: must be one of stdio, http, sse, streamable-http", nil
 	}
 	if cloud.IsCloud() && args.Type != "" && isCloudBlockedMCPTransport(args.Type) {
 		return "[ERROR] " + cloudBlockedMCPTransportMessage, nil

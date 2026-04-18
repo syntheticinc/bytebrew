@@ -5,17 +5,18 @@ import (
 	"time"
 )
 
-// User represents a lazily-created identity record.
-// No password storage — auth is external (JWT sub / guest UUID / admin-set).
+// User represents a system/admin user record.
+// Auth is DB-backed (username + bcrypt password_hash).
+// End-users are external (identified by user_sub on sessions/memories), NOT in this table.
 type User struct {
-	ID          string
-	TenantID    string
-	ExternalID  string // JWT sub / guest:uuid / admin-set
-	Email       string
-	DisplayName string
-	Disabled    bool
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID           string
+	TenantID     string
+	Username     string
+	PasswordHash string
+	Role         string // "admin" | "system"
+	Disabled     bool
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // --- User context key ---

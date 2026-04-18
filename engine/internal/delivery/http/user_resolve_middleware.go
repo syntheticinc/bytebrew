@@ -8,18 +8,19 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 )
 
-// UserResolver lazily creates/looks up users by tenant + external ID.
+// UserResolver looks up users by primary key.
+// Admin/system users are pre-created via the `ce admin` CLI — no lazy creation.
 type UserResolver interface {
-	GetOrCreate(ctx context.Context, tenantID, externalID string) (userID string, err error)
+	ResolveByID(ctx context.Context, id string) (userID string, err error)
 }
 
 // UserResolveMiddleware resolves the authenticated actor to a users table row.
 // Must be mounted AFTER AuthMiddleware so ContextKeyActorID is set.
 // Stores the resolved user UUID in the context via domain.WithUserID.
+//
+// For JWT auth, ContextKeyActorID holds the user UUID (claims.Subject = user.ID).
+// For API token auth, ContextKeyActorID holds the token name (not a UUID) — no match.
 func UserResolveMiddleware(resolver UserResolver) func(http.Handler) http.Handler {
-	// Default tenant for CE (single-tenant).
-	const defaultTenantID = "00000000-0000-0000-0000-000000000001"
-
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			actorID, _ := r.Context().Value(ContextKeyActorID).(string)
@@ -29,15 +30,15 @@ func UserResolveMiddleware(resolver UserResolver) func(http.Handler) http.Handle
 				return
 			}
 
-			tenantID := domain.TenantIDFromContext(r.Context())
-			if tenantID == "" {
-				tenantID = defaultTenantID
-			}
-
-			userID, err := resolver.GetOrCreate(r.Context(), tenantID, actorID)
+			userID, err := resolver.ResolveByID(r.Context(), actorID)
 			if err != nil {
-				slog.ErrorContext(r.Context(), "failed to resolve user", "external_id", actorID, "error", err)
+				slog.ErrorContext(r.Context(), "failed to resolve user", "actor_id", actorID, "error", err)
 				// Non-fatal: don't block the request, just skip user resolution.
+				next.ServeHTTP(w, r)
+				return
+			}
+			if userID == "" {
+				// Not a known user row (e.g. API token, or JWT sub is not a user UUID).
 				next.ServeHTTP(w, r)
 				return
 			}

@@ -31,7 +31,6 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/turnexecutorfactory"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/versioncheck"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/audit"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/bridge"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/indexing"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/knowledge"
@@ -58,7 +57,6 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	"github.com/syntheticinc/bytebrew/engine/pkg/ee"
 	"github.com/syntheticinc/bytebrew/engine/pkg/logger"
-	"github.com/glebarez/sqlite"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -77,9 +75,6 @@ type ServerConfig struct {
 
 	// Managed enables managed subprocess mode (random port, READY protocol).
 	Managed bool
-
-	// BridgeURL overrides the bridge WebSocket URL from config.
-	BridgeURL string
 
 	// EEExtension plugs Enterprise Edition behavior into the CE server.
 	// nil in CE builds — all EE-gated code is silently skipped.
@@ -167,12 +162,6 @@ func Run(sc ServerConfig) error {
 		slog.Info("Config loaded", "default_provider", cfg.LLM.DefaultProvider, "ollama_model", cfg.LLM.Ollama.Model)
 	}
 
-	// Override bridge config from flag
-	if sc.BridgeURL != "" {
-		cfg.Bridge.URL = sc.BridgeURL
-		cfg.Bridge.Enabled = true
-	}
-
 	// Check for already running server BEFORE touching log files.
 	portReader := portfile.NewReader(dataDir)
 	existingInfo, _ := portReader.Read()
@@ -258,10 +247,6 @@ func Run(sc ServerConfig) error {
 		})
 		if pgErr != nil {
 			return fmt.Errorf("connect to PostgreSQL: %w", pgErr)
-		}
-
-		if migrateErr := models.AutoMigrate(pgDB); migrateErr != nil {
-			return fmt.Errorf("run database migrations: %w", migrateErr)
 		}
 
 		agentRepo := configrepo.NewGORMAgentRepository(pgDB)
@@ -533,7 +518,10 @@ func Run(sc ServerConfig) error {
 		}
 
 		// Auth
-		jwtSecret := bootstrapCfg.Security.AdminPassword
+		jwtSecret := bootstrapCfg.Security.JWTSecret
+		if jwtSecret == "" {
+			return fmt.Errorf("JWT secret is required: set security.jwt_secret in config or JWT_SECRET env var")
+		}
 		authMW := deliveryhttp.NewAuthMiddleware(jwtSecret, &tokenRepoHTTPAdapter{repo: apiTokenRepo})
 		httpAuthMW = authMW
 
@@ -569,12 +557,8 @@ func Run(sc ServerConfig) error {
 		modelRegistry := registry.New()
 		registryHandler := deliveryhttp.NewModelRegistryHandler(modelRegistry)
 
-		// Auth login (public)
-		authHandler := deliveryhttp.NewAuthHandler(
-			bootstrapCfg.Security.AdminUser,
-			bootstrapCfg.Security.AdminPassword,
-			jwtSecret,
-		)
+		// Auth login (public) — DB-backed authentication (bcrypt via users table).
+		authHandler := deliveryhttp.NewAuthHandler(pgDB, jwtSecret)
 
 		if internalHTTPServer != nil {
 			// Two-port mode: register public routes on internal router too
@@ -1364,17 +1348,6 @@ func Run(sc ServerConfig) error {
 		startMemoryRetentionCleanup(ctx, pgDB)
 	}
 
-	// Start bridge connectivity if enabled
-	var bridgeCleanup func()
-	if cfg.Bridge.Enabled && cfg.Bridge.URL != "" {
-		cleanup, err := startBridge(ctx, cfg, dataDir, sessionRegistry, sessProcessor, wsHandler, loggerInstance, eventStore)
-		if err != nil {
-			slog.Error("Failed to start bridge connectivity", "error", err)
-		} else {
-			bridgeCleanup = cleanup
-		}
-	}
-
 	// Wait for shutdown signal or server error
 	select {
 	case sig := <-sigChan:
@@ -1386,11 +1359,6 @@ func Run(sc ServerConfig) error {
 	}
 
 	loggerInstance.InfoContext(ctx, "Shutting down ByteBrew Server...")
-
-	// Shutdown bridge first (stops accepting new messages)
-	if bridgeCleanup != nil {
-		bridgeCleanup()
-	}
 
 	// Cron scheduler is stopped via defer inside the platform-services block above.
 
@@ -1536,106 +1504,6 @@ llm:
     timeout: 300s
 `
 	return os.WriteFile(path, []byte(content), 0644)
-}
-
-// startBridge initializes and connects the Bridge relay stack for mobile device communication.
-func startBridge(
-	ctx context.Context,
-	cfg *config.Config,
-	dataDir string,
-	sessionRegistry *flowregistry.SessionRegistry,
-	processor *sessionprocessor.Processor,
-	wsHandler *ws.ConnectionHandler,
-	loggerInstance *logger.Logger,
-	eventStore *eventstore.Store,
-) (func(), error) {
-	// Use shared PostgreSQL DB for bridge storage
-	// Note: this function needs pgDB passed from caller
-	// For now use inline GORM SQLite as fallback
-	bridgeDBPath := filepath.Join(dataDir, "data", "bytebrew.db")
-	bridgeDB, err := gorm.Open(sqlite.Open(bridgeDBPath), &gorm.Config{
-		Logger: gormlogger.Default.LogMode(gormlogger.Silent),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("open bridge db: %w", err)
-	}
-
-	identityStore := persistence.NewServerIdentityStore(bridgeDB)
-
-	identity, err := identityStore.GetOrCreateIdentity()
-	if err != nil {
-		return nil, fmt.Errorf("get server identity: %w", err)
-	}
-
-	deviceStore := persistence.NewDeviceStore(bridgeDB)
-
-	cryptoAdapter := bridge.NewDeviceCryptoAdapter()
-	devices, err := deviceStore.List(ctx)
-	if err != nil {
-		slog.Warn("Failed to load existing devices for crypto", "error", err)
-	} else {
-		for _, d := range devices {
-			if len(d.SharedSecret) > 0 {
-				cryptoAdapter.AddDevice(d.ID, d.SharedSecret)
-			}
-		}
-		if len(devices) > 0 {
-			slog.Info("Loaded device crypto keys", "count", len(devices))
-		}
-	}
-
-	hostName, _ := os.Hostname()
-	if hostName == "" {
-		hostName = "ByteBrew Server"
-	}
-	bridgeClient := bridge.NewBridgeClient(cfg.Bridge.URL, identity.ID, hostName, cfg.Bridge.AuthToken)
-
-	messageRouter := bridge.NewMessageRouter(bridgeClient, cryptoAdapter)
-	eventBroadcaster := bridge.NewEventBroadcaster(messageRouter, eventStore)
-	sessionRegistry.SetEventHook(eventBroadcaster.BroadcastEvent)
-
-	tokenStore := bridge.NewPairingTokenStore()
-	pairingProvider := bridge.NewPairingProvider(tokenStore, identity, cfg.Bridge.URL)
-	if wsHandler != nil {
-		wsHandler.SetPairingProvider(pairingProvider)
-	}
-
-	deviceStoreAdapter := bridge.NewDeviceStoreAdapter(deviceStore)
-	requestHandler := bridge.NewMobileRequestHandler(
-		messageRouter,
-		deviceStoreAdapter,
-		tokenStore,
-		cryptoAdapter,
-		eventBroadcaster,
-		sessionRegistry,
-		processor,
-		identity,
-		hostName,
-	)
-
-	if err := bridgeClient.Connect(ctx); err != nil {
-		// GORM handles connection pooling
-		return nil, fmt.Errorf("connect to bridge: %w", err)
-	}
-
-	messageRouter.Start()
-	requestHandler.Start()
-
-	loggerInstance.InfoContext(ctx, "Bridge connectivity enabled",
-		"url", cfg.Bridge.URL,
-		"server_id", identity.ID,
-	)
-
-	cleanup := func() {
-		slog.Info("Shutting down bridge connectivity")
-		requestHandler.Stop()
-		messageRouter.Stop()
-		bridgeClient.Disconnect()
-		// GORM handles connection pooling
-		slog.Info("Bridge connectivity stopped")
-	}
-
-	return cleanup, nil
 }
 
 // connectMCPServers connects to MCP servers and registers them in the registry.

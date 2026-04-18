@@ -291,10 +291,15 @@ func (r *kbEmbeddingResolver) ResolveByModelID(ctx context.Context, modelID stri
 }
 
 // resolveEmbeddingModelByID loads an embedding model from the DB by its ID.
+// DBML models.type enum is {ollama, openai_compatible, anthropic, azure_openai}
+// and does NOT include "embedding". Embedding-capable models are identified
+// by a positive config.embedding_dim jsonb field instead.
 func resolveEmbeddingModelByID(db *gorm.DB, ctx context.Context, modelID string) (*svcknowledge.EmbeddingModelInfo, error) {
 	var llm models.LLMProviderModel
-	if err := db.WithContext(ctx).Where("id = ? AND type = ?", modelID, "embedding").First(&llm).Error; err != nil {
-		return nil, fmt.Errorf("embedding model %q not found or not type=embedding", modelID)
+	if err := db.WithContext(ctx).
+		Where("id = ? AND (config->>'embedding_dim')::int > 0", modelID).
+		First(&llm).Error; err != nil {
+		return nil, fmt.Errorf("embedding model %q not found or config.embedding_dim not set", modelID)
 	}
 	return &svcknowledge.EmbeddingModelInfo{
 		BaseURL:      llm.BaseURL,

@@ -75,6 +75,13 @@ func (h *ModelHandler) Routes() http.Handler {
 
 // List handles GET /api/v1/models.
 // Supports ?type=embedding (only embedding) or ?type=!embedding (exclude embedding).
+// NOTE: per target-schema.dbml, models.type enum is
+//
+//	{ollama, openai_compatible, anthropic, azure_openai}
+//
+// and does NOT include "embedding". Embedding-capable models are discovered
+// via positive config.embedding_dim (surfaced as EmbeddingDim on the API
+// response), so filtering checks that field — not the .Type string.
 func (h *ModelHandler) List(w http.ResponseWriter, r *http.Request) {
 	allModels, err := h.service.ListModels(r.Context())
 	if err != nil {
@@ -90,9 +97,10 @@ func (h *ModelHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	filtered := make([]ModelResponse, 0, len(allModels))
 	for _, m := range allModels {
-		if typeFilter == "embedding" && m.Type == "embedding" {
+		isEmbedding := m.EmbeddingDim > 0
+		if typeFilter == "embedding" && isEmbedding {
 			filtered = append(filtered, m)
-		} else if typeFilter == "!embedding" && m.Type != "embedding" {
+		} else if typeFilter == "!embedding" && !isEmbedding {
 			filtered = append(filtered, m)
 		}
 	}
@@ -147,11 +155,11 @@ func (h *ModelHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Embedding model: require embedding_dim, base_url, api_key.
-	if req.Type == "embedding" {
-		if req.EmbeddingDim <= 0 {
-			writeJSONError(w, http.StatusBadRequest, "embedding_dim is required for embedding models (e.g. 1536 for text-embedding-3-small)")
-			return
-		}
+	// NOTE: "embedding" is NOT a DBML models.type value — callers signal an
+	// embedding-capable model by setting embedding_dim (which lands in
+	// config.embedding_dim jsonb). Keep the validation branch, but trigger
+	// it on embedding_dim rather than the type string.
+	if req.EmbeddingDim > 0 {
 		if req.BaseURL == "" {
 			writeJSONError(w, http.StatusBadRequest, "base_url is required for embedding models (e.g. https://api.openai.com/v1)")
 			return
@@ -184,12 +192,8 @@ func (h *ModelHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Embedding model: same validation as Create.
-	if req.Type == "embedding" {
-		if req.EmbeddingDim <= 0 {
-			writeJSONError(w, http.StatusBadRequest, "embedding_dim is required for embedding models (e.g. 1536 for text-embedding-3-small)")
-			return
-		}
+	// Embedding model: same validation as Create (keyed on embedding_dim, not type).
+	if req.EmbeddingDim > 0 {
 		if req.BaseURL == "" {
 			writeJSONError(w, http.StatusBadRequest, "base_url is required for embedding models (e.g. https://api.openai.com/v1)")
 			return

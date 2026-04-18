@@ -219,13 +219,13 @@ func (e *Engine) RecoverInterrupted(ctx context.Context) error {
 
 	for _, snap := range active {
 		if snap.Status == domain.AgentContextStatusActive {
-			snap.MarkInterrupted()
+			snap.MarkExpired()
 			if err := e.snapshotRepo.Save(ctx, snap); err != nil {
-				slog.ErrorContext(ctx, "failed to mark snapshot as interrupted",
+				slog.ErrorContext(ctx, "failed to mark snapshot as expired",
 					"agent_id", snap.AgentID, "error", err)
 				continue
 			}
-			slog.WarnContext(ctx, "found interrupted agent",
+			slog.WarnContext(ctx, "found interrupted agent (marked expired)",
 				"agent_id", snap.AgentID, "session_id", snap.SessionID)
 		}
 	}
@@ -363,15 +363,22 @@ func (e *Engine) saveSnapshot(
 	return nil
 }
 
-// mapExecutionStatusToContextStatus maps ExecutionStatus to AgentContextStatus
+// mapExecutionStatusToContextStatus maps ExecutionStatus to AgentContextStatus.
+//
+// DBML agent_context_snapshots.status CHECK: active | compacted | expired.
+//   - StatusCompleted => compacted  (snapshot collapsed / final answer reached)
+//   - StatusSuspended => expired    (paused — must be resumed or aged out)
+//   - StatusFailed    => expired    (interrupted — same storage state as suspended)
+//
+// NOTE: ExecutionStatus is an internal engine concept distinct from the
+// snapshot lifecycle; the three-way runtime distinction collapses to the
+// two-way storage distinction required by the target schema.
 func mapExecutionStatusToContextStatus(status ExecutionStatus) domain.AgentContextStatus {
 	switch status {
 	case StatusCompleted:
-		return domain.AgentContextStatusCompleted
-	case StatusSuspended:
-		return domain.AgentContextStatusSuspended
-	case StatusFailed:
-		return domain.AgentContextStatusInterrupted
+		return domain.AgentContextStatusCompacted
+	case StatusSuspended, StatusFailed:
+		return domain.AgentContextStatusExpired
 	default:
 		return domain.AgentContextStatusActive
 	}

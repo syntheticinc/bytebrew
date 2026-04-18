@@ -5,14 +5,16 @@ import (
 	"time"
 )
 
-// AgentContextStatus represents the lifecycle status of an agent's context
+// AgentContextStatus represents the lifecycle status of an agent's context.
+// Values must match target-schema.dbml agent_context_snapshots.status CHECK:
+//
+//	active | compacted | expired
 type AgentContextStatus string
 
 const (
-	AgentContextStatusActive      AgentContextStatus = "active"
-	AgentContextStatusSuspended   AgentContextStatus = "suspended"
-	AgentContextStatusCompleted   AgentContextStatus = "completed"
-	AgentContextStatusInterrupted AgentContextStatus = "interrupted"
+	AgentContextStatusActive    AgentContextStatus = "active"
+	AgentContextStatusCompacted AgentContextStatus = "compacted"
+	AgentContextStatusExpired   AgentContextStatus = "expired"
 )
 
 // CurrentSchemaVersion is the version of the context data format.
@@ -54,8 +56,7 @@ func (s *AgentContextSnapshot) Validate() error {
 // IsValid returns true if the status is valid
 func (s AgentContextStatus) IsValid() bool {
 	switch s {
-	case AgentContextStatusActive, AgentContextStatusSuspended,
-		AgentContextStatusCompleted, AgentContextStatusInterrupted:
+	case AgentContextStatusActive, AgentContextStatusCompacted, AgentContextStatusExpired:
 		return true
 	}
 	return false
@@ -67,20 +68,17 @@ func (s *AgentContextSnapshot) IsCompatible() bool {
 	return s.SchemaVersion == CurrentSchemaVersion
 }
 
-// MarkInterrupted marks the snapshot as interrupted (server crash recovery).
-func (s *AgentContextSnapshot) MarkInterrupted() {
-	s.Status = AgentContextStatusInterrupted
+// MarkExpired marks the snapshot as expired (paused / interrupted / stale).
+// Replaces the previous Suspended/Interrupted semantics — both map to "expired"
+// in the DBML-aligned enum (no longer distinguishable at the storage layer).
+func (s *AgentContextSnapshot) MarkExpired() {
+	s.Status = AgentContextStatusExpired
 	s.UpdatedAt = time.Now()
 }
 
-// MarkSuspended marks the snapshot as suspended (agent paused).
-func (s *AgentContextSnapshot) MarkSuspended() {
-	s.Status = AgentContextStatusSuspended
-	s.UpdatedAt = time.Now()
-}
-
-// MarkCompleted marks the snapshot as completed.
-func (s *AgentContextSnapshot) MarkCompleted() {
-	s.Status = AgentContextStatusCompleted
+// MarkCompacted marks the snapshot as compacted (context was summarized/collapsed).
+// Replaces the previous Completed semantics.
+func (s *AgentContextSnapshot) MarkCompacted() {
+	s.Status = AgentContextStatusCompacted
 	s.UpdatedAt = time.Now()
 }

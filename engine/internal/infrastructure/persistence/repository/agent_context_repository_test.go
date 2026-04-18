@@ -92,7 +92,7 @@ func TestAgentContextRepository_Upsert(t *testing.T) {
 	require.NoError(t, err)
 
 	// Save second snapshot with same agent_id (upsert)
-	snapshot2 := createTestSnapshot(sessionID, agentID, domain.AgentContextStatusCompleted)
+	snapshot2 := createTestSnapshot(sessionID, agentID, domain.AgentContextStatusCompacted)
 	snapshot2.StepNumber = 5
 	snapshot2.TokenCount = 500
 
@@ -107,7 +107,7 @@ func TestAgentContextRepository_Upsert(t *testing.T) {
 	// Verify data was updated, not duplicated
 	assert.Equal(t, 5, loaded.StepNumber)
 	assert.Equal(t, 500, loaded.TokenCount)
-	assert.Equal(t, domain.AgentContextStatusCompleted, loaded.Status)
+	assert.Equal(t, domain.AgentContextStatusCompacted, loaded.Status)
 
 	// Verify no duplicates in DB
 	var count int64
@@ -169,7 +169,7 @@ func TestAgentContextRepository_FindActive(t *testing.T) {
 	err := repo.Save(ctx, snapshot1)
 	require.NoError(t, err)
 
-	snapshot2 := createTestSnapshot(sessionID, "agent-2", domain.AgentContextStatusCompleted)
+	snapshot2 := createTestSnapshot(sessionID, "agent-2", domain.AgentContextStatusCompacted)
 	err = repo.Save(ctx, snapshot2)
 	require.NoError(t, err)
 

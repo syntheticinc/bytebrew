@@ -26,7 +26,6 @@ type Config struct {
 	Provider      ProviderConfig      `mapstructure:"provider"`
 	BYOK          BYOKConfig          `mapstructure:"byok"`
 	Relay         RelayConfig         `mapstructure:"relay"`
-	Bridge        BridgeConfig        `mapstructure:"bridge"`
 	RateLimits    []RateLimitRule     `mapstructure:"rate_limits"`
 
 	// ConfigDir is the directory containing config files (set by Load, not from YAML)
@@ -57,13 +56,6 @@ type RateLimitTier struct {
 	Requests  int    `mapstructure:"requests" yaml:"requests" json:"requests"`
 	Window    string `mapstructure:"window" yaml:"window" json:"window"`
 	Unlimited bool   `mapstructure:"unlimited" yaml:"unlimited" json:"unlimited"`
-}
-
-// BridgeConfig holds Bridge relay connectivity configuration for mobile devices.
-type BridgeConfig struct {
-	URL       string `mapstructure:"url"`        // WebSocket URL, e.g. "wss://bridge.bytebrew.ai"
-	AuthToken string `mapstructure:"auth_token"` // Bridge authentication token
-	Enabled   bool   `mapstructure:"enabled"`    // Whether bridge connectivity is enabled
 }
 
 // ProviderConfig holds LLM provider routing configuration.

@@ -47,10 +47,11 @@ func TestLogger_Log(t *testing.T) {
 	ts := time.Date(2026, 3, 17, 12, 0, 0, 0, time.UTC)
 	sessionID := "session-123"
 
+	actorUUID := "11111111-1111-1111-1111-111111111111"
 	err := logger.Log(context.Background(), Entry{
 		Timestamp: ts,
 		ActorType: "admin",
-		ActorID:   "user-1",
+		ActorID:   actorUUID,
 		Action:    "api_call",
 		Resource:  "GET /api/v1/agents",
 		Details: map[string]interface{}{
@@ -66,7 +67,8 @@ func TestLogger_Log(t *testing.T) {
 
 	assert.Equal(t, "admin", result.ActorType)
 	require.NotNil(t, result.ActorUserID)
-	assert.Equal(t, "user-1", *result.ActorUserID)
+	assert.Equal(t, actorUUID, *result.ActorUserID)
+	assert.Nil(t, result.ActorSub)
 	assert.Equal(t, "api_call", result.Action)
 	assert.Equal(t, "GET /api/v1/agents", result.Resource)
 	assert.Contains(t, result.Details, `"method":"GET"`)

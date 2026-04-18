@@ -15,7 +15,7 @@ import (
 // TaskFilter holds optional criteria for listing tasks.
 type TaskFilter struct {
 	Status       *domain.EngineTaskStatus
-	UserID       *string
+	UserSub      *string
 	SessionID    *string
 	ParentTaskID *uuid.UUID
 	Limit        int
@@ -227,8 +227,8 @@ func applyTaskFilter(q *gorm.DB, f TaskFilter) *gorm.DB {
 	if f.Status != nil {
 		q = q.Where("status = ?", string(*f.Status))
 	}
-	if f.UserID != nil {
-		q = q.Where("session_id IN (?)", q.Session(&gorm.Session{NewDB: true}).Table("sessions").Select("id").Where("user_id = ?", *f.UserID))
+	if f.UserSub != nil {
+		q = q.Where("session_id IN (?)", q.Session(&gorm.Session{NewDB: true}).Table("sessions").Select("id").Where("user_sub = ?", *f.UserSub))
 	}
 	if f.SessionID != nil {
 		q = q.Where("session_id = ?", *f.SessionID)

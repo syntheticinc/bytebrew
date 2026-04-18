@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
@@ -53,14 +54,20 @@ func (l *Logger) Log(ctx context.Context, entry Entry) error {
 	}
 
 	var actorUserID *string
+	var actorSub *string
 	if entry.ActorID != "" {
-		actorUserID = &entry.ActorID
+		if _, err := uuid.Parse(entry.ActorID); err == nil {
+			actorUserID = &entry.ActorID
+		} else {
+			actorSub = &entry.ActorID
+		}
 	}
 
 	model := models.AuditLogModel{
 		OccurredAt:  ts,
 		ActorType:   entry.ActorType,
 		ActorUserID: actorUserID,
+		ActorSub:    actorSub,
 		Action:      entry.Action,
 		Resource:    entry.Resource,
 		Details:     string(detailsJSON),

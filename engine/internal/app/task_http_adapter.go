@@ -169,9 +169,9 @@ func (a *taskServiceHTTPAdapter) buildRepoFilter(filter deliveryhttp.TaskListFil
 		}
 	}
 	// Non-admin actors only see tasks belonging to their sessions.
-	// The UserID filter is resolved via session ownership in the repository layer.
+	// The UserSub filter is resolved via session ownership in the repository layer.
 	if !actor.IsAdmin {
-		repoFilter.UserID = &actor.ID
+		repoFilter.UserSub = &actor.ID
 	}
 	return repoFilter
 }

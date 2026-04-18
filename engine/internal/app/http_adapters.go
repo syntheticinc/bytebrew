@@ -135,14 +135,20 @@ func (a *tokenRepoHTTPAdapter) VerifyToken(ctx context.Context, tokenHash string
 }
 
 // userResolverHTTPAdapter bridges GORMUserRepository to the http.UserResolver interface.
+// Looks up admin/system users by their UUID (set as JWT subject on login).
+// Returns empty string (no error) when the actor is not a known user row —
+// e.g. API tokens, where ActorID is the token name rather than a user UUID.
 type userResolverHTTPAdapter struct {
 	repo *configrepo.GORMUserRepository
 }
 
-func (a *userResolverHTTPAdapter) GetOrCreate(ctx context.Context, tenantID, externalID string) (string, error) {
-	user, err := a.repo.GetOrCreate(ctx, tenantID, externalID)
+func (a *userResolverHTTPAdapter) ResolveByID(ctx context.Context, id string) (string, error) {
+	user, err := a.repo.GetByID(ctx, id)
 	if err != nil {
 		return "", err
+	}
+	if user == nil {
+		return "", nil
 	}
 	return user.ID, nil
 }

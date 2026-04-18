@@ -12,14 +12,33 @@ import (
 )
 
 // cloudBlockedMCPTransportMessage is returned when the user tries to configure
-// a transport that gives the Cloud-hosted engine arbitrary code execution
-// (stdio = exec.Command on the host, docker = container spawn).
-const cloudBlockedMCPTransportMessage = "stdio and docker MCP transports are disabled in Cloud; use http or sse"
+// a transport that gives the Cloud-hosted engine arbitrary code execution.
+// Only stdio can exec arbitrary commands on the host; the other DBML
+// transports (http, sse, streamable-http) are network-bound and safe.
+const cloudBlockedMCPTransportMessage = "stdio MCP transport is disabled in Cloud; use http, sse or streamable-http"
 
 // isCloudBlockedMCPTransport reports whether the requested transport must be
 // rejected when running in Cloud mode.
 func isCloudBlockedMCPTransport(t string) bool {
-	return t == "stdio" || t == "docker"
+	return t == "stdio"
+}
+
+// allowedMCPTransports matches target-schema.dbml mcp_servers.type CHECK:
+//
+//	stdio | http | sse | streamable-http
+var allowedMCPTransports = map[string]struct{}{
+	"stdio":           {},
+	"http":            {},
+	"sse":             {},
+	"streamable-http": {},
+}
+
+// isAllowedMCPTransport reports whether the requested transport value is one
+// of the four DBML-permitted values. Anything else (including legacy "docker")
+// must be rejected before it reaches the DB.
+func isAllowedMCPTransport(t string) bool {
+	_, ok := allowedMCPTransports[t]
+	return ok
 }
 
 // MCPServerResponse is the API representation of an MCP server.
@@ -113,6 +132,10 @@ func (h *MCPHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "type is required")
 		return
 	}
+	if !isAllowedMCPTransport(req.Type) {
+		writeJSONError(w, http.StatusBadRequest, "invalid transport type: must be one of stdio, http, sse, streamable-http")
+		return
+	}
 	if cloud.IsCloud() && isCloudBlockedMCPTransport(req.Type) {
 		writeJSONError(w, http.StatusBadRequest, cloudBlockedMCPTransportMessage)
 		return
@@ -137,6 +160,10 @@ func (h *MCPHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var req CreateMCPServerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %s", err.Error()))
+		return
+	}
+	if req.Type != "" && !isAllowedMCPTransport(req.Type) {
+		writeJSONError(w, http.StatusBadRequest, "invalid transport type: must be one of stdio, http, sse, streamable-http")
 		return
 	}
 	if cloud.IsCloud() && isCloudBlockedMCPTransport(req.Type) {

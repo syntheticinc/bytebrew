@@ -1,3 +1,4 @@
 databaseChangeLog:
   - include:
-      file: migrations/001_initial_schema.yaml
+      file: 001_initial_schema.yaml
+      relativeToChangelogFile: true

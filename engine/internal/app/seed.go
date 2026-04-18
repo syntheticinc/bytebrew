@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -15,10 +16,15 @@ import (
 const builderAssistantName = "builder-assistant"
 
 // ByteBrew docs MCP server — public, no API key required.
-const (
-	bytebrewDocsMCPName = "bytebrew-docs"
-	bytebrewDocsMCPURL  = "https://mcp.bytebrew.ai/sse"
-)
+const bytebrewDocsMCPName = "bytebrew-docs"
+
+// bytebrewDocsMCPEndpoint returns the MCP URL, overridable via BYTEBREW_DOCS_MCP_URL env var.
+func bytebrewDocsMCPEndpoint() string {
+	if v := strings.TrimSpace(os.Getenv("BYTEBREW_DOCS_MCP_URL")); v != "" {
+		return v
+	}
+	return "https://mcp.bytebrew.ai/sse"
+}
 
 // Default model seeded when no models exist — free tier, strong tool calling.
 const (
@@ -198,16 +204,17 @@ func seedByteBrewDocsMCP(ctx context.Context, db *gorm.DB) {
 			return
 		}
 	}
+	mcpURL := bytebrewDocsMCPEndpoint()
 	server := &models.MCPServerModel{
 		Name: bytebrewDocsMCPName,
 		Type: models.MCPServerTypeSSE,
-		URL:  bytebrewDocsMCPURL,
+		URL:  mcpURL,
 	}
 	if err := mcpRepo.Create(ctx, server); err != nil {
 		slog.ErrorContext(ctx, "failed to seed bytebrew-docs MCP server", "error", err)
 		return
 	}
-	slog.InfoContext(ctx, "seeded bytebrew-docs MCP server", "url", bytebrewDocsMCPURL)
+	slog.InfoContext(ctx, "seeded bytebrew-docs MCP server", "url", mcpURL)
 }
 
 // seedBuilderAssistant ensures the builder-assistant agent exists in the database.
