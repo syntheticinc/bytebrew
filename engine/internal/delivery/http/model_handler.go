@@ -126,6 +126,11 @@ func (h *ModelHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "model_name is required")
 		return
 	}
+	validTypes := map[string]bool{"ollama": true, "openai_compatible": true, "anthropic": true, "azure_openai": true, "openrouter": true}
+	if !validTypes[req.Type] {
+		writeJSONError(w, http.StatusBadRequest, "type must be one of: ollama, openai_compatible, anthropic, azure_openai, openrouter")
+		return
+	}
 
 	// OpenRouter preset: normalize to openai_compatible with default base URL.
 	if req.Type == "openrouter" {

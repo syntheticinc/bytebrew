@@ -12,17 +12,19 @@ type TabKey = 'canvas' | 'settings';
 // DelegationTree expects TreeAgent/TreeRelation (prototype mock shapes).
 // We adapt real API types to these shapes here at the boundary.
 
-function agentDetailToTreeAgent(a: AgentDetail): TreeAgent {
+function agentDetailToTreeAgent(a: AgentDetail, modelNameById?: Map<string, string>): TreeAgent {
   const initials = a.name
     .split(/[-_\s]/)
     .map((p) => p[0] ?? '')
     .join('')
     .slice(0, 2)
     .toUpperCase() || a.name.slice(0, 2).toUpperCase();
+  const modelId = a.model_id ?? '';
+  const modelDisplay = modelNameById?.get(modelId) ?? modelId.slice(0, 8);
   return {
     id: a.name,
     name: a.name,
-    model: a.model_id ?? '',
+    model: modelDisplay,
     description: a.description,
     avatarInitials: initials,
     lifecycle: a.lifecycle ?? 'persistent',
@@ -215,10 +217,17 @@ export default function SchemaDetailPage() {
     return () => { cancelled = true; };
   }, [agentNames]);
 
+  const { data: models } = useApi(() => api.listModels());
+  const modelNameById = useMemo<Map<string, string>>(() => {
+    const m = new Map<string, string>();
+    for (const model of models ?? []) m.set(model.id, model.name);
+    return m;
+  }, [models]);
+
   // Adapt API shapes to Tree* types expected by DelegationTree
   const treeAgents = useMemo<TreeAgent[]>(
-    () => agents.map(agentDetailToTreeAgent),
-    [agents],
+    () => agents.map((a) => agentDetailToTreeAgent(a, modelNameById)),
+    [agents, modelNameById],
   );
 
   const treeRelations = useMemo<TreeRelation[]>(
