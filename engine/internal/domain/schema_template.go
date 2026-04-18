@@ -84,10 +84,10 @@ type SchemaTemplateRelation struct {
 	Target string `json:"target" yaml:"target"`
 }
 
-// SchemaTemplateTrigger describes one trigger to attach to the forked
-// schema. Type is one of "cron" / "webhook" / "chat" (same enum as
-// TriggerModel). The fork service points the trigger at the entry agent of
-// the forked schema.
+// SchemaTemplateTrigger is a legacy YAML-compatibility shim. V2 removed the
+// triggers table; `{type: "chat", enabled: true}` entries are mapped to
+// `schemas.chat_enabled=true` at fork time. Other types (cron/webhook) are
+// deferred to V3 — tenants hit the chat API from their own schedulers.
 type SchemaTemplateTrigger struct {
 	Type    string                 `json:"type"             yaml:"type"`
 	Title   string                 `json:"title"            yaml:"title"`

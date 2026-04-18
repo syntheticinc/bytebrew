@@ -2,15 +2,15 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/adapters"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
-	"github.com/syntheticinc/bytebrew/engine/pkg/errors"
+	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 // AgentContextRepository provides CRUD for agent context snapshots
@@ -23,25 +23,49 @@ func NewAgentContextRepository(db *gorm.DB) *AgentContextRepository {
 	return &AgentContextRepository{db: db}
 }
 
-// Save performs upsert by (session_id, agent_id) — one snapshot per agent per session
+// Save upserts the active snapshot for (session_id, agent_id).
+// Uses explicit find-then-update because ON CONFLICT requires a full unique
+// index but the DB keeps only a partial unique index WHERE status='active',
+// allowing compacted/expired rows to accumulate as history.
 func (r *AgentContextRepository) Save(ctx context.Context, snapshot *domain.AgentContextSnapshot) error {
 	model := adapters.AgentContextSnapshotToModel(snapshot)
+	model.UpdatedAt = time.Now()
+
+	var existing models.AgentContextSnapshotModel
+	err := r.db.WithContext(ctx).
+		Where("session_id = ? AND agent_id = ? AND status = 'active'", model.SessionID, model.AgentID).
+		First(&existing).Error
+
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return pkgerrors.Wrap(err, pkgerrors.CodeInternal, "find active snapshot")
+	}
+
+	if err == nil {
+		// Active snapshot found — update it in place.
+		model.ID = existing.ID
+		result := r.db.WithContext(ctx).Model(&existing).Updates(map[string]interface{}{
+			"context_data":   model.ContextData,
+			"step_number":    model.StepNumber,
+			"token_count":    model.TokenCount,
+			"status":         model.Status,
+			"updated_at":     model.UpdatedAt,
+			"schema_version": model.SchemaVersion,
+		})
+		if result.Error != nil {
+			return pkgerrors.Wrap(result.Error, pkgerrors.CodeInternal, "update agent context snapshot")
+		}
+		snapshot.ID = existing.ID
+		return nil
+	}
+
+	// No active snapshot — insert new.
 	if model.ID == "" {
 		model.ID = uuid.New().String()
 	}
-	model.UpdatedAt = time.Now()
-
-	result := r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "session_id"}, {Name: "agent_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{
-			"context_data", "step_number", "token_count", "status", "updated_at", "schema_version",
-		}),
-	}).Create(model)
-
+	result := r.db.WithContext(ctx).Create(model)
 	if result.Error != nil {
-		return errors.Wrap(result.Error, errors.CodeInternal, "save agent context snapshot")
+		return pkgerrors.Wrap(result.Error, pkgerrors.CodeInternal, "save agent context snapshot")
 	}
-
 	snapshot.ID = model.ID
 	return nil
 }
@@ -54,7 +78,7 @@ func (r *AgentContextRepository) Load(ctx context.Context, sessionID, agentID st
 		if result.Error == gorm.ErrRecordNotFound {
 			return nil, nil // Not found = fresh start
 		}
-		return nil, errors.Wrap(result.Error, errors.CodeInternal, "load agent context snapshot")
+		return nil, pkgerrors.Wrap(result.Error, pkgerrors.CodeInternal, "load agent context snapshot")
 	}
 
 	return adapters.AgentContextSnapshotFromModel(&model), nil
@@ -64,7 +88,7 @@ func (r *AgentContextRepository) Load(ctx context.Context, sessionID, agentID st
 func (r *AgentContextRepository) Delete(ctx context.Context, sessionID, agentID string) error {
 	result := r.db.WithContext(ctx).Where("session_id = ? AND agent_id = ?", sessionID, agentID).Delete(&models.AgentContextSnapshotModel{})
 	if result.Error != nil {
-		return errors.Wrap(result.Error, errors.CodeInternal, "delete agent context snapshot")
+		return pkgerrors.Wrap(result.Error, pkgerrors.CodeInternal, "delete agent context snapshot")
 	}
 	return nil
 }
@@ -74,7 +98,7 @@ func (r *AgentContextRepository) FindActive(ctx context.Context) ([]*domain.Agen
 	var dbModels []models.AgentContextSnapshotModel
 	result := r.db.WithContext(ctx).Where("status = ?", string(domain.AgentContextStatusActive)).Find(&dbModels)
 	if result.Error != nil {
-		return nil, errors.Wrap(result.Error, errors.CodeInternal, "find active snapshots")
+		return nil, pkgerrors.Wrap(result.Error, pkgerrors.CodeInternal, "find active snapshots")
 	}
 
 	snapshots := make([]*domain.AgentContextSnapshot, 0, len(dbModels))

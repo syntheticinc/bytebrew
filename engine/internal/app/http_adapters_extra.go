@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/robfig/cron/v3"
 	"gorm.io/gorm"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
@@ -16,35 +15,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
-	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 )
-
-// cronParser validates 5-field POSIX cron expressions (same set the scheduler runs).
-var cronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-
-// validateTriggerRequest rejects triggers with missing or malformed config.
-func validateTriggerRequest(req deliveryhttp.CreateTriggerRequest) error {
-	switch req.Type {
-	case "cron":
-		schedule, _ := req.Config["schedule"].(string)
-		if strings.TrimSpace(schedule) == "" {
-			return pkgerrors.InvalidInput("cron trigger requires config.schedule")
-		}
-		if _, err := cronParser.Parse(schedule); err != nil {
-			return pkgerrors.InvalidInput(fmt.Sprintf("invalid cron schedule %q: %v", schedule, err))
-		}
-	case "webhook":
-		path, _ := req.Config["webhook_path"].(string)
-		if strings.TrimSpace(path) == "" {
-			return pkgerrors.InvalidInput("webhook trigger requires config.webhook_path")
-		}
-	case "chat", "":
-		// chat triggers are system-owned; empty type is rejected by the handler.
-	default:
-		return pkgerrors.InvalidInput(fmt.Sprintf("unknown trigger type: %s", req.Type))
-	}
-	return nil
-}
 
 // mcpServiceHTTPAdapter bridges GORMMCPServerRepository to the http.MCPService interface.
 type mcpServiceHTTPAdapter struct {
@@ -262,175 +233,8 @@ func derefString(p *string) string {
 	return *p
 }
 
-// triggerServiceHTTPAdapter bridges GORMTriggerRepository to the http.TriggerService interface.
-type triggerServiceHTTPAdapter struct {
-	repo *configrepo.GORMTriggerRepository
-	db   *gorm.DB
-}
-
-func triggerModelToResponse(t models.TriggerModel) deliveryhttp.TriggerResponse {
-	var schemaIDPtr *string
-	if t.SchemaID != "" {
-		s := t.SchemaID
-		schemaIDPtr = &s
-	}
-	resp := deliveryhttp.TriggerResponse{
-		ID:          t.ID,
-		Type:        t.Type,
-		Title:       t.Title,
-		SchemaID:    schemaIDPtr,
-		Description: t.Description,
-		Enabled:     t.Enabled,
-		Config:      triggerConfigToMap(t.Config),
-		CreatedAt:   t.CreatedAt.Format(time.RFC3339),
-	}
-	if t.LastFiredAt != nil {
-		resp.LastFiredAt = t.LastFiredAt.Format(time.RFC3339)
-	}
-	return resp
-}
-
-// triggerConfigToMap flattens a typed TriggerConfig into the wire-format map
-// served by the HTTP API. Empty fields are elided so `config` stays compact
-// for chat-type triggers that carry no config.
-func triggerConfigToMap(c models.TriggerConfig) map[string]interface{} {
-	out := map[string]interface{}{}
-	if c.Schedule != "" {
-		out["schedule"] = c.Schedule
-	}
-	if c.WebhookPath != "" {
-		out["webhook_path"] = c.WebhookPath
-	}
-	return out
-}
-
-// triggerConfigFromMap materialises a typed TriggerConfig from the wire map.
-// Unknown keys are dropped silently — the API surface is deliberately narrow.
-func triggerConfigFromMap(m map[string]interface{}) models.TriggerConfig {
-	var c models.TriggerConfig
-	if v, ok := m["schedule"].(string); ok {
-		c.Schedule = v
-	}
-	if v, ok := m["webhook_path"].(string); ok {
-		c.WebhookPath = v
-	}
-	return c
-}
-
-func (a *triggerServiceHTTPAdapter) ListTriggers(ctx context.Context) ([]deliveryhttp.TriggerResponse, error) {
-	triggers, err := a.repo.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-	result := make([]deliveryhttp.TriggerResponse, 0, len(triggers))
-	for _, t := range triggers {
-		result = append(result, triggerModelToResponse(t))
-	}
-	return result, nil
-}
-
-func (a *triggerServiceHTTPAdapter) ListTriggersBySchema(ctx context.Context, schemaID string) ([]deliveryhttp.TriggerResponse, error) {
-	triggers, err := a.repo.ListBySchemaID(ctx, schemaID)
-	if err != nil {
-		return nil, err
-	}
-	result := make([]deliveryhttp.TriggerResponse, 0, len(triggers))
-	for _, t := range triggers {
-		result = append(result, triggerModelToResponse(t))
-	}
-	return result, nil
-}
-
-// Q.5: triggers no longer have agent_id — they target schemas only.
-
-func (a *triggerServiceHTTPAdapter) CreateTrigger(ctx context.Context, req deliveryhttp.CreateTriggerRequest) (*deliveryhttp.TriggerResponse, error) {
-	if err := validateTriggerRequest(req); err != nil {
-		return nil, err
-	}
-	schemaID := ""
-	if req.SchemaID != nil {
-		schemaID = *req.SchemaID
-	}
-	// CE mode: schema_id not provided — auto-assign to the first available schema.
-	// In Cloud mode the caller must pass schema_id explicitly.
-	if schemaID == "" {
-		if err := a.db.WithContext(ctx).Raw("SELECT id FROM schemas ORDER BY created_at LIMIT 1").Scan(&schemaID).Error; err != nil || schemaID == "" {
-			return nil, fmt.Errorf("schema_id is required: no schemas found")
-		}
-	}
-	model := &models.TriggerModel{
-		Type:        req.Type,
-		Title:       req.Title,
-		SchemaID:    schemaID,
-		Description: req.Description,
-		Enabled:     true,
-		Config:      triggerConfigFromMap(req.Config),
-	}
-	if req.Enabled != nil {
-		model.Enabled = *req.Enabled
-	}
-	if err := a.repo.Create(ctx, model); err != nil {
-		return nil, err
-	}
-	resp := triggerModelToResponse(*model)
-	return &resp, nil
-}
-
-func (a *triggerServiceHTTPAdapter) UpdateTrigger(ctx context.Context, id string, req deliveryhttp.CreateTriggerRequest) (*deliveryhttp.TriggerResponse, error) {
-	if err := validateTriggerRequest(req); err != nil {
-		return nil, err
-	}
-	model := &models.TriggerModel{
-		Type:        req.Type,
-		Title:       req.Title,
-		Description: req.Description,
-		Config:      triggerConfigFromMap(req.Config),
-	}
-	if req.Enabled != nil {
-		model.Enabled = *req.Enabled
-	}
-	if err := a.repo.Update(ctx, id, model); err != nil {
-		return nil, err
-	}
-
-	t, err := a.repo.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	resp := triggerModelToResponse(*t)
-	return &resp, nil
-}
-
-// SetTriggerTarget resolves agent → schema and sets the trigger's schema_id.
-// Q.5: triggers no longer have agent_id; they target schemas only.
-func (a *triggerServiceHTTPAdapter) SetTriggerTarget(ctx context.Context, id string, agentName string) (*deliveryhttp.TriggerResponse, error) {
-	// Resolve agent name → find schema where this agent is the entry agent
-	var schemaID string
-	if err := a.db.WithContext(ctx).
-		Raw("SELECT id FROM schemas WHERE entry_agent_id = (SELECT id FROM agents WHERE name = ? LIMIT 1) LIMIT 1", agentName).
-		Scan(&schemaID).Error; err != nil || schemaID == "" {
-		return nil, pkgerrors.NotFound(fmt.Sprintf("no schema with entry agent %q", agentName))
-	}
-	if err := a.repo.SetSchemaID(ctx, id, schemaID); err != nil {
-		return nil, err
-	}
-	t, err := a.repo.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	resp := triggerModelToResponse(*t)
-	return &resp, nil
-}
-
-// ClearTriggerTarget is no longer supported — triggers.schema_id is NOT NULL.
-// Returns an error directing callers to delete and recreate the trigger instead.
-func (a *triggerServiceHTTPAdapter) ClearTriggerTarget(ctx context.Context, id string) error {
-	return fmt.Errorf("clearing trigger schema is not supported (schema_id is NOT NULL); delete and recreate the trigger instead")
-}
-
-func (a *triggerServiceHTTPAdapter) DeleteTrigger(ctx context.Context, id string) error {
-	return a.repo.Delete(ctx, id)
-}
+// Triggers adapter removed in V2: the triggers table is gone, replaced by
+// schemas.chat_enabled. Chat dispatch routes through POST /api/v1/schemas/{id}/chat.
 
 // settingServiceHTTPAdapter bridges GORMSettingRepository to the http.SettingService interface.
 // byokMW, db, and fallback are optional — when set, any write to a byok.*
@@ -504,22 +308,18 @@ type sessionServiceHTTPAdapter struct {
 	messageRepo *configrepo.GORMEventRepository
 }
 
-func (a *sessionServiceHTTPAdapter) ListSessions(ctx context.Context, agentName, userID, status, from, to string, page, perPage int) ([]deliveryhttp.SessionResponse, int64, error) {
-	sessions, total, err := a.repo.List(ctx, agentName, userID, status, from, to, page, perPage)
+func (a *sessionServiceHTTPAdapter) ListSessions(ctx context.Context, agentName, userSub, status, from, to string, page, perPage int) ([]deliveryhttp.SessionResponse, int64, error) {
+	sessions, total, err := a.repo.List(ctx, agentName, userSub, status, from, to, page, perPage)
 	if err != nil {
 		return nil, 0, err
 	}
 	result := make([]deliveryhttp.SessionResponse, 0, len(sessions))
 	for _, s := range sessions {
-		userID := ""
-		if s.UserID != nil {
-			userID = *s.UserID
-		}
 		result = append(result, deliveryhttp.SessionResponse{
 			ID:        s.ID,
 			Title:     s.Title,
-			AgentName: "", // Q.5: agent_name dropped from sessions
-			UserID:    userID,
+			SchemaID:  s.SchemaID,
+			UserSub:   s.UserSub,
 			Status:    s.Status,
 			CreatedAt: s.CreatedAt.Format(time.RFC3339),
 			UpdatedAt: s.UpdatedAt.Format(time.RFC3339),
@@ -536,15 +336,11 @@ func (a *sessionServiceHTTPAdapter) GetSession(ctx context.Context, id string) (
 	if s == nil {
 		return nil, nil
 	}
-	userID := ""
-	if s.UserID != nil {
-		userID = *s.UserID
-	}
 	return &deliveryhttp.SessionResponse{
 		ID:        s.ID,
 		Title:     s.Title,
-		AgentName: "", // Q.5: agent_name dropped from sessions
-		UserID:    userID,
+		SchemaID:  s.SchemaID,
+		UserSub:   s.UserSub,
 		Status:    s.Status,
 		CreatedAt: s.CreatedAt.Format(time.RFC3339),
 		UpdatedAt: s.UpdatedAt.Format(time.RFC3339),
@@ -556,28 +352,21 @@ func (a *sessionServiceHTTPAdapter) CreateSession(ctx context.Context, req deliv
 	if id == "" {
 		id = uuid.New().String()
 	}
-	var userID *string
-	if req.UserID != "" {
-		userID = &req.UserID
-	}
 	session := &models.SessionModel{
-		ID:     id,
-		Title:  req.Title,
-		UserID: userID,
-		Status: "active",
+		ID:       id,
+		Title:    req.Title,
+		SchemaID: req.SchemaID,
+		UserSub:  req.UserSub,
+		Status:   "active",
 	}
 	if err := a.repo.Create(ctx, session); err != nil {
 		return nil, err
 	}
-	respUserID := ""
-	if session.UserID != nil {
-		respUserID = *session.UserID
-	}
 	return &deliveryhttp.SessionResponse{
 		ID:        session.ID,
 		Title:     session.Title,
-		AgentName: "", // Q.5: agent_name dropped from sessions
-		UserID:    respUserID,
+		SchemaID:  session.SchemaID,
+		UserSub:   session.UserSub,
 		Status:    session.Status,
 		CreatedAt: session.CreatedAt.Format(time.RFC3339),
 		UpdatedAt: session.UpdatedAt.Format(time.RFC3339),

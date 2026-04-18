@@ -52,8 +52,8 @@ func setupMemoryRouter(lister MemoryLister, clearer MemoryClearer) *chi.Mux {
 func TestMemoryHandler_ListMemories(t *testing.T) {
 	lister := &mockMemoryLister{
 		memories: []*domain.Memory{
-			{ID: "1", SchemaID: "10", UserID: "user-1", Content: "user prefers dark mode", CreatedAt: time.Now()},
-			{ID: "2", SchemaID: "10", UserID: "user-1", Content: "user name is Alice", CreatedAt: time.Now()},
+			{ID: "1", SchemaID: "10", UserSub: "user-1", Content: "user prefers dark mode", CreatedAt: time.Now()},
+			{ID: "2", SchemaID: "10", UserSub: "user-1", Content: "user name is Alice", CreatedAt: time.Now()},
 		},
 	}
 	r := setupMemoryRouter(lister, &mockMemoryClearer{})

@@ -25,21 +25,19 @@ type memoryStoreArgs struct {
 // MemoryStoreTool allows the agent to store important information for future sessions.
 type MemoryStoreTool struct {
 	schemaID   string
-	userID     string
+	userSub    string
 	storer     MemoryStorer
 	maxEntries int
 }
 
-// NewMemoryStoreTool creates a new memory_store tool.
-// An empty userID becomes domain.AnonymousMemoryUserID so downstream SQL on
-// the uuid-typed user_id column never hits an empty-string cast failure.
-func NewMemoryStoreTool(schemaID, userID string, storer MemoryStorer, maxEntries int) tool.InvokableTool {
-	if userID == "" {
-		userID = domain.AnonymousMemoryUserID
-	}
+// NewMemoryStoreTool creates a new memory_store tool scoped to the given
+// (schema, user_sub) pair. Memories isolate by this tuple — a non-empty
+// user_sub is required because memories require an authenticated end-user
+// in V2 (the anonymous sentinel was removed).
+func NewMemoryStoreTool(schemaID, userSub string, storer MemoryStorer, maxEntries int) tool.InvokableTool {
 	return &MemoryStoreTool{
 		schemaID:   schemaID,
-		userID:     userID,
+		userSub:    userSub,
 		storer:     storer,
 		maxEntries: maxEntries,
 	}
@@ -79,7 +77,7 @@ func (t *MemoryStoreTool) InvokableRun(ctx context.Context, argumentsInJSON stri
 		return "[ERROR] content is required.", nil
 	}
 
-	mem, err := domain.NewMemory(t.schemaID, t.userID, args.Content)
+	mem, err := domain.NewMemory(t.schemaID, t.userSub, args.Content)
 	if err != nil {
 		return fmt.Sprintf("[ERROR] Invalid memory: %v", err), nil
 	}
@@ -94,7 +92,7 @@ func (t *MemoryStoreTool) InvokableRun(ctx context.Context, argumentsInJSON stri
 	}
 
 	slog.InfoContext(ctx, "[MemoryStoreTool] stored",
-		"schema_id", t.schemaID, "user_id", t.userID, "content_len", len(args.Content))
+		"schema_id", t.schemaID, "user_sub", t.userSub, "content_len", len(args.Content))
 
 	return "Memory stored successfully.", nil
 }

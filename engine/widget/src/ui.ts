@@ -3,7 +3,7 @@ import { renderMarkdown } from './markdown';
 import { buildStyles, getTheme } from './styles';
 
 export interface WidgetConfig {
-  agent: string;
+  schemaId: string;
   apiKey: string | null;
   endpoint: string;
   position: string;
@@ -41,7 +41,7 @@ export class WidgetUI {
   constructor(config: WidgetConfig) {
     this.config = config;
     this.client = new ChatClient({
-      agent: config.agent,
+      schemaId: config.schemaId,
       endpoint: config.endpoint,
       apiKey: config.apiKey,
     });

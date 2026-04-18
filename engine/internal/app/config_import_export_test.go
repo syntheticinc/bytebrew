@@ -116,22 +116,6 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
 			PRIMARY KEY (agent_id, mcp_server_id)
 		)`,
-		// V2 (§4.1): type-specific trigger config is a single jsonb column.
-		// SQLite has no jsonb; TEXT round-trips cleanly via the TriggerConfig
-		// Scan/Value implementations in models.
-		`CREATE TABLE triggers (
-			id TEXT PRIMARY KEY,
-			type VARCHAR(10) NOT NULL,
-			title VARCHAR(255) NOT NULL,
-			schema_id TEXT,
-			description TEXT,
-			enabled BOOLEAN NOT NULL DEFAULT 1,
-			config TEXT NOT NULL DEFAULT '{}',
-			tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
-			last_fired_at DATETIME,
-			created_at DATETIME,
-			updated_at DATETIME
-		)`,
 	} {
 		require.NoError(t, db.Exec(ddl).Error)
 	}
@@ -209,12 +193,7 @@ func seedTestData(t *testing.T, db *gorm.DB) {
 		SourceAgentID: agent.ID, TargetAgentID: researcher.ID,
 	}).Error)
 
-	// Trigger
-	require.NoError(t, db.Create(&models.TriggerModel{
-		Type: "cron", Title: "Morning report",
-		Config:      models.TriggerConfig{Schedule: "0 9 * * *"},
-		Description: "Daily report", Enabled: true,
-	}).Error)
+	// Triggers removed in V2 (replaced by schemas.chat_enabled).
 }
 
 func TestExportYAML(t *testing.T) {
@@ -258,10 +237,8 @@ func TestExportYAML(t *testing.T) {
 	assert.Equal(t, "shop-api", cfg.MCPServers.Items[0].Name)
 	assert.Equal(t, "${API_KEY}", cfg.MCPServers.Items[0].EnvVars["API_KEY"])
 
-	// Triggers
-	require.Len(t, cfg.Triggers.Items, 1)
-	assert.Equal(t, "Morning report", cfg.Triggers.Items[0].Title)
-	assert.Equal(t, "0 9 * * *", cfg.Triggers.Items[0].Schedule)
+	// Triggers removed in V2 — export returns empty slice.
+	assert.Empty(t, cfg.Triggers.Items)
 }
 
 func TestImportYAML(t *testing.T) {
@@ -325,11 +302,7 @@ triggers:
 	require.Len(t, agents[0].Tools, 1)
 	assert.Equal(t, "web_search", agents[0].Tools[0].ToolName)
 
-	// Verify triggers
-	var triggers []models.TriggerModel
-	require.NoError(t, db.Find(&triggers).Error)
-	require.Len(t, triggers, 1)
-	assert.Equal(t, "Hourly check", triggers[0].Title)
+	// Triggers removed in V2 — import of legacy trigger YAML is a no-op.
 }
 
 func TestImportYAML_UpdateExisting(t *testing.T) {

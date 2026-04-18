@@ -19,12 +19,14 @@ import (
 // was called with so the test can assert that BYOK credentials were
 // propagated end-to-end.
 type fakeChatService struct {
-	gotCreds *llm.BYOKCredentials
-	gotAgent string
+	gotCreds    *llm.BYOKCredentials
+	gotSchemaID string
+	gotUserSub  string
 }
 
-func (f *fakeChatService) Chat(ctx context.Context, agentName, _, _, _ string) (<-chan SSEEvent, error) {
-	f.gotAgent = agentName
+func (f *fakeChatService) Chat(ctx context.Context, schemaID, _, userSub, _ string) (<-chan SSEEvent, error) {
+	f.gotSchemaID = schemaID
+	f.gotUserSub = userSub
 	if c := llm.BYOKCredentialsFrom(ctx); c != nil {
 		// Copy so the test sees a stable value even if the caller mutates.
 		f.gotCreds = &llm.BYOKCredentials{
@@ -43,6 +45,20 @@ func (f *fakeChatService) Chat(ctx context.Context, agentName, _, _, _ string) (
 // fakeForwardHeaders returns no header forwarding — focus is BYOK only.
 func fakeForwardHeaders() []string { return nil }
 
+// testSchemaID is a valid UUID used as the route param.
+const testSchemaID = "11111111-1111-1111-1111-111111111111"
+
+// chatBody returns a JSON chat request with user_sub fallback so the
+// handler's userSub gate does not 401 in these BYOK-focused tests.
+func chatBody(extra string) *strings.Reader {
+	body := `{"message":"hi","user_sub":"test-user","stream":false`
+	if extra != "" {
+		body += "," + extra
+	}
+	body += "}"
+	return strings.NewReader(body)
+}
+
 // TestChatHandler_BYOKHeaders_ReachServiceContext asserts the V2 §5.8
 // integration contract: a chat request carrying X-BYOK-* headers passes
 // through BYOKMiddleware into the chat handler, which lifts the values
@@ -50,7 +66,7 @@ func fakeForwardHeaders() []string { return nil }
 // ad-hoc per-end-user ChatModel.
 func TestChatHandler_BYOKHeaders_ReachServiceContext(t *testing.T) {
 	svc := &fakeChatService{}
-	handler := NewChatHandler(svc, nil, fakeForwardHeaders)
+	handler := NewChatHandler(svc, fakeForwardHeaders)
 
 	mw := NewBYOKMiddleware(BYOKConfig{
 		Enabled:          true,
@@ -61,10 +77,9 @@ func TestChatHandler_BYOKHeaders_ReachServiceContext(t *testing.T) {
 	// AFTER auth (auth is a no-op in this test) and BEFORE the handler.
 	r := chi.NewRouter()
 	r.Use(mw.InjectBYOK)
-	r.Post("/api/v1/agents/{name}/chat", handler.Chat)
+	r.Post("/api/v1/schemas/{id}/chat", handler.Chat)
 
-	body := strings.NewReader(`{"message":"hi","stream":false}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/my-agent/chat", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/schemas/"+testSchemaID+"/chat", chatBody(""))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-BYOK-Provider", "openai_compatible")
 	req.Header.Set("X-BYOK-API-Key", "sk-byok-secret")
@@ -75,7 +90,8 @@ func TestChatHandler_BYOKHeaders_ReachServiceContext(t *testing.T) {
 	r.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
-	assert.Equal(t, "my-agent", svc.gotAgent)
+	assert.Equal(t, testSchemaID, svc.gotSchemaID)
+	assert.Equal(t, "test-user", svc.gotUserSub)
 	require.NotNil(t, svc.gotCreds, "BYOK credentials must be attached to chat service ctx")
 	assert.Equal(t, "openai_compatible", svc.gotCreds.Provider)
 	assert.Equal(t, "sk-byok-secret", svc.gotCreds.APIKey)
@@ -88,7 +104,7 @@ func TestChatHandler_BYOKHeaders_ReachServiceContext(t *testing.T) {
 // the middleware short-circuits before the chat handler ever runs.
 func TestChatHandler_DisallowedProvider_Returns403(t *testing.T) {
 	svc := &fakeChatService{}
-	handler := NewChatHandler(svc, nil, fakeForwardHeaders)
+	handler := NewChatHandler(svc, fakeForwardHeaders)
 	mw := NewBYOKMiddleware(BYOKConfig{
 		Enabled:          true,
 		AllowedProviders: []string{"openai"},
@@ -96,10 +112,9 @@ func TestChatHandler_DisallowedProvider_Returns403(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Use(mw.InjectBYOK)
-	r.Post("/api/v1/agents/{name}/chat", handler.Chat)
+	r.Post("/api/v1/schemas/{id}/chat", handler.Chat)
 
-	body := strings.NewReader(`{"message":"hi"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/my-agent/chat", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/schemas/"+testSchemaID+"/chat", chatBody(""))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-BYOK-Provider", "anthropic")
 	req.Header.Set("X-BYOK-API-Key", "sk-x")
@@ -122,7 +137,7 @@ func TestChatHandler_DisallowedProvider_Returns403(t *testing.T) {
 // (V2 §5.8 "missing key when required").
 func TestChatHandler_MissingKey_Returns400(t *testing.T) {
 	svc := &fakeChatService{}
-	handler := NewChatHandler(svc, nil, fakeForwardHeaders)
+	handler := NewChatHandler(svc, fakeForwardHeaders)
 	mw := NewBYOKMiddleware(BYOKConfig{
 		Enabled:          true,
 		AllowedProviders: []string{"openai"},
@@ -130,10 +145,9 @@ func TestChatHandler_MissingKey_Returns400(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Use(mw.InjectBYOK)
-	r.Post("/api/v1/agents/{name}/chat", handler.Chat)
+	r.Post("/api/v1/schemas/{id}/chat", handler.Chat)
 
-	body := strings.NewReader(`{"message":"hi"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/my-agent/chat", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/schemas/"+testSchemaID+"/chat", chatBody(""))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-BYOK-Provider", "openai")
 	// No X-BYOK-API-Key
@@ -151,21 +165,21 @@ func TestChatHandler_MissingKey_Returns400(t *testing.T) {
 // attached — the tenant-configured model must remain in effect.
 func TestChatHandler_NoBYOK_TenantConfigPath(t *testing.T) {
 	svc := &fakeChatService{}
-	handler := NewChatHandler(svc, nil, fakeForwardHeaders)
+	handler := NewChatHandler(svc, fakeForwardHeaders)
 	mw := NewBYOKMiddleware(BYOKConfig{Enabled: true, AllowedProviders: []string{"openai"}})
 
 	r := chi.NewRouter()
 	r.Use(mw.InjectBYOK)
-	r.Post("/api/v1/agents/{name}/chat", handler.Chat)
+	r.Post("/api/v1/schemas/{id}/chat", handler.Chat)
 
-	body := strings.NewReader(`{"message":"hi","stream":false}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/my-agent/chat", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/schemas/"+testSchemaID+"/chat", chatBody(""))
 	req.Header.Set("Content-Type", "application/json")
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "my-agent", svc.gotAgent)
+	assert.Equal(t, testSchemaID, svc.gotSchemaID)
+	assert.Equal(t, "test-user", svc.gotUserSub)
 	assert.Nil(t, svc.gotCreds, "no BYOK headers ⇒ no creds attached ⇒ tenant model used")
 }

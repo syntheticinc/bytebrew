@@ -202,11 +202,6 @@ func TestSanitizePath_CollapsesIDs(t *testing.T) {
 			want: "/api/v1/auth/tokens/{id}",
 		},
 		{
-			name: "webhook path",
-			path: "/api/v1/webhooks/github-push",
-			want: "/api/v1/webhooks/{path}",
-		},
-		{
 			name: "mcp server ID",
 			path: "/api/v1/mcp-servers/123",
 			want: "/api/v1/mcp-servers/{id}",
@@ -242,9 +237,9 @@ func TestSanitizePath_CollapsesIDs(t *testing.T) {
 			want: "/metrics",
 		},
 		{
-			name: "trigger numeric ID",
-			path: "/api/v1/triggers/7",
-			want: "/api/v1/triggers/{id}",
+			name: "schema uuid",
+			path: "/api/v1/schemas/11111111-1111-1111-1111-111111111111",
+			want: "/api/v1/schemas/{id}",
 		},
 		{
 			name: "setting numeric ID",

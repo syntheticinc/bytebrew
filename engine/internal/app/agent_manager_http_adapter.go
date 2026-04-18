@@ -33,6 +33,7 @@ func (a *agentManagerHTTPAdapter) ListAgents(ctx context.Context) ([]deliveryhtt
 	result := make([]deliveryhttp.AgentInfo, 0, len(records))
 	for _, rec := range records {
 		info := deliveryhttp.AgentInfo{
+			ID:           rec.ID,
 			Name:         rec.Name,
 			ToolsCount:   len(rec.BuiltinTools) + len(rec.CustomTools),
 			IsSystem:     rec.IsSystem,
@@ -60,6 +61,7 @@ func (a *agentManagerHTTPAdapter) GetAgent(ctx context.Context, name string) (*d
 
 	detail := &deliveryhttp.AgentDetail{
 		AgentInfo: deliveryhttp.AgentInfo{
+			ID:           rec.ID,
 			Name:         rec.Name,
 			ToolsCount:   len(tools),
 			IsSystem:     rec.IsSystem,

@@ -14,14 +14,16 @@ import (
 
 // SchemaInfo is a summary of a schema returned in list responses.
 type SchemaInfo struct {
-	ID             string    `json:"id"`
-	Name           string    `json:"name"`
-	Description    string    `json:"description,omitempty"`
-	Agents         []string  `json:"agents,omitempty"`
-	IsSystem       bool      `json:"is_system,omitempty"`
-	EntryAgentName string    `json:"entry_agent_name,omitempty"`
-	AgentsCount    int       `json:"agents_count"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID              string     `json:"id"`
+	Name            string     `json:"name"`
+	Description     string     `json:"description,omitempty"`
+	Agents          []string   `json:"agents,omitempty"`
+	IsSystem        bool       `json:"is_system,omitempty"`
+	EntryAgentName  string     `json:"entry_agent_name,omitempty"`
+	AgentsCount     int        `json:"agents_count"`
+	ChatEnabled     bool       `json:"chat_enabled"`
+	ChatLastFiredAt *time.Time `json:"chat_last_fired_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
 }
 
 // CreateSchemaRequest is the body for POST /api/v1/schemas.
@@ -35,9 +37,10 @@ type CreateSchemaRequest struct {
 // All fields are pointers so callers can send partial updates — nil fields
 // preserve their current value instead of being overwritten with a zero value.
 type UpdateSchemaRequest struct {
-	Name          *string `json:"name,omitempty"`
-	Description   *string `json:"description,omitempty"`
-	EntryAgentID  *string `json:"entry_agent_id,omitempty"`
+	Name         *string `json:"name,omitempty"`
+	Description  *string `json:"description,omitempty"`
+	EntryAgentID *string `json:"entry_agent_id,omitempty"`
+	ChatEnabled  *bool   `json:"chat_enabled,omitempty"`
 }
 
 // --- AgentRelation DTOs ---

@@ -15,6 +15,7 @@ const agentNameMaxLen = 255
 
 // AgentInfo is a summary of an agent returned in list responses.
 type AgentInfo struct {
+	ID             string   `json:"id"`
 	Name           string   `json:"name"`
 	Description    string   `json:"description,omitempty"`
 	ToolsCount     int      `json:"tools_count"`

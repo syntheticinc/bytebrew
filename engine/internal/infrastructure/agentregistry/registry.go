@@ -78,6 +78,21 @@ func (r *AgentRegistry) Get(name string) (*RegisteredAgent, error) {
 	return agent, nil
 }
 
+// GetByID returns a registered agent by its UUID.
+// Used by chat dispatch to resolve a schema's entry_agent_id (UUID) onto the
+// agent record (whose name drives the flow / LLM lookup path).
+func (r *AgentRegistry) GetByID(id string) (*RegisteredAgent, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, agent := range r.agents {
+		if agent.Record.ID == id {
+			return agent, nil
+		}
+	}
+	return nil, fmt.Errorf("agent with id %q not found", id)
+}
+
 // GetFlow implements the FlowProvider interface used by EngineAdapter and AgentPool.
 // This allows AgentRegistry to be a drop-in replacement for FlowManager.
 func (r *AgentRegistry) GetFlow(_ context.Context, agentName string) (*domain.Flow, error) {

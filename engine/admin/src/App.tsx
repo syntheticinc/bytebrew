@@ -15,7 +15,6 @@ import AgentDrillInPage from './pages/AgentDrillInPage';
 import AgentsPage from './pages/AgentsPage';
 import WidgetConfigPage from './pages/WidgetConfigPage';
 import KnowledgePage from './pages/KnowledgePage';
-import TriggersPage from './pages/TriggersPage';
 import OverviewPage from './pages/OverviewPage';
 import SchemasPage from './pages/SchemasPage';
 import SchemaDetailPage from './pages/SchemaDetailPage';
@@ -55,7 +54,6 @@ export default function App() {
             <Route path="/resilience" element={<ResiliencePage />} />
             <Route path="/tool-call-log" element={<ToolCallLogPage />} />
             <Route path="/knowledge" element={<KnowledgePage />} />
-            <Route path="/triggers" element={<TriggersPage />} />
             <Route path="/widget" element={<WidgetConfigPage />} />
             <Route path="/agents" element={<AgentsPage />} />
             <Route path="/agents/:agent" element={<AgentDrillInPage />} />

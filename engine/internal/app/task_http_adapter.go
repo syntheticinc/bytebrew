@@ -14,9 +14,9 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
 )
 
-// sessionUserReader looks up the owner of a session.
+// sessionUserReader looks up the owner of a session by JWT sub.
 type sessionUserReader interface {
-	GetUserIDBySessionID(ctx context.Context, sessionID string) (string, bool, error)
+	GetUserSubBySessionID(ctx context.Context, sessionID string) (string, bool, error)
 }
 
 // taskServiceHTTPAdapter bridges task infrastructure to the http.TaskService interface.
@@ -95,11 +95,11 @@ func checkOwnership(ctx context.Context, task *domain.EngineTask, actor delivery
 	if task.SessionID == "" {
 		return domain.ErrEngineTaskNotFound
 	}
-	ownerID, ok, err := sr.GetUserIDBySessionID(ctx, task.SessionID)
+	ownerSub, ok, err := sr.GetUserSubBySessionID(ctx, task.SessionID)
 	if err != nil {
 		return err
 	}
-	if !ok || ownerID != actor.ID {
+	if !ok || ownerSub != actor.ID {
 		return domain.ErrEngineTaskNotFound
 	}
 	return nil

@@ -16,7 +16,7 @@ type MemoryRepository interface {
 // Input holds the input for storing a memory entry.
 type Input struct {
 	SchemaID   string
-	UserID     string
+	UserSub    string
 	Content    string
 	Metadata   map[string]string
 	MaxEntries int // 0 = unlimited
@@ -34,7 +34,7 @@ func New(repo MemoryRepository) *Usecase {
 
 // Execute stores a memory entry.
 func (u *Usecase) Execute(ctx context.Context, input Input) (*domain.Memory, error) {
-	mem, err := domain.NewMemory(input.SchemaID, input.UserID, input.Content)
+	mem, err := domain.NewMemory(input.SchemaID, input.UserSub, input.Content)
 	if err != nil {
 		return nil, fmt.Errorf("create memory: %w", err)
 	}
@@ -48,7 +48,7 @@ func (u *Usecase) Execute(ctx context.Context, input Input) (*domain.Memory, err
 	}
 
 	slog.InfoContext(ctx, "memory stored",
-		"schema_id", input.SchemaID, "user_id", input.UserID)
+		"schema_id", input.SchemaID, "user_id", input.UserSub)
 
 	return mem, nil
 }

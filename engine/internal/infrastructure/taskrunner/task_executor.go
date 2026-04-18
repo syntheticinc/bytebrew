@@ -137,7 +137,7 @@ func (e *TaskExecutor) Execute(ctx context.Context, taskID uuid.UUID) error {
 	// see in the admin UI why the cron run did not complete.
 	if isAutonomous(t) {
 		if cur, getErr := e.taskManager.GetTask(ctx, taskID); getErr == nil && cur != nil {
-			if cur.Status == domain.EngineTaskStatusNeedsInput || cur.Status == domain.EngineTaskStatusEscalated {
+			if cur.Status == domain.EngineTaskStatusNeedsInput {
 				return e.markFailed(ctx, taskID, fmt.Errorf("task requires user input but is running in autonomous mode (status=%s)", cur.Status))
 			}
 		}

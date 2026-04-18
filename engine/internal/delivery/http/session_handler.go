@@ -14,8 +14,8 @@ import (
 type SessionResponse struct {
 	ID        string `json:"id"`
 	Title     string `json:"title,omitempty"`
-	AgentName string `json:"agent_name"`
-	UserID    string `json:"user_id,omitempty"`
+	SchemaID  string `json:"schema_id,omitempty"`
+	UserSub   string `json:"user_sub,omitempty"`
 	Status    string `json:"status"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
@@ -32,10 +32,10 @@ type PaginatedSessionResponse struct {
 
 // CreateSessionRequest is the body for POST /api/v1/sessions.
 type CreateSessionRequest struct {
-	ID        string `json:"id,omitempty"`
-	Title     string `json:"title,omitempty"`
-	AgentName string `json:"agent_name"`
-	UserID    string `json:"user_id,omitempty"`
+	ID       string `json:"id,omitempty"`
+	Title    string `json:"title,omitempty"`
+	SchemaID string `json:"schema_id,omitempty"`
+	UserSub  string `json:"user_sub,omitempty"`
 }
 
 // UpdateSessionRequest is the body for PUT /api/v1/sessions/{id}.
@@ -46,7 +46,7 @@ type UpdateSessionRequest struct {
 
 // SessionService provides session CRUD operations.
 type SessionService interface {
-	ListSessions(ctx context.Context, agentName, userID, status, from, to string, page, perPage int) ([]SessionResponse, int64, error)
+	ListSessions(ctx context.Context, agentName, userSub, status, from, to string, page, perPage int) ([]SessionResponse, int64, error)
 	GetSession(ctx context.Context, id string) (*SessionResponse, error)
 	CreateSession(ctx context.Context, req CreateSessionRequest) (*SessionResponse, error)
 	UpdateSession(ctx context.Context, id string, req UpdateSessionRequest) (*SessionResponse, error)
@@ -99,7 +99,7 @@ func (h *SessionHandler) Routes() http.Handler {
 // List handles GET /api/v1/sessions.
 func (h *SessionHandler) List(w http.ResponseWriter, r *http.Request) {
 	agentName := r.URL.Query().Get("agent_name")
-	userID := r.URL.Query().Get("user_id")
+	userSub := r.URL.Query().Get("user_sub")
 	status := r.URL.Query().Get("status")
 	from := r.URL.Query().Get("from")
 	to := r.URL.Query().Get("to")
@@ -121,7 +121,7 @@ func (h *SessionHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	sessions, total, err := h.service.ListSessions(r.Context(), agentName, userID, status, from, to, page, perPage)
+	sessions, total, err := h.service.ListSessions(r.Context(), agentName, userSub, status, from, to, page, perPage)
 	if err != nil {
 		writeDomainError(w, err)
 		return
@@ -169,11 +169,6 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %s", err.Error()))
 		return
 	}
-	if req.AgentName == "" {
-		writeJSONError(w, http.StatusBadRequest, "agent_name is required")
-		return
-	}
-
 	session, err := h.service.CreateSession(r.Context(), req)
 	if err != nil {
 		writeDomainError(w, err)

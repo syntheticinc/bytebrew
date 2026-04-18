@@ -20,13 +20,14 @@ func NewGORMSessionRepository(db *gorm.DB) *GORMSessionRepository {
 }
 
 // List returns paginated sessions sorted by updated_at desc with optional filters.
-func (r *GORMSessionRepository) List(ctx context.Context, agentName, userID, status, from, to string, page, perPage int) ([]models.SessionModel, int64, error) {
+// The userSub filter matches sessions.user_sub (JWT sub of the end-user).
+func (r *GORMSessionRepository) List(ctx context.Context, agentName, userSub, status, from, to string, page, perPage int) ([]models.SessionModel, int64, error) {
 	q := r.db.WithContext(ctx).Model(&models.SessionModel{})
 
 	// Q.5: agent_name column dropped from sessions. agentName filter is a no-op.
 	_ = agentName
-	if userID != "" {
-		q = q.Where("user_id = ?", userID)
+	if userSub != "" {
+		q = q.Where("user_sub = ?", userSub)
 	}
 	if status != "" {
 		q = q.Where("status = ?", status)
@@ -105,18 +106,18 @@ func (r *GORMSessionRepository) TouchUpdatedAt(ctx context.Context, id string) e
 	return nil
 }
 
-// GetUserIDBySessionID returns the user_id for a session (for task ownership checks).
-// Returns ("", false, nil) if session not found or has no user.
-func (r *GORMSessionRepository) GetUserIDBySessionID(ctx context.Context, sessionID string) (string, bool, error) {
+// GetUserSubBySessionID returns the user_sub (JWT sub) for a session
+// for ownership checks. Returns ("", false, nil) if session not found.
+func (r *GORMSessionRepository) GetUserSubBySessionID(ctx context.Context, sessionID string) (string, bool, error) {
 	var m models.SessionModel
-	if err := r.db.WithContext(ctx).Select("user_id").First(&m, "id = ?", sessionID).Error; err != nil {
+	if err := r.db.WithContext(ctx).Select("user_sub").First(&m, "id = ?", sessionID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", false, nil
 		}
 		return "", false, fmt.Errorf("get session user: %w", err)
 	}
-	if m.UserID == nil {
+	if m.UserSub == "" {
 		return "", false, nil
 	}
-	return *m.UserID, true, nil
+	return m.UserSub, true, nil
 }

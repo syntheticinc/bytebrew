@@ -27,6 +27,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		occurred_at DATETIME,
 		actor_type VARCHAR(20) NOT NULL,
 		actor_user_id VARCHAR(255),
+		actor_sub VARCHAR(255),
 		action VARCHAR(50) NOT NULL,
 		resource VARCHAR(500),
 		details TEXT,

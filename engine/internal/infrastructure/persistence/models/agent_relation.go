@@ -12,11 +12,11 @@ import "time"
 // Q.5: source/target are now uuid FKs to agents.id (was agent_name varchar).
 type AgentRelationModel struct {
 	ID            string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
-	SchemaID      string    `gorm:"type:uuid;not null;index"`
-	SourceAgentID string    `gorm:"type:uuid;not null;uniqueIndex:idx_agent_relations_pair"`
-	TargetAgentID string    `gorm:"type:uuid;not null;uniqueIndex:idx_agent_relations_pair"`
+	TenantID      string    `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001';index" json:"tenant_id"`
+	SchemaID      string    `gorm:"type:uuid;not null;index;uniqueIndex:idx_agent_relations_pair,priority:1"`
+	SourceAgentID string    `gorm:"type:uuid;not null;uniqueIndex:idx_agent_relations_pair,priority:2"`
+	TargetAgentID string    `gorm:"type:uuid;not null;uniqueIndex:idx_agent_relations_pair,priority:3;index"`
 	Config        string    `gorm:"type:jsonb"` // JSON, optional routing hints (priority, conditions)
-	TenantID      string    `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001'" json:"tenant_id"`
 	CreatedAt     time.Time `gorm:"autoCreateTime"`
 	UpdatedAt     time.Time `gorm:"autoUpdateTime"`
 

@@ -35,7 +35,7 @@ export const MOCK_SCHEMA_TEMPLATES: SchemaTemplate[] = [
         },
       ],
       relations: [{ source: 'triage', target: 'resolver' }],
-      triggers: [{ type: 'chat', title: 'Main Chat', enabled: true, config: {} }],
+      chat_enabled: true,
     },
   },
   {
@@ -63,7 +63,7 @@ export const MOCK_SCHEMA_TEMPLATES: SchemaTemplate[] = [
         },
       ],
       relations: [{ source: 'lead-qualifier', target: 'objection-handler' }],
-      triggers: [{ type: 'chat', title: 'Sales Chat', enabled: true, config: {} }],
+      chat_enabled: true,
     },
   },
   {
@@ -91,7 +91,7 @@ export const MOCK_SCHEMA_TEMPLATES: SchemaTemplate[] = [
         },
       ],
       relations: [{ source: 'hr-assistant', target: 'docs-search' }],
-      triggers: [{ type: 'chat', title: 'HR Chat', enabled: true, config: {} }],
+      chat_enabled: true,
     },
   },
   {
@@ -113,7 +113,7 @@ export const MOCK_SCHEMA_TEMPLATES: SchemaTemplate[] = [
         },
       ],
       relations: [],
-      triggers: [{ type: 'chat', title: 'Chat', enabled: true, config: {} }],
+      chat_enabled: true,
     },
   },
 ];

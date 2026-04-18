@@ -19,7 +19,7 @@ func setupMemoryDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE memories (
 		id TEXT PRIMARY KEY,
 		schema_id TEXT NOT NULL,
-		user_id TEXT NOT NULL,
+		user_sub TEXT NOT NULL,
 		content TEXT NOT NULL,
 		metadata TEXT,
 		tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
@@ -46,7 +46,7 @@ func TestMemoryStorage_StoreAndList(t *testing.T) {
 	assert.Len(t, memories, 1)
 	assert.Equal(t, "remember: user prefers dark mode", memories[0].Content)
 	assert.Equal(t, "1", memories[0].SchemaID)
-	assert.Equal(t, "user-1", memories[0].UserID)
+	assert.Equal(t, "user-1", memories[0].UserSub)
 }
 
 func TestMemoryStorage_SchemaIsolation(t *testing.T) {

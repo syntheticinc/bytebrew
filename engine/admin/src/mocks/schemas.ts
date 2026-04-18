@@ -5,19 +5,6 @@
 // The types here match the wire-level shapes the canvas / overview / schema
 // detail components expect after adaptation.
 
-export type TriggerType = 'cron' | 'webhook' | 'chat';
-
-export interface TreeTrigger {
-  id: string;
-  type: TriggerType;
-  title: string;
-  agentId: string;
-  schemaId: string;
-  enabled: boolean;
-  config: Record<string, unknown>;
-  lastFiredAt?: string;
-}
-
 export interface TreeAgent {
   id: string;
   name: string;
@@ -296,59 +283,6 @@ export const mockSchemas: MockSchema[] = [
 ];
 
 // ============================================================================
-// TRIGGERS
-// ============================================================================
-
-export const mockTriggers: TreeTrigger[] = [
-  {
-    id: 'trg-support-chat-main',
-    type: 'chat',
-    title: 'Main Chat',
-    agentId: 'agent-triage',
-    schemaId: 'schema-support',
-    enabled: true,
-    config: {},
-    lastFiredAt: '2026-04-15T12:35:00Z',
-  },
-  {
-    id: 'trg-support-webhook',
-    type: 'webhook',
-    title: 'Intake API',
-    agentId: 'agent-triage',
-    schemaId: 'schema-support',
-    enabled: true,
-    config: {
-      webhookPath: '/api/v1/webhooks/support-intake',
-    },
-    lastFiredAt: '2026-04-15T12:28:00Z',
-  },
-  {
-    id: 'trg-sales-webhook',
-    type: 'webhook',
-    title: 'Lead Form Submit',
-    agentId: 'agent-sales-orch',
-    schemaId: 'schema-sales',
-    enabled: true,
-    config: {
-      webhookPath: '/api/v1/webhooks/lead-form',
-    },
-    lastFiredAt: '2026-04-15T12:30:00Z',
-  },
-  {
-    id: 'trg-health-cron',
-    type: 'cron',
-    title: 'Hourly Health Check',
-    agentId: 'agent-health',
-    schemaId: 'schema-health',
-    enabled: true,
-    config: {
-      schedule: '0 * * * *',
-    },
-    lastFiredAt: '2026-04-15T12:00:00Z',
-  },
-];
-
-// ============================================================================
 // SESSIONS (for overview live panel in prototype mode)
 // ============================================================================
 
@@ -468,8 +402,4 @@ export function getAgentById(id: string): TreeAgent | undefined {
 
 export function getSchemaById(id: string): MockSchema | undefined {
   return mockSchemas.find((s) => s.id === id);
-}
-
-export function getTriggerById(id: string): TreeTrigger | undefined {
-  return mockTriggers.find((t) => t.id === id);
 }

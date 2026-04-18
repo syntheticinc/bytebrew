@@ -27,7 +27,7 @@ func NewMemoryStorage(db *gorm.DB) *MemoryStorage {
 // Store persists a memory entry. If max_entries is reached, evicts the oldest (FIFO).
 func (s *MemoryStorage) Store(ctx context.Context, mem *domain.Memory, maxEntries int) error {
 	if maxEntries > 0 {
-		if err := s.evictIfNeeded(ctx, mem.SchemaID, mem.UserID, maxEntries); err != nil {
+		if err := s.evictIfNeeded(ctx, mem.SchemaID, mem.UserSub, maxEntries); err != nil {
 			return fmt.Errorf("evict memories: %w", err)
 		}
 	}
@@ -41,7 +41,7 @@ func (s *MemoryStorage) Store(ctx context.Context, mem *domain.Memory, maxEntrie
 	}
 
 	mem.ID = m.ID
-	slog.DebugContext(ctx, "memory stored", "id", mem.ID, "schema_id", mem.SchemaID, "user_id", mem.UserID)
+	slog.DebugContext(ctx, "memory stored", "id", mem.ID, "schema_id", mem.SchemaID, "user_sub", mem.UserSub)
 	return nil
 }
 
@@ -59,10 +59,10 @@ func (s *MemoryStorage) ListBySchema(ctx context.Context, schemaID string) ([]*d
 }
 
 // ListBySchemaAndUser retrieves memories for a schema+user pair.
-func (s *MemoryStorage) ListBySchemaAndUser(ctx context.Context, schemaID, userID string) ([]*domain.Memory, error) {
+func (s *MemoryStorage) ListBySchemaAndUser(ctx context.Context, schemaID, userSub string) ([]*domain.Memory, error) {
 	var ms []models.MemoryModel
 	err := s.db.WithContext(ctx).
-		Where("schema_id = ? AND user_id = ?", schemaID, userID).
+		Where("schema_id = ? AND user_sub = ?", schemaID, userSub).
 		Order("created_at DESC").
 		Find(&ms).Error
 	if err != nil {
@@ -98,11 +98,11 @@ func (s *MemoryStorage) DeleteByID(ctx context.Context, id string) error {
 }
 
 // CountBySchemaAndUser returns the number of memories for a schema+user pair.
-func (s *MemoryStorage) CountBySchemaAndUser(ctx context.Context, schemaID, userID string) (int, error) {
+func (s *MemoryStorage) CountBySchemaAndUser(ctx context.Context, schemaID, userSub string) (int, error) {
 	var count int64
 	err := s.db.WithContext(ctx).
 		Model(&models.MemoryModel{}).
-		Where("schema_id = ? AND user_id = ?", schemaID, userID).
+		Where("schema_id = ? AND user_sub = ?", schemaID, userSub).
 		Count(&count).Error
 	if err != nil {
 		return 0, fmt.Errorf("count memories: %w", err)
@@ -111,8 +111,8 @@ func (s *MemoryStorage) CountBySchemaAndUser(ctx context.Context, schemaID, user
 }
 
 // evictIfNeeded removes the oldest entries when count >= maxEntries (FIFO, AC-MEM-RET-03).
-func (s *MemoryStorage) evictIfNeeded(ctx context.Context, schemaID, userID string, maxEntries int) error {
-	count, err := s.CountBySchemaAndUser(ctx, schemaID, userID)
+func (s *MemoryStorage) evictIfNeeded(ctx context.Context, schemaID, userSub string, maxEntries int) error {
+	count, err := s.CountBySchemaAndUser(ctx, schemaID, userSub)
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func (s *MemoryStorage) evictIfNeeded(ctx context.Context, schemaID, userID stri
 	// Find IDs of oldest entries to delete
 	var oldest []models.MemoryModel
 	err = s.db.WithContext(ctx).
-		Where("schema_id = ? AND user_id = ?", schemaID, userID).
+		Where("schema_id = ? AND user_sub = ?", schemaID, userSub).
 		Order("created_at ASC").
 		Limit(toDelete).
 		Find(&oldest).Error
@@ -143,7 +143,7 @@ func (s *MemoryStorage) evictIfNeeded(ctx context.Context, schemaID, userID stri
 		return fmt.Errorf("delete oldest memories: %w", err)
 	}
 
-	slog.DebugContext(ctx, "FIFO eviction", "schema_id", schemaID, "user_id", userID, "evicted", len(ids))
+	slog.DebugContext(ctx, "FIFO eviction", "schema_id", schemaID, "user_sub", userSub, "evicted", len(ids))
 	return nil
 }
 
@@ -176,7 +176,7 @@ func memoryToModel(mem *domain.Memory) models.MemoryModel {
 
 	return models.MemoryModel{
 		SchemaID: mem.SchemaID,
-		UserID:   mem.UserID,
+		UserSub:  mem.UserSub,
 		Content:  mem.Content,
 		Metadata: metaJSON,
 	}
@@ -191,7 +191,7 @@ func modelToMemory(m *models.MemoryModel) *domain.Memory {
 	return &domain.Memory{
 		ID:        m.ID,
 		SchemaID:  m.SchemaID,
-		UserID:    m.UserID,
+		UserSub:   m.UserSub,
 		Content:   m.Content,
 		Metadata:  metadata,
 		CreatedAt: m.CreatedAt,

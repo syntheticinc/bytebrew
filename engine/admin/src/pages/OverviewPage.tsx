@@ -4,12 +4,11 @@ import {
   mockOverviewEvents,
   mockSessions,
   mockSchemas,
-  mockTriggers,
   getSchemaById,
 } from '../mocks/schemas';
 import { usePrototype } from '../hooks/usePrototype';
 import { api } from '../api/client';
-import type { SessionSummary, Schema, Trigger, HealthResponse } from '../types';
+import type { SessionSummary, Schema, HealthResponse } from '../types';
 
 function formatRelativeTime(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -44,7 +43,9 @@ function OverviewPrototype() {
   const completedSessions = mockSessions.filter((s) => s.status === 'completed');
   const failedSessions = mockSessions.filter((s) => s.status === 'failed');
   const sessionsToday = mockSchemas.reduce((sum, s) => sum + s.sessionsToday, 0);
-  const enabledTriggers = mockTriggers.filter((t) => t.enabled).length;
+  // In V2, chat is a schema-level toggle — all mock schemas are treated as
+  // chat-enabled for prototype display. Replaces the removed triggers stat.
+  const chatEnabledSchemas = mockSchemas.length;
   const finishedTotal = completedSessions.length + failedSessions.length;
   const successRate =
     finishedTotal > 0
@@ -66,9 +67,9 @@ function OverviewPrototype() {
           hint="across all schemas"
         />
         <Stat
-          label="Enabled Triggers"
-          value={`${enabledTriggers} / ${mockTriggers.length}`}
-          hint={`${mockTriggers.length - enabledTriggers} paused`}
+          label="Chat-enabled Schemas"
+          value={`${chatEnabledSchemas} / ${mockSchemas.length}`}
+          hint={`${mockSchemas.length - chatEnabledSchemas} disabled`}
         />
         <Stat
           label="Success Rate"
@@ -189,7 +190,6 @@ interface ProductionStats {
   activeSessions: SessionSummary[];
   completedCount: number;
   failedCount: number;
-  triggers: Trigger[];
   schemas: Schema[];
   health: HealthResponse | null;
   loading: boolean;
@@ -200,7 +200,6 @@ function useProductionStats(): ProductionStats {
   const [activeSessions, setActiveSessions] = useState<SessionSummary[]>([]);
   const [completedCount, setCompletedCount] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
-  const [triggers, setTriggers] = useState<Trigger[]>([]);
   const [schemas, setSchemas] = useState<Schema[]>([]);
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -216,19 +215,16 @@ function useProductionStats(): ProductionStats {
       api.listSessions({ status: ['completed'], per_page: 1 }),
       // Failed + timeout sessions — for success rate denominator
       api.listSessions({ status: ['failed', 'timeout'], per_page: 1 }),
-      // Triggers — for enabled count
-      api.listTriggers(),
-      // Schemas — for quick-access grid
+      // Schemas — for quick-access grid and chat-enabled count
       api.listSchemas(),
       // Health — for system status badge
       api.health(),
     ])
-      .then(([activeRes, completedRes, failedRes, triggersRes, schemasRes, healthRes]) => {
+      .then(([activeRes, completedRes, failedRes, schemasRes, healthRes]) => {
         if (cancelled) return;
         setActiveSessions(activeRes.sessions);
         setCompletedCount(completedRes.total);
         setFailedCount(failedRes.total);
-        setTriggers(triggersRes);
         setSchemas(schemasRes);
         setHealth(healthRes);
         setLoading(false);
@@ -244,7 +240,7 @@ function useProductionStats(): ProductionStats {
     };
   }, []);
 
-  return { activeSessions, completedCount, failedCount, triggers, schemas, health, loading, error };
+  return { activeSessions, completedCount, failedCount, schemas, health, loading, error };
 }
 
 function SystemBadge({ health }: { health: HealthResponse }) {
@@ -260,7 +256,7 @@ function SystemBadge({ health }: { health: HealthResponse }) {
 }
 
 function OverviewProduction() {
-  const { activeSessions, completedCount, failedCount, triggers, schemas, health, loading, error } =
+  const { activeSessions, completedCount, failedCount, schemas, health, loading, error } =
     useProductionStats();
 
   if (loading) {
@@ -277,7 +273,7 @@ function OverviewProduction() {
     );
   }
 
-  const enabledTriggers = triggers.filter((t) => t.enabled).length;
+  const chatEnabledSchemas = schemas.filter((s) => s.chat_enabled).length;
   const finishedTotal = completedCount + failedCount;
   const successRate =
     finishedTotal > 0 ? Math.round((completedCount / finishedTotal) * 100) : null;
@@ -298,11 +294,11 @@ function OverviewProduction() {
         */}
         <Stat label="Sessions Today" value="—" hint="no daily counter in API" />
         <Stat
-          label="Enabled Triggers"
-          value={triggers.length > 0 ? `${enabledTriggers} / ${triggers.length}` : '—'}
+          label="Chat-enabled Schemas"
+          value={schemas.length > 0 ? `${chatEnabledSchemas} / ${schemas.length}` : '—'}
           hint={
-            triggers.length > 0
-              ? `${triggers.length - enabledTriggers} paused`
+            schemas.length > 0
+              ? `${schemas.length - chatEnabledSchemas} disabled`
               : undefined
           }
         />

@@ -193,24 +193,10 @@ func (a *configImportExportHTTPAdapter) exportMCPServers(_ context.Context) ([]m
 	return result, nil
 }
 
+// exportTriggers — triggers table removed in V2 (replaced by schemas.chat_enabled).
+// Returns an empty slice so legacy config YAML stays schema-valid.
 func (a *configImportExportHTTPAdapter) exportTriggers(_ context.Context) ([]triggerYAML, error) {
-	var triggers []models.TriggerModel
-	if err := a.db.Find(&triggers).Error; err != nil {
-		return nil, fmt.Errorf("query triggers: %w", err)
-	}
-
-	result := make([]triggerYAML, 0, len(triggers))
-	for _, t := range triggers {
-		result = append(result, triggerYAML{
-			Title:       t.Title,
-			Type:        t.Type,
-			Schedule:    t.Config.Schedule,
-			WebhookPath: t.Config.WebhookPath,
-			Description: t.Description,
-			Enabled:     t.Enabled,
-		})
-	}
-	return result, nil
+	return nil, nil
 }
 
 // ImportYAML parses YAML config and writes to DB in a transaction.
@@ -500,33 +486,10 @@ func (a *configImportExportHTTPAdapter) syncAgentRelations(tx *gorm.DB, agentID 
 	return nil
 }
 
-// Q.5: triggers no longer have agent_id. Import creates triggers without agent binding.
-func (a *configImportExportHTTPAdapter) importTriggers(tx *gorm.DB, items []triggerYAML) error {
-	for _, t := range items {
-		var existing models.TriggerModel
-		err := tx.Where("title = ? AND type = ?", t.Title, t.Type).First(&existing).Error
-		if err == nil {
-			existing.Type = t.Type
-			existing.Config = models.TriggerConfig{Schedule: t.Schedule, WebhookPath: t.WebhookPath}
-			existing.Description = t.Description
-			existing.Enabled = t.Enabled
-			if err := tx.Save(&existing).Error; err != nil {
-				return fmt.Errorf("update trigger %q: %w", t.Title, err)
-			}
-			continue
-		}
-
-		newTrigger := models.TriggerModel{
-			Type:        t.Type,
-			Title:       t.Title,
-			Description: t.Description,
-			Enabled:     t.Enabled,
-			Config:      models.TriggerConfig{Schedule: t.Schedule, WebhookPath: t.WebhookPath},
-		}
-		if err := tx.Create(&newTrigger).Error; err != nil {
-			return fmt.Errorf("create trigger %q: %w", t.Title, err)
-		}
-	}
+// importTriggers — triggers table removed in V2. Import of the legacy
+// triggers YAML block is silently skipped; callers that need chat access on a
+// schema should set schemas.chat_enabled=true explicitly.
+func (a *configImportExportHTTPAdapter) importTriggers(_ *gorm.DB, _ []triggerYAML) error {
 	return nil
 }
 

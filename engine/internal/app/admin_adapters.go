@@ -152,97 +152,6 @@ func (a *adminSchemaRepoAdapter) Delete(ctx context.Context, id string) error {
 	return a.repo.Delete(ctx, id)
 }
 
-// --- Trigger adapter ---
-
-type adminTriggerRepoAdapter struct {
-	repo *configrepo.GORMTriggerRepository
-	db   *gorm.DB
-}
-
-func newAdminTriggerRepoAdapter(repo *configrepo.GORMTriggerRepository, db *gorm.DB) *adminTriggerRepoAdapter {
-	return &adminTriggerRepoAdapter{repo: repo, db: db}
-}
-
-func (a *adminTriggerRepoAdapter) List(ctx context.Context) ([]admintools.TriggerRecord, error) {
-	triggers, err := a.repo.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]admintools.TriggerRecord, 0, len(triggers))
-	for _, t := range triggers {
-		out = append(out, toAdminTriggerRecord(t))
-	}
-	return out, nil
-}
-
-func (a *adminTriggerRepoAdapter) GetByID(ctx context.Context, id string) (*admintools.TriggerRecord, error) {
-	t, err := a.repo.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	rec := toAdminTriggerRecord(*t)
-	return &rec, nil
-}
-
-func (a *adminTriggerRepoAdapter) Create(ctx context.Context, record *admintools.TriggerRecord) error {
-	schemaID := ""
-	if record.SchemaID != nil {
-		schemaID = *record.SchemaID
-	}
-	m := &models.TriggerModel{
-		Type:        record.Type,
-		Title:       record.Title,
-		SchemaID:    schemaID,
-		Description: record.Description,
-		Enabled:     record.Enabled,
-		Config: models.TriggerConfig{
-			Schedule:    record.Schedule,
-			WebhookPath: record.WebhookPath,
-		},
-	}
-	if err := a.repo.Create(ctx, m); err != nil {
-		return err
-	}
-	record.ID = m.ID
-	return nil
-}
-
-func (a *adminTriggerRepoAdapter) Update(ctx context.Context, id string, record *admintools.TriggerRecord) error {
-	m := &models.TriggerModel{
-		Type:        record.Type,
-		Title:       record.Title,
-		Description: record.Description,
-		Enabled:     record.Enabled,
-		Config: models.TriggerConfig{
-			Schedule:    record.Schedule,
-			WebhookPath: record.WebhookPath,
-		},
-	}
-	return a.repo.Update(ctx, id, m)
-}
-
-func (a *adminTriggerRepoAdapter) Delete(ctx context.Context, id string) error {
-	return a.repo.Delete(ctx, id)
-}
-
-func toAdminTriggerRecord(t models.TriggerModel) admintools.TriggerRecord {
-	var schemaIDPtr *string
-	if t.SchemaID != "" {
-		s := t.SchemaID
-		schemaIDPtr = &s
-	}
-	return admintools.TriggerRecord{
-		ID:          t.ID,
-		Type:        t.Type,
-		Title:       t.Title,
-		SchemaID:    schemaIDPtr,
-		Schedule:    t.Config.Schedule,
-		WebhookPath: t.Config.WebhookPath,
-		Description: t.Description,
-		Enabled:     t.Enabled,
-	}
-}
-
 // --- MCP Server adapter ---
 
 type adminMCPServerRepoAdapter struct {
@@ -537,13 +446,9 @@ func (a *adminSessionRepoAdapter) List(ctx context.Context) ([]admintools.Sessio
 	}
 	out := make([]admintools.SessionRecord, 0, len(sessions))
 	for _, s := range sessions {
-		userID := ""
-		if s.UserID != nil {
-			userID = *s.UserID
-		}
 		out = append(out, admintools.SessionRecord{
 			ID:        s.ID,
-			UserID:    userID,
+			UserID:    s.UserSub,
 			StartedAt: s.CreatedAt.Format("2006-01-02T15:04:05Z"),
 			Status:    s.Status,
 		})
@@ -559,13 +464,9 @@ func (a *adminSessionRepoAdapter) GetByID(ctx context.Context, id string) (*admi
 	if s == nil {
 		return nil, fmt.Errorf("session %q not found", id)
 	}
-	userID := ""
-	if s.UserID != nil {
-		userID = *s.UserID
-	}
 	return &admintools.SessionRecord{
 		ID:        s.ID,
-		UserID:    userID,
+		UserID:    s.UserSub,
 		StartedAt: s.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		Status:    s.Status,
 	}, nil

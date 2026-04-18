@@ -59,12 +59,11 @@ func sanitizePath(path string) string {
 		placeholder string
 	}{
 		{"/api/v1/agents/", "{name}"},
+		{"/api/v1/schemas/", "{id}"},
 		{"/api/v1/sessions/", "{id}"},
 		{"/api/v1/tasks/", "{id}"},
 		{"/api/v1/auth/tokens/", "{id}"},
-		{"/api/v1/webhooks/", "{path}"},
 		{"/api/v1/mcp-servers/", "{id}"},
-		{"/api/v1/triggers/", "{id}"},
 		{"/api/v1/settings/", "{id}"},
 	}
 

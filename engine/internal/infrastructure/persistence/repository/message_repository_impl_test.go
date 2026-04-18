@@ -28,7 +28,6 @@ func setupEventTestDB(t *testing.T) *gorm.DB {
 		call_id    TEXT,
 		payload    TEXT NOT NULL DEFAULT '{}',
 		tenant_id  TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
-		trigger_id TEXT,
 		created_at DATETIME
 	)`).Error
 	require.NoError(t, err, "failed to create messages table")

@@ -23,7 +23,7 @@ type mockSessionService struct {
 	err      error
 
 	lastListAgentName string
-	lastListUserID    string
+	lastListUserSub   string
 	lastListStatus    string
 	lastListFrom      string
 	lastListTo        string
@@ -32,9 +32,9 @@ type mockSessionService struct {
 	lastDeleteID      string
 }
 
-func (m *mockSessionService) ListSessions(_ context.Context, agentName, userID, status, from, to string, page, perPage int) ([]SessionResponse, int64, error) {
+func (m *mockSessionService) ListSessions(_ context.Context, agentName, userSub, status, from, to string, page, perPage int) ([]SessionResponse, int64, error) {
 	m.lastListAgentName = agentName
-	m.lastListUserID = userID
+	m.lastListUserSub = userSub
 	m.lastListStatus = status
 	m.lastListFrom = from
 	m.lastListTo = to
@@ -97,7 +97,7 @@ func TestSessionHandler_List(t *testing.T) {
 			name:  "returns paginated sessions",
 			query: "?page=1&per_page=10",
 			sessions: []SessionResponse{
-				{ID: "s1", AgentName: "sales", Status: "active", CreatedAt: "2026-03-19T10:00:00Z", UpdatedAt: "2026-03-19T10:05:00Z"},
+				{ID: "s1", UserSub: "u1", Status: "active", CreatedAt: "2026-03-19T10:00:00Z", UpdatedAt: "2026-03-19T10:05:00Z"},
 			},
 			total:      1,
 			wantStatus: http.StatusOK,
@@ -138,13 +138,13 @@ func TestSessionHandler_List_Filters(t *testing.T) {
 	handler := NewSessionHandler(svc)
 	router := newSessionRouter(handler)
 
-	req := httptest.NewRequest(http.MethodGet, "/sessions?agent_name=sales&user_id=u1&status=active&page=2&per_page=5", nil)
+	req := httptest.NewRequest(http.MethodGet, "/sessions?agent_name=sales&user_sub=u1&status=active&page=2&per_page=5", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "sales", svc.lastListAgentName)
-	assert.Equal(t, "u1", svc.lastListUserID)
+	assert.Equal(t, "u1", svc.lastListUserSub)
 	assert.Equal(t, "active", svc.lastListStatus)
 	assert.Equal(t, 2, svc.lastListPage)
 	assert.Equal(t, 5, svc.lastListPerPage)
@@ -160,7 +160,7 @@ func TestSessionHandler_Get(t *testing.T) {
 		{
 			name:       "found",
 			id:         "s1",
-			session:    &SessionResponse{ID: "s1", AgentName: "sales", Status: "active", CreatedAt: "2026-03-19T10:00:00Z", UpdatedAt: "2026-03-19T10:05:00Z"},
+			session:    &SessionResponse{ID: "s1", UserSub: "u1", Status: "active", CreatedAt: "2026-03-19T10:00:00Z", UpdatedAt: "2026-03-19T10:05:00Z"},
 			wantStatus: http.StatusOK,
 		},
 		{
@@ -195,14 +195,9 @@ func TestSessionHandler_Create(t *testing.T) {
 	}{
 		{
 			name:       "valid request",
-			body:       `{"agent_name":"sales","title":"Help me"}`,
-			created:    &SessionResponse{ID: "s1", AgentName: "sales", Title: "Help me", Status: "active", CreatedAt: "2026-03-19T10:00:00Z", UpdatedAt: "2026-03-19T10:00:00Z"},
+			body:       `{"user_sub":"u1","title":"Help me"}`,
+			created:    &SessionResponse{ID: "s1", UserSub: "u1", Title: "Help me", Status: "active", CreatedAt: "2026-03-19T10:00:00Z", UpdatedAt: "2026-03-19T10:00:00Z"},
 			wantStatus: http.StatusCreated,
-		},
-		{
-			name:       "missing agent_name",
-			body:       `{"title":"Help me"}`,
-			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "invalid json",
@@ -234,7 +229,7 @@ func TestSessionHandler_Create(t *testing.T) {
 }
 
 func TestSessionHandler_Update(t *testing.T) {
-	updated := &SessionResponse{ID: "s1", AgentName: "sales", Title: "New title", Status: "active", CreatedAt: "2026-03-19T10:00:00Z", UpdatedAt: "2026-03-19T10:06:00Z"}
+	updated := &SessionResponse{ID: "s1", UserSub: "u1", Title: "New title", Status: "active", CreatedAt: "2026-03-19T10:00:00Z", UpdatedAt: "2026-03-19T10:06:00Z"}
 	svc := &mockSessionService{updated: updated}
 	handler := NewSessionHandler(svc)
 	router := newSessionRouter(handler)

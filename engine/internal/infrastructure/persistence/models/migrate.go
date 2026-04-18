@@ -1,439 +1,161 @@
 package models
 
 import (
-	"fmt"
 	"log/slog"
-	"time"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 // AutoMigrate registers all engine tables and runs GORM auto-migration.
+//
+// V2 fresh-start policy: the project is not in production yet, so this file
+// produces the target shape directly — no multi-step ALTERs, no data
+// preservation. `target-schema.dbml` is the authoritative spec.
+//
+// The legacy cleanup routines (drop-old-tables, rename-old-columns, backfill)
+// that accumulated during earlier V1→V2 work have been removed. To upgrade a
+// dev database: `docker compose ... down -v` and let this run on an empty DB.
 func AutoMigrate(db *gorm.DB) error {
-	// Ensure pgvector extension exists (required for Knowledge/RAG vector search).
-	// Silently ignored if extension is not available (non-pgvector PostgreSQL).
+	// pgvector extension is required for Knowledge/RAG embeddings.
 	db.Exec("CREATE EXTENSION IF NOT EXISTS vector")
 
-	// WP-4: Migrate existing knowledge_chunks.embedding from vector(768) to variable-dimension vector.
-	// Safe to run repeatedly — no-op if column already has correct type or table doesn't exist.
-	db.Exec("ALTER TABLE knowledge_chunks ALTER COLUMN embedding TYPE vector USING embedding::vector")
-
-	// V2 Tasks unification: drop legacy V1 tables that are superseded by the
-	// unified EngineTask/TaskModel. No data migration is needed — V1 Task / Subtask
-	// entities were session-scoped and already expired by the time V2 ships.
-	// Safe to run repeatedly: DROP IF EXISTS is a no-op when the table is missing.
-	if err := db.Migrator().DropTable("runtime_tasks", "runtime_subtasks"); err != nil {
-		// DropTable returns an error if the underlying DB refuses the DROP (e.g. permission).
-		// We never want to block startup on a dev DB that does not have these tables,
-		// so log and continue — the AutoMigrate below is what really matters.
-		slog.Warn("[Migration] dropping legacy V1 task tables failed (may already be absent)", "error", err)
-	}
-
-	// V2 Gate removal: gates are out of V2 (see docs/architecture/agent-first-runtime.md §3).
-	// Drop legacy `gates` table if present. Clean-schema policy: pure DDL, no data
-	// preservation — fresh install is the supported path. Edge-type removal and the
-	// edges→agent_relations rename are handled in a separate commit group.
-	if err := db.Migrator().DropTable("gates"); err != nil {
-		slog.Warn("[Migration] dropping legacy gates table failed (may already be absent)", "error", err)
-	}
-
-	// V2 Escalation removal: Escalation capability is out of V2 (see §5.9).
-	// Drop legacy agent_escalation_triggers (child) then agent_escalation (parent).
-	// Order matters because of the FK from triggers → escalation.
-	if err := db.Migrator().DropTable("agent_escalation_triggers", "agent_escalation"); err != nil {
-		slog.Warn("[Migration] dropping legacy escalation tables failed (may already be absent)", "error", err)
-	}
-
-	// V2 Kit + knowledge_path removal: Kit was a never-implemented slot, superseded
-	// by V2 Capabilities + MCP Catalog. knowledge_path is superseded by capability
-	// Knowledge + knowledge_base_agents M2M. See §5.* and Commit Group J.
-	// Defense-in-depth alongside Liquibase 011 — idempotent DropColumn.
-	if db.Migrator().HasTable("agents") {
-		if db.Migrator().HasColumn("agents", "kit") {
-			if err := db.Migrator().DropColumn("agents", "kit"); err != nil {
-				slog.Warn("[Migration] dropping legacy agents.kit column failed (may already be absent)", "error", err)
-			}
-		}
-		if db.Migrator().HasColumn("agents", "knowledge_path") {
-			if err := db.Migrator().DropColumn("agents", "knowledge_path"); err != nil {
-				slog.Warn("[Migration] dropping legacy agents.knowledge_path column failed (may already be absent)", "error", err)
-			}
-		}
-	}
-
-	// V2 edges → agent_relations rename + drop type column (Commit Group A.1).
-	// Defense-in-depth alongside Liquibase 012 — idempotent rename + DropColumn.
-	// Target schema models a single implicit DELEGATION type — no per-row type
-	// column. See docs/architecture/agent-first-runtime.md §3.1.
-	if db.Migrator().HasTable("edges") && !db.Migrator().HasTable("agent_relations") {
-		if err := db.Migrator().RenameTable("edges", "agent_relations"); err != nil {
-			slog.Warn("[Migration] renaming legacy edges table to agent_relations failed", "error", err)
-		}
-	}
-	if db.Migrator().HasTable("agent_relations") && db.Migrator().HasColumn("agent_relations", "type") {
-		if err := db.Migrator().DropColumn("agent_relations", "type"); err != nil {
-			slog.Warn("[Migration] dropping legacy agent_relations.type column failed (may already be absent)", "error", err)
-		}
-	}
-
-	// V2 schema_agents removal (Commit Group F).
-	// Defense-in-depth alongside Liquibase 013 — idempotent DropTable.
-	// Schema membership is derived from `agent_relations` (entry agent +
-	// relation source/target). See docs/architecture/agent-first-runtime.md
-	// §2.1.
-	if err := db.Migrator().DropTable("schema_agents"); err != nil {
-		slog.Warn("[Migration] dropping legacy schema_agents table failed (may already be absent)", "error", err)
-	}
-
-	// V2 triggers cleanup (Commit Group D).
-	// Defense-in-depth alongside Liquibase 014 — idempotent DropColumn.
-	// Type-specific fields (schedule, webhook_path) collapse into the
-	// `config` jsonb column. The on_complete webhook feature is removed
-	// entirely. See docs/architecture/agent-first-runtime.md §4.1 / §4.2.
-	if db.Migrator().HasTable("triggers") {
-		for _, col := range []string{"schedule", "webhook_path", "on_complete_url", "on_complete_headers"} {
-			if db.Migrator().HasColumn("triggers", col) {
-				if err := db.Migrator().DropColumn("triggers", col); err != nil {
-					slog.Warn("[Migration] dropping legacy triggers column failed (may already be absent)", "column", col, "error", err)
-				}
-			}
-		}
-	}
-
-	// V2 widgets removal (Commit Group E).
-	// Defense-in-depth alongside Liquibase 015 — idempotent DropTable.
-	// A chat widget is a client (same class as web-client / mobile / CLI),
-	// not a domain entity — there is no server-side widget configuration to
-	// persist. The admin UI becomes a pure snippet generator. See
-	// docs/architecture/agent-first-runtime.md §4.3.
-	if err := db.Migrator().DropTable("widgets"); err != nil {
-		slog.Warn("[Migration] dropping legacy widgets table failed (may already be absent)", "error", err)
-	}
-
-	// V2 MCP catalog split + runtime cleanup (Commit Group C, §5.5/§5.6).
-	// Defense-in-depth alongside Liquibase 016 — idempotent DropTable +
-	// DropColumn. The `mcp_server_runtime` table is gone (status is answered
-	// live via MCP client ping/ListTools, not persisted). `is_well_known` and
-	// `catalog_name` are gone because the catalog lives in its own
-	// `mcp_catalog` table and install-from-catalog is a copy operation with
-	// no link back.
-	if err := db.Migrator().DropTable("mcp_server_runtime"); err != nil {
-		slog.Warn("[Migration] dropping legacy mcp_server_runtime table failed (may already be absent)", "error", err)
-	}
-	if db.Migrator().HasTable("mcp_servers") {
-		for _, col := range []string{"is_well_known", "catalog_name"} {
-			if db.Migrator().HasColumn("mcp_servers", col) {
-				if err := db.Migrator().DropColumn("mcp_servers", col); err != nil {
-					slog.Warn("[Migration] dropping legacy mcp_servers column failed (may already be absent)", "column", col, "error", err)
-				}
-			}
-		}
-	}
-
-	// V2 runtime_events → messages rename (Commit Group M.1).
-	// Defense-in-depth alongside Liquibase 019 — idempotent rename.
-	// See docs/database/target-schema.dbml: Table messages.
-	if db.Migrator().HasTable("runtime_events") && !db.Migrator().HasTable("messages") {
-		if err := db.Migrator().RenameTable("runtime_events", "messages"); err != nil {
-			slog.Warn("[Migration] renaming legacy runtime_events table to messages failed", "error", err)
-		}
-	}
-
-	// V2 runtime_session_events → session_event_log rename (Commit Group M.2).
-	// Defense-in-depth alongside Liquibase 020 — idempotent rename.
-	// See docs/database/target-schema.dbml: Table session_event_log.
-	if db.Migrator().HasTable("runtime_session_events") && !db.Migrator().HasTable("session_event_log") {
-		if err := db.Migrator().RenameTable("runtime_session_events", "session_event_log"); err != nil {
-			slog.Warn("[Migration] renaming legacy runtime_session_events table to session_event_log failed", "error", err)
-		}
-	}
-
-	// V2 runtime_agent_contexts → agent_context_snapshots rename (Commit Group M.3).
-	// Defense-in-depth alongside Liquibase 021 — idempotent rename.
-	// See docs/database/target-schema.dbml: Table agent_context_snapshots.
-	if db.Migrator().HasTable("runtime_agent_contexts") && !db.Migrator().HasTable("agent_context_snapshots") {
-		if err := db.Migrator().RenameTable("runtime_agent_contexts", "agent_context_snapshots"); err != nil {
-			slog.Warn("[Migration] renaming legacy runtime_agent_contexts table to agent_context_snapshots failed", "error", err)
-		}
-	}
-
-	// V2 audit_log → audit_logs rename (Commit Group M.5).
-	// Defense-in-depth alongside Liquibase 023 — idempotent rename.
-	// See docs/database/target-schema.dbml: Table audit_logs.
-	if db.Migrator().HasTable("audit_log") && !db.Migrator().HasTable("audit_logs") {
-		if err := db.Migrator().RenameTable("audit_log", "audit_logs"); err != nil {
-			slog.Warn("[Migration] renaming legacy audit_log table to audit_logs failed", "error", err)
-		}
-	}
-
-	// V2 runtime_agent_runs → agent_runs rename (Commit Group M.4).
-	// Defense-in-depth alongside Liquibase 022 — idempotent rename.
-	// See docs/database/target-schema.dbml: Table agent_runs.
-	if db.Migrator().HasTable("runtime_agent_runs") && !db.Migrator().HasTable("agent_runs") {
-		if err := db.Migrator().RenameTable("runtime_agent_runs", "agent_runs"); err != nil {
-			slog.Warn("[Migration] renaming legacy runtime_agent_runs table to agent_runs failed", "error", err)
-		}
-	}
-
-	// V2 settings final shape (Commit Group G, §5.8).
-	// Defense-in-depth alongside Liquibase 018 — idempotent DropColumn for the
-	// legacy `scope` column. The composite PK (tenant_id, key) and the jsonb
-	// `value` column are installed by Liquibase 018 itself; GORM AutoMigrate
-	// matches the final shape declared on SettingModel.
-	if db.Migrator().HasTable("settings") && db.Migrator().HasColumn("settings", "scope") {
-		if err := db.Migrator().DropColumn("settings", "scope"); err != nil {
-			slog.Warn("[Migration] dropping legacy settings.scope column failed (may already be absent)", "error", err)
-		}
-	}
-
-	// V2 Group P.1: FK rewire — rename audit_logs.actor_id → actor_user_id.
-	// Defense-in-depth alongside Liquibase 026 — idempotent column rename.
-	if db.Migrator().HasTable("audit_logs") && db.Migrator().HasColumn("audit_logs", "actor_id") {
-		if err := db.Migrator().RenameColumn(&AuditLogModel{}, "actor_id", "actor_user_id"); err != nil {
-			slog.Warn("[Migration] renaming audit_logs.actor_id to actor_user_id failed (may already be renamed)", "error", err)
-		}
-	}
-
-	// V2 Group Q.5: agent_relations name→id + session/task/trigger restructure.
-	// Defense-in-depth alongside Liquibase 031 — idempotent column drops.
-	if db.Migrator().HasTable("agent_relations") {
-		for _, col := range []string{"source_agent_name", "target_agent_name"} {
-			if db.Migrator().HasColumn("agent_relations", col) {
-				if err := db.Migrator().DropColumn("agent_relations", col); err != nil {
-					slog.Warn("[Migration] dropping legacy agent_relations column failed", "column", col, "error", err)
-				}
-			}
-		}
-	}
-	if db.Migrator().HasTable("sessions") {
-		for _, col := range []string{"agent_name", "agent_id"} {
-			if db.Migrator().HasColumn("sessions", col) {
-				if err := db.Migrator().DropColumn("sessions", col); err != nil {
-					slog.Warn("[Migration] dropping legacy sessions column failed", "column", col, "error", err)
-				}
-			}
-		}
-	}
-	if db.Migrator().HasTable("tasks") {
-		for _, col := range []string{"agent_name", "source", "source_id", "assigned_agent_id", "depth"} {
-			if db.Migrator().HasColumn("tasks", col) {
-				if err := db.Migrator().DropColumn("tasks", col); err != nil {
-					slog.Warn("[Migration] dropping legacy tasks column failed", "column", col, "error", err)
-				}
-			}
-		}
-	}
-	if db.Migrator().HasTable("triggers") && db.Migrator().HasColumn("triggers", "agent_id") {
-		if err := db.Migrator().DropColumn("triggers", "agent_id"); err != nil {
-			slog.Warn("[Migration] dropping legacy triggers.agent_id column failed", "error", err)
-		}
-	}
-
-	// V2 Group N: drop 6 legacy tables not in target-schema.dbml (Commit Group N).
-	// Defense-in-depth alongside Liquibase 024 — idempotent DROP TABLE IF EXISTS.
-	// session_events (replaced by session_event_log), runtime_config (replaced by
-	// settings), runtime_paired_devices + runtime_sessions (bridge uses SQLite /
-	// replaced by sessions), agent_spawn_targets (replaced by agent_relations),
-	// tenants (CE single-tenant, tenant_id column is sufficient).
-	for _, legacyTable := range []string{
-		"session_events",
-		"runtime_config",
-		"runtime_paired_devices",
-		"runtime_sessions",
-		"agent_spawn_targets",
-		"tenants",
-	} {
-		if err := db.Migrator().DropTable(legacyTable); err != nil {
-			slog.Warn("[Migration] dropping legacy table failed (may already be absent)", "table", legacyTable, "error", err)
-		}
+	// Defense-in-depth: if a dev DB has the legacy `triggers` table left over
+	// from pre-schema-alignment work, drop it. V2 replaced triggers with the
+	// schemas.chat_enabled flag.
+	if err := db.Migrator().DropTable("triggers"); err != nil {
+		slog.Warn("[Migration] dropping legacy triggers table failed (may already be absent)", "error", err)
 	}
 
 	if err := db.AutoMigrate(
-		// Config tables (7)
+		// Identity
+		&UserModel{},
+
+		// Config tables
 		&AgentModel{},
 		&AgentToolModel{},
 		&LLMProviderModel{},
 		&MCPServerModel{},
 		&MCPCatalogModel{},
 		&AgentMCPServer{},
-		&TriggerModel{},
 		&SettingModel{},
+		&CapabilityModel{},
 
-		// Dashboard runtime tables (3)
+		// Schemas / flow
+		&SchemaModel{},
+		&AgentRelationModel{},
+		&SchemaTemplateModel{},
+
+		// Runtime (user-facing)
 		&SessionModel{},
-		&TaskModel{},
-		&APITokenModel{},
-		&AuditLogModel{},
-
-		// Agent runtime tables
-		&AgentRunModel{},
-		&SessionEventLogModel{},
 		&MessageModel{},
+		&SessionEventLogModel{},
+		&TaskModel{},
+		&MemoryModel{},
+		&AgentRunModel{},
 		&AgentContextSnapshotModel{},
 
-		// Knowledge / RAG tables (4)
+		// Knowledge / RAG
 		&KnowledgeBase{},
 		&KnowledgeBaseAgent{},
 		&KnowledgeDocument{},
 		&KnowledgeChunk{},
 
-		// Schema / flow tables (2)
-		&SchemaModel{},
-		&AgentRelationModel{},
-
-		// Schema template catalog (1) — V2 Commit Group L (§2.2).
-		&SchemaTemplateModel{},
-
-		// Capability table (1)
-		&CapabilityModel{},
-
-		// Memory table (1)
-		&MemoryModel{},
-
-		// User identity table (1) — V2 Commit Group P.
-		// Lazy-created on first authenticated request.
-		&UserModel{},
+		// Observability / auth
+		&AuditLogModel{},
+		&APITokenModel{},
 	); err != nil {
 		return err
 	}
 
-	// Migrate legacy knowledge documents (agent_name-scoped) to knowledge_base-scoped.
-	// Creates a KnowledgeBase per unique (tenant_id, agent_name) and links documents + chunks.
-	if err := migrateKnowledgeToKB(db); err != nil {
-		return fmt.Errorf("migrate knowledge to KB: %w", err)
+	return applyRawConstraints(db)
+}
+
+// applyRawConstraints installs DB-level constraints and partial indexes that
+// GORM struct tags cannot express: partial unique indexes, CHECK constraints
+// on enum columns, and vector-type coercion for knowledge embeddings.
+//
+// Each statement is idempotent or uses IF EXISTS/NOT EXISTS so that repeated
+// AutoMigrate calls are safe.
+func applyRawConstraints(db *gorm.DB) error {
+	statements := []string{
+		// Agent context snapshots: at most one ACTIVE snapshot per (session, agent).
+		// GORM's uniqueIndex tag produces a full unique index on SQLite (test env),
+		// but in Postgres we want a partial index so compacted/expired rows can
+		// coexist with the active one. Replace the full unique with the partial.
+		`DROP INDEX IF EXISTS idx_ctx_snapshots_session_agent`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_ctx_snapshots_active_unique
+		 ON agent_context_snapshots (session_id, agent_id)
+		 WHERE status = 'active'`,
+
+		// Knowledge chunk embeddings: variable-dim vector (was fixed dim pre-V2).
+		`ALTER TABLE knowledge_chunks ALTER COLUMN embedding TYPE vector USING embedding::vector`,
+
+		// CHECK constraints — enum fields. Use DO blocks so they're idempotent.
+		dropCheck("agents", "chk_agents_lifecycle"),
+		`ALTER TABLE agents ADD CONSTRAINT chk_agents_lifecycle
+		 CHECK (lifecycle IN ('persistent','spawn'))`,
+
+		dropCheck("agents", "chk_agents_tool_execution"),
+		`ALTER TABLE agents ADD CONSTRAINT chk_agents_tool_execution
+		 CHECK (tool_execution IN ('sequential','parallel'))`,
+
+		dropCheck("sessions", "chk_sessions_status"),
+		`ALTER TABLE sessions ADD CONSTRAINT chk_sessions_status
+		 CHECK (status IN ('active','completed','expired','failed'))`,
+
+		dropCheck("tasks", "chk_tasks_status"),
+		`ALTER TABLE tasks ADD CONSTRAINT chk_tasks_status
+		 CHECK (status IN ('pending','in_progress','completed','failed','needs_input','cancelled'))`,
+
+		dropCheck("tasks", "chk_tasks_mode"),
+		`ALTER TABLE tasks ADD CONSTRAINT chk_tasks_mode
+		 CHECK (mode IN ('interactive','background'))`,
+
+		dropCheck("capabilities", "chk_capabilities_type"),
+		`ALTER TABLE capabilities ADD CONSTRAINT chk_capabilities_type
+		 CHECK (type IN ('memory','knowledge'))`,
+
+		dropCheck("messages", "chk_messages_event_type"),
+		`ALTER TABLE messages ADD CONSTRAINT chk_messages_event_type
+		 CHECK (event_type IN ('user_message','assistant_message','tool_call','tool_result','reasoning','system'))`,
+
+		dropCheck("agent_runs", "chk_agent_runs_status"),
+		`ALTER TABLE agent_runs ADD CONSTRAINT chk_agent_runs_status
+		 CHECK (status IN ('running','completed','failed','cancelled'))`,
+
+		dropCheck("agent_context_snapshots", "chk_ctx_status"),
+		`ALTER TABLE agent_context_snapshots ADD CONSTRAINT chk_ctx_status
+		 CHECK (status IN ('active','suspended','completed','interrupted'))`,
+
+		dropCheck("audit_logs", "chk_audit_actor_type"),
+		`ALTER TABLE audit_logs ADD CONSTRAINT chk_audit_actor_type
+		 CHECK (actor_type IN ('admin','api_token','system'))`,
+
+		dropCheck("audit_logs", "chk_audit_actor_one_of"),
+		`ALTER TABLE audit_logs ADD CONSTRAINT chk_audit_actor_one_of
+		 CHECK ((actor_user_id IS NOT NULL) OR (actor_sub IS NOT NULL))`,
+
+		dropCheck("agent_runs", "chk_agent_runs_completion_order"),
+		`ALTER TABLE agent_runs ADD CONSTRAINT chk_agent_runs_completion_order
+		 CHECK (completed_at IS NULL OR completed_at >= started_at)`,
+
+		dropCheck("users", "chk_users_role"),
+		`ALTER TABLE users ADD CONSTRAINT chk_users_role
+		 CHECK (role IN ('admin','system'))`,
 	}
 
-	// V2 triggers cleanup (Commit Group D): the legacy partial unique index
-	// on `triggers.webhook_path` is obsolete — the column itself was dropped.
-	// Drop the index if a pre-V2 DB still has it. Any future uniqueness on
-	// webhook_path must be expressed against `config->>'webhook_path'`.
-	db.Exec("DROP INDEX IF EXISTS idx_triggers_webhook_path")
-	db.Exec("DROP INDEX IF EXISTS idx_triggers_webhook_path_nonempty")
-
+	for _, stmt := range statements {
+		if err := db.Exec(stmt).Error; err != nil {
+			// CHECK constraint attach will fail if a row already violates it.
+			// Log and continue — this is a fresh-start setup, not a migration.
+			slog.Warn("[Migration] raw constraint statement failed", "stmt", stmt, "error", err)
+		}
+	}
 	return nil
 }
 
-// migrateKnowledgeToKB migrates legacy agent_name-scoped knowledge documents to KB-scoped.
-// Idempotent: skips if agent_name column was already dropped by migration 029.
-func migrateKnowledgeToKB(db *gorm.DB) error {
-	// Check if legacy agent_name column still exists (dropped by migration 029).
-	var colExists int64
-	db.Raw(`SELECT COUNT(*) FROM information_schema.columns
-		WHERE table_name = 'knowledge_documents' AND column_name = 'agent_name'`).Scan(&colExists)
-	if colExists == 0 {
-		return nil // Column already dropped — migration 029 applied, nothing to do.
-	}
-
-	// Find legacy documents: have agent_name but no knowledge_base_id.
-	type legacyPair struct {
-		TenantID  string
-		AgentName string
-	}
-	var pairs []legacyPair
-	if err := db.Raw(`SELECT DISTINCT tenant_id, agent_name FROM knowledge_documents
-		WHERE agent_name != '' AND (knowledge_base_id IS NULL OR knowledge_base_id = '')`).
-		Scan(&pairs).Error; err != nil {
-		return nil // table may not exist yet on first run — safe to skip
-	}
-
-	if len(pairs) == 0 {
-		return nil
-	}
-
-	slog.Info("[Migration] migrating legacy knowledge documents to knowledge bases", "pairs", len(pairs))
-
-	for _, p := range pairs {
-		kbID := uuid.New().String()
-		now := time.Now()
-
-		// Create KB named after agent
-		kb := KnowledgeBase{
-			ID:        kbID,
-			TenantID:  p.TenantID,
-			Name:      p.AgentName,
-			CreatedAt: now,
-			UpdatedAt: now,
-		}
-
-		// Try to resolve embedding_model_id from agent's capability config.
-		var embModelID *string
-		var agentID string
-		db.Raw("SELECT id FROM agents WHERE name = ?", p.AgentName).Scan(&agentID)
-		if agentID != "" {
-			var config string
-			db.Raw("SELECT config FROM capabilities WHERE agent_id = ? AND type = 'knowledge'", agentID).Scan(&config)
-			if config != "" {
-				if idx := findJSONString(config, "embedding_model_id"); idx != "" {
-					embModelID = &idx
-				}
-			}
-		}
-		kb.EmbeddingModelID = embModelID
-
-		if err := db.Create(&kb).Error; err != nil {
-			slog.Warn("[Migration] failed to create KB for legacy pair, skipping",
-				"tenant", p.TenantID, "agent", p.AgentName, "error", err)
-			continue
-		}
-
-		// Link agent if found (use agent_id column if available, fallback to agent_name)
-		if agentID != "" {
-			var hasAgentID int64
-			db.Raw(`SELECT COUNT(*) FROM information_schema.columns
-				WHERE table_name = 'knowledge_base_agents' AND column_name = 'agent_id'`).Scan(&hasAgentID)
-			if hasAgentID > 0 {
-				db.Exec("INSERT INTO knowledge_base_agents (knowledge_base_id, agent_id) VALUES (?, ?::uuid) ON CONFLICT DO NOTHING",
-					kbID, agentID)
-			} else {
-				db.Exec("INSERT INTO knowledge_base_agents (knowledge_base_id, agent_name) VALUES (?, ?) ON CONFLICT DO NOTHING",
-					kbID, p.AgentName)
-			}
-		}
-
-		// Update documents
-		db.Exec("UPDATE knowledge_documents SET knowledge_base_id = ? WHERE tenant_id = ? AND agent_name = ? AND (knowledge_base_id IS NULL OR knowledge_base_id = '')",
-			kbID, p.TenantID, p.AgentName)
-
-		// Update chunks (knowledge_base_id may already be dropped)
-		var chunkHasKBID int64
-		db.Raw(`SELECT COUNT(*) FROM information_schema.columns
-			WHERE table_name = 'knowledge_chunks' AND column_name = 'knowledge_base_id'`).Scan(&chunkHasKBID)
-		if chunkHasKBID > 0 {
-			db.Exec("UPDATE knowledge_chunks SET knowledge_base_id = ? WHERE tenant_id = ? AND agent_name = ? AND (knowledge_base_id IS NULL OR knowledge_base_id = '')",
-				kbID, p.TenantID, p.AgentName)
-		}
-
-		slog.Info("[Migration] migrated knowledge to KB",
-			"kb_id", kbID, "tenant", p.TenantID, "agent", p.AgentName)
-	}
-
-	return nil
-}
-
-// findJSONString extracts a string value from a JSON object by key (simple, no dependency).
-func findJSONString(jsonStr, key string) string {
-	needle := `"` + key + `":"`
-	idx := 0
-	for {
-		pos := indexOf(jsonStr[idx:], needle)
-		if pos < 0 {
-			return ""
-		}
-		idx += pos + len(needle)
-		end := indexOf(jsonStr[idx:], `"`)
-		if end < 0 {
-			return ""
-		}
-		return jsonStr[idx : idx+end]
-	}
-}
-
-func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
+// dropCheck returns an idempotent statement that removes a named CHECK
+// constraint if present, so that the following ADD CONSTRAINT can re-install it.
+func dropCheck(table, name string) string {
+	return `ALTER TABLE ` + table + ` DROP CONSTRAINT IF EXISTS ` + name
 }

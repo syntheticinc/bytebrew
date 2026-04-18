@@ -9,7 +9,6 @@ import OverviewPage from './OverviewPage';
 vi.mock('../api/client', () => ({
   api: {
     listSessions: vi.fn(),
-    listTriggers: vi.fn(),
     listSchemas: vi.fn(),
     health: vi.fn(),
   },
@@ -57,7 +56,7 @@ describe('OverviewPage', () => {
       renderPage(true);
       expect(screen.getByText('Active Sessions')).toBeInTheDocument();
       expect(screen.getByText('Sessions Today')).toBeInTheDocument();
-      expect(screen.getByText('Enabled Triggers')).toBeInTheDocument();
+      expect(screen.getByText('Chat-enabled Schemas')).toBeInTheDocument();
       expect(screen.getByText('Success Rate')).toBeInTheDocument();
     });
 
@@ -80,7 +79,6 @@ describe('OverviewPage', () => {
   describe('production mode', () => {
     beforeEach(() => {
       mockApi.listSessions.mockResolvedValue(emptyPaginated);
-      mockApi.listTriggers.mockResolvedValue([]);
       mockApi.listSchemas.mockResolvedValue([]);
       mockApi.health.mockResolvedValue(emptyHealth);
     });
@@ -95,7 +93,7 @@ describe('OverviewPage', () => {
       await waitFor(() => {
         expect(screen.getByText('Active Sessions')).toBeInTheDocument();
         expect(screen.getByText('Sessions Today')).toBeInTheDocument();
-        expect(screen.getByText('Enabled Triggers')).toBeInTheDocument();
+        expect(screen.getByText('Chat-enabled Schemas')).toBeInTheDocument();
         expect(screen.getByText('Success Rate')).toBeInTheDocument();
       });
     });
@@ -160,10 +158,10 @@ describe('OverviewPage', () => {
       });
     });
 
-    it('shows enabled trigger ratio', async () => {
-      mockApi.listTriggers.mockResolvedValue([
-        { id: '1', title: 'Trigger 1', type: 'cron', enabled: true, created_at: '' },
-        { id: '2', title: 'Trigger 2', type: 'webhook', enabled: false, created_at: '' },
+    it('shows chat-enabled schema ratio', async () => {
+      mockApi.listSchemas.mockResolvedValue([
+        { id: 's1', name: 'support', agents_count: 3, created_at: '', chat_enabled: true },
+        { id: 's2', name: 'sales', agents_count: 2, created_at: '', chat_enabled: false },
       ]);
 
       renderPage(false);

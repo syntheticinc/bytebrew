@@ -11,29 +11,25 @@ func TestNewMemory(t *testing.T) {
 	tests := []struct {
 		name     string
 		schemaID string
-		userID   string
+		userSub  string
 		content  string
 		wantErr  bool
 	}{
 		{"valid", "schema-1", "user-1", "remember this", false},
 		{"empty schema_id", "", "user-1", "content", true},
-		{"empty user_id is schema-wide", "schema-1", "", "content", false},
+		{"empty user_sub is invalid", "schema-1", "", "content", true},
 		{"empty content", "schema-1", "user-1", "", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mem, err := NewMemory(tt.schemaID, tt.userID, tt.content)
+			mem, err := NewMemory(tt.schemaID, tt.userSub, tt.content)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
 			assert.Equal(t, tt.schemaID, mem.SchemaID)
-			expectedUserID := tt.userID
-			if expectedUserID == "" {
-				expectedUserID = AnonymousMemoryUserID
-			}
-			assert.Equal(t, expectedUserID, mem.UserID)
+			assert.Equal(t, tt.userSub, mem.UserSub)
 			assert.Equal(t, tt.content, mem.Content)
 			assert.NotNil(t, mem.Metadata)
 		})

@@ -25,7 +25,6 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/delivery/grpc"
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/engine/internal/delivery/ws"
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/embedded"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/taskrunner"
@@ -391,7 +390,6 @@ func Run(sc ServerConfig) error {
 			admintools.RegisterAdminTools(components.AgentToolResolver.BuiltinStore(), admintools.AdminToolDependencies{
 				AgentRepo:      newAdminAgentRepoAdapter(configrepo.NewGORMAgentRepository(pgDB)),
 				SchemaRepo:     newAdminSchemaRepoAdapter(configrepo.NewGORMSchemaRepository(pgDB)),
-				TriggerRepo:    newAdminTriggerRepoAdapter(configrepo.NewGORMTriggerRepository(pgDB), pgDB),
 				MCPServerRepo:  newAdminMCPServerRepoAdapter(configrepo.NewGORMMCPServerRepository(pgDB)),
 				ModelRepo:      newAdminModelRepoAdapter(configrepo.NewGORMLLMProviderRepository(pgDB)),
 				AgentRelationRepo: newAdminAgentRelationRepoAdapter(configrepo.NewGORMAgentRelationRepository(pgDB), configrepo.NewGORMAgentRepository(pgDB)),
@@ -793,21 +791,7 @@ func Run(sc ServerConfig) error {
 				r.Delete("/api/v1/mcp-servers/{name}", mcpHandler.Delete)
 			})
 
-			// Triggers
-			triggerRepo := configrepo.NewGORMTriggerRepository(pgDB)
-			triggerHandler := deliveryhttp.NewTriggerHandler(&triggerServiceHTTPAdapter{repo: triggerRepo, db: pgDB})
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeTriggersRead))
-				r.Get("/api/v1/triggers", triggerHandler.List)
-			})
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeTriggersWrite))
-				r.Post("/api/v1/triggers", triggerHandler.Create)
-				r.Put("/api/v1/triggers/{id}", triggerHandler.Update)
-				r.Delete("/api/v1/triggers/{id}", triggerHandler.Delete)
-				r.Patch("/api/v1/triggers/{id}/target", triggerHandler.SetTarget)
-				r.Delete("/api/v1/triggers/{id}/target", triggerHandler.ClearTarget)
-			})
+			// Triggers route removed in V2 — chat access is schemas.chat_enabled.
 
 			// Schemas (with agent_relations) — schemaRepo already created above for agent cross-refs.
 			// V2: edges→agent_relations rename + drop type column (Group A.1).
@@ -962,74 +946,9 @@ func Run(sc ServerConfig) error {
 			sc.EEExtension.RegisterHTTP(r, internalRouter)
 		}
 
-		// Webhook route (internal only — triggered by external services, requires network access)
-		//
-		// V2 (§4.1): this endpoint resolves the incoming path against
-		// `triggers.config->>'webhook_path'`, stamps the trigger's
-		// last_fired_at, and creates the task with the trigger's UUID in
-		// SourceID so the admin UI can trace the run back to its channel.
-		// Paths without a matching enabled trigger return 404.
-		webhookTriggerRepo := configrepo.NewGORMTriggerRepository(pgDB)
-		internalRouter.Post("/api/v1/webhooks/{path}", func(w http.ResponseWriter, req *http.Request) {
-			webhookPath := chi.URLParam(req, "path")
-			w.Header().Set("Content-Type", "application/json")
-
-			trigger, err := webhookTriggerRepo.FindByWebhookPath(req.Context(), "/"+webhookPath)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(`{"error":"resolve webhook trigger: ` + err.Error() + `"}`))
-				return
-			}
-			if trigger == nil {
-				w.WriteHeader(http.StatusNotFound)
-				w.Write([]byte(`{"error":"no enabled webhook trigger for path"}`))
-				return
-			}
-
-			var body struct {
-				Title       string `json:"title"`
-				Description string `json:"description"`
-				Message     string `json:"message"`
-			}
-			_ = json.NewDecoder(req.Body).Decode(&body)
-
-			title := trigger.Title
-			if title == "" {
-				title = "Webhook: /" + webhookPath
-			}
-			if body.Title != "" {
-				title = body.Title
-			}
-			description := trigger.Description
-			if body.Description != "" {
-				description = body.Description
-			}
-			if body.Message != "" && description == "" {
-				description = body.Message
-			}
-			t := &domain.EngineTask{
-				Title:       title,
-				Description: description,
-				Status:      domain.EngineTaskStatusPending,
-				Mode:        domain.TaskModeBackground,
-			}
-
-			if err := taskRepo.Create(req.Context(), t); err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(`{"error":"` + err.Error() + `"}`))
-				return
-			}
-
-			// §4.1: stamp last_fired_at after validation + task creation so the
-			// admin UI reflects the most recent fire. Non-fatal on error — the
-			// task row is what the operator really needs.
-			if markErr := webhookTriggerRepo.MarkFired(req.Context(), trigger.ID); markErr != nil {
-				slog.WarnContext(req.Context(), "mark webhook trigger fired failed", "trigger_id", trigger.ID, "error", markErr)
-			}
-
-			w.WriteHeader(http.StatusCreated)
-			w.Write([]byte(fmt.Sprintf(`{"task_id":"%s"}`, t.ID)))
-		})
+		// Webhook trigger route removed in V2 — cron/webhook triggers are
+		// deferred to V3. Tenants integrate with their own schedulers and
+		// call POST /api/v1/schemas/{id}/chat directly.
 
 		// Serve Admin Dashboard SPA (static files) — internal only
 		adminDir := "/usr/share/bytebrew/admin"
@@ -1169,11 +1088,6 @@ func Run(sc ServerConfig) error {
 	)
 	flowHandlerCfg.TurnExecutorFactory = factory
 
-	// platformTriggerRepo is shared across platform services: completion hook (wired
-	// inside the pgDB block below) and cron scheduler (wired after sessProcessor).
-	// Declared at this scope so both consumers can see it.
-	var platformTriggerRepo *configrepo.GORMTriggerRepository
-
 	// Wire agent UUID resolver so engine execution context uses uuid FK, not agent name.
 	if agentRegistry != nil {
 		factory.SetAgentUUIDResolver(agentRegistry)
@@ -1194,17 +1108,9 @@ func Run(sc ServerConfig) error {
 		factory.SetEngineTaskManager(components.TaskManager)
 		loggerInstance.InfoContext(ctx, "EngineTaskManager wired into TurnExecutorFactory")
 
-		// Platform services: the cron scheduler wires later, once sessProcessor
-		// exists so the executor can actually run the agent.
-		//
-		// V2 (§4.2): the on-complete webhook feature is removed. Task terminal
-		// transitions do not fan out to external URLs — if that use case
-		// returns it will be expressed as an MCP webhook tool call from the
-		// agent. last_fired_at is driven by TriggerRepository.MarkFired from
-		// cron / webhook / chat dispatchers.
-		if taskRepo != nil {
-			platformTriggerRepo = configrepo.NewGORMTriggerRepository(pgDB)
-		}
+		// V2: triggers-driven task fan-out (cron/webhook) removed. The background
+		// task worker still runs so agents that spawn sub-tasks through the unified
+		// task manager continue to be picked up; just no scheduler on top of it.
 
 		// Wire per-agent capability config reader for memory max_entries
 		if capReader != nil {
@@ -1223,28 +1129,18 @@ func Run(sc ServerConfig) error {
 		slog.InfoContext(ctx, "TurnExecutorFactory wired into poolBasedRunner for chat agent delegation")
 	}
 
-	// Autonomous task executor: cron/webhook triggers create a task, the worker picks it
-	// up, opens a session scoped to the trigger's schema, runs the agent, records the
-	// final answer. Wiring lives here because the executor needs sessProcessor and the
-	// session registry, which are built just above.
-	if taskRepo != nil && platformTriggerRepo != nil {
+	// Background task worker: picks up tasks created by agents (e.g. via
+	// spawn_agent) and runs them in parallel through the session processor.
+	// V2: cron/webhook trigger scheduler on top of this is deferred to V3.
+	if taskRepo != nil {
 		taskExecutor := taskrunner.NewTaskExecutor(
 			components.TaskManager,
 			sessionRegistry,
 			sessProcessor,
 			0, // 0 → DefaultTaskTimeout
 		)
-		taskWorker := taskrunner.StartBackgroundWorker(taskExecutor, 4)
-		if taskWorker != nil {
+		if taskWorker := taskrunner.StartBackgroundWorker(taskExecutor, 4); taskWorker != nil {
 			defer taskWorker.Stop()
-		}
-
-		cronScheduler, cronErr := taskrunner.StartCronScheduler(ctx, platformTriggerRepo, components.TaskManager, taskWorker)
-		if cronErr != nil {
-			loggerInstance.WarnContext(ctx, "cron scheduler failed to start", "error", cronErr)
-		} else if cronScheduler != nil {
-			// Stop the scheduler when the server exits so in-flight ticks are not left hanging.
-			defer cronScheduler.Stop()
 		}
 	}
 
@@ -1285,16 +1181,13 @@ func Run(sc ServerConfig) error {
 			agents:      agentRegistry,
 			chatEnabled: components.AgentService != nil || components.ModelCache != nil,
 		}
-		var triggerChecker deliveryhttp.ChatTriggerChecker
+		var schemaRepoForChat *configrepo.GORMSchemaRepository
 		if pgDB != nil {
-			chatTriggerRepo := configrepo.NewGORMTriggerRepository(pgDB)
-			triggerChecker = &chatTriggerCheckerAdapter{repo: chatTriggerRepo}
-			// §4.1: stamp last_fired_at on the first message of a chat session.
-			chatService.triggers = chatTriggerRepo
-			// Persist chat sessions to DB using trigger.SchemaID for resolution.
+			schemaRepoForChat = configrepo.NewGORMSchemaRepository(pgDB)
+			chatService.schemas = schemaRepoForChat
 			chatService.sessions = configrepo.NewGORMSessionRepository(pgDB)
 		}
-		chatHandler := deliveryhttp.NewChatHandler(chatService, triggerChecker, func() []string {
+		chatHandler := deliveryhttp.NewChatHandler(chatService, func() []string {
 			return forwardHeadersStore.Load().([]string)
 		})
 		respondHandler := deliveryhttp.NewRespondHandler(sessionRegistry)
@@ -1319,7 +1212,7 @@ func Run(sc ServerConfig) error {
 					if httpAuthMW != nil {
 						r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeChat))
 					}
-					r.Post("/api/v1/agents/{name}/chat", chatHandler.Chat)
+					r.Post("/api/v1/schemas/{id}/chat", chatHandler.Chat)
 					r.Post("/api/v1/sessions/{id}/respond", respondHandler.Respond)
 				})
 			})
@@ -1332,8 +1225,20 @@ func Run(sc ServerConfig) error {
 			registerChatRoutes(internalHTTPServer.Router())
 		}
 
-		// Admin assistant — admin JWT required, no trigger gate.
-		adminAssistantHandler := deliveryhttp.NewAdminAssistantHandler(chatService, func() []string {
+		// Admin assistant — admin JWT required, chats against the seeded
+		// builder-schema; the schema resolver runs per-request so a late seed
+		// is picked up without a restart.
+		builderSchemaResolver := func(ctx context.Context) (string, error) {
+			if pgDB == nil {
+				return "", fmt.Errorf("no db")
+			}
+			var id string
+			if err := pgDB.WithContext(ctx).Raw("SELECT id FROM schemas WHERE name = ? LIMIT 1", builderSchemaName).Scan(&id).Error; err != nil {
+				return "", err
+			}
+			return id, nil
+		}
+		adminAssistantHandler := deliveryhttp.NewAdminAssistantHandler(chatService, builderSchemaResolver, func() []string {
 			return forwardHeadersStore.Load().([]string)
 		})
 		registerAdminAssistantRoutes := func(router chi.Router) {

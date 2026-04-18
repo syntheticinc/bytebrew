@@ -124,9 +124,7 @@ function TemplatePicker({ onClose, onForked }: TemplatePickerProps) {
                   <span>{tpl.definition.agents.length} agents</span>
                   <span>·</span>
                   <span>
-                    {tpl.definition.triggers.length === 0
-                      ? 'no triggers'
-                      : tpl.definition.triggers.map((t) => t.type).join(', ')}
+                    {tpl.definition.chat_enabled ? 'chat enabled' : 'chat disabled'}
                   </span>
                   <span>·</span>
                   <span>v{tpl.version}</span>

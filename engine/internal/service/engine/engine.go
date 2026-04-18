@@ -35,7 +35,7 @@ type HistoryRepository interface {
 // ExecutionConfig defines what the caller passes to Execute
 type ExecutionConfig struct {
 	SessionID      string
-	AgentID        string // "supervisor" | "code-agent-{uuid}"
+	AgentID        string // agents.id (UUID). Entry agent = schema.entry_agent_id.
 	Flow           *domain.Flow
 	Tools          []tool.BaseTool
 	Input          string
@@ -128,9 +128,11 @@ func (e *Engine) Execute(ctx context.Context, cfg ExecutionConfig) (*ExecutionRe
 	}
 
 	// 2. Build react.AgentConfig
-	// Supervisor executes tools sequentially to prevent ask_user + spawn_agent
-	// from running in parallel. Code agents keep parallel execution for performance.
-	isSupervisor := cfg.AgentID == "" || cfg.AgentID == "supervisor"
+	// Tool execution mode comes from the agent's per-agent `tool_execution`
+	// setting (domain.Flow.ToolExecution). Orchestrator/entry agents are
+	// configured as `sequential` so ask_user + spawn_* cannot run in parallel;
+	// worker agents default to `parallel`.
+	sequentialTools := cfg.Flow == nil || cfg.Flow.ToolExecution != "parallel"
 
 	agentConfig := &react.AgentConfig{
 		ChatModel:                cfg.ChatModel,
@@ -146,7 +148,7 @@ func (e *Engine) Execute(ctx context.Context, cfg ExecutionConfig) (*ExecutionRe
 		ParentAgentID:            cfg.ParentAgentID,
 		SubtaskID:                cfg.SubtaskID,
 		SessionDirName:           cfg.SessionDirName,
-		SequentialTools:          isSupervisor,
+		SequentialTools:          sequentialTools,
 	}
 
 	// 3. Create message collector (wraps EventCallback for per-step persistence)

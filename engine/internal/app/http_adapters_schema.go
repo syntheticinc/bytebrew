@@ -53,14 +53,16 @@ func (a *schemaServiceHTTPAdapter) ListSchemas(ctx context.Context) ([]deliveryh
 	result := make([]deliveryhttp.SchemaInfo, 0, len(records))
 	for _, r := range records {
 		result = append(result, deliveryhttp.SchemaInfo{
-			ID:             r.ID,
-			Name:           r.Name,
-			Description:    r.Description,
-			Agents:         r.AgentNames,
-			IsSystem:       r.IsSystem,
-			EntryAgentName: a.resolveAgentNameByID(ctx, r.EntryAgentID),
-			AgentsCount:    a.countAgentsInSchema(ctx, r.ID),
-			CreatedAt:      r.CreatedAt,
+			ID:              r.ID,
+			Name:            r.Name,
+			Description:     r.Description,
+			Agents:          r.AgentNames,
+			IsSystem:        r.IsSystem,
+			EntryAgentName:  a.resolveAgentNameByID(ctx, r.EntryAgentID),
+			AgentsCount:     a.countAgentsInSchema(ctx, r.ID),
+			ChatEnabled:     r.ChatEnabled,
+			ChatLastFiredAt: r.ChatLastFiredAt,
+			CreatedAt:       r.CreatedAt,
 		})
 	}
 	return result, nil
@@ -76,14 +78,16 @@ func (a *schemaServiceHTTPAdapter) GetSchema(ctx context.Context, id string) (*d
 	}
 
 	return &deliveryhttp.SchemaInfo{
-		ID:             record.ID,
-		Name:           record.Name,
-		Description:    record.Description,
-		Agents:         record.AgentNames,
-		IsSystem:       record.IsSystem,
-		EntryAgentName: a.resolveAgentNameByID(ctx, record.EntryAgentID),
-		AgentsCount:    a.countAgentsInSchema(ctx, record.ID),
-		CreatedAt:      record.CreatedAt,
+		ID:              record.ID,
+		Name:            record.Name,
+		Description:     record.Description,
+		Agents:          record.AgentNames,
+		IsSystem:        record.IsSystem,
+		EntryAgentName:  a.resolveAgentNameByID(ctx, record.EntryAgentID),
+		AgentsCount:     a.countAgentsInSchema(ctx, record.ID),
+		ChatEnabled:     record.ChatEnabled,
+		ChatLastFiredAt: record.ChatLastFiredAt,
+		CreatedAt:       record.CreatedAt,
 	}, nil
 }
 
@@ -121,6 +125,7 @@ func (a *schemaServiceHTTPAdapter) UpdateSchema(ctx context.Context, id string, 
 		Name:         existing.Name,
 		Description:  existing.Description,
 		EntryAgentID: existing.EntryAgentID,
+		ChatEnabled:  existing.ChatEnabled,
 	}
 	if req.Name != nil {
 		record.Name = *req.Name
@@ -135,6 +140,9 @@ func (a *schemaServiceHTTPAdapter) UpdateSchema(ctx context.Context, id string, 
 			v := *req.EntryAgentID
 			record.EntryAgentID = &v
 		}
+	}
+	if req.ChatEnabled != nil {
+		record.ChatEnabled = *req.ChatEnabled
 	}
 
 	if err := a.repo.Update(ctx, id, record); err != nil {

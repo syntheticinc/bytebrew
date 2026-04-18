@@ -10,18 +10,24 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 )
 
-const builderAssistantAgentName = "builder-assistant"
+// BuilderSchemaResolver returns the current builder-schema UUID.
+// Evaluated on each request so a late seed (builder-schema created after
+// HTTP startup) is picked up without restarting the server.
+type BuilderSchemaResolver func(ctx context.Context) (string, error)
 
 // AdminAssistantHandler serves POST /api/v1/admin/assistant/chat.
-// Admin-only endpoint for the builder-assistant. Does NOT require a chat trigger.
+// Admin-only endpoint for the builder-assistant — always chats against the
+// seeded builder-schema. chat_enabled guard is applied by the underlying
+// ChatService (builder-schema is seeded with chat_enabled=true).
 type AdminAssistantHandler struct {
 	service          ChatService
+	resolveSchema    BuilderSchemaResolver
 	forwardHeadersFn func() []string
 }
 
 // NewAdminAssistantHandler creates a new AdminAssistantHandler.
-func NewAdminAssistantHandler(service ChatService, forwardHeadersFn func() []string) *AdminAssistantHandler {
-	return &AdminAssistantHandler{service: service, forwardHeadersFn: forwardHeadersFn}
+func NewAdminAssistantHandler(service ChatService, resolveSchema BuilderSchemaResolver, forwardHeadersFn func() []string) *AdminAssistantHandler {
+	return &AdminAssistantHandler{service: service, resolveSchema: resolveSchema, forwardHeadersFn: forwardHeadersFn}
 }
 
 // adminAssistantRequest extends chatRequest with an optional schema context.
@@ -63,7 +69,19 @@ func (h *AdminAssistantHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		ctx = domain.WithRequestContext(ctx, &domain.RequestContext{Headers: merged})
 	}
 
-	events, err := h.service.Chat(ctx, builderAssistantAgentName, req.Message, req.UserID, req.SessionID)
+	userSub := resolveUserSub(r, req.UserSub)
+	if userSub == "" {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+		return
+	}
+
+	schemaID, err := h.resolveSchema(r.Context())
+	if err != nil || schemaID == "" {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "builder schema not ready"})
+		return
+	}
+
+	events, err := h.service.Chat(ctx, schemaID, req.Message, userSub, req.SessionID)
 	if err != nil {
 		writeDomainError(w, err)
 		return
@@ -71,7 +89,7 @@ func (h *AdminAssistantHandler) Chat(w http.ResponseWriter, r *http.Request) {
 
 	// Non-streaming: collect all events and return JSON.
 	if req.Stream != nil && !*req.Stream {
-		h.handleNonStreaming(w, events)
+		h.handleNonStreaming(w, schemaID, events)
 		return
 	}
 
@@ -102,7 +120,7 @@ func (h *AdminAssistantHandler) Chat(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleNonStreaming collects SSE events and returns a single JSON response.
-func (h *AdminAssistantHandler) handleNonStreaming(w http.ResponseWriter, events <-chan SSEEvent) {
+func (h *AdminAssistantHandler) handleNonStreaming(w http.ResponseWriter, schemaID string, events <-chan SSEEvent) {
 	var (
 		message   string
 		errMsg    string
@@ -160,7 +178,7 @@ func (h *AdminAssistantHandler) handleNonStreaming(w http.ResponseWriter, events
 
 	resp := nonStreamResponse{
 		SessionID: sessionID,
-		Agent:     builderAssistantAgentName,
+		SchemaID:  schemaID,
 		Message:   message,
 		Error:     errMsg,
 		ToolCalls: toolCalls,

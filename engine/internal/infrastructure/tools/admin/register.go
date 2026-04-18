@@ -63,20 +63,6 @@ func RegisterAdminTools(store *tools.BuiltinToolStore, deps AdminToolDependencie
 		return NewAdminDeleteAgentRelationTool(deps.AgentRelationRepo, reloader)
 	})
 
-	// Trigger tools
-	store.Register("admin_list_triggers", func(_ tools.ToolDependencies) tool.InvokableTool {
-		return NewAdminListTriggersTool(deps.TriggerRepo)
-	})
-	store.Register("admin_create_trigger", func(_ tools.ToolDependencies) tool.InvokableTool {
-		return NewAdminCreateTriggerTool(deps.TriggerRepo, reloader)
-	})
-	store.Register("admin_update_trigger", func(_ tools.ToolDependencies) tool.InvokableTool {
-		return NewAdminUpdateTriggerTool(deps.TriggerRepo, reloader)
-	})
-	store.Register("admin_delete_trigger", func(_ tools.ToolDependencies) tool.InvokableTool {
-		return NewAdminDeleteTriggerTool(deps.TriggerRepo, reloader)
-	})
-
 	// MCP server tools
 	store.Register("admin_list_mcp_servers", func(_ tools.ToolDependencies) tool.InvokableTool {
 		return NewAdminListMCPServersTool(deps.MCPServerRepo)

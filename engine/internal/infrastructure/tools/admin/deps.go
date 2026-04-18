@@ -10,7 +10,6 @@ import "context"
 type AdminToolDependencies struct {
 	AgentRepo         AgentRepository
 	SchemaRepo        SchemaRepository
-	TriggerRepo       TriggerRepository
 	MCPServerRepo     MCPServerRepository
 	ModelRepo         ModelRepository
 	AgentRelationRepo AgentRelationRepository
@@ -41,15 +40,6 @@ type SchemaRepository interface {
 	GetByID(ctx context.Context, id string) (*SchemaRecord, error)
 	Create(ctx context.Context, record *SchemaRecord) error
 	Update(ctx context.Context, id string, record *SchemaRecord) error
-	Delete(ctx context.Context, id string) error
-}
-
-// TriggerRepository provides trigger CRUD for admin tools.
-type TriggerRepository interface {
-	List(ctx context.Context) ([]TriggerRecord, error)
-	GetByID(ctx context.Context, id string) (*TriggerRecord, error)
-	Create(ctx context.Context, record *TriggerRecord) error
-	Update(ctx context.Context, id string, record *TriggerRecord) error
 	Delete(ctx context.Context, id string) error
 }
 
@@ -112,19 +102,6 @@ type SchemaRecord struct {
 	Name        string
 	Description string
 	AgentNames  []string
-}
-
-// TriggerRecord represents a trigger for admin tools.
-// Q.5: AgentName/AgentID dropped — trigger targets schema only.
-type TriggerRecord struct {
-	ID          string
-	Type        string
-	Title       string
-	SchemaID    *string
-	Schedule    string
-	WebhookPath string
-	Description string
-	Enabled     bool
 }
 
 // MCPServerRecord represents an MCP server for admin tools.

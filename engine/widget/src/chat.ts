@@ -8,7 +8,7 @@ export interface ChatCallbacks {
 }
 
 export interface ChatConfig {
-  agent: string;
+  schemaId: string;
   endpoint: string;
   apiKey: string | null;
 }
@@ -26,7 +26,7 @@ export class ChatClient {
   }
 
   private storageKey(): string {
-    return SESSION_KEY_PREFIX + this.config.agent;
+    return SESSION_KEY_PREFIX + this.config.schemaId;
   }
 
   private loadSessionId(): string | null {
@@ -57,7 +57,7 @@ export class ChatClient {
     this.abort();
     this.abortController = new AbortController();
 
-    const url = `${this.config.endpoint}/api/v1/agents/${encodeURIComponent(this.config.agent)}/chat`;
+    const url = `${this.config.endpoint}/api/v1/schemas/${encodeURIComponent(this.config.schemaId)}/chat`;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

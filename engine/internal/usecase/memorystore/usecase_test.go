@@ -30,7 +30,7 @@ func TestUsecase_Execute(t *testing.T) {
 
 	mem, err := uc.Execute(context.Background(), Input{
 		SchemaID:   "1",
-		UserID:     "user-1",
+		UserSub:     "user-1",
 		Content:    "user prefers dark mode",
 		Metadata:   map[string]string{"source": "agent"},
 		MaxEntries: 100,
@@ -38,7 +38,7 @@ func TestUsecase_Execute(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "generated-id", mem.ID)
 	assert.Equal(t, "1", mem.SchemaID)
-	assert.Equal(t, "user-1", mem.UserID)
+	assert.Equal(t, "user-1", mem.UserSub)
 	assert.Equal(t, "user prefers dark mode", mem.Content)
 
 	val, ok := mem.GetMetadata("source")
@@ -51,7 +51,7 @@ func TestUsecase_Execute_EmptyContent(t *testing.T) {
 
 	_, err := uc.Execute(context.Background(), Input{
 		SchemaID: "1",
-		UserID:   "user-1",
+		UserSub:   "user-1",
 		Content:  "",
 	})
 	require.Error(t, err)
@@ -64,7 +64,7 @@ func TestUsecase_Execute_RepoError(t *testing.T) {
 
 	_, err := uc.Execute(context.Background(), Input{
 		SchemaID: "1",
-		UserID:   "user-1",
+		UserSub:   "user-1",
 		Content:  "something",
 	})
 	require.Error(t, err)

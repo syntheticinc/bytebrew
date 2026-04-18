@@ -14,22 +14,21 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/sessionprocessor"
 	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 )
 
-// chatTriggerMarker narrows GORMTriggerRepository to the operations used by
-// the chat dispatcher: look up the enabled chat trigger for an agent and
-// stamp its last_fired_at on the first message of a new session (§4.1).
-type chatTriggerMarker interface {
-	FindEnabledChatTrigger(ctx context.Context, agentName string) (*models.TriggerModel, error)
-	MarkFired(ctx context.Context, id string) error
+// schemaChatRepo narrows the schema repository to the operations the chat
+// dispatcher needs: load for chat_enabled + entry_agent_id, and stamp
+// chat_last_fired_at on the first message of a session. Defined consumer-side
+// so the adapter can be unit-tested against a fake.
+type schemaChatRepo interface {
+	GetModelByID(ctx context.Context, id string) (*models.SchemaModel, error)
+	MarkChatFired(ctx context.Context, id string) error
 }
 
 // chatSessionPersister persists chat sessions to the DB.
-// Narrowed consumer-side interface — only Create and Update are needed here.
 type chatSessionPersister interface {
 	Create(ctx context.Context, session *models.SessionModel) error
 	Update(ctx context.Context, id string, updates map[string]interface{}) error
@@ -41,23 +40,50 @@ type chatServiceHTTPAdapter struct {
 	registry    *flowregistry.SessionRegistry
 	processor   *sessionprocessor.Processor
 	agents      *agentregistry.AgentRegistry
-	triggers    chatTriggerMarker    // optional — nil in tests / no-DB mode
+	schemas     schemaChatRepo       // optional — nil in tests / no-DB mode
 	sessions    chatSessionPersister // optional — nil when no DB
 	chatEnabled bool                 // false when no LLM model configured
 }
 
-// Chat creates (or resumes) a session, enqueues the message, subscribes to
-// events, and returns an SSEEvent channel that closes when processing stops.
-func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, agentName, message, userID, sessionID string) (<-chan deliveryhttp.SSEEvent, error) {
+// Chat creates (or resumes) a session for the given schema, enqueues the
+// user message, subscribes to events, and returns an SSEEvent channel that
+// closes when processing stops.
+//
+// Resolution: schemaID → SchemaModel.entry_agent_id → agentregistry.GetByID →
+// agent name used by SessionRegistry and Processor. Chat is allowed only when
+// schemas.chat_enabled = true; if disabled, NotFound is returned so the route
+// doesn't leak existence of chat-disabled schemas.
+func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, schemaID, message, userSub, sessionID string) (<-chan deliveryhttp.SSEEvent, error) {
 	if a.agents == nil {
 		return nil, fmt.Errorf("no agents configured")
 	}
-
-	if _, err := a.agents.Get(agentName); err != nil {
-		return nil, pkgerrors.NotFound(fmt.Sprintf("agent not found: %s", agentName))
+	if userSub == "" {
+		return nil, pkgerrors.InvalidInput("user_sub is required")
+	}
+	if a.schemas == nil {
+		return nil, fmt.Errorf("schema repo not wired")
 	}
 
-	// Create a new session if none provided.
+	schema, err := a.schemas.GetModelByID(ctx, schemaID)
+	if err != nil {
+		return nil, fmt.Errorf("load schema: %w", err)
+	}
+	if schema == nil {
+		return nil, pkgerrors.NotFound(fmt.Sprintf("schema not found: %s", schemaID))
+	}
+	if !schema.ChatEnabled {
+		return nil, pkgerrors.NotFound(fmt.Sprintf("schema not found: %s", schemaID))
+	}
+	if schema.EntryAgentID == nil || *schema.EntryAgentID == "" {
+		return nil, pkgerrors.InvalidInput("schema has no entry agent")
+	}
+
+	entryAgent, err := a.agents.GetByID(*schema.EntryAgentID)
+	if err != nil {
+		return nil, pkgerrors.NotFound(fmt.Sprintf("entry agent not found for schema %s", schemaID))
+	}
+	agentName := entryAgent.Record.Name
+
 	isNewSession := sessionID == ""
 	if isNewSession {
 		sessionID = uuid.New().String()
@@ -65,35 +91,27 @@ func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, agentName, message, u
 		return nil, pkgerrors.InvalidInput("session_id must be a valid UUID")
 	}
 
-	// Create session in registry (idempotent — reuses existing if already present).
 	if !a.registry.HasSession(sessionID) {
-		// Registry didn't know this session either — still "new" from the
-		// trigger's perspective.
 		isNewSession = true
-		a.registry.CreateSession(sessionID, "", userID, "", "", agentName)
+		a.registry.CreateSession(sessionID, "", userSub, "", "", agentName)
 	}
 
-	// §4.1: first message of a session → stamp the chat trigger's
-	// last_fired_at and persist the session to DB using trigger.SchemaID.
-	// Non-fatal on any error — chat must still work when trigger lookup fails.
-	if isNewSession && a.triggers != nil {
-		if trigger, lookupErr := a.triggers.FindEnabledChatTrigger(ctx, agentName); lookupErr == nil && trigger != nil {
-			if markErr := a.triggers.MarkFired(ctx, trigger.ID); markErr != nil {
-				slog.WarnContext(ctx, "mark chat trigger fired failed", "trigger_id", trigger.ID, "error", markErr)
+	// On the first message stamp chat_last_fired_at and persist the session.
+	// Non-fatal on errors — chat must still stream if bookkeeping hiccups.
+	if isNewSession {
+		if markErr := a.schemas.MarkChatFired(ctx, schemaID); markErr != nil {
+			slog.WarnContext(ctx, "mark schema chat fired failed", "schema_id", schemaID, "error", markErr)
+		}
+		if a.sessions != nil {
+			m := &models.SessionModel{
+				ID:       sessionID,
+				SchemaID: schemaID,
+				UserSub:  userSub,
+				Status:   "active",
+				TenantID: domain.CETenantID,
 			}
-			if a.sessions != nil {
-				m := &models.SessionModel{
-					ID:       sessionID,
-					SchemaID: trigger.SchemaID,
-					Status:   "running",
-					TenantID: domain.CETenantID,
-				}
-				if userID != "" {
-					m.UserID = &userID
-				}
-				if createErr := a.sessions.Create(ctx, m); createErr != nil {
-					slog.WarnContext(ctx, "persist chat session failed", "session_id", sessionID, "error", createErr)
-				}
+			if createErr := a.sessions.Create(ctx, m); createErr != nil {
+				slog.WarnContext(ctx, "persist chat session failed", "session_id", sessionID, "error", createErr)
 			}
 		}
 	}
@@ -101,21 +119,15 @@ func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, agentName, message, u
 	// Subscribe BEFORE enqueueing so we don't miss events.
 	eventCh, cleanup := a.registry.Subscribe(sessionID)
 
-	// Enqueue the user message.
 	if err := a.registry.EnqueueMessage(sessionID, message); err != nil {
 		cleanup()
 		return nil, fmt.Errorf("enqueue message: %w", err)
 	}
 
-	// Start processing with the enriched context (carries RequestContext for MCP header forwarding).
 	a.processor.StartProcessing(ctx, sessionID)
 
 	// Fan-out: read proto events, convert to SSE, close when processing stops.
-	// Buffered channel prevents deadlock: PublishEvent holds entry.mu.Lock while
-	// sending to subscriber channel. If sseCh is unbuffered and the HTTP handler
-	// is slow to read/flush, the fan-out goroutine blocks on sseCh send, which
-	// blocks the subscriber channel read, which blocks PublishEvent, which holds
-	// the lock and blocks ALL subsequent events — causing stream truncation.
+	// Buffered channel avoids deadlock when the HTTP handler is slow to read.
 	sseCh := make(chan deliveryhttp.SSEEvent, 64)
 	go func() {
 		defer close(sseCh)
@@ -195,7 +207,6 @@ func convertSessionEventToSSE(event *pb.SessionEvent, sessionID string) *deliver
 			"session_id": sessionID,
 		}
 		if content := event.GetContent(); content != "" {
-			// Try JSON first (new format: {"total_tokens":N,"context_tokens":N})
 			var tokenData map[string]int
 			if err := json.Unmarshal([]byte(content), &tokenData); err == nil {
 				if t, ok := tokenData["total_tokens"]; ok && t > 0 {
@@ -205,7 +216,6 @@ func convertSessionEventToSSE(event *pb.SessionEvent, sessionID string) *deliver
 					data["context_tokens"] = c
 				}
 			} else {
-				// Legacy fallback: plain int format
 				if tokens, err := strconv.Atoi(content); err == nil && tokens > 0 {
 					data["total_tokens"] = tokens
 				}
@@ -224,7 +234,6 @@ func convertSessionEventToSSE(event *pb.SessionEvent, sessionID string) *deliver
 		return sseEventJSON("error", data)
 
 	default:
-		// PROCESSING_STARTED, USER_MESSAGE, PLAN_UPDATE, UNSPECIFIED — skip.
 		return nil
 	}
 }
@@ -240,13 +249,4 @@ func sseEventJSON(eventType string, data map[string]interface{}) *deliveryhttp.S
 		Type: eventType,
 		Data: string(jsonBytes),
 	}
-}
-
-// chatTriggerCheckerAdapter implements deliveryhttp.ChatTriggerChecker.
-type chatTriggerCheckerAdapter struct {
-	repo *configrepo.GORMTriggerRepository
-}
-
-func (a *chatTriggerCheckerAdapter) HasEnabledChatTrigger(ctx context.Context, agentName string) (bool, error) {
-	return a.repo.HasEnabledChatTrigger(ctx, agentName)
 }

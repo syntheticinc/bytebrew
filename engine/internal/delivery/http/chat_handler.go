@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
 )
@@ -17,9 +19,6 @@ import (
 // BYOKMiddleware) into a single llm.BYOKCredentials value attached via
 // llm.WithBYOKCredentials. The downstream turn executor factory reads
 // from there to build an ad-hoc per-end-user ChatModel (V2 §5.8).
-//
-// No-op when no BYOK context is present — keeps the tenant-configured
-// model in use.
 func propagateBYOK(ctx context.Context) context.Context {
 	provider, _ := ctx.Value(ContextKeyBYOKProvider).(string)
 	apiKey, _ := ctx.Value(ContextKeyBYOKAPIKey).(string)
@@ -36,59 +35,58 @@ func propagateBYOK(ctx context.Context) context.Context {
 	})
 }
 
-// ChatService handles agent chat sessions via SSE.
+// ChatService handles schema chat sessions via SSE.
+//
+// V2: chat is addressed by schema id, not agent name. The schema's
+// entry_agent_id resolves the orchestrator; chat_enabled gates access.
 type ChatService interface {
-	// Chat starts a chat session and streams events.
-	// Returns a channel of SSE events and an error.
-	Chat(ctx context.Context, agentName, message, userID, sessionID string) (<-chan SSEEvent, error)
+	Chat(ctx context.Context, schemaID, message, userSub, sessionID string) (<-chan SSEEvent, error)
 }
 
-// ChatTriggerChecker checks whether an agent has an enabled chat trigger.
-type ChatTriggerChecker interface {
-	HasEnabledChatTrigger(ctx context.Context, agentName string) (bool, error)
-}
-
-// ChatHandler serves POST /api/v1/agents/{name}/chat with SSE streaming.
+// ChatHandler serves POST /api/v1/schemas/{id}/chat with SSE streaming.
 type ChatHandler struct {
-	service        ChatService
-	triggerChecker ChatTriggerChecker // nil = gate disabled (e.g. no DB)
+	service          ChatService
 	forwardHeadersFn func() []string // dynamic — returns current forward headers
 }
 
 // NewChatHandler creates a new ChatHandler.
 // forwardHeadersFn returns the current union of all forward_headers across MCP server configs.
 // It is called on every request so that config reloads take effect immediately.
-func NewChatHandler(service ChatService, triggerChecker ChatTriggerChecker, forwardHeadersFn func() []string) *ChatHandler {
-	return &ChatHandler{service: service, triggerChecker: triggerChecker, forwardHeadersFn: forwardHeadersFn}
+func NewChatHandler(service ChatService, forwardHeadersFn func() []string) *ChatHandler {
+	return &ChatHandler{service: service, forwardHeadersFn: forwardHeadersFn}
 }
 
 type chatRequest struct {
 	Message   string            `json:"message"`
-	UserID    string            `json:"user_id"`
+	UserSub   string            `json:"user_sub"`            // fallback when no JWT present (tests/CE-local)
 	SessionID string            `json:"session_id"`
-	Stream    *bool             `json:"stream,omitempty"` // default true
-	Headers   map[string]string `json:"headers,omitempty"` // optional headers forwarded to MCP tool calls
+	Stream    *bool             `json:"stream,omitempty"`    // default true
+	Headers   map[string]string `json:"headers,omitempty"`   // optional headers forwarded to MCP tool calls
 }
 
 type nonStreamResponse struct {
 	SessionID string          `json:"session_id,omitempty"`
-	Agent     string          `json:"agent"`
+	SchemaID  string          `json:"schema_id"`
 	Message   string          `json:"message"`
 	Error     string          `json:"error,omitempty"`
 	ToolCalls []toolCallEntry `json:"tool_calls,omitempty"`
 }
 
 type toolCallEntry struct {
-	Tool    string `json:"tool"`
-	Input   string `json:"input,omitempty"`
-	Output  string `json:"output,omitempty"`
+	Tool   string `json:"tool"`
+	Input  string `json:"input,omitempty"`
+	Output string `json:"output,omitempty"`
 }
 
 // Chat handles SSE streaming or non-streaming chat.
 func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
-	agentName := chi.URLParam(r, "name")
-	if agentName == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "agent name required"})
+	schemaID := chi.URLParam(r, "id")
+	if schemaID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "schema id required"})
+		return
+	}
+	if _, err := uuid.Parse(schemaID); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "schema id must be a valid UUID"})
 		return
 	}
 
@@ -103,17 +101,10 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Gate: agent must have an enabled chat trigger.
-	if h.triggerChecker != nil {
-		ok, err := h.triggerChecker.HasEnabledChatTrigger(r.Context(), agentName)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "trigger check failed"})
-			return
-		}
-		if !ok {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "agent has no enabled chat trigger"})
-			return
-		}
+	userSub := resolveUserSub(r, req.UserSub)
+	if userSub == "" {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+		return
 	}
 
 	ctx := h.buildRequestContext(r)
@@ -134,7 +125,8 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		}
 		ctx = domain.WithRequestContext(ctx, &domain.RequestContext{Headers: merged})
 	}
-	events, err := h.service.Chat(ctx, agentName, req.Message, req.UserID, req.SessionID)
+
+	events, err := h.service.Chat(ctx, schemaID, req.Message, userSub, req.SessionID)
 	if err != nil {
 		writeDomainError(w, err)
 		return
@@ -142,39 +134,30 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 
 	// Non-streaming: collect all events → return JSON
 	if req.Stream != nil && !*req.Stream {
-		h.handleNonStreaming(w, agentName, events)
+		h.handleNonStreaming(w, schemaID, events)
 		return
 	}
 
 	// Streaming: SSE.
 	//
-	// CRITICAL: Go's net/http buffers small responses and sets Content-Length,
-	// which breaks SSE streaming. To force chunked transfer encoding:
-	// 1. Set headers
-	// 2. Write initial comment
-	// 3. Flush IMMEDIATELY — before any events arrive
-	//
-	// The Flush() call commits the headers with Transfer-Encoding: chunked
-	// and sends the first chunk. Subsequent writes become additional chunks.
+	// Go's net/http buffers small responses and sets Content-Length, which breaks
+	// SSE. Headers + initial flush + chunked encoding commit immediately so
+	// downstream clients start reading events without waiting for the whole body.
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	// Disable Read/Write timeouts for SSE — long-running streams (multi-tool ReAct chains)
-	// can exceed the server's default timeouts. The model may pause for extended periods
-	// during tool calling or reasoning before producing the next token.
 	rc := http.NewResponseController(w)
-	_ = rc.SetWriteDeadline(time.Time{}) // zero = no deadline
-	_ = rc.SetReadDeadline(time.Time{})  // clear read deadline too — prevents context cancellation during long model calls
+	_ = rc.SetWriteDeadline(time.Time{})
+	_ = rc.SetReadDeadline(time.Time{})
 
-	// Unwrap to find http.Flusher — chi middleware wraps ResponseWriter.
 	flush := findFlusher(w)
 
 	w.Header().Del("Content-Length")
 	w.Header().Set("Transfer-Encoding", "chunked")
 	w.WriteHeader(http.StatusOK)
-	flush() // commit headers immediately — before any body
+	flush()
 
 	_, _ = io.WriteString(w, ": ok\n\n")
 	flush()
@@ -185,8 +168,18 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// resolveUserSub returns the authenticated end-user identifier.
+// Preference order: JWT `sub` claim (injected by auth middleware) → request body.
+// An empty result signals unauthenticated — caller must 401.
+func resolveUserSub(r *http.Request, fallback string) string {
+	if sub, ok := r.Context().Value(ContextKeyUserSub).(string); ok && sub != "" {
+		return sub
+	}
+	return fallback
+}
+
 // handleNonStreaming collects SSE events and returns a single JSON response.
-func (h *ChatHandler) handleNonStreaming(w http.ResponseWriter, agentName string, events <-chan SSEEvent) {
+func (h *ChatHandler) handleNonStreaming(w http.ResponseWriter, schemaID string, events <-chan SSEEvent) {
 	var (
 		message   string
 		errMsg    string
@@ -205,14 +198,11 @@ func (h *ChatHandler) handleNonStreaming(w http.ResponseWriter, agentName string
 		case "message", "message_delta":
 			if content, ok := data["content"].(string); ok {
 				if event.Type == "message" {
-					// Only replace if non-empty — the engine sends a trailing
-					// "completion signal" ANSWER event with empty content after
-					// streaming finishes; ignoring it preserves the real answer.
 					if content != "" {
 						message = content
 					}
 				} else {
-					message += content // accumulate deltas
+					message += content
 				}
 			}
 		case "tool_call":
@@ -222,7 +212,6 @@ func (h *ChatHandler) handleNonStreaming(w http.ResponseWriter, agentName string
 			toolCalls = append(toolCalls, toolCallEntry{Tool: toolName, Input: input})
 		case "tool_result":
 			output, _ := data["content"].(string)
-			// Update last tool call with output
 			for i := len(toolCalls) - 1; i >= 0; i-- {
 				if toolCalls[i].Tool == lastTool && toolCalls[i].Output == "" {
 					toolCalls[i].Output = output
@@ -242,15 +231,13 @@ func (h *ChatHandler) handleNonStreaming(w http.ResponseWriter, agentName string
 		}
 	}
 
-	// If there was an error and no message content, use the error as the message
-	// so the client gets meaningful feedback instead of an empty response.
 	if message == "" && errMsg != "" {
 		message = errMsg
 	}
 
 	resp := nonStreamResponse{
 		SessionID: sessionID,
-		Agent:     agentName,
+		SchemaID:  schemaID,
 		Message:   message,
 		Error:     errMsg,
 		ToolCalls: toolCalls,

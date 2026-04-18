@@ -6,7 +6,7 @@ import Modal from '../components/Modal';
 import type { APIToken } from '../types';
 
 const SCOPES = [
-  { bit: 1, label: 'Chat', description: 'POST /agents/{name}/chat — all agents' },
+  { bit: 1, label: 'Chat', description: 'POST /schemas/{id}/chat — all chat-enabled schemas' },
   { bit: 2, label: 'Tasks', description: 'CRUD /tasks' },
   { bit: 4, label: 'Agents Read', description: 'GET /agents' },
   { bit: 32, label: 'Agents Write', description: 'POST/PUT/DELETE /agents' },
@@ -14,8 +14,6 @@ const SCOPES = [
   { bit: 128, label: 'Models Write', description: 'POST/PUT/DELETE /models' },
   { bit: 256, label: 'MCP Read', description: 'GET /mcp-servers' },
   { bit: 512, label: 'MCP Write', description: 'POST/PUT/DELETE /mcp-servers' },
-  { bit: 1024, label: 'Triggers Read', description: 'GET /triggers' },
-  { bit: 2048, label: 'Triggers Write', description: 'POST/PUT/DELETE /triggers' },
   { bit: 8, label: 'Config', description: 'POST /config/reload, import/export' },
   { bit: 16, label: 'Admin', description: 'Full access (all operations)' },
 ];

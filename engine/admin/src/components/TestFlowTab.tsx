@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useSSEChat, type SSEMessage } from '../hooks/useSSEChat';
 import { useBottomPanel } from '../hooks/useBottomPanel';
 import { usePrototype } from '../hooks/usePrototype';
 import { api } from '../api/client';
-import type { AgentDetail, SessionSummary } from '../types';
+import type { AgentDetail, SessionSummary, Schema } from '../types';
 import HeadersEditor, { type HeaderEntry } from './HeadersEditor';
 import ContextUsageBar from './ContextUsageBar';
 import BrewingSpinner from './BrewingSpinner';
@@ -22,35 +21,18 @@ const MOCK_RESPONSES = [
   'Your test message has been routed through the schema flow. All tools executed correctly and the response was generated.',
 ];
 
-// ─── Friendly error mapping ─────────────────────────────────────────────────
-
-type FriendlyResult = { text: string; agentLink?: string };
-
-function friendlyError(raw: string, agentName?: string): FriendlyResult {
-  if (raw.includes('resolve tool') && raw.includes('unknown builtin tool')) {
-    const toolMatch = raw.match(/resolve tool (\S+):/);
-    const toolName = toolMatch?.[1] ?? 'unknown';
-    return { text: `Agent references tool "${toolName}" which is not available. Check agent configuration \u2192 Tools to fix this.`, agentLink: agentName };
-  }
-  if (raw.includes('model not found') || raw.includes('no model configured') || raw.includes('no model available')) {
-    return { text: 'No model configured for this agent. Assign a model in agent settings.', agentLink: agentName };
-  }
-  if (raw.includes('connection refused') || raw.includes('ECONNREFUSED')) {
-    return { text: 'Cannot connect to the model provider. Check model configuration and API keys.', agentLink: agentName };
-  }
-  return { text: raw };
-}
-
 // ─── Component ──────────────────────────────────────────────────────────────
 
+// TestFlowTab is scoped to a single schema. The schema selector lives in
+// BottomPanel (shared with AI Assistant). The entry agent is read-only —
+// chat is always dispatched to the schema's entry orchestrator via the
+// `/api/v1/schemas/{id}/chat` endpoint.
 export default function TestFlowTab() {
-  const navigate = useNavigate();
   const { selectedSchema } = useBottomPanel();
   const { isPrototype } = usePrototype();
 
-  const [allAgents, setAllAgents] = useState<string[]>([]);
-  const [schemaAgents, setSchemaAgents] = useState<string[]>([]);
-  const [selectedAgent, setSelectedAgent] = useState('');
+  const [schema, setSchema] = useState<Schema | null>(null);
+  const [entryAgent, setEntryAgent] = useState<AgentDetail | null>(null);
   const [headers, setHeaders] = useState<HeaderEntry[]>([]);
   const [message, setMessage] = useState('');
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
@@ -62,16 +44,12 @@ export default function TestFlowTab() {
 
   // Session management state (production only)
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [agentDetail, setAgentDetail] = useState<AgentDetail | null>(null);
   const [sessionDropdownOpen, setSessionDropdownOpen] = useState(false);
   const sessionDropdownRef = useRef<HTMLDivElement>(null);
 
   // Local session history in localStorage (supplements API list — in-memory chat sessions aren't in DB)
-  const localSessionsKey = selectedAgent ? `bb_testflow_sessions__${selectedAgent}` : '';
-  const [localSessions, setLocalSessions] = useState<SessionSummary[]>(() => {
-    if (!selectedAgent) return [];
-    try { return JSON.parse(localStorage.getItem(`bb_testflow_sessions__${selectedAgent}`) ?? '[]'); } catch { return []; }
-  });
+  const localSessionsKey = schema ? `bb_testflow_sessions__${schema.id}` : '';
+  const [localSessions, setLocalSessions] = useState<SessionSummary[]>(() => []);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const headersRef = useRef(headers);
@@ -90,14 +68,9 @@ export default function TestFlowTab() {
     return result;
   }, []);
 
-  const testflowPersistenceKey = selectedAgent
-    ? selectedSchema
-      ? `bb_testflow_${selectedSchema}_${selectedAgent}`
-      : `bb_testflow__${selectedAgent}`
-    : undefined;
+  const testflowPersistenceKey = schema ? `bb_testflow_${schema.id}` : undefined;
   const sseChat = useSSEChat({
-    endpoint: selectedAgent ? `/api/v1/agents/${encodeURIComponent(selectedAgent)}/chat` : '',
-    agentName: selectedAgent,
+    schemaId: schema?.id ?? '',
     getHeaders,
     persistenceKey: testflowPersistenceKey,
     fetchMessages: (sid) => api.getSessionEvents(sid),
@@ -107,33 +80,26 @@ export default function TestFlowTab() {
   const messages = isPrototype ? protoMessages : sseChat.messages;
   const isStreaming = isPrototype ? protoStreaming : sseChat.isStreaming;
 
-  // Load agents (schema-scoped when a schema is selected)
+  // Resolve the selected schema (by name from BottomPanel) to a real Schema
+  // record, then fetch its entry agent for the context bar.
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
+      if (!selectedSchema) {
+        if (!cancelled) { setSchema(null); setEntryAgent(null); }
+        return;
+      }
       try {
-        const list = await api.listAgents();
-        const names = list.map((a) => a.name);
+        const list = await api.listSchemas();
         if (cancelled) return;
-        setAllAgents(names);
-
-        // If a schema is selected, fetch its agents to scope the dropdown
-        let schemaNames: string[] = [];
-        if (selectedSchema) {
-          const schemas = await api.listSchemas();
-          const match = schemas.find((s) => s.name === selectedSchema);
-          if (match && !cancelled) {
-            schemaNames = await api.listSchemaAgents(match.id);
-          }
-        }
-        if (cancelled) return;
-        setSchemaAgents(schemaNames);
-
-        // Auto-select first schema agent, or first agent overall
-        const preferred = schemaNames.length > 0 ? schemaNames : names;
-        if (preferred.length > 0 && !selectedAgent) {
-          setSelectedAgent(preferred[0]!);
+        const match = list.find((s) => s.name === selectedSchema) ?? null;
+        setSchema(match);
+        if (match?.entry_agent_name) {
+          const detail = await api.getAgent(match.entry_agent_name);
+          if (!cancelled) setEntryAgent(detail);
+        } else {
+          setEntryAgent(null);
         }
       } catch {
         // ignore
@@ -142,53 +108,43 @@ export default function TestFlowTab() {
 
     load();
     return () => { cancelled = true; };
-  }, [selectedSchema, selectedAgent]);
+  }, [selectedSchema]);
 
-  // Fetch agent detail for context bar
+  // Fetch sessions for selected schema's entry agent (production only)
   useEffect(() => {
-    if (!selectedAgent) { setAgentDetail(null); return; }
+    if (!schema || !entryAgent || isPrototype) { setSessions([]); return; }
     let cancelled = false;
-    api.getAgent(selectedAgent)
-      .then((d) => { if (!cancelled) setAgentDetail(d); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [selectedAgent]);
-
-  // Fetch sessions for selected agent (production only)
-  useEffect(() => {
-    if (!selectedAgent || isPrototype) { setSessions([]); return; }
-    let cancelled = false;
-    api.listSessions({ agent_name: selectedAgent, per_page: 20 })
+    api.listSessions({ agent_name: entryAgent.name, per_page: 20 })
       .then((res) => { if (!cancelled) setSessions(res.sessions); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [selectedAgent, isPrototype]);
+  }, [schema, entryAgent, isPrototype]);
 
   // Refresh session list when a new session is created (sessionId changes)
   useEffect(() => {
-    if (!selectedAgent || isPrototype || !sseChat.sessionId) return;
+    if (!schema || !entryAgent || isPrototype || !sseChat.sessionId) return;
     if (sessions?.some((s) => s.session_id === sseChat.sessionId)) return;
-    api.listSessions({ agent_name: selectedAgent, per_page: 20 })
+    api.listSessions({ agent_name: entryAgent.name, per_page: 20 })
       .then((res) => setSessions(res.sessions))
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sseChat.sessionId]);
 
-  // Reload local sessions when agent changes
+  // Reload local sessions when schema changes
   useEffect(() => {
-    if (!selectedAgent) { setLocalSessions([]); return; }
-    try { setLocalSessions(JSON.parse(localStorage.getItem(`bb_testflow_sessions__${selectedAgent}`) ?? '[]')); }
+    if (!schema) { setLocalSessions([]); return; }
+    try { setLocalSessions(JSON.parse(localStorage.getItem(`bb_testflow_sessions__${schema.id}`) ?? '[]')); }
     catch { setLocalSessions([]); }
-  }, [selectedAgent]);
+  }, [schema]);
 
   // Add newly created session to local list
   useEffect(() => {
-    if (!sseChat.sessionId || !localSessionsKey) return;
+    if (!sseChat.sessionId || !localSessionsKey || !entryAgent) return;
     setLocalSessions((prev) => {
       if (prev.some((s) => s.session_id === sseChat.sessionId)) return prev;
       const entry: SessionSummary = {
         session_id: sseChat.sessionId,
-        entry_agent: selectedAgent,
+        entry_agent: entryAgent.name,
         status: 'running',
         duration_ms: 0,
         total_tokens: 0,
@@ -283,7 +239,7 @@ export default function TestFlowTab() {
 
   async function handleSend() {
     const text = message.trim();
-    if (!text || !selectedAgent || isStreaming) return;
+    if (!text || !schema || isStreaming) return;
     setMessage('');
     if (inputRef.current) inputRef.current.style.height = 'auto';
 
@@ -351,47 +307,45 @@ export default function TestFlowTab() {
   const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
   const hasError = lastMsg?.role === 'assistant' && lastMsg.content?.startsWith('Error:');
 
+  if (!selectedSchema) {
+    return (
+      <div className="flex items-center justify-center h-full p-6 text-[12px] text-brand-shade3">
+        Select a schema in the panel above to test its flow.
+      </div>
+    );
+  }
+
+  if (!schema) {
+    return (
+      <div className="flex items-center justify-center h-full p-6 text-[12px] text-brand-shade3">
+        Loading schema…
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full">
       {/* Config section */}
       <div className="px-3 py-2 space-y-2 border-b border-brand-shade3/10 flex-shrink-0">
-        {/* Agent selector */}
+        {/* Schema + entry agent (read-only) */}
         <div className="flex items-center gap-2">
-          <label className="text-[10px] text-brand-shade3 uppercase tracking-wide shrink-0">Agent:</label>
-          <select
-            value={selectedAgent}
-            onChange={(e) => { setSelectedAgent(e.target.value); handleReset(); }}
-            className="flex-1 px-2 py-1 bg-brand-dark border border-brand-shade3/30 rounded text-xs text-brand-light focus:outline-none focus:border-brand-accent transition-colors"
-          >
-            {allAgents.length === 0 && <option value="">No agents</option>}
-            {selectedSchema && schemaAgents.length > 0 ? (
-              <>
-                <optgroup label={`Schema: ${selectedSchema}`}>
-                  {schemaAgents.map((a) => (
-                    <option key={a} value={a}>{a}</option>
-                  ))}
-                </optgroup>
-                {allAgents.filter((a) => !schemaAgents.includes(a)).length > 0 && (
-                  <optgroup label="Other agents">
-                    {allAgents.filter((a) => !schemaAgents.includes(a)).map((a) => (
-                      <option key={a} value={a}>{a}</option>
-                    ))}
-                  </optgroup>
-                )}
-              </>
-            ) : (
-              allAgents.map((a) => (
-                <option key={a} value={a}>{a}</option>
-              ))
-            )}
-          </select>
-          {(agentDetail?.used_in_schemas?.[0] || selectedSchema) && (
-            <span className="text-[10px] text-brand-shade3/60 shrink-0">Schema: {agentDetail?.used_in_schemas?.[0] ?? selectedSchema}</span>
+          <label className="text-[10px] text-brand-shade3 uppercase tracking-wide shrink-0">Schema:</label>
+          <span className="text-xs text-brand-light truncate">{schema.name}</span>
+          <span className="text-[10px] text-brand-shade3/60 shrink-0">→</span>
+          <label className="text-[10px] text-brand-shade3 uppercase tracking-wide shrink-0">Entry:</label>
+          <span className="text-xs text-brand-light truncate">{entryAgent?.name ?? schema.entry_agent_name ?? '—'}</span>
+          {!schema.chat_enabled && (
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/30 text-amber-400 bg-amber-500/10 shrink-0"
+              title="Chat is disabled on this schema. Enable it in the schema Settings tab."
+            >
+              chat disabled
+            </span>
           )}
           {messages.length > 0 && (
             <button
               onClick={handleReset}
-              className="p-1 text-brand-shade3 hover:text-brand-light transition-colors shrink-0"
+              className="ml-auto p-1 text-brand-shade3 hover:text-brand-light transition-colors shrink-0"
               title="New Session"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -403,7 +357,7 @@ export default function TestFlowTab() {
         </div>
 
         {/* Session selector (production only) */}
-        {!isPrototype && selectedAgent && (
+        {!isPrototype && (
           <div className="flex items-center gap-2">
             <label className="text-[10px] text-brand-shade3 uppercase tracking-wide shrink-0">Session:</label>
             <div ref={sessionDropdownRef} className="relative flex-1">
@@ -476,7 +430,7 @@ export default function TestFlowTab() {
           </div>
         ) : messages.length === 0 ? (
           <p className="text-[11px] text-brand-shade3/50 text-center mt-4">
-            Send a message to test the agent flow.
+            Send a message to test this schema's entry agent.
           </p>
         ) : null}
 
@@ -489,51 +443,11 @@ export default function TestFlowTab() {
             ) : (
               <div className="space-y-1">
                 {/* Error */}
-                {hasError && msg.id === lastMsg?.id && (() => {
-                  const err = friendlyError(msg.content.replace(/^Error:\s*/, ''), selectedAgent);
-                  return (
-                    <div className="px-2 py-1.5 bg-red-900/20 border border-red-500/20 rounded text-[11px] text-red-400">
-                      {err.text}
-                      {err.agentLink && (
-                        <button
-                          onClick={() => navigate(`/agents/${encodeURIComponent(err.agentLink!)}`)}
-                          className="ml-1.5 text-brand-accent hover:text-brand-accent-hover underline transition-colors"
-                        >
-                          Configure agent &rarr;
-                        </button>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* Reasoning (if present as a special content pattern) */}
-                {msg.content?.includes('[thinking]') && (() => {
-                  const thinkKey = `${msg.id}-think`;
-                  const isExpanded = expandedItems[thinkKey] ?? false;
-                  const thinkMatch = msg.content.match(/\[thinking\]([\s\S]*?)\[\/thinking\]/);
-                  if (!thinkMatch) return null;
-                  return (
-                    <button
-                      onClick={() => toggleItem(thinkKey)}
-                      className="w-full text-left px-2 py-1 bg-amber-900/10 border border-amber-500/15 rounded text-[11px] font-mono hover:border-amber-500/30 transition-colors"
-                    >
-                      <div className="flex items-center gap-1.5 text-amber-400">
-                        <span>Thinking...</span>
-                        <svg
-                          width="8" height="8" viewBox="0 0 24 24" fill="currentColor"
-                          className={`transition-transform ml-auto ${isExpanded ? 'rotate-90' : ''}`}
-                        >
-                          <path d="M8 5l10 7-10 7V5z" />
-                        </svg>
-                      </div>
-                      {isExpanded && (
-                        <div className="mt-1 text-[10px] text-amber-400/70 whitespace-pre-wrap">
-                          {thinkMatch[1]}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })()}
+                {hasError && msg.id === lastMsg?.id && (
+                  <div className="px-2 py-1.5 bg-red-900/20 border border-red-500/20 rounded text-[11px] text-red-400">
+                    {msg.content.replace(/^Error:\s*/, '')}
+                  </div>
+                )}
 
                 {/* Render segments in chronological order (tool_calls interleaved with text) */}
                 {msg.segments && msg.segments.length > 0 ? (
@@ -560,12 +474,6 @@ export default function TestFlowTab() {
                         className="w-full text-left px-2 py-1 bg-brand-dark border border-brand-shade3/15 rounded text-[11px] font-mono hover:border-brand-shade3/30 transition-colors"
                       >
                         <div className="flex items-center gap-1.5">
-                          <span className="text-blue-400">
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="inline">
-                              <circle cx="12" cy="12" r="3" />
-                              <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
-                            </svg>
-                          </span>
                           <span className="text-blue-400 font-medium">{tc.tool}</span>
                           {tc.output !== undefined && (
                             <span className="text-emerald-400/60 ml-1">done</span>
@@ -617,12 +525,6 @@ export default function TestFlowTab() {
                               className="w-full text-left px-2 py-1 bg-brand-dark border border-brand-shade3/15 rounded text-[11px] font-mono hover:border-brand-shade3/30 transition-colors"
                             >
                               <div className="flex items-center gap-1.5">
-                                <span className="text-blue-400">
-                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="inline">
-                                    <circle cx="12" cy="12" r="3" />
-                                    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
-                                  </svg>
-                                </span>
                                 <span className="text-blue-400 font-medium">{tc.tool}</span>
                                 {tc.output !== undefined && (
                                   <span className="text-emerald-400/60 ml-1">done</span>
@@ -679,7 +581,7 @@ export default function TestFlowTab() {
       </div>
 
       {/* Context usage bar */}
-      <ContextUsageBar maxContextTokens={agentDetail?.max_context_size ?? null} totalTokens={isPrototype ? null : sseChat.tokenUsage} contextTokens={isPrototype ? null : sseChat.contextTokens} />
+      <ContextUsageBar maxContextTokens={entryAgent?.max_context_size ?? null} totalTokens={isPrototype ? null : sseChat.tokenUsage} contextTokens={isPrototype ? null : sseChat.contextTokens} />
 
       {/* Input area */}
       <div className="flex items-center gap-2 px-3 py-2 border-t border-brand-shade3/10 flex-shrink-0">
@@ -710,7 +612,7 @@ export default function TestFlowTab() {
         ) : (
           <button
             onClick={handleSend}
-            disabled={!message.trim() || !selectedAgent}
+            disabled={!message.trim() || !schema}
             className="px-2.5 py-1.5 bg-brand-accent text-brand-light rounded-card text-xs font-medium hover:bg-brand-accent-hover disabled:opacity-40 transition-colors flex-shrink-0 inline-flex items-center gap-1"
           >
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

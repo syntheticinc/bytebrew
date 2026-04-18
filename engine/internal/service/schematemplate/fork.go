@@ -218,28 +218,25 @@ func (s *ForkService) forkInTx(tx *gorm.DB, tmpl *domain.SchemaTemplate, newSche
 		}
 	}
 
-	// 6. Create triggers. All template triggers target the entry agent +
-	//    the newly forked schema, so the delegation tree has exactly one
-	//    implicit entry point (§4 — triggers can only target entry
-	//    agents).
+	// 6. Map template triggers onto schemas.chat_enabled. V2 removed the
+	//    triggers table: a schema with chat access simply has
+	//    chat_enabled=true; entry agent is resolved via schemas.entry_agent_id.
+	//    Non-chat trigger types (cron/webhook) are deferred to V3 — tenants
+	//    call the chat API directly from their own schedulers in V2.
+	chatEnabled := false
 	for _, t := range def.Triggers {
 		triggerType := strings.TrimSpace(t.Type)
 		if triggerType == "" {
 			return ForkedSchema{}, fmt.Errorf("trigger with no type: %w", ErrInvalidTemplate)
 		}
-		config, err := toTriggerConfig(t.Config)
-		if err != nil {
-			return ForkedSchema{}, fmt.Errorf("trigger %q: %w", t.Title, err)
+		if triggerType == "chat" && t.Enabled {
+			chatEnabled = true
 		}
-		trigger := models.TriggerModel{
-			Type:     triggerType,
-			Title:    t.Title,
-			SchemaID: schema.ID,
-			Enabled:  t.Enabled,
-			Config:   config,
-		}
-		if err := tx.Create(&trigger).Error; err != nil {
-			return ForkedSchema{}, fmt.Errorf("create trigger %q: %w", t.Title, err)
+	}
+	if chatEnabled {
+		if err := tx.Model(&models.SchemaModel{}).Where("id = ?", schema.ID).
+			Update("chat_enabled", true).Error; err != nil {
+			return ForkedSchema{}, fmt.Errorf("enable chat on forked schema: %w", err)
 		}
 	}
 
@@ -248,25 +245,6 @@ func (s *ForkService) forkInTx(tx *gorm.DB, tmpl *domain.SchemaTemplate, newSche
 		SchemaName: schema.Name,
 		AgentIDs:   agentIDByLogical,
 	}, nil
-}
-
-// toTriggerConfig projects the template's untyped config map onto the
-// strongly-typed jsonb shape used by TriggerModel (schedule / webhook_path).
-// Unknown keys are ignored — the trigger jsonb is the source of truth, not
-// the template.
-func toTriggerConfig(raw map[string]interface{}) (models.TriggerConfig, error) {
-	if raw == nil {
-		return models.TriggerConfig{}, nil
-	}
-	buf, err := json.Marshal(raw)
-	if err != nil {
-		return models.TriggerConfig{}, fmt.Errorf("marshal trigger config: %w", err)
-	}
-	var out models.TriggerConfig
-	if err := json.Unmarshal(buf, &out); err != nil {
-		return models.TriggerConfig{}, fmt.Errorf("unmarshal trigger config: %w", err)
-	}
-	return out, nil
 }
 
 // validateDefinition asserts self-consistency of the template before the

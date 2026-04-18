@@ -18,7 +18,6 @@ const (
 	EngineTaskStatusCompleted  EngineTaskStatus = "completed"
 	EngineTaskStatusFailed     EngineTaskStatus = "failed"
 	EngineTaskStatusNeedsInput EngineTaskStatus = "needs_input"
-	EngineTaskStatusEscalated  EngineTaskStatus = "escalated"
 	EngineTaskStatusCancelled  EngineTaskStatus = "cancelled"
 )
 
@@ -38,7 +37,6 @@ const (
 // from DB. These are derived at runtime:
 //   - agent info: derived from session's schema
 //   - depth: computed from parent_task_id chain
-//   - source/source_id: tracked on session origin (messages.trigger_id)
 //
 // ID types:
 //   - ID, ParentTaskID, BlockedBy — uuid.UUID (DB-generated UUIDs)
@@ -77,16 +75,15 @@ func (t *EngineTask) IsTerminal() bool {
 }
 
 // engineTaskValidTransitions defines the state machine for EngineTask status.
-// NeedsInput / Escalated can transition to Failed so that autonomous task paths
-// (cron, webhook, API) can fail a task that asked for user input without a human
-// in the loop instead of leaving it stuck forever.
+// NeedsInput can transition to Failed so that autonomous task paths (cron,
+// webhook, API) can fail a task that asked for user input without a human in
+// the loop instead of leaving it stuck forever.
 var engineTaskValidTransitions = map[EngineTaskStatus][]EngineTaskStatus{
 	EngineTaskStatusDraft:      {EngineTaskStatusApproved, EngineTaskStatusCancelled},
 	EngineTaskStatusApproved:   {EngineTaskStatusInProgress, EngineTaskStatusCancelled},
 	EngineTaskStatusPending:    {EngineTaskStatusInProgress, EngineTaskStatusCancelled},
-	EngineTaskStatusInProgress: {EngineTaskStatusCompleted, EngineTaskStatusFailed, EngineTaskStatusNeedsInput, EngineTaskStatusEscalated, EngineTaskStatusCancelled},
+	EngineTaskStatusInProgress: {EngineTaskStatusCompleted, EngineTaskStatusFailed, EngineTaskStatusNeedsInput, EngineTaskStatusCancelled},
 	EngineTaskStatusNeedsInput: {EngineTaskStatusInProgress, EngineTaskStatusFailed, EngineTaskStatusCancelled},
-	EngineTaskStatusEscalated:  {EngineTaskStatusInProgress, EngineTaskStatusFailed, EngineTaskStatusCancelled},
 	EngineTaskStatusCompleted:  {},
 	EngineTaskStatusFailed:     {},
 	EngineTaskStatusCancelled:  {},

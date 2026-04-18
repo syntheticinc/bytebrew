@@ -42,18 +42,9 @@ const (
 	MCPServerStatusDisconnected = "disconnected"
 )
 
-// TriggerType — trigger source type.
-const (
-	TriggerTypeCron    = "cron"
-	TriggerTypeWebhook = "webhook"
-	TriggerTypeChat    = "chat"
-)
-
 // TaskSource — who created the task.
 const (
 	TaskSourceAgent     = "agent"
-	TaskSourceCron      = "cron"
-	TaskSourceWebhook   = "webhook"
 	TaskSourceAPI       = "api"
 	TaskSourceDashboard = "dashboard"
 )
@@ -65,7 +56,6 @@ const (
 	TaskStatusCompleted  = "completed"
 	TaskStatusFailed     = "failed"
 	TaskStatusNeedsInput = "needs_input"
-	TaskStatusEscalated  = "escalated"
 	TaskStatusCancelled  = "cancelled"
 )
 
@@ -80,6 +70,7 @@ const (
 	SessionStatusActive    = "active"
 	SessionStatusCompleted = "completed"
 	SessionStatusExpired   = "expired"
+	SessionStatusFailed    = "failed"
 )
 
 // AuditActorType — who performed the action.
@@ -87,7 +78,6 @@ const (
 	AuditActorAdmin    = "admin"
 	AuditActorAPIToken = "api_token"
 	AuditActorSystem   = "system"
-	AuditActorCron     = "cron"
 )
 
 // RuntimeEventType — type of runtime event in the session timeline.

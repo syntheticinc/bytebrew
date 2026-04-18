@@ -2,7 +2,6 @@ import type {
   HealthResponse,
   Model,
   MCPServer,
-  Trigger,
   PaginatedTaskResponse,
   APIToken,
   Setting,
@@ -122,12 +121,6 @@ export const MOCK_CATALOG: MCPCatalogEntry[] = [
       { name: 'slack_list_channels', description: 'List Slack channels' },
     ],
   },
-];
-
-export const MOCK_TRIGGERS: Trigger[] = [
-  { id: '1', type: 'webhook', title: 'user-message', config: { webhook_path: '/webhook/support' }, enabled: true, created_at: '2026-03-20T00:00:00Z' },
-  { id: '2', type: 'cron', title: 'daily-report', config: { schedule: '0 9 * * *' }, description: 'Daily summary', enabled: true, created_at: '2026-03-25T00:00:00Z' },
-  { id: '3', type: 'webhook', title: 'escalation-hook', config: { webhook_path: '/webhook/escalate' }, enabled: false, created_at: '2026-04-01T00:00:00Z' },
 ];
 
 export const MOCK_TASKS_PAGINATED: PaginatedTaskResponse = {

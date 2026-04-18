@@ -5,20 +5,18 @@ import (
 	"time"
 )
 
-// AnonymousMemoryUserID marks a memory that is schema-wide (no specific end
-// user). Self-hosted CE has no end users, so the schema is the isolation
-// boundary; we persist a nil UUID to satisfy the NOT NULL uuid column without
-// creating a DB-schema migration.
-const AnonymousMemoryUserID = "00000000-0000-0000-0000-000000000000"
-
-// Memory represents a long-term memory entry scoped to a schema.
-// Memory is cross-session by definition: agents in the same schema
-// share memories across all sessions.
+// Memory represents a long-term memory entry scoped to (tenant, schema, user_sub).
+// Memory is cross-session by definition: the same end-user's agents in the same
+// schema share memories across all of their sessions.
+//
+// UserSub carries the JWT sub claim of the end-user. It is an opaque varchar
+// issued by the tenant's auth provider — the engine never stores end-user
+// credentials and there is no FK to users.
 type Memory struct {
 	ID        string
 	TenantID  string
 	SchemaID  string
-	UserID    string
+	UserSub   string
 	Content   string
 	Metadata  map[string]string
 	CreatedAt time.Time
@@ -26,15 +24,10 @@ type Memory struct {
 }
 
 // NewMemory creates a new Memory with validation.
-// An empty userID is substituted with AnonymousMemoryUserID so the record
-// remains valid against the uuid NOT NULL column on the memories table.
-func NewMemory(schemaID, userID, content string) (*Memory, error) {
-	if userID == "" {
-		userID = AnonymousMemoryUserID
-	}
+func NewMemory(schemaID, userSub, content string) (*Memory, error) {
 	mem := &Memory{
 		SchemaID:  schemaID,
-		UserID:    userID,
+		UserSub:   userSub,
 		Content:   content,
 		Metadata:  make(map[string]string),
 		CreatedAt: time.Now(),
@@ -48,13 +41,15 @@ func NewMemory(schemaID, userID, content string) (*Memory, error) {
 
 // Validate validates the Memory.
 //
-// UserID is optional: self-hosted CE runs anonymously and scopes memory by
-// schema alone. In Cloud, the chat handler populates UserID from the session
-// token so memories stay isolated per end user. An empty UserID therefore
-// means "schema-wide" memory and must round-trip correctly through storage.
+// Both SchemaID and UserSub are required — memories are always scoped to
+// (tenant, schema, user_sub). Callers must authenticate the end-user before
+// storing or recalling memories.
 func (m *Memory) Validate() error {
 	if m.SchemaID == "" {
 		return fmt.Errorf("schema_id is required")
+	}
+	if m.UserSub == "" {
+		return fmt.Errorf("user_sub is required")
 	}
 	if m.Content == "" {
 		return fmt.Errorf("content is required")

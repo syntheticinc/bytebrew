@@ -1,17 +1,14 @@
 import { useMemo } from 'react';
-import type { TreeAgent, TreeRelation, TreeTrigger } from '../mocks/schemas';
+import type { TreeAgent, TreeRelation } from '../mocks/schemas';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 interface DelegationTreeProps {
-  triggers: TreeTrigger[];
   agents: TreeAgent[];
   relations: TreeRelation[];
   entryAgentId: string;
   highlightAgentIds?: Set<string>;
-  highlightTriggerIds?: Set<string>;
   onAgentOpen?: (agentId: string) => void;
-  onTriggerOpen?: (triggerId: string) => void;
   onAddChild?: (parentAgentId: string) => void;
   onRemoveDelegation?: (agentId: string) => void;
 }
@@ -59,43 +56,7 @@ function buildTree(
   return build(entryId, 0);
 }
 
-// ─── Card components ────────────────────────────────────────────────────────
-
-function TriggerCard({
-  trigger,
-  highlighted,
-  onClick,
-}: {
-  trigger: TreeTrigger;
-  highlighted: boolean;
-  onClick?: () => void;
-}) {
-  const ring = highlighted
-    ? 'ring-2 ring-purple-400 shadow-[0_0_14px_rgba(168,85,247,0.45)]'
-    : 'ring-1 ring-brand-shade3/25 hover:ring-brand-shade3/50';
-  const typeLabel =
-    trigger.type === 'cron' ? 'Cron' : trigger.type === 'webhook' ? 'Webhook' : 'Chat';
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-2 bg-brand-dark-alt/80 backdrop-blur-sm rounded-btn py-2 px-3 min-w-[160px] text-left transition-all ${ring}`}
-    >
-      <span
-        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-          trigger.enabled ? 'bg-brand-accent' : 'bg-brand-shade3/40'
-        }`}
-      />
-      <div className="min-w-0 flex-1">
-        <div className="text-[12px] font-semibold text-brand-light truncate leading-tight">
-          {trigger.title}
-        </div>
-        <div className="text-[9px] uppercase tracking-wider text-brand-shade3 mt-0.5">
-          {typeLabel}
-        </div>
-      </div>
-    </button>
-  );
-}
+// ─── Card component ─────────────────────────────────────────────────────────
 
 function AgentCard({
   agent,
@@ -243,14 +204,11 @@ function TreeBranch({
 // ─── Main component ─────────────────────────────────────────────────────────
 
 export default function DelegationTree({
-  triggers,
   agents,
   relations,
   entryAgentId,
   highlightAgentIds,
-  highlightTriggerIds,
   onAgentOpen,
-  onTriggerOpen,
   onAddChild,
   onRemoveDelegation,
 }: DelegationTreeProps) {
@@ -271,25 +229,6 @@ export default function DelegationTree({
     <div className="h-full w-full overflow-auto">
       <style>{TREE_CSS}</style>
       <div className="min-w-max mx-auto flex flex-col items-center py-10 px-8">
-        {/* Triggers row */}
-        {triggers.length > 0 && (
-          <>
-            <ul className="tree-triggers">
-              {triggers.map((t) => (
-                <li key={t.id} className="tree-trigger-node">
-                  <TriggerCard
-                    trigger={t}
-                    highlighted={highlightTriggerIds?.has(t.id) ?? false}
-                    onClick={() => onTriggerOpen?.(t.id)}
-                  />
-                </li>
-              ))}
-            </ul>
-            {/* Stub from triggers bus to entry card */}
-            <div className="tree-triggers-to-entry-stub" />
-          </>
-        )}
-
         {/* Tree */}
         <ul className="tree-root">
           <TreeBranch
@@ -319,8 +258,7 @@ export default function DelegationTree({
 //     and the result is a continuous 2×STUB_PX vertical line.
 
 const TREE_CSS = `
-.tree-node,
-.tree-trigger-node { --tree-line: ${LINE_COLOR}; }
+.tree-node { --tree-line: ${LINE_COLOR}; }
 
 /* Root and children containers */
 .tree-root,
@@ -380,55 +318,6 @@ const TREE_CSS = `
   position: absolute;
   top: 0;
   left: calc(50% - 0.5px);
-  width: 1px;
-  height: ${STUB_PX}px;
-  background-color: ${LINE_COLOR};
-}
-
-/* ─── Triggers row (mirrored layout) ────────────────────────────────────── */
-
-.tree-triggers {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  gap: 0;
-}
-
-.tree-trigger-node {
-  position: relative;
-  padding: 0 ${SIBLING_PAD_PX}px ${STUB_PX}px ${SIBLING_PAD_PX}px;
-}
-
-/* Bus at bottom of each trigger column */
-.tree-trigger-node::before {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background-color: ${LINE_COLOR};
-}
-.tree-triggers > .tree-trigger-node:first-child::before { left: calc(50% - 0.5px); }
-.tree-triggers > .tree-trigger-node:last-child::before  { right: calc(50% - 0.5px); }
-.tree-triggers > .tree-trigger-node:only-child::before  { display: none; }
-
-/* Down-stub from trigger card bottom to bus */
-.tree-trigger-node::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: calc(50% - 0.5px);
-  width: 1px;
-  height: ${STUB_PX}px;
-  background-color: ${LINE_COLOR};
-}
-
-/* Continuous vertical from triggers bus to entry card */
-.tree-triggers-to-entry-stub {
   width: 1px;
   height: ${STUB_PX}px;
   background-color: ${LINE_COLOR};

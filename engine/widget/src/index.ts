@@ -5,7 +5,7 @@ import { WidgetUI, type WidgetConfig } from './ui';
  *
  * Usage:
  *   <script src="https://your-engine/widget.js"
- *           data-agent="faq-bot"
+ *           data-schema-id="schema-uuid-here"
  *           data-api-key="bb_pk_widget_abc123">
  *   </script>
  */
@@ -43,15 +43,15 @@ function resolveEndpoint(scriptEl: HTMLScriptElement, customEndpoint: string | n
 }
 
 function readConfig(scriptEl: HTMLScriptElement): WidgetConfig {
-  const agent = scriptEl.dataset.agent;
-  if (!agent) {
-    throw new Error('[ByteBrew Widget] data-agent attribute is required');
+  const schemaId = scriptEl.dataset.schemaId;
+  if (!schemaId) {
+    throw new Error('[ByteBrew Widget] data-schema-id attribute is required');
   }
 
   const endpoint = resolveEndpoint(scriptEl, scriptEl.dataset.endpoint ?? null);
 
   return {
-    agent,
+    schemaId,
     apiKey: scriptEl.dataset.apiKey ?? null,
     endpoint,
     position: scriptEl.dataset.position ?? 'bottom-right',

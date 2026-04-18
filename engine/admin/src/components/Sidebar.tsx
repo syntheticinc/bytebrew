@@ -44,11 +44,6 @@ const icons = {
       <path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12" />
     </svg>
   ),
-  triggers: (
-    <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-    </svg>
-  ),
   tasks: (
     <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
@@ -175,7 +170,6 @@ const sections: NavSection[] = [
   {
     label: 'Automation',
     items: [
-      { to: '/triggers', label: 'Triggers', icon: icons.triggers },
       { to: '/tasks', label: 'Tasks', icon: icons.tasks },
     ],
   },

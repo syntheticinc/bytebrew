@@ -19,6 +19,10 @@ const (
 	ContextKeyActorID contextKey = "actor_id"
 	// ContextKeyScopes holds the bitmask of allowed scopes.
 	ContextKeyScopes contextKey = "scopes"
+	// ContextKeyUserSub holds the JWT sub claim for end-user identity.
+	// Populated by authenticateJWT; empty for API-token auth (tokens are not
+	// end-users — use ContextKeyActorID to identify a token holder).
+	ContextKeyUserSub contextKey = "user_sub"
 )
 
 // Scope bitmask constants matching ERD api_tokens.scopes_mask.
@@ -104,6 +108,7 @@ func (m *AuthMiddleware) authenticateJWT(w http.ResponseWriter, r *http.Request,
 	}
 	ctx := context.WithValue(r.Context(), ContextKeyActorType, "admin")
 	ctx = context.WithValue(ctx, ContextKeyActorID, claims.Subject)
+	ctx = context.WithValue(ctx, ContextKeyUserSub, claims.Subject)
 	ctx = context.WithValue(ctx, ContextKeyScopes, ScopeAdmin)
 	next.ServeHTTP(w, r.WithContext(ctx))
 }

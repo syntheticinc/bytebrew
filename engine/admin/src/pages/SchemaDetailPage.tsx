@@ -3,14 +3,14 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import DelegationTree from '../components/DelegationTree';
 import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
-import type { AgentDetail, Trigger } from '../types';
-import type { TreeAgent, TreeRelation, TreeTrigger } from '../mocks/schemas';
+import type { AgentDetail, Schema } from '../types';
+import type { TreeAgent, TreeRelation } from '../mocks/schemas';
 
-type TabKey = 'canvas' | 'triggers' | 'settings';
+type TabKey = 'canvas' | 'settings';
 
 // ─── Type adapters ───────────────────────────────────────────────────────────
-// DelegationTree expects TreeAgent/TreeRelation/TreeTrigger (prototype mock
-// shapes). We adapt real API types to these shapes here at the boundary.
+// DelegationTree expects TreeAgent/TreeRelation (prototype mock shapes).
+// We adapt real API types to these shapes here at the boundary.
 
 function agentDetailToTreeAgent(a: AgentDetail): TreeAgent {
   const initials = a.name
@@ -39,23 +39,6 @@ function apiRelationToTreeRelation(r: { id: string; schema_id: string; source: s
     id: r.id,
     sourceAgentId: r.source,
     targetAgentId: r.target,
-  };
-}
-
-// triggerToTreeTrigger maps a real Trigger (from the API) to the TreeTrigger
-// shape that DelegationTree expects. Semantics: all triggers point at the
-// schema's entry orchestrator. The server-side trigger type is a subset of
-// TriggerType (cron | webhook | chat) — the UI exposes only these three.
-function triggerToTreeTrigger(t: Trigger, schemaId: string, entryAgentId: string): TreeTrigger {
-  return {
-    id: t.id,
-    type: t.type,
-    title: t.title,
-    agentId: entryAgentId,
-    schemaId,
-    enabled: t.enabled,
-    config: (t.config ?? {}) as Record<string, unknown>,
-    lastFiredAt: t.last_fired_at,
   };
 }
 
@@ -132,13 +115,51 @@ function AddAgentPanel({
   );
 }
 
+// ─── Chat endpoint info panel ────────────────────────────────────────────────
+
+function ChatEndpointPanel({ schemaId }: { schemaId: string }) {
+  const [copied, setCopied] = useState(false);
+  const url = `POST /api/v1/schemas/${schemaId}/chat`;
+
+  function copy() {
+    navigator.clipboard
+      .writeText(url)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {});
+  }
+
+  return (
+    <div className="bg-brand-dark border border-brand-shade3/20 rounded-card p-3 space-y-2">
+      <div className="text-[10px] uppercase tracking-wider text-brand-shade3">Chat endpoint</div>
+      <div className="flex items-center gap-2">
+        <code className="flex-1 bg-brand-dark-alt border border-brand-shade3/20 rounded-btn px-2 py-1.5 text-[11px] font-mono text-brand-light break-all">
+          {url}
+        </code>
+        <button
+          onClick={copy}
+          className="px-3 py-1.5 text-[11px] bg-brand-accent text-white rounded-btn hover:bg-brand-accent/90 transition-colors shrink-0"
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <p className="text-[10px] text-brand-shade3 leading-relaxed">
+        Send <code className="text-brand-shade2">{`{ "message": "...", "session_id": "..." }`}</code> to this
+        endpoint. The chat is dispatched to the schema's entry orchestrator.
+      </p>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function SchemaDetailPage() {
   const { schemaId = '' } = useParams<{ schemaId: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const validTabs: TabKey[] = ['canvas', 'triggers', 'settings'];
+  const validTabs: TabKey[] = ['canvas', 'settings'];
   const rawTab = searchParams.get('tab') as TabKey | null;
   const [tab, setTab] = useState<TabKey>(
     rawTab && validTabs.includes(rawTab) ? rawTab : 'canvas',
@@ -147,7 +168,7 @@ export default function SchemaDetailPage() {
   const [addChildParentName, setAddChildParentName] = useState<string | null>(null);
 
   // ─── Data fetching ───────────────────────────────────────────────────────────
-  const { data: schema, loading: schemaLoading } = useApi(
+  const { data: schema, loading: schemaLoading, refetch: refetchSchema } = useApi(
     () => api.getSchema(schemaId),
     [schemaId],
   );
@@ -162,10 +183,13 @@ export default function SchemaDetailPage() {
     [schemaId],
   );
 
-  const { data: triggers, loading: triggersLoading } = useApi(
-    () => api.listTriggers(schemaId),
-    [schemaId],
-  );
+  // Local optimistic state for chat_enabled toggle
+  const [chatEnabledLocal, setChatEnabledLocal] = useState<boolean | null>(null);
+  const [chatEnabledSaving, setChatEnabledSaving] = useState(false);
+  const [chatEnabledError, setChatEnabledError] = useState<string | null>(null);
+  useEffect(() => {
+    if (schema) setChatEnabledLocal(schema.chat_enabled ?? false);
+  }, [schema]);
 
   // Load full agent details by name
   const [agents, setAgents] = useState<AgentDetail[]>([]);
@@ -205,12 +229,7 @@ export default function SchemaDetailPage() {
   // Entry agent name: from schema or first agent in list
   const entryAgentId = schema?.entry_agent_name ?? agentNames?.[0] ?? '';
 
-  const treeTriggers = useMemo<TreeTrigger[]>(
-    () => (triggers ?? []).map((t) => triggerToTreeTrigger(t, schemaId, entryAgentId)),
-    [triggers, schemaId, entryAgentId],
-  );
-
-  const isLoading = schemaLoading || agentNamesLoading || relationsLoading || agentsLoading || triggersLoading;
+  const isLoading = schemaLoading || agentNamesLoading || relationsLoading || agentsLoading;
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
 
@@ -257,6 +276,26 @@ export default function SchemaDetailPage() {
     [schemaId, entryAgentId, rawRelations, refetchRelations, refetchAgentNames],
   );
 
+  const handleToggleChatEnabled = useCallback(
+    async (next: boolean) => {
+      if (!schema || chatEnabledSaving) return;
+      setChatEnabledLocal(next); // optimistic
+      setChatEnabledSaving(true);
+      setChatEnabledError(null);
+      try {
+        await api.updateSchema(schemaId, { chat_enabled: next });
+        refetchSchema();
+      } catch (err) {
+        // Revert on error
+        setChatEnabledLocal(!next);
+        setChatEnabledError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setChatEnabledSaving(false);
+      }
+    },
+    [schema, schemaId, chatEnabledSaving, refetchSchema],
+  );
+
   // ─── Render guards ───────────────────────────────────────────────────────────
 
   if (!schemaLoading && schema === null) {
@@ -273,6 +312,8 @@ export default function SchemaDetailPage() {
   const canvasEmpty = treeAgents.length === 0 && !isLoading;
   const schemaAgentNames = agentNames ?? [];
 
+  const chatEnabled = chatEnabledLocal ?? schema?.chat_enabled ?? false;
+
   return (
     <div className="h-full flex flex-col">
       {/* Breadcrumb + title */}
@@ -284,6 +325,11 @@ export default function SchemaDetailPage() {
           <h1 className="text-xl font-semibold text-brand-light">
             {schema?.name ?? schemaId}
           </h1>
+          {chatEnabled && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+              chat enabled
+            </span>
+          )}
           <div className="flex-1" />
         </div>
 
@@ -291,7 +337,6 @@ export default function SchemaDetailPage() {
         <div className="flex items-center gap-1 mt-3">
           {([
             ['canvas', 'Canvas'],
-            ['triggers', `Triggers (${triggers?.length ?? 0})`],
             ['settings', 'Settings'],
           ] as const).map(([key, label]) => (
             <button
@@ -336,7 +381,6 @@ export default function SchemaDetailPage() {
             ) : (
               <>
                 <DelegationTree
-                  triggers={treeTriggers}
                   agents={treeAgents}
                   relations={treeRelations}
                   entryAgentId={entryAgentId}
@@ -381,51 +425,9 @@ export default function SchemaDetailPage() {
           </div>
         )}
 
-        {tab === 'triggers' && (
-          <div className="p-6 max-w-[1000px] mx-auto space-y-2">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-[12px] text-brand-shade3">
-                Triggers attached to this schema. Each points to the entry orchestrator.
-              </p>
-              <button
-                disabled
-                className="px-3 py-1.5 text-[11px] bg-brand-accent/15 text-brand-accent border border-brand-accent/30 rounded-btn cursor-not-allowed"
-              >
-                + New Trigger
-              </button>
-            </div>
-            {triggersLoading && (
-              <div className="text-[12px] text-brand-shade3">Loading triggers…</div>
-            )}
-            {!triggersLoading && (triggers ?? []).length === 0 && (
-              <div className="text-[12px] text-brand-shade3">No triggers configured for this schema.</div>
-            )}
-            {(triggers ?? []).map((t) => (
-              <div
-                key={t.id}
-                className="bg-brand-dark-surface border border-brand-shade3/15 rounded-card px-4 py-3 flex items-center gap-4"
-              >
-                <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-brand-dark-alt text-brand-shade2 border border-brand-shade3/20">
-                  {t.type}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[13px] font-medium text-brand-light truncate">{t.title}</div>
-                  <div className="text-[10px] text-brand-shade3 font-mono truncate">
-                    {t.type === 'webhook' && t.config?.webhook_path && t.config.webhook_path}
-                    {t.type === 'cron' && t.config?.schedule && `schedule: ${t.config.schedule}`}
-                    {t.type === 'chat' && 'POST /api/v1/triggers/' + t.id + '/chat'}
-                  </div>
-                </div>
-                <span className={`text-[10px] ${t.enabled ? 'text-emerald-400' : 'text-brand-shade3/50'}`}>
-                  {t.enabled ? 'enabled' : 'disabled'}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-
         {tab === 'settings' && (
-          <div className="p-6 max-w-[600px] mx-auto space-y-4">
+          <div className="p-6 max-w-[720px] mx-auto space-y-5">
+            {/* Basic fields (read-only for now — editing name/description handled elsewhere) */}
             <div>
               <label className="block text-[11px] uppercase tracking-wider text-brand-shade3 mb-1.5">Name</label>
               <input
@@ -452,7 +454,59 @@ export default function SchemaDetailPage() {
                 </label>
                 <div className="bg-brand-dark border border-brand-shade3/20 rounded-btn px-3 py-2 text-[13px] text-brand-light">
                   {entryAgentId}{' '}
-                  <span className="text-brand-shade3">— all triggers dispatch here</span>
+                  <span className="text-brand-shade3">— chat requests dispatch here</span>
+                </div>
+              </div>
+            )}
+
+            {/* Chat enabled toggle */}
+            <div className="border-t border-brand-shade3/10 pt-5">
+              <div className="flex items-start gap-4">
+                <button
+                  role="switch"
+                  aria-checked={chatEnabled}
+                  onClick={() => handleToggleChatEnabled(!chatEnabled)}
+                  disabled={chatEnabledSaving}
+                  className={`relative inline-flex h-6 w-11 shrink-0 mt-0.5 items-center rounded-full border transition-colors disabled:opacity-50 ${
+                    chatEnabled
+                      ? 'bg-emerald-500/70 border-emerald-400/50'
+                      : 'bg-brand-dark-alt border-brand-shade3/30'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
+                      chatEnabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+                <div className="flex-1">
+                  <div className="text-[13px] font-medium text-brand-light">
+                    Accept chat requests
+                  </div>
+                  <p className="text-[11px] text-brand-shade3 leading-relaxed mt-1">
+                    When enabled, this schema accepts <code className="text-brand-shade2">POST /api/v1/schemas/{schemaId}/chat</code> requests.
+                  </p>
+                  {chatEnabledError && (
+                    <div className="mt-2 text-[11px] text-rose-400">Failed to save: {chatEnabledError}</div>
+                  )}
+                </div>
+              </div>
+
+              {chatEnabled && (
+                <div className="mt-4">
+                  <ChatEndpointPanel schemaId={schemaId} />
+                </div>
+              )}
+            </div>
+
+            {/* Chat last fired at — read-only telemetry */}
+            {schema?.chat_last_fired_at && (
+              <div>
+                <label className="block text-[11px] uppercase tracking-wider text-brand-shade3 mb-1.5">
+                  Last chat request
+                </label>
+                <div className="bg-brand-dark border border-brand-shade3/20 rounded-btn px-3 py-2 text-[13px] text-brand-light">
+                  {new Date(schema.chat_last_fired_at).toLocaleString()}
                 </div>
               </div>
             )}
@@ -462,3 +516,7 @@ export default function SchemaDetailPage() {
     </div>
   );
 }
+
+// Unused type re-exports removed — the triggers tab is gone and DelegationTree
+// no longer accepts trigger props.
+export type { Schema };

@@ -121,10 +121,6 @@ var builderAssistantBuiltinTools = []string{
 	"admin_list_agent_relations",
 	"admin_create_agent_relation",
 	"admin_delete_agent_relation",
-	"admin_list_triggers",
-	"admin_create_trigger",
-	"admin_update_trigger",
-	"admin_delete_trigger",
 	"admin_list_mcp_servers",
 	"admin_create_mcp_server",
 	"admin_update_mcp_server",
@@ -297,8 +293,8 @@ func seedBuilderSchema(ctx context.Context, db *gorm.DB) {
 					Update("entry_agent_id", agentID)
 				slog.InfoContext(ctx, "builder-schema: set entry_agent_id", "agent_id", agentID)
 			}
-			// Still ensure chat trigger is seeded (upgrade path).
-			seedBuilderChatTrigger(ctx, db, s.ID)
+			// Ensure chat_enabled is true (replaces the old chat trigger seeding).
+			ensureBuilderChatEnabled(ctx, db, s.ID)
 			return
 		}
 	}
@@ -307,6 +303,7 @@ func seedBuilderSchema(ctx context.Context, db *gorm.DB) {
 		Name:        builderSchemaName,
 		Description: "System schema for the AI builder assistant",
 		IsSystem:    true,
+		ChatEnabled: true,
 	}
 	if agentID != "" {
 		record.EntryAgentID = &agentID
@@ -318,46 +315,21 @@ func seedBuilderSchema(ctx context.Context, db *gorm.DB) {
 
 	// V2: schema membership is derived from agent_relations
 	// (docs/architecture/agent-first-runtime.md §2.1). The builder schema
-	// has a single agent (builder-assistant) and no delegations — the
-	// chat trigger below establishes the entry point. No relation rows are
-	// needed for the single-agent case.
+	// has a single agent (builder-assistant) and no delegations — chat_enabled
+	// on the schema row is the entry point; no trigger row needed.
 
-	seedBuilderChatTrigger(ctx, db, record.ID)
-
-	slog.InfoContext(ctx, "seeded builder schema")
+	slog.InfoContext(ctx, "seeded builder schema (chat_enabled=true)")
 }
 
-// seedBuilderChatTrigger creates a system chat trigger for builder-assistant in builder-schema.
-// Idempotent — skips if a system chat trigger already exists for this agent.
-func seedBuilderChatTrigger(ctx context.Context, db *gorm.DB, schemaID string) {
-	// Find builder-assistant agent ID.
-	var agent models.AgentModel
-	if err := db.WithContext(ctx).Where("name = ?", builderAssistantName).First(&agent).Error; err != nil {
-		slog.WarnContext(ctx, "seed builder chat trigger: agent not found", "error", err)
-		return
+// ensureBuilderChatEnabled flips schemas.chat_enabled=true for the builder
+// schema. Replaces the legacy seedBuilderChatTrigger: V2 removed the triggers
+// table entirely, so chat access is just a column on schemas.
+func ensureBuilderChatEnabled(ctx context.Context, db *gorm.DB, schemaID string) {
+	if err := db.WithContext(ctx).Model(&models.SchemaModel{}).
+		Where("id = ?", schemaID).
+		Update("chat_enabled", true).Error; err != nil {
+		slog.WarnContext(ctx, "ensure builder-schema chat_enabled failed", "error", err)
 	}
-
-	// Check if chat trigger already exists for this schema.
-	var count int64
-	db.WithContext(ctx).Model(&models.TriggerModel{}).
-		Where("type = ? AND schema_id = ?", models.TriggerTypeChat, schemaID).
-		Count(&count)
-	if count > 0 {
-		return // already exists
-	}
-
-	trigger := &models.TriggerModel{
-		Type:     models.TriggerTypeChat,
-		Title:    "Builder Assistant Chat",
-		SchemaID: schemaID,
-		Enabled:  true,
-	}
-	if err := db.WithContext(ctx).Create(trigger).Error; err != nil {
-		slog.ErrorContext(ctx, "seed builder chat trigger: create", "error", err)
-		return
-	}
-
-	slog.InfoContext(ctx, "seeded builder-assistant chat trigger", "trigger_id", trigger.ID)
 }
 
 // restoreBuilderAssistant resets the builder-assistant agent to factory defaults.
@@ -438,9 +410,8 @@ func restoreBuilderSchema(ctx context.Context, db *gorm.DB) error {
 	// has only builder-assistant and no delegations — no membership row to
 	// reset. The chat trigger below re-establishes the entry point.
 
-	// 4. Remove stale triggers for this schema and re-create the chat trigger.
-	db.WithContext(ctx).Where("schema_id = ?", schemaID).Delete(&models.TriggerModel{})
-	seedBuilderChatTrigger(ctx, db, schemaID)
+	// 4. Ensure chat_enabled=true on the builder schema (replaces legacy chat trigger).
+	ensureBuilderChatEnabled(ctx, db, schemaID)
 
 	// 5. Remove stale agent relations for this schema (builder-assistant has no spawn targets by default).
 	db.WithContext(ctx).Where("schema_id = ?", schemaID).Delete(&models.AgentRelationModel{})

@@ -12,8 +12,6 @@ import type {
   TaskDetailResponse,
   PaginatedTaskResponse,
   CreateTaskRequest,
-  Trigger,
-  CreateTriggerRequest,
   APIToken,
   CreateTokenRequest,
   CreateTokenResponse,
@@ -54,7 +52,6 @@ import {
   MOCK_MODELS_LIST,
   MOCK_MCP_SERVERS,
   MOCK_CATALOG,
-  MOCK_TRIGGERS,
   MOCK_TASKS_PAGINATED,
   MOCK_TOKENS,
   MOCK_SETTINGS,
@@ -232,33 +229,6 @@ class APIClient {
     return this.request<void>('DELETE', `/mcp-servers/${encodeURIComponent(name)}`);
   }
 
-  // ---- Triggers ----
-  listTriggers(schemaId?: string) {
-    if (this.isPrototype) return this.mock(MOCK_TRIGGERS);
-    const q = schemaId != null ? `?schema_id=${schemaId}` : '';
-    return this.request<Trigger[]>('GET', `/triggers${q}`);
-  }
-  createTrigger(data: CreateTriggerRequest) {
-    if (this.isPrototype) return this.mock({ id: crypto.randomUUID(), ...data, created_at: new Date().toISOString() } as Trigger);
-    return this.request<Trigger>('POST', '/triggers', data);
-  }
-  updateTrigger(id: string, data: CreateTriggerRequest) {
-    if (this.isPrototype) return this.mock({ id, ...data } as Trigger);
-    return this.request<Trigger>('PUT', `/triggers/${id}`, data);
-  }
-  deleteTrigger(id: string) {
-    if (this.isPrototype) return this.mock(undefined as unknown as void);
-    return this.request<void>('DELETE', `/triggers/${id}`);
-  }
-  setTriggerTarget(id: string, agentName: string) {
-    if (this.isPrototype) return this.mock({} as Trigger);
-    return this.request<Trigger>('PATCH', `/triggers/${id}/target`, { agent_name: agentName });
-  }
-  clearTriggerTarget(id: string) {
-    if (this.isPrototype) return this.mock(undefined as unknown as void);
-    return this.request<void>('DELETE', `/triggers/${id}/target`);
-  }
-
   // ---- Tasks ----
   listTasks(params?: Record<string, string>) {
     if (this.isPrototype) return this.mock(MOCK_TASKS_PAGINATED);
@@ -402,6 +372,7 @@ class APIClient {
           agents_count: s.agentIds.length,
           entry_agent_name: s.entryAgentId,
           created_at: s.updatedAt,
+          chat_enabled: true,
         })),
       );
     }
@@ -418,19 +389,47 @@ class APIClient {
         agents_count: s.agentIds.length,
         entry_agent_name: s.entryAgentId,
         created_at: s.updatedAt,
+        chat_enabled: true,
       });
     }
     return this.request<Schema>('GET', `/schemas/${schemaId}`);
   }
 
   createSchema(data: { name: string; description?: string }) {
-    if (this.isPrototype) return this.mock({ id: String(Date.now()), name: data.name, description: data.description, agents_count: 0, created_at: new Date().toISOString() } as Schema);
+    if (this.isPrototype) return this.mock({ id: String(Date.now()), name: data.name, description: data.description, agents_count: 0, created_at: new Date().toISOString(), chat_enabled: false } as Schema);
     return this.request<Schema>('POST', '/schemas', data);
+  }
+
+  // updateSchema persists editable schema fields (name, description,
+  // chat_enabled). Used by SchemaDetailPage's Settings tab to flip the
+  // chat_enabled toggle — matches backend `PUT /api/v1/schemas/{id}`.
+  updateSchema(schemaId: string, data: { name?: string; description?: string; chat_enabled?: boolean }) {
+    if (this.isPrototype) {
+      const s = mockSchemas.find((x) => x.id === schemaId);
+      return this.mock<Schema>({
+        id: schemaId,
+        name: data.name ?? s?.name ?? 'schema',
+        description: data.description ?? s?.description,
+        agents_count: s?.agentIds.length ?? 0,
+        entry_agent_name: s?.entryAgentId,
+        created_at: s?.updatedAt ?? new Date().toISOString(),
+        chat_enabled: data.chat_enabled ?? true,
+      });
+    }
+    return this.request<Schema>('PUT', `/schemas/${schemaId}`, data);
   }
 
   deleteSchema(schemaId: string) {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
     return this.request<void>('DELETE', `/schemas/${schemaId}`);
+  }
+
+  // chatWithSchema returns the chat URL for a schema. Chat is SSE-streamed
+  // from the backend (see useSSEChat hook), so this helper simply computes
+  // the canonical endpoint — callers pass the URL to useSSEChat via the
+  // `endpoint` config. Kept here for consistency with other API helpers.
+  chatUrlForSchema(schemaId: string): string {
+    return `${BASE_URL}/schemas/${encodeURIComponent(schemaId)}/chat`;
   }
 
   // V2: schema membership is derived from agent_relations

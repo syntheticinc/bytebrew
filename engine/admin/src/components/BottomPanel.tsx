@@ -112,7 +112,6 @@ export default function BottomPanel() {
   const assistantPersistenceKey = effectiveSchema ? `bb_assistant_${effectiveSchema}` : undefined;
   const { messages, sendMessage, isStreaming, isRestoring, resetSession, tokenUsage, contextTokens } = useSSEChat({
     endpoint: `/api/v1/admin/assistant/chat`,
-    agentName: ASSISTANT_AGENT,
     schemaContext: effectiveSchema === 'builder-schema' ? undefined : effectiveSchema,
     persistenceKey: assistantPersistenceKey,
     fetchMessages: (sid) => api.getSessionEvents(sid),

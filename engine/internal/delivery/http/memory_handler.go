@@ -38,7 +38,7 @@ func NewMemoryHandler(lister MemoryLister, clearer MemoryClearer) *MemoryHandler
 type memoryResponse struct {
 	ID        string            `json:"id"`
 	SchemaID  string            `json:"schema_id"`
-	UserID    string            `json:"user_id"`
+	UserSub   string            `json:"user_sub"`
 	Content   string            `json:"content"`
 	Metadata  map[string]string `json:"metadata,omitempty"`
 	CreatedAt time.Time         `json:"created_at"`
@@ -64,7 +64,7 @@ func (h *MemoryHandler) ListMemories(w http.ResponseWriter, r *http.Request) {
 		resp = append(resp, memoryResponse{
 			ID:        m.ID,
 			SchemaID:  m.SchemaID,
-			UserID:    m.UserID,
+			UserSub:   m.UserSub,
 			Content:   m.Content,
 			Metadata:  m.Metadata,
 			CreatedAt: m.CreatedAt,

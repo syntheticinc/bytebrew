@@ -125,7 +125,7 @@ func TestHandleNonStreaming_EmptyMessageEventDoesNotOverwrite(t *testing.T) {
 
 			w := httptest.NewRecorder()
 			h := &ChatHandler{}
-			h.handleNonStreaming(w, "test-agent", ch)
+			h.handleNonStreaming(w, "test-schema", ch)
 
 			var resp nonStreamResponse
 			err := json.Unmarshal(w.Body.Bytes(), &resp)
@@ -133,7 +133,7 @@ func TestHandleNonStreaming_EmptyMessageEventDoesNotOverwrite(t *testing.T) {
 
 			assert.Equal(t, tt.wantMsg, resp.Message)
 			assert.Equal(t, tt.wantSID, resp.SessionID)
-			assert.Equal(t, "test-agent", resp.Agent)
+			assert.Equal(t, "test-schema", resp.SchemaID)
 			assert.Len(t, resp.ToolCalls, tt.wantTool)
 			assert.Equal(t, tt.wantErr, resp.Error)
 		})

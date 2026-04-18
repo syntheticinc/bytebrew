@@ -14,7 +14,7 @@ import (
 
 // MemoryRecaller retrieves memory entries.
 type MemoryRecaller interface {
-	ListBySchemaAndUser(ctx context.Context, schemaID, userID string) ([]*domain.Memory, error)
+	ListBySchemaAndUser(ctx context.Context, schemaID, userSub string) ([]*domain.Memory, error)
 }
 
 // memoryRecallArgs represents arguments for the memory_recall tool.
@@ -23,23 +23,20 @@ type memoryRecallArgs struct {
 	Limit int    `json:"limit,omitempty"`
 }
 
-// MemoryRecallTool retrieves relevant memories from previous sessions.
+// MemoryRecallTool retrieves relevant memories from previous sessions
+// scoped to (schema, user_sub).
 type MemoryRecallTool struct {
 	schemaID string
-	userID   string
+	userSub  string
 	recaller MemoryRecaller
 }
 
-// NewMemoryRecallTool creates a new memory_recall tool.
-// Empty userID is rewritten to domain.AnonymousMemoryUserID to match the
-// store path and keep queries on uuid-typed columns valid.
-func NewMemoryRecallTool(schemaID, userID string, recaller MemoryRecaller) tool.InvokableTool {
-	if userID == "" {
-		userID = domain.AnonymousMemoryUserID
-	}
+// NewMemoryRecallTool creates a new memory_recall tool scoped to the given
+// (schema, user_sub) pair.
+func NewMemoryRecallTool(schemaID, userSub string, recaller MemoryRecaller) tool.InvokableTool {
 	return &MemoryRecallTool{
 		schemaID: schemaID,
-		userID:   userID,
+		userSub:  userSub,
 		recaller: recaller,
 	}
 }
@@ -84,9 +81,9 @@ func (t *MemoryRecallTool) InvokableRun(ctx context.Context, argumentsInJSON str
 	}
 
 	slog.InfoContext(ctx, "[MemoryRecallTool] recalling",
-		"schema_id", t.schemaID, "user_id", t.userID, "query", args.Query, "limit", args.Limit)
+		"schema_id", t.schemaID, "user_sub", t.userSub, "query", args.Query, "limit", args.Limit)
 
-	memories, err := t.recaller.ListBySchemaAndUser(ctx, t.schemaID, t.userID)
+	memories, err := t.recaller.ListBySchemaAndUser(ctx, t.schemaID, t.userSub)
 	if err != nil {
 		slog.ErrorContext(ctx, "[MemoryRecallTool] recall failed", "error", err)
 		return fmt.Sprintf("[ERROR] Failed to recall memories: %v", err), nil

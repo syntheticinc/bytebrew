@@ -16,13 +16,15 @@ import (
 // `schema_agents` join table — see docs/architecture/agent-first-runtime.md
 // §2.1.
 type SchemaRecord struct {
-	ID           string
-	Name         string
-	Description  string
-	IsSystem     bool
-	AgentNames   []string // derived: distinct agents referenced by agent_relations of this schema
-	EntryAgentID *string  // FK to agents.id; may be nil
-	CreatedAt    time.Time
+	ID              string
+	Name            string
+	Description     string
+	IsSystem        bool
+	AgentNames      []string // derived: distinct agents referenced by agent_relations of this schema
+	EntryAgentID    *string  // FK to agents.id; may be nil
+	ChatEnabled     bool
+	ChatLastFiredAt *time.Time
+	CreatedAt       time.Time
 }
 
 // GORMSchemaRepository implements schema CRUD using GORM.
@@ -49,13 +51,15 @@ func (r *GORMSchemaRepository) List(ctx context.Context) ([]SchemaRecord, error)
 			return nil, fmt.Errorf("derive agents for schema %q: %w", s.Name, err)
 		}
 		records = append(records, SchemaRecord{
-			ID:           s.ID,
-			Name:         s.Name,
-			Description:  s.Description,
-			IsSystem:     s.IsSystem,
-			AgentNames:   agentNames,
-			EntryAgentID: s.EntryAgentID,
-			CreatedAt:    s.CreatedAt,
+			ID:              s.ID,
+			Name:            s.Name,
+			Description:     s.Description,
+			IsSystem:        s.IsSystem,
+			AgentNames:      agentNames,
+			EntryAgentID:    s.EntryAgentID,
+			ChatEnabled:     s.ChatEnabled,
+			ChatLastFiredAt: s.ChatLastFiredAt,
+			CreatedAt:       s.CreatedAt,
 		})
 	}
 	return records, nil
@@ -74,14 +78,45 @@ func (r *GORMSchemaRepository) GetByID(ctx context.Context, id string) (*SchemaR
 	}
 
 	return &SchemaRecord{
-		ID:           schema.ID,
-		Name:         schema.Name,
-		Description:  schema.Description,
-		IsSystem:     schema.IsSystem,
-		AgentNames:   agentNames,
-		EntryAgentID: schema.EntryAgentID,
-		CreatedAt:    schema.CreatedAt,
+		ID:              schema.ID,
+		Name:            schema.Name,
+		Description:     schema.Description,
+		IsSystem:        schema.IsSystem,
+		AgentNames:      agentNames,
+		EntryAgentID:    schema.EntryAgentID,
+		ChatEnabled:     schema.ChatEnabled,
+		ChatLastFiredAt: schema.ChatLastFiredAt,
+		CreatedAt:       schema.CreatedAt,
 	}, nil
+}
+
+// GetModelByID returns the raw SchemaModel row (chat dispatcher path).
+// Kept separate from GetByID so callers that need entry_agent_id + chat_enabled
+// don't pay the cost of deriving AgentNames from agent_relations.
+func (r *GORMSchemaRepository) GetModelByID(ctx context.Context, id string) (*models.SchemaModel, error) {
+	var schema models.SchemaModel
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&schema).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get schema %s: %w", id, err)
+	}
+	return &schema, nil
+}
+
+// MarkChatFired stamps chat_last_fired_at on the schema — called from the
+// chat dispatcher when a new session starts (replaces trigger.MarkFired).
+func (r *GORMSchemaRepository) MarkChatFired(ctx context.Context, id string) error {
+	result := r.db.WithContext(ctx).Model(&models.SchemaModel{}).
+		Where("id = ?", id).
+		Update("chat_last_fired_at", gorm.Expr("NOW()"))
+	if result.Error != nil {
+		return fmt.Errorf("mark schema chat fired: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("schema not found: %s", id)
+	}
+	return nil
 }
 
 // Create inserts a new schema.
@@ -91,6 +126,7 @@ func (r *GORMSchemaRepository) Create(ctx context.Context, record *SchemaRecord)
 		Description:  record.Description,
 		IsSystem:     record.IsSystem,
 		EntryAgentID: record.EntryAgentID,
+		ChatEnabled:  record.ChatEnabled,
 	}
 	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
 		return fmt.Errorf("create schema %q: %w", record.Name, err)
@@ -101,12 +137,14 @@ func (r *GORMSchemaRepository) Create(ctx context.Context, record *SchemaRecord)
 
 // Update updates an existing schema by ID.
 // Includes entry_agent_id so admins can re-point a schema's entry without a
-// delete+recreate cycle. Nil EntryAgentID clears the column.
+// delete+recreate cycle. Nil EntryAgentID clears the column. chat_enabled is
+// driven by the same DTO — admins toggle chat access from SchemaDetailPage.
 func (r *GORMSchemaRepository) Update(ctx context.Context, id string, record *SchemaRecord) error {
 	updates := map[string]interface{}{
-		"name":            record.Name,
-		"description":     record.Description,
-		"entry_agent_id":  record.EntryAgentID,
+		"name":           record.Name,
+		"description":    record.Description,
+		"entry_agent_id": record.EntryAgentID,
+		"chat_enabled":   record.ChatEnabled,
 	}
 	result := r.db.WithContext(ctx).Model(&models.SchemaModel{}).Where("id = ?", id).Updates(updates)
 	if result.Error != nil {
@@ -118,15 +156,10 @@ func (r *GORMSchemaRepository) Update(ctx context.Context, id string, record *Sc
 	return nil
 }
 
-// Delete removes a schema and all its agent_relations + triggers by ID.
-// V2: triggers are schema-scoped, so deleting the schema must also remove
-// them; otherwise the trigger FK blocks the schema delete with a 500.
+// Delete removes a schema and all its agent_relations by ID.
+// Triggers layer no longer exists in V2 — chat access is a schemas column.
 func (r *GORMSchemaRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Delete triggers bound to this schema (trigger.schema_id FK).
-		if err := tx.Where("schema_id = ?", id).Delete(&models.TriggerModel{}).Error; err != nil {
-			return fmt.Errorf("delete schema triggers: %w", err)
-		}
 		// Delete agent relations bound to this schema (membership cascade).
 		if err := tx.Where("schema_id = ?", id).Delete(&models.AgentRelationModel{}).Error; err != nil {
 			return fmt.Errorf("delete schema agent relations: %w", err)

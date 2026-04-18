@@ -46,7 +46,7 @@ func TestMemoryStoreTool_Store(t *testing.T) {
 	require.Len(t, storer.stored, 1)
 	assert.Equal(t, "user prefers dark mode", storer.stored[0].Content)
 	assert.Equal(t, "1", storer.stored[0].SchemaID)
-	assert.Equal(t, "user-1", storer.stored[0].UserID)
+	assert.Equal(t, "user-1", storer.stored[0].UserSub)
 
 	val, ok := storer.stored[0].GetMetadata("source")
 	assert.True(t, ok)

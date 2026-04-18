@@ -209,41 +209,6 @@ export interface CreateTaskRequest {
 }
 
 // ============================================================================
-// Trigger types
-// ============================================================================
-
-// TriggerConfig carries the type-specific configuration for a Trigger.
-// Fields are type-dependent: cron → {schedule}; webhook → {webhook_path};
-// chat → {} (may grow later).
-// See docs/architecture/agent-first-runtime.md §4.1.
-export interface TriggerConfig {
-  schedule?: string;
-  webhook_path?: string;
-}
-
-// Q.5: agent_id/agent_name dropped — trigger targets schema only.
-export interface Trigger {
-  id: string;
-  type: 'cron' | 'webhook' | 'chat';
-  title: string;
-  schema_id?: string;
-  description?: string;
-  enabled: boolean;
-  config?: TriggerConfig;
-  last_fired_at?: string;
-  created_at: string;
-}
-
-export interface CreateTriggerRequest {
-  type: string;
-  title: string;
-  schema_id?: string;
-  description?: string;
-  enabled?: boolean;
-  config?: TriggerConfig;
-}
-
-// ============================================================================
 // Token types
 // ============================================================================
 
@@ -396,6 +361,10 @@ export interface Schema {
   is_system?: boolean;
   entry_agent_name?: string;
   created_at: string;
+  // Chat-enabled schemas accept POST /api/v1/schemas/{id}/chat requests.
+  // Replaces the old per-schema trigger of type="chat".
+  chat_enabled?: boolean;
+  chat_last_fired_at?: string;
 }
 
 // ============================================================================
@@ -421,18 +390,12 @@ export interface SchemaTemplateRelation {
   target: string;
 }
 
-export interface SchemaTemplateTrigger {
-  type: 'cron' | 'webhook' | 'chat';
-  title: string;
-  enabled: boolean;
-  config?: Record<string, unknown>;
-}
-
 export interface SchemaTemplateDefinition {
   entry_agent_name: string;
   agents: SchemaTemplateAgent[];
   relations: SchemaTemplateRelation[];
-  triggers: SchemaTemplateTrigger[];
+  // V2: schemas use chat_enabled boolean instead of a triggers table.
+  chat_enabled?: boolean;
 }
 
 export interface SchemaTemplate {
@@ -581,7 +544,7 @@ export type WidgetPosition = 'bottom-right' | 'bottom-left';
 export type WidgetSize = 'compact' | 'standard' | 'full';
 
 export interface WidgetSnippetConfig {
-  triggerId: string;      // id of a chat trigger (type === 'chat')
+  schemaId: string;       // id of a chat-enabled schema
   primaryColor: string;
   position: WidgetPosition;
   size: WidgetSize;

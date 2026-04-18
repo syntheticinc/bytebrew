@@ -38,7 +38,6 @@ func TestEngineTask_IsTerminal(t *testing.T) {
 		{"pending is not terminal", EngineTaskStatusPending, false},
 		{"in_progress is not terminal", EngineTaskStatusInProgress, false},
 		{"needs_input is not terminal", EngineTaskStatusNeedsInput, false},
-		{"escalated is not terminal", EngineTaskStatusEscalated, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -59,12 +58,9 @@ func TestEngineTask_CanTransitionTo_Valid(t *testing.T) {
 		{"in_progress -> completed", EngineTaskStatusInProgress, EngineTaskStatusCompleted},
 		{"in_progress -> failed", EngineTaskStatusInProgress, EngineTaskStatusFailed},
 		{"in_progress -> needs_input", EngineTaskStatusInProgress, EngineTaskStatusNeedsInput},
-		{"in_progress -> escalated", EngineTaskStatusInProgress, EngineTaskStatusEscalated},
 		{"in_progress -> cancelled", EngineTaskStatusInProgress, EngineTaskStatusCancelled},
 		{"needs_input -> in_progress", EngineTaskStatusNeedsInput, EngineTaskStatusInProgress},
 		{"needs_input -> cancelled", EngineTaskStatusNeedsInput, EngineTaskStatusCancelled},
-		{"escalated -> in_progress", EngineTaskStatusEscalated, EngineTaskStatusInProgress},
-		{"escalated -> cancelled", EngineTaskStatusEscalated, EngineTaskStatusCancelled},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
