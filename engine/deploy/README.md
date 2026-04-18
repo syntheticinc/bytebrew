@@ -19,7 +19,13 @@ docker compose up -d
 
 Open http://localhost:8443 -- Admin Dashboard.
 
-Login: `admin` / `changeme` (change in `.env`).
+Create the first admin user:
+
+```bash
+docker compose exec engine /usr/local/bin/bytebrew-ce admin create --username admin --password <your-password>
+```
+
+Then log in with those credentials.
 
 ## Local LLM (optional)
 
@@ -35,7 +41,7 @@ Set `LLM_PROVIDER=ollama` and `LLM_MODEL=llama3` in `.env`.
 ## Configuration
 
 All runtime configuration (agents, models, tools) is managed via the Admin Dashboard.
-The `.env` file and `config.yaml` only control bootstrap settings: database, port, admin credentials.
+The `.env` file and `config.yaml` only control bootstrap settings: database, port, JWT secret.
 
 ## Volumes
 
