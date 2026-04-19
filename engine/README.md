@@ -125,3 +125,4 @@ ByteBrew Engine is licensed under the [Business Source License 1.1](LICENSE).
 
 For alternative licensing arrangements, contact [info@bytebrew.ai](mailto:info@bytebrew.ai).
 
+ 
