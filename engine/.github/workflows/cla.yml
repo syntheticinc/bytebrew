@@ -31,6 +31,14 @@ jobs:
             const author = context.payload.pull_request.user.login;
             const sha = context.payload.pull_request.head.sha;
 
+            if (author.endsWith('[bot]') || author.endsWith('-bot')) {
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner, repo: context.repo.repo, sha,
+                state: 'success', context: 'CLA', description: 'Bot — CLA not required'
+              });
+              return;
+            }
+
             if (signers.includes(author)) {
               await github.rest.repos.createCommitStatus({
                 owner: context.repo.owner,
@@ -112,10 +120,9 @@ jobs:
             const prNumber = context.payload.issue.number;
             const commenter = context.payload.comment.user.login;
 
-            // Strict match — must be exactly "I agree to the CLA"
             const body = context.payload.comment.body.trim();
-            if (body !== 'I agree to the CLA') {
-              core.info('Comment does not exactly match CLA agreement phrase, skipping');
+            if (!/i agree to the cla/i.test(body)) {
+              core.info('Comment does not match CLA agreement phrase, skipping');
               return;
             }
 

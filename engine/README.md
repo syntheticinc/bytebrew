@@ -124,3 +124,4 @@ ByteBrew Engine is licensed under the [Business Source License 1.1](LICENSE).
 - **Change Date:** 2030-04-06 (converts to Apache 2.0)
 
 For alternative licensing arrangements, contact [info@bytebrew.ai](mailto:info@bytebrew.ai).
+
