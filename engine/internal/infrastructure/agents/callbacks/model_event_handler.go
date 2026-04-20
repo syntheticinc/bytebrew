@@ -282,7 +282,9 @@ func (h *ModelEventHandler) OnModelEndWithStreamOutput(ctx context.Context, info
 			slog.InfoContext(ctx, "[CALLBACK] NOT incrementing step - tool calls detected, onToolEnd will handle it")
 		} else {
 			slog.InfoContext(ctx, "[CALLBACK] incrementing step (no error, no tool calls)")
-			h.counter.IncrementStep()
+			if err := h.counter.IncrementStep(ctx); err != nil {
+				slog.WarnContext(ctx, "[CALLBACK] model end: step quota exceeded", "error", err)
+			}
 		}
 
 		slog.InfoContext(ctx, "[CALLBACK] goroutine completed", "final_step", h.counter.GetStep())

@@ -4,7 +4,6 @@ package integration
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,13 +12,11 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	_ "github.com/glebarez/go-sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	"github.com/syntheticinc/bytebrew/engine/internal/delivery/ws"
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/turnexecutorfactory"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
@@ -30,6 +27,8 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/service/eventstore"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/sessionprocessor"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 // WsHarness is a test harness for WebSocket API tests.
@@ -40,7 +39,6 @@ type WsHarness struct {
 	sessionRegistry *flowregistry.SessionRegistry
 	cancel          context.CancelFunc
 	ctx             context.Context
-	eventsDB        *sql.DB
 }
 
 // NewWsHarness creates a full in-process WS server for integration tests.
@@ -71,8 +69,7 @@ func NewWsHarness(t *testing.T, scenario string) *WsHarness {
 		Prompts:            promptsCfg,
 	}
 
-	subtaskMgr := testutil.NewMockSubtaskManager()
-	taskMgr := testutil.NewMockTaskManager()
+	subtaskMgr := testutil.NewMockEngineTaskManager()
 
 	modelSelector := llm.NewModelSelector(chatModel, "mock-model")
 	agentRunStorage := testutil.NewMockAgentRunStorage()
@@ -85,27 +82,22 @@ func NewWsHarness(t *testing.T, scenario string) *WsHarness {
 	})
 	agentPoolAdapter := agentservice.NewAgentPoolAdapter(agentPool)
 
-	toolDepsProvider := tools.NewDefaultToolDepsProvider(nil, taskMgr, subtaskMgr, agentPoolAdapter, nil, nil)
+	toolDepsProvider := tools.NewDefaultToolDepsProvider(nil, agentPoolAdapter)
 	agentPool.SetEngine(agentEngine, flowManager, toolResolver, toolDepsProvider, nil, nil)
 
 	factory := turnexecutorfactory.New(
 		agentEngine, flowManager, toolResolver, modelSelector, agentConfig,
-		taskMgr, subtaskMgr, agentPoolAdapter, nil, nil, nil,
+		agentPoolAdapter, nil, nil, nil,
 	)
 
-	// Create in-memory event store for tests.
-	// MaxOpenConns(1) ensures all operations use the same connection —
-	// without this, database/sql pool creates separate in-memory DBs per connection.
-	eventsDB, err := sql.Open("sqlite", ":memory:")
+	eventsGormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		cancel()
 		t.Fatalf("open in-memory events db: %v", err)
 	}
-	eventsDB.SetMaxOpenConns(1)
 
-	evtStore, err := eventstore.New(eventsDB)
+	evtStore, err := eventstore.New(eventsGormDB)
 	if err != nil {
-		eventsDB.Close()
 		cancel()
 		t.Fatalf("create event store: %v", err)
 	}
@@ -115,7 +107,7 @@ func NewWsHarness(t *testing.T, scenario string) *WsHarness {
 	sessProcessor := sessionprocessor.New(sessionReg, factory, evtStore)
 	sessProcessor.SetAgentPoolRegistrar(agentPool)
 
-	wsHandler := ws.NewConnectionHandler(sessionReg, sessProcessor, &testutil.NoopAgentService{}, nil, &domain.LicenseInfo{Status: domain.LicenseActive})
+	wsHandler := ws.NewConnectionHandler(sessionReg, sessProcessor, &testutil.NoopAgentService{}, nil, nil)
 
 	wsServer, err := ws.NewServer(wsHandler)
 	if err != nil {
@@ -138,7 +130,6 @@ func NewWsHarness(t *testing.T, scenario string) *WsHarness {
 		sessionRegistry: sessionReg,
 		cancel:          cancel,
 		ctx:             ctx,
-		eventsDB:        eventsDB,
 	}
 }
 
@@ -166,9 +157,6 @@ func (h *WsHarness) Cleanup() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 	_ = h.wsServer.Shutdown(shutdownCtx)
-	if h.eventsDB != nil {
-		h.eventsDB.Close()
-	}
 }
 
 // sendJSON sends a WsMessage as JSON over the WebSocket connection.

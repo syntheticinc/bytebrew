@@ -25,6 +25,9 @@ type agentCounterHTTPAdapter struct {
 }
 
 func (a *agentCounterHTTPAdapter) Count() int {
+	if a.registry == nil {
+		return 0
+	}
 	return a.registry.Count()
 }
 
@@ -130,8 +133,16 @@ func (a *tokenRepoHTTPAdapter) Delete(ctx context.Context, id string) error {
 	return a.repo.Delete(ctx, id)
 }
 
-func (a *tokenRepoHTTPAdapter) VerifyToken(ctx context.Context, tokenHash string) (string, int, error) {
-	return a.repo.VerifyToken(ctx, tokenHash)
+func (a *tokenRepoHTTPAdapter) VerifyToken(ctx context.Context, tokenHash string) (deliveryhttp.APITokenInfo, error) {
+	v, err := a.repo.VerifyToken(ctx, tokenHash)
+	if err != nil {
+		return deliveryhttp.APITokenInfo{}, err
+	}
+	return deliveryhttp.APITokenInfo{
+		Name:       v.Name,
+		ScopesMask: v.ScopesMask,
+		TenantID:   v.TenantID,
+	}, nil
 }
 
 // userResolverHTTPAdapter bridges GORMUserRepository to the http.UserResolver interface.
@@ -195,6 +206,9 @@ func (a *configReloaderHTTPAdapter) reconnectMCPServers(ctx context.Context) {
 }
 
 func (a *configReloaderHTTPAdapter) AgentsCount() int {
+	if a.registry == nil {
+		return 0
+	}
 	return a.registry.Count()
 }
 

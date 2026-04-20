@@ -1,7 +1,9 @@
 package callbacks
 
 import (
+	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,17 +17,19 @@ func TestStepCounter_InitialValues(t *testing.T) {
 
 func TestStepCounter_IncrementStep(t *testing.T) {
 	c := NewStepCounter()
+	ctx := context.Background()
 
-	c.IncrementStep()
+	assert.NoError(t, c.IncrementStep(ctx))
 	assert.Equal(t, 1, c.GetStep())
 
-	c.IncrementStep()
-	c.IncrementStep()
+	assert.NoError(t, c.IncrementStep(ctx))
+	assert.NoError(t, c.IncrementStep(ctx))
 	assert.Equal(t, 3, c.GetStep())
 }
 
 func TestStepCounter_IncrementStep_ThreadSafe(t *testing.T) {
 	c := NewStepCounter()
+	ctx := context.Background()
 
 	var wg sync.WaitGroup
 	numIncrements := 100
@@ -34,7 +38,7 @@ func TestStepCounter_IncrementStep_ThreadSafe(t *testing.T) {
 	for i := 0; i < numIncrements; i++ {
 		go func() {
 			defer wg.Done()
-			c.IncrementStep()
+			_ = c.IncrementStep(ctx)
 		}()
 	}
 
@@ -72,4 +76,31 @@ func TestStepCounter_PendingAssistantContent_Overwrite(t *testing.T) {
 	c.SetPendingAssistantContent("first")
 	c.SetPendingAssistantContent("second")
 	assert.Equal(t, "second", c.ConsumePendingAssistantContent())
+}
+
+func TestStepCounter_StepCallback_Fires(t *testing.T) {
+	// Reset at end so other tests are not affected.
+	t.Cleanup(func() { SetStepCallback(nil) })
+
+	var calls int32
+	SetStepCallback(func(ctx context.Context) error {
+		atomic.AddInt32(&calls, 1)
+		return nil
+	})
+
+	c := NewStepCounter()
+	assert.NoError(t, c.IncrementStep(context.Background()))
+	assert.NoError(t, c.IncrementStep(context.Background()))
+
+	assert.Equal(t, int32(2), atomic.LoadInt32(&calls))
+}
+
+func TestStepCounter_StepCallback_Nil_NoCrash(t *testing.T) {
+	// Ensure any callback installed by a previous test is cleared.
+	SetStepCallback(nil)
+
+	c := NewStepCounter()
+	// Must not panic when callback is unset.
+	assert.NoError(t, c.IncrementStep(context.Background()))
+	assert.Equal(t, 1, c.GetStep())
 }

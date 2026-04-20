@@ -193,7 +193,7 @@ func TestOnToolError_UsesCurrentStep(t *testing.T) {
 
 	// Simulate being at step 5
 	for i := 0; i < 5; i++ {
-		counter.IncrementStep()
+		_ = counter.IncrementStep(context.Background())
 	}
 
 	info := &callbacks.RunInfo{Name: "read_file"}

@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
@@ -17,11 +18,42 @@ import (
 )
 
 // agentManagerHTTPAdapter bridges GORMAgentRepository + AgentRegistry to the http.AgentManager interface.
+//
+// `registryMgr` is the per-tenant cache owner; it may be nil (legacy wiring
+// still relies on `registry` alone). When non-nil we call InvalidateTenant on
+// the context's tenant after successful writes so that the next read loads
+// fresh data instead of the stale cached registry — otherwise multi-tenant
+// callers would continue to see the pre-write snapshot until restart.
 type agentManagerHTTPAdapter struct {
-	repo       *configrepo.GORMAgentRepository
-	registry   *agentregistry.AgentRegistry
-	db         *gorm.DB
-	schemaRepo *configrepo.GORMSchemaRepository
+	repo        *configrepo.GORMAgentRepository
+	registry    *agentregistry.AgentRegistry
+	registryMgr *agentregistry.Manager
+	db          *gorm.DB
+	schemaRepo  *configrepo.GORMSchemaRepository
+}
+
+// invalidateRegistryForContext refreshes cached agent registries so that the
+// next lookup sees the write we just committed.
+//
+// Ordering: we invalidate FIRST, reload SECOND. That way:
+//   - multi-tenant mode: the per-tenant registry is dropped and will lazily
+//     reload on the next request for that tenant;
+//   - single-tenant mode: the eager singleton is reloaded immediately so that
+//     the freshly-seeded agent is visible to the in-process agent pool.
+func (a *agentManagerHTTPAdapter) invalidateRegistryForContext(ctx context.Context) {
+	if a.registryMgr != nil {
+		if tid := domain.TenantIDFromContext(ctx); tid != "" {
+			a.registryMgr.InvalidateTenant(tid)
+		} else {
+			// CE / no-tenant path: InvalidateAll reloads the singleton.
+			a.registryMgr.InvalidateAll()
+		}
+	}
+	if a.registry != nil {
+		if err := a.registry.Reload(ctx); err != nil {
+			slog.ErrorContext(ctx, "failed to reload agent registry", "error", err)
+		}
+	}
 }
 
 func (a *agentManagerHTTPAdapter) ListAgents(ctx context.Context) ([]deliveryhttp.AgentInfo, error) {
@@ -119,9 +151,7 @@ func (a *agentManagerHTTPAdapter) CreateAgent(ctx context.Context, req deliveryh
 		return nil, fmt.Errorf("create agent: %w", err)
 	}
 
-	if err := a.registry.Reload(ctx); err != nil {
-		slog.ErrorContext(ctx, "failed to reload agent registry after create", "error", err)
-	}
+	a.invalidateRegistryForContext(ctx)
 
 	return a.GetAgent(ctx, req.Name)
 }
@@ -164,9 +194,7 @@ func (a *agentManagerHTTPAdapter) UpdateAgent(ctx context.Context, name string, 
 		return nil, fmt.Errorf("update agent: %w", err)
 	}
 
-	if err := a.registry.Reload(ctx); err != nil {
-		slog.ErrorContext(ctx, "failed to reload agent registry after update", "error", err)
-	}
+	a.invalidateRegistryForContext(ctx)
 
 	// Use the updated name (could have been renamed).
 	lookupName := req.Name
@@ -217,9 +245,7 @@ func (a *agentManagerHTTPAdapter) DeleteAgent(ctx context.Context, name string) 
 		return fmt.Errorf("delete agent: %w", err)
 	}
 
-	if err := a.registry.Reload(ctx); err != nil {
-		slog.ErrorContext(ctx, "failed to reload agent registry after delete", "error", err)
-	}
+	a.invalidateRegistryForContext(ctx)
 
 	return nil
 }

@@ -80,6 +80,20 @@ func parseStringParam(r *http.Request, param string) (string, error) {
 	return s, nil
 }
 
+// parseUUIDStringParam extracts a URL parameter by name and validates it is a
+// well-formed UUID. Returns a 400-mappable error when the value is missing or
+// not a valid UUID so malformed ids never reach the service/repo layer.
+func parseUUIDStringParam(r *http.Request, param string) (string, error) {
+	s := chi.URLParam(r, param)
+	if s == "" {
+		return "", fmt.Errorf("%s is required", param)
+	}
+	if _, err := uuid.Parse(s); err != nil {
+		return "", fmt.Errorf("invalid %s: must be a valid UUID", param)
+	}
+	return s, nil
+}
+
 // Input validation limits.
 const (
 	MaxTaskTitleLen            = 256

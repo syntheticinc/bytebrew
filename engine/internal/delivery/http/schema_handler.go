@@ -31,6 +31,7 @@ type CreateSchemaRequest struct {
 	Name         string  `json:"name"`
 	Description  string  `json:"description,omitempty"`
 	EntryAgentID *string `json:"entry_agent_id,omitempty"`
+	ChatEnabled  *bool   `json:"chat_enabled,omitempty"`
 }
 
 // UpdateSchemaRequest is the body for PUT /api/v1/schemas/{id}.
@@ -151,7 +152,7 @@ func (h *SchemaHandler) ListSchemas(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SchemaHandler) GetSchema(w http.ResponseWriter, r *http.Request) {
-	id, err := parseStringParam(r, "id")
+	id, err := parseUUIDStringParam(r, "id")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return

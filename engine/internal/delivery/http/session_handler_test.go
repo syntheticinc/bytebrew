@@ -159,14 +159,14 @@ func TestSessionHandler_Get(t *testing.T) {
 	}{
 		{
 			name:       "found",
-			id:         "s1",
-			session:    &SessionResponse{ID: "s1", UserSub: "u1", Status: "active", CreatedAt: "2026-03-19T10:00:00Z", UpdatedAt: "2026-03-19T10:05:00Z"},
+			id:         "11111111-1111-1111-1111-111111111111",
+			session:    &SessionResponse{ID: "11111111-1111-1111-1111-111111111111", UserSub: "u1", Status: "active", CreatedAt: "2026-03-19T10:00:00Z", UpdatedAt: "2026-03-19T10:05:00Z"},
 			wantStatus: http.StatusOK,
 		},
 		{
 			name:       "not found",
-			id:         "s999",
-			session:    &SessionResponse{ID: "s1"},
+			id:         "99999999-9999-9999-9999-999999999999",
+			session:    &SessionResponse{ID: "11111111-1111-1111-1111-111111111111"},
 			wantStatus: http.StatusNotFound,
 		},
 	}
@@ -229,13 +229,13 @@ func TestSessionHandler_Create(t *testing.T) {
 }
 
 func TestSessionHandler_Update(t *testing.T) {
-	updated := &SessionResponse{ID: "s1", UserSub: "u1", Title: "New title", Status: "active", CreatedAt: "2026-03-19T10:00:00Z", UpdatedAt: "2026-03-19T10:06:00Z"}
+	updated := &SessionResponse{ID: "11111111-1111-1111-1111-111111111111", UserSub: "u1", Title: "New title", Status: "active", CreatedAt: "2026-03-19T10:00:00Z", UpdatedAt: "2026-03-19T10:06:00Z"}
 	svc := &mockSessionService{updated: updated}
 	handler := NewSessionHandler(svc)
 	router := newSessionRouter(handler)
 
 	body := `{"title":"New title"}`
-	req := httptest.NewRequest(http.MethodPut, "/sessions/s1", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPut, "/sessions/11111111-1111-1111-1111-111111111111", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -252,7 +252,7 @@ func TestSessionHandler_Update_NotFound(t *testing.T) {
 	router := newSessionRouter(handler)
 
 	body := `{"title":"New title"}`
-	req := httptest.NewRequest(http.MethodPut, "/sessions/s999", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPut, "/sessions/99999999-9999-9999-9999-999999999999", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -265,12 +265,12 @@ func TestSessionHandler_Delete(t *testing.T) {
 	handler := NewSessionHandler(svc)
 	router := newSessionRouter(handler)
 
-	req := httptest.NewRequest(http.MethodDelete, "/sessions/s1", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/sessions/11111111-1111-1111-1111-111111111111", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusNoContent, rec.Code)
-	assert.Equal(t, "s1", svc.lastDeleteID)
+	assert.Equal(t, "11111111-1111-1111-1111-111111111111", svc.lastDeleteID)
 }
 
 func TestSessionHandler_Delete_Error(t *testing.T) {
@@ -278,7 +278,7 @@ func TestSessionHandler_Delete_Error(t *testing.T) {
 	handler := NewSessionHandler(svc)
 	router := newSessionRouter(handler)
 
-	req := httptest.NewRequest(http.MethodDelete, "/sessions/s999", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/sessions/99999999-9999-9999-9999-999999999999", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 

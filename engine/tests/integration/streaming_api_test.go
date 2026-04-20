@@ -4,12 +4,10 @@ package integration
 
 import (
 	"context"
-	"database/sql"
 	"net"
 	"testing"
 	"time"
 
-	_ "github.com/glebarez/go-sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
@@ -26,6 +24,8 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 // StreamingHarness is a test harness for server-streaming API tests.
@@ -67,8 +67,7 @@ func NewStreamingHarness(t *testing.T, scenario string) *StreamingHarness {
 		Prompts:            promptsCfg,
 	}
 
-	subtaskMgr := testutil.NewMockSubtaskManager()
-	taskMgr := testutil.NewMockTaskManager()
+	subtaskMgr := testutil.NewMockEngineTaskManager()
 
 	modelSelector := llm.NewModelSelector(chatModel, "mock-model")
 	agentRunStorage := testutil.NewMockAgentRunStorage()
@@ -81,25 +80,22 @@ func NewStreamingHarness(t *testing.T, scenario string) *StreamingHarness {
 	})
 	agentPoolAdapter := agentservice.NewAgentPoolAdapter(agentPool)
 
-	toolDepsProvider := tools.NewDefaultToolDepsProvider(nil, taskMgr, subtaskMgr, agentPoolAdapter, nil, nil)
+	toolDepsProvider := tools.NewDefaultToolDepsProvider(nil, agentPoolAdapter)
 	agentPool.SetEngine(agentEngine, flowManager, toolResolver, toolDepsProvider, nil, nil)
 
 	factory := turnexecutorfactory.New(
 		agentEngine, flowManager, toolResolver, modelSelector, agentConfig,
-		taskMgr, subtaskMgr, agentPoolAdapter, nil, nil, nil,
+		agentPoolAdapter, nil, nil, nil,
 	)
 
 	flowReg := flowregistry.NewInMemoryRegistry()
-	// Create in-memory event store for tests
-	eventsDB, err := sql.Open("sqlite", ":memory:")
+	eventsGormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		cancel()
 		t.Fatalf("open in-memory events db: %v", err)
 	}
-	eventsDB.SetMaxOpenConns(1)
-	t.Cleanup(func() { eventsDB.Close() })
 
-	evtStore, err := eventstore.New(eventsDB)
+	evtStore, err := eventstore.New(eventsGormDB)
 	if err != nil {
 		cancel()
 		t.Fatalf("create event store: %v", err)

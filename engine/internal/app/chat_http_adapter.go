@@ -54,9 +54,6 @@ type chatServiceHTTPAdapter struct {
 // schemas.chat_enabled = true; if disabled, NotFound is returned so the route
 // doesn't leak existence of chat-disabled schemas.
 func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, schemaID, message, userSub, sessionID string) (<-chan deliveryhttp.SSEEvent, error) {
-	if a.agents == nil {
-		return nil, fmt.Errorf("no agents configured")
-	}
 	if userSub == "" {
 		return nil, pkgerrors.InvalidInput("user_sub is required")
 	}
@@ -64,6 +61,8 @@ func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, schemaID, message, us
 		return nil, fmt.Errorf("schema repo not wired")
 	}
 
+	// Tenant-scoped schema lookup must happen before any other check so that
+	// cross-tenant requests get NotFound (404) rather than leaking a 500.
 	schema, err := a.schemas.GetModelByID(ctx, schemaID)
 	if err != nil {
 		return nil, fmt.Errorf("load schema: %w", err)
@@ -76,6 +75,10 @@ func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, schemaID, message, us
 	}
 	if schema.EntryAgentID == nil || *schema.EntryAgentID == "" {
 		return nil, pkgerrors.InvalidInput("schema has no entry agent")
+	}
+
+	if a.agents == nil {
+		return nil, fmt.Errorf("no agents configured")
 	}
 
 	entryAgent, err := a.agents.GetByID(*schema.EntryAgentID)

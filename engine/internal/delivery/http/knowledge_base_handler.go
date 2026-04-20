@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 )
 
@@ -84,9 +85,21 @@ func (h *KnowledgeBaseHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, kbs)
 }
 
+func parseKBID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	id := chi.URLParam(r, "id")
+	if _, err := uuid.Parse(id); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid knowledge base id: must be a UUID")
+		return "", false
+	}
+	return id, true
+}
+
 // Get handles GET /api/v1/knowledge-bases/{id}.
 func (h *KnowledgeBaseHandler) Get(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, ok := parseKBID(w, r)
+	if !ok {
+		return
+	}
 	kb, err := h.store.GetByID(r.Context(), id)
 	if err != nil {
 		writeDomainError(w, err)
@@ -126,7 +139,10 @@ func (h *KnowledgeBaseHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /api/v1/knowledge-bases/{id}.
 func (h *KnowledgeBaseHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, ok := parseKBID(w, r)
+	if !ok {
+		return
+	}
 	var req UpdateKBRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid request body")
@@ -151,7 +167,20 @@ func (h *KnowledgeBaseHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /api/v1/knowledge-bases/{id}.
 func (h *KnowledgeBaseHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, ok := parseKBID(w, r)
+	if !ok {
+		return
+	}
+
+	existing, err := h.store.GetByID(r.Context(), id)
+	if err != nil {
+		writeDomainError(w, err)
+		return
+	}
+	if existing == nil {
+		writeJSONError(w, http.StatusNotFound, "knowledge base not found")
+		return
+	}
 
 	// Delete all files first
 	if h.fileManager != nil {
@@ -170,7 +199,10 @@ func (h *KnowledgeBaseHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // LinkAgent handles POST /api/v1/knowledge-bases/{id}/agents/{agent_name}.
 func (h *KnowledgeBaseHandler) LinkAgent(w http.ResponseWriter, r *http.Request) {
-	kbID := chi.URLParam(r, "id")
+	kbID, ok := parseKBID(w, r)
+	if !ok {
+		return
+	}
 	agentName := chi.URLParam(r, "agent_name")
 	if kbID == "" || agentName == "" {
 		writeJSONError(w, http.StatusBadRequest, "kb id and agent_name are required")
@@ -185,7 +217,10 @@ func (h *KnowledgeBaseHandler) LinkAgent(w http.ResponseWriter, r *http.Request)
 
 // UnlinkAgent handles DELETE /api/v1/knowledge-bases/{id}/agents/{agent_name}.
 func (h *KnowledgeBaseHandler) UnlinkAgent(w http.ResponseWriter, r *http.Request) {
-	kbID := chi.URLParam(r, "id")
+	kbID, ok := parseKBID(w, r)
+	if !ok {
+		return
+	}
 	agentName := chi.URLParam(r, "agent_name")
 	if kbID == "" || agentName == "" {
 		writeJSONError(w, http.StatusBadRequest, "kb id and agent_name are required")
@@ -200,7 +235,21 @@ func (h *KnowledgeBaseHandler) UnlinkAgent(w http.ResponseWriter, r *http.Reques
 
 // ListFiles handles GET /api/v1/knowledge-bases/{id}/files.
 func (h *KnowledgeBaseHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
-	kbID := chi.URLParam(r, "id")
+	kbID, ok := parseKBID(w, r)
+	if !ok {
+		return
+	}
+
+	existing, err := h.store.GetByID(r.Context(), kbID)
+	if err != nil {
+		writeDomainError(w, err)
+		return
+	}
+	if existing == nil {
+		writeJSONError(w, http.StatusNotFound, "knowledge base not found")
+		return
+	}
+
 	if h.fileManager == nil {
 		writeJSONError(w, http.StatusNotImplemented, "Knowledge indexing requires an embedding model. Configure one in Models → select type Embeddings.")
 		return
@@ -218,7 +267,10 @@ func (h *KnowledgeBaseHandler) ListFiles(w http.ResponseWriter, r *http.Request)
 
 // UploadFile handles POST /api/v1/knowledge-bases/{id}/files.
 func (h *KnowledgeBaseHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
-	kbID := chi.URLParam(r, "id")
+	kbID, ok := parseKBID(w, r)
+	if !ok {
+		return
+	}
 	if h.fileManager == nil {
 		writeJSONError(w, http.StatusNotImplemented, "Knowledge indexing requires an embedding model. Configure one in Models → select type Embeddings.")
 		return
@@ -297,10 +349,22 @@ func (h *KnowledgeBaseHandler) UploadFile(w http.ResponseWriter, r *http.Request
 
 // DeleteFile handles DELETE /api/v1/knowledge-bases/{id}/files/{file_id}.
 func (h *KnowledgeBaseHandler) DeleteFile(w http.ResponseWriter, r *http.Request) {
-	kbID := chi.URLParam(r, "id")
+	kbID, ok := parseKBID(w, r)
+	if !ok {
+		return
+	}
 	fileID := chi.URLParam(r, "file_id")
 	if h.fileManager == nil {
 		writeJSONError(w, http.StatusNotImplemented, "Knowledge indexing requires an embedding model. Configure one in Models → select type Embeddings.")
+		return
+	}
+	existing, err := h.store.GetByID(r.Context(), kbID)
+	if err != nil {
+		writeDomainError(w, err)
+		return
+	}
+	if existing == nil {
+		writeJSONError(w, http.StatusNotFound, "knowledge base not found")
 		return
 	}
 	if err := h.fileManager.DeleteFile(r.Context(), kbID, fileID); err != nil {
@@ -312,7 +376,10 @@ func (h *KnowledgeBaseHandler) DeleteFile(w http.ResponseWriter, r *http.Request
 
 // ReindexFile handles POST /api/v1/knowledge-bases/{id}/files/{file_id}/reindex.
 func (h *KnowledgeBaseHandler) ReindexFile(w http.ResponseWriter, r *http.Request) {
-	kbID := chi.URLParam(r, "id")
+	kbID, ok := parseKBID(w, r)
+	if !ok {
+		return
+	}
 	fileID := chi.URLParam(r, "file_id")
 	if h.fileManager == nil {
 		writeJSONError(w, http.StatusNotImplemented, "Knowledge indexing requires an embedding model. Configure one in Models → select type Embeddings.")

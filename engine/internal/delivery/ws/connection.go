@@ -13,7 +13,7 @@ import (
 
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	sp "github.com/syntheticinc/bytebrew/engine/internal/service/sessionprocessor"
-	"github.com/syntheticinc/bytebrew/engine/pkg/ee"
+	pluginpkg "github.com/syntheticinc/bytebrew/engine/pkg/plugin"
 )
 
 // SessionRegistry provides session management for WS clients (consumer-side interface).
@@ -65,7 +65,7 @@ type ConnectionHandler struct {
 	agentService     AgentEnvironmentSetter
 	agentCanceller   AgentCanceller // optional, cancels running agents on user cancel
 	agentLister      AgentLister    // optional, nil when agent registry not available
-	eeExtension      ee.Extension        // optional, nil in CE mode
+	plugin           pluginpkg.Plugin // plugin.Noop{} in CE mode
 }
 
 // NewConnectionHandler creates a new WebSocket connection handler.
@@ -74,8 +74,11 @@ func NewConnectionHandler(
 	processor *sp.Processor,
 	agentService AgentEnvironmentSetter,
 	agentCanceller AgentCanceller,
-	eeExtension ee.Extension,
+	plug pluginpkg.Plugin,
 ) *ConnectionHandler {
+	if plug == nil {
+		plug = pluginpkg.Noop{}
+	}
 	return &ConnectionHandler{
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
@@ -87,7 +90,7 @@ func NewConnectionHandler(
 		sessionProcessor: processor,
 		agentService:     agentService,
 		agentCanceller:   agentCanceller,
-		eeExtension:      eeExtension,
+		plugin:           plug,
 	}
 }
 
@@ -223,12 +226,13 @@ func (h *ConnectionHandler) handleMessage(writer *wsWriter, msg WsMessage, state
 	}
 }
 
-// checkLicense verifies the license status. Returns true if the request should be blocked.
+// checkLicense delegates session admission to the plugin. Returns true if
+// the request should be blocked. In CE mode (Noop plugin) always returns false.
 func (h *ConnectionHandler) checkLicense(writer *wsWriter, msg *WsMessage) (blocked bool) {
-	if h.eeExtension == nil {
+	if h.plugin == nil {
 		return false
 	}
-	if reason := h.eeExtension.CheckSessionAllowed(); reason != "" {
+	if reason := h.plugin.CheckSessionAllowed(context.Background()); reason != "" {
 		writer.sendError(msg.RequestID, reason)
 		return true
 	}

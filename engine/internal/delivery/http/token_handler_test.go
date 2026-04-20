@@ -139,7 +139,7 @@ func TestTokenHandler_ListTokens(t *testing.T) {
 func TestTokenHandler_DeleteToken(t *testing.T) {
 	repo := newMockTokenRepository()
 	repo.tokens = []TokenInfo{
-		{ID: "1", Name: "to-delete", ScopesMask: 1, CreatedAt: time.Now()},
+		{ID: "11111111-1111-1111-1111-111111111111", Name: "to-delete", ScopesMask: 1, CreatedAt: time.Now()},
 	}
 	h := NewTokenHandler(repo)
 
@@ -147,7 +147,7 @@ func TestTokenHandler_DeleteToken(t *testing.T) {
 	r := chi.NewRouter()
 	r.Delete("/auth/tokens/{id}", h.DeleteToken)
 
-	req := httptest.NewRequest(http.MethodDelete, "/auth/tokens/1", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/auth/tokens/11111111-1111-1111-1111-111111111111", nil)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -162,7 +162,7 @@ func TestTokenHandler_DeleteToken_NotFound(t *testing.T) {
 	r := chi.NewRouter()
 	r.Delete("/auth/tokens/{id}", h.DeleteToken)
 
-	req := httptest.NewRequest(http.MethodDelete, "/auth/tokens/999", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/auth/tokens/99999999-9999-9999-9999-999999999999", nil)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 

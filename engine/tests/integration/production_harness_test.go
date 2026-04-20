@@ -68,8 +68,7 @@ func NewProductionHarness(t *testing.T, scenario string) *ProductionHarness {
 	}
 
 	// 4. Mock managers
-	subtaskMgr := testutil.NewMockSubtaskManager()
-	taskMgr := testutil.NewMockTaskManager()
+	subtaskMgr := testutil.NewMockEngineTaskManager()
 
 	// 5. Model selector + agent pool
 	modelSelector := llm.NewModelSelector(chatModel, "mock-model")
@@ -83,13 +82,13 @@ func NewProductionHarness(t *testing.T, scenario string) *ProductionHarness {
 	})
 	agentPoolAdapter := agentservice.NewAgentPoolAdapter(agentPool)
 
-	toolDepsProvider := tools.NewDefaultToolDepsProvider(nil, taskMgr, subtaskMgr, agentPoolAdapter, nil, nil)
+	toolDepsProvider := tools.NewDefaultToolDepsProvider(nil, agentPoolAdapter)
 	agentPool.SetEngine(agentEngine, flowManager, toolResolver, toolDepsProvider, nil, nil)
 
 	// 6. TurnExecutorFactory
 	factory := turnexecutorfactory.New(
 		agentEngine, flowManager, toolResolver, modelSelector, agentConfig,
-		taskMgr, subtaskMgr, agentPoolAdapter, nil, nil, nil,
+		agentPoolAdapter, nil, nil, nil,
 	)
 
 	// 7. FlowHandler + FlowRegistry

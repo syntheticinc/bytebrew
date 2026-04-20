@@ -28,10 +28,12 @@ func NewGORMAuditRepository(db *gorm.DB) *GORMAuditRepository {
 	return &GORMAuditRepository{db: db}
 }
 
-// List returns a page of audit log entries matching the given filters.
+// List returns a page of audit log entries matching the given filters (tenant-scoped).
 // Returns the entries, total count, and any error.
 func (r *GORMAuditRepository) List(ctx context.Context, filters AuditFilters, page, perPage int) ([]models.AuditLogModel, int64, error) {
-	query := r.db.WithContext(ctx).Model(&models.AuditLogModel{})
+	query := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Model(&models.AuditLogModel{})
 
 	if filters.ActorType != "" {
 		query = query.Where("actor_type = ?", filters.ActorType)

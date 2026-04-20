@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 )
 
@@ -48,8 +49,8 @@ type memoryResponse struct {
 // ListMemories handles GET /api/v1/schemas/{id}/memory
 func (h *MemoryHandler) ListMemories(w http.ResponseWriter, r *http.Request) {
 	schemaID := chi.URLParam(r, "id")
-	if schemaID == "" {
-		writeJSONError(w, http.StatusBadRequest, "schema id required")
+	if _, err := uuid.Parse(schemaID); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid schema id: must be a UUID")
 		return
 	}
 
@@ -78,20 +79,17 @@ func (h *MemoryHandler) ListMemories(w http.ResponseWriter, r *http.Request) {
 // ClearMemories handles DELETE /api/v1/schemas/{id}/memory
 func (h *MemoryHandler) ClearMemories(w http.ResponseWriter, r *http.Request) {
 	schemaID := chi.URLParam(r, "id")
-	if schemaID == "" {
-		writeJSONError(w, http.StatusBadRequest, "schema id required")
+	if _, err := uuid.Parse(schemaID); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid schema id: must be a UUID")
 		return
 	}
 
-	deleted, err := h.clearer.ClearAll(r.Context(), schemaID)
-	if err != nil {
+	if _, err := h.clearer.ClearAll(r.Context(), schemaID); err != nil {
 		writeDomainError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"deleted": deleted,
-	})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // DeleteMemory handles DELETE /api/v1/schemas/{id}/memory/{entry_id}

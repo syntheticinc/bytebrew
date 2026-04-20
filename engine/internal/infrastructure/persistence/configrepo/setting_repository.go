@@ -26,11 +26,11 @@ func NewGORMSettingRepository(db *gorm.DB) *GORMSettingRepository {
 	return &GORMSettingRepository{db: db}
 }
 
-// List returns all settings for the default tenant.
+// List returns all settings for the tenant resolved from context.
 func (r *GORMSettingRepository) List(ctx context.Context) ([]models.SettingModel, error) {
 	var settings []models.SettingModel
 	if err := r.db.WithContext(ctx).
-		Where("tenant_id = ?", models.DefaultTenantID).
+		Scopes(tenantScope(ctx)).
 		Order(`"key"`).
 		Find(&settings).Error; err != nil {
 		return nil, fmt.Errorf("list settings: %w", err)
@@ -38,11 +38,13 @@ func (r *GORMSettingRepository) List(ctx context.Context) ([]models.SettingModel
 	return settings, nil
 }
 
-// Get returns a single setting by key for the default tenant. Returns nil if not found.
+// Get returns a single setting by key for the tenant resolved from context.
+// Returns nil if not found.
 func (r *GORMSettingRepository) Get(ctx context.Context, key string) (*models.SettingModel, error) {
 	var setting models.SettingModel
 	err := r.db.WithContext(ctx).
-		Where("tenant_id = ? AND key = ?", models.DefaultTenantID, key).
+		Scopes(tenantScope(ctx)).
+		Where("key = ?", key).
 		First(&setting).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -53,7 +55,7 @@ func (r *GORMSettingRepository) Get(ctx context.Context, key string) (*models.Se
 	return &setting, nil
 }
 
-// Set upserts a string setting value by key for the default tenant.
+// Set upserts a string setting value by key for the tenant resolved from context.
 // The string is encoded as a jsonb string (e.g. "true" → `"true"`).
 func (r *GORMSettingRepository) Set(ctx context.Context, key, value string) error {
 	encoded, err := json.Marshal(value)
@@ -63,12 +65,12 @@ func (r *GORMSettingRepository) Set(ctx context.Context, key, value string) erro
 	return r.SetJSON(ctx, key, encoded)
 }
 
-// SetJSON upserts a raw jsonb setting value by key for the default tenant.
+// SetJSON upserts a raw jsonb setting value by key for the tenant resolved from context.
 // The caller is responsible for the JSON encoding — pass the marshalled
 // bytes (e.g. `[]byte("true")`, `[]byte("[\"openai\",\"anthropic\"]")`).
 func (r *GORMSettingRepository) SetJSON(ctx context.Context, key string, value []byte) error {
 	setting := models.SettingModel{
-		TenantID: models.DefaultTenantID,
+		TenantID: tenantIDFromCtx(ctx),
 		Key:      key,
 		Value:    value,
 	}

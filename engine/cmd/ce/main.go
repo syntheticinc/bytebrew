@@ -46,6 +46,8 @@ func main() {
 		ConfigExplicit: configExplicit,
 		Port:           *port,
 		Managed:        *managed,
+		LoginEnabled:   true,
+		RequireTenant:  false,
 		Version:        version,
 		Commit:         commit,
 		Date:           date,

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthContext, useAuthProvider } from './hooks/useAuth';
 import Layout from './components/Layout';
+import OnboardingGate from './components/OnboardingGate';
 import LoginPage from './pages/LoginPage';
 import MCPPage from './pages/MCPPage';
 import ModelsPage from './pages/ModelsPage';
@@ -18,6 +19,7 @@ import KnowledgePage from './pages/KnowledgePage';
 import OverviewPage from './pages/OverviewPage';
 import SchemasPage from './pages/SchemasPage';
 import SchemaDetailPage from './pages/SchemaDetailPage';
+import OnboardingWizard from './pages/OnboardingWizard';
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('jwt');
   if (!token) return <Navigate to="/login" replace />;
@@ -33,9 +35,21 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route
+            path="/onboarding"
             element={
               <ProtectedRoute>
-                <Layout />
+                <OnboardingGate>
+                  <OnboardingWizard />
+                </OnboardingGate>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            element={
+              <ProtectedRoute>
+                <OnboardingGate>
+                  <Layout />
+                </OnboardingGate>
               </ProtectedRoute>
             }
           >

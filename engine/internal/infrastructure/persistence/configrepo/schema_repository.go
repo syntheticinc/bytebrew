@@ -37,10 +37,13 @@ func NewGORMSchemaRepository(db *gorm.DB) *GORMSchemaRepository {
 	return &GORMSchemaRepository{db: db}
 }
 
-// List returns all schemas with their derived agent membership.
+// List returns all schemas for the tenant with their derived agent membership.
 func (r *GORMSchemaRepository) List(ctx context.Context) ([]SchemaRecord, error) {
 	var schemas []models.SchemaModel
-	if err := r.db.WithContext(ctx).Order("created_at ASC").Find(&schemas).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Order("created_at ASC").
+		Find(&schemas).Error; err != nil {
 		return nil, fmt.Errorf("list schemas: %w", err)
 	}
 
@@ -65,10 +68,13 @@ func (r *GORMSchemaRepository) List(ctx context.Context) ([]SchemaRecord, error)
 	return records, nil
 }
 
-// GetByID returns a single schema by ID with derived agent membership.
+// GetByID returns a single schema by ID with derived agent membership (tenant-scoped).
 func (r *GORMSchemaRepository) GetByID(ctx context.Context, id string) (*SchemaRecord, error) {
 	var schema models.SchemaModel
-	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&schema).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Where("id = ?", id).
+		First(&schema).Error; err != nil {
 		return nil, fmt.Errorf("get schema %s: %w", id, err)
 	}
 
@@ -93,9 +99,13 @@ func (r *GORMSchemaRepository) GetByID(ctx context.Context, id string) (*SchemaR
 // GetModelByID returns the raw SchemaModel row (chat dispatcher path).
 // Kept separate from GetByID so callers that need entry_agent_id + chat_enabled
 // don't pay the cost of deriving AgentNames from agent_relations.
+// Tenant-scoped.
 func (r *GORMSchemaRepository) GetModelByID(ctx context.Context, id string) (*models.SchemaModel, error) {
 	var schema models.SchemaModel
-	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&schema).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Where("id = ?", id).
+		First(&schema).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
@@ -106,8 +116,11 @@ func (r *GORMSchemaRepository) GetModelByID(ctx context.Context, id string) (*mo
 
 // MarkChatFired stamps chat_last_fired_at on the schema — called from the
 // chat dispatcher when a new session starts (replaces trigger.MarkFired).
+// Tenant-scoped.
 func (r *GORMSchemaRepository) MarkChatFired(ctx context.Context, id string) error {
-	result := r.db.WithContext(ctx).Model(&models.SchemaModel{}).
+	result := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Model(&models.SchemaModel{}).
 		Where("id = ?", id).
 		Update("chat_last_fired_at", gorm.Expr("NOW()"))
 	if result.Error != nil {
@@ -119,9 +132,10 @@ func (r *GORMSchemaRepository) MarkChatFired(ctx context.Context, id string) err
 	return nil
 }
 
-// Create inserts a new schema.
+// Create inserts a new schema, stamping tenant from context.
 func (r *GORMSchemaRepository) Create(ctx context.Context, record *SchemaRecord) error {
 	model := models.SchemaModel{
+		TenantID:     tenantIDFromCtx(ctx),
 		Name:         record.Name,
 		Description:  record.Description,
 		IsSystem:     record.IsSystem,
@@ -135,7 +149,7 @@ func (r *GORMSchemaRepository) Create(ctx context.Context, record *SchemaRecord)
 	return nil
 }
 
-// Update updates an existing schema by ID.
+// Update updates an existing schema by ID (tenant-scoped).
 // Includes entry_agent_id so admins can re-point a schema's entry without a
 // delete+recreate cycle. Nil EntryAgentID clears the column. chat_enabled is
 // driven by the same DTO — admins toggle chat access from SchemaDetailPage.
@@ -146,7 +160,11 @@ func (r *GORMSchemaRepository) Update(ctx context.Context, id string, record *Sc
 		"entry_agent_id": record.EntryAgentID,
 		"chat_enabled":   record.ChatEnabled,
 	}
-	result := r.db.WithContext(ctx).Model(&models.SchemaModel{}).Where("id = ?", id).Updates(updates)
+	result := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Model(&models.SchemaModel{}).
+		Where("id = ?", id).
+		Updates(updates)
 	if result.Error != nil {
 		return fmt.Errorf("update schema %s: %w", id, result.Error)
 	}
@@ -156,16 +174,22 @@ func (r *GORMSchemaRepository) Update(ctx context.Context, id string, record *Sc
 	return nil
 }
 
-// Delete removes a schema and all its agent_relations by ID.
+// Delete removes a schema and all its agent_relations by ID (tenant-scoped).
 // Triggers layer no longer exists in V2 — chat access is a schemas column.
 func (r *GORMSchemaRepository) Delete(ctx context.Context, id string) error {
+	tenantID := tenantIDFromCtx(ctx)
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Delete agent relations bound to this schema (membership cascade).
-		if err := tx.Where("schema_id = ?", id).Delete(&models.AgentRelationModel{}).Error; err != nil {
+		// Delete agent relations bound to this schema (membership cascade, tenant-scoped).
+		if err := tx.
+			Where("schema_id = ? AND tenant_id = ?", id, tenantID).
+			Delete(&models.AgentRelationModel{}).Error; err != nil {
 			return fmt.Errorf("delete schema agent relations: %w", err)
 		}
-		// Delete schema itself.
-		result := tx.Delete(&models.SchemaModel{}, "id = ?", id)
+		// Delete schema itself. Conditions are merged into one Where clause to
+		// ensure tenant_id scoping is applied (avoids GORM zero-PK quirks).
+		result := tx.
+			Where("id = ? AND tenant_id = ?", id, tenantID).
+			Delete(&models.SchemaModel{})
 		if result.Error != nil {
 			return fmt.Errorf("delete schema %s: %w", id, result.Error)
 		}
@@ -189,16 +213,22 @@ func (r *GORMSchemaRepository) ListAgents(ctx context.Context, schemaID string) 
 //
 // Q.5: agent_relations uses source_agent_id/target_agent_id UUIDs. We first
 // resolve agentName → agent.id, then query agent_relations by UUID.
+// Tenant-scoped at every stage so we never surface another tenant's schema.
 func (r *GORMSchemaRepository) ListSchemasForAgent(ctx context.Context, agentName string) ([]string, error) {
+	tenantID := tenantIDFromCtx(ctx)
+
 	var agentID string
-	if err := r.db.WithContext(ctx).Raw("SELECT id FROM agents WHERE name = ?", agentName).Scan(&agentID).Error; err != nil || agentID == "" {
+	if err := r.db.WithContext(ctx).
+		Raw("SELECT id FROM agents WHERE name = ? AND tenant_id = ?", agentName, tenantID).
+		Scan(&agentID).Error; err != nil || agentID == "" {
 		return nil, nil
 	}
 
 	var schemaIDs []string
 	if err := r.db.WithContext(ctx).
 		Raw(`SELECT DISTINCT schema_id FROM agent_relations
-			WHERE source_agent_id = ? OR target_agent_id = ?`, agentID, agentID).
+			WHERE (source_agent_id = ? OR target_agent_id = ?) AND tenant_id = ?`,
+			agentID, agentID, tenantID).
 		Scan(&schemaIDs).Error; err != nil {
 		return nil, fmt.Errorf("list schema ids for agent %q: %w", agentName, err)
 	}
@@ -208,7 +238,10 @@ func (r *GORMSchemaRepository) ListSchemasForAgent(ctx context.Context, agentNam
 	}
 
 	var schemas []models.SchemaModel
-	if err := r.db.WithContext(ctx).Where("id IN ?", schemaIDs).Find(&schemas).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Where("id IN ?", schemaIDs).
+		Find(&schemas).Error; err != nil {
 		return nil, fmt.Errorf("load schemas: %w", err)
 	}
 
@@ -226,16 +259,23 @@ func (r *GORMSchemaRepository) ListSchemasForAgent(ctx context.Context, agentNam
 //
 // A schema with an entry agent and no delegations is a valid single-agent
 // state (template fork from Generic Assistant, or the system builder-schema).
+// Tenant-scoped.
 func (r *GORMSchemaRepository) deriveAgentNames(ctx context.Context, schemaID string) ([]string, error) {
+	tenantID := tenantIDFromCtx(ctx)
+
 	var names []string
 	if err := r.db.WithContext(ctx).
 		Raw(`SELECT DISTINCT a.name FROM (
-				SELECT entry_agent_id AS agent_id FROM schemas WHERE id = ? AND entry_agent_id IS NOT NULL
+				SELECT entry_agent_id AS agent_id FROM schemas
+				WHERE id = ? AND tenant_id = ? AND entry_agent_id IS NOT NULL
 				UNION
-				SELECT source_agent_id AS agent_id FROM agent_relations WHERE schema_id = ?
+				SELECT source_agent_id AS agent_id FROM agent_relations
+				WHERE schema_id = ? AND tenant_id = ?
 				UNION
-				SELECT target_agent_id AS agent_id FROM agent_relations WHERE schema_id = ?
-			) members JOIN agents a ON a.id = members.agent_id ORDER BY a.name`, schemaID, schemaID, schemaID).
+				SELECT target_agent_id AS agent_id FROM agent_relations
+				WHERE schema_id = ? AND tenant_id = ?
+			) members JOIN agents a ON a.id = members.agent_id AND a.tenant_id = ? ORDER BY a.name`,
+			schemaID, tenantID, schemaID, tenantID, schemaID, tenantID, tenantID).
 		Scan(&names).Error; err != nil {
 		return nil, fmt.Errorf("derive agent names: %w", err)
 	}

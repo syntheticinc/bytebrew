@@ -34,10 +34,13 @@ func NewGORMAgentRelationRepository(db *gorm.DB) *GORMAgentRelationRepository {
 	return &GORMAgentRelationRepository{db: db}
 }
 
-// List returns all agent relations for a schema.
+// List returns all agent relations for a schema (tenant-scoped).
 func (r *GORMAgentRelationRepository) List(ctx context.Context, schemaID string) ([]AgentRelationRecord, error) {
 	var rels []models.AgentRelationModel
-	if err := r.db.WithContext(ctx).Where("schema_id = ?", schemaID).Find(&rels).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Where("schema_id = ?", schemaID).
+		Find(&rels).Error; err != nil {
 		return nil, fmt.Errorf("list agent relations: %w", err)
 	}
 
@@ -52,10 +55,13 @@ func (r *GORMAgentRelationRepository) List(ctx context.Context, schemaID string)
 	return records, nil
 }
 
-// GetByID returns a single agent relation by ID.
+// GetByID returns a single agent relation by ID (tenant-scoped).
 func (r *GORMAgentRelationRepository) GetByID(ctx context.Context, id string) (*AgentRelationRecord, error) {
 	var rel models.AgentRelationModel
-	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&rel).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Where("id = ?", id).
+		First(&rel).Error; err != nil {
 		return nil, fmt.Errorf("get agent relation %s: %w", id, err)
 	}
 	rec, err := toAgentRelationRecord(rel)
@@ -65,7 +71,7 @@ func (r *GORMAgentRelationRepository) GetByID(ctx context.Context, id string) (*
 	return &rec, nil
 }
 
-// Create inserts a new agent relation.
+// Create inserts a new agent relation, stamping tenant from context.
 func (r *GORMAgentRelationRepository) Create(ctx context.Context, record *AgentRelationRecord) error {
 	configJSON, err := json.Marshal(record.Config)
 	if err != nil {
@@ -73,6 +79,7 @@ func (r *GORMAgentRelationRepository) Create(ctx context.Context, record *AgentR
 	}
 
 	model := models.AgentRelationModel{
+		TenantID:      tenantIDFromCtx(ctx),
 		SchemaID:      record.SchemaID,
 		SourceAgentID: record.SourceAgentID,
 		TargetAgentID: record.TargetAgentID,
@@ -85,18 +92,22 @@ func (r *GORMAgentRelationRepository) Create(ctx context.Context, record *AgentR
 	return nil
 }
 
-// Update updates an existing agent relation by ID.
+// Update updates an existing agent relation by ID (tenant-scoped).
 func (r *GORMAgentRelationRepository) Update(ctx context.Context, id string, record *AgentRelationRecord) error {
 	configJSON, err := json.Marshal(record.Config)
 	if err != nil {
 		return fmt.Errorf("marshal agent relation config: %w", err)
 	}
 
-	result := r.db.WithContext(ctx).Model(&models.AgentRelationModel{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"source_agent_id": record.SourceAgentID,
-		"target_agent_id": record.TargetAgentID,
-		"config":          string(configJSON),
-	})
+	result := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Model(&models.AgentRelationModel{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"source_agent_id": record.SourceAgentID,
+			"target_agent_id": record.TargetAgentID,
+			"config":          string(configJSON),
+		})
 	if result.Error != nil {
 		return fmt.Errorf("update agent relation %s: %w", id, result.Error)
 	}
@@ -106,9 +117,11 @@ func (r *GORMAgentRelationRepository) Update(ctx context.Context, id string, rec
 	return nil
 }
 
-// Delete removes an agent relation by ID.
+// Delete removes an agent relation by ID (tenant-scoped).
 func (r *GORMAgentRelationRepository) Delete(ctx context.Context, id string) error {
-	result := r.db.WithContext(ctx).Delete(&models.AgentRelationModel{}, "id = ?", id)
+	result := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Delete(&models.AgentRelationModel{}, "id = ?", id)
 	if result.Error != nil {
 		return fmt.Errorf("delete agent relation %s: %w", id, result.Error)
 	}

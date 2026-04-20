@@ -14,6 +14,9 @@ import (
 )
 
 // MemoryStorage implements memory persistence using GORM (PostgreSQL).
+// All operations are tenant-scoped — memories are a triple of
+// (tenant_id, schema_id, user_sub). In CE (single-tenant) mode the tenant
+// falls back to domain.CETenantID when the context doesn't carry one.
 type MemoryStorage struct {
 	db *gorm.DB
 }
@@ -24,15 +27,34 @@ func NewMemoryStorage(db *gorm.DB) *MemoryStorage {
 	return &MemoryStorage{db: db}
 }
 
+// tenantID extracts tenant from context, falling back to CETenantID for CE mode.
+//
+// TODO(tenancy): configrepo has a private `tenantIDFromCtx` helper with the
+// same shape. Consolidate by promoting a public helper (e.g. in a new
+// `internal/infrastructure/persistence/tenant.go`) once we are ready to touch
+// both packages in the same change — this is a purely cosmetic duplication
+// for now: the semantics match exactly (empty ctx → CETenantID).
+func (s *MemoryStorage) tenantID(ctx context.Context) string {
+	tid := domain.TenantIDFromContext(ctx)
+	if tid == "" {
+		return domain.CETenantID
+	}
+	return tid
+}
+
 // Store persists a memory entry. If max_entries is reached, evicts the oldest (FIFO).
+// Tenant is stamped from context.
 func (s *MemoryStorage) Store(ctx context.Context, mem *domain.Memory, maxEntries int) error {
+	tenantID := s.tenantID(ctx)
+
 	if maxEntries > 0 {
-		if err := s.evictIfNeeded(ctx, mem.SchemaID, mem.UserSub, maxEntries); err != nil {
+		if err := s.evictIfNeeded(ctx, tenantID, mem.SchemaID, mem.UserSub, maxEntries); err != nil {
 			return fmt.Errorf("evict memories: %w", err)
 		}
 	}
 
 	m := memoryToModel(mem)
+	m.TenantID = tenantID
 	if m.ID == "" {
 		m.ID = uuid.New().String()
 	}
@@ -45,11 +67,11 @@ func (s *MemoryStorage) Store(ctx context.Context, mem *domain.Memory, maxEntrie
 	return nil
 }
 
-// ListBySchema retrieves all memories for a schema, ordered by most recent first.
+// ListBySchema retrieves all memories for a schema, ordered by most recent first (tenant-scoped).
 func (s *MemoryStorage) ListBySchema(ctx context.Context, schemaID string) ([]*domain.Memory, error) {
 	var ms []models.MemoryModel
 	err := s.db.WithContext(ctx).
-		Where("schema_id = ?", schemaID).
+		Where("tenant_id = ? AND schema_id = ?", s.tenantID(ctx), schemaID).
 		Order("created_at DESC").
 		Find(&ms).Error
 	if err != nil {
@@ -58,11 +80,11 @@ func (s *MemoryStorage) ListBySchema(ctx context.Context, schemaID string) ([]*d
 	return modelsToMemories(ms), nil
 }
 
-// ListBySchemaAndUser retrieves memories for a schema+user pair.
+// ListBySchemaAndUser retrieves memories for a schema+user pair (tenant-scoped).
 func (s *MemoryStorage) ListBySchemaAndUser(ctx context.Context, schemaID, userSub string) ([]*domain.Memory, error) {
 	var ms []models.MemoryModel
 	err := s.db.WithContext(ctx).
-		Where("schema_id = ? AND user_sub = ?", schemaID, userSub).
+		Where("tenant_id = ? AND schema_id = ? AND user_sub = ?", s.tenantID(ctx), schemaID, userSub).
 		Order("created_at DESC").
 		Find(&ms).Error
 	if err != nil {
@@ -71,10 +93,10 @@ func (s *MemoryStorage) ListBySchemaAndUser(ctx context.Context, schemaID, userS
 	return modelsToMemories(ms), nil
 }
 
-// DeleteBySchema deletes all memories for a schema.
+// DeleteBySchema deletes all memories for a schema (tenant-scoped).
 func (s *MemoryStorage) DeleteBySchema(ctx context.Context, schemaID string) (int64, error) {
 	result := s.db.WithContext(ctx).
-		Where("schema_id = ?", schemaID).
+		Where("tenant_id = ? AND schema_id = ?", s.tenantID(ctx), schemaID).
 		Delete(&models.MemoryModel{})
 	if result.Error != nil {
 		return 0, fmt.Errorf("delete memories by schema: %w", result.Error)
@@ -83,10 +105,10 @@ func (s *MemoryStorage) DeleteBySchema(ctx context.Context, schemaID string) (in
 	return result.RowsAffected, nil
 }
 
-// DeleteByID deletes a single memory entry by ID.
+// DeleteByID deletes a single memory entry by ID (tenant-scoped).
 func (s *MemoryStorage) DeleteByID(ctx context.Context, id string) error {
 	result := s.db.WithContext(ctx).
-		Where("id = ?", id).
+		Where("tenant_id = ? AND id = ?", s.tenantID(ctx), id).
 		Delete(&models.MemoryModel{})
 	if result.Error != nil {
 		return fmt.Errorf("delete memory: %w", result.Error)
@@ -97,12 +119,12 @@ func (s *MemoryStorage) DeleteByID(ctx context.Context, id string) error {
 	return nil
 }
 
-// CountBySchemaAndUser returns the number of memories for a schema+user pair.
+// CountBySchemaAndUser returns the number of memories for a schema+user pair (tenant-scoped).
 func (s *MemoryStorage) CountBySchemaAndUser(ctx context.Context, schemaID, userSub string) (int, error) {
 	var count int64
 	err := s.db.WithContext(ctx).
 		Model(&models.MemoryModel{}).
-		Where("schema_id = ? AND user_sub = ?", schemaID, userSub).
+		Where("tenant_id = ? AND schema_id = ? AND user_sub = ?", s.tenantID(ctx), schemaID, userSub).
 		Count(&count).Error
 	if err != nil {
 		return 0, fmt.Errorf("count memories: %w", err)
@@ -111,22 +133,26 @@ func (s *MemoryStorage) CountBySchemaAndUser(ctx context.Context, schemaID, user
 }
 
 // evictIfNeeded removes the oldest entries when count >= maxEntries (FIFO, AC-MEM-RET-03).
-func (s *MemoryStorage) evictIfNeeded(ctx context.Context, schemaID, userSub string, maxEntries int) error {
-	count, err := s.CountBySchemaAndUser(ctx, schemaID, userSub)
-	if err != nil {
-		return err
+// Caller provides the already-resolved tenantID to avoid repeated context lookups.
+func (s *MemoryStorage) evictIfNeeded(ctx context.Context, tenantID, schemaID, userSub string, maxEntries int) error {
+	var count int64
+	if err := s.db.WithContext(ctx).
+		Model(&models.MemoryModel{}).
+		Where("tenant_id = ? AND schema_id = ? AND user_sub = ?", tenantID, schemaID, userSub).
+		Count(&count).Error; err != nil {
+		return fmt.Errorf("count memories: %w", err)
 	}
 
 	// Need to make room for the new entry
-	toDelete := count - maxEntries + 1
+	toDelete := int(count) - maxEntries + 1
 	if toDelete <= 0 {
 		return nil
 	}
 
 	// Find IDs of oldest entries to delete
 	var oldest []models.MemoryModel
-	err = s.db.WithContext(ctx).
-		Where("schema_id = ? AND user_sub = ?", schemaID, userSub).
+	err := s.db.WithContext(ctx).
+		Where("tenant_id = ? AND schema_id = ? AND user_sub = ?", tenantID, schemaID, userSub).
 		Order("created_at ASC").
 		Limit(toDelete).
 		Find(&oldest).Error
@@ -139,7 +165,9 @@ func (s *MemoryStorage) evictIfNeeded(ctx context.Context, schemaID, userSub str
 		ids[i] = m.ID
 	}
 
-	if err := s.db.WithContext(ctx).Where("id IN ?", ids).Delete(&models.MemoryModel{}).Error; err != nil {
+	if err := s.db.WithContext(ctx).
+		Where("tenant_id = ? AND id IN ?", tenantID, ids).
+		Delete(&models.MemoryModel{}).Error; err != nil {
 		return fmt.Errorf("delete oldest memories: %w", err)
 	}
 
@@ -147,14 +175,14 @@ func (s *MemoryStorage) evictIfNeeded(ctx context.Context, schemaID, userSub str
 	return nil
 }
 
-// CleanupExpiredBySchema deletes memories older than retentionDays for a given schema.
+// CleanupExpiredBySchema deletes memories older than retentionDays for a given schema (tenant-scoped).
 func (s *MemoryStorage) CleanupExpiredBySchema(ctx context.Context, schemaID string, retentionDays int) (int64, error) {
 	if retentionDays <= 0 {
 		return 0, nil
 	}
 	cutoff := time.Now().AddDate(0, 0, -retentionDays)
 	result := s.db.WithContext(ctx).
-		Where("schema_id = ? AND created_at < ?", schemaID, cutoff).
+		Where("tenant_id = ? AND schema_id = ? AND created_at < ?", s.tenantID(ctx), schemaID, cutoff).
 		Delete(&models.MemoryModel{})
 	if result.Error != nil {
 		return 0, fmt.Errorf("cleanup expired memories: %w", result.Error)

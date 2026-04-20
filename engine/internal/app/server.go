@@ -25,8 +25,10 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/delivery/grpc"
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/engine/internal/delivery/ws"
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/embedded"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agents/callbacks"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/taskrunner"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/turnexecutorfactory"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/versioncheck"
@@ -55,8 +57,8 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/service/sessionprocessor"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/turnexecutor"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
-	"github.com/syntheticinc/bytebrew/engine/pkg/ee"
 	"github.com/syntheticinc/bytebrew/engine/pkg/logger"
+	pluginpkg "github.com/syntheticinc/bytebrew/engine/pkg/plugin"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -76,9 +78,18 @@ type ServerConfig struct {
 	// Managed enables managed subprocess mode (random port, READY protocol).
 	Managed bool
 
-	// EEExtension plugs Enterprise Edition behavior into the CE server.
-	// nil in CE builds — all EE-gated code is silently skipped.
-	EEExtension ee.Extension
+	// Plugin is the runtime extension point. nil defaults to pluginpkg.Noop{}
+	// — a silent pass-through that adds nothing to the server.
+	Plugin pluginpkg.Plugin
+
+	// LoginEnabled controls whether POST /api/v1/auth/login is registered.
+	// CE defaults to true. External auth setups may disable it to force all
+	// authentication through their JWT verifier.
+	LoginEnabled bool
+
+	// RequireTenant enforces presence of a non-empty tenant_id after auth.
+	// CE defaults to false (single-tenant). Multi-tenant setups set it true.
+	RequireTenant bool
 
 	// Version, Commit, Date are build-time metadata.
 	Version string
@@ -89,6 +100,20 @@ type ServerConfig struct {
 // Run starts the ByteBrew server with the given configuration.
 // This is the common entry point shared by CE and server (legacy) binaries.
 func Run(sc ServerConfig) error {
+	if sc.Plugin == nil {
+		sc.Plugin = pluginpkg.Noop{}
+	}
+
+	// Wire the agent-step observer hook so plugins (EE metering, etc.) are
+	// notified after every runtime step. The callbacks package uses a process-
+	// global callback because the StepCounter lives deep in the agent
+	// infrastructure; plumbing a dependency through four constructor layers
+	// for a single observer hook would be disproportionate.
+	plugin := sc.Plugin
+	callbacks.SetStepCallback(func(ctx context.Context) error {
+		return plugin.OnAgentStep(ctx, domain.TenantIDFromContext(ctx), pluginpkg.StepsLimitFromContext(ctx))
+	})
+
 	// Always resolve data dir (needed for port file discovery)
 	dataDir, err := UserDataDir()
 	if err != nil {
@@ -234,6 +259,7 @@ func Run(sc ServerConfig) error {
 
 	// Try loading bootstrap config for PostgreSQL database connection.
 	var agentRegistry *agentregistry.AgentRegistry
+	var registryMgr *agentregistry.Manager
 	var pgDB *gorm.DB
 	var taskRepo *configrepo.GORMTaskRepository
 	var apiTokenRepo *configrepo.GORMAPITokenRepository
@@ -252,17 +278,29 @@ func Run(sc ServerConfig) error {
 		agentRepo := configrepo.NewGORMAgentRepository(pgDB)
 		taskRepo = configrepo.NewGORMTaskRepository(pgDB)
 		apiTokenRepo = configrepo.NewGORMAPITokenRepository(pgDB)
-		agentRegistry = agentregistry.New(agentRepo)
-		if loadErr := agentRegistry.Load(ctx); loadErr != nil {
+		registryMgr = agentregistry.NewManager(agentRepo, sc.RequireTenant)
+		if loadErr := registryMgr.Init(ctx); loadErr != nil {
 			return fmt.Errorf("load agents from database: %w", loadErr)
 		}
-
-		agentCount := agentRegistry.Count()
-		if agentCount > 0 {
-			slog.InfoContext(ctx, "Loaded agents from database", "count", agentCount, "agents", agentRegistry.List())
+		if !sc.RequireTenant {
+			agentRegistry = registryMgr.Single()
+			agentCount := agentRegistry.Count()
+			if agentCount > 0 {
+				slog.InfoContext(ctx, "Loaded agents from database", "count", agentCount, "agents", agentRegistry.List())
+			} else {
+				slog.InfoContext(ctx, "No agents configured in database")
+			}
 		} else {
-			slog.InfoContext(ctx, "No agents configured in database")
+			slog.InfoContext(ctx, "Multi-tenant mode: agent registries loaded per-tenant on first request")
 		}
+
+		// Wire the tenant seeder so plugins (EE Cloud provisioning) can populate
+		// newly-created tenants with default data via engine repositories rather
+		// than reimplementing schema/agent creation. CE's Noop plugin ignores
+		// the seeder, so this is safe to wire unconditionally.
+		sc.Plugin.SetTenantSeeder(&engineTenantSeeder{
+			schemaRepo: configrepo.NewGORMSchemaRepository(pgDB),
+		})
 	}
 
 	// If no LLM configured in legacy config but models exist in DB, use the first one.
@@ -381,10 +419,8 @@ func Run(sc ServerConfig) error {
 				SessionRepo:    newAdminSessionRepoAdapter(configrepo.NewGORMSessionRepository(pgDB)),
 				CapabilityRepo: newAdminCapabilityRepoAdapter(configrepo.NewGORMCapabilityRepository(pgDB)),
 				Reloader: func() {
-					if agentRegistry != nil {
-						if err := agentRegistry.Load(context.Background()); err != nil {
-							slog.Warn("admin tools: failed to reload registry", "error", err)
-						}
+					if registryMgr != nil {
+						registryMgr.InvalidateAll()
 					}
 				},
 			})
@@ -392,8 +428,8 @@ func Run(sc ServerConfig) error {
 		}
 
 		// Reload registry so the seeded builder-assistant is available at runtime.
-		if err := agentRegistry.Load(ctx); err != nil {
-			slog.WarnContext(ctx, "failed to reload agent registry after seed", "error", err)
+		if registryMgr != nil {
+			registryMgr.InvalidateAll()
 		}
 	}
 
@@ -486,7 +522,7 @@ func Run(sc ServerConfig) error {
 	var httpAuthMW *deliveryhttp.AuthMiddleware
 	var byokMW *deliveryhttp.BYOKMiddleware
 	var userResolveMW func(http.Handler) http.Handler
-	if agentRegistry != nil && bootstrapCfg != nil {
+	if bootstrapCfg != nil {
 		httpPort = bootstrapCfg.Engine.Port
 		if httpPort == 0 {
 			httpPort = 8443
@@ -517,12 +553,28 @@ func Run(sc ServerConfig) error {
 			internalRouter.Use(deliveryhttp.MetricsMiddleware)
 		}
 
+		// Extra HTTP middleware contributed by the plugin (e.g. EdDSA JWT verifier,
+		// entitlements). Must be registered before any routes — chi panics otherwise.
+		for _, mw := range sc.Plugin.HTTPMiddleware() {
+			r.Use(mw)
+			if internalHTTPServer != nil {
+				internalRouter.Use(mw)
+			}
+		}
+
 		// Auth
 		jwtSecret := bootstrapCfg.Security.JWTSecret
 		if jwtSecret == "" {
 			return fmt.Errorf("JWT secret is required: set security.jwt_secret in config or JWT_SECRET env var")
 		}
-		authMW := deliveryhttp.NewAuthMiddleware(jwtSecret, &tokenRepoHTTPAdapter{repo: apiTokenRepo})
+		// Plugin may provide a custom JWT verifier; otherwise fall back to the
+		// CE default HMAC verifier built from jwtSecret.
+		var authMW *deliveryhttp.AuthMiddleware
+		if pluginVerifier := sc.Plugin.JWTVerifier(); pluginVerifier != nil {
+			authMW = deliveryhttp.NewAuthMiddlewareWithVerifier(pluginVerifier, &tokenRepoHTTPAdapter{repo: apiTokenRepo})
+		} else {
+			authMW = deliveryhttp.NewAuthMiddleware(jwtSecret, &tokenRepoHTTPAdapter{repo: apiTokenRepo})
+		}
 		httpAuthMW = authMW
 
 		// V2 Group P: lazy user creation middleware. After auth resolves the
@@ -565,16 +617,28 @@ func Run(sc ServerConfig) error {
 			internalRouter.Get("/api/v1/health", healthHandler.ServeHTTP)
 			internalRouter.Get("/api/v1/models/registry", registryHandler.List)
 			internalRouter.Get("/api/v1/models/registry/providers", registryHandler.ListProviders)
-			internalRouter.Post("/api/v1/auth/login", authHandler.Login)
+			if sc.LoginEnabled {
+				internalRouter.Post("/api/v1/auth/login", authHandler.Login)
+			}
 		}
 		// Single-port or external: model registry + login on main router
 		r.Get("/api/v1/models/registry", registryHandler.List)
 		r.Get("/api/v1/models/registry/providers", registryHandler.ListProviders)
-		r.Post("/api/v1/auth/login", authHandler.Login)
+		if sc.LoginEnabled {
+			r.Post("/api/v1/auth/login", authHandler.Login)
+		}
+
+		// TenantMiddleware enforces presence of tenant_id after auth.
+		// In CE mode RequireTenant is false, so requests without tenant_id
+		// pass through; multi-tenant setups enable RequireTenant to reject
+		// unscoped requests with 403.
+		tenantExtractor := deliveryhttp.NewJWTTenantExtractor("tenant_id")
+		tenantMW := deliveryhttp.NewTenantMiddleware(tenantExtractor, sc.RequireTenant)
 
 		// Protected management routes — on internalRouter (= r in single-port mode)
 		internalRouter.Group(func(r chi.Router) {
 			r.Use(authMW.Authenticate)
+			r.Use(tenantMW.Handler)
 			r.Use(userResolveMW)
 			r.Use(deliveryhttp.AuditMiddleware(&auditHTTPAdapter{logger: auditLogger}))
 
@@ -583,7 +647,7 @@ func Run(sc ServerConfig) error {
 
 			// Agents
 			agentRepo := configrepo.NewGORMAgentRepository(pgDB)
-			agentManager := &agentManagerHTTPAdapter{repo: agentRepo, registry: agentRegistry, db: pgDB, schemaRepo: schemaRepo}
+			agentManager := &agentManagerHTTPAdapter{repo: agentRepo, registry: agentRegistry, registryMgr: registryMgr, db: pgDB, schemaRepo: schemaRepo}
 			agentHandler := deliveryhttp.NewAgentHandlerWithManager(agentManager)
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
@@ -783,7 +847,7 @@ func Run(sc ServerConfig) error {
 			agentRelationRepo := configrepo.NewGORMAgentRelationRepository(pgDB)
 			schemaHandler := deliveryhttp.NewSchemaHandler(
 				&schemaServiceHTTPAdapter{repo: schemaRepo, db: pgDB},
-				&agentRelationServiceHTTPAdapter{repo: agentRelationRepo, agentRepo: agentRepo, db: pgDB},
+				&agentRelationServiceHTTPAdapter{repo: agentRelationRepo, agentRepo: agentRepo, schemaRepo: schemaRepo, db: pgDB},
 			)
 			schemaHandler.SetAgentDetailer(agentManager)
 			r.Group(func(r chi.Router) {
@@ -924,11 +988,9 @@ func Run(sc ServerConfig) error {
 			// capRepo is also used here for capability CRUD HTTP handlers.
 		})
 
-		// EE-only routes (metrics, rate limiting, etc.) are registered by the
-		// EE extension. CE builds set EEExtension = nil and skip this entirely.
-		if sc.EEExtension != nil {
-			sc.EEExtension.RegisterHTTP(r, internalRouter)
-		}
+		// Extra HTTP routes contributed by the plugin (metrics, rate-limit
+		// usage, etc.). Noop plugin registers nothing.
+		sc.Plugin.RegisterHTTP(r, internalRouter)
 
 		// Webhook trigger route removed in V2 — cron/webhook triggers are
 		// deferred to V3. Tenants integrate with their own schedulers and
@@ -1009,10 +1071,17 @@ func Run(sc ServerConfig) error {
 	if grpcUsesRandomPort {
 		cfg.Server.Port = 0 // force random port for gRPC
 	}
-	var extraGRPCOpts []googlegrpc.ServerOption
-	if sc.EEExtension != nil {
-		extraGRPCOpts = sc.EEExtension.GRPCServerOptions()
+	// Tenant-aware gRPC interceptors: extract tenant_id from authorization
+	// metadata and inject into context for downstream handlers.
+	var jwtVerifierForGRPC pluginpkg.JWTVerifier
+	if httpAuthMW != nil {
+		jwtVerifierForGRPC = httpAuthMW.JWTVerifier()
 	}
+	extraGRPCOpts := []googlegrpc.ServerOption{
+		googlegrpc.ChainUnaryInterceptor(grpc.TenantUnaryInterceptor(jwtVerifierForGRPC, sc.RequireTenant)),
+		googlegrpc.ChainStreamInterceptor(grpc.TenantStreamInterceptor(jwtVerifierForGRPC, sc.RequireTenant)),
+	}
+	extraGRPCOpts = append(extraGRPCOpts, sc.Plugin.GRPCServerOptions()...)
 	grpcServer, err := initializeGRPCServer(cfg, loggerInstance, extraGRPCOpts, sc.Managed || grpcUsesRandomPort)
 	if err != nil {
 		return fmt.Errorf("initialize gRPC server: %w", err)
@@ -1158,7 +1227,9 @@ func Run(sc ServerConfig) error {
 	grpcServer.RegisterServices(flowHandler)
 
 	// Wire chat endpoint and start HTTP server(s) now that SessionProcessor is ready.
-	if httpServer != nil && agentRegistry != nil {
+	// In multi-tenant mode agentRegistry is nil (per-tenant registries loaded on demand),
+	// but we still register the routes so auth middleware can reject unauthenticated requests.
+	if httpServer != nil && (agentRegistry != nil || registryMgr != nil) {
 		chatService := &chatServiceHTTPAdapter{
 			registry:    sessionRegistry,
 			processor:   sessProcessor,
@@ -1251,15 +1322,19 @@ func Run(sc ServerConfig) error {
 				}
 				r.Get("/api/v1/agents", deliveryhttp.NewAgentHandlerWithManager(
 					&agentManagerHTTPAdapter{
-						repo:       configrepo.NewGORMAgentRepository(pgDB),
-						registry:   agentRegistry,
-						db:         pgDB,
-						schemaRepo: configrepo.NewGORMSchemaRepository(pgDB),
+						repo:        configrepo.NewGORMAgentRepository(pgDB),
+						registry:    agentRegistry,
+						registryMgr: registryMgr,
+						db:          pgDB,
+						schemaRepo:  configrepo.NewGORMSchemaRepository(pgDB),
 					}).List)
 			})
 		}
 
-		// Start HTTP server(s)
+	}
+
+	// Start HTTP server(s) — independent of agentRegistry (multi-tenant mode has no singleton).
+	if httpServer != nil {
 		go func() {
 			if err := httpServer.Start(); err != nil && err != http.ErrServerClosed {
 				slog.Error("HTTP server error", "error", err)
@@ -1288,7 +1363,7 @@ func Run(sc ServerConfig) error {
 	if components.AgentPool != nil {
 		agentCanceller = components.AgentPool
 	}
-	wsHandler := ws.NewConnectionHandler(sessionRegistry, sessProcessor, components.AgentService, agentCanceller, sc.EEExtension)
+	wsHandler := ws.NewConnectionHandler(sessionRegistry, sessProcessor, components.AgentService, agentCanceller, sc.Plugin)
 
 	// Create WS server (localhost only, random port)
 	wsServer, err := ws.NewServer(wsHandler)
@@ -1362,11 +1437,9 @@ func Run(sc ServerConfig) error {
 
 	// Cron scheduler is stopped via defer inside the platform-services block above.
 
-	// Stop EE extension (license watcher, etc.) — no-op in CE.
-	if sc.EEExtension != nil {
-		sc.EEExtension.Stop()
-		slog.Info("EE extension stopped")
-	}
+	// Stop plugin resources (license watcher, etc.) — no-op in CE.
+	sc.Plugin.Stop()
+	slog.Info("plugin stopped")
 
 	// Close MCP client connections
 	mcpRegistry.CloseAll()

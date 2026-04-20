@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
+	pluginpkg "github.com/syntheticinc/bytebrew/engine/pkg/plugin"
 )
 
 type contextKey string
@@ -43,23 +45,46 @@ const (
 	ScopeSchemasWrite  = 8192
 )
 
+// APITokenInfo is the decoded API-token record returned by the verifier.
+type APITokenInfo struct {
+	Name       string
+	ScopesMask int
+	TenantID   string
+}
+
 // APITokenVerifier looks up API tokens by their SHA-256 hash.
 type APITokenVerifier interface {
-	VerifyToken(ctx context.Context, tokenHash string) (name string, scopesMask int, err error)
+	VerifyToken(ctx context.Context, tokenHash string) (APITokenInfo, error)
 }
 
 // AuthMiddleware handles dual authentication: admin session JWT and API tokens (bb_ prefix).
 type AuthMiddleware struct {
-	jwtSecret     []byte
+	jwtVerifier   pluginpkg.JWTVerifier
 	tokenVerifier APITokenVerifier
 }
 
-// NewAuthMiddleware creates a new AuthMiddleware.
+// NewAuthMiddleware creates an AuthMiddleware with the CE default HMAC JWT
+// verifier built from jwtSecret.
 func NewAuthMiddleware(jwtSecret string, tokenVerifier APITokenVerifier) *AuthMiddleware {
 	return &AuthMiddleware{
-		jwtSecret:     []byte(jwtSecret),
+		jwtVerifier:   NewHMACVerifier(jwtSecret),
 		tokenVerifier: tokenVerifier,
 	}
+}
+
+// NewAuthMiddlewareWithVerifier creates an AuthMiddleware with a custom JWT
+// verifier. Used by the plugin seam to swap in non-HMAC verifiers.
+func NewAuthMiddlewareWithVerifier(jwtVerifier pluginpkg.JWTVerifier, tokenVerifier APITokenVerifier) *AuthMiddleware {
+	return &AuthMiddleware{
+		jwtVerifier:   jwtVerifier,
+		tokenVerifier: tokenVerifier,
+	}
+}
+
+// JWTVerifier returns the middleware's JWT verifier. Other delivery layers
+// (e.g. gRPC) reuse it to decode tokens consistently across transports.
+func (m *AuthMiddleware) JWTVerifier() pluginpkg.JWTVerifier {
+	return m.jwtVerifier
 }
 
 // Authenticate is the middleware handler that validates Bearer tokens.
@@ -83,33 +108,51 @@ func (m *AuthMiddleware) Authenticate(next http.Handler) http.Handler {
 
 func (m *AuthMiddleware) authenticateAPIToken(w http.ResponseWriter, r *http.Request, next http.Handler, token string) {
 	hash := sha256Hash(token)
-	name, scopes, err := m.tokenVerifier.VerifyToken(r.Context(), hash)
+	info, err := m.tokenVerifier.VerifyToken(r.Context(), hash)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid api token"})
 		return
 	}
 	ctx := context.WithValue(r.Context(), ContextKeyActorType, "api_token")
-	ctx = context.WithValue(ctx, ContextKeyActorID, name)
-	ctx = context.WithValue(ctx, ContextKeyScopes, scopes)
+	ctx = context.WithValue(ctx, ContextKeyActorID, info.Name)
+	ctx = context.WithValue(ctx, ContextKeyScopes, info.ScopesMask)
+	if info.TenantID != "" {
+		if _, err := uuid.Parse(info.TenantID); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid tenant_id claim"})
+			return
+		}
+		ctx = domain.WithTenantID(ctx, info.TenantID)
+	}
 	next.ServeHTTP(w, r.WithContext(ctx))
 }
 
 func (m *AuthMiddleware) authenticateJWT(w http.ResponseWriter, r *http.Request, next http.Handler, token string) {
-	claims := &jwt.RegisteredClaims{}
-	parsed, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, jwt.ErrSignatureInvalid
-		}
-		return m.jwtSecret, nil
-	})
-	if err != nil || !parsed.Valid {
+	if m.jwtVerifier == nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "no jwt verifier configured"})
+		return
+	}
+	claims, err := m.jwtVerifier.Verify(token)
+	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
 		return
 	}
+	// Scopes come straight from the verifier. The HMAC verifier grants
+	// ScopeAdmin only when role=="admin"; other tokens get 0 and will be
+	// rejected by RequireScope. We do NOT default missing scopes to
+	// ScopeAdmin here — doing so would re-enable cross-tenant admin hijack
+	// for any validly-signed JWT without a role claim.
+	scopes := claims.Scopes
 	ctx := context.WithValue(r.Context(), ContextKeyActorType, "admin")
 	ctx = context.WithValue(ctx, ContextKeyActorID, claims.Subject)
 	ctx = context.WithValue(ctx, ContextKeyUserSub, claims.Subject)
-	ctx = context.WithValue(ctx, ContextKeyScopes, ScopeAdmin)
+	ctx = context.WithValue(ctx, ContextKeyScopes, scopes)
+	if claims.TenantID != "" {
+		if _, err := uuid.Parse(claims.TenantID); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid tenant_id claim"})
+			return
+		}
+		ctx = domain.WithTenantID(ctx, claims.TenantID)
+	}
 	next.ServeHTTP(w, r.WithContext(ctx))
 }
 

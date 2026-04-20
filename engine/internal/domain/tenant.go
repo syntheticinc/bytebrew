@@ -7,7 +7,6 @@ import (
 )
 
 // Tenant represents a customer workspace in Cloud mode.
-// Uses CloudPlan from billing.go for plan type.
 type Tenant struct {
 	ID        string
 	Email     string

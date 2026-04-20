@@ -289,6 +289,18 @@ export default function SchemasPage() {
           >
             Create first schema
           </button>
+          <p className="mt-5 text-[11px] text-brand-shade3/70">
+            If ByteBrew helps you, consider{' '}
+            <a
+              href="https://github.com/syntheticinc/bytebrew"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand-accent hover:underline"
+            >
+              starring us on GitHub
+            </a>
+            .
+          </p>
         </div>
       )}
 

@@ -117,7 +117,25 @@ export default function AgentsPage() {
         </table>
         {userAgents.length === 0 && (
           <div className="px-4 py-8 text-center text-brand-shade3 text-sm">
-            {search ? 'No agents match your search.' : 'No agents configured.'}
+            {search ? (
+              'No agents match your search.'
+            ) : (
+              <>
+                <p>No agents configured. Create your first agent to get started.</p>
+                <p className="mt-2 text-xs text-brand-shade3/70">
+                  If ByteBrew helps you, consider{' '}
+                  <a
+                    href="https://github.com/syntheticinc/bytebrew"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-brand-accent hover:underline"
+                  >
+                    starring us on GitHub
+                  </a>
+                  .
+                </p>
+              </>
+            )}
           </div>
         )}
       </div>

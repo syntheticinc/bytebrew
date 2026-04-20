@@ -269,7 +269,7 @@ function ModelsPageInner() {
           <>
             <DetailSection title="Provider">
               <DetailRow label="Type">
-                <span className="px-2 py-0.5 bg-brand-light rounded text-xs font-medium">
+                <span className="px-2 py-0.5 bg-brand-light rounded text-xs text-brand-shade3 font-medium">
                   {selected.type}
                 </span>
               </DetailRow>

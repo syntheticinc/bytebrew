@@ -58,7 +58,7 @@ func TestMemoryHandler_ListMemories(t *testing.T) {
 	}
 	r := setupMemoryRouter(lister, &mockMemoryClearer{})
 
-	req := httptest.NewRequest("GET", "/api/v1/schemas/10/memory", nil)
+	req := httptest.NewRequest("GET", "/api/v1/schemas/10000000-0000-0000-0000-000000000001/memory", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -74,7 +74,7 @@ func TestMemoryHandler_ListMemories_Empty(t *testing.T) {
 	lister := &mockMemoryLister{memories: []*domain.Memory{}}
 	r := setupMemoryRouter(lister, &mockMemoryClearer{})
 
-	req := httptest.NewRequest("GET", "/api/v1/schemas/10/memory", nil)
+	req := httptest.NewRequest("GET", "/api/v1/schemas/10000000-0000-0000-0000-000000000001/memory", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -89,22 +89,18 @@ func TestMemoryHandler_ClearMemories(t *testing.T) {
 	clearer := &mockMemoryClearer{deletedCount: 5}
 	r := setupMemoryRouter(&mockMemoryLister{}, clearer)
 
-	req := httptest.NewRequest("DELETE", "/api/v1/schemas/10/memory", nil)
+	req := httptest.NewRequest("DELETE", "/api/v1/schemas/10000000-0000-0000-0000-000000000001/memory", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var resp map[string]interface{}
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
-	assert.Equal(t, float64(5), resp["deleted"])
+	assert.Equal(t, http.StatusNoContent, w.Code)
 }
 
 func TestMemoryHandler_DeleteMemory(t *testing.T) {
 	clearer := &mockMemoryClearer{}
 	r := setupMemoryRouter(&mockMemoryLister{}, clearer)
 
-	req := httptest.NewRequest("DELETE", "/api/v1/schemas/10/memory/42", nil)
+	req := httptest.NewRequest("DELETE", "/api/v1/schemas/10000000-0000-0000-0000-000000000001/memory/42", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -115,7 +111,7 @@ func TestMemoryHandler_DeleteMemory_Error(t *testing.T) {
 	clearer := &mockMemoryClearer{err: fmt.Errorf("memory not found: 999")}
 	r := setupMemoryRouter(&mockMemoryLister{}, clearer)
 
-	req := httptest.NewRequest("DELETE", "/api/v1/schemas/10/memory/999", nil)
+	req := httptest.NewRequest("DELETE", "/api/v1/schemas/10000000-0000-0000-0000-000000000001/memory/999", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 

@@ -33,8 +33,10 @@ func NewGORMTaskRepository(db *gorm.DB) *GORMTaskRepository {
 }
 
 // Create inserts a new task and populates the ID back into the domain entity.
+// Stamps tenant from context.
 func (r *GORMTaskRepository) Create(ctx context.Context, task *domain.EngineTask) error {
 	m := toTaskModel(task)
+	m.TenantID = tenantIDFromCtx(ctx)
 	if err := r.db.WithContext(ctx).Create(&m).Error; err != nil {
 		return fmt.Errorf("create task: %w", err)
 	}
@@ -42,10 +44,12 @@ func (r *GORMTaskRepository) Create(ctx context.Context, task *domain.EngineTask
 	return nil
 }
 
-// GetByID returns a single task by its primary key.
+// GetByID returns a single task by its primary key (tenant-scoped).
 func (r *GORMTaskRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.EngineTask, error) {
 	var m models.TaskModel
-	if err := r.db.WithContext(ctx).First(&m, "id = ?", id).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		First(&m, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, domain.ErrEngineTaskNotFound
 		}
@@ -54,9 +58,11 @@ func (r *GORMTaskRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain
 	return toEngineTask(&m), nil
 }
 
-// List returns tasks matching the provided filter.
+// List returns tasks matching the provided filter (tenant-scoped).
 func (r *GORMTaskRepository) List(ctx context.Context, filter TaskFilter) ([]domain.EngineTask, error) {
-	q := r.db.WithContext(ctx).Model(&models.TaskModel{})
+	q := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Model(&models.TaskModel{})
 	q = applyTaskFilter(q, filter)
 	q = q.Order("created_at DESC")
 
@@ -79,9 +85,11 @@ func (r *GORMTaskRepository) List(ctx context.Context, filter TaskFilter) ([]dom
 	return tasks, nil
 }
 
-// Count returns the total number of tasks matching the filter (ignoring Limit/Offset).
+// Count returns the total number of tasks matching the filter (ignoring Limit/Offset, tenant-scoped).
 func (r *GORMTaskRepository) Count(ctx context.Context, filter TaskFilter) (int64, error) {
-	q := r.db.WithContext(ctx).Model(&models.TaskModel{})
+	q := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Model(&models.TaskModel{})
 	q = applyTaskFilter(q, filter)
 	var count int64
 	if err := q.Count(&count).Error; err != nil {
@@ -90,10 +98,12 @@ func (r *GORMTaskRepository) Count(ctx context.Context, filter TaskFilter) (int6
 	return count, nil
 }
 
-// UpdateStatus transitions a task to a new status and optionally sets a result string.
+// UpdateStatus transitions a task to a new status and optionally sets a result string (tenant-scoped).
 func (r *GORMTaskRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status domain.EngineTaskStatus, result string) error {
 	var m models.TaskModel
-	if err := r.db.WithContext(ctx).First(&m, "id = ?", id).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		First(&m, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return domain.ErrEngineTaskNotFound
 		}
@@ -107,25 +117,42 @@ func (r *GORMTaskRepository) UpdateStatus(ctx context.Context, id uuid.UUID, sta
 	task.Result = result
 
 	updated := toTaskModel(task)
+	updated.TenantID = m.TenantID // preserve tenant on Save
 	if err := r.db.WithContext(ctx).Save(&updated).Error; err != nil {
 		return fmt.Errorf("update task %s status: %w", id, err)
 	}
 	return nil
 }
 
-// Update saves all fields of the task.
+// Update saves all fields of the task (tenant-scoped by preserving existing tenant).
 func (r *GORMTaskRepository) Update(ctx context.Context, task *domain.EngineTask) error {
+	// Verify task belongs to current tenant before updating.
+	var existing models.TaskModel
+	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		First(&existing, "id = ?", task.ID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return domain.ErrEngineTaskNotFound
+		}
+		return fmt.Errorf("find task %s for update: %w", task.ID, err)
+	}
+
 	m := toTaskModel(task)
+	m.TenantID = existing.TenantID
 	if err := r.db.WithContext(ctx).Save(&m).Error; err != nil {
 		return fmt.Errorf("update task %s: %w", task.ID, err)
 	}
 	return nil
 }
 
-// GetSubTasks returns all direct children of the given parent task.
+// GetSubTasks returns all direct children of the given parent task (tenant-scoped).
 func (r *GORMTaskRepository) GetSubTasks(ctx context.Context, parentID uuid.UUID) ([]domain.EngineTask, error) {
 	var rows []models.TaskModel
-	if err := r.db.WithContext(ctx).Where("parent_task_id = ?", parentID).Order("created_at ASC").Find(&rows).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Where("parent_task_id = ?", parentID).
+		Order("created_at ASC").
+		Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("get subtasks for %s: %w", parentID, err)
 	}
 
@@ -136,10 +163,11 @@ func (r *GORMTaskRepository) GetSubTasks(ctx context.Context, parentID uuid.UUID
 	return tasks, nil
 }
 
-// GetPendingBySession returns all pending tasks for the given session.
+// GetPendingBySession returns all pending tasks for the given session (tenant-scoped).
 func (r *GORMTaskRepository) GetPendingBySession(ctx context.Context, sessionID string) ([]domain.EngineTask, error) {
 	var rows []models.TaskModel
 	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
 		Where("session_id = ? AND status = ?", sessionID, string(domain.EngineTaskStatusPending)).
 		Order("created_at ASC").
 		Find(&rows).Error; err != nil {
@@ -158,20 +186,21 @@ func (r *GORMTaskRepository) GetPendingBySession(ctx context.Context, sessionID 
 // if the database was modified directly).
 const MaxCancelDepth = 64
 
-// Cancel cancels a task and all its non-terminal subtasks (cascading).
+// Cancel cancels a task and all its non-terminal subtasks (cascading, tenant-scoped).
 // The optional reason is stored in the result column for the root task.
 func (r *GORMTaskRepository) Cancel(ctx context.Context, id uuid.UUID, reason string) error {
+	tenantID := tenantIDFromCtx(ctx)
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		visited := make(map[uuid.UUID]bool)
-		return cancelRecursive(tx, id, reason, 0, visited)
+		return cancelRecursive(tx, tenantID, id, reason, 0, visited)
 	})
 }
 
-// cancelRecursive cancels a task and recursively cancels all non-terminal subtasks.
+// cancelRecursive cancels a task and recursively cancels all non-terminal subtasks (tenant-scoped).
 // - depth: guard against cycles (bails out at MaxCancelDepth)
 // - visited: idempotency guard in case the graph is corrupt
 // - reason: stored on the first task only; children get empty result
-func cancelRecursive(tx *gorm.DB, id uuid.UUID, reason string, depth int, visited map[uuid.UUID]bool) error {
+func cancelRecursive(tx *gorm.DB, tenantID string, id uuid.UUID, reason string, depth int, visited map[uuid.UUID]bool) error {
 	if depth > MaxCancelDepth {
 		return fmt.Errorf("cancel recursion depth exceeded (%d) for task %s — possible cycle in parent_task_id", MaxCancelDepth, id)
 	}
@@ -181,7 +210,9 @@ func cancelRecursive(tx *gorm.DB, id uuid.UUID, reason string, depth int, visite
 	visited[id] = true
 
 	var m models.TaskModel
-	if err := tx.First(&m, "id = ?", id).Error; err != nil {
+	if err := tx.
+		Where("id = ? AND tenant_id = ?", id, tenantID).
+		First(&m).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return domain.ErrEngineTaskNotFound
 		}
@@ -203,18 +234,21 @@ func cancelRecursive(tx *gorm.DB, id uuid.UUID, reason string, depth int, visite
 	}
 
 	updated := toTaskModel(task)
+	updated.TenantID = tenantID
 	if err := tx.Save(&updated).Error; err != nil {
 		return fmt.Errorf("save cancelled task %s: %w", id, err)
 	}
 
-	// Cancel subtasks
+	// Cancel subtasks (tenant-scoped).
 	var subtasks []models.TaskModel
-	if err := tx.Where("parent_task_id = ?", id).Find(&subtasks).Error; err != nil {
+	if err := tx.
+		Where("parent_task_id = ? AND tenant_id = ?", id, tenantID).
+		Find(&subtasks).Error; err != nil {
 		return fmt.Errorf("get subtasks for cancel %s: %w", id, err)
 	}
 
 	for _, sub := range subtasks {
-		if err := cancelRecursive(tx, sub.ID, "", depth+1, visited); err != nil {
+		if err := cancelRecursive(tx, tenantID, sub.ID, "", depth+1, visited); err != nil {
 			return err
 		}
 	}
@@ -239,10 +273,11 @@ func applyTaskFilter(q *gorm.DB, f TaskFilter) *gorm.DB {
 	return q
 }
 
-// GetBySession returns all tasks for the given session (used by TaskReminderProvider).
+// GetBySession returns all tasks for the given session (used by TaskReminderProvider, tenant-scoped).
 func (r *GORMTaskRepository) GetBySession(ctx context.Context, sessionID string) ([]domain.EngineTask, error) {
 	var rows []models.TaskModel
 	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
 		Where("session_id = ?", sessionID).
 		Order("priority DESC, created_at ASC").
 		Find(&rows).Error; err != nil {
@@ -256,10 +291,11 @@ func (r *GORMTaskRepository) GetBySession(ctx context.Context, sessionID string)
 	return tasks, nil
 }
 
-// GetByStatus returns tasks for the given session and status.
+// GetByStatus returns tasks for the given session and status (tenant-scoped).
 func (r *GORMTaskRepository) GetByStatus(ctx context.Context, sessionID string, status domain.EngineTaskStatus) ([]domain.EngineTask, error) {
 	var rows []models.TaskModel
 	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
 		Where("session_id = ? AND status = ?", sessionID, string(status)).
 		Order("priority DESC, created_at ASC").
 		Find(&rows).Error; err != nil {
@@ -273,10 +309,11 @@ func (r *GORMTaskRepository) GetByStatus(ctx context.Context, sessionID string, 
 	return tasks, nil
 }
 
-// GetByAgentID returns the active in_progress task assigned to the given agent.
+// GetByAgentID returns the active in_progress task assigned to the given agent (tenant-scoped).
 func (r *GORMTaskRepository) GetByAgentID(ctx context.Context, agentID string) (*domain.EngineTask, error) {
 	var m models.TaskModel
 	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
 		Where("assigned_agent_id = ? AND status = ?", agentID, string(domain.EngineTaskStatusInProgress)).
 		First(&m).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -290,9 +327,11 @@ func (r *GORMTaskRepository) GetByAgentID(ctx context.Context, agentID string) (
 // GetReadySubtasks returns pending subtasks of parentID whose blockers
 // (declared in BlockedBy) have all reached terminal state (completed/failed/cancelled).
 // A task with no blockers is always ready. A task with at least one non-terminal blocker is NOT ready.
+// Tenant-scoped.
 func (r *GORMTaskRepository) GetReadySubtasks(ctx context.Context, parentID uuid.UUID) ([]domain.EngineTask, error) {
 	var rows []models.TaskModel
 	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
 		Where("parent_task_id = ? AND status = ?", parentID, string(domain.EngineTaskStatusPending)).
 		Order("priority DESC, created_at ASC").
 		Find(&rows).Error; err != nil {
@@ -321,7 +360,7 @@ func (r *GORMTaskRepository) GetReadySubtasks(ctx context.Context, parentID uuid
 		return tasks, nil
 	}
 
-	// Fetch terminal status for all blockers in one query.
+	// Fetch terminal status for all blockers in one query (tenant-scoped).
 	blockerIDs := make([]uuid.UUID, 0, len(blockerSet))
 	for id := range blockerSet {
 		blockerIDs = append(blockerIDs, id)
@@ -333,6 +372,7 @@ func (r *GORMTaskRepository) GetReadySubtasks(ctx context.Context, parentID uuid
 	}
 	var terminalBlockers []models.TaskModel
 	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
 		Select("id").
 		Where("id IN ? AND status IN ?", blockerIDs, terminalStatuses).
 		Find(&terminalBlockers).Error; err != nil {
@@ -364,8 +404,9 @@ func (r *GORMTaskRepository) GetReadySubtasks(ctx context.Context, parentID uuid
 }
 
 // toTaskModel maps a domain EngineTask to a GORM TaskModel.
-// toTaskModel maps a domain EngineTask to a GORM TaskModel.
 // Q.5: agent_name, source, source_id, assigned_agent_id, depth dropped.
+// Tenant is applied by the caller (Create stamps from ctx; Update/UpdateStatus
+// preserve the existing row's tenant).
 func toTaskModel(t *domain.EngineTask) models.TaskModel {
 	return models.TaskModel{
 		ID:                 t.ID,

@@ -14,6 +14,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools"
+	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 )
 
@@ -131,7 +132,7 @@ func (a *mcpServiceHTTPAdapter) UpdateMCPServer(ctx context.Context, name string
 		}
 	}
 	if targetID == "" {
-		return nil, fmt.Errorf("mcp server not found: %s", name)
+		return nil, pkgerrors.NotFound(fmt.Sprintf("mcp server not found: %s", name))
 	}
 
 	model := &models.MCPServerModel{
@@ -201,7 +202,7 @@ func (a *mcpServiceHTTPAdapter) UpdateMCPServer(ctx context.Context, name string
 			return resp, nil
 		}
 	}
-	return nil, fmt.Errorf("mcp server not found after update: %s", name)
+	return nil, pkgerrors.NotFound(fmt.Sprintf("mcp server not found after update: %s", name))
 }
 
 func (a *mcpServiceHTTPAdapter) DeleteMCPServer(ctx context.Context, name string) error {
@@ -214,7 +215,7 @@ func (a *mcpServiceHTTPAdapter) DeleteMCPServer(ctx context.Context, name string
 			return a.repo.Delete(ctx, s.ID)
 		}
 	}
-	return fmt.Errorf("mcp server not found: %s", name)
+	return pkgerrors.NotFound(fmt.Sprintf("mcp server not found: %s", name))
 }
 
 // ptrString converts a string to *string; returns nil when v == "" (no reference).

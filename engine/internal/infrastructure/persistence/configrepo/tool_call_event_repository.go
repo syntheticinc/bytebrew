@@ -51,9 +51,12 @@ func NewToolCallEventRepository(db *gorm.DB) *ToolCallEventRepository {
 }
 
 // QueryToolCalls returns tool call entries matching the filters with pagination.
+// All queries are scoped to the current tenant via tenantScope.
 func (r *ToolCallEventRepository) QueryToolCalls(ctx context.Context, filters ToolCallFilters, page, perPage int) ([]ToolCallEntry, int64, error) {
 	// Step 1: Query tool_call_start events with filters.
-	startQuery := r.db.WithContext(ctx).Model(&models.SessionEventLogModel{}).
+	startQuery := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Model(&models.SessionEventLogModel{}).
 		Where("event_type = ?", "tool_call_start")
 
 	if filters.SessionID != "" {
@@ -78,6 +81,7 @@ func (r *ToolCallEventRepository) QueryToolCalls(ctx context.Context, filters To
 	if len(sessionIDs) > 0 {
 		var endEvents []models.SessionEventLogModel
 		if err := r.db.WithContext(ctx).
+			Scopes(tenantScope(ctx)).
 			Where("event_type = ? AND session_id IN ?", "tool_call_end", sessionIDs).
 			Find(&endEvents).Error; err != nil {
 			return nil, 0, fmt.Errorf("query tool call end events: %w", err)

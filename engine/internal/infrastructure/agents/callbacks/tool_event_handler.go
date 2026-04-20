@@ -166,7 +166,12 @@ func (h *ToolEventHandler) OnToolEnd(ctx context.Context, info *callbacks.RunInf
 
 	// Increment step after tool execution completes
 	// This ensures onToolStart and onToolEnd use the same step number for callId
-	h.counter.IncrementStep()
+	if err := h.counter.IncrementStep(ctx); err != nil {
+		slog.WarnContext(ctx, "[CALLBACK] onToolEnd: step quota exceeded, cancelling context", "tool_name", info.Name, "error", err)
+		ctx, cancel := context.WithCancelCause(ctx)
+		cancel(err)
+		return ctx
+	}
 	slog.InfoContext(ctx, "[CALLBACK] onToolEnd completed, step incremented", "tool_name", info.Name, "new_step", h.counter.GetStep())
 	return ctx
 }
@@ -217,7 +222,12 @@ func (h *ToolEventHandler) OnToolError(ctx context.Context, info *callbacks.RunI
 		h.recorder.RecordToolResult(h.sessionID, info.Name, content)
 	}
 
-	h.counter.IncrementStep()
+	if err := h.counter.IncrementStep(ctx); err != nil {
+		slog.WarnContext(ctx, "[CALLBACK] onToolError: step quota exceeded, cancelling context", "tool_name", info.Name, "error", err)
+		ctx, cancel := context.WithCancelCause(ctx)
+		cancel(err)
+		return ctx
+	}
 	slog.InfoContext(ctx, "[CALLBACK] onToolError completed, step incremented", "tool_name", info.Name, "new_step", h.counter.GetStep())
 	return ctx
 }

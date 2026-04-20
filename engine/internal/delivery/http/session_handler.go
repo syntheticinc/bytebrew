@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 // SessionResponse is the API representation of a session.
@@ -141,11 +142,19 @@ func (h *SessionHandler) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func parseSessionID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	id := chi.URLParam(r, "id")
+	if _, err := uuid.Parse(id); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid session id: must be a UUID")
+		return "", false
+	}
+	return id, true
+}
+
 // Get handles GET /api/v1/sessions/{id}.
 func (h *SessionHandler) Get(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if id == "" {
-		writeJSONError(w, http.StatusBadRequest, "id parameter is required")
+	id, ok := parseSessionID(w, r)
+	if !ok {
 		return
 	}
 
@@ -180,9 +189,8 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /api/v1/sessions/{id}.
 func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if id == "" {
-		writeJSONError(w, http.StatusBadRequest, "id parameter is required")
+	id, ok := parseSessionID(w, r)
+	if !ok {
 		return
 	}
 
@@ -207,9 +215,8 @@ func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /api/v1/sessions/{id}.
 func (h *SessionHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if id == "" {
-		writeJSONError(w, http.StatusBadRequest, "id parameter is required")
+	id, ok := parseSessionID(w, r)
+	if !ok {
 		return
 	}
 
@@ -224,10 +231,21 @@ func (h *SessionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // ListMessages handles GET /api/v1/sessions/{id}/messages.
 // Returns session events (messages, tool calls, reasoning) in chronological order.
 func (h *SessionHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if id == "" {
-		writeJSONError(w, http.StatusBadRequest, "id parameter is required")
+	id, ok := parseSessionID(w, r)
+	if !ok {
 		return
+	}
+
+	if h.service != nil {
+		sess, err := h.service.GetSession(r.Context(), id)
+		if err != nil {
+			writeDomainError(w, err)
+			return
+		}
+		if sess == nil {
+			writeJSONError(w, http.StatusNotFound, "session not found")
+			return
+		}
 	}
 
 	if h.eventSvc == nil {

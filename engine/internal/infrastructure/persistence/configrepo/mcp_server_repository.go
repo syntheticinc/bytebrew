@@ -18,41 +18,52 @@ func NewGORMMCPServerRepository(db *gorm.DB) *GORMMCPServerRepository {
 	return &GORMMCPServerRepository{db: db}
 }
 
-// List returns all MCP server models.
+// List returns all MCP server models for the tenant.
 //
 // V2 Commit Group C (§5.6): runtime status (connection state, tools_count)
 // is no longer persisted — callers that need status must ping the live MCP
 // client registry instead.
 func (r *GORMMCPServerRepository) List(ctx context.Context) ([]models.MCPServerModel, error) {
 	var servers []models.MCPServerModel
-	if err := r.db.WithContext(ctx).Order("name").Find(&servers).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Order("name").
+		Find(&servers).Error; err != nil {
 		return nil, fmt.Errorf("list mcp servers: %w", err)
 	}
 	return servers, nil
 }
 
-// GetByID returns a single MCP server model by ID.
+// GetByID returns a single MCP server model by ID (tenant-scoped).
 func (r *GORMMCPServerRepository) GetByID(ctx context.Context, id string) (*models.MCPServerModel, error) {
 	var server models.MCPServerModel
-	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&server).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Where("id = ?", id).
+		First(&server).Error; err != nil {
 		return nil, fmt.Errorf("get mcp server %s: %w", id, err)
 	}
 	return &server, nil
 }
 
-// Create inserts a new MCP server model.
+// Create inserts a new MCP server model, stamping tenant from context.
 func (r *GORMMCPServerRepository) Create(ctx context.Context, model *models.MCPServerModel) error {
+	model.TenantID = tenantIDFromCtx(ctx)
 	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
 		return fmt.Errorf("create mcp server: %w", err)
 	}
 	return nil
 }
 
-// Update updates an MCP server model by ID.
+// Update updates an MCP server model by ID (tenant-scoped).
 // Select("*") ensures zero-value fields (e.g. cleared ForwardHeaders) are written.
 func (r *GORMMCPServerRepository) Update(ctx context.Context, id string, model *models.MCPServerModel) error {
-	result := r.db.WithContext(ctx).Model(&models.MCPServerModel{}).Where("id = ?", id).
-		Select("*").Omit("id", "tenant_id", "created_at", "updated_at").Updates(model)
+	result := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Model(&models.MCPServerModel{}).
+		Where("id = ?", id).
+		Select("*").Omit("id", "tenant_id", "created_at", "updated_at").
+		Updates(model)
 	if result.Error != nil {
 		return fmt.Errorf("update mcp server: %w", result.Error)
 	}
@@ -62,9 +73,11 @@ func (r *GORMMCPServerRepository) Update(ctx context.Context, id string, model *
 	return nil
 }
 
-// Delete removes an MCP server model by ID.
+// Delete removes an MCP server model by ID (tenant-scoped).
 func (r *GORMMCPServerRepository) Delete(ctx context.Context, id string) error {
-	result := r.db.WithContext(ctx).Delete(&models.MCPServerModel{}, "id = ?", id)
+	result := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Delete(&models.MCPServerModel{}, "id = ?", id)
 	if result.Error != nil {
 		return fmt.Errorf("delete mcp server: %w", result.Error)
 	}
@@ -75,7 +88,7 @@ func (r *GORMMCPServerRepository) Delete(ctx context.Context, id string) error {
 }
 
 // GetAgentNamesByServerIDs returns a map of MCP server ID -> []agent names
-// by querying the agent_mcp_servers join table. Loads all servers in one query.
+// by querying the agent_mcp_servers join table (tenant-scoped). Loads all servers in one query.
 func (r *GORMMCPServerRepository) GetAgentNamesByServerIDs(ctx context.Context, serverIDs []string) (map[string][]string, error) {
 	if len(serverIDs) == 0 {
 		return make(map[string][]string), nil
@@ -83,6 +96,7 @@ func (r *GORMMCPServerRepository) GetAgentNamesByServerIDs(ctx context.Context, 
 
 	var joins []models.AgentMCPServer
 	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
 		Preload("Agent").
 		Where("mcp_server_id IN ?", serverIDs).
 		Find(&joins).Error; err != nil {
@@ -96,7 +110,7 @@ func (r *GORMMCPServerRepository) GetAgentNamesByServerIDs(ctx context.Context, 
 	return result, nil
 }
 
-// GetAgentNamesForServer returns agent names assigned to a single MCP server.
+// GetAgentNamesForServer returns agent names assigned to a single MCP server (tenant-scoped).
 func (r *GORMMCPServerRepository) GetAgentNamesForServer(ctx context.Context, serverID string) ([]string, error) {
 	m, err := r.GetAgentNamesByServerIDs(ctx, []string{serverID})
 	if err != nil {

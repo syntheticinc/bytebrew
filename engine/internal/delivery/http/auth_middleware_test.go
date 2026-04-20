@@ -16,42 +16,38 @@ import (
 const testJWTSecret = "test-secret-key-for-unit-tests"
 
 type mockTokenVerifier struct {
-	tokens map[string]struct {
-		name   string
-		scopes int
-	}
+	tokens map[string]APITokenInfo
 }
 
 func newMockTokenVerifier() *mockTokenVerifier {
 	return &mockTokenVerifier{
-		tokens: make(map[string]struct {
-			name   string
-			scopes int
-		}),
+		tokens: make(map[string]APITokenInfo),
 	}
 }
 
 func (m *mockTokenVerifier) addToken(rawToken string, name string, scopes int) {
 	hash := sha256Hash(rawToken)
-	m.tokens[hash] = struct {
-		name   string
-		scopes int
-	}{name: name, scopes: scopes}
+	m.tokens[hash] = APITokenInfo{Name: name, ScopesMask: scopes}
 }
 
-func (m *mockTokenVerifier) VerifyToken(_ context.Context, tokenHash string) (string, int, error) {
+func (m *mockTokenVerifier) VerifyToken(_ context.Context, tokenHash string) (APITokenInfo, error) {
 	t, ok := m.tokens[tokenHash]
 	if !ok {
-		return "", 0, fmt.Errorf("token not found")
+		return APITokenInfo{}, fmt.Errorf("token not found")
 	}
-	return t.name, t.scopes, nil
+	return t, nil
 }
 
+// generateTestJWT mints an admin-role HS256 token with a required `exp`
+// claim. Both the role and the expiration are required by the tightened
+// HMACVerifier (SEV-3 / SEV-4 fixes): tokens without `exp` are rejected and
+// missing/non-admin roles no longer silently inherit ScopeAdmin.
 func generateTestJWT(subject, secret string, expiry time.Duration) string {
-	claims := &jwt.RegisteredClaims{
-		Subject:   subject,
-		ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
-		IssuedAt:  jwt.NewNumericDate(time.Now()),
+	claims := jwt.MapClaims{
+		"sub":  subject,
+		"role": "admin",
+		"exp":  time.Now().Add(expiry).Unix(),
+		"iat":  time.Now().Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	s, _ := token.SignedString([]byte(secret))

@@ -1,8 +1,38 @@
 package callbacks
 
 import (
+	"context"
 	"sync"
 )
+
+// stepCallback is optionally set at process startup (server.go) and invoked
+// after every step increment. Used by EE plugin for metering. Global because
+// the callbacks package is deep in the agent infrastructure and plumbing a
+// callback through 4 layers of constructors would be disproportionate for a
+// single observer hook.
+var (
+	stepCallback   func(ctx context.Context) error
+	stepCallbackMu sync.RWMutex
+)
+
+// SetStepCallback installs cb as the post-IncrementStep callback. Passing nil
+// removes it. Safe to call at any time; idempotent.
+func SetStepCallback(cb func(ctx context.Context) error) {
+	stepCallbackMu.Lock()
+	stepCallback = cb
+	stepCallbackMu.Unlock()
+}
+
+// fireStepCallback invokes the global callback if set. Called from IncrementStep.
+func fireStepCallback(ctx context.Context) error {
+	stepCallbackMu.RLock()
+	cb := stepCallback
+	stepCallbackMu.RUnlock()
+	if cb != nil {
+		return cb(ctx)
+	}
+	return nil
+}
 
 // StepCounter tracks step number, model call count, and pending assistant content.
 // All methods are thread-safe.
@@ -25,11 +55,15 @@ func (c *StepCounter) GetStep() int {
 	return c.step
 }
 
-// IncrementStep increments the step counter (thread-safe).
-func (c *StepCounter) IncrementStep() {
+// IncrementStep increments the step counter and fires the global step
+// callback (if set) for metering/observability. Returns the callback error
+// (e.g. ErrStepsQuotaExceeded) so callers can cancel the request context.
+// Thread-safe.
+func (c *StepCounter) IncrementStep(ctx context.Context) error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	c.step++
+	c.mu.Unlock()
+	return fireStepCallback(ctx)
 }
 
 // GetModelCallCount returns how many times the model has been called (thread-safe).

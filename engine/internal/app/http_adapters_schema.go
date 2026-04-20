@@ -92,10 +92,21 @@ func (a *schemaServiceHTTPAdapter) GetSchema(ctx context.Context, id string) (*d
 }
 
 func (a *schemaServiceHTTPAdapter) CreateSchema(ctx context.Context, req deliveryhttp.CreateSchemaRequest) (*deliveryhttp.SchemaInfo, error) {
+	entryAgentID := req.EntryAgentID
+	if entryAgentID != nil && *entryAgentID == "" {
+		entryAgentID = nil
+	}
+
+	chatEnabled := false
+	if req.ChatEnabled != nil {
+		chatEnabled = *req.ChatEnabled
+	}
+
 	record := &configrepo.SchemaRecord{
 		Name:         req.Name,
 		Description:  req.Description,
-		EntryAgentID: req.EntryAgentID,
+		EntryAgentID: entryAgentID,
+		ChatEnabled:  chatEnabled,
 	}
 	if err := a.repo.Create(ctx, record); err != nil {
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "UNIQUE constraint") {
@@ -108,6 +119,7 @@ func (a *schemaServiceHTTPAdapter) CreateSchema(ctx context.Context, req deliver
 		ID:          record.ID,
 		Name:        record.Name,
 		Description: record.Description,
+		ChatEnabled: record.ChatEnabled,
 		CreatedAt:   record.CreatedAt,
 	}, nil
 }
@@ -186,10 +198,13 @@ func (a *schemaServiceHTTPAdapter) ListSchemaAgents(ctx context.Context, schemaI
 //
 // agentRepo is used to resolve agent names to UUIDs — the API accepts either
 // form in source/target fields so admin UI can work directly with agent names.
+// schemaRepo is used to verify schema ownership (SCC-02 tenant isolation) before
+// any operation that takes a schemaID parameter.
 type agentRelationServiceHTTPAdapter struct {
-	repo      *configrepo.GORMAgentRelationRepository
-	agentRepo *configrepo.GORMAgentRepository
-	db        *gorm.DB
+	repo       *configrepo.GORMAgentRelationRepository
+	agentRepo  *configrepo.GORMAgentRepository
+	schemaRepo *configrepo.GORMSchemaRepository
+	db         *gorm.DB
 }
 
 // resolveNameByID resolves an agent UUID to its name via a raw DB query.
@@ -243,6 +258,13 @@ func isUUID(s string) bool {
 }
 
 func (a *agentRelationServiceHTTPAdapter) ListAgentRelations(ctx context.Context, schemaID string) ([]deliveryhttp.AgentRelationInfo, error) {
+	// SCC-02: verify the schema belongs to the requesting tenant before returning
+	// its relations. schemaRepo.GetByID is tenant-scoped, so it returns
+	// gorm.ErrRecordNotFound when the schema belongs to a different tenant.
+	if _, err := a.schemaRepo.GetByID(ctx, schemaID); err != nil {
+		return nil, pkgerrors.NotFound(fmt.Sprintf("schema not found: %s", schemaID))
+	}
+
 	records, err := a.repo.List(ctx, schemaID)
 	if err != nil {
 		return nil, fmt.Errorf("list agent relations: %w", err)
@@ -280,6 +302,12 @@ func (a *agentRelationServiceHTTPAdapter) GetAgentRelation(ctx context.Context, 
 }
 
 func (a *agentRelationServiceHTTPAdapter) CreateAgentRelation(ctx context.Context, schemaID string, req deliveryhttp.CreateAgentRelationRequest) (*deliveryhttp.AgentRelationInfo, error) {
+	// SCC-02: verify the schema belongs to the requesting tenant before creating
+	// a relation under it.
+	if _, err := a.schemaRepo.GetByID(ctx, schemaID); err != nil {
+		return nil, pkgerrors.NotFound(fmt.Sprintf("schema not found: %s", schemaID))
+	}
+
 	sourceID, err := a.resolveAgentRef(ctx, req.Source)
 	if err != nil {
 		return nil, err

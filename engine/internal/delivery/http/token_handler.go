@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 )
 
@@ -97,8 +98,8 @@ func (h *TokenHandler) ListTokens(w http.ResponseWriter, r *http.Request) {
 // DeleteToken handles DELETE /auth/tokens/{id}.
 func (h *TokenHandler) DeleteToken(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if id == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id required"})
+	if _, err := uuid.Parse(id); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid token id: must be a UUID"})
 		return
 	}
 

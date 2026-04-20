@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/pgvector/pgvector-go"
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	"gorm.io/gorm"
 )
@@ -22,12 +21,9 @@ func NewGORMKnowledgeRepository(db *gorm.DB) *GORMKnowledgeRepository {
 }
 
 // tenantID extracts tenant from context, falling back to CETenantID for CE mode.
+// Delegates to the package-level helper so all repos agree on tenant resolution.
 func (r *GORMKnowledgeRepository) tenantID(ctx context.Context) string {
-	tid := domain.TenantIDFromContext(ctx)
-	if tid == "" {
-		return domain.CETenantID
-	}
-	return tid
+	return tenantIDFromCtx(ctx)
 }
 
 // GetDocumentByPath returns a document by KB ID and file path, or nil if not found.
@@ -46,8 +42,11 @@ func (r *GORMKnowledgeRepository) GetDocumentByPath(ctx context.Context, kbID, f
 	return &doc, nil
 }
 
-// SaveDocument creates or updates a knowledge document.
+// SaveDocument creates or updates a knowledge document, stamping tenant when missing.
 func (r *GORMKnowledgeRepository) SaveDocument(ctx context.Context, doc *models.KnowledgeDocument) error {
+	if doc.TenantID == "" {
+		doc.TenantID = r.tenantID(ctx)
+	}
 	if err := r.db.WithContext(ctx).Save(doc).Error; err != nil {
 		return fmt.Errorf("save document: %w", err)
 	}
@@ -66,10 +65,13 @@ func (r *GORMKnowledgeRepository) ListDocumentsByKB(ctx context.Context, kbID st
 	return docs, nil
 }
 
-// GetDocumentByID returns a document by its ID, or nil if not found.
+// GetDocumentByID returns a document by its ID (tenant-scoped), or nil if not found.
 func (r *GORMKnowledgeRepository) GetDocumentByID(ctx context.Context, id string) (*models.KnowledgeDocument, error) {
 	var doc models.KnowledgeDocument
-	err := r.db.WithContext(ctx).Where("id = ?", id).First(&doc).Error
+	err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Where("id = ?", id).
+		First(&doc).Error
 	if err == gorm.ErrRecordNotFound {
 		return nil, nil
 	}
@@ -79,18 +81,27 @@ func (r *GORMKnowledgeRepository) GetDocumentByID(ctx context.Context, id string
 	return &doc, nil
 }
 
-// DeleteDocument removes a single document by ID.
+// DeleteDocument removes a single document by ID (tenant-scoped).
 func (r *GORMKnowledgeRepository) DeleteDocument(ctx context.Context, id string) error {
-	if err := r.db.WithContext(ctx).Where("id = ?", id).Delete(&models.KnowledgeDocument{}).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Where("id = ?", id).
+		Delete(&models.KnowledgeDocument{}).Error; err != nil {
 		return fmt.Errorf("delete document: %w", err)
 	}
 	return nil
 }
 
-// SaveChunks inserts a batch of knowledge chunks.
+// SaveChunks inserts a batch of knowledge chunks, stamping tenant when missing.
 func (r *GORMKnowledgeRepository) SaveChunks(ctx context.Context, chunks []models.KnowledgeChunk) error {
 	if len(chunks) == 0 {
 		return nil
+	}
+	tenantID := r.tenantID(ctx)
+	for i := range chunks {
+		if chunks[i].TenantID == "" {
+			chunks[i].TenantID = tenantID
+		}
 	}
 	if err := r.db.WithContext(ctx).Create(&chunks).Error; err != nil {
 		return fmt.Errorf("save chunks: %w", err)
@@ -98,9 +109,12 @@ func (r *GORMKnowledgeRepository) SaveChunks(ctx context.Context, chunks []model
 	return nil
 }
 
-// DeleteChunksByDocument removes all chunks belonging to a document.
+// DeleteChunksByDocument removes all chunks belonging to a document (tenant-scoped).
 func (r *GORMKnowledgeRepository) DeleteChunksByDocument(ctx context.Context, documentID string) error {
-	if err := r.db.WithContext(ctx).Where("document_id = ?", documentID).Delete(&models.KnowledgeChunk{}).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Where("document_id = ?", documentID).
+		Delete(&models.KnowledgeChunk{}).Error; err != nil {
 		return fmt.Errorf("delete chunks by document: %w", err)
 	}
 	return nil
@@ -159,9 +173,10 @@ func (r *GORMKnowledgeRepository) SearchByKeywordKBs(ctx context.Context, kbIDs 
 	return chunks, nil
 }
 
-// DeleteDocumentsByKB removes all documents for a given knowledge base.
+// DeleteDocumentsByKB removes all documents for a given knowledge base (tenant-scoped).
 func (r *GORMKnowledgeRepository) DeleteDocumentsByKB(ctx context.Context, kbID string) error {
 	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
 		Where("knowledge_base_id = ?", kbID).
 		Delete(&models.KnowledgeDocument{}).Error; err != nil {
 		return fmt.Errorf("delete documents by KB: %w", err)
@@ -169,11 +184,17 @@ func (r *GORMKnowledgeRepository) DeleteDocumentsByKB(ctx context.Context, kbID 
 	return nil
 }
 
-// DeleteChunksByKB removes all chunks for documents belonging to a knowledge base.
+// DeleteChunksByKB removes all chunks for documents belonging to a knowledge base (tenant-scoped).
+// Both the outer DELETE and the inner SELECT are scoped to the current tenant so that
+// a caller cannot delete another tenant's chunks by passing their kbID/documentID.
 func (r *GORMKnowledgeRepository) DeleteChunksByKB(ctx context.Context, kbID string) error {
+	tenantID := r.tenantID(ctx)
 	if err := r.db.WithContext(ctx).
-		Exec(`DELETE FROM knowledge_chunks WHERE document_id IN
-			(SELECT id FROM knowledge_documents WHERE knowledge_base_id = ?)`, kbID).Error; err != nil {
+		Exec(`DELETE FROM knowledge_chunks
+			WHERE tenant_id = ? AND document_id IN
+				(SELECT id FROM knowledge_documents
+				 WHERE tenant_id = ? AND knowledge_base_id = ?)`,
+			tenantID, tenantID, kbID).Error; err != nil {
 		return fmt.Errorf("delete chunks by KB: %w", err)
 	}
 	return nil

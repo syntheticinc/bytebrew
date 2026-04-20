@@ -20,12 +20,14 @@ func NewGORMAPITokenRepository(db *gorm.DB) *GORMAPITokenRepository {
 }
 
 // Create inserts a new API token and returns its ID.
+// Stamps tenant_id from context so tokens are tenant-scoped.
 func (r *GORMAPITokenRepository) Create(ctx context.Context, userID, name, tokenHash string, scopesMask int) (string, error) {
 	m := models.APITokenModel{
 		UserID:     userID,
 		Name:       name,
 		TokenHash:  tokenHash,
 		ScopesMask: scopesMask,
+		TenantID:   tenantIDFromCtx(ctx),
 	}
 	if err := r.db.WithContext(ctx).Create(&m).Error; err != nil {
 		return "", fmt.Errorf("create api token: %w", err)
@@ -33,10 +35,14 @@ func (r *GORMAPITokenRepository) Create(ctx context.Context, userID, name, token
 	return m.ID, nil
 }
 
-// List returns all non-revoked API tokens.
+// List returns all non-revoked API tokens for the current tenant.
 func (r *GORMAPITokenRepository) List(ctx context.Context) ([]APITokenInfo, error) {
 	var rows []models.APITokenModel
-	if err := r.db.WithContext(ctx).Where("revoked_at IS NULL").Order("created_at DESC").Find(&rows).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Where("revoked_at IS NULL").
+		Order("created_at DESC").
+		Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("list api tokens: %w", err)
 	}
 
@@ -53,10 +59,12 @@ func (r *GORMAPITokenRepository) List(ctx context.Context) ([]APITokenInfo, erro
 	return result, nil
 }
 
-// Delete soft-revokes an API token by ID.
+// Delete soft-revokes an API token by ID, scoped to the current tenant.
 func (r *GORMAPITokenRepository) Delete(ctx context.Context, id string) error {
 	now := time.Now()
-	result := r.db.WithContext(ctx).Model(&models.APITokenModel{}).
+	result := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Model(&models.APITokenModel{}).
 		Where("id = ? AND revoked_at IS NULL", id).
 		Update("revoked_at", now)
 	if result.Error != nil {
@@ -68,19 +76,31 @@ func (r *GORMAPITokenRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// VerifyToken looks up an API token by its SHA-256 hash and returns the token name and scopes.
+// VerifiedToken is the repository-level result of a successful token lookup.
+// Delivery adapters map this into their own DTOs (e.g. http.APITokenInfo).
+type VerifiedToken struct {
+	Name       string
+	ScopesMask int
+	TenantID   string
+}
+
+// VerifyToken looks up an API token by its SHA-256 hash.
 // Only non-revoked tokens are considered valid. Updates last_used_at on success.
-func (r *GORMAPITokenRepository) VerifyToken(ctx context.Context, tokenHash string) (name string, scopesMask int, err error) {
+func (r *GORMAPITokenRepository) VerifyToken(ctx context.Context, tokenHash string) (VerifiedToken, error) {
 	var m models.APITokenModel
 	if err := r.db.WithContext(ctx).Where("token_hash = ? AND revoked_at IS NULL", tokenHash).First(&m).Error; err != nil {
-		return "", 0, fmt.Errorf("token not found")
+		return VerifiedToken{}, fmt.Errorf("token not found")
 	}
 
 	// Update last_used_at asynchronously (best-effort)
 	now := time.Now()
 	r.db.WithContext(ctx).Model(&m).Update("last_used_at", now)
 
-	return m.Name, m.ScopesMask, nil
+	return VerifiedToken{
+		Name:       m.Name,
+		ScopesMask: m.ScopesMask,
+		TenantID:   m.TenantID,
+	}, nil
 }
 
 // APITokenInfo is a token record returned by List (no raw token value).
