@@ -235,8 +235,21 @@ export default function SchemaDetailPage() {
     [rawRelations],
   );
 
-  // Entry agent name: from schema or first agent in list
-  const entryAgentId = schema?.entry_agent_name ?? agentNames?.[0] ?? '';
+  // Entry agent name: prefer explicit entry_agent_name from schema, then detect
+  // from the relation graph (agent with outgoing relations but no incoming ones),
+  // then fall back to the first agent name. This handles schemas where entry_agent_id
+  // was not set explicitly (e.g., created without it or before auto-assignment).
+  // Uses agentNames (available before full agent details load) instead of treeAgents
+  // to avoid a timing issue where treeAgents is empty when treeRelations first loads.
+  const entryAgentId = useMemo(() => {
+    if (schema?.entry_agent_name) return schema.entry_agent_name;
+    if (treeRelations.length > 0 && (agentNames?.length ?? 0) > 0) {
+      const hasIncoming = new Set(treeRelations.map((r) => r.targetAgentId));
+      const sourceOnly = (agentNames ?? []).find((name) => !hasIncoming.has(name));
+      if (sourceOnly) return sourceOnly;
+    }
+    return agentNames?.[0] ?? '';
+  }, [schema, treeRelations, agentNames]);
 
   const isLoading = schemaLoading || agentNamesLoading || relationsLoading || agentsLoading;
 
@@ -255,7 +268,19 @@ export default function SchemaDetailPage() {
   const handleAddAgent = useCallback(
     async (agentName: string) => {
       const parent = addChildParentName ?? entryAgentId;
-      if (!parent) return;
+      if (!parent) {
+        // Empty schema: no entry agent yet — set this agent as the entry orchestrator.
+        try {
+          await api.updateSchema(schemaId, { entry_agent_id: agentName });
+          refetchSchema();
+          refetchAgentNames();
+        } catch {
+          // silently ignore
+        }
+        setShowAddAgent(false);
+        setAddChildParentName(null);
+        return;
+      }
       try {
         await api.createAgentRelation(schemaId, parent, agentName);
         refetchRelations();
@@ -266,7 +291,7 @@ export default function SchemaDetailPage() {
       setShowAddAgent(false);
       setAddChildParentName(null);
     },
-    [schemaId, addChildParentName, entryAgentId, refetchRelations, refetchAgentNames],
+    [schemaId, addChildParentName, entryAgentId, refetchRelations, refetchAgentNames, refetchSchema],
   );
 
   const handleRemoveDelegation = useCallback(

@@ -27,7 +27,7 @@ const MOCK_RESPONSES = [
 // BottomPanel (shared with AI Assistant). The entry agent is read-only —
 // chat is always dispatched to the schema's entry orchestrator via the
 // `/api/v1/schemas/{id}/chat` endpoint.
-export default function TestFlowTab() {
+export default function TestFlowTab({ lockedSchemaId }: { lockedSchemaId?: string } = {}) {
   const { selectedSchema } = useBottomPanel();
   const { isPrototype } = usePrototype();
 
@@ -80,20 +80,25 @@ export default function TestFlowTab() {
   const messages = isPrototype ? protoMessages : sseChat.messages;
   const isStreaming = isPrototype ? protoStreaming : sseChat.isStreaming;
 
-  // Resolve the selected schema (by name from BottomPanel) to a real Schema
-  // record, then fetch its entry agent for the context bar.
+  // Resolve the schema to a real Schema record, then fetch its entry agent.
+  // When lockedSchemaId (UUID from canvas URL) is provided, look up by ID.
+  // Otherwise fall back to selectedSchema name from BottomPanel context.
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
-      if (!selectedSchema) {
+      const hasLocked = !!lockedSchemaId;
+      const hasSelected = !!selectedSchema;
+      if (!hasLocked && !hasSelected) {
         if (!cancelled) { setSchema(null); setEntryAgent(null); }
         return;
       }
       try {
         const list = await api.listSchemas();
         if (cancelled) return;
-        const match = list.find((s) => s.name === selectedSchema) ?? null;
+        const match = hasLocked
+          ? (list.find((s) => s.id === lockedSchemaId) ?? null)
+          : (list.find((s) => s.name === selectedSchema) ?? null);
         setSchema(match);
         if (match?.entry_agent_name) {
           const detail = await api.getAgent(match.entry_agent_name);
@@ -108,7 +113,7 @@ export default function TestFlowTab() {
 
     load();
     return () => { cancelled = true; };
-  }, [selectedSchema]);
+  }, [lockedSchemaId, selectedSchema]);
 
   // Fetch sessions for selected schema's entry agent (production only)
   useEffect(() => {

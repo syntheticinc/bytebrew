@@ -149,8 +149,11 @@ func (a *schemaServiceHTTPAdapter) UpdateSchema(ctx context.Context, id string, 
 		if *req.EntryAgentID == "" {
 			record.EntryAgentID = nil
 		} else {
-			v := *req.EntryAgentID
-			record.EntryAgentID = &v
+			resolved, err := a.resolveEntryAgentRef(ctx, *req.EntryAgentID)
+			if err != nil {
+				return err
+			}
+			record.EntryAgentID = &resolved
 		}
 	}
 	if req.ChatEnabled != nil {
@@ -177,6 +180,19 @@ func (a *schemaServiceHTTPAdapter) DeleteSchema(ctx context.Context, id string) 
 		return fmt.Errorf("delete schema: %w", err)
 	}
 	return nil
+}
+
+// resolveEntryAgentRef returns the agent UUID for a name or UUID reference.
+// UUID values pass through verbatim; names are resolved via a raw DB lookup.
+func (a *schemaServiceHTTPAdapter) resolveEntryAgentRef(ctx context.Context, ref string) (string, error) {
+	if isUUID(ref) {
+		return ref, nil
+	}
+	var id string
+	if err := a.db.WithContext(ctx).Raw("SELECT id FROM agents WHERE name = ? LIMIT 1", ref).Scan(&id).Error; err != nil || id == "" {
+		return "", pkgerrors.InvalidInput(fmt.Sprintf("agent not found: %s", ref))
+	}
+	return id, nil
 }
 
 // ListSchemaAgents returns the derived membership list for a schema (V2:
@@ -303,8 +319,9 @@ func (a *agentRelationServiceHTTPAdapter) GetAgentRelation(ctx context.Context, 
 
 func (a *agentRelationServiceHTTPAdapter) CreateAgentRelation(ctx context.Context, schemaID string, req deliveryhttp.CreateAgentRelationRequest) (*deliveryhttp.AgentRelationInfo, error) {
 	// SCC-02: verify the schema belongs to the requesting tenant before creating
-	// a relation under it.
-	if _, err := a.schemaRepo.GetByID(ctx, schemaID); err != nil {
+	// a relation under it. Capture the record for entry-agent auto-assignment below.
+	existingSchema, err := a.schemaRepo.GetByID(ctx, schemaID)
+	if err != nil {
 		return nil, pkgerrors.NotFound(fmt.Sprintf("schema not found: %s", schemaID))
 	}
 
@@ -330,11 +347,23 @@ func (a *agentRelationServiceHTTPAdapter) CreateAgentRelation(ctx context.Contex
 		return nil, fmt.Errorf("create agent relation: %w", err)
 	}
 
+	// Auto-set entry_agent_id to the source agent when the schema has none.
+	// This makes the canvas work correctly for schemas created without an explicit entry agent.
+	if existingSchema.EntryAgentID == nil && sourceID != "" {
+		updated := &configrepo.SchemaRecord{
+			Name:         existingSchema.Name,
+			Description:  existingSchema.Description,
+			EntryAgentID: &sourceID,
+			ChatEnabled:  existingSchema.ChatEnabled,
+		}
+		_ = a.schemaRepo.Update(ctx, schemaID, updated)
+	}
+
 	return &deliveryhttp.AgentRelationInfo{
 		ID:            record.ID,
 		SchemaID:      record.SchemaID,
-		SourceAgentID: record.SourceAgentID,
-		TargetAgentID: record.TargetAgentID,
+		SourceAgentID: a.resolveNameByID(ctx, record.SourceAgentID),
+		TargetAgentID: a.resolveNameByID(ctx, record.TargetAgentID),
 		Config:        record.Config,
 	}, nil
 }

@@ -447,7 +447,7 @@ export default function BottomPanel() {
           )}
           {tab === 'testflow' && (
             <div className="flex-1 min-h-0 overflow-y-auto">
-              <TestFlowTab />
+              <TestFlowTab lockedSchemaId={lockedSchema ?? undefined} />
             </div>
           )}
         </div>

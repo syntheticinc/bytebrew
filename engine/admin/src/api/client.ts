@@ -403,7 +403,7 @@ class APIClient {
   // updateSchema persists editable schema fields (name, description,
   // chat_enabled). Used by SchemaDetailPage's Settings tab to flip the
   // chat_enabled toggle — matches backend `PUT /api/v1/schemas/{id}`.
-  updateSchema(schemaId: string, data: { name?: string; description?: string; chat_enabled?: boolean }) {
+  updateSchema(schemaId: string, data: { name?: string; description?: string; chat_enabled?: boolean; entry_agent_id?: string }) {
     if (this.isPrototype) {
       const s = mockSchemas.find((x) => x.id === schemaId);
       return this.mock<Schema>({
