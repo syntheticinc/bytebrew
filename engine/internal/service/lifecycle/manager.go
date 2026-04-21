@@ -22,8 +22,10 @@ type ContextCompactor interface {
 // AgentUUIDResolver resolves an agent name to its stable UUID.
 // When set, the Manager uses UUID as the instance key instead of name,
 // so renaming an agent does not reset its persistent context.
+// Context is required so multi-tenant registries can dispatch to the
+// caller's tenant_id (CE single-tenant registries ignore ctx).
 type AgentUUIDResolver interface {
-	ResolveAgentUUID(agentName string) string
+	ResolveAgentUUID(ctx context.Context, agentName string) string
 }
 
 // Manager tracks agent instances and their lifecycle (spawn vs persistent).
@@ -60,7 +62,7 @@ func (m *Manager) SetUUIDResolver(r AgentUUIDResolver) {
 func (m *Manager) ExecuteTask(ctx context.Context, agentName, sessionID, input string,
 	mode domain.LifecycleMode, maxContext int, eventStream domain.AgentEventStream) (string, error) {
 
-	key := m.resolvedKey(agentName, sessionID)
+	key := m.resolvedKey(ctx, agentName, sessionID)
 
 	instance := m.getOrCreateInstance(key, agentName, mode, maxContext)
 
@@ -137,16 +139,16 @@ func (m *Manager) ExecuteTask(ctx context.Context, agentName, sessionID, input s
 }
 
 // GetInstance returns the current agent instance state, if it exists.
-func (m *Manager) GetInstance(agentName, sessionID string) (*domain.AgentInstance, bool) {
+func (m *Manager) GetInstance(ctx context.Context, agentName, sessionID string) (*domain.AgentInstance, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	inst, ok := m.instances[m.resolvedKey(agentName, sessionID)]
+	inst, ok := m.instances[m.resolvedKey(ctx, agentName, sessionID)]
 	return inst, ok
 }
 
 // ResetAgent resets a persistent agent's context explicitly.
-func (m *Manager) ResetAgent(agentName, sessionID string) {
-	key := m.resolvedKey(agentName, sessionID)
+func (m *Manager) ResetAgent(ctx context.Context, agentName, sessionID string) {
+	key := m.resolvedKey(ctx, agentName, sessionID)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -157,10 +159,10 @@ func (m *Manager) ResetAgent(agentName, sessionID string) {
 }
 
 // ContextSize returns the number of context entries for a persistent agent.
-func (m *Manager) ContextSize(agentName, sessionID string) int {
+func (m *Manager) ContextSize(ctx context.Context, agentName, sessionID string) int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return len(m.contexts[m.resolvedKey(agentName, sessionID)])
+	return len(m.contexts[m.resolvedKey(ctx, agentName, sessionID)])
 }
 
 func (m *Manager) getOrCreateInstance(key, agentName string, mode domain.LifecycleMode, maxContext int) *domain.AgentInstance {
@@ -183,9 +185,9 @@ func (m *Manager) getOrCreateInstance(key, agentName string, mode domain.Lifecyc
 
 // resolvedKey builds the instance map key using UUID when available, falling
 // back to the agent name. UUID-based keys survive agent renames.
-func (m *Manager) resolvedKey(agentName, sessionID string) string {
+func (m *Manager) resolvedKey(ctx context.Context, agentName, sessionID string) string {
 	if m.uuidResolver != nil {
-		if uuid := m.uuidResolver.ResolveAgentUUID(agentName); uuid != "" {
+		if uuid := m.uuidResolver.ResolveAgentUUID(ctx, agentName); uuid != "" {
 			return uuid + ":" + sessionID
 		}
 	}

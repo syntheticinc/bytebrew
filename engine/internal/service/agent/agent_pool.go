@@ -161,8 +161,9 @@ type AgentModelSelector interface {
 
 // AgentModelIDResolver resolves the model ID configured for a named agent (consumer-side).
 // Returns nil when no per-agent model is configured.
+// Context is required so multi-tenant registries can dispatch per tenant.
 type AgentModelIDResolver interface {
-	ResolveModelID(agentName string) *string
+	ResolveModelID(ctx context.Context, agentName string) *string
 }
 
 // AgentModelCacheProvider fetches a cached LLM client by model ID (consumer-side).

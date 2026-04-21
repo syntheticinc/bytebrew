@@ -17,8 +17,10 @@ import (
 
 // AgentModelResolver looks up the ModelID associated with a named agent.
 // Returns nil when the agent has no per-agent model configured.
+// Context is required so multi-tenant registries can resolve against the
+// caller's tenant_id (CE registries ignore ctx — see AgentRegistry).
 type AgentModelResolver interface {
-	ResolveModelID(agentName string) *string
+	ResolveModelID(ctx context.Context, agentName string) *string
 }
 
 // AgentSchemaResolver resolves the primary schema ID (UUID) for an agent.
@@ -29,8 +31,10 @@ type AgentSchemaResolver interface {
 
 // AgentUUIDResolver resolves the UUID for an agent by name.
 // Used to pass the correct uuid FK into engine.ExecutionConfig.AgentID.
+// Context is required so multi-tenant registries can resolve against the
+// caller's tenant_id (CE registries ignore ctx — see AgentRegistry).
 type AgentUUIDResolver interface {
-	ResolveAgentUUID(agentName string) string
+	ResolveAgentUUID(ctx context.Context, agentName string) string
 }
 
 // Factory creates EngineAdapter-based TurnExecutors for Supervisor mode.
@@ -236,7 +240,7 @@ func (f *Factory) CreateForSession(
 	// Resolve agent UUID for engine execution context (agent_context_snapshots.agent_id = uuid FK).
 	var agentUUID string
 	if f.agentUUIDResolver != nil {
-		agentUUID = f.agentUUIDResolver.ResolveAgentUUID(agentName)
+		agentUUID = f.agentUUIDResolver.ResolveAgentUUID(ctx, agentName)
 	}
 
 	// Create EngineAdapter (implements TurnExecutor interface)
@@ -298,7 +302,7 @@ func (f *Factory) resolveModel(ctx context.Context, agentName string) (model.Too
 	}
 
 	if f.modelCache != nil && f.agentResolver != nil {
-		modelID := f.agentResolver.ResolveModelID(agentName)
+		modelID := f.agentResolver.ResolveModelID(ctx, agentName)
 		if modelID != nil {
 			client, name, err := f.modelCache.Get(ctx, *modelID)
 			if err != nil {

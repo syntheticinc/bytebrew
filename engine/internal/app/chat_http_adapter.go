@@ -39,10 +39,24 @@ type chatSessionPersister interface {
 type chatServiceHTTPAdapter struct {
 	registry    *flowregistry.SessionRegistry
 	processor   *sessionprocessor.Processor
-	agents      *agentregistry.AgentRegistry
+	agents      *agentregistry.AgentRegistry  // non-nil in single-tenant (CE) mode
+	registryMgr *agentregistry.Manager        // non-nil in multi-tenant (Cloud/EE) mode
 	schemas     schemaChatRepo       // optional — nil in tests / no-DB mode
 	sessions    chatSessionPersister // optional — nil when no DB
 	chatEnabled bool                 // false when no LLM model configured
+}
+
+// resolveRegistry returns the AgentRegistry for the current request context.
+// In single-tenant mode it returns a.agents directly; in multi-tenant mode it
+// delegates to registryMgr.GetForContext to get the per-tenant registry.
+func (a *chatServiceHTTPAdapter) resolveRegistry(ctx context.Context) (*agentregistry.AgentRegistry, error) {
+	if a.agents != nil {
+		return a.agents, nil
+	}
+	if a.registryMgr != nil {
+		return a.registryMgr.GetForContext(ctx)
+	}
+	return nil, fmt.Errorf("no agent registry configured")
 }
 
 // Chat creates (or resumes) a session for the given schema, enqueues the
@@ -77,11 +91,12 @@ func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, schemaID, message, us
 		return nil, pkgerrors.InvalidInput("schema has no entry agent")
 	}
 
-	if a.agents == nil {
-		return nil, fmt.Errorf("no agents configured")
+	registry, err := a.resolveRegistry(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("no agents configured: %w", err)
 	}
 
-	entryAgent, err := a.agents.GetByID(*schema.EntryAgentID)
+	entryAgent, err := registry.GetByID(*schema.EntryAgentID)
 	if err != nil {
 		return nil, pkgerrors.NotFound(fmt.Sprintf("entry agent not found for schema %s", schemaID))
 	}

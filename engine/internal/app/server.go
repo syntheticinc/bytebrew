@@ -1112,15 +1112,23 @@ func Run(sc ServerConfig) error {
 	}
 
 	// Engine components are always available
-	// Use AgentRegistry as FlowProvider (replaces legacy FlowManager for agent resolution)
+	// Use AgentRegistry as FlowProvider (replaces legacy FlowManager for agent resolution).
+	// In multi-tenant mode agentRegistry is nil and we must dispatch per-request via the
+	// Manager, otherwise the static FlowManager has no agents (flows.yaml is empty).
 	var flowProvider turnexecutor.FlowProvider = components.FlowManager
+	var tenantAwareProvider *agentregistry.TenantAwareFlowProvider
 	if agentRegistry != nil {
 		flowProvider = agentRegistry
+	} else if registryMgr != nil {
+		tenantAwareProvider = agentregistry.NewTenantAwareFlowProvider(registryMgr)
+		flowProvider = tenantAwareProvider
 	}
 	// Resolve AgentModelResolver (nil-safe: factory handles nil gracefully)
 	var agentModelResolver turnexecutorfactory.AgentModelResolver
 	if agentRegistry != nil {
 		agentModelResolver = agentRegistry
+	} else if tenantAwareProvider != nil {
+		agentModelResolver = tenantAwareProvider
 	}
 
 	factory := turnexecutorfactory.New(
@@ -1145,6 +1153,9 @@ func Run(sc ServerConfig) error {
 	if agentRegistry != nil {
 		factory.SetAgentUUIDResolver(agentRegistry)
 		loggerInstance.InfoContext(ctx, "AgentUUIDResolver wired into TurnExecutorFactory")
+	} else if tenantAwareProvider != nil {
+		factory.SetAgentUUIDResolver(tenantAwareProvider)
+		loggerInstance.InfoContext(ctx, "Tenant-aware AgentUUIDResolver wired into TurnExecutorFactory")
 	}
 
 	// Wire memory storage into factory for memory_recall/memory_store tools (US-001 Memory capability)
@@ -1234,6 +1245,7 @@ func Run(sc ServerConfig) error {
 			registry:    sessionRegistry,
 			processor:   sessProcessor,
 			agents:      agentRegistry,
+			registryMgr: registryMgr,
 			chatEnabled: components.AgentService != nil || components.ModelCache != nil,
 		}
 		var schemaRepoForChat *configrepo.GORMSchemaRepository

@@ -147,8 +147,11 @@ func (r *AgentRegistry) GetDefault() (*RegisteredAgent, error) {
 }
 
 // ResolveAgentUUID returns the UUID for the given agent name, or "" if not found.
-// Implements turnexecutorfactory.AgentUUIDResolver interface.
-func (r *AgentRegistry) ResolveAgentUUID(agentName string) string {
+// Implements turnexecutorfactory.AgentUUIDResolver and lifecycle.AgentUUIDResolver.
+// The context parameter is ignored at this layer because the AgentRegistry is
+// already tenant-scoped (single-tenant singleton or per-tenant instance managed
+// by Manager.GetForContext); tenant dispatch happens at the Manager level.
+func (r *AgentRegistry) ResolveAgentUUID(_ context.Context, agentName string) string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -161,7 +164,8 @@ func (r *AgentRegistry) ResolveAgentUUID(agentName string) string {
 
 // ResolveModelID returns the ModelID for the given agent name, or nil if not found.
 // Implements turnexecutorfactory.AgentModelResolver interface.
-func (r *AgentRegistry) ResolveModelID(agentName string) *string {
+// Context is ignored here for the same reason as ResolveAgentUUID.
+func (r *AgentRegistry) ResolveModelID(_ context.Context, agentName string) *string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

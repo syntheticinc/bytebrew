@@ -129,7 +129,7 @@ func (p *AgentPool) resolveModel(ctx context.Context, agentName string) (model.T
 	p.mu.RUnlock()
 
 	if resolver != nil && cache != nil {
-		if modelID := resolver.ResolveModelID(agentName); modelID != nil {
+		if modelID := resolver.ResolveModelID(ctx, agentName); modelID != nil {
 			client, name, err := cache.Get(ctx, *modelID)
 			if err != nil {
 				slog.ErrorContext(ctx, "failed to resolve model from cache, falling back to selector",

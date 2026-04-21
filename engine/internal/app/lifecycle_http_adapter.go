@@ -35,7 +35,7 @@ func (a *lifecycleHTTPAdapter) GetLifecycleStatus(ctx context.Context, agentName
 		}, nil
 	}
 
-	instance, ok := a.manager.GetInstance(agentName, sessionID)
+	instance, ok := a.manager.GetInstance(ctx, agentName, sessionID)
 	if !ok {
 		return &deliveryhttp.LifecycleStatus{
 			Mode:       string(mode),
