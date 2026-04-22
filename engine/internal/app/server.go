@@ -296,6 +296,7 @@ func Run(sc ServerConfig) error {
 		// the seeder, so this is safe to wire unconditionally.
 		sc.Plugin.SetTenantSeeder(&engineTenantSeeder{
 			schemaRepo: configrepo.NewGORMSchemaRepository(pgDB),
+			db:         pgDB,
 		})
 
 		// Wire the schema counter so EE quota middleware can enforce
@@ -748,7 +749,7 @@ func Run(sc ServerConfig) error {
 
 			// Models
 			llmProviderRepo := configrepo.NewGORMLLMProviderRepository(pgDB)
-			modelService := &modelServiceHTTPAdapter{repo: llmProviderRepo, modelCache: components.ModelCache}
+			modelService := &modelServiceHTTPAdapter{repo: llmProviderRepo, modelCache: components.ModelCache, agentRepo: agentRepo}
 			modelHandler := deliveryhttp.NewModelHandler(modelService)
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeModelsRead))

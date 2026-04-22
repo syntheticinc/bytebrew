@@ -22,6 +22,13 @@ type ModelCacheInvalidator interface {
 type modelServiceHTTPAdapter struct {
 	repo       *configrepo.GORMLLMProviderRepository
 	modelCache ModelCacheInvalidator
+	// agentRepo is used to back-fill the builder-assistant's model_name when
+	// a tenant creates its first chat model via the onboarding wizard. At
+	// provisioning time the builder-assistant is seeded without a model (no
+	// tenant models exist yet) — this closes that gap automatically so the
+	// AI Builder is usable right after step 1 of the wizard. Optional; nil
+	// means no backfill (useful in unit tests).
+	agentRepo *configrepo.GORMAgentRepository
 }
 
 func (m *modelServiceHTTPAdapter) ListModels(ctx context.Context) ([]deliveryhttp.ModelResponse, error) {
@@ -75,6 +82,19 @@ func (m *modelServiceHTTPAdapter) CreateModel(ctx context.Context, req deliveryh
 			return nil, pkgerrors.AlreadyExists(fmt.Sprintf("model with name %q already exists", req.Name))
 		}
 		return nil, fmt.Errorf("create model: %w", err)
+	}
+
+	// Back-fill builder-assistant's model_name when this is the first chat
+	// model for the tenant. Non-fatal — a failure here doesn't undo the
+	// successful model create.
+	if m.agentRepo != nil && kind == "chat" {
+		if ba, err := m.agentRepo.GetByName(ctx, builderAssistantName); err == nil && ba != nil && ba.ModelName == "" {
+			ba.ModelName = provider.Name
+			if uerr := m.agentRepo.Update(ctx, builderAssistantName, ba); uerr != nil {
+				// Log-only: the model is live, the user can set it manually later.
+				_ = uerr
+			}
+		}
 	}
 
 	return &deliveryhttp.ModelResponse{

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"gorm.io/gorm"
+
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 )
@@ -13,12 +15,18 @@ import (
 // goes through the same code path as normal user-driven schema creation —
 // tenant scoping, validation, timestamps, etc. remain consistent.
 //
-// Kept deliberately minimal: a single default schema named "My Workspace".
-// Creating a default entry agent is a follow-up (requires a sane default model
-// to be already present for the tenant, which is not guaranteed at
-// provisioning time).
+// Seeds per-tenant:
+//   1. "My Workspace" default schema (chat disabled until the user configures it)
+//   2. builder-assistant system agent (editable by the user — deleting and
+//      re-seeding via POST /admin/builder-assistant/restore is supported).
+//      Model assignment is deferred: if no models exist yet the agent is
+//      seeded without a model, and modelServiceHTTPAdapter.CreateModel picks
+//      up the first user-created model to back-fill it. This matches the
+//      dogfooding story: the AI Builder runs on the same engine the user
+//      configures, so every tenant gets its own editable copy.
 type engineTenantSeeder struct {
 	schemaRepo *configrepo.GORMSchemaRepository
+	db         *gorm.DB
 }
 
 // SeedTenant satisfies plugin.TenantSeeder. Runs under a context scoped to the
@@ -29,6 +37,9 @@ func (s *engineTenantSeeder) SeedTenant(ctx context.Context, tenantID, plan stri
 	}
 	if s.schemaRepo == nil {
 		return fmt.Errorf("schema repository not configured")
+	}
+	if s.db == nil {
+		return fmt.Errorf("db handle not configured")
 	}
 
 	// Scope the context to the new tenant so the repository stamps
@@ -43,5 +54,10 @@ func (s *engineTenantSeeder) SeedTenant(ctx context.Context, tenantID, plan stri
 	if err := s.schemaRepo.Create(ctx, record); err != nil {
 		return fmt.Errorf("seed default schema: %w", err)
 	}
+
+	// Seed the AI Builder agent for this tenant. seedBuilderAssistant is
+	// tolerant of missing models (leaves ModelName empty) and idempotent
+	// (updates if already present).
+	seedBuilderAssistant(ctx, s.db)
 	return nil
 }
