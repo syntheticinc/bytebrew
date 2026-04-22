@@ -77,6 +77,16 @@ type Plugin interface {
 	// internals. CE's Noop ignores the seeder.
 	SetTenantSeeder(seeder TenantSeeder)
 
+	// SetSchemaCounter installs a callback the plugin can call to count
+	// schemas visible to the tenant in the current request context. EE's
+	// quota middleware uses it to enforce SchemasLimit without issuing an
+	// internal HTTP sub-request to itself — the earlier sub-request design
+	// hard-coded the loopback port and silently failed (fail-open) whenever
+	// the engine ran on a non-default port (Cloud containers bind 8443, the
+	// sub-request targeted 9555). CE's Noop ignores the counter because it
+	// has no quota middleware.
+	SetSchemaCounter(counter SchemaCounter)
+
 	// TransportPolicy returns the MCP transport policy for this deployment.
 	// CE / bare-metal deployments return PermissiveTransportPolicy (all
 	// transports allowed). Cloud / managed deployments return
@@ -86,6 +96,33 @@ type Plugin interface {
 	// Stop releases any background resources held by the plugin
 	// (watchers, tickers, etc.).
 	Stop()
+}
+
+// SchemaCounter returns the number of schemas belonging to tenantID. The
+// engine wires a concrete counter over its schema repository; quota
+// middleware calls it instead of issuing an internal HTTP sub-request that
+// would require port discovery and a round-trip through the entire
+// middleware chain.
+//
+// tenantID is passed explicitly rather than read from ctx so the plugin
+// does not need to know about CE's internal tenant context key — the
+// engine-side counter applies its own tenant scoping.
+//
+// A non-nil error means "counting failed" — the plugin decides whether to
+// fail-open (let the write through, log a warning) or fail-closed depending
+// on policy. Empty tenantID should yield (0, nil) — CE / single-tenant mode
+// has no quota enforcement surface.
+type SchemaCounter interface {
+	CountSchemas(ctx context.Context, tenantID string) (int, error)
+}
+
+// SchemaCounterFunc adapts a plain function to the SchemaCounter interface so
+// callers can wire an inline closure without declaring a new type.
+type SchemaCounterFunc func(ctx context.Context, tenantID string) (int, error)
+
+// CountSchemas implements SchemaCounter.
+func (f SchemaCounterFunc) CountSchemas(ctx context.Context, tenantID string) (int, error) {
+	return f(ctx, tenantID)
 }
 
 // TenantSeeder populates a freshly-created tenant with default data.

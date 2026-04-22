@@ -297,6 +297,29 @@ func Run(sc ServerConfig) error {
 		sc.Plugin.SetTenantSeeder(&engineTenantSeeder{
 			schemaRepo: configrepo.NewGORMSchemaRepository(pgDB),
 		})
+
+		// Wire the schema counter so EE quota middleware can enforce
+		// SchemasLimit without making an internal HTTP sub-request (the old
+		// sub-request design hard-coded the loopback port and silently
+		// failed open whenever the engine bound a non-default port). CE's
+		// Noop plugin ignores the counter — safe to wire unconditionally.
+		schemaCounterRepo := configrepo.NewGORMSchemaRepository(pgDB)
+		sc.Plugin.SetSchemaCounter(pluginpkg.SchemaCounterFunc(
+			func(ctx context.Context, tenantID string) (int, error) {
+				if tenantID == "" {
+					return 0, nil
+				}
+				// Scope ctx to the plugin-supplied tenant so the repository
+				// applies the same tenant filter it would for an authenticated
+				// HTTP request.
+				scoped := domain.WithTenantID(ctx, tenantID)
+				recs, err := schemaCounterRepo.List(scoped)
+				if err != nil {
+					return 0, fmt.Errorf("count schemas: %w", err)
+				}
+				return len(recs), nil
+			},
+		))
 	}
 
 	// If no LLM configured in legacy config but models exist in DB, use the first one.
@@ -679,7 +702,12 @@ func Run(sc ServerConfig) error {
 
 			// Agents
 			agentRepo := configrepo.NewGORMAgentRepository(pgDB)
-			agentManager := &agentManagerHTTPAdapter{repo: agentRepo, registry: agentRegistry, registryMgr: registryMgr, db: pgDB, schemaRepo: schemaRepo}
+			// kbRepo is used by PatchAgent/CreateAgent to apply
+			// knowledge_base_ids changes to the knowledge_base_agents M2M
+			// table. Without this the request body field was silently
+			// accepted and discarded (Bug 7).
+			agentKBRepo := configrepo.NewGORMKnowledgeBaseRepository(pgDB)
+			agentManager := &agentManagerHTTPAdapter{repo: agentRepo, registry: agentRegistry, registryMgr: registryMgr, db: pgDB, schemaRepo: schemaRepo, kbRepo: agentKBRepo}
 			agentHandler := deliveryhttp.NewAgentHandlerWithManager(agentManager)
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
@@ -1376,6 +1404,7 @@ func Run(sc ServerConfig) error {
 						registryMgr: registryMgr,
 						db:          pgDB,
 						schemaRepo:  configrepo.NewGORMSchemaRepository(pgDB),
+						kbRepo:      configrepo.NewGORMKnowledgeBaseRepository(pgDB),
 					}).List)
 			})
 		}

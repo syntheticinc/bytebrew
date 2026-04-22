@@ -9,6 +9,22 @@ import (
 	"gorm.io/gorm"
 )
 
+// Sentinel errors for ReplaceAgentKBs/LinkAgent/UnlinkAgent tenant-isolation
+// checks. Callers use errors.Is to map these to 404 at the HTTP layer without
+// relying on string matching.
+var (
+	// ErrAgentNotInTenant means the referenced agent does not exist in the
+	// tenant resolved from the context. The authoritative fix at the caller
+	// is to surface a 404 — never a 500 — so a cross-tenant probe cannot
+	// distinguish "agent does not exist" from "agent exists elsewhere".
+	ErrAgentNotInTenant = errors.New("agent not found in tenant")
+
+	// ErrKBsNotInTenant means one or more referenced knowledge bases do not
+	// exist in the tenant resolved from the context. Same 404 mapping policy
+	// as ErrAgentNotInTenant.
+	ErrKBsNotInTenant = errors.New("one or more knowledge bases not found in tenant")
+)
+
 // GORMKnowledgeBaseRepository provides CRUD for knowledge bases and agent linking.
 // Tenant isolation is applied via tenantScope(ctx) from base_repo.go.
 type GORMKnowledgeBaseRepository struct {
@@ -147,7 +163,7 @@ func (r *GORMKnowledgeBaseRepository) verifyKBAndAgentInTenant(ctx context.Conte
 		return fmt.Errorf("verify knowledge base tenant: %w", err)
 	}
 	if kbCount == 0 {
-		return fmt.Errorf("knowledge base not found in tenant")
+		return ErrKBsNotInTenant
 	}
 
 	var agentCount int64
@@ -158,7 +174,7 @@ func (r *GORMKnowledgeBaseRepository) verifyKBAndAgentInTenant(ctx context.Conte
 		return fmt.Errorf("verify agent tenant: %w", err)
 	}
 	if agentCount == 0 {
-		return fmt.Errorf("agent not found in tenant")
+		return ErrAgentNotInTenant
 	}
 	return nil
 }
@@ -185,6 +201,96 @@ func (r *GORMKnowledgeBaseRepository) ListKBsByAgentID(ctx context.Context, agen
 		return nil, fmt.Errorf("list KBs by agent: %w", err)
 	}
 	return kbIDs, nil
+}
+
+// ReplaceAgentKBs replaces the KB membership for the given agent with the
+// exact list of kbIDs provided. Empty kbIDs means "unlink from all KBs".
+// Bug 7: admin UI patches an agent with knowledge_base_ids and expects the
+// M2M table to match exactly — this single call handles both additions
+// (for previously-absent IDs) and removals (for previously-present IDs
+// that are not in the new set).
+//
+// The operation is tenant-safe in the sense that every KB touched is
+// verified to belong to the current tenant before any write; stray IDs
+// from other tenants short-circuit with an error and no write is applied.
+// This uses a short transaction so partial failure rolls back the whole
+// membership change.
+func (r *GORMKnowledgeBaseRepository) ReplaceAgentKBs(ctx context.Context, agentID string, kbIDs []string) error {
+	tenantID := tenantIDFromCtx(ctx)
+
+	// Verify agent belongs to the tenant — prevents stitching an agent to
+	// a KB owned by a different tenant.
+	var agentCount int64
+	if err := r.db.WithContext(ctx).
+		Model(&models.AgentModel{}).
+		Where("id = ? AND tenant_id = ?", agentID, tenantID).
+		Count(&agentCount).Error; err != nil {
+		return fmt.Errorf("verify agent tenant: %w", err)
+	}
+	if agentCount == 0 {
+		return ErrAgentNotInTenant
+	}
+
+	// Verify every incoming KB also belongs to the tenant. We do this in
+	// a single IN-query so the cost stays O(1) round-trips regardless of
+	// how many KBs were passed.
+	if len(kbIDs) > 0 {
+		var kbCount int64
+		if err := r.db.WithContext(ctx).
+			Model(&models.KnowledgeBase{}).
+			Where("id IN ? AND tenant_id = ?", kbIDs, tenantID).
+			Count(&kbCount).Error; err != nil {
+			return fmt.Errorf("verify kb tenants: %w", err)
+		}
+		if int(kbCount) != len(uniqueStrings(kbIDs)) {
+			return ErrKBsNotInTenant
+		}
+	}
+
+	// Replace the agent's KB set inside a transaction so a mid-way error
+	// does not leave the membership half-updated. PATCH with []=unlink all
+	// is a supported case — both the delete and a no-op insert are OK.
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("agent_id = ?", agentID).
+			Delete(&models.KnowledgeBaseAgent{}).Error; err != nil {
+			return fmt.Errorf("clear agent KB links: %w", err)
+		}
+		if len(kbIDs) == 0 {
+			return nil
+		}
+		rows := make([]models.KnowledgeBaseAgent, 0, len(kbIDs))
+		seen := make(map[string]struct{}, len(kbIDs))
+		for _, kbID := range kbIDs {
+			if _, dup := seen[kbID]; dup {
+				continue
+			}
+			seen[kbID] = struct{}{}
+			rows = append(rows, models.KnowledgeBaseAgent{
+				KnowledgeBaseID: kbID,
+				AgentID:         agentID,
+			})
+		}
+		if err := tx.Create(&rows).Error; err != nil {
+			return fmt.Errorf("insert agent KB links: %w", err)
+		}
+		return nil
+	})
+}
+
+// uniqueStrings returns the input with duplicates removed (order preserved).
+// Used by ReplaceAgentKBs to make the tenant-count comparison correct when
+// callers pass the same KB twice.
+func uniqueStrings(in []string) []string {
+	seen := make(map[string]struct{}, len(in))
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
 }
 
 // ListKBsByAgentName resolves agent name → ID (tenant-scoped), then returns linked KB IDs.

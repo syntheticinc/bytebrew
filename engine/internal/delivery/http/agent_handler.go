@@ -64,6 +64,12 @@ type CreateAgentRequest struct {
 	Tools      []string `json:"tools,omitempty"`
 	CanSpawn   []string `json:"can_spawn,omitempty"`
 	MCPServers []string `json:"mcp_servers,omitempty"`
+	// KnowledgeBaseIDs is the set of KB UUIDs linked to this agent via the
+	// knowledge_base_agents M2M. A nil slice means "do not change" on
+	// update; an empty slice means "unlink all". Bug 7: the field was
+	// silently accepted and ignored — now the upsert is wired through
+	// the agent manager adapter.
+	KnowledgeBaseIDs []string `json:"knowledge_base_ids,omitempty"`
 }
 
 // UnmarshalJSON supports "system" as an alias for "system_prompt" in the JSON body.
@@ -111,6 +117,9 @@ type UpdateAgentRequest struct {
 	Tools           *[]string `json:"tools,omitempty"`
 	CanSpawn        *[]string `json:"can_spawn,omitempty"`
 	MCPServers      *[]string `json:"mcp_servers,omitempty"`
+	// KnowledgeBaseIDs, when non-nil, replaces the KB membership for the
+	// agent (empty slice = unlink all). Bug 7: silent-accept before.
+	KnowledgeBaseIDs *[]string `json:"knowledge_base_ids,omitempty"`
 }
 
 // AgentLister provides agent listing and detail retrieval.

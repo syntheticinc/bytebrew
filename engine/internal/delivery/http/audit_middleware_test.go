@@ -118,6 +118,35 @@ func TestAuditMiddleware_LogsMethodAndPath(t *testing.T) {
 	assert.Equal(t, "POST /api/v1/tasks", logger.entries[0].Resource)
 }
 
+func TestResolveAuditAction_SemanticActions(t *testing.T) {
+	cases := []struct {
+		name, method, path string
+		status             int
+		want               string
+	}{
+		{"create agent", "POST", "/api/v1/agents", 201, "agent.create"},
+		{"update agent", "PATCH", "/api/v1/agents/ag-a", 200, "agent.update"},
+		{"delete agent", "DELETE", "/api/v1/agents/ag-a", 204, "agent.delete"},
+		{"create schema", "POST", "/api/v1/schemas", 201, "schema.create"},
+		{"delete schema", "DELETE", "/api/v1/schemas/s-1", 204, "schema.delete"},
+		{"chat message", "POST", "/api/v1/schemas/s-1/chat", 200, "chat.message"},
+		{"agent relation", "POST", "/api/v1/schemas/s-1/agent-relations", 201, "agent_relation.create"},
+		{"create model", "POST", "/api/v1/models", 201, "model.create"},
+		{"delete mcp", "DELETE", "/api/v1/mcp-servers/m-1", 204, "mcp.delete"},
+		{"token create", "POST", "/api/v1/auth/tokens", 201, "token.create"},
+		{"token revoke", "DELETE", "/api/v1/auth/tokens/t-1", 204, "token.revoke"},
+		{"local session success", "POST", "/api/v1/auth/local-session", 200, "auth.success"},
+		{"local session fail", "POST", "/api/v1/auth/local-session", 401, "auth.fail"},
+		{"GET agents list fallback", "GET", "/api/v1/agents", 200, "api_call"},
+		{"unknown path", "POST", "/api/v1/unknown", 200, "api_call"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, resolveAuditAction(c.method, c.path, c.status))
+		})
+	}
+}
+
 func TestStatusWriter_PreventDoubleWriteHeader(t *testing.T) {
 	w := httptest.NewRecorder()
 	sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}

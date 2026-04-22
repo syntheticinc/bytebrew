@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 )
 
@@ -160,4 +161,71 @@ func TestLogger_Log_MultipleEntries(t *testing.T) {
 	var count int64
 	db.Model(&models.AuditLogModel{}).Count(&count)
 	assert.Equal(t, int64(5), count)
+}
+
+// TestLogger_Log_CETenantFallback verifies that in CE mode (no tenant in ctx)
+// entries default to the CE sentinel tenant, keeping single-tenant semantics.
+func TestLogger_Log_CETenantFallback(t *testing.T) {
+	db := setupTestDB(t)
+	logger := NewLogger(db)
+
+	err := logger.Log(context.Background(), Entry{
+		ActorType: "admin",
+		Action:    "agent.create",
+	})
+	require.NoError(t, err)
+
+	var result models.AuditLogModel
+	require.NoError(t, db.First(&result).Error)
+	assert.Equal(t, domain.CETenantID, result.TenantID,
+		"CE fallback must stamp the CETenantID sentinel")
+}
+
+// TestLogger_Log_CloudTenantStamp verifies that a Cloud-style ctx with a
+// tenant_id attached is persisted verbatim — this is the Bug 1 regression.
+// Without the fix, all audit rows land under the CE sentinel even in Cloud.
+func TestLogger_Log_CloudTenantStamp(t *testing.T) {
+	db := setupTestDB(t)
+	logger := NewLogger(db)
+
+	tenantA := "11111111-1111-1111-1111-111111111111"
+	ctx := domain.WithTenantID(context.Background(), tenantA)
+
+	err := logger.Log(ctx, Entry{
+		ActorType: "admin",
+		ActorID:   "alice@tenant-a.com",
+		Action:    "agent.create",
+	})
+	require.NoError(t, err)
+
+	var result models.AuditLogModel
+	require.NoError(t, db.First(&result).Error)
+	assert.Equal(t, tenantA, result.TenantID,
+		"Cloud tenant_id from ctx must be persisted verbatim")
+	assert.NotEqual(t, domain.CETenantID, result.TenantID,
+		"must not collapse Cloud tenant to CE sentinel")
+}
+
+// TestLogger_Log_MultipleTenants verifies that two concurrent tenants write
+// entries under their own tenant_id — no leakage, no fall-through to the
+// default column value.
+func TestLogger_Log_MultipleTenants(t *testing.T) {
+	db := setupTestDB(t)
+	logger := NewLogger(db)
+
+	tenantA := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	tenantB := "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+
+	require.NoError(t, logger.Log(domain.WithTenantID(context.Background(), tenantA), Entry{
+		ActorType: "admin", Action: "a",
+	}))
+	require.NoError(t, logger.Log(domain.WithTenantID(context.Background(), tenantB), Entry{
+		ActorType: "admin", Action: "b",
+	}))
+
+	var rows []models.AuditLogModel
+	require.NoError(t, db.Order("action ASC").Find(&rows).Error)
+	require.Len(t, rows, 2)
+	assert.Equal(t, tenantA, rows[0].TenantID)
+	assert.Equal(t, tenantB, rows[1].TenantID)
 }

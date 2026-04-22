@@ -37,6 +37,10 @@ func (Noop) OnAgentStep(context.Context, string, int) error { return nil }
 // nothing to wire the seeder into.
 func (Noop) SetTenantSeeder(TenantSeeder) {}
 
+// SetSchemaCounter is a no-op. CE has no quota middleware, so the counter
+// has no consumer. Defined for Plugin-interface completeness.
+func (Noop) SetSchemaCounter(SchemaCounter) {}
+
 // TransportPolicy returns PermissiveTransportPolicy — CE allows all transports.
 func (Noop) TransportPolicy() TransportPolicy { return PermissiveTransportPolicy{} }
 

@@ -217,6 +217,37 @@ func (a *schemaServiceHTTPAdapter) ListSchemaAgents(ctx context.Context, schemaI
 	return names, nil
 }
 
+// agentRelationLister is the minimal consumer-side contract the relation
+// adapter needs from an agent-relation repository. Narrowing this from the
+// concrete *GORMAgentRelationRepository lets tests inject a fake in-memory
+// store for cycle-check integration coverage without spinning up a DB.
+//
+// Only List + GetByID + Create + Update + Delete are in the contract — these
+// are the exact calls CreateAgentRelation/UpdateAgentRelation/etc. make on
+// the repository today.
+type agentRelationLister interface {
+	List(ctx context.Context, schemaID string) ([]configrepo.AgentRelationRecord, error)
+	GetByID(ctx context.Context, id string) (*configrepo.AgentRelationRecord, error)
+	Create(ctx context.Context, record *configrepo.AgentRelationRecord) error
+	Update(ctx context.Context, id string, record *configrepo.AgentRelationRecord) error
+	Delete(ctx context.Context, id string) error
+}
+
+// agentResolver narrows GORMAgentRepository to the single call the relation
+// adapter actually uses (name → UUID resolution). Consumer-side interface —
+// the relation adapter is the sole caller, so it owns the contract shape.
+type agentResolver interface {
+	GetByName(ctx context.Context, name string) (*configrepo.AgentRecord, error)
+}
+
+// schemaTenantChecker is the consumer-side contract the relation adapter needs
+// from the schema repo for SCC-02 (tenant-ownership) checks and the entry-agent
+// auto-assignment side-effect in CreateAgentRelation.
+type schemaTenantChecker interface {
+	GetByID(ctx context.Context, id string) (*configrepo.SchemaRecord, error)
+	Update(ctx context.Context, id string, record *configrepo.SchemaRecord) error
+}
+
 // agentRelationServiceHTTPAdapter bridges GORMAgentRelationRepository to the
 // http.AgentRelationService interface.
 //
@@ -224,18 +255,27 @@ func (a *schemaServiceHTTPAdapter) ListSchemaAgents(ctx context.Context, schemaI
 // form in source/target fields so admin UI can work directly with agent names.
 // schemaRepo is used to verify schema ownership (SCC-02 tenant isolation) before
 // any operation that takes a schemaID parameter.
+//
+// Fields are typed against consumer-side interfaces (agentRelationLister,
+// agentResolver, schemaTenantChecker) so tests can substitute fakes for the
+// cycle-detection integration coverage without a real DB. The constructor
+// still accepts the concrete types wired in server.go so no call sites change.
 type agentRelationServiceHTTPAdapter struct {
-	repo       *configrepo.GORMAgentRelationRepository
-	agentRepo  *configrepo.GORMAgentRepository
-	schemaRepo *configrepo.GORMSchemaRepository
+	repo       agentRelationLister
+	agentRepo  agentResolver
+	schemaRepo schemaTenantChecker
 	db         *gorm.DB
 }
 
 // resolveNameByID resolves an agent UUID to its name via a raw DB query.
-// Returns the UUID unchanged if the agent is not found (safe fallback).
+// Returns the UUID unchanged if the agent is not found (safe fallback) or if
+// db is nil (unit-test wiring where name-resolution isn't exercised).
 func (a *agentRelationServiceHTTPAdapter) resolveNameByID(ctx context.Context, id string) string {
 	if id == "" {
 		return ""
+	}
+	if a.db == nil {
+		return id
 	}
 	var name string
 	if err := a.db.WithContext(ctx).Raw("SELECT name FROM agents WHERE id = ? LIMIT 1", id).Scan(&name).Error; err != nil || name == "" {
@@ -345,6 +385,16 @@ func (a *agentRelationServiceHTTPAdapter) CreateAgentRelation(ctx context.Contex
 		return nil, pkgerrors.InvalidInput("source and target must be different agents")
 	}
 
+	// Bug 2: reject circular delegation. We must prevent any cycle in the
+	// directed delegation graph for this schema. If a path target→source
+	// already exists, adding source→target closes a cycle. Reachability is
+	// computed via BFS over all existing relations for the schema (tenant-
+	// scoped by the repo). Graphs are tiny in practice (< hundreds of edges)
+	// so the per-create O(V+E) check is negligible.
+	if err := a.checkNoCycle(ctx, schemaID, sourceID, targetID); err != nil {
+		return nil, err
+	}
+
 	record := &configrepo.AgentRelationRecord{
 		SchemaID:      schemaID,
 		SourceAgentID: sourceID,
@@ -389,6 +439,20 @@ func (a *agentRelationServiceHTTPAdapter) UpdateAgentRelation(ctx context.Contex
 		return pkgerrors.InvalidInput("source and target must be different agents")
 	}
 
+	// Bug 2: reject cycle-closing updates. We need the existing relation's
+	// schema_id to scope the check and to exclude the current edge from the
+	// graph (otherwise updating (A→B) to (A→B) would self-report a cycle).
+	existing, err := a.repo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return pkgerrors.NotFound(fmt.Sprintf("agent relation not found: %s", id))
+		}
+		return fmt.Errorf("load agent relation for cycle check: %w", err)
+	}
+	if err := a.checkNoCycleExcluding(ctx, existing.SchemaID, sourceID, targetID, id); err != nil {
+		return err
+	}
+
 	record := &configrepo.AgentRelationRecord{
 		SourceAgentID: sourceID,
 		TargetAgentID: targetID,
@@ -401,6 +465,68 @@ func (a *agentRelationServiceHTTPAdapter) UpdateAgentRelation(ctx context.Contex
 		return fmt.Errorf("update agent relation: %w", err)
 	}
 	return nil
+}
+
+// checkNoCycle returns an InvalidInput error when adding the edge
+// source→target to the schema's existing delegation graph would close a
+// cycle. A cycle is closed iff there is already a path target→…→source.
+func (a *agentRelationServiceHTTPAdapter) checkNoCycle(ctx context.Context, schemaID, sourceID, targetID string) error {
+	return a.checkNoCycleExcluding(ctx, schemaID, sourceID, targetID, "")
+}
+
+// checkNoCycleExcluding is the variant used by updates: it ignores a specific
+// existing relation ID when building the graph so that re-saving an edge
+// does not falsely self-report a cycle through itself.
+func (a *agentRelationServiceHTTPAdapter) checkNoCycleExcluding(ctx context.Context, schemaID, sourceID, targetID, excludeID string) error {
+	// Self-loop is caught by the caller, but belt-and-braces:
+	if sourceID == targetID {
+		return pkgerrors.InvalidInput("source and target must be different agents")
+	}
+
+	existing, err := a.repo.List(ctx, schemaID)
+	if err != nil {
+		return fmt.Errorf("list existing agent relations: %w", err)
+	}
+
+	// Build an adjacency list of current edges (excluding the one being
+	// updated, if any) and probe reachability from target back to source.
+	adj := make(map[string][]string, len(existing))
+	for _, r := range existing {
+		if excludeID != "" && r.ID == excludeID {
+			continue
+		}
+		adj[r.SourceAgentID] = append(adj[r.SourceAgentID], r.TargetAgentID)
+	}
+
+	if reachable(adj, targetID, sourceID) {
+		return pkgerrors.InvalidInput("circular delegation: adding this edge would close a cycle")
+	}
+	return nil
+}
+
+// reachable reports whether dst is reachable from src in the directed graph adj.
+// BFS; stops as soon as dst is dequeued. O(V+E).
+func reachable(adj map[string][]string, src, dst string) bool {
+	if src == dst {
+		return true
+	}
+	visited := map[string]struct{}{src: {}}
+	queue := []string{src}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, next := range adj[cur] {
+			if next == dst {
+				return true
+			}
+			if _, seen := visited[next]; seen {
+				continue
+			}
+			visited[next] = struct{}{}
+			queue = append(queue, next)
+		}
+	}
+	return false
 }
 
 func (a *agentRelationServiceHTTPAdapter) DeleteAgentRelation(ctx context.Context, id string) error {

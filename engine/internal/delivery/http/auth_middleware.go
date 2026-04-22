@@ -41,6 +41,59 @@ const (
 	ScopeSchemasWrite  = 8192
 )
 
+// ScopeAPI is the virtual catch-all integration scope. It is NOT a separate
+// bit — it expands into the union of every non-admin operation permitted to
+// an integration: chat, tasks, sessions, and read-only access to agents,
+// schemas, models, and MCP servers. Admin-only surfaces (agent CRUD, schema
+// CRUD, model CRUD, MCP CRUD, config, token management) are deliberately
+// excluded so an "api" token cannot reconfigure the tenant it runs under.
+//
+// Bug 3: clients POST /auth/tokens with `scopes: ["api"]` — we expand that
+// name into the mask below. An empty mask was previously stored (0), which
+// authenticated the token but 403'd every request.
+const ScopeAPIMask = ScopeChat | ScopeTasks | ScopeAgentsRead | ScopeModelsRead | ScopeMCPRead | ScopeTriggersRead | ScopeSchemasRead
+
+// ScopeNameToMask maps canonical scope name tokens accepted by
+// POST /auth/tokens `scopes: [...]` to their underlying bitmask.
+//
+// Granular names ("chat", "tasks", "agents:read", ...) map to a single bit.
+// Composite names ("api", "admin") expand into a union. Unknown names are
+// ignored silently; the resulting mask is the bitwise OR of all recognised
+// tokens. An all-unknown list therefore yields mask=0, which is still a
+// hard reject at RequireScope time — never a silent privilege escalation.
+var ScopeNameToMask = map[string]int{
+	"chat":          ScopeChat,
+	"tasks":         ScopeTasks,
+	"agents:read":   ScopeAgentsRead,
+	"agents":        ScopeAgentsRead, // alias: "agents" => read-only
+	"agents:write":  ScopeAgentsWrite,
+	"config":        ScopeConfig,
+	"admin":         ScopeAdmin,
+	"models:read":   ScopeModelsRead,
+	"models":        ScopeModelsRead,
+	"models:write":  ScopeModelsWrite,
+	"mcp:read":      ScopeMCPRead,
+	"mcp":           ScopeMCPRead,
+	"mcp:write":     ScopeMCPWrite,
+	"schemas:read":  ScopeSchemasRead,
+	"schemas":       ScopeSchemasRead,
+	"schemas:write": ScopeSchemasWrite,
+	"api":           ScopeAPIMask,
+}
+
+// ScopesToMask converts a list of scope names into a bitmask. Unknown
+// names are dropped (no error) — defensive against front-end typos that
+// might otherwise privilege-escalate. An empty list returns 0.
+func ScopesToMask(scopes []string) int {
+	mask := 0
+	for _, s := range scopes {
+		if bit, ok := ScopeNameToMask[s]; ok {
+			mask |= bit
+		}
+	}
+	return mask
+}
+
 // APITokenInfo is the decoded API-token record returned by the verifier.
 type APITokenInfo struct {
 	Name       string

@@ -9,6 +9,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 )
 
@@ -63,7 +64,18 @@ func (l *Logger) Log(ctx context.Context, entry Entry) error {
 		actorSub = &s
 	}
 
+	// Stamp tenant_id from context so Cloud writes land under the right
+	// tenant. CE has no tenant middleware wired so ctx is empty — fall back
+	// to the CE sentinel to preserve single-tenant semantics. Never 000...000
+	// (zero UUID): the column default is the CE tenant sentinel, and some
+	// migrations rely on it.
+	tenantID := domain.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = domain.CETenantID
+	}
+
 	model := models.AuditLogModel{
+		TenantID:   tenantID,
 		OccurredAt: ts,
 		ActorType:  entry.ActorType,
 		ActorSub:   actorSub,

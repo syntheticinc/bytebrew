@@ -30,6 +30,11 @@ type agentManagerHTTPAdapter struct {
 	registryMgr *agentregistry.Manager
 	db          *gorm.DB
 	schemaRepo  *configrepo.GORMSchemaRepository
+	// kbRepo is used to apply knowledge_base_ids changes during agent
+	// Create/Update/Patch (Bug 7). When nil, the knowledge_base_ids
+	// field is silently dropped — this matches the legacy behaviour so
+	// callers that don't wire kbRepo (none in production) keep working.
+	kbRepo *configrepo.GORMKnowledgeBaseRepository
 }
 
 // invalidateRegistryForContext refreshes cached agent registries so that the
@@ -149,6 +154,25 @@ func (a *agentManagerHTTPAdapter) CreateAgent(ctx context.Context, req deliveryh
 		return nil, fmt.Errorf("create agent: %w", err)
 	}
 
+	// Bug 7: apply knowledge_base_ids → knowledge_base_agents M2M link set
+	// when the request included the field. Empty slice = no links; nil = field
+	// not provided at all (no change).
+	if req.KnowledgeBaseIDs != nil && a.kbRepo != nil {
+		created, err := a.repo.GetByName(ctx, req.Name)
+		if err != nil || created == nil {
+			return nil, fmt.Errorf("load created agent for kb link: %w", err)
+		}
+		if err := a.kbRepo.ReplaceAgentKBs(ctx, created.ID, req.KnowledgeBaseIDs); err != nil {
+			if errors.Is(err, configrepo.ErrAgentNotInTenant) {
+				return nil, pkgerrors.NotFound(fmt.Sprintf("agent not found: %s", req.Name))
+			}
+			if errors.Is(err, configrepo.ErrKBsNotInTenant) {
+				return nil, pkgerrors.NotFound("one or more knowledge bases not found")
+			}
+			return nil, fmt.Errorf("apply knowledge_base_ids: %w", err)
+		}
+	}
+
 	a.invalidateRegistryForContext(ctx)
 
 	return a.GetAgent(ctx, req.Name)
@@ -190,13 +214,33 @@ func (a *agentManagerHTTPAdapter) UpdateAgent(ctx context.Context, name string, 
 		return nil, fmt.Errorf("update agent: %w", err)
 	}
 
-	a.invalidateRegistryForContext(ctx)
-
 	// Use the updated name (could have been renamed).
 	lookupName := req.Name
 	if lookupName == "" {
 		lookupName = name
 	}
+
+	// Bug 7: apply knowledge_base_ids if present on PUT full-replace. A nil
+	// slice preserves the existing KB membership; an empty slice removes
+	// all links.
+	if req.KnowledgeBaseIDs != nil && a.kbRepo != nil {
+		updated, err := a.repo.GetByName(ctx, lookupName)
+		if err != nil || updated == nil {
+			return nil, fmt.Errorf("load updated agent for kb link: %w", err)
+		}
+		if err := a.kbRepo.ReplaceAgentKBs(ctx, updated.ID, req.KnowledgeBaseIDs); err != nil {
+			if errors.Is(err, configrepo.ErrAgentNotInTenant) {
+				return nil, pkgerrors.NotFound(fmt.Sprintf("agent not found: %s", lookupName))
+			}
+			if errors.Is(err, configrepo.ErrKBsNotInTenant) {
+				return nil, pkgerrors.NotFound("one or more knowledge bases not found")
+			}
+			return nil, fmt.Errorf("apply knowledge_base_ids: %w", err)
+		}
+	}
+
+	a.invalidateRegistryForContext(ctx)
+
 	return a.GetAgent(ctx, lookupName)
 }
 
@@ -286,6 +330,22 @@ func (a *agentManagerHTTPAdapter) PatchAgent(ctx context.Context, name string, r
 			return nil, pkgerrors.NotFound(fmt.Sprintf("agent not found: %s", name))
 		}
 		return nil, fmt.Errorf("patch agent: %w", err)
+	}
+
+	// Bug 7: apply knowledge_base_ids when the caller explicitly included
+	// the field (non-nil slice). Nil preserves the existing membership;
+	// an empty slice unlinks the agent from all KBs. Mutations go through
+	// ReplaceAgentKBs which enforces tenant isolation on every KB touched.
+	if req.KnowledgeBaseIDs != nil && a.kbRepo != nil {
+		if err := a.kbRepo.ReplaceAgentKBs(ctx, existing.ID, *req.KnowledgeBaseIDs); err != nil {
+			if errors.Is(err, configrepo.ErrAgentNotInTenant) {
+				return nil, pkgerrors.NotFound(fmt.Sprintf("agent not found: %s", name))
+			}
+			if errors.Is(err, configrepo.ErrKBsNotInTenant) {
+				return nil, pkgerrors.NotFound("one or more knowledge bases not found")
+			}
+			return nil, fmt.Errorf("apply knowledge_base_ids: %w", err)
+		}
 	}
 
 	a.invalidateRegistryForContext(ctx)
