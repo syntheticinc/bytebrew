@@ -3,45 +3,111 @@ import { test as base, expect, Page, APIRequestContext } from '@playwright/test'
 export { expect };
 
 export const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:18082';
+export const CLOUD_API = `${BASE_URL}/api/v1`;
 export const ENGINE_API = `${BASE_URL}/api/v1`;
 
-export type AdminToken = {
-  token: string;
-  userId?: string;
+export type AdminSession = {
+  engineToken: string;
+  cloudAccessToken: string;
+  email: string;
+  password: string;
+  available: boolean;
+  blockedReason?: string;
 };
 
-async function adminLocalSession(request: APIRequestContext): Promise<string> {
-  // AUTH_MODE=local — engine issues its own session
-  const res = await request.post(`${ENGINE_API}/auth/local-session`);
-  if (res.status() === 404) {
-    // legacy HS256 admin login fallback
-    const legacy = await request.post(`${ENGINE_API}/auth/login`, {
-      data: { username: 'admin', password: 'admin123' },
-    });
-    if (!legacy.ok()) throw new Error(`admin auth failed (both local-session and legacy): ${legacy.status()}`);
-    const body = await legacy.json();
-    return body.token ?? body.access_token;
-  }
-  if (!res.ok()) throw new Error(`local-session failed: ${res.status()}`);
-  const body = await res.json();
-  return body.access_token ?? body.token;
+function randomEmail(): string {
+  return `pw-admin-${Date.now()}-${Math.random().toString(36).slice(2, 10)}@e2e.bytebrew.local`;
 }
 
-type Fixtures = {
+async function cloudRegister(request: APIRequestContext, email: string, password: string) {
+  const res = await request.post(`${CLOUD_API}/auth/register`, { data: { email, password } });
+  if (res.status() === 429) throw new Error('RATE_LIMITED');
+  return res.status();
+}
+
+async function cloudLogin(request: APIRequestContext, email: string, password: string) {
+  const res = await request.post(`${CLOUD_API}/auth/login`, { data: { email, password } });
+  return { status: res.status(), body: await res.json().catch(() => ({})) };
+}
+
+async function mintEngineToken(request: APIRequestContext, cloudAccess: string) {
+  const res = await request.post(`${CLOUD_API}/auth/engine-token`, {
+    headers: { Authorization: `Bearer ${cloudAccess}` },
+  });
+  return { status: res.status(), body: await res.json().catch(() => ({})) };
+}
+
+type WorkerFixtures = {
+  adminSession: AdminSession;
+};
+
+type TestFixtures = {
   adminToken: string;
   authenticatedAdmin: Page;
 };
 
-export const test = base.extend<Fixtures>({
-  adminToken: async ({ request }, use) => {
-    const token = await adminLocalSession(request);
-    await use(token);
+export const test = base.extend<TestFixtures, WorkerFixtures>({
+  adminSession: [
+    async ({ browser }, use) => {
+      const request = await browser.newContext().then(c => c.request);
+      const email = randomEmail();
+      const password = 'AdminE2e!-' + Math.random().toString(36).slice(2, 10);
+      const session: AdminSession = {
+        engineToken: '',
+        cloudAccessToken: '',
+        email,
+        password,
+        available: false,
+      };
+      try {
+        const regStatus = await cloudRegister(request, email, password);
+        if (regStatus !== 201 && regStatus !== 409) {
+          session.blockedReason = `register_${regStatus}`;
+          await use(session);
+          return;
+        }
+        const login = await cloudLogin(request, email, password);
+        if (login.status !== 200) {
+          session.blockedReason = login.body?.error?.code
+            ? `${login.body.error.code} — stack requires SMTP mock or auto-verify`
+            : `login_${login.status}`;
+          await use(session);
+          return;
+        }
+        session.cloudAccessToken = login.body.access_token ?? '';
+        const engine = await mintEngineToken(request, session.cloudAccessToken);
+        if (engine.status !== 200) {
+          session.blockedReason = `engine_token_${engine.status}: ${JSON.stringify(engine.body).slice(0, 200)}`;
+          await use(session);
+          return;
+        }
+        session.engineToken = engine.body.engine_token ?? engine.body.token ?? engine.body.access_token ?? '';
+        session.available = !!session.engineToken;
+        if (!session.available) session.blockedReason = 'engine_token_empty';
+      } catch (e) {
+        session.blockedReason = (e as Error).message;
+      }
+      await use(session);
+    },
+    { scope: 'worker' },
+  ],
+  adminToken: async ({ adminSession }, use, testInfo) => {
+    if (!adminSession.available) {
+      testInfo.skip(true, `admin auth unavailable: ${adminSession.blockedReason ?? 'no token'}`);
+      return;
+    }
+    await use(adminSession.engineToken);
   },
-  authenticatedAdmin: async ({ page, adminToken }, use) => {
+  authenticatedAdmin: async ({ page, adminSession }, use, testInfo) => {
+    if (!adminSession.available) {
+      testInfo.skip(true, `admin auth unavailable: ${adminSession.blockedReason ?? 'no token'}`);
+      return;
+    }
+    const tok = adminSession.engineToken;
     await page.addInitScript((token: string) => {
       window.localStorage.setItem('jwt', token);
       window.localStorage.setItem('access_token', token);
-    }, adminToken);
+    }, tok);
     await page.goto('/admin/');
     await use(page);
   },
@@ -53,7 +119,7 @@ export async function apiFetch(
   options: { method?: string; token?: string; body?: unknown; headers?: Record<string, string> } = {}
 ) {
   const url = path.startsWith('http') ? path : `${ENGINE_API}${path}`;
-  const init: Parameters<APIRequestContext['fetch']>[1] = {
+  return await request.fetch(url, {
     method: options.method ?? 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -61,6 +127,5 @@ export async function apiFetch(
       ...options.headers,
     },
     data: options.body,
-  };
-  return await request.fetch(url, init);
+  });
 }

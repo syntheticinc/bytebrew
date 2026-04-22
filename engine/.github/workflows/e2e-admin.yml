@@ -1,0 +1,113 @@
+name: E2E — Playwright (engine admin)
+
+on:
+  pull_request:
+    paths:
+      - 'admin/**'
+      - 'internal/delivery/http/**'
+      - '.github/workflows/e2e-admin.yml'
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-engine-admin-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: engine admin @ localhost:18082
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PLAYWRIGHT_BASE_URL: http://localhost:18082
+
+    steps:
+      - name: Checkout bytebrew
+        uses: actions/checkout@v4
+        with:
+          path: bytebrew
+
+      - name: Checkout companion repo (cloud-web)
+        uses: actions/checkout@v4
+        with:
+          repository: syntheticinc/bytebrew-cloud-web
+          token: ${{ secrets.WORKSPACE_CLONE_TOKEN }}
+          path: bytebrew-cloud-web
+
+      - name: Build web-client assets for engine Dockerfile.test
+        run: |
+          cd bytebrew-cloud-web/cloud-web-spa
+          npm ci
+          npm run build
+          mkdir -p ../../bytebrew/engine/webclient-dist
+          cp -r dist/* ../../bytebrew/engine/webclient-dist/
+
+      - name: Start Cloud-full stack (with auto-verify email)
+        run: |
+          cd bytebrew/local-dev
+          docker compose -f docker-compose-cloud-full.yml -p cloud-full up -d --build --wait
+        env:
+          BYTEBREW_INTERNAL_AUTO_VERIFY_EMAIL: 'true'
+
+      - name: Wait for health endpoint
+        run: |
+          for i in {1..30}; do
+            if curl -sf http://localhost:18082/api/v1/health > /dev/null; then
+              echo "stack ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "stack not ready after 60s"
+          docker ps
+          docker logs cloud-full-engine-1 --tail 100
+          exit 1
+
+      - name: Install Playwright browsers
+        working-directory: bytebrew/engine/admin
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright E2E
+        working-directory: bytebrew/engine/admin
+        run: npm run test:e2e
+        env:
+          CI: 'true'
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-engine-admin
+          path: bytebrew/engine/admin/playwright-report/
+          retention-days: 7
+
+      - name: Upload trace artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces-engine-admin
+          path: bytebrew/engine/admin/test-results/
+          retention-days: 7
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: |
+          mkdir -p _logs
+          for c in $(docker ps -a --format '{{.Names}}' | grep cloud-full); do
+            docker logs "$c" --tail 500 > "_logs/$c.log" 2>&1 || true
+          done
+
+      - name: Upload container logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-logs-engine-admin
+          path: _logs/
+          retention-days: 7
+
+      - name: Stop stack
+        if: always()
+        run: |
+          cd bytebrew/local-dev
+          docker compose -f docker-compose-cloud-full.yml -p cloud-full down -v

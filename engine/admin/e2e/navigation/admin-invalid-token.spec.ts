@@ -1,10 +1,15 @@
 // §1.6 Navigation — stale token → 401 → redirect to login
 // TC: NAV-05 | SCC-05
+// REPRODUCES BUG #4: admin SPA infinite-loads on stale/invalid token instead of redirecting to login.
+// The UI test is annotated test.fail() to document the regression without blocking the suite.
 
 import { test, expect } from '../fixtures';
 
 test.describe('Admin — stale/invalid token handling', () => {
   test('stale JWT in localStorage causes 401 and redirect away from admin', async ({ page }) => {
+    // REPRODUCES BUG #4: admin SPA infinite-loads on stale/invalid token instead of redirecting to login
+    test.fail(true, 'BUG #4: admin SPA does not redirect to login on stale token — shows infinite loading instead');
+
     // Inject an obviously expired/invalid token
     await page.addInitScript(() => {
       // Fake JWT: header.payload.sig — expired

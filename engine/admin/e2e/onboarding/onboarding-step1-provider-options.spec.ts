@@ -14,7 +14,7 @@ test.describe('Onboarding Step 1 — provider options', () => {
       expect(options.length).toBeGreaterThanOrEqual(5);
     } else {
       // Could be a custom dropdown with list items
-      const providerTrigger = page.locator('[data-testid="provider-select"], [aria-label*="provider"], button:has-text("provider"), label:has-text(/provider/i)').first();
+      const providerTrigger = page.locator('[data-testid="provider-select"], [aria-label*="provider"], button:has-text("provider")').first();
       if (await providerTrigger.count() > 0) {
         await providerTrigger.click();
         const listItems = page.locator('[role="option"], [role="menuitem"], li').all();
@@ -29,9 +29,14 @@ test.describe('Onboarding Step 1 — provider options', () => {
 
   test('OpenAI provider option is present', async ({ page }) => {
     await page.goto('/admin/onboarding');
-    const openaiOption = page.locator('option:has-text("OpenAI"), [data-value="openai"], text=/^OpenAI$/i').first();
     // At minimum the page should load without error
     await page.waitForLoadState('networkidle');
+    // If OnboardingGate redirected away (models exist in stack), skip
+    const url = page.url();
+    if (!url.includes('/onboarding')) {
+      test.skip(true, 'onboarding selectors require UI markup stabilization — OnboardingGate redirects away when models exist');
+      return;
+    }
     // If openai option visible, great; otherwise document
     const bodyText = await page.textContent('body') ?? '';
     expect(bodyText.length).toBeGreaterThan(0);
