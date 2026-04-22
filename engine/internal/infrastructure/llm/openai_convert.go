@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"strings"
@@ -101,11 +102,11 @@ func sanitizeToolCall(name, arguments string) (string, string) {
 
 	jsonBytes, err := json.Marshal(argsMap)
 	if err != nil {
-		slog.Warn("failed to marshal sanitized tool args", "tool", toolName, "error", err)
+		slog.WarnContext(context.Background(), "failed to marshal sanitized tool args", "tool", toolName, "error", err)
 		return toolName, arguments
 	}
 
-	slog.Info("sanitized malformed tool call", "original_name", name[:min(len(name), 80)], "tool", toolName)
+	slog.InfoContext(context.Background(), "sanitized malformed tool call", "original_name", name[:min(len(name), 80)], "tool", toolName)
 	return toolName, string(jsonBytes)
 }
 
@@ -201,7 +202,7 @@ func schemaToolsToOpenAI(tools []*schema.ToolInfo) []openAIToolDef {
 
 		jsonSchema, err := t.ParamsOneOf.ToJSONSchema()
 		if err != nil {
-			slog.Warn("skip tool params schema", "tool", t.Name, "error", err)
+			slog.WarnContext(context.Background(), "skip tool params schema", "tool", t.Name, "error", err)
 			defs = append(defs, def)
 			continue
 		}
@@ -212,7 +213,7 @@ func schemaToolsToOpenAI(tools []*schema.ToolInfo) []openAIToolDef {
 
 		raw, err := json.Marshal(jsonSchema)
 		if err != nil {
-			slog.Warn("skip tool params marshal", "tool", t.Name, "error", err)
+			slog.WarnContext(context.Background(), "skip tool params marshal", "tool", t.Name, "error", err)
 			defs = append(defs, def)
 			continue
 		}

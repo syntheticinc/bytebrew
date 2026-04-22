@@ -1,6 +1,7 @@
 package resilience
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -91,7 +92,7 @@ func (cb *CircuitBreaker) RecordSuccess() {
 	defer cb.mu.Unlock()
 
 	if cb.state == CircuitHalfOpen {
-		slog.Info("[CircuitBreaker] half-open → closed", "resource", cb.name)
+		slog.InfoContext(context.Background(), "[CircuitBreaker] half-open → closed", "resource", cb.name)
 		cb.state = CircuitClosed
 	}
 	cb.failures = nil
@@ -108,7 +109,7 @@ func (cb *CircuitBreaker) RecordFailure() {
 
 	// If half-open probe failed, go back to open
 	if cb.state == CircuitHalfOpen {
-		slog.Warn("[CircuitBreaker] half-open probe failed → open", "resource", cb.name)
+		slog.WarnContext(context.Background(), "[CircuitBreaker] half-open probe failed → open", "resource", cb.name)
 		cb.state = CircuitOpen
 		cb.openedAt = now
 		cb.failureCountAtOpen = 1
@@ -128,7 +129,7 @@ func (cb *CircuitBreaker) RecordFailure() {
 
 	// Check threshold
 	if len(cb.failures) >= cb.config.FailureThreshold {
-		slog.Warn("[CircuitBreaker] threshold reached → open",
+		slog.WarnContext(context.Background(), "[CircuitBreaker] threshold reached → open",
 			"resource", cb.name, "failures", len(cb.failures))
 		cb.state = CircuitOpen
 		cb.openedAt = now
@@ -161,7 +162,7 @@ func (cb *CircuitBreaker) currentState() CircuitState {
 	if cb.state == CircuitOpen {
 		if time.Since(cb.openedAt) >= cb.config.ResetInterval {
 			cb.state = CircuitHalfOpen
-			slog.Info("[CircuitBreaker] open → half-open", "resource", cb.name)
+			slog.InfoContext(context.Background(), "[CircuitBreaker] open → half-open", "resource", cb.name)
 		}
 	}
 	return cb.state
@@ -225,7 +226,7 @@ func (r *CircuitBreakerRegistry) Reset(name string) bool {
 	_, ok := r.breakers[name]
 	if ok {
 		delete(r.breakers, name)
-		slog.Info("[CircuitBreaker] reset", "resource", name)
+		slog.InfoContext(context.Background(), "[CircuitBreaker] reset", "resource", name)
 	}
 	return ok
 }

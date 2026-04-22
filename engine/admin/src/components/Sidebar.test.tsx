@@ -16,7 +16,6 @@ const mockApi = vi.mocked(api);
 
 const auth: AuthContextType = {
   isAuthenticated: true,
-  login: vi.fn(),
   logout: vi.fn(),
 };
 

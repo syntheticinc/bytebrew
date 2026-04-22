@@ -79,7 +79,30 @@ type kbStoreAdapter struct {
 	db   *gorm.DB // for counting files and resolving agents
 }
 
+// validateEmbeddingModelKind checks that the given model ID references a model
+// with kind='embedding'. Returns an error with the actual kind when mismatched.
+// Wave 5: embedding_model_id must reference a model with kind='embedding'.
+func (a *kbStoreAdapter) validateEmbeddingModelKind(ctx context.Context, modelID string) error {
+	if modelID == "" {
+		return nil
+	}
+	var kind string
+	if err := a.db.WithContext(ctx).
+		Model(&models.LLMProviderModel{}).
+		Where("id = ?", modelID).
+		Pluck("kind", &kind).Error; err != nil || kind == "" {
+		return fmt.Errorf("embedding_model_id references unknown model: %s", modelID)
+	}
+	if kind != "embedding" {
+		return fmt.Errorf("embedding_model_id must reference an embedding model, got kind=%s", kind)
+	}
+	return nil
+}
+
 func (a *kbStoreAdapter) Create(ctx context.Context, name, description, embeddingModelID, tenantID string) (*deliveryhttp.KnowledgeBaseInfo, error) {
+	if err := a.validateEmbeddingModelKind(ctx, embeddingModelID); err != nil {
+		return nil, err
+	}
 	kb := &models.KnowledgeBase{
 		TenantID:    tenantID,
 		Name:        name,
@@ -97,6 +120,9 @@ func (a *kbStoreAdapter) Create(ctx context.Context, name, description, embeddin
 }
 
 func (a *kbStoreAdapter) Update(ctx context.Context, id, name, description, embeddingModelID string) (*deliveryhttp.KnowledgeBaseInfo, error) {
+	if err := a.validateEmbeddingModelKind(ctx, embeddingModelID); err != nil {
+		return nil, err
+	}
 	kb, err := a.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -143,6 +169,41 @@ func (a *kbStoreAdapter) List(ctx context.Context) ([]deliveryhttp.KnowledgeBase
 		result = append(result, *info)
 	}
 	return result, nil
+}
+
+// Patch applies only the non-nil fields in req to the existing knowledge base.
+func (a *kbStoreAdapter) Patch(ctx context.Context, id string, req deliveryhttp.PatchKBRequest) (*deliveryhttp.KnowledgeBaseInfo, error) {
+	// Wave 5: validate embedding_model_id kind when being set.
+	if req.EmbeddingModelID != nil && *req.EmbeddingModelID != "" {
+		if err := a.validateEmbeddingModelKind(ctx, *req.EmbeddingModelID); err != nil {
+			return nil, err
+		}
+	}
+	kb, err := a.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if kb == nil {
+		return nil, nil
+	}
+	if req.Name != nil {
+		kb.Name = *req.Name
+	}
+	if req.Description != nil {
+		kb.Description = *req.Description
+	}
+	if req.EmbeddingModelID != nil {
+		if *req.EmbeddingModelID == "" {
+			kb.EmbeddingModelID = nil
+		} else {
+			kb.EmbeddingModelID = req.EmbeddingModelID
+		}
+	}
+	kb.UpdatedAt = time.Now()
+	if err := a.repo.Update(ctx, kb); err != nil {
+		return nil, err
+	}
+	return a.toInfo(ctx, kb)
 }
 
 func (a *kbStoreAdapter) Delete(ctx context.Context, id string) error {

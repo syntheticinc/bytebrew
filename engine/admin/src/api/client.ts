@@ -3,6 +3,7 @@ import type {
   AgentDetail,
   CreateAgentRequest,
   Model,
+  ModelKind,
   CreateModelRequest,
   MCPServer,
   MCPCatalogEntry,
@@ -17,7 +18,7 @@ import type {
   CreateTokenResponse,
   HealthResponse,
   Setting,
-  LoginResponse,
+  LocalSessionResponse,
   ToolMetadata,
   AuditEntry,
   ToolCallEntry,
@@ -122,9 +123,11 @@ class APIClient {
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    if (res.status === 401 && path !== '/auth/login') {
+    if (res.status === 401 && path !== '/auth/local-session') {
       this.clearToken();
-      window.location.href = import.meta.env.BASE_URL + 'login';
+      // Defer bootstrap handling to the AuthProvider / hash-mode redirect.
+      // Reload kicks off the same bootstrap path a cold mount would use.
+      window.location.reload();
       throw new Error('Unauthorized');
     }
 
@@ -148,8 +151,14 @@ class APIClient {
   }
 
   // ---- Auth ----
-  login(username: string, password: string) {
-    return this.request<LoginResponse>('POST', '/auth/login', { username, password });
+  // localSession mints a short-lived JWT for the single local admin user.
+  // Wave 1+7: replaces the old username/password login flow entirely. The
+  // endpoint takes no body and no auth — the engine only exposes it when
+  // VITE_AUTH_MODE=local and the deployment is a single-user self-hosted
+  // setup. In external/cloud mode this endpoint is not reachable and the
+  // admin must receive its token via the URL hash fragment instead.
+  localSession() {
+    return this.request<LocalSessionResponse>('POST', '/auth/local-session');
   }
 
   // ---- Agents ----
@@ -180,7 +189,7 @@ class APIClient {
   }
   updateAgent(name: string, data: Partial<CreateAgentRequest>) {
     if (this.isPrototype) return this.mock({ name, ...data } as AgentDetail);
-    return this.request<AgentDetail>('PUT', `/agents/${encodeURIComponent(name)}`, data);
+    return this.request<AgentDetail>('PATCH', `/agents/${encodeURIComponent(name)}`, data);
   }
   deleteAgent(name: string) {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
@@ -188,23 +197,30 @@ class APIClient {
   }
 
   // ---- Models ----
-  listModels(typeFilter?: string) {
+  //
+  // Wave 5: Models are split by `kind` — chat models (generate completions,
+  // used by agents) and embedding models (vectorize text, used by KBs). The
+  // backend accepts `?kind=chat` or `?kind=embedding` to filter; omitting the
+  // param returns both. Callers that specifically need one side must pass the
+  // kind explicitly — the agent model dropdown uses `kind=chat`, the KB
+  // wizard uses `kind=embedding`.
+  listModels(params?: { kind?: ModelKind }) {
     if (this.isPrototype) {
       const models = MOCK_MODELS_LIST;
-      if (typeFilter === 'embedding') return this.mock(models.filter(m => m.type === 'embedding'));
-      if (typeFilter === '!embedding') return this.mock(models.filter(m => m.type !== 'embedding'));
+      if (params?.kind === 'embedding') return this.mock(models.filter(m => m.kind === 'embedding'));
+      if (params?.kind === 'chat') return this.mock(models.filter(m => m.kind === 'chat'));
       return this.mock(models);
     }
-    const query = typeFilter ? `?type=${encodeURIComponent(typeFilter)}` : '';
+    const query = params?.kind ? `?kind=${encodeURIComponent(params.kind)}` : '';
     return this.request<Model[]>('GET', `/models${query}`);
   }
   createModel(data: CreateModelRequest) {
-    if (this.isPrototype) return this.mock({ id: crypto.randomUUID(), ...data, has_api_key: !!data.api_key, created_at: new Date().toISOString() } as Model);
+    if (this.isPrototype) return this.mock({ id: crypto.randomUUID(), ...data, kind: data.kind ?? 'chat', has_api_key: !!data.api_key, created_at: new Date().toISOString() } as Model);
     return this.request<Model>('POST', '/models', data);
   }
   updateModel(name: string, data: CreateModelRequest) {
-    if (this.isPrototype) return this.mock({ ...data, name } as Model);
-    return this.request<Model>('PUT', `/models/${encodeURIComponent(name)}`, data);
+    if (this.isPrototype) return this.mock({ ...data, kind: data.kind ?? 'chat', name } as Model);
+    return this.request<Model>('PATCH', `/models/${encodeURIComponent(name)}`, data);
   }
   deleteModel(name: string) {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
@@ -222,7 +238,7 @@ class APIClient {
   }
   updateMCPServer(name: string, data: CreateMCPServerRequest) {
     if (this.isPrototype) return this.mock({ id: '', ...data, name, agents: [] } as MCPServer);
-    return this.request<MCPServer>('PUT', `/mcp-servers/${encodeURIComponent(name)}`, data);
+    return this.request<MCPServer>('PATCH', `/mcp-servers/${encodeURIComponent(name)}`, data);
   }
   deleteMCPServer(name: string) {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
@@ -416,7 +432,7 @@ class APIClient {
         chat_enabled: data.chat_enabled ?? true,
       });
     }
-    return this.request<Schema>('PUT', `/schemas/${schemaId}`, data);
+    return this.request<Schema>('PATCH', `/schemas/${schemaId}`, data);
   }
 
   deleteSchema(schemaId: string) {
@@ -814,7 +830,7 @@ class APIClient {
     });
     if (res.status === 401) {
       this.clearToken();
-      window.location.href = import.meta.env.BASE_URL + 'login';
+      window.location.reload();
       throw new Error('Unauthorized');
     }
     if (!res.ok) {
@@ -861,7 +877,7 @@ class APIClient {
 
   async updateKnowledgeBase(id: string, data: CreateKnowledgeBaseRequest): Promise<KnowledgeBase> {
     if (this.isPrototype) return this.mock<KnowledgeBase>({ id, ...data, file_count: 0, linked_agents: [], created_at: '', updated_at: new Date().toISOString() });
-    return this.request<KnowledgeBase>('PUT', `/knowledge-bases/${encodeURIComponent(id)}`, data);
+    return this.request<KnowledgeBase>('PATCH', `/knowledge-bases/${encodeURIComponent(id)}`, data);
   }
 
   async deleteKnowledgeBase(id: string): Promise<void> {
@@ -919,7 +935,7 @@ class APIClient {
     });
     if (res.status === 401) {
       this.clearToken();
-      window.location.href = import.meta.env.BASE_URL + 'login';
+      window.location.reload();
       throw new Error('Unauthorized');
     }
     if (!res.ok) {
@@ -1004,7 +1020,7 @@ class APIClient {
 
     if (res.status === 401) {
       this.clearToken();
-      window.location.href = import.meta.env.BASE_URL + 'login';
+      window.location.reload();
       throw new Error('Unauthorized');
     }
 

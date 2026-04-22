@@ -200,7 +200,7 @@ func (r *SessionRegistry) ReplayEvents(sessionID string, lastEventID string) []*
 
 	all, err := r.store.GetAll(sessionID)
 	if err != nil {
-		slog.Error("replay events failed", "session_id", sessionID, "error", err)
+		slog.ErrorContext(context.Background(), "replay events failed", "session_id", sessionID, "error", err)
 		return nil
 	}
 

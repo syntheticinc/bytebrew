@@ -21,7 +21,8 @@ func TestMIGR01_TablesExist(t *testing.T) {
 
 	// Smoke: SELECT on each expected table returns without error. A missing
 	// table surfaces a useful "relation does not exist" message via GORM.
-	for _, tbl := range []string{"agents", "schemas", "sessions", "users", "audit_logs"} {
+	// Note: "users" table was dropped in migration 002_drop_users_unify_identity.
+	for _, tbl := range []string{"agents", "schemas", "sessions", "audit_logs"} {
 		var count int64
 		err := testDB.WithContext(ctx).Raw(
 			`SELECT COUNT(*) FROM ` + `"` + ensureTableName(tbl) + `"`,
@@ -30,8 +31,9 @@ func TestMIGR01_TablesExist(t *testing.T) {
 	}
 }
 
-// TC-MIGR-02: The seeded admin user has tenant_id = CE default tenant.
-func TestMIGR02_AdminTenantDefault(t *testing.T) {
+// TC-MIGR-02: The users table was dropped in migration
+// 002_drop_users_unify_identity. Verify it does NOT exist.
+func TestMIGR02_UsersTableDropped(t *testing.T) {
 	requireSuite(t)
 	require.NotNil(t, testDB)
 
@@ -40,11 +42,11 @@ func TestMIGR02_AdminTenantDefault(t *testing.T) {
 
 	var count int64
 	err := testDB.WithContext(ctx).Raw(
-		`SELECT COUNT(*) FROM users WHERE tenant_id = ?::uuid`, ceTenantID,
+		`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users'`,
 	).Scan(&count).Error
 	require.NoError(t, err)
-	assert.GreaterOrEqual(t, count, int64(1),
-		"admin user seeded with tenant_id=%s should exist", ceTenantID)
+	assert.Equal(t, int64(0), count,
+		"users table must not exist after 002_drop_users_unify_identity migration")
 }
 
 // TC-MIGR-03: Public schema has at least a reasonable number of tables —

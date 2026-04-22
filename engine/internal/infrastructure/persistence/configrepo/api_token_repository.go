@@ -20,10 +20,11 @@ func NewGORMAPITokenRepository(db *gorm.DB) *GORMAPITokenRepository {
 }
 
 // Create inserts a new API token and returns its ID.
-// Stamps tenant_id from context so tokens are tenant-scoped.
-func (r *GORMAPITokenRepository) Create(ctx context.Context, userID, name, tokenHash string, scopesMask int) (string, error) {
+// Stamps tenant_id from context so tokens are tenant-scoped. userSub is the
+// JWT `sub` of the admin/user creating the token (no FK — external identity).
+func (r *GORMAPITokenRepository) Create(ctx context.Context, userSub, name, tokenHash string, scopesMask int) (string, error) {
 	m := models.APITokenModel{
-		UserID:     userID,
+		UserSub:    userSub,
 		Name:       name,
 		TokenHash:  tokenHash,
 		ScopesMask: scopesMask,

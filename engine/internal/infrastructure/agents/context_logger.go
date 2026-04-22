@@ -99,7 +99,7 @@ func (cl *ContextLogger) LogContext(ctx context.Context, messages []*schema.Mess
 	// Create session directory if it doesn't exist
 	sessionDir := filepath.Join(cl.logDir, cl.sessionDirName)
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
-		slog.Error("failed to create session log directory", "error", err, "path", sessionDir)
+		slog.ErrorContext(ctx, "failed to create session log directory", "error", err, "path", sessionDir)
 		return
 	}
 	slog.DebugContext(ctx, "session directory created", "path", sessionDir)
@@ -260,8 +260,12 @@ type ContextStatistics struct {
 	AverageMsgTokens  int `json:"average_msg_tokens"`
 }
 
-// writeSnapshot writes the context snapshot to a step-specific JSON file
+// writeSnapshot writes the context snapshot to a step-specific JSON file.
+// Called from a background goroutine; no request context available — uses
+// context.Background() for slog calls (acceptable since this is process-level
+// background logging, not per-tenant work).
 func (cl *ContextLogger) writeSnapshot(sessionDir string, step int, snapshot ContextSnapshot) {
+	ctx := context.Background()
 	// Create step-specific filename with agent prefix
 	prefix := cl.agentID
 	if prefix == "" {
@@ -273,16 +277,16 @@ func (cl *ContextLogger) writeSnapshot(sessionDir string, step int, snapshot Con
 	// Write snapshot as JSON file
 	data, err := json.MarshalIndent(snapshot, "", "  ")
 	if err != nil {
-		slog.Error("failed to marshal context snapshot", "error", err)
+		slog.ErrorContext(ctx, "failed to marshal context snapshot", "error", err)
 		return
 	}
 
 	if err := os.WriteFile(filepath, data, 0644); err != nil {
-		slog.Error("failed to write context snapshot", "error", err, "path", filepath)
+		slog.ErrorContext(ctx, "failed to write context snapshot", "error", err, "path", filepath)
 		return
 	}
 
-	slog.Info("context snapshot saved",
+	slog.InfoContext(ctx, "context snapshot saved",
 		"step", step,
 		"path", filepath,
 		"messages", snapshot.TotalMessages,
@@ -309,7 +313,7 @@ func (cl *ContextLogger) LogContextSummary(ctx context.Context, messages []*sche
 	// Create session directory if it doesn't exist
 	sessionDir := filepath.Join(cl.logDir, cl.sessionDirName)
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
-		slog.Error("failed to create session log directory", "error", err, "path", sessionDir)
+		slog.ErrorContext(ctx, "failed to create session log directory", "error", err, "path", sessionDir)
 		return
 	}
 
@@ -347,11 +351,11 @@ func (cl *ContextLogger) LogContextSummary(ctx context.Context, messages []*sche
 	}
 	summaryPath := filepath.Join(sessionDir, prefix+"_context_summary.txt")
 	if err := os.WriteFile(summaryPath, []byte(summary), 0644); err != nil {
-		slog.Error("failed to write context summary", "error", err, "path", summaryPath)
+		slog.ErrorContext(ctx, "failed to write context summary", "error", err, "path", summaryPath)
 		return
 	}
 
-	slog.Info("context summary saved", "path", summaryPath)
+	slog.InfoContext(ctx, "context summary saved", "path", summaryPath)
 }
 
 // LogCompressionReport logs a report about context compression
@@ -363,7 +367,7 @@ func (cl *ContextLogger) LogCompressionReport(ctx context.Context, beforeCount, 
 	// Create session directory if it doesn't exist
 	sessionDir := filepath.Join(cl.logDir, cl.sessionDirName)
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
-		slog.Error("failed to create session log directory", "error", err, "path", sessionDir)
+		slog.ErrorContext(ctx, "failed to create session log directory", "error", err, "path", sessionDir)
 		return
 	}
 
@@ -386,11 +390,11 @@ func (cl *ContextLogger) LogCompressionReport(ctx context.Context, beforeCount, 
 	// Write report file
 	reportPath := filepath.Join(sessionDir, "context_compression_report.txt")
 	if err := os.WriteFile(reportPath, []byte(report), 0644); err != nil {
-		slog.Error("failed to write compression report", "error", err, "path", reportPath)
+		slog.ErrorContext(ctx, "failed to write compression report", "error", err, "path", reportPath)
 		return
 	}
 
-	slog.Info("compression report saved", "path", reportPath, "removed", len(removedToolResults))
+	slog.InfoContext(ctx, "compression report saved", "path", reportPath, "removed", len(removedToolResults))
 }
 
 // SessionOverview represents the session structure for logging
@@ -420,22 +424,23 @@ func (cl *ContextLogger) LogSessionOverview(overview SessionOverview) {
 	}
 
 	sessionDir := filepath.Join(cl.logDir, cl.sessionDirName)
+	bgCtx := context.Background()
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
-		slog.Error("failed to create session log directory", "error", err, "path", sessionDir)
+		slog.ErrorContext(bgCtx, "failed to create session log directory", "error", err, "path", sessionDir)
 		return
 	}
 
 	data, err := json.MarshalIndent(overview, "", "  ")
 	if err != nil {
-		slog.Error("failed to marshal session overview", "error", err)
+		slog.ErrorContext(bgCtx, "failed to marshal session overview", "error", err)
 		return
 	}
 
 	overviewPath := filepath.Join(sessionDir, "session_overview.json")
 	if err := os.WriteFile(overviewPath, data, 0644); err != nil {
-		slog.Error("failed to write session overview", "error", err, "path", overviewPath)
+		slog.ErrorContext(bgCtx, "failed to write session overview", "error", err, "path", overviewPath)
 		return
 	}
 
-	slog.Info("session overview saved", "path", overviewPath, "code_agents", len(overview.CodeAgents))
+	slog.InfoContext(bgCtx, "session overview saved", "path", overviewPath, "code_agents", len(overview.CodeAgents))
 }

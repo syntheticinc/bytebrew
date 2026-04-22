@@ -22,11 +22,11 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 
 	// Create table manually to avoid PostgreSQL-specific syntax in GORM tags.
+	// Mirrors migration 002 schema (actor_sub only; actor_user_id dropped).
 	err = db.Exec(`CREATE TABLE audit_logs (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		occurred_at DATETIME,
 		actor_type VARCHAR(20) NOT NULL,
-		actor_user_id VARCHAR(255),
 		actor_sub VARCHAR(255),
 		action VARCHAR(50) NOT NULL,
 		resource VARCHAR(500),
@@ -47,11 +47,11 @@ func TestLogger_Log(t *testing.T) {
 	ts := time.Date(2026, 3, 17, 12, 0, 0, 0, time.UTC)
 	sessionID := "session-123"
 
-	actorUUID := "11111111-1111-1111-1111-111111111111"
+	actorSub := "admin@example.com"
 	err := logger.Log(context.Background(), Entry{
 		Timestamp: ts,
 		ActorType: "admin",
-		ActorID:   actorUUID,
+		ActorID:   actorSub,
 		Action:    "api_call",
 		Resource:  "GET /api/v1/agents",
 		Details: map[string]interface{}{
@@ -66,9 +66,8 @@ func TestLogger_Log(t *testing.T) {
 	require.NoError(t, db.First(&result).Error)
 
 	assert.Equal(t, "admin", result.ActorType)
-	require.NotNil(t, result.ActorUserID)
-	assert.Equal(t, actorUUID, *result.ActorUserID)
-	assert.Nil(t, result.ActorSub)
+	require.NotNil(t, result.ActorSub)
+	assert.Equal(t, actorSub, *result.ActorSub)
 	assert.Equal(t, "api_call", result.Action)
 	assert.Equal(t, "GET /api/v1/agents", result.Resource)
 	assert.Contains(t, result.Details, `"method":"GET"`)
@@ -111,6 +110,8 @@ func TestLogger_Log_WithTaskID(t *testing.T) {
 	require.NoError(t, db.First(&result).Error)
 	require.NotNil(t, result.TaskID)
 	assert.Equal(t, "task-uuid-42", *result.TaskID)
+	require.NotNil(t, result.ActorSub)
+	assert.Equal(t, "bot-token", *result.ActorSub)
 }
 
 func TestLogger_Log_ZeroTimestamp(t *testing.T) {

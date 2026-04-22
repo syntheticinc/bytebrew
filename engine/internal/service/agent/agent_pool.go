@@ -383,7 +383,7 @@ func (p *AgentPool) Spawn(ctx context.Context, sessionID, projectKey, subtaskID 
 		defer cancel() // Release context resources on goroutine exit
 		defer func() {
 			if r := recover(); r != nil {
-				slog.Error("[AgentPool] Code Agent panicked",
+				slog.ErrorContext(context.Background(), "[AgentPool] Code Agent panicked",
 					"agent_id", agentID,
 					"subtask_id", subtaskID,
 					"panic", r)
@@ -498,7 +498,7 @@ func (p *AgentPool) StopAgent(agentID string) error {
 	agentRunStorage := p.agentRunStorage
 	p.mu.Unlock()
 
-	slog.Info("[AgentPool] agent stopped", "agent_id", agentID)
+	slog.InfoContext(context.Background(), "[AgentPool] agent stopped", "agent_id", agentID)
 
 	// Update agent run in DB (if storage available)
 	if agentRunStorage != nil {
@@ -506,13 +506,13 @@ func (p *AgentPool) StopAgent(agentID string) error {
 			ctx := context.Background()
 			run, err := agentRunStorage.GetByID(ctx, agentID)
 			if err != nil {
-				slog.Error("[AgentPool] failed to get agent run for stop", "agent_id", agentID, "error", err)
+				slog.ErrorContext(context.Background(), "[AgentPool] failed to get agent run for stop", "agent_id", agentID, "error", err)
 				return
 			}
 			if run != nil {
 				run.Stop()
 				if err := agentRunStorage.Update(ctx, run); err != nil {
-					slog.Error("[AgentPool] failed to update stopped agent run", "agent_id", agentID, "error", err)
+					slog.ErrorContext(context.Background(), "[AgentPool] failed to update stopped agent run", "agent_id", agentID, "error", err)
 				}
 			}
 		}()
@@ -613,7 +613,7 @@ func (p *AgentPool) SpawnWithDescription(ctx context.Context, sessionID, project
 		defer cancel() // Release context resources on goroutine exit
 		defer func() {
 			if r := recover(); r != nil {
-				slog.Error("[AgentPool] Agent panicked",
+				slog.ErrorContext(context.Background(), "[AgentPool] Agent panicked",
 					"agent_id", agentID,
 					"agent_type", agentType,
 					"panic", r)
@@ -717,7 +717,7 @@ func (p *AgentPool) CancelRunningAgents(sessionID string) {
 			agent.Status = "stopped"
 			agent.signalCompletion()
 			agent.Cancel()
-			slog.Info("[AgentPool] cancelled agent (user cancel)", "agent_id", agent.ID)
+			slog.InfoContext(context.Background(), "[AgentPool] cancelled agent (user cancel)", "agent_id", agent.ID)
 		}
 	}
 }

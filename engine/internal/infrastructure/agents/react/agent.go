@@ -306,7 +306,7 @@ func (a *Agent) buildMessagesWithHistory(input string) []*schema.Message {
 	// Add history messages first (if any)
 	if len(a.historyMessages) > 0 {
 		messages = append(messages, a.historyMessages...)
-		slog.Info("added history messages to context", "count", len(a.historyMessages))
+		slog.InfoContext(context.Background(), "added history messages to context", "count", len(a.historyMessages))
 	}
 
 	// Add current user message

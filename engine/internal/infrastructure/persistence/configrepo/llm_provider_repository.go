@@ -84,6 +84,23 @@ func (r *GORMLLMProviderRepository) Delete(ctx context.Context, id string) error
 	return nil
 }
 
+// GetModelKind returns the kind ('chat' or 'embedding') for the given model ID (tenant-scoped).
+// Returns an empty string and an error when the model does not exist in the tenant.
+func (r *GORMLLMProviderRepository) GetModelKind(ctx context.Context, id string) (string, error) {
+	var kind string
+	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Model(&models.LLMProviderModel{}).
+		Where("id = ?", id).
+		Pluck("kind", &kind).Error; err != nil {
+		return "", fmt.Errorf("get model kind %s: %w", id, err)
+	}
+	if kind == "" {
+		return "", fmt.Errorf("model not found: %s", id)
+	}
+	return kind, nil
+}
+
 // AgentsUsingModel returns the names of agents that reference the given model ID (tenant-scoped).
 func (r *GORMLLMProviderRepository) AgentsUsingModel(ctx context.Context, modelID string) ([]string, error) {
 	var names []string

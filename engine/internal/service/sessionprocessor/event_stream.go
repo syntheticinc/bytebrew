@@ -1,6 +1,7 @@
 package sessionprocessor
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -139,7 +140,7 @@ func (s *EventStream) persistAndPublish(event *pb.SessionEvent) {
 
 		id, err := s.store.Append(s.sessionID, eventType, event, jsonData)
 		if err != nil {
-			slog.Error("failed to persist event", "session_id", s.sessionID, "event_type", eventType, "error", err)
+			slog.ErrorContext(context.Background(), "failed to persist event", "session_id", s.sessionID, "event_type", eventType, "error", err)
 		}
 		if id != "" {
 			event.EventId = id

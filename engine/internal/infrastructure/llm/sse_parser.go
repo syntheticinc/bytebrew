@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"context"
 	"bufio"
 	"encoding/json"
 	"fmt"
@@ -33,7 +34,7 @@ func parseSSEStream(r io.Reader, sw *schema.StreamWriter[*schema.Message]) error
 		var chunk openAIResponse
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
 			// Skip malformed chunks; log for debugging.
-			slog.Warn("proxy SSE: skip malformed chunk", "error", err)
+			slog.WarnContext(context.Background(), "proxy SSE: skip malformed chunk", "error", err)
 			continue
 		}
 

@@ -9,8 +9,11 @@ database:
   url: "postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/bytebrew"
 
 security:
-  jwt_secret: "${JWT_SECRET}"
-  # Admin users are created via CLI: bytebrew-ce admin create --username admin --password <pass>
+  # Wave 1+7 (2026-04-21): jwt_secret + admin CLI removed. Engine signs admin
+  # sessions with an Ed25519 keypair generated on first boot under
+  # <data_dir>/keys. Set auth_mode=external + jwt_public_key_path when tokens
+  # are issued by an external service (Cloud / SSO gateway).
+  auth_mode: "local"
 
 logging:
   level: "info"

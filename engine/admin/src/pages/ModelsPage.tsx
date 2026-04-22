@@ -1,4 +1,4 @@
-import { useState, useMemo, type FormEvent } from 'react';
+import { useState, useMemo, useEffect, type FormEvent } from 'react';
 import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
 import { useModelRegistry } from '../hooks/useModelRegistry';
@@ -11,7 +11,7 @@ import FormField from '../components/FormField';
 import ConfirmDialog from '../components/ConfirmDialog';
 import TierBadge, { CustomModelBadge } from '../components/TierBadge';
 import { ToastProvider, useToast } from '../components/builder/Toast';
-import type { Model, CreateModelRequest, ModelRegistryEntry } from '../types';
+import type { Model, ModelKind, CreateModelRequest, ModelRegistryEntry } from '../types';
 
 const PROVIDER_TYPES = [
   { value: 'ollama', label: 'Ollama (local)' },
@@ -20,8 +20,19 @@ const PROVIDER_TYPES = [
   { value: 'anthropic', label: 'Anthropic' },
   { value: 'azure_openai', label: 'Azure OpenAI' },
   { value: 'google', label: 'Google (Gemini)' },
-  { value: 'embedding', label: 'Embedding Model' },
+  { value: 'embedding', label: 'Embedding Provider' },
 ];
+
+// Kind filter persisted in localStorage so operators keep their chosen view
+// across page navigations. Matches the pattern used for prototype mode.
+type KindFilter = 'all' | 'chat' | 'embedding';
+const KIND_FILTER_KEY = 'bytebrew_models_kind_filter';
+
+function readKindFilter(): KindFilter {
+  const v = localStorage.getItem(KIND_FILTER_KEY);
+  if (v === 'chat' || v === 'embedding' || v === 'all') return v;
+  return 'all';
+}
 
 const PROVIDER_BASE_URLS: Record<string, string> = {
   openrouter: 'https://openrouter.ai/api/v1',
@@ -41,6 +52,7 @@ function providerTypeForRegistry(provider: string): string {
 const emptyForm: CreateModelRequest = {
   name: '',
   type: 'ollama',
+  kind: 'chat',
   base_url: '',
   model_name: '',
   api_key: '',
@@ -56,7 +68,19 @@ export default function ModelsPage() {
 
 function ModelsPageInner() {
   const { addToast } = useToast();
-  const { data: models, loading, error, refetch } = useApi(() => api.listModels());
+  const [kindFilter, setKindFilter] = useState<KindFilter>(() => readKindFilter());
+
+  useEffect(() => {
+    localStorage.setItem(KIND_FILTER_KEY, kindFilter);
+  }, [kindFilter]);
+
+  // Call the server with the active filter so the table only shows the slice
+  // the operator asked for. The `all` branch omits the param so the backend
+  // returns both kinds.
+  const { data: models, loading, error, refetch } = useApi(
+    () => api.listModels(kindFilter === 'all' ? undefined : { kind: kindFilter }),
+    [kindFilter],
+  );
   useAdminRefresh(refetch);
   const { registry, registryByModelName } = useModelRegistry();
 
@@ -88,9 +112,12 @@ function ModelsPageInner() {
     setForm({
       name: model.name,
       type: model.type,
+      kind: model.kind ?? 'chat',
       base_url: model.base_url ?? '',
       model_name: model.model_name,
       api_key: '',
+      embedding_dim: model.embedding_dim,
+      api_version: model.api_version,
     });
     setEditTarget(model);
     setShowForm(true);
@@ -107,9 +134,24 @@ function ModelsPageInner() {
     setForm((prev) => ({
       ...prev,
       type: providerType,
+      // Legacy `type: embedding` stayed as a shorthand for embedding-provider
+      // config. With Wave 5 the canonical split is `kind`, but we keep the
+      // implicit sync so picking the Embedding provider auto-flips the kind
+      // radio below — the operator can still override it either way.
+      kind: providerType === 'embedding' ? 'embedding' : prev.kind ?? 'chat',
       base_url: autoUrl ?? (providerType === prev.type ? prev.base_url : ''),
       model_name: '',
-      embedding_dim: providerType === 'embedding' ? (prev.embedding_dim || 1536) : undefined,
+      embedding_dim: providerType === 'embedding' ? (prev.embedding_dim || 1536) : prev.embedding_dim,
+    }));
+  }
+
+  function handleKindChange(kind: ModelKind) {
+    setForm((prev) => ({
+      ...prev,
+      kind,
+      // When flipping to embedding make sure the embedding_dim hint is set so
+      // the operator sees a sensible default.
+      embedding_dim: kind === 'embedding' ? prev.embedding_dim ?? 1536 : prev.embedding_dim,
     }));
   }
 
@@ -176,6 +218,21 @@ function ModelsPageInner() {
       },
     },
     {
+      key: 'kind',
+      header: 'Kind',
+      render: (row: Model) => (
+        <span
+          className={
+            row.kind === 'embedding'
+              ? 'px-1.5 py-0.5 bg-purple-500/20 border border-purple-500/30 rounded text-xs text-purple-400 font-medium'
+              : 'px-1.5 py-0.5 bg-blue-500/20 border border-blue-500/30 rounded text-xs text-blue-400 font-medium'
+          }
+        >
+          {row.kind === 'embedding' ? 'Embedding' : 'Chat'}
+        </span>
+      ),
+    },
+    {
       key: 'type',
       header: 'Provider',
       render: (row: Model) => (
@@ -183,11 +240,6 @@ function ModelsPageInner() {
           <span className="px-2 py-0.5 bg-brand-light rounded text-xs text-brand-shade3 font-medium">
             {row.type}
           </span>
-          {row.type === 'embedding' && (
-            <span className="px-1.5 py-0.5 bg-purple-500/20 border border-purple-500/30 rounded text-xs text-purple-400 font-medium">
-              Embedding
-            </span>
-          )}
         </span>
       ),
     },
@@ -226,6 +278,32 @@ function ModelsPageInner() {
         >
           Add Model
         </button>
+      </div>
+
+      {/* Kind filter — persisted in localStorage so operators keep their view
+          across navigations. Toggles map to server-side ?kind= filter. */}
+      <div className="mb-4 flex items-center gap-1" role="tablist" aria-label="Filter by model kind">
+        {(
+          [
+            { value: 'all', label: 'All' },
+            { value: 'chat', label: 'Chat' },
+            { value: 'embedding', label: 'Embedding' },
+          ] as { value: KindFilter; label: string }[]
+        ).map((opt) => (
+          <button
+            key={opt.value}
+            role="tab"
+            aria-selected={kindFilter === opt.value}
+            onClick={() => setKindFilter(opt.value)}
+            className={
+              kindFilter === opt.value
+                ? 'px-3 py-1.5 bg-brand-accent text-brand-light rounded-btn text-xs font-medium'
+                : 'px-3 py-1.5 bg-brand-dark-alt border border-brand-shade3/30 text-brand-shade2 rounded-btn text-xs font-medium hover:bg-brand-dark transition-colors'
+            }
+          >
+            {opt.label}
+          </button>
+        ))}
       </div>
 
       <div className="bg-brand-dark-alt rounded-card border border-brand-shade3/15">
@@ -268,6 +346,17 @@ function ModelsPageInner() {
         {selected && (
           <>
             <DetailSection title="Provider">
+              <DetailRow label="Kind">
+                <span
+                  className={
+                    selected.kind === 'embedding'
+                      ? 'px-1.5 py-0.5 bg-purple-500/20 border border-purple-500/30 rounded text-xs text-purple-400 font-medium'
+                      : 'px-1.5 py-0.5 bg-blue-500/20 border border-blue-500/30 rounded text-xs text-blue-400 font-medium'
+                  }
+                >
+                  {selected.kind === 'embedding' ? 'Embedding' : 'Chat'}
+                </span>
+              </DetailRow>
               <DetailRow label="Type">
                 <span className="px-2 py-0.5 bg-brand-light rounded text-xs text-brand-shade3 font-medium">
                   {selected.type}
@@ -346,6 +435,54 @@ function ModelsPageInner() {
           placeholder="my-llama"
           hint={isEdit ? 'Name cannot be changed.' : undefined}
         />
+
+        {/* Kind selector. Wave 5: agents require chat, KBs require embedding.
+            Rendered as radio pair rather than a dropdown so the choice stays
+            visible — picking the wrong kind at create time is a common
+            mistake that would later fail agent/KB wiring. */}
+        <div>
+          <label className="block text-sm font-medium text-brand-light mb-1">
+            Kind<span className="text-brand-accent ml-0.5">*</span>
+          </label>
+          <div className="flex gap-2" role="radiogroup" aria-label="Model kind">
+            {(
+              [
+                { value: 'chat', label: 'Chat Model', hint: 'Used by agents for completions' },
+                { value: 'embedding', label: 'Embedding Model', hint: 'Used by Knowledge Bases for vectorization' },
+              ] as { value: ModelKind; label: string; hint: string }[]
+            ).map((opt) => {
+              const selected = (form.kind ?? 'chat') === opt.value;
+              return (
+                <label
+                  key={opt.value}
+                  className={
+                    selected
+                      ? 'flex-1 px-3 py-2 rounded-card border border-brand-accent bg-brand-accent/10 cursor-pointer'
+                      : 'flex-1 px-3 py-2 rounded-card border border-brand-shade3/30 bg-brand-dark-alt cursor-pointer hover:border-brand-shade3/60'
+                  }
+                >
+                  <input
+                    type="radio"
+                    name="model-kind"
+                    value={opt.value}
+                    checked={selected}
+                    onChange={() => handleKindChange(opt.value)}
+                    disabled={isEdit}
+                    className="sr-only"
+                  />
+                  <div className={`text-sm font-medium ${selected ? 'text-brand-accent' : 'text-brand-light'}`}>
+                    {opt.label}
+                  </div>
+                  <div className="text-xs text-brand-shade3 mt-0.5">{opt.hint}</div>
+                </label>
+              );
+            })}
+          </div>
+          {isEdit && (
+            <p className="mt-1 text-xs text-brand-shade3">Kind cannot be changed after creation.</p>
+          )}
+        </div>
+
         <FormField
           label="Provider"
           type="select"
@@ -422,7 +559,7 @@ function ModelsPageInner() {
             hint="Azure OpenAI API version (default: 2024-10-21)"
           />
         )}
-        {form.type === 'embedding' && (
+        {form.kind === 'embedding' && (
           <FormField
             label="Embedding Dimension"
             value={String(form.embedding_dim ?? 1536)}

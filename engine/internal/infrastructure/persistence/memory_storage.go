@@ -23,7 +23,7 @@ type MemoryStorage struct {
 
 // NewMemoryStorage creates a new memory storage.
 func NewMemoryStorage(db *gorm.DB) *MemoryStorage {
-	slog.Info("memory storage initialized (PostgreSQL)")
+	slog.InfoContext(context.Background(), "memory storage initialized (PostgreSQL)")
 	return &MemoryStorage{db: db}
 }
 

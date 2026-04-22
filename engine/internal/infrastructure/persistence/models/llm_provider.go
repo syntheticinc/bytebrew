@@ -17,6 +17,10 @@ type LLMProviderModel struct {
 	ID              string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	Name            string    `gorm:"uniqueIndex;not null"`
 	Type            string    `gorm:"type:varchar(30);not null"`
+	// Kind discriminates between 'chat' and 'embedding' models.
+	// DB CHECK constraint (chk_models_kind) enforces the allowed values.
+	// Application layer is the primary enforcement point.
+	Kind            string    `gorm:"type:varchar(20);not null;default:'chat'"`
 	BaseURL         string    `gorm:"type:varchar(500)"`
 	ModelName       string    `gorm:"type:varchar(255);not null"`
 	APIKeyEncrypted string    `gorm:"type:varchar(1000)"`

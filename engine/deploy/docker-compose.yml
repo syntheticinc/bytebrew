@@ -10,7 +10,9 @@ services:
       - "${ENGINE_PORT:-8443}:8443"
     environment:
       - DATABASE_URL=postgresql://bytebrew:${POSTGRES_PASSWORD:-bytebrew}@db:5432/bytebrew?sslmode=disable
-      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - BYTEBREW_AUTH_MODE=${BYTEBREW_AUTH_MODE:-local}
+      - BYTEBREW_JWT_KEYS_DIR=${BYTEBREW_JWT_KEYS_DIR:-/var/lib/bytebrew/keys}
+      - BYTEBREW_JWT_PUBLIC_KEY_PATH=${BYTEBREW_JWT_PUBLIC_KEY_PATH:-}
       - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-}

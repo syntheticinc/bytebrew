@@ -2,6 +2,8 @@ package http
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,9 +13,35 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/auth"
 )
 
-const testJWTSecret = "test-secret-key-for-unit-tests"
+// testKeypair holds the Ed25519 keys used by every test in this file. It is
+// generated once per test so each case is hermetic.
+type testKeypair struct {
+	public  ed25519.PublicKey
+	private ed25519.PrivateKey
+}
+
+func newTestKeypair(t *testing.T) testKeypair {
+	t.Helper()
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	return testKeypair{public: pub, private: priv}
+}
+
+// newTestAuthMiddleware wires a fresh EdDSA-based AuthMiddleware the same way
+// the production server does (Wave 1+7): verifier built from an Ed25519
+// public key, no fallback to HMAC. Returns the middleware plus the private
+// key so individual test cases can sign arbitrary tokens.
+func newTestAuthMiddleware(t *testing.T, tokenVerifier APITokenVerifier) (*AuthMiddleware, testKeypair) {
+	t.Helper()
+	kp := newTestKeypair(t)
+	verifier, err := auth.NewEdDSAVerifier(kp.public)
+	require.NoError(t, err)
+	return NewAuthMiddlewareWithVerifier(verifier, tokenVerifier), kp
+}
 
 type mockTokenVerifier struct {
 	tokens map[string]APITokenInfo
@@ -38,25 +66,24 @@ func (m *mockTokenVerifier) VerifyToken(_ context.Context, tokenHash string) (AP
 	return t, nil
 }
 
-// generateTestJWT mints an admin-role HS256 token with a required `exp`
-// claim. Both the role and the expiration are required by the tightened
-// HMACVerifier (SEV-3 / SEV-4 fixes): tokens without `exp` are rejected and
-// missing/non-admin roles no longer silently inherit ScopeAdmin.
-func generateTestJWT(subject, secret string, expiry time.Duration) string {
+// signTestJWT mints an Ed25519-signed token with a mandatory `exp` claim.
+// The verifier rejects tokens without `exp`; every test supplies one.
+func signTestJWT(t *testing.T, privateKey ed25519.PrivateKey, subject string, expiry time.Duration) string {
+	t.Helper()
 	claims := jwt.MapClaims{
-		"sub":  subject,
-		"role": "admin",
-		"exp":  time.Now().Add(expiry).Unix(),
-		"iat":  time.Now().Unix(),
+		"sub": subject,
+		"exp": time.Now().Add(expiry).Unix(),
+		"iat": time.Now().Unix(),
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	s, _ := token.SignedString([]byte(secret))
-	return s
+	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
+	signed, err := token.SignedString(privateKey)
+	require.NoError(t, err)
+	return signed
 }
 
 func TestAuthMiddleware_NoAuthHeader(t *testing.T) {
 	verifier := newMockTokenVerifier()
-	mw := NewAuthMiddleware(testJWTSecret, verifier)
+	mw, _ := newTestAuthMiddleware(t, verifier)
 
 	handler := mw.Authenticate(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -72,7 +99,7 @@ func TestAuthMiddleware_NoAuthHeader(t *testing.T) {
 
 func TestAuthMiddleware_InvalidBearerFormat(t *testing.T) {
 	verifier := newMockTokenVerifier()
-	mw := NewAuthMiddleware(testJWTSecret, verifier)
+	mw, _ := newTestAuthMiddleware(t, verifier)
 
 	handler := mw.Authenticate(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -88,7 +115,7 @@ func TestAuthMiddleware_InvalidBearerFormat(t *testing.T) {
 
 func TestAuthMiddleware_ValidJWT(t *testing.T) {
 	verifier := newMockTokenVerifier()
-	mw := NewAuthMiddleware(testJWTSecret, verifier)
+	mw, kp := newTestAuthMiddleware(t, verifier)
 
 	var capturedActorType, capturedActorID string
 	var capturedScopes int
@@ -100,7 +127,7 @@ func TestAuthMiddleware_ValidJWT(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	token := generateTestJWT("admin-user", testJWTSecret, time.Hour)
+	token := signTestJWT(t, kp.private, "admin-user", time.Hour)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
@@ -114,13 +141,13 @@ func TestAuthMiddleware_ValidJWT(t *testing.T) {
 
 func TestAuthMiddleware_ExpiredJWT(t *testing.T) {
 	verifier := newMockTokenVerifier()
-	mw := NewAuthMiddleware(testJWTSecret, verifier)
+	mw, kp := newTestAuthMiddleware(t, verifier)
 
 	handler := mw.Authenticate(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	token := generateTestJWT("admin-user", testJWTSecret, -time.Hour)
+	token := signTestJWT(t, kp.private, "admin-user", -time.Hour)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
@@ -130,19 +157,20 @@ func TestAuthMiddleware_ExpiredJWT(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "invalid token")
 }
 
-func TestAuthMiddleware_WrongSecretJWT(t *testing.T) {
+func TestAuthMiddleware_WrongKeyJWT(t *testing.T) {
 	verifier := newMockTokenVerifier()
-	mw := NewAuthMiddleware(testJWTSecret, verifier)
+	mw, _ := newTestAuthMiddleware(t, verifier)
 
-	handler := mw.Authenticate(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	token := generateTestJWT("admin-user", "wrong-secret", time.Hour)
+	// Sign with an unrelated keypair — verifier rejects.
+	other := newTestKeypair(t)
+	token := signTestJWT(t, other.private, "admin-user", time.Hour)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
+
+	mw.Authenticate(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
@@ -152,7 +180,7 @@ func TestAuthMiddleware_ValidAPIToken(t *testing.T) {
 	rawToken := "bb_abc123def456"
 	verifier.addToken(rawToken, "my-cli-token", ScopeChat|ScopeTasks)
 
-	mw := NewAuthMiddleware(testJWTSecret, verifier)
+	mw, _ := newTestAuthMiddleware(t, verifier)
 
 	var capturedActorType, capturedActorID string
 	var capturedScopes int
@@ -177,7 +205,7 @@ func TestAuthMiddleware_ValidAPIToken(t *testing.T) {
 
 func TestAuthMiddleware_InvalidAPIToken(t *testing.T) {
 	verifier := newMockTokenVerifier()
-	mw := NewAuthMiddleware(testJWTSecret, verifier)
+	mw, _ := newTestAuthMiddleware(t, verifier)
 
 	handler := mw.Authenticate(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

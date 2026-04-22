@@ -16,8 +16,8 @@ import (
 const toolCallTimeout = 5 * time.Minute
 
 // StreamBasedClientOperationsProxy implements ClientOperationsProxy using a
-// gRPC bidirectional stream. Only ask_user is delegated to the client —
-// file/shell/LSP proxies were removed when self-hosted tools were parked.
+// gRPC bidirectional stream. Only ask_user crosses the gRPC boundary;
+// file/shell/LSP tool calls are not proxied to the client.
 type StreamBasedClientOperationsProxy struct {
 	stream         pb.FlowService_ExecuteFlowServer
 	streamWriter   *StreamWriter
@@ -132,7 +132,7 @@ func (p *StreamBasedClientOperationsProxy) HandleToolResult(result *pb.ToolResul
 	p.mu.RUnlock()
 
 	if !exists {
-		slog.Warn("[PROXY] late ToolResult (pending call expired)", "call_id", result.CallId)
+		slog.WarnContext(context.Background(), "[PROXY] late ToolResult (pending call expired)", "call_id", result.CallId)
 		return false
 	}
 
@@ -166,7 +166,7 @@ func (p *StreamBasedClientOperationsProxy) CleanupPendingCalls() {
 	p.mu.Unlock()
 
 	for callID, ch := range pending {
-		slog.Warn("[PROXY] CleanupPendingCalls: cancelling pending call", "call_id", callID)
+		slog.WarnContext(context.Background(), "[PROXY] CleanupPendingCalls: cancelling pending call", "call_id", callID)
 		close(ch)
 	}
 }

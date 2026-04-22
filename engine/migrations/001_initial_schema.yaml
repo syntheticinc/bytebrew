@@ -11,27 +11,17 @@ databaseChangeLog:
   - changeSet:
       id: 002_tables
       author: bytebrew
+      comment: |
+        Initial schema — final state.
+        Identity: no `users` table. Admin/system identity is external (JWT `sub`)
+        persisted as varchar wherever it appears (api_tokens.user_sub,
+        audit_logs.actor_sub). Models carry an explicit `kind` discriminator
+        (chat | embedding) used by application-layer validation.
       changes:
         - sql:
             sql: |
               -- =============================================================================
-              -- IDENTITY — System/admin users only (end-users are external via user_sub)
-              -- =============================================================================
-
-              CREATE TABLE users (
-                id            uuid         NOT NULL DEFAULT gen_random_uuid(),
-                tenant_id     uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
-                username      varchar(255) NOT NULL,
-                password_hash varchar(255) NOT NULL,
-                role          varchar(20)  NOT NULL DEFAULT 'admin',
-                disabled      boolean      NOT NULL DEFAULT false,
-                created_at    timestamptz  NOT NULL DEFAULT now(),
-                updated_at    timestamptz  NOT NULL DEFAULT now(),
-                CONSTRAINT pk_users PRIMARY KEY (id)
-              );
-
-              -- =============================================================================
-              -- CONFIG — Models
+              -- CONFIG — Models (kind splits chat vs embedding)
               -- =============================================================================
 
               CREATE TABLE models (
@@ -39,6 +29,7 @@ databaseChangeLog:
                 tenant_id         uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
                 name              varchar(255) NOT NULL,
                 type              varchar(30)  NOT NULL,
+                kind              varchar(20)  NOT NULL DEFAULT 'chat',
                 base_url          varchar(500),
                 model_name        varchar(255) NOT NULL,
                 api_key_encrypted varchar(1000),
@@ -191,7 +182,7 @@ databaseChangeLog:
               );
 
               -- =============================================================================
-              -- SCHEMAS — Schemas (chat_enabled flag replaces triggers table)
+              -- SCHEMAS — Schemas (chat_enabled flag gates chat access)
               -- =============================================================================
 
               CREATE TABLE schemas (
@@ -287,7 +278,7 @@ databaseChangeLog:
               );
 
               -- =============================================================================
-              -- RUNTIME — Sessions (user_sub varchar, not FK)
+              -- RUNTIME — Sessions (user_sub varchar, external identity)
               -- =============================================================================
 
               CREATE TABLE sessions (
@@ -360,7 +351,7 @@ databaseChangeLog:
               );
 
               -- =============================================================================
-              -- RUNTIME — Memories (user_sub varchar, not FK)
+              -- RUNTIME — Memories (user_sub varchar, external identity)
               -- =============================================================================
 
               CREATE TABLE memories (
@@ -413,32 +404,31 @@ databaseChangeLog:
               );
 
               -- =============================================================================
-              -- OBSERVABILITY — Audit Logs (actor_user_id OR actor_sub)
+              -- OBSERVABILITY — Audit Logs (actor identity via actor_sub, no FK)
               -- =============================================================================
 
               CREATE TABLE audit_logs (
-                id            uuid         NOT NULL DEFAULT gen_random_uuid(),
-                tenant_id     uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
-                occurred_at   timestamptz  NOT NULL DEFAULT now(),
-                actor_type    varchar(20)  NOT NULL,
-                actor_user_id uuid,
-                actor_sub     varchar(255),
-                action        varchar(50)  NOT NULL,
-                resource      varchar(500),
-                details       jsonb,
-                session_id    uuid,
-                task_id       uuid,
+                id          uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id   uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                occurred_at timestamptz  NOT NULL DEFAULT now(),
+                actor_type  varchar(20)  NOT NULL,
+                actor_sub   varchar(255),
+                action      varchar(50)  NOT NULL,
+                resource    varchar(500),
+                details     jsonb,
+                session_id  uuid,
+                task_id     uuid,
                 CONSTRAINT pk_audit_logs PRIMARY KEY (id)
               );
 
               -- =============================================================================
-              -- AUTH — API Tokens
+              -- AUTH — API Tokens (user_sub varchar, no FK to a users table)
               -- =============================================================================
 
               CREATE TABLE api_tokens (
                 id           uuid         NOT NULL DEFAULT gen_random_uuid(),
                 tenant_id    uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
-                user_id      uuid         NOT NULL,
+                user_sub     varchar(255) NOT NULL DEFAULT '',
                 name         varchar(255) NOT NULL,
                 token_hash   char(64)     NOT NULL,
                 scopes_mask  int          NOT NULL DEFAULT 0,
@@ -455,10 +445,6 @@ databaseChangeLog:
       changes:
         - sql:
             sql: |
-              -- users
-              CREATE UNIQUE INDEX idx_users_tenant_username ON users (tenant_id, username);
-              CREATE INDEX idx_users_tenant_id ON users (tenant_id);
-
               -- models
               CREATE UNIQUE INDEX idx_models_tenant_name ON models (tenant_id, name);
               CREATE INDEX idx_models_tenant_id ON models (tenant_id);
@@ -548,15 +534,16 @@ databaseChangeLog:
 
               -- audit_logs
               CREATE INDEX idx_audit_tenant_time ON audit_logs (tenant_id, occurred_at);
-              CREATE INDEX idx_audit_logs_actor_user_id ON audit_logs (actor_user_id);
+              CREATE INDEX idx_audit_logs_actor_sub ON audit_logs (actor_sub);
               CREATE INDEX idx_audit_logs_session_id ON audit_logs (session_id);
               CREATE INDEX idx_audit_logs_task_id ON audit_logs (task_id);
               CREATE INDEX idx_audit_logs_actor_type ON audit_logs (actor_type);
               CREATE INDEX idx_audit_logs_action ON audit_logs (action);
 
-              -- api_tokens
-              CREATE UNIQUE INDEX idx_api_tokens_tenant_name ON api_tokens (tenant_id, name);
-              CREATE INDEX idx_api_tokens_user_id ON api_tokens (user_id);
+              -- api_tokens — no uniqueness on name (token name is a label,
+              -- not an identifier; token_hash is the only required unique).
+              -- idx_api_tokens_tenant removed intentionally; insert traffic is
+              -- tenant-scoped but lookups are by token_hash (already unique).
 
   - changeSet:
       id: 004_foreign_keys
@@ -678,19 +665,11 @@ databaseChangeLog:
 
               -- audit_logs
               ALTER TABLE audit_logs
-                ADD CONSTRAINT fk_audit_logs_actor_user_id
-                FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL;
-              ALTER TABLE audit_logs
                 ADD CONSTRAINT fk_audit_logs_session_id
                 FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL;
               ALTER TABLE audit_logs
                 ADD CONSTRAINT fk_audit_logs_task_id
                 FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL;
-
-              -- api_tokens
-              ALTER TABLE api_tokens
-                ADD CONSTRAINT fk_api_tokens_user_id
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT;
 
   - changeSet:
       id: 005_check_constraints
@@ -698,11 +677,6 @@ databaseChangeLog:
       changes:
         - sql:
             sql: |
-              -- users
-              ALTER TABLE users
-                ADD CONSTRAINT chk_users_role
-                CHECK (role IN ('admin','system'));
-
               -- agents
               ALTER TABLE agents
                 ADD CONSTRAINT chk_agents_lifecycle
@@ -725,6 +699,9 @@ databaseChangeLog:
               ALTER TABLE models
                 ADD CONSTRAINT chk_models_type
                 CHECK (type IN ('ollama','openai_compatible','anthropic','azure_openai'));
+              ALTER TABLE models
+                ADD CONSTRAINT chk_models_kind
+                CHECK (kind IN ('chat','embedding'));
 
               -- mcp_catalog
               ALTER TABLE mcp_catalog
@@ -789,4 +766,4 @@ databaseChangeLog:
                 CHECK (actor_type IN ('admin','api_token','system'));
               ALTER TABLE audit_logs
                 ADD CONSTRAINT chk_audit_logs_actor_presence
-                CHECK (actor_user_id IS NOT NULL OR actor_sub IS NOT NULL);
+                CHECK (actor_type = 'system' OR actor_sub IS NOT NULL);

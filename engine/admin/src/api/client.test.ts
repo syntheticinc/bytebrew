@@ -52,7 +52,11 @@ describe('APIClient', () => {
     );
   });
 
-  it('redirects to /login on 401', async () => {
+  it('clears token and reloads on 401', async () => {
+    // Wave 1+7: the SPA no longer has a login route. On 401 the client
+    // drops the cached token and triggers a full reload — the mount-time
+    // bootstrap in useAuth then re-acquires a session (local-session call
+    // or external-landing redirect, depending on build-time auth mode).
     const { api } = await import('./client');
     api.setToken('expired-token');
 
@@ -64,15 +68,14 @@ describe('APIClient', () => {
     });
     vi.stubGlobal('fetch', mockFetch);
 
-    // Mock window.location
-    const locationMock = { href: '' };
+    const reloadMock = vi.fn();
     Object.defineProperty(window, 'location', {
-      value: locationMock,
+      value: { reload: reloadMock },
       writable: true,
     });
 
     await expect(api.listAgents()).rejects.toThrow('Unauthorized');
-    expect(locationMock.href).toBe('/admin/login');
+    expect(reloadMock).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem('jwt')).toBeNull();
   });
 

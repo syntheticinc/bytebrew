@@ -31,8 +31,6 @@ type KnowledgeBaseAgent struct {
 func (KnowledgeBaseAgent) TableName() string { return "knowledge_base_agents" }
 
 // KnowledgeDocument represents an indexed document in a knowledge base.
-// file_name dropped in migration 029 — derivable as filepath.Base(FilePath).
-// agent_name dropped in migration 029 — pre-KB migration legacy.
 type KnowledgeDocument struct {
 	ID              string    `gorm:"primaryKey;type:uuid"`
 	KnowledgeBaseID string    `gorm:"type:uuid;not null;index:idx_knowledge_docs_kb"`

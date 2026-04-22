@@ -205,6 +205,114 @@ func (a *mcpServiceHTTPAdapter) UpdateMCPServer(ctx context.Context, name string
 	return nil, pkgerrors.NotFound(fmt.Sprintf("mcp server not found after update: %s", name))
 }
 
+// PatchMCPServer applies only the non-nil fields in req to the existing MCP server.
+func (a *mcpServiceHTTPAdapter) PatchMCPServer(ctx context.Context, name string, req deliveryhttp.UpdateMCPServerRequest) (*deliveryhttp.MCPServerResponse, error) {
+	servers, err := a.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var existing *models.MCPServerModel
+	for i := range servers {
+		if servers[i].Name == name {
+			existing = &servers[i]
+			break
+		}
+	}
+	if existing == nil {
+		return nil, pkgerrors.NotFound(fmt.Sprintf("mcp server not found: %s", name))
+	}
+
+	// Build update struct starting from existing values.
+	update := &models.MCPServerModel{
+		Name:         existing.Name,
+		Type:         existing.Type,
+		Command:      existing.Command,
+		URL:          existing.URL,
+		AuthType:     existing.AuthType,
+		AuthKeyEnv:   existing.AuthKeyEnv,
+		AuthTokenEnv: existing.AuthTokenEnv,
+		AuthClientID: existing.AuthClientID,
+		Args:         existing.Args,
+		EnvVars:      existing.EnvVars,
+		ForwardHeaders: existing.ForwardHeaders,
+	}
+
+	// Apply non-nil fields.
+	if req.Name != nil {
+		update.Name = *req.Name
+	}
+	if req.Type != nil {
+		update.Type = *req.Type
+	}
+	if req.Command != nil {
+		update.Command = *req.Command
+	}
+	if req.URL != nil {
+		update.URL = *req.URL
+	}
+	if req.AuthType != nil {
+		update.AuthType = *req.AuthType
+	}
+	if req.AuthKeyEnv != nil {
+		update.AuthKeyEnv = *req.AuthKeyEnv
+	}
+	if req.AuthTokenEnv != nil {
+		update.AuthTokenEnv = *req.AuthTokenEnv
+	}
+	if req.AuthClientID != nil {
+		update.AuthClientID = *req.AuthClientID
+	}
+	if req.Args != nil {
+		data, _ := json.Marshal(*req.Args)
+		s := string(data)
+		update.Args = &s
+	}
+	if req.EnvVars != nil {
+		data, _ := json.Marshal(*req.EnvVars)
+		s := string(data)
+		update.EnvVars = &s
+	}
+	if req.ForwardHeaders != nil {
+		data, _ := json.Marshal(*req.ForwardHeaders)
+		s := string(data)
+		update.ForwardHeaders = &s
+	}
+
+	if err := a.repo.Update(ctx, existing.ID, update); err != nil {
+		return nil, err
+	}
+
+	agents, err := a.repo.GetAgentNamesForServer(ctx, existing.ID)
+	if err != nil {
+		return nil, fmt.Errorf("load agents for mcp server: %w", err)
+	}
+	if agents == nil {
+		agents = []string{}
+	}
+	resp := &deliveryhttp.MCPServerResponse{
+		ID:           existing.ID,
+		Name:         update.Name,
+		Type:         update.Type,
+		Command:      update.Command,
+		URL:          update.URL,
+		AuthType:     update.AuthType,
+		AuthKeyEnv:   update.AuthKeyEnv,
+		AuthTokenEnv: update.AuthTokenEnv,
+		AuthClientID: update.AuthClientID,
+		Agents:       agents,
+	}
+	if update.Args != nil && *update.Args != "" {
+		_ = json.Unmarshal([]byte(*update.Args), &resp.Args)
+	}
+	if update.EnvVars != nil && *update.EnvVars != "" {
+		_ = json.Unmarshal([]byte(*update.EnvVars), &resp.EnvVars)
+	}
+	if update.ForwardHeaders != nil && *update.ForwardHeaders != "" {
+		_ = json.Unmarshal([]byte(*update.ForwardHeaders), &resp.ForwardHeaders)
+	}
+	return resp, nil
+}
+
 func (a *mcpServiceHTTPAdapter) DeleteMCPServer(ctx context.Context, name string) error {
 	servers, err := a.repo.List(ctx)
 	if err != nil {
@@ -233,9 +341,6 @@ func derefString(p *string) string {
 	}
 	return *p
 }
-
-// Triggers adapter removed in V2: the triggers table is gone, replaced by
-// schemas.chat_enabled. Chat dispatch routes through POST /api/v1/schemas/{id}/chat.
 
 // settingServiceHTTPAdapter bridges GORMSettingRepository to the http.SettingService interface.
 // byokMW, db, and fallback are optional — when set, any write to a byok.*

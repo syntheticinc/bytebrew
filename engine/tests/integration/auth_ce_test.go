@@ -56,21 +56,13 @@ func TestSEC04_AlgNone(t *testing.T) {
 
 // TC-SEC-05: Non-admin role has no scopes, so POST /agents (which is
 // guarded by RequireScope(ScopeAgentsWrite)) must return 403.
+//
+// Skipped: HS256 role-gate removed in Wave 1+7 — EdDSA verifier grants
+// ScopeAdmin uniformly; role-based denial is now tested via API tokens
+// (see TestSEC07_APITokenLimitedScope). Use an API token with limited
+// ScopesMask for equivalent coverage.
 func TestSEC05_NonAdminRoleForbidden(t *testing.T) {
-	requireSuite(t)
-	t.Cleanup(func() { truncateTables(t) })
-
-	userTok := tokenForRole("user-test", "user")
-	resp := do(t, http.MethodPost, "/api/v1/agents",
-		mustJSON(map[string]any{
-			"name":          "tc-sec-05-agent",
-			"system_prompt": "should not be created",
-		}), userTok)
-	_ = readBody(t, resp)
-	// Middleware path: authenticateJWT accepts the signature but issues
-	// scopes=0 for role!=admin; RequireScope then responds 403.
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode,
-		"role=user must be rejected on scope-protected route")
+	t.Skip("HS256 role-gate removed in Wave 1+7 — see auth_middleware_test.go for replacement")
 }
 
 // TC-SEC-06: API token full lifecycle — create, use, delete, use again

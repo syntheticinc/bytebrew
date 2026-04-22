@@ -189,8 +189,8 @@ func TestDispatcher_PersistentChild(t *testing.T) {
 	}
 
 	// Context should be accumulated
-	if mgr.ContextSize("child", "task-2") != 2 {
+	if mgr.ContextSize(context.Background(), "child", "task-2") != 2 {
 		// Each task gets its own session (taskID as sessionID), so context = 2 for task-2
-		t.Logf("context size: %d (each dispatch uses taskID as sessionID)", mgr.ContextSize("child", "task-2"))
+		t.Logf("context size: %d (each dispatch uses taskID as sessionID)", mgr.ContextSize(context.Background(), "child", "task-2"))
 	}
 }

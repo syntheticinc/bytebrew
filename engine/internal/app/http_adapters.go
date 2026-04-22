@@ -16,6 +16,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/mcp"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
+	mcpcatalog "github.com/syntheticinc/bytebrew/engine/internal/service/mcp"
 	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 )
 
@@ -107,8 +108,8 @@ type tokenRepoHTTPAdapter struct {
 	repo *configrepo.GORMAPITokenRepository
 }
 
-func (a *tokenRepoHTTPAdapter) Create(ctx context.Context, userID, name, tokenHash string, scopesMask int) (string, error) {
-	return a.repo.Create(ctx, userID, name, tokenHash, scopesMask)
+func (a *tokenRepoHTTPAdapter) Create(ctx context.Context, userSub, name, tokenHash string, scopesMask int) (string, error) {
+	return a.repo.Create(ctx, userSub, name, tokenHash, scopesMask)
 }
 
 func (a *tokenRepoHTTPAdapter) List(ctx context.Context) ([]deliveryhttp.TokenInfo, error) {
@@ -145,31 +146,13 @@ func (a *tokenRepoHTTPAdapter) VerifyToken(ctx context.Context, tokenHash string
 	}, nil
 }
 
-// userResolverHTTPAdapter bridges GORMUserRepository to the http.UserResolver interface.
-// Looks up admin/system users by their UUID (set as JWT subject on login).
-// Returns empty string (no error) when the actor is not a known user row —
-// e.g. API tokens, where ActorID is the token name rather than a user UUID.
-type userResolverHTTPAdapter struct {
-	repo *configrepo.GORMUserRepository
-}
-
-func (a *userResolverHTTPAdapter) ResolveByID(ctx context.Context, id string) (string, error) {
-	user, err := a.repo.GetByID(ctx, id)
-	if err != nil {
-		return "", err
-	}
-	if user == nil {
-		return "", nil
-	}
-	return user.ID, nil
-}
-
 // configReloaderHTTPAdapter bridges AgentRegistry and MCP reconnection to the http.ConfigReloader interface.
 type configReloaderHTTPAdapter struct {
 	registry            *agentregistry.AgentRegistry
 	mcpRegistry         *mcp.ClientRegistry
 	db                  *gorm.DB
 	forwardHeadersStore *atomic.Value // shared with ChatHandler for dynamic forward header updates
+	transportPolicy     mcpcatalog.TransportPolicy
 }
 
 func (a *configReloaderHTTPAdapter) Reload(ctx context.Context) error {
@@ -194,7 +177,7 @@ func (a *configReloaderHTTPAdapter) reconnectMCPServers(ctx context.Context) {
 	}
 
 	a.mcpRegistry.CloseAll()
-	connectMCPServers(ctx, mcpServers, a.mcpRegistry)
+	connectMCPServers(ctx, mcpServers, a.mcpRegistry, a.transportPolicy)
 
 	// Update forward headers so ChatHandler picks up changes immediately
 	if a.forwardHeadersStore != nil {
@@ -259,8 +242,8 @@ func (a *auditServiceHTTPAdapter) ListAuditLogs(ctx context.Context, actorType, 
 	result := make([]deliveryhttp.AuditResponse, 0, len(logs))
 	for _, l := range logs {
 		actorID := ""
-		if l.ActorUserID != nil {
-			actorID = *l.ActorUserID
+		if l.ActorSub != nil {
+			actorID = *l.ActorSub
 		}
 		result = append(result, deliveryhttp.AuditResponse{
 			ID:        l.ID,

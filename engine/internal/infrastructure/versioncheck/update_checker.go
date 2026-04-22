@@ -82,13 +82,13 @@ func (uc *UpdateChecker) checkFromURL(url string) {
 
 	resp, err := client.Get(url)
 	if err != nil {
-		slog.Debug("update check: request failed", "error", err)
+		slog.DebugContext(context.Background(), "update check: request failed", "error", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		slog.Debug("update check: unexpected status", "status", resp.StatusCode)
+		slog.DebugContext(context.Background(), "update check: unexpected status", "status", resp.StatusCode)
 		return
 	}
 
@@ -99,7 +99,7 @@ func (uc *UpdateChecker) checkFromURL(url string) {
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		slog.Debug("update check: decode failed", "error", err)
+		slog.DebugContext(context.Background(), "update check: decode failed", "error", err)
 		return
 	}
 

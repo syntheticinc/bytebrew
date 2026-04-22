@@ -32,10 +32,15 @@ func (m *modelServiceHTTPAdapter) ListModels(ctx context.Context) ([]deliveryhtt
 
 	result := make([]deliveryhttp.ModelResponse, 0, len(providers))
 	for _, p := range providers {
+		kind := p.Kind
+		if kind == "" {
+			kind = "chat"
+		}
 		result = append(result, deliveryhttp.ModelResponse{
 			ID:           p.ID,
 			Name:         p.Name,
 			Type:         p.Type,
+			Kind:         kind,
 			BaseURL:      p.BaseURL,
 			ModelName:    p.ModelName,
 			HasAPIKey:    p.APIKeyEncrypted != "",
@@ -48,9 +53,14 @@ func (m *modelServiceHTTPAdapter) ListModels(ctx context.Context) ([]deliveryhtt
 }
 
 func (m *modelServiceHTTPAdapter) CreateModel(ctx context.Context, req deliveryhttp.CreateModelRequest) (*deliveryhttp.ModelResponse, error) {
+	kind := req.Kind
+	if kind == "" {
+		kind = "chat"
+	}
 	provider := &models.LLMProviderModel{
 		Name:            req.Name,
 		Type:            req.Type,
+		Kind:            kind,
 		BaseURL:         req.BaseURL,
 		ModelName:       req.ModelName,
 		APIKeyEncrypted: req.APIKey,
@@ -71,6 +81,7 @@ func (m *modelServiceHTTPAdapter) CreateModel(ctx context.Context, req deliveryh
 		ID:           provider.ID,
 		Name:         provider.Name,
 		Type:         provider.Type,
+		Kind:         provider.Kind,
 		BaseURL:      provider.BaseURL,
 		ModelName:    provider.ModelName,
 		HasAPIKey:    provider.APIKeyEncrypted != "",
@@ -97,9 +108,14 @@ func (m *modelServiceHTTPAdapter) UpdateModel(ctx context.Context, name string, 
 		return nil, pkgerrors.NotFound(fmt.Sprintf("model not found: %s", name))
 	}
 
+	kind := req.Kind
+	if kind == "" {
+		kind = "chat"
+	}
 	update := &models.LLMProviderModel{
 		Name:       req.Name,
 		Type:       req.Type,
+		Kind:       kind,
 		BaseURL:    req.BaseURL,
 		ModelName:  req.ModelName,
 		APIVersion: req.APIVersion,
@@ -135,11 +151,100 @@ func (m *modelServiceHTTPAdapter) UpdateModel(ctx context.Context, name string, 
 		ID:           existing.ID,
 		Name:         respName,
 		Type:         req.Type,
+		Kind:         kind,
 		BaseURL:      req.BaseURL,
 		ModelName:    req.ModelName,
 		HasAPIKey:    hasKey,
 		APIVersion:   req.APIVersion,
 		EmbeddingDim: req.EmbeddingDim,
+		CreatedAt:    existing.CreatedAt.Format(time.RFC3339),
+	}, nil
+}
+
+// PatchModel applies only the non-nil fields in req to the existing model.
+func (m *modelServiceHTTPAdapter) PatchModel(ctx context.Context, name string, req deliveryhttp.UpdateModelRequest) (*deliveryhttp.ModelResponse, error) {
+	providers, err := m.repo.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list models for patch: %w", err)
+	}
+
+	var existing *models.LLMProviderModel
+	for i := range providers {
+		if providers[i].Name == name {
+			existing = &providers[i]
+			break
+		}
+	}
+	if existing == nil {
+		return nil, pkgerrors.NotFound(fmt.Sprintf("model not found: %s", name))
+	}
+
+	// Build update struct starting from existing values (preserve unspecified fields).
+	existingKind := existing.Kind
+	if existingKind == "" {
+		existingKind = "chat"
+	}
+	update := &models.LLMProviderModel{
+		Name:            existing.Name,
+		Type:            existing.Type,
+		Kind:            existingKind,
+		BaseURL:         existing.BaseURL,
+		ModelName:       existing.ModelName,
+		APIVersion:      existing.APIVersion,
+		APIKeyEncrypted: existing.APIKeyEncrypted,
+	}
+	update.SetConfig(existing.GetConfig())
+
+	if req.Name != nil {
+		update.Name = *req.Name
+	}
+	if req.Type != nil {
+		update.Type = *req.Type
+	}
+	if req.Kind != nil {
+		update.Kind = *req.Kind
+	}
+	if req.BaseURL != nil {
+		update.BaseURL = *req.BaseURL
+	}
+	if req.ModelName != nil {
+		update.ModelName = *req.ModelName
+	}
+	if req.APIVersion != nil {
+		update.APIVersion = *req.APIVersion
+	}
+	if req.APIKey != nil && *req.APIKey != "" {
+		update.APIKeyEncrypted = *req.APIKey
+	}
+	if req.EmbeddingDim != nil {
+		cfg := existing.GetConfig()
+		cfg.EmbeddingDim = *req.EmbeddingDim
+		update.SetConfig(cfg)
+	}
+
+	if err := m.repo.Update(ctx, existing.ID, update); err != nil {
+		return nil, fmt.Errorf("patch model: %w", err)
+	}
+
+	if m.modelCache != nil {
+		m.modelCache.Invalidate(existing.ID)
+	}
+
+	embDim := existing.EmbeddingDim()
+	if req.EmbeddingDim != nil {
+		embDim = *req.EmbeddingDim
+	}
+
+	return &deliveryhttp.ModelResponse{
+		ID:           existing.ID,
+		Name:         update.Name,
+		Type:         update.Type,
+		Kind:         update.Kind,
+		BaseURL:      update.BaseURL,
+		ModelName:    update.ModelName,
+		HasAPIKey:    update.APIKeyEncrypted != "",
+		APIVersion:   update.APIVersion,
+		EmbeddingDim: embDim,
 		CreatedAt:    existing.CreatedAt.Format(time.RFC3339),
 	}, nil
 }

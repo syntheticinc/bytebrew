@@ -36,21 +36,45 @@ type BootstrapLogging struct {
 	Level string `mapstructure:"level"`
 }
 
-// BootstrapSecurity holds security settings loaded at startup.
-// Admin credentials are NO LONGER here — admin/system users live in the
-// `users` table and are created via the `ce admin` CLI subcommand.
+// AuthMode values.
+const (
+	// AuthModeLocal: CE single-node — engine signs its own Ed25519 keypair on
+	// first boot, issues short-lived admin sessions via POST /auth/local-session,
+	// `sub` is the synthetic `local-admin`, `tenant_id` is empty.
+	AuthModeLocal = "local"
+	// AuthModeExternal: Cloud / hosted — tokens are signed by an external issuer
+	// (landing service). Engine loads only the public key; there is no
+	// /auth/local-session route.
+	AuthModeExternal = "external"
+)
+
+// BootstrapSecurity holds auth-related settings loaded at startup.
+//
+// There is no shared HMAC secret any more (Wave 1+7). All JWTs are EdDSA.
+// In local mode the engine generates its keypair automatically and
+// persists it under JWTKeysDir. In external mode JWTPublicKeyPath points at
+// the issuer's public key.
 type BootstrapSecurity struct {
-	// JWTSecret is the HMAC key used to sign/verify admin JWT tokens.
-	// Typically supplied via the JWT_SECRET environment variable.
-	JWTSecret string `mapstructure:"jwt_secret"`
+	// AuthMode selects local vs external JWT issuance.
+	// Accepts "local" or "external"; defaults to "local" when empty.
+	AuthMode string `mapstructure:"auth_mode"`
+
+	// JWTKeysDir is the directory where the local Ed25519 keypair is stored.
+	// Used only when AuthMode == "local". Defaults to <data_dir>/keys.
+	JWTKeysDir string `mapstructure:"jwt_keys_dir"`
+
+	// JWTPublicKeyPath is the path to the Ed25519 public key of the external
+	// issuer. Required when AuthMode == "external".
+	JWTPublicKeyPath string `mapstructure:"jwt_public_key_path"`
 }
 
 // LoadBootstrap loads the bootstrap config from a YAML file.
 // If the config file is not found, falls back to environment variables:
 //   - DATABASE_URL — PostgreSQL connection string (required)
-//   - JWT_SECRET — HMAC signing key for admin JWTs (required if no users authenticate)
-//   - ENGINE_HOST — listen host (optional, default: "0.0.0.0")
-//   - ENGINE_PORT — listen port (optional, default: 8443)
+//   - BYTEBREW_AUTH_MODE — "local" (default) or "external"
+//   - BYTEBREW_JWT_KEYS_DIR — directory for local-mode Ed25519 keypair
+//   - BYTEBREW_JWT_PUBLIC_KEY_PATH — path to external issuer public key
+//   - ENGINE_HOST / ENGINE_PORT — listen host/port (optional)
 //
 // Environment variable placeholders (${VAR}) in YAML string fields are also expanded.
 func LoadBootstrap(path string) (*BootstrapConfig, error) {
@@ -74,6 +98,7 @@ func LoadBootstrap(path string) (*BootstrapConfig, error) {
 
 	expandBootstrapEnvVars(&cfg)
 	applyBootstrapEnvOverrides(&cfg)
+	applySecurityDefaults(&cfg)
 
 	if err := validateBootstrap(&cfg); err != nil {
 		return nil, fmt.Errorf("validate bootstrap config: %w", err)
@@ -123,9 +148,8 @@ func loadBootstrapFromEnv() (*BootstrapConfig, error) {
 		cfg.Engine.CORSOrigins = splitAndTrim(origins, ",")
 	}
 
-	if secret := os.Getenv("JWT_SECRET"); secret != "" {
-		cfg.Security.JWTSecret = secret
-	}
+	applyBootstrapEnvOverrides(cfg)
+	applySecurityDefaults(cfg)
 
 	if err := validateBootstrap(cfg); err != nil {
 		return nil, fmt.Errorf("validate env-based config: %w", err)
@@ -146,8 +170,26 @@ func applyBootstrapEnvOverrides(cfg *BootstrapConfig) {
 	if origins := os.Getenv("BYTEBREW_CORS_ORIGINS"); origins != "" {
 		cfg.Engine.CORSOrigins = splitAndTrim(origins, ",")
 	}
-	if secret := os.Getenv("JWT_SECRET"); secret != "" {
-		cfg.Security.JWTSecret = secret
+	if mode := os.Getenv("BYTEBREW_AUTH_MODE"); mode != "" {
+		cfg.Security.AuthMode = mode
+	}
+	if dir := os.Getenv("BYTEBREW_JWT_KEYS_DIR"); dir != "" {
+		cfg.Security.JWTKeysDir = dir
+	}
+	if path := os.Getenv("BYTEBREW_JWT_PUBLIC_KEY_PATH"); path != "" {
+		cfg.Security.JWTPublicKeyPath = path
+	}
+}
+
+// applySecurityDefaults fills missing auth settings with sensible defaults
+// after env overrides. Called after loadBootstrapFromEnv / LoadBootstrap so
+// YAML-provided keys win over defaults.
+func applySecurityDefaults(cfg *BootstrapConfig) {
+	if cfg.Security.AuthMode == "" {
+		cfg.Security.AuthMode = AuthModeLocal
+	}
+	if cfg.Security.AuthMode == AuthModeLocal && cfg.Security.JWTKeysDir == "" {
+		cfg.Security.JWTKeysDir = filepath.Join(cfg.Engine.DataDirOrDefault(), "keys")
 	}
 }
 
@@ -156,7 +198,9 @@ func expandBootstrapEnvVars(cfg *BootstrapConfig) {
 	cfg.Engine.Host = expandEnvVars(cfg.Engine.Host)
 	cfg.Engine.DataDir = expandEnvVars(cfg.Engine.DataDir)
 	cfg.Database.URL = expandEnvVars(cfg.Database.URL)
-	cfg.Security.JWTSecret = expandEnvVars(cfg.Security.JWTSecret)
+	cfg.Security.AuthMode = expandEnvVars(cfg.Security.AuthMode)
+	cfg.Security.JWTKeysDir = expandEnvVars(cfg.Security.JWTKeysDir)
+	cfg.Security.JWTPublicKeyPath = expandEnvVars(cfg.Security.JWTPublicKeyPath)
 	cfg.Logging.Level = expandEnvVars(cfg.Logging.Level)
 }
 
@@ -174,6 +218,19 @@ func validateBootstrap(cfg *BootstrapConfig) error {
 	if cfg.Engine.InternalPort > 0 && cfg.Engine.InternalPort == cfg.Engine.Port {
 		return fmt.Errorf("internal_port (%d) must differ from port (%d)", cfg.Engine.InternalPort, cfg.Engine.Port)
 	}
+	switch cfg.Security.AuthMode {
+	case AuthModeLocal:
+		if cfg.Security.JWTKeysDir == "" {
+			return fmt.Errorf("security.jwt_keys_dir is required when auth_mode=local")
+		}
+	case AuthModeExternal:
+		if cfg.Security.JWTPublicKeyPath == "" {
+			return fmt.Errorf("security.jwt_public_key_path is required when auth_mode=external")
+		}
+	default:
+		return fmt.Errorf("invalid auth_mode %q (expected %q or %q)",
+			cfg.Security.AuthMode, AuthModeLocal, AuthModeExternal)
+	}
 	return nil
 }
 
@@ -186,6 +243,9 @@ func DefaultBootstrapConfig() *BootstrapConfig {
 		},
 		Logging: BootstrapLogging{
 			Level: "info",
+		},
+		Security: BootstrapSecurity{
+			AuthMode: AuthModeLocal,
 		},
 	}
 }

@@ -34,17 +34,27 @@ type CreateKBRequest struct {
 	EmbeddingModelID string `json:"embedding_model_id"`
 }
 
-// UpdateKBRequest is the request body for updating a knowledge base.
+// UpdateKBRequest is the request body for PUT /api/v1/knowledge-bases/{id} (full replace).
+// name is required for PUT; missing required fields return 400.
 type UpdateKBRequest struct {
 	Name             string `json:"name"`
 	Description      string `json:"description,omitempty"`
 	EmbeddingModelID string `json:"embedding_model_id"`
 }
 
+// PatchKBRequest is the request body for PATCH /api/v1/knowledge-bases/{id}.
+// All fields are pointers: nil means "preserve existing value".
+type PatchKBRequest struct {
+	Name             *string `json:"name,omitempty"`
+	Description      *string `json:"description,omitempty"`
+	EmbeddingModelID *string `json:"embedding_model_id,omitempty"`
+}
+
 // KBStore provides CRUD for knowledge bases.
 type KBStore interface {
 	Create(ctx context.Context, name, description, embeddingModelID, tenantID string) (*KnowledgeBaseInfo, error)
 	Update(ctx context.Context, id, name, description, embeddingModelID string) (*KnowledgeBaseInfo, error)
+	Patch(ctx context.Context, id string, req PatchKBRequest) (*KnowledgeBaseInfo, error)
 	GetByID(ctx context.Context, id string) (*KnowledgeBaseInfo, error)
 	List(ctx context.Context) ([]KnowledgeBaseInfo, error)
 	Delete(ctx context.Context, id string) error
@@ -138,6 +148,8 @@ func (h *KnowledgeBaseHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // Update handles PUT /api/v1/knowledge-bases/{id}.
+// PUT is a full-replace: name is required; missing required fields return 400.
+// Use PATCH for partial updates.
 func (h *KnowledgeBaseHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseKBID(w, r)
 	if !ok {
@@ -149,11 +161,36 @@ func (h *KnowledgeBaseHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Name == "" {
-		writeJSONError(w, http.StatusBadRequest, "name is required")
+		writeJSONError(w, http.StatusBadRequest, "name is required for PUT (full replace); use PATCH for partial updates")
 		return
 	}
 
 	kb, err := h.store.Update(r.Context(), id, req.Name, req.Description, req.EmbeddingModelID)
+	if err != nil {
+		writeDomainError(w, err)
+		return
+	}
+	if kb == nil {
+		writeJSONError(w, http.StatusNotFound, "knowledge base not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, kb)
+}
+
+// PatchKB handles PATCH /api/v1/knowledge-bases/{id}.
+// Only non-nil fields are applied; all others preserve their current value.
+func (h *KnowledgeBaseHandler) PatchKB(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseKBID(w, r)
+	if !ok {
+		return
+	}
+	var req PatchKBRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	kb, err := h.store.Patch(r.Context(), id, req)
 	if err != nil {
 		writeDomainError(w, err)
 		return

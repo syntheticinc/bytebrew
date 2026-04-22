@@ -37,5 +37,8 @@ func (Noop) OnAgentStep(context.Context, string, int) error { return nil }
 // nothing to wire the seeder into.
 func (Noop) SetTenantSeeder(TenantSeeder) {}
 
+// TransportPolicy returns PermissiveTransportPolicy — CE allows all transports.
+func (Noop) TransportPolicy() TransportPolicy { return PermissiveTransportPolicy{} }
+
 // Stop is a no-op.
 func (Noop) Stop() {}

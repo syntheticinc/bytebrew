@@ -41,7 +41,7 @@ func (r *InMemoryRegistry) Register(sessionID string, flow *domain.ActiveFlow, c
 		if existing.cancel != nil {
 			existing.cancel()
 		}
-		slog.Info("replacing existing flow", "session_id", sessionID)
+		slog.InfoContext(context.Background(), "replacing existing flow", "session_id", sessionID)
 	}
 
 	r.flows[sessionID] = &flowEntry{flow: flow, cancel: cancel}
@@ -137,7 +137,7 @@ func (r *InMemoryRegistry) PublishUserMessage(sessionID, message string) bool {
 	}
 
 	if err := entry.messageSink.PublishUserMessage(message); err != nil {
-		slog.Error("failed to publish user message to active flow", "session_id", sessionID, "error", err)
+		slog.ErrorContext(context.Background(), "failed to publish user message to active flow", "session_id", sessionID, "error", err)
 		return false
 	}
 	return true

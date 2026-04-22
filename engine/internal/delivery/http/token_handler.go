@@ -15,7 +15,7 @@ import (
 
 // TokenRepository manages API tokens in the database.
 type TokenRepository interface {
-	Create(ctx context.Context, userID, name, tokenHash string, scopesMask int) (id string, err error)
+	Create(ctx context.Context, userSub, name, tokenHash string, scopesMask int) (id string, err error)
 	List(ctx context.Context) ([]TokenInfo, error)
 	Delete(ctx context.Context, id string) error
 }
@@ -69,9 +69,9 @@ func (h *TokenHandler) CreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID := domain.UserIDFromContext(r.Context())
+	userSub := domain.UserSubFromContext(r.Context())
 	hash := sha256Hash(rawToken)
-	id, err := h.repo.Create(r.Context(), userID, req.Name, hash, req.ScopesMask)
+	id, err := h.repo.Create(r.Context(), userSub, req.Name, hash, req.ScopesMask)
 	if err != nil {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": fmt.Sprintf("create token: %s", err)})
 		return

@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -96,7 +97,7 @@ func (m *BackgroundProcessManager) Spawn(command, cwd string) (*BackgroundProces
 	// Wait for exit in background
 	go m.waitForExit(id, cmd)
 
-	slog.Info("background process spawned",
+	slog.InfoContext(context.Background(), "background process spawned",
 		"id", id,
 		"pid", cmd.Process.Pid,
 		"command", command)
@@ -196,7 +197,7 @@ func (m *BackgroundProcessManager) waitForExit(id string, cmd *exec.Cmd) {
 
 	m.mu.Unlock()
 
-	slog.Info("background process exited",
+	slog.InfoContext(context.Background(), "background process exited",
 		"id", id,
 		"exit_code", entry.info.ExitCode)
 }

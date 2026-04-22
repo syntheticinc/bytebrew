@@ -122,7 +122,7 @@ func NewClient(serverID, root string, cmd *exec.Cmd) (*Client, error) {
 
 	go c.readLoop()
 
-	slog.Info("LSP client started", "server", serverID, "pid", cmd.Process.Pid, "root", root)
+	slog.InfoContext(context.Background(), "LSP client started", "server", serverID, "pid", cmd.Process.Pid, "root", root)
 	return c, nil
 }
 
@@ -158,7 +158,7 @@ func (c *Client) Initialize(ctx context.Context, projectRoot string) error {
 		return fmt.Errorf("initialized notification: %w", err)
 	}
 
-	slog.Info("LSP initialized", "server", c.serverID, "root", projectRoot)
+	slog.InfoContext(context.Background(), "LSP initialized", "server", c.serverID, "root", projectRoot)
 	return nil
 }
 
@@ -237,9 +237,9 @@ func (c *Client) Shutdown(ctx context.Context) error {
 
 	select {
 	case <-done:
-		slog.Info("LSP server exited gracefully", "server", c.serverID)
+		slog.InfoContext(context.Background(), "LSP server exited gracefully", "server", c.serverID)
 	case <-time.After(3 * time.Second):
-		slog.Warn("LSP server did not exit, killing", "server", c.serverID)
+		slog.WarnContext(context.Background(), "LSP server did not exit, killing", "server", c.serverID)
 		_ = c.Close()
 	}
 
@@ -264,13 +264,13 @@ func (c *Client) readLoop() {
 			if c.closed.Load() {
 				return
 			}
-			slog.Debug("LSP readLoop error", "server", c.serverID, "error", err)
+			slog.DebugContext(context.Background(), "LSP readLoop error", "server", c.serverID, "error", err)
 			return
 		}
 
 		var msg jsonrpcResponse
 		if err := json.Unmarshal(body, &msg); err != nil {
-			slog.Debug("LSP parse message error", "server", c.serverID, "error", err)
+			slog.DebugContext(context.Background(), "LSP parse message error", "server", c.serverID, "error", err)
 			continue
 		}
 
@@ -307,7 +307,7 @@ func (c *Client) readLoop() {
 // handleServerRequest responds to server-initiated requests (e.g., window/workDoneProgress/create).
 // LSP servers may send requests that expect a response; failing to respond blocks the server.
 func (c *Client) handleServerRequest(id int64, method string, params json.RawMessage) {
-	slog.Debug("LSP server request", "server", c.serverID, "method", method, "id", id)
+	slog.DebugContext(context.Background(), "LSP server request", "server", c.serverID, "method", method, "id", id)
 
 	// Respond with an empty success result for known methods.
 	// This unblocks the server so it can continue processing.
@@ -318,7 +318,7 @@ func (c *Client) handleServerRequest(id int64, method string, params json.RawMes
 	}
 
 	if err := c.writeMessage(response); err != nil {
-		slog.Debug("LSP: failed to respond to server request", "server", c.serverID, "method", method, "error", err)
+		slog.DebugContext(context.Background(), "LSP: failed to respond to server request", "server", c.serverID, "method", method, "error", err)
 	}
 }
 
@@ -337,7 +337,7 @@ func (c *Client) handleNotification(method string, params json.RawMessage) {
 			Message string `json:"message"`
 		}
 		if err := json.Unmarshal(params, &logMsg); err == nil {
-			slog.Debug("LSP server log", "server", c.serverID, "message", logMsg.Message)
+			slog.DebugContext(context.Background(), "LSP server log", "server", c.serverID, "message", logMsg.Message)
 		}
 	}
 }
@@ -370,7 +370,7 @@ func (c *Client) handleProgress(params json.RawMessage) {
 			// Already closed
 		default:
 			close(c.ready)
-			slog.Info("LSP server ready", "server", c.serverID)
+			slog.InfoContext(context.Background(), "LSP server ready", "server", c.serverID)
 		}
 	}
 }

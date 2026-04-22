@@ -30,7 +30,7 @@ func (c SchemaTemplateCategory) IsValid() bool {
 // template. Same hybrid pattern as MCPCatalogRecord (§5.5): rows are seeded
 // from `schema-templates.yaml` at engine startup via seedSchemaTemplates,
 // and the "Use template" action forks the `Definition` graph into
-// tenant-owned rows in schemas + agents + agent_relations + triggers. Forked
+// tenant-owned rows in schemas + agents + agent_relations. Forked
 // data has no FK back — catalog updates never touch existing forks (§2.2).
 //
 // This is a pure domain entity (no GORM tags). Definition is stored as
@@ -48,16 +48,14 @@ type SchemaTemplate struct {
 	UpdatedAt   time.Time
 }
 
-// SchemaTemplateDefinition is the full template graph: agents, relations,
-// triggers, and an entry-agent reference. Agent references inside Relations
-// and Triggers use logical names (the `Name` field on
-// SchemaTemplateAgent) — the fork service resolves them to freshly-created
-// uuids at fork time.
+// SchemaTemplateDefinition is the full template graph: agents, relations, and
+// an entry-agent reference. Agent references inside Relations use logical
+// names (the `Name` field on SchemaTemplateAgent) — the fork service resolves
+// them to freshly-created UUIDs at fork time.
 type SchemaTemplateDefinition struct {
 	EntryAgentName string                    `json:"entry_agent_name" yaml:"entry_agent_name"`
 	Agents         []SchemaTemplateAgent     `json:"agents"           yaml:"agents"`
 	Relations      []SchemaTemplateRelation  `json:"relations"        yaml:"relations"`
-	Triggers       []SchemaTemplateTrigger   `json:"triggers"         yaml:"triggers"`
 }
 
 // SchemaTemplateAgent describes one agent in the template graph.
@@ -84,13 +82,3 @@ type SchemaTemplateRelation struct {
 	Target string `json:"target" yaml:"target"`
 }
 
-// SchemaTemplateTrigger is a legacy YAML-compatibility shim. V2 removed the
-// triggers table; `{type: "chat", enabled: true}` entries are mapped to
-// `schemas.chat_enabled=true` at fork time. Other types (cron/webhook) are
-// deferred to V3 — tenants hit the chat API from their own schedulers.
-type SchemaTemplateTrigger struct {
-	Type    string                 `json:"type"             yaml:"type"`
-	Title   string                 `json:"title"            yaml:"title"`
-	Enabled bool                   `json:"enabled"          yaml:"enabled"`
-	Config  map[string]interface{} `json:"config,omitempty" yaml:"config,omitempty"`
-}

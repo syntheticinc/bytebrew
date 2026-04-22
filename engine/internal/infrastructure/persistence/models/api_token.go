@@ -3,9 +3,13 @@ package models
 import "time"
 
 // APITokenModel maps to the "api_tokens" table.
+//
+// Identity: user_sub is the JWT `sub` claim of the admin/user who created the
+// token. No FK to a users table — identity is external (Cloud) or synthetic
+// (CE local admin = "local-admin"). varchar, not uuid.
 type APITokenModel struct {
 	ID         string     `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
-	UserID     string     `gorm:"type:uuid;not null"`
+	UserSub    string     `gorm:"column:user_sub;type:varchar(255);not null;default:''"`
 	Name       string     `gorm:"uniqueIndex;not null"`
 	TokenHash  string     `gorm:"uniqueIndex;not null"`
 	ScopesMask int        `gorm:"not null;default:0"`

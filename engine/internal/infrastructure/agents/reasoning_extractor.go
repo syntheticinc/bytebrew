@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"strings"
@@ -26,7 +27,7 @@ func (r *ReasoningExtractor) ExtractReasoning(msg *schema.Message) (string, bool
 
 	content := cleanReasoningContent(msg.ReasoningContent)
 
-	slog.Debug("reasoning extracted", "length", len(content))
+	slog.DebugContext(context.Background(), "reasoning extracted", "length", len(content))
 	return content, true
 }
 

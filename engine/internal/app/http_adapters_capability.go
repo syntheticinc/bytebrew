@@ -6,14 +6,31 @@ import (
 	"fmt"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 	"gorm.io/gorm"
 )
 
 // capabilityServiceHTTPAdapter bridges GORMCapabilityRepository to the http.CapabilityService interface.
+// registryMgr is optional; when set, every mutation triggers registry invalidation so
+// DerivedTools are recomputed on the next request (fixes BUG-K-01).
 type capabilityServiceHTTPAdapter struct {
-	repo *configrepo.GORMCapabilityRepository
+	repo        *configrepo.GORMCapabilityRepository
+	registryMgr *agentregistry.Manager
+}
+
+// invalidateRegistry refreshes the agent registry cache after a capability mutation.
+func (a *capabilityServiceHTTPAdapter) invalidateRegistry(ctx context.Context) {
+	if a.registryMgr == nil {
+		return
+	}
+	if tid := domain.TenantIDFromContext(ctx); tid != "" {
+		a.registryMgr.InvalidateTenant(tid)
+	} else {
+		a.registryMgr.InvalidateAll()
+	}
 }
 
 func (a *capabilityServiceHTTPAdapter) ListCapabilities(ctx context.Context, agentName string) ([]deliveryhttp.CapabilityInfo, error) {
@@ -55,6 +72,8 @@ func (a *capabilityServiceHTTPAdapter) AddCapability(ctx context.Context, agentN
 		}
 		return nil, fmt.Errorf("add capability: %w", err)
 	}
+
+	a.invalidateRegistry(ctx)
 
 	return &deliveryhttp.CapabilityInfo{
 		ID:      record.ID,
@@ -100,6 +119,8 @@ func (a *capabilityServiceHTTPAdapter) UpdateCapability(ctx context.Context, id 
 		}
 		return fmt.Errorf("update capability: %w", err)
 	}
+
+	a.invalidateRegistry(ctx)
 	return nil
 }
 
@@ -110,5 +131,7 @@ func (a *capabilityServiceHTTPAdapter) RemoveCapability(ctx context.Context, id 
 		}
 		return fmt.Errorf("remove capability: %w", err)
 	}
+
+	a.invalidateRegistry(ctx)
 	return nil
 }

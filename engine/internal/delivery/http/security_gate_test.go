@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	eehttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
+	"github.com/syntheticinc/bytebrew/engine/pkg/plugin"
 )
 
 // noTokenVerifier always fails token lookup. The security-gate suite never
@@ -34,6 +35,18 @@ type noTokenVerifier struct{}
 func (n *noTokenVerifier) VerifyToken(_ context.Context, _ string) (eehttp.APITokenInfo, error) {
 	return eehttp.APITokenInfo{}, errors.New("token lookup not expected in security-gate test")
 }
+
+// rejectingVerifier is a plugin.JWTVerifier that rejects every token. The
+// security-gate suite never sends an Authorization header, so the middleware
+// rejects the request before calling Verify. This stub is plumbed only to
+// satisfy the constructor signature — reaching it means the gate failed.
+type rejectingVerifier struct{}
+
+func (rejectingVerifier) Verify(string) (plugin.Claims, error) {
+	return plugin.Claims{}, errors.New("rejecting verifier: gate failure")
+}
+
+func newRejectingVerifier() plugin.JWTVerifier { return rejectingVerifier{} }
 
 // TestSecurityGate_NoAuthorization asserts SCC-01: any call without an
 // Authorization header to a protected endpoint returns 401.
@@ -72,7 +85,7 @@ func TestSecurityGate_NoAuthorization(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			mw := eehttp.NewAuthMiddlewareWithVerifier(
-				eehttp.NewHMACVerifier("irrelevant-secret"),
+				newRejectingVerifier(),
 				&noTokenVerifier{},
 			)
 
@@ -119,7 +132,7 @@ func TestSecurityGate_NoAuthorization(t *testing.T) {
 // middleware must not accept alternative schemes.
 func TestSecurityGate_BearerPrefixRequired(t *testing.T) {
 	mw := eehttp.NewAuthMiddlewareWithVerifier(
-		eehttp.NewHMACVerifier("irrelevant-secret"),
+		newRejectingVerifier(),
 		&noTokenVerifier{},
 	)
 

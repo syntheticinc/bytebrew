@@ -148,19 +148,19 @@ func (w *DebugChatModelWrapper) saveToFile(name string, data map[string]interfac
 	// Create session subdirectory
 	sessionDir := filepath.Join(w.logDir, w.sessionID)
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
-		slog.Error("failed to create debug log directory", "error", err)
+		slog.ErrorContext(context.Background(), "failed to create debug log directory", "error", err)
 		return
 	}
 
 	filename := filepath.Join(sessionDir, fmt.Sprintf("%s.json", name))
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		slog.Error("failed to marshal debug log", "error", err)
+		slog.ErrorContext(context.Background(), "failed to marshal debug log", "error", err)
 		return
 	}
 
 	if err := os.WriteFile(filename, jsonData, 0644); err != nil {
-		slog.Error("failed to write debug log", "error", err)
+		slog.ErrorContext(context.Background(), "failed to write debug log", "error", err)
 	}
 }
 
@@ -196,9 +196,9 @@ func (w *DebugChatModelWrapper) Stream(ctx context.Context, input []*schema.Mess
 
 // WithTools implements model.ToolCallingChatModel
 func (w *DebugChatModelWrapper) WithTools(tools []*schema.ToolInfo) (model.ToolCallingChatModel, error) {
-	slog.Info("[DEBUG_WRAPPER] WithTools called", "tool_count", len(tools))
+	slog.InfoContext(context.Background(), "[DEBUG_WRAPPER] WithTools called", "tool_count", len(tools))
 	for i, t := range tools {
-		slog.Debug("[DEBUG_WRAPPER] Tool added", "index", i, "name", t.Name)
+		slog.DebugContext(context.Background(), "[DEBUG_WRAPPER] Tool added", "index", i, "name", t.Name)
 	}
 	newInner, err := w.inner.WithTools(tools)
 	if err != nil {

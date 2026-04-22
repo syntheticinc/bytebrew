@@ -92,6 +92,27 @@ func (r *CreateAgentRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UpdateAgentRequest is the body for PATCH /api/v1/agents/{name}.
+// All fields are pointers: nil means "preserve existing value"; non-nil means "apply this value".
+// This prevents the PUT-wipe bug (BUG-MT-03) where unspecified fields were zeroed.
+type UpdateAgentRequest struct {
+	SystemPrompt    *string   `json:"system_prompt,omitempty"`
+	ModelID         *string   `json:"model_id,omitempty"` // accepts UUID or name
+	Lifecycle       *string   `json:"lifecycle,omitempty"`
+	ToolExecution   *string   `json:"tool_execution,omitempty"`
+	MaxSteps        *int      `json:"max_steps,omitempty"`
+	MaxContextSize  *int      `json:"max_context_size,omitempty"`
+	MaxTurnDuration *int      `json:"max_turn_duration,omitempty"`
+	Temperature     *float64  `json:"temperature,omitempty"`
+	TopP            *float64  `json:"top_p,omitempty"`
+	MaxTokens       *int      `json:"max_tokens,omitempty"`
+	StopSequences   *[]string `json:"stop_sequences,omitempty"`
+	ConfirmBefore   *[]string `json:"confirm_before,omitempty"`
+	Tools           *[]string `json:"tools,omitempty"`
+	CanSpawn        *[]string `json:"can_spawn,omitempty"`
+	MCPServers      *[]string `json:"mcp_servers,omitempty"`
+}
+
 // AgentLister provides agent listing and detail retrieval.
 type AgentLister interface {
 	ListAgents(ctx context.Context) ([]AgentInfo, error)
@@ -103,6 +124,7 @@ type AgentManager interface {
 	AgentLister
 	CreateAgent(ctx context.Context, req CreateAgentRequest) (*AgentDetail, error)
 	UpdateAgent(ctx context.Context, name string, req CreateAgentRequest) (*AgentDetail, error)
+	PatchAgent(ctx context.Context, name string, req UpdateAgentRequest) (*AgentDetail, error)
 	DeleteAgent(ctx context.Context, name string) error
 }
 
@@ -129,6 +151,7 @@ func (h *AgentHandler) Routes() http.Handler {
 	r.Post("/", h.Create)
 	r.Get("/{name}", h.Get)
 	r.Put("/{name}", h.Update)
+	r.Patch("/{name}", h.Patch)
 	r.Delete("/{name}", h.Delete)
 	return r
 }
@@ -202,6 +225,9 @@ func (h *AgentHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // Update handles PUT /api/v1/agents/{name}.
+// PUT is a full-replace: the request body MUST include all required fields
+// (system_prompt is required; missing required fields return 400).
+// Use PATCH for partial updates.
 func (h *AgentHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if h.manager == nil {
 		writeJSONError(w, http.StatusNotImplemented, "agent update not supported")
@@ -220,7 +246,13 @@ func (h *AgentHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ensure name from URL is used (body may omit it)
+	// PUT full-replace: system_prompt is required.
+	if req.SystemPrompt == "" {
+		writeJSONError(w, http.StatusBadRequest, "system_prompt is required for PUT (full replace); use PATCH for partial updates")
+		return
+	}
+
+	// Ensure name from URL is used (body may omit it).
 	if req.Name == "" {
 		req.Name = name
 	}
@@ -234,6 +266,45 @@ func (h *AgentHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	agent, err := h.manager.UpdateAgent(r.Context(), name, req)
+	if err != nil {
+		writeDomainError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, agent)
+}
+
+// Patch handles PATCH /api/v1/agents/{name}.
+// Only non-nil fields in the request body are applied; all others preserve their current value.
+// This fixes BUG-MT-03 where PUT with a partial body wiped unspecified fields.
+func (h *AgentHandler) Patch(w http.ResponseWriter, r *http.Request) {
+	if h.manager == nil {
+		writeJSONError(w, http.StatusNotImplemented, "agent update not supported")
+		return
+	}
+
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		writeJSONError(w, http.StatusBadRequest, "agent name is required")
+		return
+	}
+
+	var req UpdateAgentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %s", err.Error()))
+		return
+	}
+
+	// Reject admin_* tools — reserved for system agents only.
+	if req.Tools != nil {
+		for _, toolName := range *req.Tools {
+			if strings.HasPrefix(toolName, "admin_") {
+				writeJSONError(w, http.StatusBadRequest, "admin tools are reserved for system agents")
+				return
+			}
+		}
+	}
+
+	agent, err := h.manager.PatchAgent(r.Context(), name, req)
 	if err != nil {
 		writeDomainError(w, err)
 		return

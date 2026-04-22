@@ -43,7 +43,7 @@ func (w *TaskWorker) Start() {
 		w.wg.Add(1)
 		go w.worker(i)
 	}
-	slog.Info("task worker started", "concurrency", w.concurrency)
+	slog.InfoContext(context.Background(), "task worker started", "concurrency", w.concurrency)
 }
 
 func (w *TaskWorker) worker(id int) {
@@ -57,7 +57,7 @@ func (w *TaskWorker) worker(id int) {
 				return
 			}
 			if err := w.executor.Execute(w.ctx, taskID); err != nil {
-				slog.Error("task execution failed", "task_id", taskID, "worker", id, "error", err)
+				slog.ErrorContext(context.Background(), "task execution failed", "task_id", taskID, "worker", id, "error", err)
 			}
 		}
 	}
@@ -67,14 +67,14 @@ func (w *TaskWorker) worker(id int) {
 // Returns false if the queue is full, the worker is stopped, or the task was dropped.
 func (w *TaskWorker) Submit(taskID uuid.UUID) bool {
 	if w.stopped.Load() {
-		slog.Debug("task worker stopped, rejecting submit", "task_id", taskID)
+		slog.DebugContext(context.Background(), "task worker stopped, rejecting submit", "task_id", taskID)
 		return false
 	}
 	select {
 	case w.queue <- taskID:
 		return true
 	default:
-		slog.Warn("task queue full, dropping task", "task_id", taskID)
+		slog.WarnContext(context.Background(), "task queue full, dropping task", "task_id", taskID)
 		return false
 	}
 }
@@ -86,5 +86,5 @@ func (w *TaskWorker) Stop() {
 	w.cancel()
 	close(w.queue)
 	w.wg.Wait()
-	slog.Info("task worker stopped")
+	slog.InfoContext(context.Background(), "task worker stopped")
 }

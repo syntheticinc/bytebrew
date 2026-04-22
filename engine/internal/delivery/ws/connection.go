@@ -128,7 +128,7 @@ func (cs *connState) cleanupAll() {
 func (h *ConnectionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		slog.Error("[WS] upgrade failed", "error", err)
+		slog.ErrorContext(r.Context(), "[WS] upgrade failed", "error", err)
 		return
 	}
 	defer conn.Close()
@@ -148,7 +148,7 @@ func (h *ConnectionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_, msgBytes, err := conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-				slog.Error("[WS] read error", "error", err)
+				slog.ErrorContext(ctx, "[WS] read error", "error", err)
 			}
 			return
 		}
@@ -175,11 +175,11 @@ func (w *wsWriter) send(msg *WsMessage) {
 
 	data, err := json.Marshal(msg)
 	if err != nil {
-		slog.Error("[WS] marshal error", "error", err)
+		slog.ErrorContext(context.Background(), "[WS] marshal error", "error", err)
 		return
 	}
 	if err := w.conn.WriteMessage(websocket.TextMessage, data); err != nil {
-		slog.Error("[WS] write error", "error", err)
+		slog.ErrorContext(context.Background(), "[WS] write error", "error", err)
 	}
 }
 
@@ -256,7 +256,7 @@ func (h *ConnectionHandler) handleCreateSession(writer *wsWriter, msg *WsMessage
 	sessionID := uuid.New().String()
 	h.sessionRegistry.CreateSession(sessionID, projectKey, "", projectRoot, platform, agentName)
 
-	slog.Info("[WS] session created", "session_id", sessionID, "project_root", projectRoot)
+	slog.InfoContext(context.Background(), "[WS] session created", "session_id", sessionID, "project_root", projectRoot)
 
 	writer.send(&WsMessage{
 		Type:      "create_session_ack",

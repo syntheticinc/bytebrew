@@ -118,7 +118,7 @@ func TestCatalogService_Search(t *testing.T) {
 func TestCatalogService_GetByName(t *testing.T) {
 	svc := NewCatalogService(fixtureRepo())
 
-	entry, ok := svc.GetByName("tavily-web-search")
+	entry, ok := svc.GetByName(context.Background(), "tavily-web-search")
 	require.True(t, ok)
 	assert.Equal(t, "Tavily Web Search", entry.Display)
 	assert.True(t, entry.Verified)
@@ -128,14 +128,14 @@ func TestCatalogService_GetByName(t *testing.T) {
 	require.Len(t, entry.ProvidedTools, 1)
 	assert.Equal(t, "tavily_search", entry.ProvidedTools[0].Name)
 
-	_, ok = svc.GetByName("nonexistent")
+	_, ok = svc.GetByName(context.Background(), "nonexistent")
 	assert.False(t, ok)
 }
 
 func TestCatalogService_EnvVars(t *testing.T) {
 	svc := NewCatalogService(fixtureRepo())
 
-	entry, ok := svc.GetByName("tavily-web-search")
+	entry, ok := svc.GetByName(context.Background(), "tavily-web-search")
 	require.True(t, ok)
 	require.Len(t, entry.Packages[0].EnvVars, 1)
 

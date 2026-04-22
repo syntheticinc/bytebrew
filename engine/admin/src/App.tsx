@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthContext, useAuthProvider } from './hooks/useAuth';
 import Layout from './components/Layout';
 import OnboardingGate from './components/OnboardingGate';
-import LoginPage from './pages/LoginPage';
 import MCPPage from './pages/MCPPage';
 import ModelsPage from './pages/ModelsPage';
 import TasksPage from './pages/TasksPage';
@@ -20,9 +19,19 @@ import OverviewPage from './pages/OverviewPage';
 import SchemasPage from './pages/SchemasPage';
 import SchemaDetailPage from './pages/SchemaDetailPage';
 import OnboardingWizard from './pages/OnboardingWizard';
+// Wave 1+7 auth: the SPA never renders a login page. `useAuthProvider`
+// bootstraps a token via `auth/local-session` (local mode) or a URL hash
+// fragment (external mode) on mount. Until that completes we render a
+// neutral splash so we don't flash an empty app.
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('jwt');
-  if (!token) return <Navigate to="/login" replace />;
+  if (!token) {
+    return (
+      <div className="fixed inset-0 bg-brand-dark flex items-center justify-center">
+        <div className="text-sm text-brand-shade3 font-mono">Authenticating…</div>
+      </div>
+    );
+  }
   return <>{children}</>;
 }
 
@@ -33,7 +42,6 @@ export default function App() {
     <AuthContext.Provider value={auth}>
       <BrowserRouter basename={import.meta.env.BASE_URL}>
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
           <Route
             path="/onboarding"
             element={

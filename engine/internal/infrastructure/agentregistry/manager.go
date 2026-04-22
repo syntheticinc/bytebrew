@@ -20,6 +20,7 @@ type Manager struct {
 	mu        sync.RWMutex
 	tenants   map[string]*AgentRegistry // used when perTenant
 	repo      AgentReader
+	capRepo   CapabilityReader // optional; enables DerivedTools computation
 }
 
 // NewManager creates a Manager. Pass perTenant=sc.RequireTenant.
@@ -33,6 +34,29 @@ func NewManager(repo AgentReader, perTenant bool) *Manager {
 		m.single = New(repo)
 	}
 	return m
+}
+
+// NewManagerWithCapabilities creates a Manager that also loads capabilities
+// so each AgentRegistry populates DerivedTools on Load.
+func NewManagerWithCapabilities(repo AgentReader, capRepo CapabilityReader, perTenant bool) *Manager {
+	m := &Manager{
+		perTenant: perTenant,
+		tenants:   make(map[string]*AgentRegistry),
+		repo:      repo,
+		capRepo:   capRepo,
+	}
+	if !perTenant {
+		m.single = NewWithCapabilities(repo, capRepo)
+	}
+	return m
+}
+
+// newRegistry creates a registry instance using the manager's configured readers.
+func (m *Manager) newRegistry() *AgentRegistry {
+	if m.capRepo != nil {
+		return NewWithCapabilities(m.repo, m.capRepo)
+	}
+	return New(m.repo)
 }
 
 // Init loads agents at startup.
@@ -79,7 +103,7 @@ func (m *Manager) GetForContext(ctx context.Context) (*AgentRegistry, error) {
 	if r, ok := m.tenants[tenantID]; ok {
 		return r, nil // loaded by another goroutine while waiting for the write lock
 	}
-	r := New(m.repo)
+	r := m.newRegistry()
 	if err := r.Load(ctx); err != nil {
 		return nil, fmt.Errorf("load registry for tenant %s: %w", tenantID, err)
 	}

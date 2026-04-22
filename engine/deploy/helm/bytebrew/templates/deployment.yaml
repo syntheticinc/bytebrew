@@ -37,11 +37,16 @@ spec:
                 secretKeyRef:
                   name: {{ include "bytebrew-engine.fullname" . }}-secrets
                   key: database-url
-            - name: JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "bytebrew-engine.fullname" . }}-secrets
-                  key: jwt-secret
+            - name: BYTEBREW_AUTH_MODE
+              value: {{ .Values.config.auth.mode | quote }}
+            {{- if eq .Values.config.auth.mode "local" }}
+            - name: BYTEBREW_JWT_KEYS_DIR
+              value: {{ .Values.config.auth.jwtKeysPath | quote }}
+            {{- end }}
+            {{- if eq .Values.config.auth.mode "external" }}
+            - name: BYTEBREW_JWT_PUBLIC_KEY_PATH
+              value: {{ .Values.config.auth.jwtPublicKeyPath | quote }}
+            {{- end }}
             {{- if .Values.config.embedURL }}
             - name: EMBED_URL
               value: {{ .Values.config.embedURL | quote }}
@@ -49,6 +54,20 @@ spec:
               value: {{ .Values.config.embedModel | quote }}
             - name: EMBED_DIM
               value: {{ .Values.config.embedDim | quote }}
+            {{- end }}
+            {{- if .Values.secrets.meteringHMACCurrent }}
+            - name: BYTEBREW_METERING_HMAC_CURRENT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "bytebrew-engine.fullname" . }}-secrets
+                  key: metering-hmac-current
+            {{- end }}
+            {{- if .Values.secrets.meteringHMACPrevious }}
+            - name: BYTEBREW_METERING_HMAC_PREVIOUS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "bytebrew-engine.fullname" . }}-secrets
+                  key: metering-hmac-previous
             {{- end }}
             {{- range $provider, $key := .Values.secrets.llmAPIKeys }}
             - name: LLM_API_KEY_{{ $provider | upper }}
@@ -78,6 +97,10 @@ spec:
               subPath: agents.yaml
               readOnly: true
             {{- end }}
+            {{- if and (eq .Values.config.auth.mode "local") .Values.persistence.keys.enabled }}
+            - name: keys
+              mountPath: {{ .Values.config.auth.jwtKeysPath | quote }}
+            {{- end }}
             {{- if .Values.persistence.knowledge.enabled }}
             - name: knowledge
               mountPath: /etc/bytebrew/knowledge
@@ -87,6 +110,11 @@ spec:
         - name: config
           configMap:
             name: {{ include "bytebrew-engine.fullname" . }}-config
+        {{- end }}
+        {{- if and (eq .Values.config.auth.mode "local") .Values.persistence.keys.enabled }}
+        - name: keys
+          persistentVolumeClaim:
+            claimName: {{ include "bytebrew-engine.fullname" . }}-keys
         {{- end }}
         {{- if .Values.persistence.knowledge.enabled }}
         - name: knowledge

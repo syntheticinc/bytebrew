@@ -33,6 +33,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/turnexecutorfactory"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/versioncheck"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/audit"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/auth"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/indexing"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/knowledge"
@@ -48,7 +49,6 @@ import (
 	svcschematemplate "github.com/syntheticinc/bytebrew/engine/internal/service/schematemplate"
 	ucschematemplate "github.com/syntheticinc/bytebrew/engine/internal/usecase/schematemplate"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/capability"
-	"github.com/syntheticinc/bytebrew/engine/internal/service/cloud"
 	svcknowledge "github.com/syntheticinc/bytebrew/engine/internal/service/knowledge"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/eventstore"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/lifecycle"
@@ -81,11 +81,6 @@ type ServerConfig struct {
 	// Plugin is the runtime extension point. nil defaults to pluginpkg.Noop{}
 	// — a silent pass-through that adds nothing to the server.
 	Plugin pluginpkg.Plugin
-
-	// LoginEnabled controls whether POST /api/v1/auth/login is registered.
-	// CE defaults to true. External auth setups may disable it to force all
-	// authentication through their JWT verifier.
-	LoginEnabled bool
 
 	// RequireTenant enforces presence of a non-empty tenant_id after auth.
 	// CE defaults to false (single-tenant). Multi-tenant setups set it true.
@@ -138,7 +133,7 @@ func Run(sc ServerConfig) error {
 				if err := generateDefaultConfig(managedConfigPath); err != nil {
 					return fmt.Errorf("generate default config: %w", err)
 				}
-				slog.Info("Generated default config", "path", managedConfigPath)
+				slog.InfoContext(context.Background(), "Generated default config", "path", managedConfigPath)
 			}
 			configPath = managedConfigPath
 		}
@@ -149,7 +144,7 @@ func Run(sc ServerConfig) error {
 			if err := os.WriteFile(managedPromptsPath, embedded.DefaultPrompts, 0644); err != nil {
 				return fmt.Errorf("write default prompts: %w", err)
 			}
-			slog.Info("Generated default prompts", "path", managedPromptsPath)
+			slog.InfoContext(context.Background(), "Generated default prompts", "path", managedPromptsPath)
 		}
 
 		// Generate default flows.yaml if missing (from embedded)
@@ -158,7 +153,7 @@ func Run(sc ServerConfig) error {
 			if err := os.WriteFile(managedFlowsPath, embedded.DefaultFlows, 0644); err != nil {
 				return fmt.Errorf("write default flows: %w", err)
 			}
-			slog.Info("Generated default flows", "path", managedFlowsPath)
+			slog.InfoContext(context.Background(), "Generated default flows", "path", managedFlowsPath)
 		}
 	}
 
@@ -176,7 +171,7 @@ func Run(sc ServerConfig) error {
 	// Load configuration — if config file doesn't exist, use defaults (env-var mode for Docker)
 	var cfg *config.Config
 	if _, statErr := os.Stat(configPath); os.IsNotExist(statErr) && !sc.ConfigExplicit {
-		slog.Info("No config file found, using defaults (configure via environment variables or Admin Dashboard)", "path", configPath)
+		slog.InfoContext(context.Background(), "No config file found, using defaults (configure via environment variables or Admin Dashboard)", "path", configPath)
 		cfg = config.DefaultConfig()
 	} else {
 		var loadErr error
@@ -184,7 +179,7 @@ func Run(sc ServerConfig) error {
 		if loadErr != nil {
 			return fmt.Errorf("load config: %w", loadErr)
 		}
-		slog.Info("Config loaded", "default_provider", cfg.LLM.DefaultProvider, "ollama_model", cfg.LLM.Ollama.Model)
+		slog.InfoContext(context.Background(), "Config loaded", "default_provider", cfg.LLM.DefaultProvider, "ollama_model", cfg.LLM.Ollama.Model)
 	}
 
 	// Check for already running server BEFORE touching log files.
@@ -199,9 +194,9 @@ func Run(sc ServerConfig) error {
 		// Stale port file from a crashed/killed server — clean up.
 		stalePortFile := filepath.Join(dataDir, "server.port")
 		if err := os.Remove(stalePortFile); err != nil && !os.IsNotExist(err) {
-			slog.Warn("failed to remove stale port file", "error", err)
+			slog.WarnContext(context.Background(), "failed to remove stale port file", "error", err)
 		} else {
-			slog.Info("Removed stale port file", "pid", existingInfo.PID)
+			slog.InfoContext(context.Background(), "Removed stale port file", "pid", existingInfo.PID)
 		}
 	}
 
@@ -219,9 +214,9 @@ func Run(sc ServerConfig) error {
 		}
 		removedCount, err := logger.ClearLogsDir(logsDir)
 		if err != nil {
-			slog.Warn("failed to clear logs directory", "error", err)
+			slog.WarnContext(context.Background(), "failed to clear logs directory", "error", err)
 		} else if removedCount > 0 {
-			slog.Info("Cleared old log files", "count", removedCount, "dir", logsDir)
+			slog.InfoContext(context.Background(), "Cleared old log files", "count", removedCount, "dir", logsDir)
 		}
 	}
 
@@ -236,9 +231,9 @@ func Run(sc ServerConfig) error {
 	// Start pprof HTTP server for diagnostics
 	go func() {
 		pprofAddr := "localhost:6060"
-		slog.Info("pprof server started", "addr", pprofAddr)
+		slog.InfoContext(context.Background(), "pprof server started", "addr", pprofAddr)
 		if err := http.ListenAndServe(pprofAddr, nil); err != nil {
-			slog.Error("pprof server failed", "error", err)
+			slog.ErrorContext(context.Background(), "pprof server failed", "error", err)
 		}
 	}()
 
@@ -265,7 +260,7 @@ func Run(sc ServerConfig) error {
 	var apiTokenRepo *configrepo.GORMAPITokenRepository
 	bootstrapCfg, bootstrapErr := config.LoadBootstrap(configPath)
 	if bootstrapErr != nil {
-		slog.Info("No bootstrap database config, running in legacy mode", "reason", bootstrapErr.Error())
+		slog.InfoContext(context.Background(), "No bootstrap database config, running in legacy mode", "reason", bootstrapErr.Error())
 	} else {
 		var pgErr error
 		pgDB, pgErr = gorm.Open(postgres.Open(bootstrapCfg.Database.URL), &gorm.Config{
@@ -278,7 +273,8 @@ func Run(sc ServerConfig) error {
 		agentRepo := configrepo.NewGORMAgentRepository(pgDB)
 		taskRepo = configrepo.NewGORMTaskRepository(pgDB)
 		apiTokenRepo = configrepo.NewGORMAPITokenRepository(pgDB)
-		registryMgr = agentregistry.NewManager(agentRepo, sc.RequireTenant)
+		capRepoForRegistry := configrepo.NewGORMCapabilityRepository(pgDB)
+		registryMgr = agentregistry.NewManagerWithCapabilities(agentRepo, capRepoForRegistry, sc.RequireTenant)
 		if loadErr := registryMgr.Init(ctx); loadErr != nil {
 			return fmt.Errorf("load agents from database: %w", loadErr)
 		}
@@ -393,9 +389,9 @@ func Run(sc ServerConfig) error {
 		mcpServerRepo := configrepo.NewGORMMCPServerRepository(pgDB)
 		mcpServers, mcpErr := mcpServerRepo.List(ctx)
 		if mcpErr != nil {
-			slog.Warn("failed to load MCP servers from database", "error", mcpErr)
+			slog.WarnContext(context.Background(), "failed to load MCP servers from database", "error", mcpErr)
 		} else {
-			connectMCPServers(ctx, mcpServers, mcpRegistry)
+			connectMCPServers(ctx, mcpServers, mcpRegistry, sc.Plugin.TransportPolicy())
 			forwardHeadersStore.Store(collectForwardHeaders(mcpServers))
 		}
 	}
@@ -423,6 +419,7 @@ func Run(sc ServerConfig) error {
 						registryMgr.InvalidateAll()
 					}
 				},
+				TransportPolicy: sc.Plugin.TransportPolicy(),
 			})
 			slog.InfoContext(ctx, "admin tools registered into builtin store")
 		}
@@ -521,7 +518,6 @@ func Run(sc ServerConfig) error {
 	var internalHTTPPort int
 	var httpAuthMW *deliveryhttp.AuthMiddleware
 	var byokMW *deliveryhttp.BYOKMiddleware
-	var userResolveMW func(http.Handler) http.Handler
 	if bootstrapCfg != nil {
 		httpPort = bootstrapCfg.Engine.Port
 		if httpPort == 0 {
@@ -553,6 +549,15 @@ func Run(sc ServerConfig) error {
 			internalRouter.Use(deliveryhttp.MetricsMiddleware)
 		}
 
+		// Security headers — applied globally before any route so every response
+		// carries nosniff/frame-ancestors/CSP/referrer-policy. Widget routes
+		// (which must be embeddable) install their own handler later with a
+		// per-tenant frame-ancestors allowlist (key widget_embed_origins via settings table).
+		r.Use(deliveryhttp.SecurityHeadersMiddleware)
+		if internalHTTPServer != nil {
+			internalRouter.Use(deliveryhttp.SecurityHeadersMiddleware)
+		}
+
 		// Extra HTTP middleware contributed by the plugin (e.g. EdDSA JWT verifier,
 		// entitlements). Must be registered before any routes — chi panics otherwise.
 		for _, mw := range sc.Plugin.HTTPMiddleware() {
@@ -562,26 +567,48 @@ func Run(sc ServerConfig) error {
 			}
 		}
 
-		// Auth
-		jwtSecret := bootstrapCfg.Security.JWTSecret
-		if jwtSecret == "" {
-			return fmt.Errorf("JWT secret is required: set security.jwt_secret in config or JWT_SECRET env var")
-		}
-		// Plugin may provide a custom JWT verifier; otherwise fall back to the
-		// CE default HMAC verifier built from jwtSecret.
-		var authMW *deliveryhttp.AuthMiddleware
+		// Auth — EdDSA verifier in all modes.
+		//
+		// Local mode: engine generates its own Ed25519 keypair on first boot,
+		// signs short-lived admin sessions via POST /auth/local-session.
+		// External mode (Cloud): engine loads the issuer's public key; token
+		// issuance is owned by the landing service.
+		// The plugin may override the default verifier entirely (EE) — the
+		// middleware uses whatever it gets as long as the interface matches.
+		var jwtVerifier pluginpkg.JWTVerifier
+		var localSessionPrivKey []byte // non-nil in local mode, enables /auth/local-session route below
 		if pluginVerifier := sc.Plugin.JWTVerifier(); pluginVerifier != nil {
-			authMW = deliveryhttp.NewAuthMiddlewareWithVerifier(pluginVerifier, &tokenRepoHTTPAdapter{repo: apiTokenRepo})
+			jwtVerifier = pluginVerifier
 		} else {
-			authMW = deliveryhttp.NewAuthMiddleware(jwtSecret, &tokenRepoHTTPAdapter{repo: apiTokenRepo})
+			switch bootstrapCfg.Security.AuthMode {
+			case config.AuthModeLocal:
+				kp, err := auth.LoadOrGenerateKeypair(bootstrapCfg.Security.JWTKeysDir)
+				if err != nil {
+					return fmt.Errorf("load/generate local jwt keypair: %w", err)
+				}
+				verifier, err := auth.NewEdDSAVerifier(kp.Public)
+				if err != nil {
+					return fmt.Errorf("build local EdDSA verifier: %w", err)
+				}
+				jwtVerifier = verifier
+				localSessionPrivKey = kp.Private
+			case config.AuthModeExternal:
+				pub, err := auth.LoadPublicKey(bootstrapCfg.Security.JWTPublicKeyPath)
+				if err != nil {
+					return fmt.Errorf("load external jwt public key: %w", err)
+				}
+				verifier, err := auth.NewEdDSAVerifier(pub)
+				if err != nil {
+					return fmt.Errorf("build external EdDSA verifier: %w", err)
+				}
+				jwtVerifier = verifier
+			default:
+				return fmt.Errorf("invalid auth_mode %q (expected %q or %q)",
+					bootstrapCfg.Security.AuthMode, config.AuthModeLocal, config.AuthModeExternal)
+			}
 		}
+		authMW := deliveryhttp.NewAuthMiddlewareWithVerifier(jwtVerifier, &tokenRepoHTTPAdapter{repo: apiTokenRepo})
 		httpAuthMW = authMW
-
-		// V2 Group P: lazy user creation middleware. After auth resolves the
-		// actor (JWT sub / API token name), GetOrCreate ensures a users table
-		// row exists and stores the resolved user UUID in context.
-		userRepo := configrepo.NewGORMUserRepository(pgDB)
-		userResolveMW = deliveryhttp.UserResolveMiddleware(&userResolverHTTPAdapter{repo: userRepo})
 
 		// V2 §5.8: per-end-user BYOK middleware. Reads the live config from
 		// `settings` (admin UI updates take effect on the next request via
@@ -609,23 +636,29 @@ func Run(sc ServerConfig) error {
 		modelRegistry := registry.New()
 		registryHandler := deliveryhttp.NewModelRegistryHandler(modelRegistry)
 
-		// Auth login (public) — DB-backed authentication (bcrypt via users table).
-		authHandler := deliveryhttp.NewAuthHandler(pgDB, jwtSecret)
+		// Local admin session issuer (public) — only wired in local auth mode.
+		// Signs Ed25519 admin sessions with the local keypair generated at
+		// boot. External/Cloud mode never exposes this route; token issuance
+		// is owned by the landing service.
+		var localSessionHandler *deliveryhttp.LocalSessionHandler
+		if localSessionPrivKey != nil {
+			localSessionHandler = deliveryhttp.NewLocalSessionHandler(localSessionPrivKey, time.Hour)
+		}
 
 		if internalHTTPServer != nil {
 			// Two-port mode: register public routes on internal router too
 			internalRouter.Get("/api/v1/health", healthHandler.ServeHTTP)
 			internalRouter.Get("/api/v1/models/registry", registryHandler.List)
 			internalRouter.Get("/api/v1/models/registry/providers", registryHandler.ListProviders)
-			if sc.LoginEnabled {
-				internalRouter.Post("/api/v1/auth/login", authHandler.Login)
+			if localSessionHandler != nil {
+				internalRouter.Post("/api/v1/auth/local-session", localSessionHandler.Issue)
 			}
 		}
-		// Single-port or external: model registry + login on main router
+		// Single-port or external: model registry + local session on main router
 		r.Get("/api/v1/models/registry", registryHandler.List)
 		r.Get("/api/v1/models/registry/providers", registryHandler.ListProviders)
-		if sc.LoginEnabled {
-			r.Post("/api/v1/auth/login", authHandler.Login)
+		if localSessionHandler != nil {
+			r.Post("/api/v1/auth/local-session", localSessionHandler.Issue)
 		}
 
 		// TenantMiddleware enforces presence of tenant_id after auth.
@@ -639,7 +672,6 @@ func Run(sc ServerConfig) error {
 		internalRouter.Group(func(r chi.Router) {
 			r.Use(authMW.Authenticate)
 			r.Use(tenantMW.Handler)
-			r.Use(userResolveMW)
 			r.Use(deliveryhttp.AuditMiddleware(&auditHTTPAdapter{logger: auditLogger}))
 
 			// Schema repo (created early because agent manager needs it for used_in_schemas)
@@ -658,6 +690,7 @@ func Run(sc ServerConfig) error {
 				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsWrite))
 				r.Post("/api/v1/agents", agentHandler.Create)
 				r.Put("/api/v1/agents/{name}", agentHandler.Update)
+				r.Patch("/api/v1/agents/{name}", agentHandler.Patch)
 				r.Delete("/api/v1/agents/{name}", agentHandler.Delete)
 			})
 
@@ -673,7 +706,7 @@ func Run(sc ServerConfig) error {
 
 			// Agent Capabilities
 			capRepo := configrepo.NewGORMCapabilityRepository(pgDB)
-			capHandler := deliveryhttp.NewCapabilityHandler(&capabilityServiceHTTPAdapter{repo: capRepo})
+			capHandler := deliveryhttp.NewCapabilityHandler(&capabilityServiceHTTPAdapter{repo: capRepo, registryMgr: registryMgr})
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
 				r.Get("/api/v1/agents/{name}/capabilities", capHandler.List)
@@ -697,6 +730,7 @@ func Run(sc ServerConfig) error {
 				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeModelsWrite))
 				r.Post("/api/v1/models", modelHandler.Create)
 				r.Put("/api/v1/models/{name}", modelHandler.Update)
+				r.Patch("/api/v1/models/{name}", modelHandler.Patch)
 				r.Delete("/api/v1/models/{name}", modelHandler.Delete)
 				r.Post("/api/v1/models/{name}/verify", modelHandler.Verify)
 			})
@@ -733,7 +767,7 @@ func Run(sc ServerConfig) error {
 
 			// Config
 			configHandler := deliveryhttp.NewConfigHandler(
-				&configReloaderHTTPAdapter{registry: agentRegistry, mcpRegistry: mcpRegistry, db: pgDB, forwardHeadersStore: &forwardHeadersStore},
+				&configReloaderHTTPAdapter{registry: agentRegistry, mcpRegistry: mcpRegistry, db: pgDB, forwardHeadersStore: &forwardHeadersStore, transportPolicy: sc.Plugin.TransportPolicy()},
 				&configImportExportHTTPAdapter{db: pgDB},
 			)
 			r.Group(func(r chi.Router) {
@@ -800,6 +834,7 @@ func Run(sc ServerConfig) error {
 					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsWrite))
 					r.Post("/api/v1/knowledge-bases", kbHandler.Create)
 					r.Put("/api/v1/knowledge-bases/{id}", kbHandler.Update)
+					r.Patch("/api/v1/knowledge-bases/{id}", kbHandler.PatchKB)
 					r.Delete("/api/v1/knowledge-bases/{id}", kbHandler.Delete)
 					r.Post("/api/v1/knowledge-bases/{id}/agents/{agent_name}", kbHandler.LinkAgent)
 					r.Delete("/api/v1/knowledge-bases/{id}/agents/{agent_name}", kbHandler.UnlinkAgent)
@@ -827,7 +862,7 @@ func Run(sc ServerConfig) error {
 
 			// MCP Servers
 			mcpServerRepo := configrepo.NewGORMMCPServerRepository(pgDB)
-			mcpHandler := deliveryhttp.NewMCPHandler(&mcpServiceHTTPAdapter{repo: mcpServerRepo})
+			mcpHandler := deliveryhttp.NewMCPHandler(&mcpServiceHTTPAdapter{repo: mcpServerRepo}, sc.Plugin.TransportPolicy())
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeMCPRead))
 				r.Get("/api/v1/mcp-servers", mcpHandler.List)
@@ -836,14 +871,13 @@ func Run(sc ServerConfig) error {
 				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeMCPWrite))
 				r.Post("/api/v1/mcp-servers", mcpHandler.Create)
 				r.Put("/api/v1/mcp-servers/{name}", mcpHandler.Update)
+				r.Patch("/api/v1/mcp-servers/{name}", mcpHandler.Patch)
 				r.Delete("/api/v1/mcp-servers/{name}", mcpHandler.Delete)
 			})
 
-			// Triggers route removed in V2 — chat access is schemas.chat_enabled.
-
-			// Schemas (with agent_relations) — schemaRepo already created above for agent cross-refs.
-			// V2: edges→agent_relations rename + drop type column (Group A.1).
-			// Gates removed in V2 (see docs/architecture/agent-first-runtime.md §3).
+			// Schemas (with agent_relations). Chat access on a schema is
+			// controlled by schemas.chat_enabled; edge graph lives in
+			// agent_relations (source→target delegation).
 			agentRelationRepo := configrepo.NewGORMAgentRelationRepository(pgDB)
 			schemaHandler := deliveryhttp.NewSchemaHandler(
 				&schemaServiceHTTPAdapter{repo: schemaRepo, db: pgDB},
@@ -864,6 +898,7 @@ func Run(sc ServerConfig) error {
 				r.Post("/api/v1/schemas", schemaHandler.CreateSchema)
 				r.Post("/api/v1/schemas/import", schemaHandler.ImportSchema)
 				r.Put("/api/v1/schemas/{id}", schemaHandler.UpdateSchema)
+				r.Patch("/api/v1/schemas/{id}", schemaHandler.PatchSchema)
 				r.Delete("/api/v1/schemas/{id}", schemaHandler.DeleteSchema)
 				// V2: schema membership is derived from agent_relations
 				// (docs/architecture/agent-first-runtime.md §2.1) — the
@@ -992,10 +1027,6 @@ func Run(sc ServerConfig) error {
 		// usage, etc.). Noop plugin registers nothing.
 		sc.Plugin.RegisterHTTP(r, internalRouter)
 
-		// Webhook trigger route removed in V2 — cron/webhook triggers are
-		// deferred to V3. Tenants integrate with their own schedulers and
-		// call POST /api/v1/schemas/{id}/chat directly.
-
 		// Serve Admin Dashboard SPA (static files) — internal only
 		adminDir := "/usr/share/bytebrew/admin"
 		if _, statErr := os.Stat(adminDir); statErr == nil {
@@ -1056,7 +1087,19 @@ func Run(sc ServerConfig) error {
 				w.Header().Set("Cache-Control", "public, max-age=3600")
 				http.ServeFile(w, req, widgetPath)
 			}
-			r.Get("/widget.js", widgetFileHandler)
+			widgetAdapter := &widgetEmbedOriginsAdapter{repo: configrepo.NewGORMSettingRepository(pgDB)}
+			r.Group(func(r chi.Router) {
+				// Widget is publicly embeddable — optional auth so that if a
+				// caller presents a valid JWT, tenant context is populated and
+				// the widget CSP lookup returns the tenant's configured
+				// widget_embed_origins. Anonymous callers get frame-ancestors
+				// 'none' (safe default: blocks embedding until configured).
+				if httpAuthMW != nil {
+					r.Use(httpAuthMW.AuthenticateOptional)
+				}
+				r.Use(deliveryhttp.WidgetSecurityHeadersMiddleware(widgetAdapter))
+				r.Get("/widget.js", widgetFileHandler)
+			})
 			slog.InfoContext(ctx, "Widget served", "path", widgetPath)
 		}
 
@@ -1264,9 +1307,6 @@ func Run(sc ServerConfig) error {
 			router.Group(func(r chi.Router) {
 				if httpAuthMW != nil {
 					r.Use(httpAuthMW.Authenticate)
-					if userResolveMW != nil {
-						r.Use(userResolveMW)
-					}
 				}
 				// V2 §5.8: BYOK runs AFTER auth so unauthenticated traffic
 				// never reaches the header-parsing path; the LLM factory
@@ -1312,9 +1352,6 @@ func Run(sc ServerConfig) error {
 			router.Group(func(r chi.Router) {
 				if httpAuthMW != nil {
 					r.Use(httpAuthMW.Authenticate)
-					if userResolveMW != nil {
-						r.Use(userResolveMW)
-					}
 					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
 				}
 				r.Post("/api/v1/admin/assistant/chat", adminAssistantHandler.Chat)
@@ -1349,13 +1386,13 @@ func Run(sc ServerConfig) error {
 	if httpServer != nil {
 		go func() {
 			if err := httpServer.Start(); err != nil && err != http.ErrServerClosed {
-				slog.Error("HTTP server error", "error", err)
+				slog.ErrorContext(context.Background(), "HTTP server error", "error", err)
 			}
 		}()
 		if internalHTTPServer != nil {
 			go func() {
 				if err := internalHTTPServer.Start(); err != nil && err != http.ErrServerClosed {
-					slog.Error("Internal HTTP server error", "error", err)
+					slog.ErrorContext(context.Background(), "Internal HTTP server error", "error", err)
 				}
 			}()
 			slog.InfoContext(ctx, "Two-port mode enabled",
@@ -1386,7 +1423,7 @@ func Run(sc ServerConfig) error {
 	// Start WS server in goroutine
 	go func() {
 		if err := wsServer.Start(ctx); err != nil {
-			slog.Error("WS server error", "error", err)
+			slog.ErrorContext(context.Background(), "WS server error", "error", err)
 		}
 	}()
 
@@ -1419,9 +1456,9 @@ func Run(sc ServerConfig) error {
 		Host:         portFileHost,
 		StartedAt:    time.Now().UTC().Format(time.RFC3339),
 	}); err != nil {
-		slog.Warn("Failed to write port file", "error", err)
+		slog.WarnContext(context.Background(), "Failed to write port file", "error", err)
 	} else {
-		slog.Info("Port file written", "path", portWriter.Path())
+		slog.InfoContext(context.Background(), "Port file written", "path", portWriter.Path())
 	}
 
 	// In managed mode, emit READY protocol AFTER port file is written.
@@ -1451,15 +1488,15 @@ func Run(sc ServerConfig) error {
 
 	// Stop plugin resources (license watcher, etc.) — no-op in CE.
 	sc.Plugin.Stop()
-	slog.Info("plugin stopped")
+	slog.InfoContext(context.Background(), "plugin stopped")
 
 	// Close MCP client connections
 	mcpRegistry.CloseAll()
-	slog.Info("MCP clients closed")
+	slog.InfoContext(context.Background(), "MCP clients closed")
 
 	// Remove port file on shutdown
 	if err := portWriter.Remove(); err != nil {
-		slog.Warn("Failed to remove port file", "error", err)
+		slog.WarnContext(context.Background(), "Failed to remove port file", "error", err)
 	}
 
 	// Graceful shutdown
@@ -1467,17 +1504,17 @@ func Run(sc ServerConfig) error {
 	defer shutdownCancel()
 
 	if err := wsServer.Shutdown(shutdownCtx); err != nil {
-		slog.Warn("WS server shutdown error", "error", err)
+		slog.WarnContext(context.Background(), "WS server shutdown error", "error", err)
 	}
 
 	if httpServer != nil {
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
-			slog.Warn("HTTP server shutdown error", "error", err)
+			slog.WarnContext(context.Background(), "HTTP server shutdown error", "error", err)
 		}
 	}
 	if internalHTTPServer != nil {
 		if err := internalHTTPServer.Shutdown(shutdownCtx); err != nil {
-			slog.Warn("Internal HTTP server shutdown error", "error", err)
+			slog.WarnContext(context.Background(), "Internal HTTP server shutdown error", "error", err)
 		}
 	}
 
@@ -1503,7 +1540,7 @@ func initializeGRPCServer(cfg *config.Config, log *logger.Logger, extraOpts []go
 
 	server, err := grpc.NewServer(cfg.Server, log, extraOpts)
 	if err != nil {
-		slog.Warn("Configured port busy, using random port",
+		slog.WarnContext(context.Background(), "Configured port busy, using random port",
 			"port", cfg.Server.Port, "error", err)
 		host := cfg.Server.Host
 		if host == "" {
@@ -1592,7 +1629,9 @@ llm:
 }
 
 // connectMCPServers connects to MCP servers and registers them in the registry.
-func connectMCPServers(ctx context.Context, mcpServers []models.MCPServerModel, registry *mcp.ClientRegistry) {
+// policy is consulted before opening stdio transports: Cloud deployments block
+// stdio to prevent host code execution; CE allows all transports.
+func connectMCPServers(ctx context.Context, mcpServers []models.MCPServerModel, registry *mcp.ClientRegistry, policy mcpcatalog.TransportPolicy) {
 	for _, srv := range mcpServers {
 		var forwardHeaders []string
 		if srv.ForwardHeaders != nil && *srv.ForwardHeaders != "" {
@@ -1602,8 +1641,8 @@ func connectMCPServers(ctx context.Context, mcpServers []models.MCPServerModel, 
 		var transport mcp.Transport
 		switch srv.Type {
 		case "stdio":
-			if cloud.IsCloud() {
-				slog.Warn("MCP stdio transport blocked in Cloud mode", "name", srv.Name)
+			if err := policy.IsAllowed("stdio"); err != nil {
+				slog.WarnContext(context.Background(), "MCP stdio transport blocked by policy", "name", srv.Name, "reason", err.Error())
 				continue
 			}
 			var args []string
@@ -1618,21 +1657,21 @@ func connectMCPServers(ctx context.Context, mcpServers []models.MCPServerModel, 
 		case "streamable-http":
 			transport = mcp.NewStreamableHTTPTransport(srv.URL, forwardHeaders)
 		default:
-			slog.Warn("unknown MCP server type, skipping", "name", srv.Name, "type", srv.Type)
+			slog.WarnContext(context.Background(), "unknown MCP server type, skipping", "name", srv.Name, "type", srv.Type)
 			continue
 		}
 
 		client := mcp.NewClient(srv.Name, transport)
 		connectCtx, connectCancel := context.WithTimeout(ctx, 10*time.Second)
 		if err := client.Connect(connectCtx); err != nil {
-			slog.Warn("MCP server unavailable, skipping", "name", srv.Name, "error", err)
+			slog.WarnContext(context.Background(), "MCP server unavailable, skipping", "name", srv.Name, "error", err)
 			connectCancel()
 			continue
 		}
 		connectCancel()
 
 		tools := client.ListTools()
-		slog.Info("MCP server connected", "name", srv.Name, "tools", len(tools))
+		slog.InfoContext(context.Background(), "MCP server connected", "name", srv.Name, "tools", len(tools))
 		registry.Register(srv.Name, client)
 	}
 }
@@ -1648,7 +1687,7 @@ func startMemoryRetentionCleanup(ctx context.Context, db *gorm.DB) {
 			select {
 			case <-ctx.Done():
 				ticker.Stop()
-				slog.Info("Memory retention cleanup goroutine stopped")
+				slog.InfoContext(context.Background(), "Memory retention cleanup goroutine stopped")
 				return
 			case <-ticker.C:
 				runMemoryRetentionCleanup(ctx, db)

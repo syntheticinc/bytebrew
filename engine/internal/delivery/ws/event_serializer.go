@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"context"
 	"log/slog"
 
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
@@ -110,7 +111,7 @@ func serializeEvent(event *pb.SessionEvent) map[string]interface{} {
 		}
 
 	default:
-		slog.Warn("[WS] unknown session event type", "type", event.GetType().String())
+		slog.WarnContext(context.Background(), "[WS] unknown session event type", "type", event.GetType().String())
 		return nil
 	}
 }

@@ -42,9 +42,19 @@ config:
   # agents.yaml content (mounted as ConfigMap)
   agents: ""
 
-  # JWT signing secret (required)
-  # Admin users are created via: kubectl exec <pod> -- bytebrew-ce admin create --username admin --password <pass>
-  jwtSecret: ""
+  # Auth mode: "local" or "external"
+  # local   — engine auto-generates an Ed25519 keypair on first boot and stores it
+  #           under auth.jwtKeysPath (must be a persistent volume). Single-replica only.
+  # external — engine receives only the public key via auth.jwtPublicKeyPath; the
+  #           private key lives in an external identity service (e.g. bytebrew Cloud).
+  auth:
+    mode: "local"
+    # PVC mount path where the local-mode keypair is persisted.
+    # Files written: jwt_ed25519.priv (0600) and jwt_ed25519.pub (0644)
+    jwtKeysPath: "/var/lib/bytebrew/keys"
+    # Path to the Ed25519 public-key file (hex-encoded).
+    # Used only when auth.mode = "external". Mount via a ConfigMap or Secret.
+    jwtPublicKeyPath: ""
 
   # License
   licensePath: /etc/bytebrew/license.jwt
@@ -60,7 +70,24 @@ secrets:
   #  openai: sk-xxx
   #  anthropic: sk-ant-xxx
 
+  # Cloud-mode metering HMAC secrets (EE/Cloud binary only).
+  # meteringHMACCurrent is required when cloud metering is enabled.
+  # meteringHMACPrevious is set only during a 90-day key rotation window;
+  # remove it once all engine pods have been rolled with the new current key.
+  meteringHMACCurrent: ""
+  meteringHMACPrevious: ""  # leave empty when no rotation is in progress
+
 persistence:
+  # Ed25519 keypair storage (local auth mode only).
+  # Must be ReadWriteOnce and persisted across pod restarts.
+  # WARNING: local auth mode supports only replicaCount=1.
+  # For HA deployments use auth.mode=external.
+  keys:
+    enabled: true
+    size: 1Mi
+    storageClass: ""
+    accessMode: ReadWriteOnce
+
   # Knowledge base storage
   knowledge:
     enabled: false

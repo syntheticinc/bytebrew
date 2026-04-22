@@ -205,10 +205,9 @@ func extractActor(r *http.Request) ActorInfo {
 
 // TaskService provides task CRUD + state transitions.
 // Task IDs are uuid.UUID — string ids only appear at the HTTP boundary.
-//
-// Note (V2): ProvideInput has been removed. Autonomous tasks (cron/webhook/API)
-// that request user input are auto-failed by the executor with a clear reason.
-// Interactive tasks (dashboard) can only be cancelled if they reach needs_input.
+// Autonomous tasks (cron/webhook/API) that request user input are auto-failed
+// by the executor with a clear reason; interactive tasks can only be cancelled
+// if they reach needs_input.
 type TaskService interface {
 	CreateTask(ctx context.Context, params CreateTaskRequest, actor ActorInfo) (uuid.UUID, error)
 	ListTasks(ctx context.Context, filter TaskListFilter, actor ActorInfo) ([]TaskResponse, error)

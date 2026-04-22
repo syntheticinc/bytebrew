@@ -44,7 +44,7 @@ func NewCatalogService(repo catalogRepository) *CatalogService {
 func (s *CatalogService) List() []domain.MCPCatalogEntry {
 	records, err := s.repo.List(context.Background())
 	if err != nil {
-		slog.Warn("[MCPCatalog] list failed", "error", err)
+		slog.WarnContext(context.Background(), "[MCPCatalog] list failed", "error", err)
 		return []domain.MCPCatalogEntry{}
 	}
 	return toEntries(records)
@@ -54,7 +54,7 @@ func (s *CatalogService) List() []domain.MCPCatalogEntry {
 func (s *CatalogService) ListByCategory(category domain.MCPCatalogCategory) []domain.MCPCatalogEntry {
 	records, err := s.repo.List(context.Background())
 	if err != nil {
-		slog.Warn("[MCPCatalog] list-by-category failed", "error", err)
+		slog.WarnContext(context.Background(), "[MCPCatalog] list-by-category failed", "error", err)
 		return []domain.MCPCatalogEntry{}
 	}
 	out := make([]domain.MCPCatalogEntry, 0, len(records))
@@ -70,7 +70,7 @@ func (s *CatalogService) ListByCategory(category domain.MCPCatalogCategory) []do
 func (s *CatalogService) Search(query string) []domain.MCPCatalogEntry {
 	records, err := s.repo.List(context.Background())
 	if err != nil {
-		slog.Warn("[MCPCatalog] search failed", "error", err)
+		slog.WarnContext(context.Background(), "[MCPCatalog] search failed", "error", err)
 		return []domain.MCPCatalogEntry{}
 	}
 	q := strings.ToLower(query)
@@ -86,10 +86,12 @@ func (s *CatalogService) Search(query string) []domain.MCPCatalogEntry {
 }
 
 // GetByName returns a specific catalog entry by name.
-func (s *CatalogService) GetByName(name string) (*domain.MCPCatalogEntry, bool) {
+// ctx is accepted for interface uniformity (ctx-doctrine); the MCP catalog is a
+// process-global shared table — there is no per-tenant dispatch here.
+func (s *CatalogService) GetByName(_ context.Context, name string) (*domain.MCPCatalogEntry, bool) {
 	rec, err := s.repo.GetByName(context.Background(), name)
 	if err != nil {
-		slog.Warn("[MCPCatalog] get-by-name failed", "name", name, "error", err)
+		slog.WarnContext(context.Background(), "[MCPCatalog] get-by-name failed", "name", name, "error", err)
 		return nil, false
 	}
 	if rec == nil {

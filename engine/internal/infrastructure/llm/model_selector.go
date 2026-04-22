@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/cloudwego/eino/components/model"
@@ -60,7 +61,9 @@ func (s *ModelSelector) RegisterNamedModel(name string, m model.ToolCallingChatM
 
 // ResolveByName returns a model registered under the given name.
 // Returns an error if the name is not found.
-func (s *ModelSelector) ResolveByName(name string) (model.ToolCallingChatModel, error) {
+// ctx is accepted for interface uniformity (ctx-doctrine); ModelSelector holds a
+// process-global in-memory map built at startup — there is no per-tenant dispatch here.
+func (s *ModelSelector) ResolveByName(_ context.Context, name string) (model.ToolCallingChatModel, error) {
 	m, ok := s.namedModels[name]
 	if !ok {
 		return nil, fmt.Errorf("named model %q not registered", name)

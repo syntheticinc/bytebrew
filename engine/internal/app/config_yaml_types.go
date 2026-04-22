@@ -11,12 +11,11 @@ type configYAML struct {
 	Agents     flexList[agentYAML]     `yaml:"agents,omitempty"`
 	Models     flexList[modelYAML]     `yaml:"models,omitempty"`
 	MCPServers flexList[mcpServerYAML] `yaml:"mcp_servers,omitempty"`
-	Triggers   flexList[triggerYAML]   `yaml:"triggers,omitempty"`
 }
 
 // namedItem is implemented by YAML structs that can be keyed by name in map format.
 type namedItem interface {
-	agentYAML | modelYAML | mcpServerYAML | triggerYAML
+	agentYAML | modelYAML | mcpServerYAML
 }
 
 // flexList accepts both YAML array format and map format (where map keys become the Name/Title field).
@@ -84,10 +83,6 @@ func setNameFromKey(item interface{}, key string) {
 	case *mcpServerYAML:
 		if v.Name == "" {
 			v.Name = key
-		}
-	case *triggerYAML:
-		if v.Title == "" {
-			v.Title = key
 		}
 	}
 }
@@ -163,12 +158,3 @@ type mcpServerYAML struct {
 	ForwardHeaders []string          `yaml:"forward_headers,omitempty"`
 }
 
-type triggerYAML struct {
-	Title       string `yaml:"title"`
-	Type        string `yaml:"type"`
-	AgentName   string `yaml:"agent_name"`
-	Schedule    string `yaml:"schedule,omitempty"`
-	WebhookPath string `yaml:"webhook_path,omitempty"`
-	Description string `yaml:"description,omitempty"`
-	Enabled     bool   `yaml:"enabled"`
-}

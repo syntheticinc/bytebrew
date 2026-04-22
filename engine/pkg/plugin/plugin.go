@@ -77,6 +77,12 @@ type Plugin interface {
 	// internals. CE's Noop ignores the seeder.
 	SetTenantSeeder(seeder TenantSeeder)
 
+	// TransportPolicy returns the MCP transport policy for this deployment.
+	// CE / bare-metal deployments return PermissiveTransportPolicy (all
+	// transports allowed). Cloud / managed deployments return
+	// RestrictedTransportPolicy (stdio blocked to prevent host code execution).
+	TransportPolicy() TransportPolicy
+
 	// Stop releases any background resources held by the plugin
 	// (watchers, tickers, etc.).
 	Stop()

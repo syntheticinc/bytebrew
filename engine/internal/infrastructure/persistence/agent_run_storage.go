@@ -18,7 +18,7 @@ type AgentRunStorage struct {
 
 // NewAgentRunStorage creates a new agent run storage.
 func NewAgentRunStorage(db *gorm.DB) *AgentRunStorage {
-	slog.Info("agent run storage initialized (PostgreSQL)")
+	slog.InfoContext(context.Background(), "agent run storage initialized (PostgreSQL)")
 	return &AgentRunStorage{db: db}
 }
 

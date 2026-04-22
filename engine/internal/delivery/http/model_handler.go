@@ -14,6 +14,8 @@ type ModelResponse struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
 	Type         string `json:"type"`
+	// Kind is "chat" or "embedding". Must be one of: chat, embedding.
+	Kind         string `json:"kind"`
 	BaseURL      string `json:"base_url,omitempty"`
 	ModelName    string `json:"model_name"`
 	HasAPIKey    bool   `json:"has_api_key"`
@@ -26,11 +28,13 @@ type ModelResponse struct {
 type CreateModelRequest struct {
 	Name         string `json:"name"`
 	Type         string `json:"type"`
+	// Kind is "chat" or "embedding". Must be one of: chat, embedding.
+	Kind         string `json:"kind,omitempty"`
 	BaseURL      string `json:"base_url,omitempty"`
 	ModelName    string `json:"model_name"`
 	APIKey       string `json:"api_key,omitempty"`
 	APIVersion   string `json:"api_version,omitempty"`
-	EmbeddingDim int    `json:"embedding_dim,omitempty"` // required when type=embedding
+	EmbeddingDim int    `json:"embedding_dim,omitempty"` // required when kind=embedding
 }
 
 // ModelVerifyResult contains the result of model connectivity verification.
@@ -43,14 +47,32 @@ type ModelVerifyResult struct {
 	Error          *string `json:"error"`
 }
 
+// UpdateModelRequest is the body for PATCH /api/v1/models/{name}.
+// All fields are pointers: nil means "preserve existing value".
+type UpdateModelRequest struct {
+	Name         *string `json:"name,omitempty"`
+	Type         *string `json:"type,omitempty"`
+	// Kind is "chat" or "embedding". Nil preserves existing value.
+	Kind         *string `json:"kind,omitempty"`
+	BaseURL      *string `json:"base_url,omitempty"`
+	ModelName    *string `json:"model_name,omitempty"`
+	APIKey       *string `json:"api_key,omitempty"`
+	APIVersion   *string `json:"api_version,omitempty"`
+	EmbeddingDim *int    `json:"embedding_dim,omitempty"`
+}
+
 // ModelService provides LLM model CRUD operations.
 type ModelService interface {
 	ListModels(ctx context.Context) ([]ModelResponse, error)
 	CreateModel(ctx context.Context, req CreateModelRequest) (*ModelResponse, error)
 	UpdateModel(ctx context.Context, name string, req CreateModelRequest) (*ModelResponse, error)
+	PatchModel(ctx context.Context, name string, req UpdateModelRequest) (*ModelResponse, error)
 	DeleteModel(ctx context.Context, name string) error
 	VerifyModel(ctx context.Context, name string) (*ModelVerifyResult, error)
 }
+
+// validModelKinds is the set of accepted kind values for validation.
+var validModelKinds = map[string]bool{"chat": true, "embedding": true}
 
 // ModelHandler serves /api/v1/models endpoints.
 type ModelHandler struct {
@@ -68,20 +90,15 @@ func (h *ModelHandler) Routes() http.Handler {
 	r.Get("/", h.List)
 	r.Post("/", h.Create)
 	r.Put("/{name}", h.Update)
+	r.Patch("/{name}", h.Patch)
 	r.Delete("/{name}", h.Delete)
 	r.Post("/{name}/verify", h.Verify)
 	return r
 }
 
 // List handles GET /api/v1/models.
-// Supports ?type=embedding (only embedding) or ?type=!embedding (exclude embedding).
-// NOTE: per target-schema.dbml, models.type enum is
-//
-//	{ollama, openai_compatible, anthropic, azure_openai}
-//
-// and does NOT include "embedding". Embedding-capable models are discovered
-// via positive config.embedding_dim (surfaced as EmbeddingDim on the API
-// response), so filtering checks that field — not the .Type string.
+// Supports ?kind=chat (chat only), ?kind=embedding (embedding only).
+// Empty ?kind returns all models. Invalid ?kind returns 400.
 func (h *ModelHandler) List(w http.ResponseWriter, r *http.Request) {
 	allModels, err := h.service.ListModels(r.Context())
 	if err != nil {
@@ -89,18 +106,20 @@ func (h *ModelHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	typeFilter := r.URL.Query().Get("type")
-	if typeFilter == "" {
+	kindFilter := r.URL.Query().Get("kind")
+	if kindFilter == "" {
 		writeJSON(w, http.StatusOK, allModels)
+		return
+	}
+
+	if !validModelKinds[kindFilter] {
+		writeJSONError(w, http.StatusBadRequest, "kind must be one of: chat, embedding")
 		return
 	}
 
 	filtered := make([]ModelResponse, 0, len(allModels))
 	for _, m := range allModels {
-		isEmbedding := m.EmbeddingDim > 0
-		if typeFilter == "embedding" && isEmbedding {
-			filtered = append(filtered, m)
-		} else if typeFilter == "!embedding" && !isEmbedding {
+		if m.Kind == kindFilter {
 			filtered = append(filtered, m)
 		}
 	}
@@ -129,6 +148,14 @@ func (h *ModelHandler) Create(w http.ResponseWriter, r *http.Request) {
 	validTypes := map[string]bool{"ollama": true, "openai_compatible": true, "anthropic": true, "azure_openai": true, "openrouter": true}
 	if !validTypes[req.Type] {
 		writeJSONError(w, http.StatusBadRequest, "type must be one of: ollama, openai_compatible, anthropic, azure_openai, openrouter")
+		return
+	}
+	if req.Kind == "" {
+		writeJSONError(w, http.StatusBadRequest, "kind is required")
+		return
+	}
+	if !validModelKinds[req.Kind] {
+		writeJSONError(w, http.StatusBadRequest, "kind must be one of: chat, embedding")
 		return
 	}
 
@@ -184,6 +211,8 @@ func (h *ModelHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // Update handles PUT /api/v1/models/{name}.
+// PUT is a full-replace: type and model_name are required; missing required fields return 400.
+// Use PATCH for partial updates.
 func (h *ModelHandler) Update(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	if name == "" {
@@ -194,6 +223,24 @@ func (h *ModelHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var req CreateModelRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %s", err.Error()))
+		return
+	}
+
+	// PUT full-replace: required fields must be present.
+	if req.Type == "" {
+		writeJSONError(w, http.StatusBadRequest, "type is required for PUT (full replace); use PATCH for partial updates")
+		return
+	}
+	if req.ModelName == "" {
+		writeJSONError(w, http.StatusBadRequest, "model_name is required for PUT (full replace); use PATCH for partial updates")
+		return
+	}
+	if req.Kind == "" {
+		writeJSONError(w, http.StatusBadRequest, "kind is required for PUT (full replace); use PATCH for partial updates")
+		return
+	}
+	if !validModelKinds[req.Kind] {
+		writeJSONError(w, http.StatusBadRequest, "kind must be one of: chat, embedding")
 		return
 	}
 
@@ -210,6 +257,33 @@ func (h *ModelHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := h.service.UpdateModel(r.Context(), name, req)
+	if err != nil {
+		writeDomainError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+// Patch handles PATCH /api/v1/models/{name}.
+// Only non-nil fields are applied; all others preserve their current value.
+func (h *ModelHandler) Patch(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		writeJSONError(w, http.StatusBadRequest, "model name is required")
+		return
+	}
+
+	var req UpdateModelRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %s", err.Error()))
+		return
+	}
+	if req.Kind != nil && !validModelKinds[*req.Kind] {
+		writeJSONError(w, http.StatusBadRequest, "kind must be one of: chat, embedding")
+		return
+	}
+
+	result, err := h.service.PatchModel(r.Context(), name, req)
 	if err != nil {
 		writeDomainError(w, err)
 		return

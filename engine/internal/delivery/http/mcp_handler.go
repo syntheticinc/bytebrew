@@ -8,20 +8,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/service/cloud"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/mcp"
 )
-
-// cloudBlockedMCPTransportMessage is returned when the user tries to configure
-// a transport that gives the Cloud-hosted engine arbitrary code execution.
-// Only stdio can exec arbitrary commands on the host; the other DBML
-// transports (http, sse, streamable-http) are network-bound and safe.
-const cloudBlockedMCPTransportMessage = "stdio MCP transport is disabled in Cloud; use http, sse or streamable-http"
-
-// isCloudBlockedMCPTransport reports whether the requested transport must be
-// rejected when running in Cloud mode.
-func isCloudBlockedMCPTransport(t string) bool {
-	return t == "stdio"
-}
 
 // allowedMCPTransports matches target-schema.dbml mcp_servers.type CHECK:
 //
@@ -79,22 +67,42 @@ type CreateMCPServerRequest struct {
 	AuthClientID   string            `json:"auth_client_id,omitempty"`
 }
 
+// UpdateMCPServerRequest is the body for PATCH /api/v1/mcp-servers/{name}.
+// All fields are pointers: nil means "preserve existing value".
+type UpdateMCPServerRequest struct {
+	Name           *string            `json:"name,omitempty"`
+	Type           *string            `json:"type,omitempty"`
+	Command        *string            `json:"command,omitempty"`
+	Args           *[]string          `json:"args,omitempty"`
+	URL            *string            `json:"url,omitempty"`
+	EnvVars        *map[string]string `json:"env_vars,omitempty"`
+	ForwardHeaders *[]string          `json:"forward_headers,omitempty"`
+	AuthType       *string            `json:"auth_type,omitempty"`
+	AuthKeyEnv     *string            `json:"auth_key_env,omitempty"`
+	AuthTokenEnv   *string            `json:"auth_token_env,omitempty"`
+	AuthClientID   *string            `json:"auth_client_id,omitempty"`
+}
+
 // MCPService provides MCP server CRUD operations.
 type MCPService interface {
 	ListMCPServers(ctx context.Context) ([]MCPServerResponse, error)
 	CreateMCPServer(ctx context.Context, req CreateMCPServerRequest) (*MCPServerResponse, error)
 	UpdateMCPServer(ctx context.Context, name string, req CreateMCPServerRequest) (*MCPServerResponse, error)
+	PatchMCPServer(ctx context.Context, name string, req UpdateMCPServerRequest) (*MCPServerResponse, error)
 	DeleteMCPServer(ctx context.Context, name string) error
 }
 
 // MCPHandler serves /api/v1/mcp-servers endpoints.
 type MCPHandler struct {
-	service MCPService
+	service  MCPService
+	policy   mcp.TransportPolicy
 }
 
 // NewMCPHandler creates an MCPHandler.
-func NewMCPHandler(service MCPService) *MCPHandler {
-	return &MCPHandler{service: service}
+// policy enforces deployment-specific transport restrictions (e.g. blocking
+// stdio in Cloud mode). Pass mcp.PermissiveTransportPolicy{} for CE.
+func NewMCPHandler(service MCPService, policy mcp.TransportPolicy) *MCPHandler {
+	return &MCPHandler{service: service, policy: policy}
 }
 
 // Routes returns a chi router with MCP server endpoints mounted.
@@ -103,6 +111,7 @@ func (h *MCPHandler) Routes() http.Handler {
 	r.Get("/", h.List)
 	r.Post("/", h.Create)
 	r.Put("/{name}", h.Update)
+	r.Patch("/{name}", h.Patch)
 	r.Delete("/{name}", h.Delete)
 	return r
 }
@@ -136,8 +145,8 @@ func (h *MCPHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid transport type: must be one of stdio, http, sse, streamable-http")
 		return
 	}
-	if cloud.IsCloud() && isCloudBlockedMCPTransport(req.Type) {
-		writeJSONError(w, http.StatusBadRequest, cloudBlockedMCPTransportMessage)
+	if err := h.policy.IsAllowed(req.Type); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -150,6 +159,8 @@ func (h *MCPHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // Update handles PUT /api/v1/mcp-servers/{name}.
+// PUT is a full-replace: type is required; missing required fields return 400.
+// Use PATCH for partial updates.
 func (h *MCPHandler) Update(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	if name == "" {
@@ -162,16 +173,57 @@ func (h *MCPHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %s", err.Error()))
 		return
 	}
-	if req.Type != "" && !isAllowedMCPTransport(req.Type) {
+
+	// PUT full-replace: type is required.
+	if req.Type == "" {
+		writeJSONError(w, http.StatusBadRequest, "type is required for PUT (full replace); use PATCH for partial updates")
+		return
+	}
+	if !isAllowedMCPTransport(req.Type) {
 		writeJSONError(w, http.StatusBadRequest, "invalid transport type: must be one of stdio, http, sse, streamable-http")
 		return
 	}
-	if cloud.IsCloud() && isCloudBlockedMCPTransport(req.Type) {
-		writeJSONError(w, http.StatusBadRequest, cloudBlockedMCPTransportMessage)
+	if err := h.policy.IsAllowed(req.Type); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	result, err := h.service.UpdateMCPServer(r.Context(), name, req)
+	if err != nil {
+		writeDomainError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+// Patch handles PATCH /api/v1/mcp-servers/{name}.
+// Only non-nil fields are applied; all others preserve their current value.
+func (h *MCPHandler) Patch(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		writeJSONError(w, http.StatusBadRequest, "mcp server name is required")
+		return
+	}
+
+	var req UpdateMCPServerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %s", err.Error()))
+		return
+	}
+
+	// Validate transport type if provided.
+	if req.Type != nil {
+		if !isAllowedMCPTransport(*req.Type) {
+			writeJSONError(w, http.StatusBadRequest, "invalid transport type: must be one of stdio, http, sse, streamable-http")
+			return
+		}
+		if err := h.policy.IsAllowed(*req.Type); err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+
+	result, err := h.service.PatchMCPServer(r.Context(), name, req)
 	if err != nil {
 		writeDomainError(w, err)
 		return

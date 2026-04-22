@@ -82,6 +82,7 @@ type SchemaService interface {
 	GetSchema(ctx context.Context, id string) (*SchemaInfo, error)
 	CreateSchema(ctx context.Context, req CreateSchemaRequest) (*SchemaInfo, error)
 	UpdateSchema(ctx context.Context, id string, req UpdateSchemaRequest) error
+	PatchSchema(ctx context.Context, id string, req UpdateSchemaRequest) error
 	DeleteSchema(ctx context.Context, id string) error
 	ListSchemaAgents(ctx context.Context, schemaID string) ([]string, error)
 }
@@ -123,6 +124,7 @@ func (h *SchemaHandler) Routes() http.Handler {
 	r.Post("/", h.CreateSchema)
 	r.Get("/{id}", h.GetSchema)
 	r.Put("/{id}", h.UpdateSchema)
+	r.Patch("/{id}", h.PatchSchema)
 	r.Delete("/{id}", h.DeleteSchema)
 
 	// Schema-Agent membership (read-only — derived from agent_relations).
@@ -185,6 +187,9 @@ func (h *SchemaHandler) CreateSchema(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, schema)
 }
 
+// UpdateSchema handles PUT /api/v1/schemas/{id}.
+// PUT is a full-replace: name is required; missing required fields return 400.
+// Use PATCH for partial updates.
 func (h *SchemaHandler) UpdateSchema(w http.ResponseWriter, r *http.Request) {
 	id, err := parseStringParam(r, "id")
 	if err != nil {
@@ -198,7 +203,35 @@ func (h *SchemaHandler) UpdateSchema(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// PUT full-replace: name is required.
+	if req.Name == nil || *req.Name == "" {
+		writeJSONError(w, http.StatusBadRequest, "name is required for PUT (full replace); use PATCH for partial updates")
+		return
+	}
+
 	if err := h.schemas.UpdateSchema(r.Context(), id, req); err != nil {
+		writeDomainError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PatchSchema handles PATCH /api/v1/schemas/{id}.
+// Only non-nil fields are applied; all others preserve their current value.
+func (h *SchemaHandler) PatchSchema(w http.ResponseWriter, r *http.Request) {
+	id, err := parseStringParam(r, "id")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	var req UpdateSchemaRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %s", err.Error()))
+		return
+	}
+
+	if err := h.schemas.PatchSchema(r.Context(), id, req); err != nil {
 		writeDomainError(w, err)
 		return
 	}

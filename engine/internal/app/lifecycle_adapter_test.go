@@ -147,7 +147,7 @@ func TestCompositeAgentSpawner_PersistentMode_UsesManager(t *testing.T) {
 	assert.Equal(t, "agent-789-output", result)
 
 	// Verify the manager tracked the instance
-	instance, ok := manager.GetInstance("persistent-agent", "sess-2")
+	instance, ok := manager.GetInstance(ctx, "persistent-agent", "sess-2")
 	require.True(t, ok)
 	assert.Equal(t, domain.LifecycleModePersistent, instance.Mode)
 	assert.Equal(t, 1, instance.TasksHandled)
@@ -181,7 +181,7 @@ func TestCompositeAgentSpawner_PersistentMode_AccumulatesContext(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	instance, ok := manager.GetInstance("persistent-agent", "sess-3")
+	instance, ok := manager.GetInstance(ctx, "persistent-agent", "sess-3")
 	require.True(t, ok)
 	assert.Equal(t, 2, instance.TasksHandled)
 	assert.Greater(t, instance.ContextTokens, 0)

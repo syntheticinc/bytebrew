@@ -96,7 +96,7 @@ func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, schemaID, message, us
 		return nil, fmt.Errorf("no agents configured: %w", err)
 	}
 
-	entryAgent, err := registry.GetByID(*schema.EntryAgentID)
+	entryAgent, err := registry.GetByID(ctx, *schema.EntryAgentID)
 	if err != nil {
 		return nil, pkgerrors.NotFound(fmt.Sprintf("entry agent not found for schema %s", schemaID))
 	}
@@ -161,7 +161,7 @@ func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, schemaID, message, us
 			if sseEvent.Type == "done" {
 				if a.sessions != nil {
 					if updateErr := a.sessions.Update(context.Background(), sessionID, map[string]interface{}{"status": "completed"}); updateErr != nil {
-						slog.Warn("update chat session status failed", "session_id", sessionID, "error", updateErr)
+						slog.WarnContext(context.Background(), "update chat session status failed", "session_id", sessionID, "error", updateErr)
 					}
 				}
 				return
@@ -260,7 +260,7 @@ func convertSessionEventToSSE(event *pb.SessionEvent, sessionID string) *deliver
 func sseEventJSON(eventType string, data map[string]interface{}) *deliveryhttp.SSEEvent {
 	jsonBytes, err := json.Marshal(data)
 	if err != nil {
-		slog.Error("failed to marshal SSE event data", "type", eventType, "error", err)
+		slog.ErrorContext(context.Background(), "failed to marshal SSE event data", "type", eventType, "error", err)
 		return nil
 	}
 	return &deliveryhttp.SSEEvent{

@@ -42,6 +42,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL UNIQUE,
 			type VARCHAR(30) NOT NULL,
+			kind VARCHAR(20) NOT NULL DEFAULT 'chat',
 			base_url VARCHAR(500),
 			model_name VARCHAR(255) NOT NULL,
 			api_key_encrypted VARCHAR(1000),
@@ -192,8 +193,6 @@ func seedTestData(t *testing.T, db *gorm.DB) {
 		SchemaID:      "00000000-0000-0000-0000-000000000001",
 		SourceAgentID: agent.ID, TargetAgentID: researcher.ID,
 	}).Error)
-
-	// Triggers removed in V2 (replaced by schemas.chat_enabled).
 }
 
 func TestExportYAML(t *testing.T) {
@@ -236,9 +235,6 @@ func TestExportYAML(t *testing.T) {
 	require.Len(t, cfg.MCPServers.Items, 1)
 	assert.Equal(t, "shop-api", cfg.MCPServers.Items[0].Name)
 	assert.Equal(t, "${API_KEY}", cfg.MCPServers.Items[0].EnvVars["API_KEY"])
-
-	// Triggers removed in V2 — export returns empty slice.
-	assert.Empty(t, cfg.Triggers.Items)
 }
 
 func TestImportYAML(t *testing.T) {
@@ -301,8 +297,6 @@ triggers:
 	assert.Equal(t, "claude-3", agents[0].Model.Name)
 	require.Len(t, agents[0].Tools, 1)
 	assert.Equal(t, "web_search", agents[0].Tools[0].ToolName)
-
-	// Triggers removed in V2 — import of legacy trigger YAML is a no-op.
 }
 
 func TestImportYAML_UpdateExisting(t *testing.T) {
@@ -421,7 +415,6 @@ func TestExportImportRoundTrip(t *testing.T) {
 	assert.Equal(t, len(cfg1.Agents.Items), len(cfg2.Agents.Items))
 	assert.Equal(t, len(cfg1.Models.Items), len(cfg2.Models.Items))
 	assert.Equal(t, len(cfg1.MCPServers.Items), len(cfg2.MCPServers.Items))
-	assert.Equal(t, len(cfg1.Triggers.Items), len(cfg2.Triggers.Items))
 
 	// Agent names match
 	for _, a1 := range cfg1.Agents.Items {
@@ -444,7 +437,6 @@ func TestExportYAML_EmptyDB(t *testing.T) {
 	assert.Empty(t, cfg.Agents.Items)
 	assert.Empty(t, cfg.Models.Items)
 	assert.Empty(t, cfg.MCPServers.Items)
-	assert.Empty(t, cfg.Triggers.Items)
 }
 
 func TestSplitCSV(t *testing.T) {

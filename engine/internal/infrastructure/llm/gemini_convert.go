@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 
@@ -88,7 +89,7 @@ func parseToolCallArgs(args string) map[string]interface{} {
 	}
 	var result map[string]interface{}
 	if err := json.Unmarshal([]byte(args), &result); err != nil {
-		slog.Warn("gemini: failed to parse tool call args", "error", err)
+		slog.WarnContext(context.Background(), "gemini: failed to parse tool call args", "error", err)
 		return map[string]interface{}{"raw": args}
 	}
 	return result
@@ -111,7 +112,7 @@ func geminiResponseToSchema(resp *geminiResponse) *schema.Message {
 		if part.FunctionCall != nil {
 			argsJSON, err := json.Marshal(part.FunctionCall.Args)
 			if err != nil {
-				slog.Warn("gemini: failed to marshal function call args", "error", err)
+				slog.WarnContext(context.Background(), "gemini: failed to marshal function call args", "error", err)
 				argsJSON = []byte("{}")
 			}
 			msg.ToolCalls = append(msg.ToolCalls, schema.ToolCall{
@@ -154,14 +155,14 @@ func schemaToolsToGemini(tools []*schema.ToolInfo) []geminiTool {
 		if t.ParamsOneOf != nil {
 			jsonSchema, err := t.ParamsOneOf.ToJSONSchema()
 			if err != nil {
-				slog.Warn("gemini: skip tool params schema", "tool", t.Name, "error", err)
+				slog.WarnContext(context.Background(), "gemini: skip tool params schema", "tool", t.Name, "error", err)
 				decls = append(decls, decl)
 				continue
 			}
 			if jsonSchema != nil {
 				raw, err := json.Marshal(jsonSchema)
 				if err != nil {
-					slog.Warn("gemini: skip tool params marshal", "tool", t.Name, "error", err)
+					slog.WarnContext(context.Background(), "gemini: skip tool params marshal", "tool", t.Name, "error", err)
 					decls = append(decls, decl)
 					continue
 				}

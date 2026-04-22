@@ -457,7 +457,7 @@ func unmarshalStringSlice(s string) []string {
 	}
 	var result []string
 	if err := json.Unmarshal([]byte(s), &result); err != nil {
-		slog.Warn("unmarshal string slice failed", "error", err, "raw", s)
+		slog.WarnContext(context.Background(), "unmarshal string slice failed", "error", err, "raw", s)
 		return nil
 	}
 	return result
@@ -484,7 +484,7 @@ func unmarshalUUIDSlice(s string) []uuid.UUID {
 	}
 	var result []uuid.UUID
 	if err := json.Unmarshal([]byte(s), &result); err != nil {
-		slog.Warn("unmarshal UUID slice failed", "error", err, "raw", s)
+		slog.WarnContext(context.Background(), "unmarshal UUID slice failed", "error", err, "raw", s)
 		return nil
 	}
 	return result

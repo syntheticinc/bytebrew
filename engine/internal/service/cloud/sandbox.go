@@ -17,11 +17,6 @@ func DeploymentMode() string {
 	return mode
 }
 
-// IsCloud returns true if running in Cloud mode.
-func IsCloud() bool {
-	return DeploymentMode() == "cloud"
-}
-
 // Sandbox enforces Cloud security restrictions.
 type Sandbox struct {
 	isCloud bool
@@ -30,11 +25,6 @@ type Sandbox struct {
 // NewSandbox creates a new Sandbox. Pass true for Cloud mode, false for CE.
 func NewSandbox(isCloud bool) *Sandbox {
 	return &Sandbox{isCloud: isCloud}
-}
-
-// NewSandboxFromEnv creates a Sandbox based on BYTEBREW_MODE env var.
-func NewSandboxFromEnv() *Sandbox {
-	return NewSandbox(IsCloud())
 }
 
 // ValidateToolAccess checks if a tool is allowed in the current deployment mode.

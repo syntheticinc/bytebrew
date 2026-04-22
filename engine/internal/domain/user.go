@@ -1,36 +1,27 @@
 package domain
 
-import (
-	"context"
-	"time"
-)
+import "context"
 
-// User represents a system/admin user record.
-// Auth is DB-backed (username + bcrypt password_hash).
-// End-users are external (identified by user_sub on sessions/memories), NOT in this table.
-type User struct {
-	ID           string
-	TenantID     string
-	Username     string
-	PasswordHash string
-	Role         string // "admin" | "system"
-	Disabled     bool
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+// Identity context helpers.
+//
+// The engine identifies callers by their JWT `sub` claim (varchar, not uuid).
+// There is no users table — admin/system identity is external (Cloud JWT
+// issued by landing) or synthetic (CE local admin = "local-admin"). End-user
+// identity on sessions/memories is likewise user_sub.
+//
+// These helpers let services read the authenticated sub from ctx without
+// knowing how it was set (HTTP middleware, gRPC interceptor, test harness).
+
+type userSubCtxKey struct{}
+
+// WithUserSub returns a context with the authenticated user's `sub` claim set.
+func WithUserSub(ctx context.Context, sub string) context.Context {
+	return context.WithValue(ctx, userSubCtxKey{}, sub)
 }
 
-// --- User context key ---
-
-type userIDCtxKey struct{}
-
-// WithUserID returns a context with the resolved user UUID set.
-func WithUserID(ctx context.Context, userID string) context.Context {
-	return context.WithValue(ctx, userIDCtxKey{}, userID)
-}
-
-// UserIDFromContext extracts the resolved user UUID from context.
+// UserSubFromContext extracts the authenticated `sub` from context.
 // Returns empty string if not set.
-func UserIDFromContext(ctx context.Context) string {
-	v, _ := ctx.Value(userIDCtxKey{}).(string)
+func UserSubFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(userSubCtxKey{}).(string)
 	return v
 }

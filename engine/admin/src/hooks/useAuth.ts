@@ -1,9 +1,35 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { api } from '../api/client';
+
+// Wave 1+7 auth model.
+//
+// Admin is a pure client SPA — it never POSTs credentials. Two build-time
+// modes decide how the token is obtained:
+//
+//   VITE_AUTH_MODE=local (default)
+//     Engine exposes `POST /api/v1/auth/local-session` (no auth, no body)
+//     which mints a short-lived JWT for the single local admin user. The
+//     SPA calls it once on mount if no token is cached in localStorage.
+//     This is the dev / self-hosted flow — there is no login form.
+//
+//   VITE_AUTH_MODE=external
+//     Token is produced by an external identity service (Cloud landing,
+//     SSO, etc.) and delivered to the admin as a URL hash fragment
+//     `#at=<token>&rt=<refresh>`. If neither localStorage nor the hash
+//     carries a token, the SPA redirects to `VITE_LANDING_URL/login?return_to=<current>`.
+//
+// The existing axios/fetch client keeps using the token the same way
+// (Authorization: Bearer <token>). Expiry → 401 → clearToken + re-bootstrap.
+
+export type AuthMode = 'local' | 'external';
+
+export const AUTH_MODE: AuthMode =
+  (import.meta.env.VITE_AUTH_MODE as AuthMode | undefined) === 'external' ? 'external' : 'local';
+
+const LANDING_URL = import.meta.env.VITE_LANDING_URL as string | undefined;
 
 export interface AuthContextType {
   isAuthenticated: boolean;
-  login: (username: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -15,19 +41,90 @@ export function useAuth(): AuthContextType {
   return ctx;
 }
 
+// parseHashToken consumes `#at=...&rt=...` fragment (if present) and clears
+// it from the URL bar so the token never leaks via copy/paste or logs.
+// Returns the access token or null.
+function parseHashToken(): string | null {
+  const hash = window.location.hash.startsWith('#')
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  if (!hash) return null;
+  const params = new URLSearchParams(hash);
+  const at = params.get('at');
+  if (!at) return null;
+  // Scrub fragment so the token doesn't linger in location.href.
+  window.history.replaceState(
+    null,
+    '',
+    window.location.pathname + window.location.search,
+  );
+  return at;
+}
+
+// redirectToLanding sends the user to the external login flow, passing
+// the current URL as `return_to` so the IdP can bounce back after auth.
+function redirectToLanding(): void {
+  if (!LANDING_URL) {
+    throw new Error(
+      'VITE_AUTH_MODE=external requires VITE_LANDING_URL to be set at build time',
+    );
+  }
+  const returnTo = encodeURIComponent(window.location.href);
+  window.location.href = `${LANDING_URL}/login?return_to=${returnTo}`;
+}
+
+// bootstrapAuth runs the correct acquisition flow for the active mode.
+// Idempotent: if a token is already in localStorage, it's a no-op.
+// Exported so the api client can re-run it on 401 without needing the
+// React tree.
+export async function bootstrapAuth(): Promise<boolean> {
+  if (api.isAuthenticated()) return true;
+
+  if (AUTH_MODE === 'external') {
+    const hashToken = parseHashToken();
+    if (hashToken) {
+      api.setToken(hashToken);
+      return true;
+    }
+    redirectToLanding();
+    return false;
+  }
+
+  // local mode: ask the engine for a fresh session token.
+  const res = await api.localSession();
+  api.setToken(res.access_token);
+  return true;
+}
+
 export function useAuthProvider(): AuthContextType {
   const [isAuthenticated, setIsAuthenticated] = useState(api.isAuthenticated());
 
-  const login = useCallback(async (username: string, password: string) => {
-    const res = await api.login(username, password);
-    api.setToken(res.token);
-    setIsAuthenticated(true);
+  useEffect(() => {
+    let cancelled = false;
+    bootstrapAuth()
+      .then((ok) => {
+        if (!cancelled && ok) setIsAuthenticated(true);
+      })
+      .catch((err) => {
+        // In local mode this surfaces as a logged error and leaves the
+        // SPA in an unauthenticated state — the 401 handler will retry
+        // on the next API call.
+        console.error('auth bootstrap failed', err);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const logout = useCallback(() => {
     api.clearToken();
     setIsAuthenticated(false);
+    // Re-run bootstrap to either mint a new local session or bounce to
+    // the external landing page.
+    void bootstrapAuth().then((ok) => {
+      if (ok) setIsAuthenticated(true);
+    });
   }, []);
 
-  return { isAuthenticated, login, logout };
+  return { isAuthenticated, logout };
 }

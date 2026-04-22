@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { AuthContext, type AuthContextType } from '../hooks/useAuth';
@@ -27,7 +27,6 @@ const mockApi = vi.mocked(api);
 
 const auth: AuthContextType = {
   isAuthenticated: true,
-  login: vi.fn(),
   logout: vi.fn(),
 };
 
@@ -85,6 +84,7 @@ const MOCK_MODELS = [
     id: '1',
     name: 'main-model',
     type: 'openrouter',
+    kind: 'chat' as const,
     base_url: 'https://openrouter.ai/api/v1',
     model_name: 'openai/gpt-4o',
     has_api_key: true,
@@ -94,17 +94,37 @@ const MOCK_MODELS = [
     id: '2',
     name: 'custom-model',
     type: 'ollama',
+    kind: 'chat' as const,
     base_url: 'http://localhost:11434',
     model_name: 'my-custom-llama',
     has_api_key: false,
     created_at: '2026-01-02T00:00:00Z',
+  },
+  {
+    id: '3',
+    name: 'embed-small',
+    type: 'embedding',
+    kind: 'embedding' as const,
+    base_url: 'https://api.openai.com/v1',
+    model_name: 'text-embedding-3-small',
+    embedding_dim: 1536,
+    has_api_key: true,
+    created_at: '2026-01-03T00:00:00Z',
   },
 ];
 
 describe('ModelsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockApi.listModels.mockResolvedValue(MOCK_MODELS);
+    // Reset the persisted kind filter so each test starts with "All".
+    localStorage.removeItem('bytebrew_models_kind_filter');
+    // Filter-aware mock: mirror the backend behavior so the kind-filter tests
+    // can assert the table re-renders with the right slice.
+    mockApi.listModels.mockImplementation((params?: { kind?: 'chat' | 'embedding' }) => {
+      if (params?.kind === 'chat') return Promise.resolve(MOCK_MODELS.filter((m) => m.kind === 'chat'));
+      if (params?.kind === 'embedding') return Promise.resolve(MOCK_MODELS.filter((m) => m.kind === 'embedding'));
+      return Promise.resolve(MOCK_MODELS);
+    });
     mockApi.getModelRegistry.mockResolvedValue(MOCK_REGISTRY);
   });
 
@@ -119,8 +139,12 @@ describe('ModelsPage', () => {
     // Tier 1 badge for openai/gpt-4o
     expect(screen.getByText('Tier 1 - Orchestrator')).toBeInTheDocument();
 
-    // Custom badge for unknown model
-    expect(screen.getByText('Custom')).toBeInTheDocument();
+    // Custom badge for the unknown model — scope the lookup to the
+    // custom-model row so we don't collide with other "Custom" text
+    // that the Wave 5 Kind column / filters may render elsewhere.
+    const customRow = screen.getByText('custom-model').closest('tr');
+    expect(customRow).not.toBeNull();
+    expect(within(customRow as HTMLElement).getByText('Custom')).toBeInTheDocument();
   });
 
   it('shows empty state when no models', async () => {

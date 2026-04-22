@@ -68,6 +68,10 @@ func (m *mockSchemaService) UpdateSchema(_ context.Context, _ string, _ UpdateSc
 	return nil
 }
 
+func (m *mockSchemaService) PatchSchema(_ context.Context, _ string, _ UpdateSchemaRequest) error {
+	return nil
+}
+
 func (m *mockSchemaService) DeleteSchema(_ context.Context, _ string) error {
 	return nil
 }

@@ -211,7 +211,7 @@ func parseGeminiSSEStream(r io.Reader, sw *schema.StreamWriter[*schema.Message])
 
 		var chunk geminiResponse
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			slog.Warn("gemini SSE: skip malformed chunk", "error", err)
+			slog.WarnContext(context.Background(), "gemini SSE: skip malformed chunk", "error", err)
 			continue
 		}
 

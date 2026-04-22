@@ -31,7 +31,7 @@ func routeUserMessage(sessionID, message string, router MessageRouter, eventBus 
 		Type:    orchestrator.EventUserMessage,
 		Content: message,
 	}); err != nil {
-		slog.Warn("[routeUserMessage] failed to publish user message", "error", err, "session_id", sessionID)
+		slog.WarnContext(context.Background(), "[routeUserMessage] failed to publish user message", "error", err, "session_id", sessionID)
 	}
 	return false
 }
@@ -105,15 +105,15 @@ func (h *FlowHandler) runSupervisorMode(
 		defer func() {
 			session, err := h.sessionStorage.GetByID(context.Background(), req.SessionId)
 			if err != nil {
-				slog.Error("failed to get session for expire", "error", err)
+				slog.ErrorContext(ctx, "failed to get session for expire", "error", err)
 				return
 			}
 			if session != nil {
 				session.Expire()
 				if err := h.sessionStorage.Update(context.Background(), session); err != nil {
-					slog.Error("failed to expire session", "error", err)
+					slog.ErrorContext(ctx, "failed to expire session", "error", err)
 				} else {
-					slog.Info("session expired on disconnect", "session_id", session.ID)
+					slog.InfoContext(ctx, "session expired on disconnect", "session_id", session.ID)
 				}
 			}
 		}()

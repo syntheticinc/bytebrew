@@ -19,10 +19,10 @@ engine:
   host: "0.0.0.0"
   port: 9443
 
-# NEW: Security for admin dashboard — admin users live in the `users` table
-# (create via `ce admin create ...`). JWT secret signs admin JWT tokens.
+# Test fixture: local mode auto-generates an Ed25519 keypair at boot.
+# Wave 1+7 (2026-04-21): jwt_secret/users-table removed.
 security:
-  jwt_secret: "test-jwt-secret"
+  auth_mode: "local"
 
 logging:
   level: info

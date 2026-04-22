@@ -218,26 +218,13 @@ func (s *ForkService) forkInTx(tx *gorm.DB, tmpl *domain.SchemaTemplate, newSche
 		}
 	}
 
-	// 6. Map template triggers onto schemas.chat_enabled. V2 removed the
-	//    triggers table: a schema with chat access simply has
-	//    chat_enabled=true; entry agent is resolved via schemas.entry_agent_id.
-	//    Non-chat trigger types (cron/webhook) are deferred to V3 — tenants
-	//    call the chat API directly from their own schedulers in V2.
-	chatEnabled := false
-	for _, t := range def.Triggers {
-		triggerType := strings.TrimSpace(t.Type)
-		if triggerType == "" {
-			return ForkedSchema{}, fmt.Errorf("trigger with no type: %w", ErrInvalidTemplate)
-		}
-		if triggerType == "chat" && t.Enabled {
-			chatEnabled = true
-		}
-	}
-	if chatEnabled {
-		if err := tx.Model(&models.SchemaModel{}).Where("id = ?", schema.ID).
-			Update("chat_enabled", true).Error; err != nil {
-			return ForkedSchema{}, fmt.Errorf("enable chat on forked schema: %w", err)
-		}
+	// 6. Enable chat on the forked schema. Templates are authored to be
+	//    chat-facing; a forked schema always has chat_enabled=true and a
+	//    resolved entry_agent_id. Schedulers (cron/webhook) are tenant-owned
+	//    and call POST /api/v1/schemas/{id}/chat directly.
+	if err := tx.Model(&models.SchemaModel{}).Where("id = ?", schema.ID).
+		Update("chat_enabled", true).Error; err != nil {
+		return ForkedSchema{}, fmt.Errorf("enable chat on forked schema: %w", err)
 	}
 
 	return ForkedSchema{

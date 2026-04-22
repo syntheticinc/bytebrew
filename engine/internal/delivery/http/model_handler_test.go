@@ -57,6 +57,10 @@ func (m *mockModelService) VerifyModel(ctx context.Context, name string) (*Model
 	return nil, nil
 }
 
+func (m *mockModelService) PatchModel(ctx context.Context, name string, req UpdateModelRequest) (*ModelResponse, error) {
+	return &ModelResponse{Name: name}, nil
+}
+
 func TestModelHandler_Verify(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -222,6 +226,114 @@ func TestModelHandler_Verify_ErrorField(t *testing.T) {
 	assert.Equal(t, "connection refused", *result.Error)
 }
 
+func TestModelHandler_List_KindFilter(t *testing.T) {
+	chatModel := ModelResponse{ID: "1", Name: "gpt-4", Type: "openai_compatible", Kind: "chat", ModelName: "gpt-4", CreatedAt: "2026-01-01T00:00:00Z"}
+	embModel := ModelResponse{ID: "2", Name: "text-emb", Type: "openai_compatible", Kind: "embedding", ModelName: "text-embedding-3-small", EmbeddingDim: 1536, CreatedAt: "2026-01-01T00:00:00Z"}
+
+	svc := &mockModelService{
+		listFunc: func(ctx context.Context) ([]ModelResponse, error) {
+			return []ModelResponse{chatModel, embModel}, nil
+		},
+	}
+	handler := NewModelHandler(svc)
+	r := chi.NewRouter()
+	r.Mount("/api/v1/models", handler.Routes())
+
+	t.Run("kind=embedding returns only embedding models", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/models/?kind=embedding", nil)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var result []ModelResponse
+		require.NoError(t, json.NewDecoder(rec.Body).Decode(&result))
+		require.Len(t, result, 1)
+		assert.Equal(t, "embedding", result[0].Kind)
+		assert.Equal(t, "text-emb", result[0].Name)
+	})
+
+	t.Run("kind=chat returns only chat models", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/models/?kind=chat", nil)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var result []ModelResponse
+		require.NoError(t, json.NewDecoder(rec.Body).Decode(&result))
+		require.Len(t, result, 1)
+		assert.Equal(t, "chat", result[0].Kind)
+		assert.Equal(t, "gpt-4", result[0].Name)
+	})
+
+	t.Run("no filter returns all models", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/models/", nil)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var result []ModelResponse
+		require.NoError(t, json.NewDecoder(rec.Body).Decode(&result))
+		assert.Len(t, result, 2)
+	})
+
+	t.Run("invalid kind returns 400", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/models/?kind=unknown", nil)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+}
+
+func TestModelHandler_Create_KindValidation(t *testing.T) {
+	svc := &mockModelService{
+		createFunc: func(ctx context.Context, req CreateModelRequest) (*ModelResponse, error) {
+			return &ModelResponse{ID: "1", Name: req.Name, Type: req.Type, Kind: req.Kind, ModelName: req.ModelName, CreatedAt: "2026-01-01T00:00:00Z"}, nil
+		},
+	}
+	handler := NewModelHandler(svc)
+	r := chi.NewRouter()
+	r.Mount("/api/v1/models", handler.Routes())
+
+	t.Run("kind absent returns 400", func(t *testing.T) {
+		body, _ := json.Marshal(CreateModelRequest{Name: "m", Type: "ollama", ModelName: "llama3"})
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/models/", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		var errResp map[string]string
+		require.NoError(t, json.NewDecoder(rec.Body).Decode(&errResp))
+		assert.Contains(t, errResp["error"], "kind is required")
+	})
+
+	t.Run("kind=embedding is accepted", func(t *testing.T) {
+		var capturedReq CreateModelRequest
+		svc.createFunc = func(ctx context.Context, req CreateModelRequest) (*ModelResponse, error) {
+			capturedReq = req
+			return &ModelResponse{ID: "2", Name: req.Name, Type: req.Type, Kind: req.Kind, ModelName: req.ModelName, CreatedAt: "2026-01-01T00:00:00Z"}, nil
+		}
+		body, _ := json.Marshal(CreateModelRequest{
+			Name: "emb", Type: "openai_compatible", ModelName: "text-embedding-3-small",
+			Kind: "embedding", BaseURL: "https://api.openai.com/v1", APIKey: "sk-test", EmbeddingDim: 1536,
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/models/", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusCreated, rec.Code)
+		assert.Equal(t, "embedding", capturedReq.Kind)
+	})
+
+	t.Run("invalid kind returns 400", func(t *testing.T) {
+		body, _ := json.Marshal(CreateModelRequest{Name: "m", Type: "ollama", ModelName: "llama3", Kind: "reranker"})
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/models/", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		var errResp map[string]string
+		require.NoError(t, json.NewDecoder(rec.Body).Decode(&errResp))
+		assert.Contains(t, errResp["error"], "kind must be one of")
+	})
+}
+
 func TestModelHandler_Create_OpenRouterPreset(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -238,6 +350,7 @@ func TestModelHandler_Create_OpenRouterPreset(t *testing.T) {
 				Type:      "openrouter",
 				ModelName: "anthropic/claude-sonnet-4-6",
 				APIKey:    "sk-or-test-key",
+				Kind:      "chat",
 			},
 			wantStatus:  http.StatusCreated,
 			wantType:    "openai_compatible",
@@ -251,6 +364,7 @@ func TestModelHandler_Create_OpenRouterPreset(t *testing.T) {
 				ModelName: "anthropic/claude-sonnet-4-6",
 				APIKey:    "sk-or-test-key",
 				BaseURL:   "https://custom.openrouter.ai/api/v1",
+				Kind:      "chat",
 			},
 			wantStatus:  http.StatusCreated,
 			wantType:    "openai_compatible",
@@ -262,6 +376,7 @@ func TestModelHandler_Create_OpenRouterPreset(t *testing.T) {
 				Name:      "no-key",
 				Type:      "openrouter",
 				ModelName: "anthropic/claude-sonnet-4-6",
+				Kind:      "chat",
 			},
 			wantStatus:     http.StatusBadRequest,
 			wantErrMessage: "api_key is required for openrouter",

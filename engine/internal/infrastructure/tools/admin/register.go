@@ -68,10 +68,10 @@ func RegisterAdminTools(store *tools.BuiltinToolStore, deps AdminToolDependencie
 		return NewAdminListMCPServersTool(deps.MCPServerRepo)
 	})
 	store.Register("admin_create_mcp_server", func(_ tools.ToolDependencies) tool.InvokableTool {
-		return NewAdminCreateMCPServerTool(deps.MCPServerRepo, reloader)
+		return NewAdminCreateMCPServerTool(deps.MCPServerRepo, reloader, deps.TransportPolicy)
 	})
 	store.Register("admin_update_mcp_server", func(_ tools.ToolDependencies) tool.InvokableTool {
-		return NewAdminUpdateMCPServerTool(deps.MCPServerRepo, reloader)
+		return NewAdminUpdateMCPServerTool(deps.MCPServerRepo, reloader, deps.TransportPolicy)
 	})
 	store.Register("admin_delete_mcp_server", func(_ tools.ToolDependencies) tool.InvokableTool {
 		return NewAdminDeleteMCPServerTool(deps.MCPServerRepo, reloader)

@@ -133,13 +133,11 @@ func (a *agentManagerHTTPAdapter) GetAgent(ctx context.Context, name string) (*d
 }
 
 func (a *agentManagerHTTPAdapter) CreateAgent(ctx context.Context, req deliveryhttp.CreateAgentRequest) (*deliveryhttp.AgentDetail, error) {
-	// WP-4: Prevent using embedding models as agent model.
+	// Wave 5: model_id must reference a chat model, not an embedding model.
 	if req.ModelID != nil {
 		var llm models.LLMProviderModel
-		// DBML models.type does not contain "embedding" — embedding models are
-		// detected via positive config.embedding_dim.
-		if err := a.db.Where("id = ?", *req.ModelID).First(&llm).Error; err == nil && llm.EmbeddingDim() > 0 {
-			return nil, pkgerrors.InvalidInput("embedding models cannot be used as agent model, use a chat model instead")
+		if err := a.db.Where("id = ?", *req.ModelID).First(&llm).Error; err == nil && llm.Kind == "embedding" {
+			return nil, pkgerrors.InvalidInput(fmt.Sprintf("model_id must reference a chat model, got kind=embedding"))
 		}
 	}
 
@@ -157,13 +155,11 @@ func (a *agentManagerHTTPAdapter) CreateAgent(ctx context.Context, req deliveryh
 }
 
 func (a *agentManagerHTTPAdapter) UpdateAgent(ctx context.Context, name string, req deliveryhttp.CreateAgentRequest) (*deliveryhttp.AgentDetail, error) {
-	// WP-4: Prevent using embedding models as agent model.
+	// Wave 5: model_id must reference a chat model, not an embedding model.
 	if req.ModelID != nil {
 		var llm models.LLMProviderModel
-		// DBML models.type does not contain "embedding" — embedding models are
-		// detected via positive config.embedding_dim.
-		if err := a.db.Where("id = ?", *req.ModelID).First(&llm).Error; err == nil && llm.EmbeddingDim() > 0 {
-			return nil, pkgerrors.InvalidInput("embedding models cannot be used as agent model, use a chat model instead")
+		if err := a.db.Where("id = ?", *req.ModelID).First(&llm).Error; err == nil && llm.Kind == "embedding" {
+			return nil, pkgerrors.InvalidInput(fmt.Sprintf("model_id must reference a chat model, got kind=embedding"))
 		}
 	}
 
@@ -202,6 +198,98 @@ func (a *agentManagerHTTPAdapter) UpdateAgent(ctx context.Context, name string, 
 		lookupName = name
 	}
 	return a.GetAgent(ctx, lookupName)
+}
+
+// PatchAgent applies only the non-nil fields in req to the existing agent record.
+// This fixes BUG-MT-03: partial updates no longer wipe unspecified fields.
+func (a *agentManagerHTTPAdapter) PatchAgent(ctx context.Context, name string, req deliveryhttp.UpdateAgentRequest) (*deliveryhttp.AgentDetail, error) {
+	existing, err := a.repo.GetByName(ctx, name)
+	if err != nil || existing == nil {
+		return nil, pkgerrors.NotFound(fmt.Sprintf("agent not found: %s", name))
+	}
+
+	// Resolve model_id if provided (accepts UUID or name).
+	// Wave 5: model_id must reference a chat model, not an embedding model.
+	if req.ModelID != nil && *req.ModelID != "" {
+		var llm models.LLMProviderModel
+		if isUUID(*req.ModelID) {
+			if err := a.db.Where("id = ?", *req.ModelID).First(&llm).Error; err == nil {
+				if llm.Kind == "embedding" {
+					return nil, pkgerrors.InvalidInput(fmt.Sprintf("model_id must reference a chat model, got kind=embedding"))
+				}
+				existing.ModelID = req.ModelID
+				existing.ModelName = llm.Name
+			} else {
+				return nil, pkgerrors.NotFound(fmt.Sprintf("model not found: %s", *req.ModelID))
+			}
+		} else {
+			// Treat as name.
+			if err := a.db.Where("name = ?", *req.ModelID).First(&llm).Error; err == nil {
+				if llm.Kind == "embedding" {
+					return nil, pkgerrors.InvalidInput(fmt.Sprintf("model_id must reference a chat model, got kind=embedding"))
+				}
+				id := llm.ID
+				existing.ModelID = &id
+				existing.ModelName = llm.Name
+			} else {
+				return nil, pkgerrors.NotFound(fmt.Sprintf("model not found: %s", *req.ModelID))
+			}
+		}
+	}
+
+	// Apply only non-nil fields.
+	if req.SystemPrompt != nil {
+		existing.SystemPrompt = *req.SystemPrompt
+	}
+	if req.Lifecycle != nil {
+		existing.Lifecycle = *req.Lifecycle
+	}
+	if req.ToolExecution != nil {
+		existing.ToolExecution = *req.ToolExecution
+	}
+	if req.MaxSteps != nil {
+		existing.MaxSteps = *req.MaxSteps
+	}
+	if req.MaxContextSize != nil {
+		existing.MaxContextSize = *req.MaxContextSize
+	}
+	if req.MaxTurnDuration != nil {
+		existing.MaxTurnDuration = *req.MaxTurnDuration
+	}
+	if req.Temperature != nil {
+		existing.Temperature = req.Temperature
+	}
+	if req.TopP != nil {
+		existing.TopP = req.TopP
+	}
+	if req.MaxTokens != nil {
+		existing.MaxTokens = req.MaxTokens
+	}
+	if req.StopSequences != nil {
+		existing.StopSequences = *req.StopSequences
+	}
+	if req.ConfirmBefore != nil {
+		existing.ConfirmBefore = *req.ConfirmBefore
+	}
+	if req.Tools != nil {
+		existing.BuiltinTools = *req.Tools
+	}
+	if req.CanSpawn != nil {
+		existing.CanSpawn = *req.CanSpawn
+	}
+	if req.MCPServers != nil {
+		existing.MCPServers = *req.MCPServers
+	}
+
+	if err := a.repo.Update(ctx, name, existing); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, pkgerrors.NotFound(fmt.Sprintf("agent not found: %s", name))
+		}
+		return nil, fmt.Errorf("patch agent: %w", err)
+	}
+
+	a.invalidateRegistryForContext(ctx)
+	return a.GetAgent(ctx, name)
 }
 
 func (a *agentManagerHTTPAdapter) DeleteAgent(ctx context.Context, name string) error {
@@ -270,6 +358,7 @@ func (a *agentManagerHTTPAdapter) toAgentRecord(req deliveryhttp.CreateAgentRequ
 	}
 
 	// Resolve model: by ID or by name.
+	// Note: kind validation is done before toAgentRecord is called (in Create/UpdateAgent).
 	if req.ModelID != nil {
 		rec.ModelID = req.ModelID
 		var llm models.LLMProviderModel

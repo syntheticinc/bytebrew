@@ -10,16 +10,8 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/service/cloud"
+	"github.com/syntheticinc/bytebrew/engine/internal/service/mcp"
 )
-
-// cloudBlockedMCPTransportMessage matches the REST layer so the agent-facing
-// error reads the same way as the API error for a copy/paste Cloud deployment.
-const cloudBlockedMCPTransportMessage = "stdio MCP transport is disabled in Cloud; use http, sse or streamable-http"
-
-func isCloudBlockedMCPTransport(t string) bool {
-	return t == "stdio"
-}
 
 // allowedMCPTransports matches target-schema.dbml mcp_servers.type CHECK:
 //
@@ -82,10 +74,11 @@ func (t *adminListMCPServersTool) InvokableRun(ctx context.Context, _ string, _ 
 type adminCreateMCPServerTool struct {
 	repo     MCPServerRepository
 	reloader func()
+	policy   mcp.TransportPolicy
 }
 
-func NewAdminCreateMCPServerTool(repo MCPServerRepository, reloader func()) tool.InvokableTool {
-	return &adminCreateMCPServerTool{repo: repo, reloader: reloader}
+func NewAdminCreateMCPServerTool(repo MCPServerRepository, reloader func(), policy mcp.TransportPolicy) tool.InvokableTool {
+	return &adminCreateMCPServerTool{repo: repo, reloader: reloader, policy: policy}
 }
 
 func (t *adminCreateMCPServerTool) Info(_ context.Context) (*schema.ToolInfo, error) {
@@ -126,8 +119,8 @@ func (t *adminCreateMCPServerTool) InvokableRun(ctx context.Context, argsJSON st
 	if !isAllowedMCPTransport(args.Type) {
 		return "[ERROR] invalid transport type: must be one of stdio, http, sse, streamable-http", nil
 	}
-	if cloud.IsCloud() && isCloudBlockedMCPTransport(args.Type) {
-		return "[ERROR] " + cloudBlockedMCPTransportMessage, nil
+	if err := t.policy.IsAllowed(args.Type); err != nil {
+		return "[ERROR] " + err.Error(), nil
 	}
 
 	record := &MCPServerRecord{
@@ -159,10 +152,11 @@ func (t *adminCreateMCPServerTool) InvokableRun(ctx context.Context, argsJSON st
 type adminUpdateMCPServerTool struct {
 	repo     MCPServerRepository
 	reloader func()
+	policy   mcp.TransportPolicy
 }
 
-func NewAdminUpdateMCPServerTool(repo MCPServerRepository, reloader func()) tool.InvokableTool {
-	return &adminUpdateMCPServerTool{repo: repo, reloader: reloader}
+func NewAdminUpdateMCPServerTool(repo MCPServerRepository, reloader func(), policy mcp.TransportPolicy) tool.InvokableTool {
+	return &adminUpdateMCPServerTool{repo: repo, reloader: reloader, policy: policy}
 }
 
 func (t *adminUpdateMCPServerTool) Info(_ context.Context) (*schema.ToolInfo, error) {
@@ -202,8 +196,10 @@ func (t *adminUpdateMCPServerTool) InvokableRun(ctx context.Context, argsJSON st
 	if args.Type != "" && !isAllowedMCPTransport(args.Type) {
 		return "[ERROR] invalid transport type: must be one of stdio, http, sse, streamable-http", nil
 	}
-	if cloud.IsCloud() && args.Type != "" && isCloudBlockedMCPTransport(args.Type) {
-		return "[ERROR] " + cloudBlockedMCPTransportMessage, nil
+	if args.Type != "" {
+		if err := t.policy.IsAllowed(args.Type); err != nil {
+			return "[ERROR] " + err.Error(), nil
+		}
 	}
 
 	existing, err := t.repo.GetByID(ctx, args.ServerID)

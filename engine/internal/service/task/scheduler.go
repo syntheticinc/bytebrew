@@ -49,7 +49,7 @@ func (s *CronScheduler) AddTrigger(schedule, title, description, sourceID string
 			SourceID:    sourceID,
 		})
 		if createErr != nil {
-			slog.Error("cron trigger failed to create task", "error", createErr, "trigger", sourceID)
+			slog.ErrorContext(context.Background(), "cron trigger failed to create task", "error", createErr, "trigger", sourceID)
 		}
 	})
 	if err != nil {

@@ -28,6 +28,30 @@ func NewGORMCapabilityRepository(db *gorm.DB) *GORMCapabilityRepository {
 	return &GORMCapabilityRepository{db: db}
 }
 
+// ListAll returns all capabilities for the current tenant, grouped by agent name.
+// The returned map key is the agent name. Used by AgentRegistry.Load to bulk-load
+// capabilities in one query rather than per-agent round-trips.
+func (r *GORMCapabilityRepository) ListAll(ctx context.Context) (map[string][]CapabilityRecord, error) {
+	var caps []models.CapabilityModel
+	if err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Preload("Agent").
+		Find(&caps).Error; err != nil {
+		return nil, fmt.Errorf("list all capabilities: %w", err)
+	}
+
+	result := make(map[string][]CapabilityRecord)
+	for _, c := range caps {
+		agentName := c.Agent.Name
+		rec, err := toCapabilityRecord(c, agentName)
+		if err != nil {
+			return nil, fmt.Errorf("convert capability %s: %w", c.ID, err)
+		}
+		result[agentName] = append(result[agentName], rec)
+	}
+	return result, nil
+}
+
 // ListByAgent returns all capabilities for an agent (by name), tenant-scoped.
 func (r *GORMCapabilityRepository) ListByAgent(ctx context.Context, agentName string) ([]CapabilityRecord, error) {
 	agentID, err := r.resolveAgentID(ctx, agentName)

@@ -21,10 +21,6 @@ const (
 	ContextKeyActorID contextKey = "actor_id"
 	// ContextKeyScopes holds the bitmask of allowed scopes.
 	ContextKeyScopes contextKey = "scopes"
-	// ContextKeyUserSub holds the JWT sub claim for end-user identity.
-	// Populated by authenticateJWT; empty for API-token auth (tokens are not
-	// end-users — use ContextKeyActorID to identify a token holder).
-	ContextKeyUserSub contextKey = "user_sub"
 )
 
 // Scope bitmask constants matching ERD api_tokens.scopes_mask.
@@ -63,17 +59,10 @@ type AuthMiddleware struct {
 	tokenVerifier APITokenVerifier
 }
 
-// NewAuthMiddleware creates an AuthMiddleware with the CE default HMAC JWT
-// verifier built from jwtSecret.
-func NewAuthMiddleware(jwtSecret string, tokenVerifier APITokenVerifier) *AuthMiddleware {
-	return &AuthMiddleware{
-		jwtVerifier:   NewHMACVerifier(jwtSecret),
-		tokenVerifier: tokenVerifier,
-	}
-}
-
-// NewAuthMiddlewareWithVerifier creates an AuthMiddleware with a custom JWT
-// verifier. Used by the plugin seam to swap in non-HMAC verifiers.
+// NewAuthMiddlewareWithVerifier creates an AuthMiddleware backed by the given
+// JWT verifier. Wave 7 collapsed CE and Cloud onto a single EdDSA verifier,
+// so there is no longer a "default HMAC" constructor — the caller is
+// responsible for building (or loading) the verifier.
 func NewAuthMiddlewareWithVerifier(jwtVerifier pluginpkg.JWTVerifier, tokenVerifier APITokenVerifier) *AuthMiddleware {
 	return &AuthMiddleware{
 		jwtVerifier:   jwtVerifier,
@@ -144,7 +133,7 @@ func (m *AuthMiddleware) authenticateJWT(w http.ResponseWriter, r *http.Request,
 	scopes := claims.Scopes
 	ctx := context.WithValue(r.Context(), ContextKeyActorType, "admin")
 	ctx = context.WithValue(ctx, ContextKeyActorID, claims.Subject)
-	ctx = context.WithValue(ctx, ContextKeyUserSub, claims.Subject)
+	ctx = domain.WithUserSub(ctx, claims.Subject)
 	ctx = context.WithValue(ctx, ContextKeyScopes, scopes)
 	if claims.TenantID != "" {
 		if _, err := uuid.Parse(claims.TenantID); err != nil {
@@ -154,6 +143,52 @@ func (m *AuthMiddleware) authenticateJWT(w http.ResponseWriter, r *http.Request,
 		ctx = domain.WithTenantID(ctx, claims.TenantID)
 	}
 	next.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// AuthenticateOptional attaches tenant/user context when a valid Bearer
+// token is present. Unlike Authenticate, it does NOT reject the request on
+// missing or invalid credentials — it simply passes through without
+// populating the context. Use for public routes that serve different
+// content based on tenant identity when known (e.g. widget CSP origins).
+func (m *AuthMiddleware) AuthenticateOptional(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+
+		if strings.HasPrefix(token, "bb_") {
+			hash := sha256Hash(token)
+			info, err := m.tokenVerifier.VerifyToken(r.Context(), hash)
+			if err != nil || info.TenantID == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if _, err := uuid.Parse(info.TenantID); err != nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(domain.WithTenantID(r.Context(), info.TenantID)))
+			return
+		}
+
+		if m.jwtVerifier == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		claims, err := m.jwtVerifier.Verify(token)
+		if err != nil || claims.TenantID == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if _, err := uuid.Parse(claims.TenantID); err != nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(domain.WithTenantID(r.Context(), claims.TenantID)))
+	})
 }
 
 // RequireScope returns middleware that checks the authenticated user has the required scope.

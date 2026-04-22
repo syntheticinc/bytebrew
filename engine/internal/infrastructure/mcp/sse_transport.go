@@ -122,7 +122,7 @@ func (t *SSETransport) Send(ctx context.Context, req *Request) (*Response, error
 		return nil, err
 	}
 
-	slog.Warn("SSE transport: session error on Send, attempting reconnect",
+	slog.WarnContext(context.Background(), "SSE transport: session error on Send, attempting reconnect",
 		"error", err, "body", string(errBody))
 
 	if reconnErr := t.reconnect(); reconnErr != nil {
@@ -309,7 +309,7 @@ func (t *SSETransport) readSSE(ctx context.Context, body io.ReadCloser) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		slog.Warn("SSE transport: stream error", "error", err)
+		slog.WarnContext(context.Background(), "SSE transport: stream error", "error", err)
 	}
 
 	// Stream ended. If context is still active, the server dropped the connection.
@@ -320,9 +320,9 @@ func (t *SSETransport) readSSE(ctx context.Context, body io.ReadCloser) {
 	default:
 	}
 
-	slog.Warn("SSE transport: stream dropped, attempting reconnect", "base_url", t.baseURL)
+	slog.WarnContext(context.Background(), "SSE transport: stream dropped, attempting reconnect", "base_url", t.baseURL)
 	if err := t.reconnect(); err != nil {
-		slog.Error("SSE transport: reconnect failed after stream drop", "error", err)
+		slog.ErrorContext(context.Background(), "SSE transport: reconnect failed after stream drop", "error", err)
 	}
 }
 
@@ -346,7 +346,7 @@ func (t *SSETransport) reconnect() error {
 
 	var lastErr error
 	for attempt := 1; attempt <= sseMaxReconnectAttempts; attempt++ {
-		slog.Info("SSE transport: reconnect attempt", "attempt", attempt, "max", sseMaxReconnectAttempts)
+		slog.InfoContext(context.Background(), "SSE transport: reconnect attempt", "attempt", attempt, "max", sseMaxReconnectAttempts)
 
 		// Create a fresh context for the new connection
 		sseCtx, cancel := context.WithCancel(context.Background())
@@ -355,7 +355,7 @@ func (t *SSETransport) reconnect() error {
 		if err := t.connectSSE(sseCtx); err != nil {
 			cancel()
 			lastErr = err
-			slog.Warn("SSE transport: reconnect attempt failed",
+			slog.WarnContext(context.Background(), "SSE transport: reconnect attempt failed",
 				"attempt", attempt, "error", err)
 			time.Sleep(sseReconnectDelay * time.Duration(attempt))
 			continue
@@ -368,12 +368,12 @@ func (t *SSETransport) reconnect() error {
 
 		select {
 		case <-ready:
-			slog.Info("SSE transport: reconnected successfully", "attempt", attempt)
+			slog.InfoContext(context.Background(), "SSE transport: reconnected successfully", "attempt", attempt)
 			return nil
 		case <-time.After(sseEndpointTimeout):
 			cancel()
 			lastErr = fmt.Errorf("timeout waiting for endpoint event")
-			slog.Warn("SSE transport: reconnect endpoint timeout", "attempt", attempt)
+			slog.WarnContext(context.Background(), "SSE transport: reconnect endpoint timeout", "attempt", attempt)
 			continue
 		}
 	}
@@ -386,7 +386,7 @@ func (t *SSETransport) handleSSEData(eventType, data string) {
 	case "endpoint":
 		// Server announces its message endpoint
 		t.setMessageURL(strings.TrimSpace(data))
-		slog.Info("SSE transport: discovered message endpoint", "url", data)
+		slog.InfoContext(context.Background(), "SSE transport: discovered message endpoint", "url", data)
 
 		// Signal that endpoint is ready
 		t.mu.Lock()
@@ -402,7 +402,7 @@ func (t *SSETransport) handleSSEData(eventType, data string) {
 		// JSON-RPC response
 		var resp Response
 		if err := json.Unmarshal([]byte(data), &resp); err != nil {
-			slog.Warn("SSE transport: failed to parse response", "error", err)
+			slog.WarnContext(context.Background(), "SSE transport: failed to parse response", "error", err)
 			return
 		}
 
@@ -417,7 +417,7 @@ func (t *SSETransport) handleSSEData(eventType, data string) {
 		t.mu.Unlock()
 
 	default:
-		slog.Debug("SSE transport: unknown event", "type", eventType, "data", data[:min(len(data), 100)])
+		slog.DebugContext(context.Background(), "SSE transport: unknown event", "type", eventType, "data", data[:min(len(data), 100)])
 	}
 }
 

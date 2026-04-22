@@ -1,6 +1,7 @@
 package eventformat
 
 import (
+	"context"
 	"log/slog"
 
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
@@ -110,7 +111,7 @@ func SerializeForMobile(event *pb.SessionEvent) map[string]interface{} {
 		}
 
 	default:
-		slog.Warn("unknown session event type for mobile serialization", "type", event.GetType().String())
+		slog.WarnContext(context.Background(), "unknown session event type for mobile serialization", "type", event.GetType().String())
 		return nil
 	}
 }

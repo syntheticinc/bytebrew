@@ -19,13 +19,14 @@ type Server struct {
 	port       int
 }
 
-// NewServer creates a new HTTP server with standard middleware and permissive CORS.
+// NewServer creates a new HTTP server with standard middleware and same-origin CORS policy.
+// Use NewServerWithCORS to explicitly allow additional origins.
 func NewServer(port int) *Server {
 	return NewServerWithCORS(port, nil)
 }
 
 // NewServerWithCORS creates a new HTTP server with standard middleware and configurable CORS.
-// If allowedOrigins is nil or empty, all origins are allowed (wildcard).
+// If allowedOrigins is nil or empty, only same-origin requests are allowed (no wildcard).
 func NewServerWithCORS(port int, allowedOrigins []string) *Server {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -33,18 +34,27 @@ func NewServerWithCORS(port int, allowedOrigins []string) *Server {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	origins := []string{"*"}
+	// Default is same-origin only — no wildcard fallback. The go-chi/cors
+	// library treats an empty AllowedOrigins as "*"; explicitly deny all
+	// origins via AllowOriginFunc to neutralize that. Same-origin requests
+	// don't carry a CORS Origin header, so they pass through regardless.
 	if len(allowedOrigins) > 0 {
-		origins = allowedOrigins
+		r.Use(cors.Handler(cors.Options{
+			AllowedOrigins:   allowedOrigins,
+			AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-BYOK-Provider", "X-BYOK-API-Key", "X-BYOK-Model", "X-BYOK-Base-URL"},
+			ExposedHeaders:   []string{"Link", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset", "Retry-After"},
+			AllowCredentials: true,
+			MaxAge:           300,
+		}))
+	} else {
+		r.Use(cors.Handler(cors.Options{
+			AllowOriginFunc: func(_ *http.Request, _ string) bool { return false },
+			AllowedMethods:  []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+			AllowedHeaders:  []string{"Accept", "Authorization", "Content-Type", "X-BYOK-Provider", "X-BYOK-API-Key", "X-BYOK-Model", "X-BYOK-Base-URL"},
+			MaxAge:          300,
+		}))
 	}
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   origins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-BYOK-Provider", "X-BYOK-API-Key", "X-BYOK-Model", "X-BYOK-Base-URL"},
-		ExposedHeaders:   []string{"Link", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset", "Retry-After"},
-		AllowCredentials: true,
-		MaxAge:           300,
-	}))
 
 	return &Server{
 		router: r,
@@ -64,7 +74,7 @@ func (s *Server) Start() error {
 		WriteTimeout: 60 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
-	slog.Info("HTTP server starting", "port", s.port)
+	slog.InfoContext(context.Background(), "HTTP server starting", "port", s.port)
 	return s.httpServer.ListenAndServe()
 }
 

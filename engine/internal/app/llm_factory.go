@@ -126,7 +126,7 @@ func wrapWithDebugModel(chatModel model.ToolCallingChatModel) model.ToolCallingC
 	if debugDir == "" {
 		return chatModel
 	}
-	slog.Info("debug model wrapper enabled", "log_dir", debugDir)
+	slog.InfoContext(context.Background(), "debug model wrapper enabled", "log_dir", debugDir)
 	return llm.NewDebugChatModelWrapper(chatModel, debugDir, "global")
 }
 

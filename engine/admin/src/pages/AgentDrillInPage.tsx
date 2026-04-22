@@ -120,7 +120,9 @@ function AgentDrillInInner() {
   // Fetch models and all agent names for connections (production only)
   useEffect(() => {
     if (isPrototype) return;
-    api.listModels('!embedding').then(setModels).catch(() => {});
+    // Wave 5: agents require a chat-kind model (backend enforces
+    // `model_id must reference a chat model`). Filter server-side.
+    api.listModels({ kind: 'chat' }).then(setModels).catch(() => {});
     api.listAgents().then((agents: Array<{ name: string }>) => setAllAgentNames(agents.map((a) => a.name))).catch(() => {});
     api.listMCPServers().then(setMcpServers).catch(() => {});
   }, [isPrototype]);

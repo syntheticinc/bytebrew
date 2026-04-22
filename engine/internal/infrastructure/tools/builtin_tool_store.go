@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strings"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
@@ -164,49 +165,37 @@ type ResolveContext struct {
 }
 
 // ResolveForAgent returns tools available to a specific agent.
-// Only tools listed in the agent's BuiltinTools whitelist are resolved.
-// Unknown tool names produce an error.
+// DerivedTools (pre-computed at registry load time) is the single source of truth
+// for which tools the agent has access to. Raw record fields (BuiltinTools, CanSpawn,
+// CustomTools) are only consulted for per-tool construction details, not for membership.
 func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveContext) ([]tool.InvokableTool, error) {
 	var tools []tool.InvokableTool
 
-	// US-001: Inject capability-derived tool names
-	builtinTools := rc.Agent.Record.BuiltinTools
-	capInjectedTools := make(map[string]bool) // track which tools came from capabilities
-	if r.capInjector != nil {
-		injected, err := r.capInjector.InjectedTools(ctx, rc.Agent.Record.Name)
-		if err != nil {
-			slog.WarnContext(ctx, "capability injection failed in ResolveForAgent, continuing",
-				"agent", rc.Agent.Record.Name, "error", err)
-		} else if len(injected) > 0 {
-			existing := make(map[string]bool, len(builtinTools))
-			for _, n := range builtinTools {
-				existing[n] = true
-			}
-			for _, n := range injected {
-				if !existing[n] {
-					builtinTools = append(builtinTools, n)
-					existing[n] = true
-				}
-				capInjectedTools[n] = true
-			}
-		}
+	// Build a set of derived tool names for O(1) membership checks.
+	derivedSet := make(map[string]bool, len(rc.Agent.DerivedTools))
+	for _, n := range rc.Agent.DerivedTools {
+		derivedSet[n] = true
 	}
 
-	for _, name := range builtinTools {
-		// knowledge_search is auto-injected below via capability — skip here
+	// Resolve builtin tools that are in DerivedTools (excludes knowledge_search —
+	// handled separately below — and spawn_* / custom tool names which have their
+	// own construction paths).
+	for _, name := range rc.Agent.DerivedTools {
+		// knowledge_search is constructed below with full KB/embedder wiring — skip here.
 		if name == "knowledge_search" {
+			continue
+		}
+		// spawn_* tools are constructed below with spawner wiring — skip here.
+		if strings.HasPrefix(name, "spawn_") {
 			continue
 		}
 		factory, ok := r.builtins.Get(name)
 		if !ok {
-			// BUG-006: capability-injected tools that aren't registered yet → warn and skip.
-			// Explicitly configured tools → still error.
-			if capInjectedTools[name] {
-				slog.WarnContext(ctx, "capability-injected tool not registered, skipping",
-					"agent", rc.Agent.Record.Name, "tool", name)
-				continue
-			}
-			return nil, fmt.Errorf("unknown builtin tool %q for agent %q", name, rc.Agent.Record.Name)
+			// Capability-derived tools (memory_recall, memory_store) or custom tool
+			// names that aren't registered as builtins → warn and skip gracefully.
+			slog.WarnContext(ctx, "tool in DerivedTools not registered as builtin, skipping",
+				"agent", rc.Agent.Record.Name, "tool", name)
+			continue
 		}
 		t := factory(rc.Deps)
 		if t == nil {
@@ -215,16 +204,24 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 		tools = append(tools, t)
 	}
 
-	// Phase 2.3: Generate spawn_{name} tools from can_spawn
+	// Generate spawn_{name} tools for every spawn_* entry in DerivedTools.
 	if rc.Spawner != nil {
-		for _, targetName := range rc.Agent.Record.CanSpawn {
+		for _, name := range rc.Agent.DerivedTools {
+			if !strings.HasPrefix(name, "spawn_") {
+				continue
+			}
+			targetName := strings.TrimPrefix(name, "spawn_")
 			spawnTool := NewSpawnTool(targetName, rc.Deps.SessionID, rc.Spawner, rc.Inspector)
 			tools = append(tools, spawnTool)
 		}
 	}
 
-	// Phase 2.6: custom declarative tools from agent config
+	// Custom declarative tools: keep the full CustomToolRecord (Name + Config JSON)
+	// for construction, but only include tools whose name is in DerivedTools.
 	for _, ct := range rc.Agent.Record.CustomTools {
+		if !derivedSet[ct.Name] {
+			continue
+		}
 		cfg := config.CustomToolConfig{Name: ct.Name}
 		// ct.Config is JSON — parse if needed. For now, use name-only stub.
 		dt := NewDeclarativeTool(cfg)
@@ -260,7 +257,7 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 	if ke == nil {
 		ke = r.knowledgeEmbedder
 	}
-	hasKnowledgeCap := capInjectedTools["knowledge_search"] // WP-3: capability-injected
+	hasKnowledgeCap := derivedSet["knowledge_search"] // WP-3: present in DerivedTools
 	if hasKnowledgeCap && ks != nil && ke != nil {
 		topK := 5 // domain default
 		var simThreshold float64
@@ -283,10 +280,9 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 		}
 		knowledgeTool := NewKnowledgeSearchTool(rc.Agent.Record.Name, kbIDs, ks, ke, topK, simThreshold)
 		tools = append(tools, knowledgeTool)
-	} else if hasToolInList(rc.Agent.Record.BuiltinTools, "knowledge_search") {
-		slog.WarnContext(ctx, "agent has knowledge_search in tools but knowledge not available — skipping",
+	} else if derivedSet["knowledge_search"] {
+		slog.WarnContext(ctx, "agent has knowledge_search in DerivedTools but knowledge not available — skipping",
 			"agent", rc.Agent.Record.Name,
-			"capability_injected", hasKnowledgeCap,
 			"searcher_available", ks != nil,
 			"embedder_available", ke != nil)
 	}
@@ -446,7 +442,7 @@ func (r *AgentToolResolver) resolveMCPTools(rc ResolveContext) ([]tool.Invokable
 	for _, serverName := range rc.Agent.Record.MCPServers {
 		mcpTools, err := r.mcpProvider.GetMCPTools(serverName)
 		if err != nil {
-			slog.Warn("failed to get MCP tools, skipping server",
+			slog.WarnContext(context.Background(), "failed to get MCP tools, skipping server",
 				"server", serverName, "agent", rc.Agent.Record.Name, "error", err)
 			continue
 		}

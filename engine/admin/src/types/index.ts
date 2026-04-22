@@ -52,10 +52,18 @@ export interface CreateAgentRequest {
 // Model types
 // ============================================================================
 
+// ModelKind is the canonical split between chat-generating and embedding
+// models (Wave 5). Backend enforces this at the API layer — agents' model_id
+// must reference a `chat` model; KBs' embedding_model_id must reference an
+// `embedding` model. Defaults to `chat` for new models created without an
+// explicit kind.
+export type ModelKind = 'chat' | 'embedding';
+
 export interface Model {
   id: string;
   name: string;
   type: string;
+  kind: ModelKind;
   base_url?: string;
   model_name: string;
   has_api_key: boolean;
@@ -67,12 +75,15 @@ export interface Model {
 export interface CreateModelRequest {
   name: string;
   type: string;
+  kind?: ModelKind; // defaults to 'chat' server-side
   base_url?: string;
   model_name: string;
   api_key?: string;
   api_version?: string;
-  embedding_dim?: number; // required when type=embedding
+  embedding_dim?: number; // required when kind=embedding
 }
+
+export interface UpdateModelRequest extends CreateModelRequest {}
 
 // ============================================================================
 // MCP types
@@ -328,9 +339,13 @@ export interface PaginatedResponse<T> {
 // Auth types
 // ============================================================================
 
-export interface LoginResponse {
-  token: string;
+// Wave 1+7: the admin SPA no longer POSTs credentials. `local-session` is
+// called (no body) by the bootstrap path in useAuth when VITE_AUTH_MODE=local.
+// In external mode the token is delivered via URL hash instead.
+export interface LocalSessionResponse {
+  access_token: string;
   expires_at: string;
+  token_type: string;
 }
 
 // ============================================================================

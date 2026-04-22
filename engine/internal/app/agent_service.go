@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"log/slog"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agents"
@@ -52,7 +53,7 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 	}
 
 	modelName := getModelName(cfg)
-	slog.Info("agent service initialized", "model", modelName, "provider", cfg.LLM.DefaultProvider)
+	slog.InfoContext(context.Background(), "agent service initialized", "model", modelName, "provider", cfg.LLM.DefaultProvider)
 
 	chatModel = wrapWithDebugModel(chatModel)
 	modelSelector := createModelSelector(cfg, chatModel, modelName)
@@ -76,7 +77,7 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 			AgentConfig:     &cfg.Agent,
 		})
 		agentPoolAdapter = agentservice.NewAgentPoolAdapter(agentPool)
-		slog.Info("agent pool initialized")
+		slog.InfoContext(context.Background(), "agent pool initialized")
 	}
 
 	// 4. Fill empty AgentConfig fields with defaults
@@ -110,12 +111,12 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 		if svcErr != nil {
 			return nil, errors.Wrap(svcErr, errors.CodeInternal, "failed to create agent service")
 		}
-		slog.Info("agent service created with multi-agent support",
+		slog.InfoContext(context.Background(), "agent service created with multi-agent support",
 			"task_manager", storageCmp.TaskManager != nil,
 			"agent_pool", agentPool != nil,
 			"engine", ec.Engine != nil)
 	} else {
-		slog.Info("agent service skipped — no LLM model configured. Configure models via Admin Dashboard to enable chat.")
+		slog.InfoContext(context.Background(), "agent service skipped — no LLM model configured. Configure models via Admin Dashboard to enable chat.")
 	}
 
 	return &InfraComponents{

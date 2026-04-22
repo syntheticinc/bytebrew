@@ -31,7 +31,7 @@ type storageComponents struct {
 // createWorkStorage creates task manager, agent pool, session storage from pgDB.
 func createWorkStorage(db *gorm.DB) *storageComponents {
 	if db == nil {
-		slog.Error("no database connection, multi-agent features disabled")
+		slog.ErrorContext(context.Background(), "no database connection, multi-agent features disabled")
 		return &storageComponents{}
 	}
 	return initWorkComponents(db)
@@ -50,14 +50,14 @@ func initWorkComponents(db *gorm.DB) *storageComponents {
 	// Startup cleanup: orphaned agent runs from previous crash
 	cleaned, cleanErr := agentRunStorage.CleanupOrphanedRuns(ctx)
 	if cleanErr != nil {
-		slog.Error("failed to cleanup orphaned agent runs", "error", cleanErr)
+		slog.ErrorContext(ctx, "failed to cleanup orphaned agent runs", "error", cleanErr)
 	} else if cleaned > 0 {
-		slog.Info("cleaned up orphaned agent runs from previous crash", "count", cleaned)
+		slog.InfoContext(ctx, "cleaned up orphaned agent runs from previous crash", "count", cleaned)
 	}
 
 	// Unified task manager (replaces old work.Manager, uses EngineTask).
 	result.TaskManager = taskrunner.NewEngineTaskManagerAdapter(taskRepo)
-	slog.Info("task manager initialized (EngineTask-based)")
+	slog.InfoContext(ctx, "task manager initialized (EngineTask-based)")
 
 	// Context reminder for agent — shows active EngineTasks every turn (survives context compression).
 	taskReminder := task.NewTaskReminderProviderContext(result.TaskManager)
@@ -90,13 +90,13 @@ func createEngine(
 	snapshotRepo := repository.NewAgentContextRepository(db)
 	messageRepo := repository.NewMessageRepositoryImpl(db)
 	agentEngine := engine.New(snapshotRepo, messageRepo)
-	slog.Info("engine initialized (PostgreSQL)")
+	slog.InfoContext(context.Background(), "engine initialized (PostgreSQL)")
 
 	// Load flows.yaml (optional — not required in bootstrap/Docker mode)
 	flowsPath := filepath.Join(cfg.ConfigDir, "flows.yaml")
 	flowsCfg, err := config.LoadFlowsConfig(flowsPath)
 	if err != nil {
-		slog.Info("No flows.yaml found — using empty flows config (configure agents via Admin Dashboard)", "path", flowsPath)
+		slog.InfoContext(context.Background(), "No flows.yaml found — using empty flows config (configure agents via Admin Dashboard)", "path", flowsPath)
 		flowsCfg = &config.FlowsConfig{}
 	}
 
@@ -104,7 +104,7 @@ func createEngine(
 	if err != nil {
 		return nil, fmt.Errorf("create flow manager: %w", err)
 	}
-	slog.Info("flow manager initialized", "flows_path", flowsPath)
+	slog.InfoContext(context.Background(), "flow manager initialized", "flows_path", flowsPath)
 
 	// Create ToolDepsProvider with unified task manager.
 	toolDepsProvider := tools.NewDefaultToolDepsProvider(
@@ -127,7 +127,7 @@ func createEngine(
 	}
 
 	agentToolResolver := tools.NewAgentToolResolver(builtinStore)
-	slog.Info("agent tool resolver initialized", "builtin_tools", len(builtinStore.Names()))
+	slog.InfoContext(context.Background(), "agent tool resolver initialized", "builtin_tools", len(builtinStore.Names()))
 
 	return &engineComponents{
 		Engine:            agentEngine,
@@ -148,5 +148,5 @@ func wireEngineToPool(
 	}
 
 	agentPool.SetEngine(ec.Engine, ec.FlowManager, ec.AgentToolResolver, ec.ToolDepsProvider, nil, nil)
-	slog.Info("engine wired to agent pool")
+	slog.InfoContext(context.Background(), "engine wired to agent pool")
 }

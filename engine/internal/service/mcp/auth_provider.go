@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -52,7 +53,7 @@ func (p *AuthProvider) ApplyAuth(req *http.Request, config domain.MCPAuthConfig,
 	case domain.MCPAuthOAuth2:
 		// OAuth2 token refresh is complex; for V2, treat like service_account
 		// with the token stored in TokenEnv after external refresh.
-		slog.Warn("[MCPAuth] OAuth2 using static token — full refresh not yet implemented")
+		slog.WarnContext(context.Background(), "[MCPAuth] OAuth2 using static token — full refresh not yet implemented")
 		token := os.Getenv(config.TokenEnv)
 		if token == "" {
 			return fmt.Errorf("oauth2 token env var %s not set", config.TokenEnv)

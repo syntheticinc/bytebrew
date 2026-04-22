@@ -95,9 +95,9 @@ func (s *Service) Dispose() {
 	defer cancel()
 
 	for id, client := range clients {
-		slog.Info("shutting down LSP client", "server", id)
+		slog.InfoContext(context.Background(), "shutting down LSP client", "server", id)
 		if err := client.Shutdown(ctx); err != nil {
-			slog.Warn("LSP shutdown error", "server", id, "error", err)
+			slog.WarnContext(context.Background(), "LSP shutdown error", "server", id, "error", err)
 		}
 	}
 }

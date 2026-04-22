@@ -220,7 +220,7 @@ func (f *Factory) CreateForSession(
 	// ModelSelector. See V2 §5.8.
 	chatModel, modelName := f.resolveModel(ctx, agentName)
 	if chatModel == nil {
-		slog.Error("no model available for agent — add a model via Admin Dashboard",
+		slog.ErrorContext(context.Background(), "no model available for agent — add a model via Admin Dashboard",
 			"agent", agentName)
 		return nil
 	}
@@ -230,7 +230,7 @@ func (f *Factory) CreateForSession(
 	if f.schemaResolver != nil {
 		sid, err := f.schemaResolver.ResolveSchemaID(ctx, agentName)
 		if err != nil {
-			slog.Warn("failed to resolve schema for agent, memory tools may be disabled",
+			slog.WarnContext(context.Background(), "failed to resolve schema for agent, memory tools may be disabled",
 				"agent", agentName, "error", err)
 		} else {
 			schemaID = sid
@@ -306,7 +306,7 @@ func (f *Factory) resolveModel(ctx context.Context, agentName string) (model.Too
 		if modelID != nil {
 			client, name, err := f.modelCache.Get(ctx, *modelID)
 			if err != nil {
-				slog.Error("failed to resolve model from cache, falling back to selector",
+				slog.ErrorContext(context.Background(), "failed to resolve model from cache, falling back to selector",
 					"agent", agentName, "model_id", *modelID, "error", err)
 			} else {
 				return client, name

@@ -6,11 +6,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/syntheticinc/bytebrew/engine/internal/service/mcp"
 )
 
 // stubMCPService is an MCPService that records calls; Create/Update return
@@ -39,11 +42,24 @@ func (s *stubMCPService) DeleteMCPServer(ctx context.Context, name string) error
 	return nil
 }
 
+func (s *stubMCPService) PatchMCPServer(ctx context.Context, name string, req UpdateMCPServerRequest) (*MCPServerResponse, error) {
+	return &MCPServerResponse{Name: name}, nil
+}
+
+// policyFromEnv returns the transport policy that matches the current
+// BYTEBREW_MODE env var — mirrors the production wiring in server.go.
+func policyFromEnv() mcp.TransportPolicy {
+	if os.Getenv("BYTEBREW_MODE") == "cloud" {
+		return mcp.RestrictedTransportPolicy{}
+	}
+	return mcp.PermissiveTransportPolicy{}
+}
+
 // newMCPTestRouter returns a chi router that mounts only the MCPHandler
 // routes — good for unit testing without the full server wiring.
 func newMCPTestRouter(svc *stubMCPService) http.Handler {
 	r := chi.NewRouter()
-	r.Mount("/", NewMCPHandler(svc).Routes())
+	r.Mount("/", NewMCPHandler(svc, policyFromEnv()).Routes())
 	return r
 }
 
@@ -91,7 +107,7 @@ func TestMCPHandler_Create_Cloud_BlocksStdio(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "stdio MCP transport is disabled in Cloud")
+	assert.Contains(t, rec.Body.String(), "is not permitted in this deployment")
 	assert.Len(t, svc.createCalls, 0, "service must not be called when transport is blocked")
 }
 
@@ -162,6 +178,6 @@ func TestMCPHandler_Update_Cloud_BlocksStdio(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "stdio MCP transport is disabled in Cloud")
+	assert.Contains(t, rec.Body.String(), "is not permitted in this deployment")
 	assert.Len(t, svc.updateCalls, 0)
 }

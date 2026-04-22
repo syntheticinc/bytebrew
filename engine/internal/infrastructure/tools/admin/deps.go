@@ -1,6 +1,10 @@
 package admin
 
-import "context"
+import (
+	"context"
+
+	"github.com/syntheticinc/bytebrew/engine/internal/service/mcp"
+)
 
 // NOTE: Admin tools operate without tenant scoping (CE = single-tenant by design).
 // Cloud deployments MUST NOT expose admin tools to non-admin agents.
@@ -15,7 +19,8 @@ type AdminToolDependencies struct {
 	AgentRelationRepo AgentRelationRepository
 	SessionRepo       SessionRepository
 	CapabilityRepo    CapabilityRepository
-	Reloader          func() // AgentRegistry reload callback
+	Reloader          func()              // AgentRegistry reload callback
+	TransportPolicy   mcp.TransportPolicy // MCP transport restriction policy
 }
 
 // Consumer-side interfaces (defined here, implemented by GORM repo adapters):

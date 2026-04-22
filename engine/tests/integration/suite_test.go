@@ -15,6 +15,7 @@ package integration
 
 import (
 	"context"
+	"crypto/ed25519"
 	"fmt"
 	"net"
 	"net/http"
@@ -24,23 +25,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
-	"golang.org/x/crypto/bcrypt"
 	gormpostgres "gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/auth"
 	ceserver "github.com/syntheticinc/bytebrew/engine/pkg/server"
 )
 
 const (
-	// jwtSecret must match writeBootstrapConfig's security.jwt_secret value —
-	// the HMACVerifier is built from exactly this string.
-	jwtSecret = "integration-test-hmac-secret"
-	// ceTenantID is the single tenant row CE seeds for LoginEnabled=true
+	// ceTenantID is the single tenant row CE seeds for local-mode
 	// deployments. All CE rows default to this uuid via GORM defaults.
 	ceTenantID = "00000000-0000-0000-0000-000000000001"
 )
@@ -49,6 +46,11 @@ var (
 	baseURL    string
 	adminToken string
 	testDB     *gorm.DB
+
+	// localSessionPrivKey is the Ed25519 private key loaded after the engine
+	// boots (it writes the keypair on first start). Used by tokenFor/tokenForRole
+	// in helpers_test.go to sign test JWTs with the same key the verifier trusts.
+	localSessionPrivKey ed25519.PrivateKey
 
 	// suiteSkipReason — non-empty means setup bailed (no Docker, etc.) and
 	// each test file's requireSuite(t) will call t.Skip instead of fail.
@@ -151,7 +153,6 @@ func setupSuite(ctx context.Context) (func(), error) {
 		_ = ceserver.Run(ceserver.Config{
 			ConfigPath:     configPath,
 			ConfigExplicit: true,
-			LoginEnabled:   true,
 			RequireTenant:  false,
 			Version:        "ce-integration-test",
 			Commit:         "none",
@@ -165,6 +166,16 @@ func setupSuite(ctx context.Context) (func(), error) {
 		return cleanup, fmt.Errorf("wait for engine healthy: %w", err)
 	}
 
+	// Load the Ed25519 keypair that the engine generated on first boot.
+	// The engine writes <jwt_keys_dir>/jwt_ed25519.priv on startup; we read
+	// the same files so tokenFor() signs with exactly the key the verifier trusts.
+	keysDir := filepath.Join(dataDir, "keys")
+	kp, err := auth.LoadOrGenerateKeypair(keysDir)
+	if err != nil {
+		return cleanup, fmt.Errorf("load engine keypair: %w", err)
+	}
+	localSessionPrivKey = kp.Private
+
 	// Open a direct GORM connection for test-side seeding + assertions.
 	// This is intentionally separate from the engine's pool — truncation
 	// must work regardless of engine state.
@@ -176,31 +187,11 @@ func setupSuite(ctx context.Context) (func(), error) {
 	}
 	testDB = db
 
-	// Seed an admin user so TC-SEC-06 and any login-path test has credentials.
-	if err := seedAdminUser(ctx, db); err != nil {
-		return cleanup, fmt.Errorf("seed admin user: %w", err)
-	}
-
 	// Cache an always-admin token for test helpers that need one without
-	// going through /auth/login. jwtSecret matches the server's verifier.
-	adminToken = tokenFor("admin-test")
+	// going through /auth/login. Signed with the engine's Ed25519 private key.
+	adminToken = tokenFor("local-admin")
 
 	return cleanup, nil
-}
-
-// seedAdminUser inserts the canonical admin/admin123 user in the CE default
-// tenant. ON CONFLICT makes re-runs idempotent if someone wires a persistent
-// container layer.
-func seedAdminUser(ctx context.Context, db *gorm.DB) error {
-	hash, err := bcrypt.GenerateFromPassword([]byte("admin123"), 10)
-	if err != nil {
-		return fmt.Errorf("bcrypt admin password: %w", err)
-	}
-	return db.WithContext(ctx).Exec(`
-		INSERT INTO users (id, tenant_id, username, password_hash, role, disabled)
-		VALUES (gen_random_uuid(), ?::uuid, 'admin', ?, 'admin', false)
-		ON CONFLICT (username) DO NOTHING
-	`, ceTenantID, string(hash)).Error
 }
 
 // cleanupStack is a tiny LIFO teardown stack. Panics in one cleanup don't
@@ -276,6 +267,8 @@ func applyLiquibaseMigrations(ctx context.Context, pg *tcpostgres.PostgresContai
 // (legacy validation) and config.LoadBootstrap (bootstrap path). Also writes
 // prompts.yaml next to config.yaml — config.Load fails without it.
 func writeBootstrapConfig(path, dbURL string, port int) error {
+	// keysDir sits next to config.yaml so the engine writes its keypair there.
+	keysDir := filepath.Join(filepath.Dir(path), "keys")
 	content := fmt.Sprintf(`engine:
   host: "127.0.0.1"
   port: %d
@@ -283,12 +276,13 @@ database:
   url: %q
   host: "localhost"
 security:
-  jwt_secret: %q
+  auth_mode: "local"
+  jwt_keys_dir: %q
 logging:
   level: "warn"
 llm:
   default_provider: "ollama"
-`, port, dbURL, jwtSecret)
+`, port, dbURL, keysDir)
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		return err
 	}
@@ -367,6 +361,3 @@ func waitForHealthy(ctx context.Context, base string, timeout time.Duration) err
 	return fmt.Errorf("engine did not become healthy within %s: %w", timeout, lastErr)
 }
 
-// Keep the jwt import reachable from suite_test.go so build tag parsing
-// doesn't complain when the only other user lives in helpers_test.go.
-var _ = jwt.SigningMethodHS256

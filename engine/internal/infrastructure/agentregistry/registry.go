@@ -18,17 +18,28 @@ type AgentReader interface {
 	Count(ctx context.Context) (int64, error)
 }
 
+// CapabilityReader is the consumer-side interface for bulk-loading capabilities.
+// Returns all capabilities for the current tenant grouped by agent name.
+type CapabilityReader interface {
+	ListAll(ctx context.Context) (map[string][]configrepo.CapabilityRecord, error)
+}
+
 // RegisteredAgent holds a domain Flow and its original DB record.
+// DerivedTools is the pre-computed, sorted, deduplicated list of tool names
+// that the agent's runtime should have access to (base + spawn + capabilities).
+// Use DerivedTools everywhere instead of reconstructing from Record.BuiltinTools.
 type RegisteredAgent struct {
-	Flow   *domain.Flow
-	Record configrepo.AgentRecord
+	Flow         *domain.Flow
+	Record       configrepo.AgentRecord
+	DerivedTools []string
 }
 
 // AgentRegistry loads agents from DB and caches them in memory.
 type AgentRegistry struct {
-	mu     sync.RWMutex
-	agents map[string]*RegisteredAgent
-	repo   AgentReader
+	mu       sync.RWMutex
+	agents   map[string]*RegisteredAgent
+	repo     AgentReader
+	capRepo  CapabilityReader // optional; nil disables capability-derived tools
 }
 
 // New creates a new AgentRegistry.
@@ -39,19 +50,43 @@ func New(repo AgentReader) *AgentRegistry {
 	}
 }
 
+// NewWithCapabilities creates a new AgentRegistry that also loads capabilities
+// to populate DerivedTools on each agent at load time.
+func NewWithCapabilities(repo AgentReader, capRepo CapabilityReader) *AgentRegistry {
+	return &AgentRegistry{
+		agents:  make(map[string]*RegisteredAgent),
+		repo:    repo,
+		capRepo: capRepo,
+	}
+}
+
 // Load reads all agents from DB and caches them in memory.
+// When a CapabilityReader is configured, capabilities are loaded in one bulk
+// query and used to compute DerivedTools for each agent via DeriveRuntimeTools.
 func (r *AgentRegistry) Load(ctx context.Context) error {
 	records, err := r.repo.List(ctx)
 	if err != nil {
 		return fmt.Errorf("load agents: %w", err)
 	}
 
+	// Bulk-load capabilities once (zero extra queries when capRepo is nil).
+	var capsByAgent map[string][]configrepo.CapabilityRecord
+	if r.capRepo != nil {
+		capsByAgent, err = r.capRepo.ListAll(ctx)
+		if err != nil {
+			return fmt.Errorf("load capabilities: %w", err)
+		}
+	}
+
 	agents := make(map[string]*RegisteredAgent, len(records))
 	for _, rec := range records {
+		caps := capsByAgent[rec.Name] // nil if capRepo unset or agent has no caps
+		derived := DeriveRuntimeTools(rec, caps)
 		flow := toFlow(rec)
 		agents[rec.Name] = &RegisteredAgent{
-			Flow:   flow,
-			Record: rec,
+			Flow:         flow,
+			Record:       rec,
+			DerivedTools: derived,
 		}
 	}
 
@@ -81,7 +116,10 @@ func (r *AgentRegistry) Get(name string) (*RegisteredAgent, error) {
 // GetByID returns a registered agent by its UUID.
 // Used by chat dispatch to resolve a schema's entry_agent_id (UUID) onto the
 // agent record (whose name drives the flow / LLM lookup path).
-func (r *AgentRegistry) GetByID(id string) (*RegisteredAgent, error) {
+// ctx is accepted so multi-tenant callers can pass the request context;
+// the single-tenant AgentRegistry ignores it because tenant dispatch happens
+// at the Manager level (Manager.GetForContext) before this method is called.
+func (r *AgentRegistry) GetByID(_ context.Context, id string) (*RegisteredAgent, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

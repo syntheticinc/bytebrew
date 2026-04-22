@@ -28,10 +28,12 @@ database:
 				assert.Equal(t, "postgresql://localhost:5432/bytebrew", cfg.Database.URL)
 				assert.Equal(t, 0, cfg.Engine.Port)
 				assert.Equal(t, "", cfg.Engine.Host)
+				assert.Equal(t, AuthModeLocal, cfg.Security.AuthMode)
+				assert.NotEmpty(t, cfg.Security.JWTKeysDir)
 			},
 		},
 		{
-			name: "full config",
+			name: "full config with external auth mode",
 			yaml: `
 engine:
   host: "0.0.0.0"
@@ -40,14 +42,16 @@ engine:
 database:
   url: "postgresql://admin:pass@db.host:5432/bytebrew?sslmode=require"
 security:
-  jwt_secret: "s3cret-jwt-key"
+  auth_mode: "external"
+  jwt_public_key_path: "/etc/bytebrew/issuer.pub"
 logging:
   level: "debug"
 `,
 			check: func(t *testing.T, cfg *BootstrapConfig) {
 				assert.Equal(t, "0.0.0.0", cfg.Engine.Host)
 				assert.Equal(t, 9090, cfg.Engine.Port)
-				assert.Equal(t, "s3cret-jwt-key", cfg.Security.JWTSecret)
+				assert.Equal(t, AuthModeExternal, cfg.Security.AuthMode)
+				assert.Equal(t, "/etc/bytebrew/issuer.pub", cfg.Security.JWTPublicKeyPath)
 				assert.Equal(t, "debug", cfg.Logging.Level)
 				assert.Contains(t, cfg.Database.URL, "sslmode=require")
 			},
@@ -58,16 +62,17 @@ logging:
 database:
   url: "postgresql://${TEST_DB_USER}:${TEST_DB_PASS}@localhost:5432/bytebrew"
 security:
-  jwt_secret: "${TEST_JWT_SECRET}"
+  auth_mode: "external"
+  jwt_public_key_path: "${TEST_PUB_KEY_PATH}"
 `,
 			env: map[string]string{
-				"TEST_DB_USER":    "pguser",
-				"TEST_DB_PASS":    "pgpass",
-				"TEST_JWT_SECRET": "jwt-xyz",
+				"TEST_DB_USER":      "pguser",
+				"TEST_DB_PASS":      "pgpass",
+				"TEST_PUB_KEY_PATH": "/var/keys/issuer.pub",
 			},
 			check: func(t *testing.T, cfg *BootstrapConfig) {
 				assert.Equal(t, "postgresql://pguser:pgpass@localhost:5432/bytebrew", cfg.Database.URL)
-				assert.Equal(t, "jwt-xyz", cfg.Security.JWTSecret)
+				assert.Equal(t, "/var/keys/issuer.pub", cfg.Security.JWTPublicKeyPath)
 			},
 		},
 		{
@@ -87,6 +92,26 @@ database:
   url: "postgresql://localhost/db"
 `,
 			wantErr: "invalid engine port",
+		},
+		{
+			name: "external mode without public key path",
+			yaml: `
+database:
+  url: "postgresql://localhost/db"
+security:
+  auth_mode: "external"
+`,
+			wantErr: "jwt_public_key_path is required",
+		},
+		{
+			name: "invalid auth mode",
+			yaml: `
+database:
+  url: "postgresql://localhost/db"
+security:
+  auth_mode: "gibberish"
+`,
+			wantErr: "invalid auth_mode",
 		},
 	}
 
@@ -170,6 +195,7 @@ func TestDefaultBootstrapConfig(t *testing.T) {
 	assert.Equal(t, 8080, cfg.Engine.Port)
 	assert.Equal(t, "info", cfg.Logging.Level)
 	assert.Empty(t, cfg.Database.URL)
+	assert.Equal(t, AuthModeLocal, cfg.Security.AuthMode)
 }
 
 func TestBootstrapValidation_InternalPort(t *testing.T) {
@@ -276,6 +302,26 @@ database:
 	require.Len(t, cfg.Engine.CORSOrigins, 2)
 	assert.Equal(t, "https://example.com", cfg.Engine.CORSOrigins[0])
 	assert.Equal(t, "https://app.example.com", cfg.Engine.CORSOrigins[1])
+}
+
+func TestBootstrapEnvOverrides_AuthMode(t *testing.T) {
+	t.Setenv("BYTEBREW_AUTH_MODE", "external")
+	t.Setenv("BYTEBREW_JWT_PUBLIC_KEY_PATH", "/tmp/pub.key")
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	yaml := `
+engine:
+  port: 8443
+database:
+  url: "postgresql://localhost/db"
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(yaml), 0644))
+
+	cfg, err := LoadBootstrap(configPath)
+	require.NoError(t, err)
+	assert.Equal(t, AuthModeExternal, cfg.Security.AuthMode)
+	assert.Equal(t, "/tmp/pub.key", cfg.Security.JWTPublicKeyPath)
 }
 
 func TestBootstrapEnvOverrides_InternalPortConflict(t *testing.T) {

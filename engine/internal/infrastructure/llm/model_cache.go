@@ -78,7 +78,7 @@ func (c *ModelCache) Invalidate(modelID string) {
 	delete(c.clients, modelID)
 	c.mu.Unlock()
 
-	slog.Info("model cache invalidated", "model_id", modelID)
+	slog.InfoContext(context.Background(), "model cache invalidated", "model_id", modelID)
 }
 
 // InvalidateAll clears the entire cache.
@@ -87,7 +87,7 @@ func (c *ModelCache) InvalidateAll() {
 	c.clients = make(map[string]*cachedModel)
 	c.mu.Unlock()
 
-	slog.Info("model cache fully invalidated")
+	slog.InfoContext(context.Background(), "model cache fully invalidated")
 }
 
 // anthropicTransport adds the required anthropic-version header to all requests.

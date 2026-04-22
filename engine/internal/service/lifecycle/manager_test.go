@@ -38,13 +38,13 @@ func TestManager_SpawnAgent_ContextDestroyed(t *testing.T) {
 	}
 
 	// After spawn, instance should be cleaned up
-	_, exists := mgr.GetInstance("agent-a", "session-1")
+	_, exists := mgr.GetInstance(context.Background(), "agent-a", "session-1")
 	if exists {
 		t.Error("expected spawn instance to be cleaned up after task")
 	}
 
 	// Context should be zero
-	if mgr.ContextSize("agent-a", "session-1") != 0 {
+	if mgr.ContextSize(context.Background(), "agent-a", "session-1") != 0 {
 		t.Error("expected zero context after spawn")
 	}
 }
@@ -61,7 +61,7 @@ func TestManager_PersistentAgent_ContextPreserved(t *testing.T) {
 	}
 
 	// Instance should still exist
-	inst, exists := mgr.GetInstance("agent-a", "session-1")
+	inst, exists := mgr.GetInstance(context.Background(), "agent-a", "session-1")
 	if !exists {
 		t.Fatal("expected persistent instance to exist")
 	}
@@ -70,8 +70,8 @@ func TestManager_PersistentAgent_ContextPreserved(t *testing.T) {
 	}
 
 	// Context should be preserved
-	if mgr.ContextSize("agent-a", "session-1") != 2 { // "User: task 1" + "Agent: result-1"
-		t.Errorf("expected 2 context entries, got %d", mgr.ContextSize("agent-a", "session-1"))
+	if mgr.ContextSize(context.Background(), "agent-a", "session-1") != 2 { // "User: task 1" + "Agent: result-1"
+		t.Errorf("expected 2 context entries, got %d", mgr.ContextSize(context.Background(), "agent-a", "session-1"))
 	}
 
 	// Second execution — should have context
@@ -82,8 +82,8 @@ func TestManager_PersistentAgent_ContextPreserved(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if mgr.ContextSize("agent-a", "session-1") != 4 {
-		t.Errorf("expected 4 context entries, got %d", mgr.ContextSize("agent-a", "session-1"))
+	if mgr.ContextSize(context.Background(), "agent-a", "session-1") != 4 {
+		t.Errorf("expected 4 context entries, got %d", mgr.ContextSize(context.Background(), "agent-a", "session-1"))
 	}
 }
 
@@ -99,7 +99,7 @@ func TestManager_PersistentAgent_MultiTask(t *testing.T) {
 		}
 	}
 
-	inst, _ := mgr.GetInstance("agent-a", "session-1")
+	inst, _ := mgr.GetInstance(context.Background(), "agent-a", "session-1")
 	if inst.TasksHandled != 3 {
 		t.Errorf("expected 3 tasks handled, got %d", inst.TasksHandled)
 	}
@@ -112,9 +112,9 @@ func TestManager_ResetAgent(t *testing.T) {
 	mgr.ExecuteTask(context.Background(), "agent-a", "session-1", "task 1",
 		domain.LifecycleModePersistent, 16000, nil)
 
-	mgr.ResetAgent("agent-a", "session-1")
+	mgr.ResetAgent(context.Background(), "agent-a", "session-1")
 
-	if mgr.ContextSize("agent-a", "session-1") != 0 {
+	if mgr.ContextSize(context.Background(), "agent-a", "session-1") != 0 {
 		t.Error("expected zero context after reset")
 	}
 }
@@ -135,7 +135,7 @@ func TestManager_SpawnAgent_ReSpawn(t *testing.T) {
 		domain.LifecycleModeSpawn, 16000, nil)
 
 	// Instance should be gone (spawn cleans up)
-	_, exists := mgr.GetInstance("agent-a", "session-1")
+	_, exists := mgr.GetInstance(context.Background(), "agent-a", "session-1")
 	if exists {
 		t.Error("expected no instance after spawn task")
 	}
@@ -167,7 +167,7 @@ type mockUUIDResolver struct {
 	mapping map[string]string
 }
 
-func (r *mockUUIDResolver) ResolveAgentUUID(name string) string {
+func (r *mockUUIDResolver) ResolveAgentUUID(_ context.Context, name string) string {
 	return r.mapping[name]
 }
 
@@ -251,7 +251,7 @@ func TestManager_UUIDFallbackToName(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if mgr.ContextSize("agent-a", "sess") != 2 {
-		t.Errorf("expected 2 context entries under name-based fallback key, got %d", mgr.ContextSize("agent-a", "sess"))
+	if mgr.ContextSize(context.Background(), "agent-a", "sess") != 2 {
+		t.Errorf("expected 2 context entries under name-based fallback key, got %d", mgr.ContextSize(context.Background(), "agent-a", "sess"))
 	}
 }

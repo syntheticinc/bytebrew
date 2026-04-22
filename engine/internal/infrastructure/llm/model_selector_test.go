@@ -147,7 +147,7 @@ func TestModelSelector_NamedModels(t *testing.T) {
 
 		selector.RegisterNamedModel("llama-4", namedModel)
 
-		got, err := selector.ResolveByName("llama-4")
+		got, err := selector.ResolveByName(context.Background(), "llama-4")
 		require.NoError(t, err)
 		require.NotNil(t, got)
 
@@ -159,7 +159,7 @@ func TestModelSelector_NamedModels(t *testing.T) {
 	t.Run("resolve unknown name returns error", func(t *testing.T) {
 		selector := NewModelSelector(defaultModel, "default-model")
 
-		got, err := selector.ResolveByName("nonexistent")
+		got, err := selector.ResolveByName(context.Background(), "nonexistent")
 		require.Error(t, err)
 		assert.Nil(t, got)
 		assert.Contains(t, err.Error(), "nonexistent")
@@ -175,12 +175,12 @@ func TestModelSelector_NamedModels(t *testing.T) {
 
 		assert.Equal(t, 2, selector.NamedModelCount())
 
-		gotA, err := selector.ResolveByName("model-a")
+		gotA, err := selector.ResolveByName(context.Background(), "model-a")
 		require.NoError(t, err)
 		respA, _ := gotA.Generate(context.Background(), nil)
 		assert.Equal(t, "model-a", respA.Content)
 
-		gotB, err := selector.ResolveByName("model-b")
+		gotB, err := selector.ResolveByName(context.Background(), "model-b")
 		require.NoError(t, err)
 		respB, _ := gotB.Generate(context.Background(), nil)
 		assert.Equal(t, "model-b", respB.Content)
@@ -194,7 +194,7 @@ func TestModelSelector_NamedModels(t *testing.T) {
 		selector.RegisterNamedModel("my-model", original)
 		selector.RegisterNamedModel("my-model", replacement)
 
-		got, err := selector.ResolveByName("my-model")
+		got, err := selector.ResolveByName(context.Background(), "my-model")
 		require.NoError(t, err)
 		resp, _ := got.Generate(context.Background(), nil)
 		assert.Equal(t, "v2", resp.Content)

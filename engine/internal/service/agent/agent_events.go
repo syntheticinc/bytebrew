@@ -34,9 +34,9 @@ func (p *AgentPool) markCompleted(agentID, subtaskID, result string) {
 	ctx := context.Background()
 	if subtaskID != "" {
 		if subtaskUUID, err := uuid.Parse(subtaskID); err != nil {
-			slog.Error("[AgentPool] invalid subtask id on complete", "task_id", subtaskID, "error", err)
+			slog.ErrorContext(context.Background(), "[AgentPool] invalid subtask id on complete", "task_id", subtaskID, "error", err)
 		} else if err := p.subtaskManager.CompleteTask(ctx, subtaskUUID, result); err != nil {
-			slog.Error("[AgentPool] failed to complete task", "task_id", subtaskID, "error", err)
+			slog.ErrorContext(context.Background(), "[AgentPool] failed to complete task", "task_id", subtaskID, "error", err)
 		}
 	}
 
@@ -46,13 +46,13 @@ func (p *AgentPool) markCompleted(agentID, subtaskID, result string) {
 			updateCtx := context.Background()
 			run, err := agentRunStorage.GetByID(updateCtx, agentID)
 			if err != nil {
-				slog.Error("[AgentPool] failed to get agent run for update", "agent_id", agentID, "error", err)
+				slog.ErrorContext(context.Background(), "[AgentPool] failed to get agent run for update", "agent_id", agentID, "error", err)
 				return
 			}
 			if run != nil {
 				run.Complete(result)
 				if err := agentRunStorage.Update(updateCtx, run); err != nil {
-					slog.Error("[AgentPool] failed to update agent run", "agent_id", agentID, "error", err)
+					slog.ErrorContext(context.Background(), "[AgentPool] failed to update agent run", "agent_id", agentID, "error", err)
 				}
 			}
 		}()
@@ -120,9 +120,9 @@ func (p *AgentPool) markFailed(agentID, subtaskID, reason string) {
 	ctx := context.Background()
 	if subtaskID != "" {
 		if subtaskUUID, err := uuid.Parse(subtaskID); err != nil {
-			slog.Error("[AgentPool] invalid subtask id on fail", "task_id", subtaskID, "error", err)
+			slog.ErrorContext(context.Background(), "[AgentPool] invalid subtask id on fail", "task_id", subtaskID, "error", err)
 		} else if err := p.subtaskManager.FailTask(ctx, subtaskUUID, reason); err != nil {
-			slog.Error("[AgentPool] failed to mark task as failed", "task_id", subtaskID, "error", err)
+			slog.ErrorContext(context.Background(), "[AgentPool] failed to mark task as failed", "task_id", subtaskID, "error", err)
 		}
 	}
 
@@ -132,13 +132,13 @@ func (p *AgentPool) markFailed(agentID, subtaskID, reason string) {
 			updateCtx := context.Background()
 			run, err := agentRunStorage.GetByID(updateCtx, agentID)
 			if err != nil {
-				slog.Error("[AgentPool] failed to get agent run for update", "agent_id", agentID, "error", err)
+				slog.ErrorContext(context.Background(), "[AgentPool] failed to get agent run for update", "agent_id", agentID, "error", err)
 				return
 			}
 			if run != nil {
 				run.Fail(reason)
 				if err := agentRunStorage.Update(updateCtx, run); err != nil {
-					slog.Error("[AgentPool] failed to update agent run", "agent_id", agentID, "error", err)
+					slog.ErrorContext(context.Background(), "[AgentPool] failed to update agent run", "agent_id", agentID, "error", err)
 				}
 			}
 		}()
@@ -183,6 +183,6 @@ func (p *AgentPool) emitEventForSession(sessionID string, event *domain.AgentEve
 		return
 	}
 	if err := cb(event); err != nil {
-		slog.Error("[AgentPool] failed to emit event", "type", event.Type, "error", err)
+		slog.ErrorContext(context.Background(), "[AgentPool] failed to emit event", "type", event.Type, "error", err)
 	}
 }

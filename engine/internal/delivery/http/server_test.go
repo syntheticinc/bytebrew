@@ -14,14 +14,15 @@ func TestNewServer_DefaultCORS(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	// Wildcard mode returns "*" as the Allow-Origin value.
+	// Same-origin policy: no wildcard, cross-origin requests get no Allow-Origin header.
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req.Header.Set("Origin", "https://random-site.com")
 	rec := httptest.NewRecorder()
 	srv.Router().ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "*", rec.Header().Get("Access-Control-Allow-Origin"))
+	assert.Empty(t, rec.Header().Get("Access-Control-Allow-Origin"),
+		"default server must not grant CORS to arbitrary origins")
 }
 
 func TestNewServerWithCORS_CustomOrigins(t *testing.T) {
@@ -53,7 +54,7 @@ func TestNewServerWithCORS_CustomOrigins(t *testing.T) {
 }
 
 func TestNewServerWithCORS_EmptyOrigins(t *testing.T) {
-	// Empty slice should behave like wildcard (allow all).
+	// Empty slice means same-origin only — no wildcard.
 	srv := NewServerWithCORS(0, []string{})
 	srv.Router().Get("/test", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -65,11 +66,12 @@ func TestNewServerWithCORS_EmptyOrigins(t *testing.T) {
 	srv.Router().ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "*", rec.Header().Get("Access-Control-Allow-Origin"))
+	assert.Empty(t, rec.Header().Get("Access-Control-Allow-Origin"),
+		"empty origins must not grant CORS to arbitrary origins")
 }
 
 func TestNewServerWithCORS_NilOrigins(t *testing.T) {
-	// nil should behave like wildcard (allow all).
+	// nil means same-origin only — no wildcard.
 	srv := NewServerWithCORS(0, nil)
 	srv.Router().Get("/test", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -81,7 +83,8 @@ func TestNewServerWithCORS_NilOrigins(t *testing.T) {
 	srv.Router().ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "*", rec.Header().Get("Access-Control-Allow-Origin"))
+	assert.Empty(t, rec.Header().Get("Access-Control-Allow-Origin"),
+		"nil origins must not grant CORS to arbitrary origins")
 }
 
 func TestCORS_Preflight(t *testing.T) {
@@ -116,7 +119,8 @@ func TestCORS_Preflight(t *testing.T) {
 }
 
 func TestCORS_ExposedHeaders(t *testing.T) {
-	srv := NewServer(0)
+	// Must use an explicitly-allowed origin; the default server uses same-origin policy.
+	srv := NewServerWithCORS(0, []string{"https://example.com"})
 	srv.Router().Get("/test", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})

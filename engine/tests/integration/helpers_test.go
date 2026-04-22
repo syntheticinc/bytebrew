@@ -20,6 +20,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Ensure jwt import is used even if all signing helpers below are the only
+// users (build tag analysis can otherwise drop it).
+var _ = jwt.SigningMethodEdDSA
+
 // waitForCondition polls check every 100ms until it returns true or timeout expires.
 // Kept for non-CE tests in this package (production_harness, streaming, ws).
 func waitForCondition(t *testing.T, timeout time.Duration, check func() bool) {
@@ -51,28 +55,31 @@ func requireSuite(t *testing.T) {
 	}
 }
 
-// tokenFor builds an HS256 JWT with role=admin (→ ScopeAdmin via HMACVerifier)
-// that expires in 1h. This is the workhorse constructor for authenticated
-// test calls.
+// tokenFor builds an EdDSA JWT signed with the engine's local keypair that
+// expires in 1h. This is the workhorse constructor for authenticated test calls.
 func tokenFor(sub string) string {
-	return tokenForRole(sub, "admin")
-}
-
-// tokenForRole builds an HS256 JWT with the given role claim. role != "admin"
-// gets empty scopes, which the CE auth middleware rejects at RequireScope
-// boundaries — used to exercise 403 paths.
-func tokenForRole(sub, role string) string {
 	claims := jwt.MapClaims{
-		"sub":  sub,
-		"role": role,
-		"exp":  time.Now().Add(time.Hour).Unix(),
+		"sub": sub,
+		"exp": time.Now().Add(time.Hour).Unix(),
+		"iat": time.Now().Unix(),
 	}
-	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := tok.SignedString([]byte(jwtSecret))
+	tok := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
+	signed, err := tok.SignedString(localSessionPrivKey)
 	if err != nil {
-		panic(fmt.Sprintf("tokenForRole: sign: %v", err))
+		panic(fmt.Sprintf("tokenFor: sign: %v", err))
 	}
 	return signed
+}
+
+// tokenForRole builds an EdDSA JWT. The role parameter is kept for call-site
+// compatibility but is not used by the EdDSA verifier — all successfully
+// verified JWTs receive ScopeAdmin uniformly.
+//
+// EdDSA verifier grants ScopeAdmin uniformly; role-based denial tests moved to
+// API-token tests (TestSEC05, TestSEC07).
+func tokenForRole(sub, _ string) string {
+	// EdDSA verifier grants ScopeAdmin uniformly; role is ignored.
+	return tokenFor(sub)
 }
 
 // do performs an HTTP request against baseURL. token may be empty for
@@ -239,29 +246,28 @@ func tamperedToken(good string) string {
 }
 
 // algNoneToken builds a JWT with alg=none and an empty signature. A
-// correctly-hardened verifier (WithValidMethods(["HS256"])) must reject this
-// even though the token parses.
+// correctly-hardened verifier (EdDSA only, via WithValidMethods) must reject
+// this even though the token structure is valid.
 func algNoneToken(sub string) string {
 	// Manually build header.payload. with empty signature.
 	header := base64URLJSON(map[string]any{"alg": "none", "typ": "JWT"})
 	payload := base64URLJSON(map[string]any{
-		"sub":  sub,
-		"role": "admin",
-		"exp":  time.Now().Add(time.Hour).Unix(),
+		"sub": sub,
+		"exp": time.Now().Add(time.Hour).Unix(),
 	})
 	return header + "." + payload + "."
 }
 
-// expiredToken produces an HMAC-signed JWT whose exp claim is already in the
-// past. WithExpirationRequired + exp validation must reject it.
+// expiredToken produces an EdDSA-signed JWT whose exp claim is already in the
+// past. WithExpirationRequired + exp validation in EdDSAVerifier must reject it.
 func expiredToken(sub string) string {
 	claims := jwt.MapClaims{
-		"sub":  sub,
-		"role": "admin",
-		"exp":  time.Now().Add(-time.Hour).Unix(),
+		"sub": sub,
+		"exp": time.Now().Add(-time.Hour).Unix(),
+		"iat": time.Now().Add(-2 * time.Hour).Unix(),
 	}
-	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := tok.SignedString([]byte(jwtSecret))
+	tok := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
+	signed, err := tok.SignedString(localSessionPrivKey)
 	if err != nil {
 		panic(fmt.Sprintf("expiredToken: %v", err))
 	}

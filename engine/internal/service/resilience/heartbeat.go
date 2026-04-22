@@ -83,7 +83,7 @@ func (m *HeartbeatMonitor) Register(agentID string, agentType AgentType) {
 		agentType:     agentType,
 		lastHeartbeat: time.Now(),
 	}
-	slog.Info("[Heartbeat] agent registered", "agent_id", agentID, "type", agentType)
+	slog.InfoContext(context.Background(), "[Heartbeat] agent registered", "agent_id", agentID, "type", agentType)
 }
 
 // Unregister removes an agent from monitoring.
@@ -119,7 +119,7 @@ func (m *HeartbeatMonitor) CheckStuck() []string {
 	for agentID, entry := range m.agents {
 		if now.Sub(entry.lastHeartbeat) > stuckTimeout {
 			stuckAgents = append(stuckAgents, agentID)
-			slog.Warn("[Heartbeat] agent stuck",
+			slog.WarnContext(context.Background(), "[Heartbeat] agent stuck",
 				"agent_id", agentID, "type", entry.agentType,
 				"last_heartbeat", entry.lastHeartbeat,
 				"elapsed", now.Sub(entry.lastHeartbeat))

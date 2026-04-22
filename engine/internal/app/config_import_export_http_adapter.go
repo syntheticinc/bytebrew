@@ -57,12 +57,6 @@ func (a *configImportExportHTTPAdapter) buildExportConfig(ctx context.Context) (
 	}
 	cfg.MCPServers.Items = mcpYAML
 
-	triggersYAML, err := a.exportTriggers(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("export triggers: %w", err)
-	}
-	cfg.Triggers.Items = triggersYAML
-
 	return &cfg, nil
 }
 
@@ -193,12 +187,6 @@ func (a *configImportExportHTTPAdapter) exportMCPServers(_ context.Context) ([]m
 	return result, nil
 }
 
-// exportTriggers — triggers table removed in V2 (replaced by schemas.chat_enabled).
-// Returns an empty slice so legacy config YAML stays schema-valid.
-func (a *configImportExportHTTPAdapter) exportTriggers(_ context.Context) ([]triggerYAML, error) {
-	return nil, nil
-}
-
 // ImportYAML parses YAML config and writes to DB in a transaction.
 func (a *configImportExportHTTPAdapter) ImportYAML(ctx context.Context, yamlData []byte) error {
 	var cfg configYAML
@@ -219,15 +207,10 @@ func (a *configImportExportHTTPAdapter) ImportYAML(ctx context.Context, yamlData
 			return fmt.Errorf("import agents: %w", err)
 		}
 
-		if err := a.importTriggers(tx, cfg.Triggers.Items); err != nil {
-			return fmt.Errorf("import triggers: %w", err)
-		}
-
 		slog.InfoContext(ctx, "config imported",
 			"agents", len(cfg.Agents.Items),
 			"models", len(cfg.Models.Items),
 			"mcp_servers", len(cfg.MCPServers.Items),
-			"triggers", len(cfg.Triggers.Items),
 		)
 		return nil
 	})
@@ -483,13 +466,6 @@ func (a *configImportExportHTTPAdapter) syncAgentRelations(tx *gorm.DB, agentID 
 		}
 	}
 
-	return nil
-}
-
-// importTriggers — triggers table removed in V2. Import of the legacy
-// triggers YAML block is silently skipped; callers that need chat access on a
-// schema should set schemas.chat_enabled=true explicitly.
-func (a *configImportExportHTTPAdapter) importTriggers(_ *gorm.DB, _ []triggerYAML) error {
 	return nil
 }
 

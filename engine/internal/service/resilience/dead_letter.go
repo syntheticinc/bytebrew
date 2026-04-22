@@ -1,6 +1,7 @@
 package resilience
 
 import (
+	"context"
 	"log/slog"
 	"sync"
 	"time"
@@ -153,7 +154,7 @@ func (q *DeadLetterQueue) CheckTimeouts() []TrackedTask {
 			}
 			timedOut = append(timedOut, *task)
 
-			slog.Warn("[DeadLetter] task timeout",
+			slog.WarnContext(context.Background(), "[DeadLetter] task timeout",
 				"task_id", task.TaskID, "agent_id", task.AgentID,
 				"elapsed_ms", elapsed.Milliseconds())
 

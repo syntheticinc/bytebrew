@@ -1,6 +1,7 @@
 package taskrunner
 
 import (
+	"context"
 	"log/slog"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/service/task"
@@ -15,7 +16,7 @@ import (
 // are deferred to V3 along with the trigger_subscriptions table.
 func StartBackgroundWorker(executor task.TaskExecutor, concurrency int) *task.TaskWorker {
 	if executor == nil {
-		slog.Info("background task worker not started (no executor provided)")
+		slog.InfoContext(context.Background(), "background task worker not started (no executor provided)")
 		return nil
 	}
 	if concurrency <= 0 {

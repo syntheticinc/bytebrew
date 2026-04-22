@@ -81,7 +81,10 @@ export default function KnowledgePage() {
   const { data: knowledgeBases, loading, error, refetch } = useApi(() => api.listKnowledgeBases());
   useAdminRefresh(refetch);
 
-  const { data: models } = useApi(() => api.listModels());
+  // Wave 5: KBs require an embedding-kind model. Filter server-side so the
+  // dropdown never shows chat models (backend rejects them with
+  // `embedding_model_id must reference an embedding model`).
+  const { data: models } = useApi(() => api.listModels({ kind: 'embedding' }));
   const { data: agents } = useApi(() => api.listAgents());
 
   // ── Selection & panel state ──
@@ -109,8 +112,12 @@ export default function KnowledgePage() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   // ── Derived data ──
+  // Wave 5: `models` is already filtered server-side to kind='embedding'. Keep
+  // a local alias + defensive filter in case the API ever starts returning
+  // chat models here (belt-and-braces — backend validation rejects those
+  // anyway).
   const embeddingModels = useMemo(
-    () => (models ?? []).filter((m: Model) => m.type === 'embedding'),
+    () => (models ?? []).filter((m: Model) => m.kind === 'embedding'),
     [models],
   );
 
@@ -692,7 +699,7 @@ export default function KnowledgePage() {
           ]}
           hint={
             embeddingModels.length === 0
-              ? 'No embedding models found. Add one in Models page first (type = Embedding Model).'
+              ? 'No embedding models found. Add one in Models page first (kind = Embedding Model).'
               : undefined
           }
         />

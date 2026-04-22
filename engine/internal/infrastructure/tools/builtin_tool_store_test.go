@@ -86,6 +86,8 @@ func TestAgentToolResolver_ResolveForAgent_Whitelist(t *testing.T) {
 			Name:         "test_agent",
 			BuiltinTools: []string{"tool_a", "tool_c"},
 		},
+		// DerivedTools is the resolver's source of truth (pre-computed by DeriveRuntimeTools).
+		DerivedTools: []string{"tool_a", "tool_c"},
 	}
 
 	tools, err := resolver.ResolveForAgent(context.Background(), ResolveContext{
@@ -95,7 +97,7 @@ func TestAgentToolResolver_ResolveForAgent_Whitelist(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, tools, 2)
 
-	// Verify tools are in whitelist order
+	// Verify tools are in DerivedTools order (sorted by DeriveRuntimeTools).
 	info0, _ := tools[0].Info(context.Background())
 	info1, _ := tools[1].Info(context.Background())
 	assert.Equal(t, "tool_a", info0.Name)
@@ -114,17 +116,21 @@ func TestAgentToolResolver_ResolveForAgent_UnknownTool(t *testing.T) {
 			Name:         "test_agent",
 			BuiltinTools: []string{"tool_a", "unknown_tool"},
 		},
+		// DerivedTools is the resolver's source of truth. Unregistered tools in
+		// DerivedTools are warned and skipped (not returned as errors) because
+		// capability-injected names (memory_recall, etc.) may appear before their
+		// factory is registered.
+		DerivedTools: []string{"tool_a", "unknown_tool"},
 	}
 
 	tools, err := resolver.ResolveForAgent(context.Background(), ResolveContext{
 		Agent: agent,
 		Deps:  ToolDependencies{},
 	})
-	require.Error(t, err)
-	assert.Nil(t, tools)
-	assert.Contains(t, err.Error(), "unknown builtin tool")
-	assert.Contains(t, err.Error(), "unknown_tool")
-	assert.Contains(t, err.Error(), "test_agent")
+	require.NoError(t, err)
+	require.Len(t, tools, 1)
+	info, _ := tools[0].Info(context.Background())
+	assert.Equal(t, "tool_a", info.Name)
 }
 
 func TestAgentToolResolver_ResolveForAgent_EmptyWhitelist(t *testing.T) {
@@ -164,6 +170,8 @@ func TestAgentToolResolver_ResolveForAgent_PassesDeps(t *testing.T) {
 			Name:         "test_agent",
 			BuiltinTools: []string{"dep_tool"},
 		},
+		// DerivedTools is the resolver's source of truth.
+		DerivedTools: []string{"dep_tool"},
 	}
 
 	_, err := resolver.ResolveForAgent(context.Background(), ResolveContext{

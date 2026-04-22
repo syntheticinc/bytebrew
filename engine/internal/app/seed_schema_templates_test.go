@@ -139,9 +139,6 @@ func TestSeedSchemaTemplates_Idempotent(t *testing.T) {
 	require.Len(t, tmpl.Definition.Relations, 1)
 	assert.Equal(t, "triage", tmpl.Definition.Relations[0].Source)
 	assert.Equal(t, "resolver", tmpl.Definition.Relations[0].Target)
-	require.Len(t, tmpl.Definition.Triggers, 1)
-	assert.Equal(t, "chat", tmpl.Definition.Triggers[0].Type)
-	assert.True(t, tmpl.Definition.Triggers[0].Enabled)
 }
 
 // TestSeedSchemaTemplates_SkipsMissingYAML confirms a missing YAML is a

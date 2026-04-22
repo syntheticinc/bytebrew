@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -87,7 +88,7 @@ func (w *StreamWriter) writerLoop() {
 		select {
 		case resp := <-w.writeCh:
 			if err := w.stream.Send(resp); err != nil {
-				slog.Error("[StreamWriter] failed to send", "error", err)
+				slog.ErrorContext(context.Background(), "[StreamWriter] failed to send", "error", err)
 				w.setLastError(err)
 				w.drainWriteChannel()
 				return

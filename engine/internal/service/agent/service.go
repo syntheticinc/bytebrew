@@ -130,7 +130,7 @@ func (s *Service) SetTestingStrategy(yamlContent string) {
 
 	strategy, err := ParseTestingStrategy(yamlContent)
 	if err != nil {
-		slog.Warn("failed to parse testing strategy", "error", err)
+		slog.WarnContext(context.Background(), "failed to parse testing strategy", "error", err)
 		return
 	}
 

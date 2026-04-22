@@ -172,7 +172,7 @@ func (h *ChatHandler) Chat(w http.ResponseWriter, r *http.Request) {
 // Preference order: JWT `sub` claim (injected by auth middleware) → request body.
 // An empty result signals unauthenticated — caller must 401.
 func resolveUserSub(r *http.Request, fallback string) string {
-	if sub, ok := r.Context().Value(ContextKeyUserSub).(string); ok && sub != "" {
+	if sub := domain.UserSubFromContext(r.Context()); sub != "" {
 		return sub
 	}
 	return fallback
@@ -281,7 +281,7 @@ func findFlusher(w http.ResponseWriter) func() {
 			w = u.Unwrap()
 			continue
 		}
-		slog.Warn("[SSE] Flush not available — middleware may be wrapping ResponseWriter without Unwrap()")
+		slog.WarnContext(context.Background(), "[SSE] Flush not available — middleware may be wrapping ResponseWriter without Unwrap()")
 		return func() {}
 	}
 }

@@ -172,6 +172,14 @@ func (a *schemaServiceHTTPAdapter) UpdateSchema(ctx context.Context, id string, 
 	return nil
 }
 
+// PatchSchema applies only the non-nil fields in req to the existing schema.
+// The implementation is identical to UpdateSchema — pointer-typed fields already
+// preserve existing values when nil. The distinction between PUT and PATCH is
+// enforced at the handler layer (PUT requires name; PATCH does not).
+func (a *schemaServiceHTTPAdapter) PatchSchema(ctx context.Context, id string, req deliveryhttp.UpdateSchemaRequest) error {
+	return a.UpdateSchema(ctx, id, req)
+}
+
 func (a *schemaServiceHTTPAdapter) DeleteSchema(ctx context.Context, id string) error {
 	if err := a.repo.Delete(ctx, id); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
