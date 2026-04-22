@@ -82,13 +82,31 @@ const PROVIDERS: Provider[] = [
 
 type TemplateId = 'support' | 'sales' | 'blank';
 
+// Template descriptor. For `support` and `sales` we hand off to the backend
+// fork endpoint (POST /api/v1/schema-templates/:name/fork) — it creates the
+// schema, agents, agent_relations, capabilities, and enables chat in one
+// transaction. See internal/service/schematemplate/fork.go. The wizard must
+// NOT try to synthesise relations client-side: the old path used
+// `createAgentRelation(schemaId, agentName, agentName)` (self-loop), which
+// the backend rejects with "source and target must be different", leaving
+// the schema with zero members.
+//
+// For `blank` we stay on the per-entity API (createSchema + createAgent +
+// updateSchema to set entry_agent_id) because there is no catalog entry for
+// an empty schema. Crucially, we do NOT create any agent_relation here —
+// a single entry agent with no delegates is a valid schema in V2
+// (membership is derived from entry_agent_id + agent_relations, and an
+// entry agent alone is enough for the canvas to render).
 type Template = {
   id: TemplateId;
   label: string;
   description: string;
   schemaName: string;
-  agentName: string;
-  systemPrompt: string;
+  // Backend schema-templates.yaml catalog name (undefined for `blank`).
+  catalogName?: string;
+  // Fields below are used only for the `blank` path.
+  agentName?: string;
+  systemPrompt?: string;
 };
 
 const TEMPLATES: Template[] = [
@@ -98,9 +116,7 @@ const TEMPLATES: Template[] = [
     description:
       'A polite, fact-driven customer support agent. Answers from your docs, escalates when unsure.',
     schemaName: 'Support Bot',
-    agentName: 'support-agent',
-    systemPrompt:
-      "You are a customer support agent. Be concise, empathetic, and accurate. If you don't know something, say so clearly and offer to escalate. Never invent product details.",
+    catalogName: 'customer-support-basic',
   },
   {
     id: 'sales',
@@ -108,9 +124,7 @@ const TEMPLATES: Template[] = [
     description:
       'A proactive sales assistant. Qualifies leads, answers pricing questions, books demos.',
     schemaName: 'Sales Assistant',
-    agentName: 'sales-agent',
-    systemPrompt:
-      "You are a helpful sales assistant. Qualify leads (company size, use case, timeline), answer pricing/feature questions clearly, and suggest booking a demo when the fit is strong. Never pressure the customer.",
+    catalogName: 'sales-qualifier-basic',
   },
   {
     id: 'blank',
@@ -130,14 +144,6 @@ function CheckIcon({ className = 'w-5 h-5' }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
-function StarIcon({ className = 'w-4 h-4' }: { className?: string }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
     </svg>
   );
 }
@@ -172,17 +178,17 @@ function XIcon({ className = 'w-4 h-4' }: { className?: string }) {
 // Progress header
 // ────────────────────────────────────────────────────────────────────────────
 
-function ProgressHeader({ step }: { step: 1 | 2 | 3 }) {
-  const labels = ['Connect LLM', 'Starter template', 'Done'];
+function ProgressHeader({ step }: { step: 1 | 2 }) {
+  const labels = ['Connect LLM', 'Starter template'];
   return (
     <div className="w-full max-w-3xl mx-auto mb-8">
       <div className="flex items-center justify-between mb-3 text-xs text-brand-shade3 font-mono">
-        <span>Step {step} of 3</span>
-        <span>{Math.round((step / 3) * 100)}%</span>
+        <span>Step {step} of 2</span>
+        <span>{Math.round((step / 2) * 100)}%</span>
       </div>
       <div className="flex items-center gap-2">
         {labels.map((label, idx) => {
-          const n = (idx + 1) as 1 | 2 | 3;
+          const n = (idx + 1) as 1 | 2;
           const done = n < step;
           const active = n === step;
           return (
@@ -473,47 +479,87 @@ function Step1ConnectLLM({
 function Step2Template({
   onDone,
 }: {
-  onDone: () => void;
+  onDone: (schemaId?: string) => void;
 }) {
   const [selected, setSelected] = useState<TemplateId | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // createFromCatalog delegates the whole schema+agents+relations creation to
+  // the backend fork endpoint. This is the correct path for curated templates
+  // because:
+  //   1. The catalog YAML is the source of truth for multi-agent topologies
+  //      (support: triage → resolver; sales: qualifier → objection-handler).
+  //   2. The fork runs inside a single DB transaction — partial rows on
+  //      failure never persist.
+  //   3. It sets entry_agent_id and chat_enabled=true automatically, so the
+  //      resulting schema renders on the canvas with a live entry orchestrator.
+  //
+  // The previous wizard synthesised relations client-side with source=target,
+  // which the backend validator rejects as a self-loop → schema ended up
+  // empty and the onboarding flow left users at a dead end.
+  async function createFromCatalog(template: Template): Promise<string> {
+    if (!template.catalogName) {
+      throw new Error(`template ${template.id} has no catalogName`);
+    }
+    const forked = await api.forkSchemaTemplate(template.catalogName, template.schemaName);
+    return forked.schema_id;
+  }
+
+  // createBlankSchema is used only for the "blank canvas" path where no
+  // catalog entry applies. We create:
+  //   - one schema
+  //   - one agent (the entry orchestrator)
+  //   - PATCH the schema with entry_agent_id = agent.id (the schema API
+  //     accepts the agent *name* as entry_agent_id — see admin client)
+  //
+  // We do NOT create an agent_relation. The domain rejects self-loops
+  // (source == target) with "source and target must be different", and with
+  // a single-agent schema there is no valid edge to create. Entry agent
+  // alone is sufficient for the canvas to render the schema as non-empty.
+  async function createBlankSchema(template: Template): Promise<string> {
+    if (!template.agentName || !template.systemPrompt) {
+      throw new Error('blank template missing agent definition');
+    }
+
+    const schema = await api.createSchema({
+      name: template.schemaName,
+      description: `Created from ${template.label} template during onboarding`,
+    });
+
+    // Idempotent agent creation — if an agent with this name already exists
+    // (user re-ran onboarding), reuse it instead of failing.
+    try {
+      await api.createAgent({
+        name: template.agentName,
+        system_prompt: template.systemPrompt,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message.toLowerCase() : '';
+      const benign =
+        message.includes('exists') ||
+        message.includes('duplicate') ||
+        message.includes('conflict') ||
+        message.includes('already');
+      if (!benign) throw err;
+    }
+
+    // Wire the agent as the entry orchestrator. updateSchema accepts the
+    // agent name for entry_agent_id — handler resolves it to the UUID
+    // before persisting.
+    await api.updateSchema(schema.id, { entry_agent_id: template.agentName });
+
+    return schema.id;
+  }
+
   async function createFromTemplate(template: Template) {
     setCreating(true);
     setError(null);
     try {
-      // Schema first — then single agent wired as the entry. This matches the
-      // minimum shape the canvas needs. Users add delegation later.
-      const schema = await api.createSchema({
-        name: template.schemaName,
-        description: `Created from ${template.label} template during onboarding`,
-      });
-
-      try {
-        // Best-effort agent creation. If the schemas endpoint on this engine
-        // already auto-creates an entry agent, the second call will fail with
-        // a conflict — we swallow that and continue. Anything else bubbles up.
-        await api.createAgent({
-          name: template.agentName,
-          system_prompt: template.systemPrompt,
-        });
-      } catch (err) {
-        const message = err instanceof Error ? err.message.toLowerCase() : '';
-        if (!message.includes('exists') && !message.includes('duplicate') && !message.includes('conflict')) {
-          throw err;
-        }
-      }
-
-      // Swallow "already a member" errors for the same reason as above.
-      try {
-        await api.createAgentRelation(schema.id, template.agentName, template.agentName);
-      } catch {
-        // non-fatal — relation wiring is a nice-to-have here; the schema +
-        // agent already exist, which is enough for the canvas to open.
-      }
-
-      onDone();
+      const schemaId = template.catalogName
+        ? await createFromCatalog(template)
+        : await createBlankSchema(template);
+      onDone(schemaId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create template.');
     } finally {
@@ -563,22 +609,33 @@ function Step2Template({
         })}
       </div>
 
-      {selected && (
-        <div className="mb-6 p-4 bg-brand-dark-alt border border-brand-shade3/15 rounded-card">
-          <p className="text-xs text-brand-shade3 mb-1">You'll get:</p>
-          <p className="text-sm text-brand-light">
-            A schema named{' '}
-            <strong className="font-mono">
-              {TEMPLATES.find((t) => t.id === selected)?.schemaName}
-            </strong>{' '}
-            with one entry agent (
-            <span className="font-mono text-brand-shade2">
-              {TEMPLATES.find((t) => t.id === selected)?.agentName}
-            </span>
-            ).
-          </p>
-        </div>
-      )}
+      {selected && (() => {
+        const t = TEMPLATES.find((x) => x.id === selected);
+        if (!t) return null;
+        // Catalog templates (support/sales) fork the backend schema-templates
+        // catalog which ships preconfigured multi-agent topologies. Blank
+        // creates a single-agent schema locally. Describe both accurately so
+        // the user knows what they're about to click through to.
+        const isCatalog = !!t.catalogName;
+        return (
+          <div className="mb-6 p-4 bg-brand-dark-alt border border-brand-shade3/15 rounded-card">
+            <p className="text-xs text-brand-shade3 mb-1">You'll get:</p>
+            <p className="text-sm text-brand-light">
+              A schema named{' '}
+              <strong className="font-mono">{t.schemaName}</strong>{' '}
+              {isCatalog
+                ? 'with a preconfigured multi-agent flow and chat enabled — ready to test immediately.'
+                : (
+                    <>
+                      with a single entry agent (
+                      <span className="font-mono text-brand-shade2">{t.agentName}</span>
+                      ).
+                    </>
+                  )}
+            </p>
+          </div>
+        );
+      })()}
 
       {error && (
         <div className="mb-4 flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-btn text-sm text-red-400">
@@ -590,7 +647,11 @@ function Step2Template({
       <div className="flex items-center justify-end gap-3">
         <button
           type="button"
-          onClick={onDone}
+          // Skip bypasses template creation entirely — call onDone with no
+          // schemaId so the wizard navigates to the schemas list (not a
+          // fabricated URL). Without the explicit wrapper React would pass
+          // the MouseEvent as the schemaId arg.
+          onClick={() => onDone()}
           disabled={creating}
           className="px-4 py-2 bg-brand-dark border border-brand-shade3/30 text-brand-light rounded-btn text-sm font-medium hover:border-brand-shade3/60 transition-colors disabled:opacity-60"
         >
@@ -617,93 +678,31 @@ function Step2Template({
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Step 3 — Success
-// ────────────────────────────────────────────────────────────────────────────
-
-const STAR_DISMISSED_KEY = 'bytebrew_onboarding_star_dismissed';
-
-function Step3Done() {
-  const navigate = useNavigate();
-  const [starDismissed, setStarDismissed] = useState(
-    () => localStorage.getItem(STAR_DISMISSED_KEY) === 'true',
-  );
-
-  function dismissStar() {
-    localStorage.setItem(STAR_DISMISSED_KEY, 'true');
-    setStarDismissed(true);
-  }
-
-  return (
-    <div className="w-full max-w-2xl mx-auto text-center">
-      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-500/10 border border-green-500/30 mb-5">
-        <CheckIcon className="w-8 h-8 text-green-400" />
-      </div>
-      <h1 className="text-3xl font-bold text-brand-light mb-2">Your workspace is ready!</h1>
-      <p className="text-base text-brand-shade2 mb-8">
-        Open the canvas to start wiring agents, tools, and MCP servers.
-      </p>
-
-      <div className="flex items-center justify-center gap-3 mb-8">
-        <button
-          type="button"
-          onClick={() => navigate('/schemas')}
-          className="px-6 py-3 bg-brand-accent text-brand-light rounded-btn text-sm font-semibold hover:bg-brand-accent-hover transition-colors"
-        >
-          Open Canvas
-        </button>
-        <button
-          type="button"
-          onClick={() => navigate('/overview')}
-          className="px-6 py-3 bg-brand-dark-alt border border-brand-shade3/30 text-brand-light rounded-btn text-sm font-medium hover:border-brand-shade3/60 transition-colors"
-        >
-          Go to Overview
-        </button>
-      </div>
-
-      {!starDismissed && (
-        <div className="relative p-5 bg-brand-dark-alt border border-brand-shade3/15 rounded-card text-left">
-          <button
-            type="button"
-            onClick={dismissStar}
-            aria-label="Dismiss"
-            className="absolute top-2 right-2 p-1 text-brand-shade3 hover:text-brand-light transition-colors"
-          >
-            <XIcon className="w-4 h-4" />
-          </button>
-          <div className="flex items-start gap-3">
-            <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-yellow-400/10 text-yellow-400 shrink-0">
-              <StarIcon className="w-5 h-5" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-brand-light mb-1">
-                Love ByteBrew? Star us on GitHub
-              </p>
-              <p className="text-xs text-brand-shade2 mb-3">
-                It helps more teams discover the project — takes five seconds.
-              </p>
-              <a
-                href="https://github.com/syntheticinc/bytebrew"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-dark border border-brand-shade3/30 text-brand-light rounded-btn text-xs font-medium hover:border-brand-shade3/60 transition-colors"
-              >
-                <StarIcon className="w-3.5 h-3.5 text-yellow-400" />
-                Star on GitHub
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────────────
 // Wizard container
 // ────────────────────────────────────────────────────────────────────────────
 
 export default function OnboardingWizard() {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2>(1);
+  const navigate = useNavigate();
+
+  // After step 2 the user is dropped into the newly-created schema detail
+  // page (canvas) if we know its ID, otherwise into the schemas list.
+  //
+  // Previously we always navigated to /schemas, which worked for the list
+  // but hid the fresh workspace behind an extra click — worse, when the
+  // template creation silently produced an empty schema (Bug 3), users
+  // landed on an empty list and assumed onboarding did nothing.
+  //
+  // By navigating straight to /schemas/{id} we show the canvas with the
+  // agents the template created, which is the entire point of picking a
+  // starter.
+  const finish = (schemaId?: string) => {
+    if (schemaId) {
+      navigate(`/schemas/${schemaId}`);
+      return;
+    }
+    navigate('/schemas');
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-brand-dark overflow-auto">
@@ -718,8 +717,7 @@ export default function OnboardingWizard() {
         <div className="flex-1 px-6 py-10">
           <ProgressHeader step={step} />
           {step === 1 && <Step1ConnectLLM onSuccess={() => setStep(2)} />}
-          {step === 2 && <Step2Template onDone={() => setStep(3)} />}
-          {step === 3 && <Step3Done />}
+          {step === 2 && <Step2Template onDone={finish} />}
         </div>
       </div>
     </div>

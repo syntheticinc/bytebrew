@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { api } from '../api/client';
 import { usePrototype } from '../hooks/usePrototype';
+import { useBottomPanel } from '../hooks/useBottomPanel';
 
 interface NavItem {
   to: string;
@@ -212,6 +213,16 @@ const v2Section: NavSection = {
 export default function Sidebar() {
   const { logout } = useAuth();
   const { isPrototype } = usePrototype();
+  // AI Builder is the platform's headline value prop ("agents that build
+  // agents"). Exposing it as a prominent, always-visible shortcut at the top
+  // of the sidebar makes it discoverable without asking users to find it
+  // inside the bottom panel chrome. Clicking the shortcut expands the panel
+  // and focuses the Assistant tab.
+  const { setCollapsed, setTab } = useBottomPanel();
+  const openAIBuilder = () => {
+    setTab('assistant');
+    setCollapsed(false);
+  };
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
@@ -233,6 +244,27 @@ export default function Sidebar() {
       <div className="px-5 py-6 border-b border-brand-shade3/10">
         <img src={import.meta.env.BASE_URL + 'logo-dark.svg'} alt="ByteBrew" className="h-8" />
         <span className="text-[10px] text-brand-shade3 mt-2 block tracking-[0.2em] uppercase font-medium">Admin Dashboard</span>
+      </div>
+
+      {/* AI Builder shortcut — pinned above nav so users see the headline
+          "agents that build agents" value prop immediately. Expanding the
+          bottom panel and focusing the Assistant tab is the fastest route
+          to actually talking to the builder agent. */}
+      <div className="px-3 pt-3">
+        <button
+          type="button"
+          onClick={openAIBuilder}
+          aria-label="Open AI Builder chat"
+          className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-btn text-[13px] font-medium bg-brand-accent/15 border border-brand-accent/40 text-brand-light hover:bg-brand-accent/25 hover:border-brand-accent/60 transition-colors"
+        >
+          <span className="flex-shrink-0 text-brand-accent">
+            <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2l2.09 6.26L20 9l-5 4.5L16.18 20 12 16.5 7.82 20 9 13.5 4 9l5.91-.74z" />
+            </svg>
+          </span>
+          <span className="flex-1 text-left">AI Builder</span>
+          <span className="text-[9px] uppercase tracking-wider text-brand-accent/80">Chat</span>
+        </button>
       </div>
 
       {/* Nav sections */}

@@ -4,6 +4,7 @@ import { usePrototype } from '../hooks/usePrototype';
 import { useApi } from '../hooks/useApi';
 import { useAdminRefresh } from '../hooks/useAdminRefresh';
 import { api } from '../api/client';
+import PageContainer from '../components/PageContainer';
 import type { AgentInfo } from '../types';
 
 function AgentRow({ agent, onClick }: { agent: AgentInfo; onClick: () => void }) {
@@ -77,7 +78,7 @@ export default function AgentsPage() {
   }
 
   return (
-    <div className="p-6 max-w-6xl">
+    <PageContainer>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-brand-light">Agents</h1>
@@ -183,6 +184,6 @@ export default function AgentsPage() {
         {systemAgents.length > 0 && ` ${systemAgents.length} system agent${systemAgents.length !== 1 ? 's' : ''} hidden.`}
         {' '}Click to edit configuration.
       </p>
-    </div>
+    </PageContainer>
   );
 }

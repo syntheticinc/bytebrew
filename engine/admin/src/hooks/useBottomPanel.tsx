@@ -23,10 +23,14 @@ interface BottomPanelContextValue {
 const STORAGE_KEY = 'bytebrew_panel_state';
 const SCHEMA_KEY = 'bytebrew_panel_schema';
 
+// Default panel state: expanded and focused on AI Assistant tab.
+// The panel is the primary in-admin UX surface — users need to see where to
+// chat/test immediately on first admin load. Users who prefer a larger canvas
+// can collapse manually; the state persists via localStorage.
 const DEFAULT_STATE: BottomPanelState = {
-  height: 300,
+  height: 320,
   tab: 'assistant',
-  collapsed: true,
+  collapsed: false,
 };
 
 function loadState(): BottomPanelState {

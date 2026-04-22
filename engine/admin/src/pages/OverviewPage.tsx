@@ -7,7 +7,9 @@ import {
   getSchemaById,
 } from '../mocks/schemas';
 import { usePrototype } from '../hooks/usePrototype';
+import { useBottomPanel } from '../hooks/useBottomPanel';
 import { api } from '../api/client';
+import PageContainer from '../components/PageContainer';
 import type { SessionSummary, Schema, HealthResponse } from '../types';
 
 function formatRelativeTime(iso: string) {
@@ -255,6 +257,62 @@ function SystemBadge({ health }: { health: HealthResponse }) {
   );
 }
 
+function AIBuilderCTA({ compact = false }: { compact?: boolean }) {
+  // Prominent entry point to the AI Builder (builder-assistant agent).
+  // The builder chat lives in the bottom panel; this CTA expands the panel
+  // and focuses the Assistant tab so the user can immediately start a
+  // "build me an agent that does X" conversation. Shown on Overview so the
+  // headline value prop — agents that build agents — is the first thing a
+  // freshly-onboarded user sees.
+  const { setCollapsed, setTab } = useBottomPanel();
+  const open = () => {
+    setTab('assistant');
+    setCollapsed(false);
+  };
+
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={open}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-btn text-[11px] font-medium bg-brand-accent/15 border border-brand-accent/40 text-brand-light hover:bg-brand-accent/25 transition-colors"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2l2.09 6.26L20 9l-5 4.5L16.18 20 12 16.5 7.82 20 9 13.5 4 9l5.91-.74z" />
+        </svg>
+        Open AI Builder
+      </button>
+    );
+  }
+
+  return (
+    <div className="mb-6 rounded-card border border-brand-accent/40 bg-gradient-to-r from-brand-accent/10 via-brand-accent/5 to-transparent px-5 py-4 flex items-center gap-4">
+      <div className="shrink-0 w-10 h-10 rounded-full bg-brand-accent/20 border border-brand-accent/40 flex items-center justify-center text-brand-accent">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2l2.09 6.26L20 9l-5 4.5L16.18 20 12 16.5 7.82 20 9 13.5 4 9l5.91-.74z" />
+        </svg>
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] font-semibold text-brand-light">
+          Build agents by chatting with an agent
+        </div>
+        <p className="text-[11px] text-brand-shade3 mt-0.5 leading-relaxed">
+          The ByteBrew Builder Assistant configures schemas, agents, tools, and
+          triggers for you. Describe what you need — it'll ask questions and
+          wire everything up.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={open}
+        className="shrink-0 px-4 py-2 bg-brand-accent text-white rounded-btn text-[12px] font-medium hover:bg-brand-accent/90 transition-colors"
+      >
+        Open AI Builder
+      </button>
+    </div>
+  );
+}
+
 function OverviewProduction() {
   const { activeSessions, completedCount, failedCount, schemas, health, loading, error } =
     useProductionStats();
@@ -280,6 +338,7 @@ function OverviewProduction() {
 
   return (
     <>
+      <AIBuilderCTA />
       {/* Stats grid — derived from real API data only, no fabricated metrics */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         <Stat
@@ -434,7 +493,7 @@ export default function OverviewPage() {
   const { isPrototype } = usePrototype();
 
   return (
-    <div className="max-w-[1200px] mx-auto">
+    <PageContainer>
       <div className="mb-8">
         <h1 className="text-2xl font-semibold text-brand-light">Overview</h1>
         <p className="text-sm text-brand-shade3 mt-1">
@@ -443,6 +502,6 @@ export default function OverviewPage() {
       </div>
 
       {isPrototype ? <OverviewPrototype /> : <OverviewProduction />}
-    </div>
+    </PageContainer>
   );
 }

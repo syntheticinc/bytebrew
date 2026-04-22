@@ -9,6 +9,7 @@ import DetailPanel, { DetailRow, DetailSection } from '../components/DetailPanel
 import FormModal from '../components/FormModal';
 import FormField from '../components/FormField';
 import ConfirmDialog from '../components/ConfirmDialog';
+import PageContainer from '../components/PageContainer';
 import TierBadge, { CustomModelBadge } from '../components/TierBadge';
 import { ToastProvider, useToast } from '../components/builder/Toast';
 import type { Model, ModelKind, CreateModelRequest, ModelRegistryEntry } from '../types';
@@ -269,7 +270,7 @@ function ModelsPageInner() {
   const selectedRegistryEntry = selected ? findRegistryEntry(selected.model_name) : undefined;
 
   return (
-    <div>
+    <PageContainer>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-brand-light">Models</h1>
         <button
@@ -583,6 +584,6 @@ function ModelsPageInner() {
         confirmLabel="Remove"
         variant="danger"
       />
-    </div>
+    </PageContainer>
   );
 }

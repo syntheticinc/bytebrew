@@ -8,6 +8,7 @@ import DetailPanel, { DetailRow, DetailSection } from '../components/DetailPanel
 import FormModal from '../components/FormModal';
 import FormField from '../components/FormField';
 import ConfirmDialog from '../components/ConfirmDialog';
+import PageContainer from '../components/PageContainer';
 import type { KnowledgeBase, CreateKnowledgeBaseRequest, KnowledgeFile, KnowledgeFileStatus, Model, AgentInfo } from '../types';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -469,7 +470,7 @@ export default function KnowledgePage() {
   if (error) return <div className="text-red-400">Error: {error}</div>;
 
   return (
-    <div>
+    <PageContainer>
       {/* ── Header ── */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-brand-light">Knowledge Bases</h1>
@@ -720,6 +721,6 @@ export default function KnowledgePage() {
         confirmLabel="Remove"
         variant="danger"
       />
-    </div>
+    </PageContainer>
   );
 }

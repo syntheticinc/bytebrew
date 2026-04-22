@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
+import PageContainer from '../components/PageContainer';
 import type { Schema, SchemaTemplate } from '../types';
 
 function formatRelativeTime(iso: string) {
@@ -253,7 +254,7 @@ export default function SchemasPage() {
   const systemSchemas = all.filter((s) => s.is_system);
 
   return (
-    <div className="max-w-[1200px] mx-auto">
+    <PageContainer>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-brand-light">Schemas</h1>
@@ -341,6 +342,6 @@ export default function SchemasPage() {
       )}
 
       {picking && <TemplatePicker onClose={() => setPicking(false)} onForked={handleForked} />}
-    </div>
+    </PageContainer>
   );
 }
