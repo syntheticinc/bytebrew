@@ -285,6 +285,11 @@ function Step1ConnectLLM({
     setStatus({ kind: 'testing' });
 
     const payload: CreateModelRequest = {
+      // Onboarding wizard only configures *chat* models — the embedding
+      // flow is a separate admin surface. Without `kind` the server
+      // rejects the create call with "kind is required", which surfaced
+      // as an unactionable error on step 1 of the wizard.
+      kind: 'chat',
       name: displayName.trim(),
       type: backendType(providerId),
       model_name: modelName.trim(),
