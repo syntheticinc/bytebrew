@@ -261,7 +261,7 @@ function Step1ConnectLLM({
     return id;
   }
 
-  async function handleTest(e: FormEvent) {
+  async function handleNext(e: FormEvent) {
     e.preventDefault();
     if (status.kind === 'testing') return;
 
@@ -298,23 +298,25 @@ function Step1ConnectLLM({
     };
 
     try {
-      // There's no dedicated POST /models/test endpoint today — we create a
-      // real model and rely on the backend's validation. If the backend
-      // rejects bad credentials synchronously we surface that; if it accepts
-      // the config, we treat that as success and keep the model so the user
-      // has something usable on exit.
+      // POST /models is the only synchronous validation path today — backend
+      // rejects malformed payloads (missing kind, empty name, etc.) and 201
+      // means "good enough to persist". Bad API keys surface on the first
+      // real chat call, not here; adding a provider-ping validate endpoint
+      // is a separate backend change tracked in the playwright-smoke plan.
+      //
+      // On success we advance immediately — there is no value in showing a
+      // separate "Connected" state before the user clicks again.
       await api.createModel(payload);
       setStatus({ kind: 'success', modelName: payload.name });
+      onSuccess();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Connection failed.';
       setStatus({ kind: 'error', message });
     }
   }
 
-  const canProceed = status.kind === 'success';
-
   return (
-    <form onSubmit={handleTest} className="w-full max-w-3xl mx-auto">
+    <form onSubmit={handleNext} className="w-full max-w-3xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-brand-light mb-1">Connect your LLM</h1>
         <p className="text-sm text-brand-shade2">
@@ -447,24 +449,16 @@ function Step1ConnectLLM({
           <button
             type="submit"
             disabled={status.kind === 'testing'}
-            className="flex items-center gap-2 px-4 py-2 bg-brand-dark border border-brand-shade3/30 text-brand-light rounded-btn text-sm font-medium hover:border-brand-shade3/60 transition-colors disabled:opacity-60"
+            className="flex items-center gap-2 px-5 py-2 bg-brand-accent text-brand-light rounded-btn text-sm font-medium hover:bg-brand-accent-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {status.kind === 'testing' ? (
               <>
                 <SpinnerIcon className="w-4 h-4" />
-                Testing…
+                Connecting…
               </>
             ) : (
-              'Test connection'
+              'Next'
             )}
-          </button>
-          <button
-            type="button"
-            onClick={onSuccess}
-            disabled={!canProceed}
-            className="px-5 py-2 bg-brand-accent text-brand-light rounded-btn text-sm font-medium hover:bg-brand-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Next
           </button>
         </div>
       </div>
