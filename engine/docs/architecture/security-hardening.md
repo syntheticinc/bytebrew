@@ -3,6 +3,47 @@
 This document describes the security headers, CORS policy, and observability
 controls applied by the ByteBrew engine HTTP layer.
 
+## Security Gate Mapping (SCC-01..SCC-06)
+
+The table below maps canonical Security Check Codes to the engine endpoints
+and middleware that satisfy each gate. Used by QA when running
+`docs/testing/security-checklist.md` against a live deployment.
+
+| Check | Gate type | Description | Engine mechanism |
+|-------|-----------|-------------|-----------------|
+| **SCC-01** | GATE | Unauthenticated → 401 | `JWTAuthMiddleware` on all `/api/v1/*` protected routes. Absent or invalid `Authorization: Bearer` → `401 Unauthorized`. |
+| **SCC-02** | GATE | Cross-tenant → 403/404 | `TenantMiddleware` resolves `tenant_id` from JWT `sub` + `kid`. All repository queries are scoped by `tenant_id`. A valid JWT for tenant A cannot read resources of tenant B — returns 404 (resource not found for that tenant). |
+| **SCC-03** | GATE | Invalid input → 400 not 500 | Handler-level input validation before any business logic. Malformed JSON, missing required fields, oversized bodies (1 MB cap via `maxBodySize` middleware) → `400 Bad Request`. |
+| **SCC-04** | ADVISORY | File/shell tools blocked (Cloud) | EE binary: `deriveRuntimeTools` excludes `file_*`, `shell_exec` tool registrations. Cloud mode enforced via `BYTEBREW_AUTH_MODE=external` build path — no file-system tools exposed through MCP or native tool registry. |
+| **SCC-05** | ADVISORY | Expired JWT → 401 + WWW-Authenticate | EdDSA verifier checks `exp` claim; expired token → `401` with `WWW-Authenticate: Bearer error="invalid_token"` header. |
+| **SCC-06** | ADVISORY | Rate limit → 429 | `httprate.LimitByIP(100, time.Minute)` on `/api/v1/*` group (cloud-api). Engine: configurable via `engine.rate_limit` config key (default 200 req/min per IP). |
+
+### Fail-Closed Policy
+
+The quota check on each chat step is **fail-closed**: if the internal metering
+endpoint is unreachable, the engine rejects the request rather than allowing
+unlimited usage. Rationale: a silent billing gap is worse than a brief outage.
+
+```
+quota check → 503 metering unavailable → engine returns 503 to client
+```
+
+This is intentional and documented in the run-book. Operators must ensure the
+cloud-api `/api/v1/internal/quota/{tenant_id}` endpoint is reachable from the
+engine pod/container.
+
+### JWT Attack Defences
+
+| Attack | Defence |
+|--------|---------|
+| `alg=none` | EdDSA verifier hardcodes `EdDSA` algorithm — any token with `alg=none` or an unexpected algorithm is rejected before signature check. |
+| Algorithm confusion (RS256 vs EdDSA) | Single key type (Ed25519) registered; no RSA/HMAC keys present — confusion attacks have no valid target. |
+| Tampered payload | Signature covers the full header+payload; any byte change invalidates the Ed25519 signature. |
+| Key enumeration | Public key served only at `/api/v1/auth/keys` (JWKS). Private key never leaves the keys directory. |
+| Replay after expiry | `exp` claim mandatory; verifier rejects expired tokens even with valid signature. |
+
+---
+
 ## Security Headers
 
 ### API and Admin Routes (`/api/*`, `/admin/*`)
