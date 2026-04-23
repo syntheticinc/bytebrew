@@ -125,9 +125,12 @@ class APIClient {
 
     if (res.status === 401 && path !== '/auth/local-session') {
       this.clearToken();
-      // Defer bootstrap handling to the AuthProvider / hash-mode redirect.
-      // Reload kicks off the same bootstrap path a cold mount would use.
-      window.location.reload();
+      // Redirect to the login flow instead of reload — a cleared-token reload
+      // would trigger the same 401 on AuthProvider bootstrap and loop in
+      // external-mode stacks where /auth/local-session is not available.
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login?reason=session_expired';
+      }
       throw new Error('Unauthorized');
     }
 
@@ -830,7 +833,9 @@ class APIClient {
     });
     if (res.status === 401) {
       this.clearToken();
-      window.location.reload();
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login?reason=session_expired';
+      }
       throw new Error('Unauthorized');
     }
     if (!res.ok) {
@@ -935,7 +940,9 @@ class APIClient {
     });
     if (res.status === 401) {
       this.clearToken();
-      window.location.reload();
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login?reason=session_expired';
+      }
       throw new Error('Unauthorized');
     }
     if (!res.ok) {
@@ -1020,7 +1027,9 @@ class APIClient {
 
     if (res.status === 401) {
       this.clearToken();
-      window.location.reload();
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login?reason=session_expired';
+      }
       throw new Error('Unauthorized');
     }
 
