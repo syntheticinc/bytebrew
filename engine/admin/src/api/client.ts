@@ -65,6 +65,34 @@ import { MOCK_SCHEMA_TEMPLATES } from '../mocks/schemaTemplates';
 import { mockSchemas, mockAgentRelations } from '../mocks/schemas';
 
 const BASE_URL = '/api/v1';
+
+// redirectToLoginOn401 bounces the user to the correct login entrypoint for
+// the active auth mode. Called after clearing a stale token on a 401 response.
+//
+//   - VITE_AUTH_MODE=local (default, self-hosted): /login lives inside this
+//     SPA, so a same-origin redirect is fine.
+//   - VITE_AUTH_MODE=external (Cloud): this SPA has no /login route and lives
+//     on app.bytebrew.ai. Without VITE_LANDING_URL we'd send users to
+//     app.bytebrew.ai/login → Caddy fallthrough → confusing blank page. Use
+//     the landing URL with a return_to so the external IdP can mint a fresh
+//     token and hand us back in.
+//
+// Idempotent: no-op when we're already on /login to avoid redirect loops.
+function redirectToLoginOn401(): void {
+  if (typeof window === 'undefined') return;
+  if (window.location.pathname.startsWith('/login')) return;
+
+  const mode = import.meta.env.VITE_AUTH_MODE;
+  const landing = import.meta.env.VITE_LANDING_URL as string | undefined;
+
+  if (mode === 'external' && landing) {
+    const returnTo = encodeURIComponent(window.location.href);
+    window.location.href = `${landing}/login?return_to=${returnTo}&reason=session_expired`;
+    return;
+  }
+
+  window.location.href = '/login?reason=session_expired';
+}
 const PROTOTYPE_KEY = 'bytebrew_prototype_mode';
 // Build-time gate. A production build with VITE_PROTOTYPE_ENABLED unset cannot
 // enter prototype mode at all, even if localStorage is tampered with.
@@ -125,12 +153,7 @@ class APIClient {
 
     if (res.status === 401 && path !== '/auth/local-session') {
       this.clearToken();
-      // Redirect to the login flow instead of reload — a cleared-token reload
-      // would trigger the same 401 on AuthProvider bootstrap and loop in
-      // external-mode stacks where /auth/local-session is not available.
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login?reason=session_expired';
-      }
+      redirectToLoginOn401();
       throw new Error('Unauthorized');
     }
 
@@ -833,9 +856,7 @@ class APIClient {
     });
     if (res.status === 401) {
       this.clearToken();
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login?reason=session_expired';
-      }
+      redirectToLoginOn401();
       throw new Error('Unauthorized');
     }
     if (!res.ok) {
@@ -940,9 +961,7 @@ class APIClient {
     });
     if (res.status === 401) {
       this.clearToken();
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login?reason=session_expired';
-      }
+      redirectToLoginOn401();
       throw new Error('Unauthorized');
     }
     if (!res.ok) {
@@ -1027,9 +1046,7 @@ class APIClient {
 
     if (res.status === 401) {
       this.clearToken();
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login?reason=session_expired';
-      }
+      redirectToLoginOn401();
       throw new Error('Unauthorized');
     }
 
