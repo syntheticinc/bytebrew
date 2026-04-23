@@ -263,10 +263,18 @@ func seedBuilderAssistant(ctx context.Context, db *gorm.DB) {
 	slog.InfoContext(ctx, msg)
 }
 
-// resolveBuilderAgentID returns the UUID of builder-assistant, or "" if not found.
+// resolveBuilderAgentID returns the UUID of builder-assistant for the tenant in
+// ctx (or globally when no tenant in ctx — CE single-tenant mode). Tenant-scoped
+// because raw GORM queries bypass the repository scope chain: without an explicit
+// tenant filter, this would return the first match from any tenant, leaking a
+// foreign builder-assistant reference to the current tenant's schema seeding.
 func resolveBuilderAgentID(ctx context.Context, db *gorm.DB) string {
 	var agent models.AgentModel
-	if err := db.WithContext(ctx).Where("name = ?", builderAssistantName).First(&agent).Error; err != nil {
+	q := db.WithContext(ctx).Where("name = ?", builderAssistantName)
+	if tenantID := domain.TenantIDFromContext(ctx); tenantID != "" {
+		q = q.Where("tenant_id = ?", tenantID)
+	}
+	if err := q.First(&agent).Error; err != nil {
 		return ""
 	}
 	return agent.ID

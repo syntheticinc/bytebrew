@@ -59,5 +59,10 @@ func (s *engineTenantSeeder) SeedTenant(ctx context.Context, tenantID, plan stri
 	// tolerant of missing models (leaves ModelName empty) and idempotent
 	// (updates if already present).
 	seedBuilderAssistant(ctx, s.db)
+
+	// Seed the builder-schema so admin-assistant chat has a schema to
+	// resolve for this tenant. Without it, POST /admin/assistant/chat
+	// returns "no schema found" for new tenants.
+	seedBuilderSchema(ctx, s.db)
 	return nil
 }

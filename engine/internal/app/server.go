@@ -1363,13 +1363,20 @@ func Run(sc ServerConfig) error {
 
 		// Admin assistant — admin JWT required, chats against the seeded
 		// builder-schema; the schema resolver runs per-request so a late seed
-		// is picked up without a restart.
+		// is picked up without a restart. In multi-tenant (Cloud) mode, scope
+		// the lookup to the caller's tenant_id — otherwise every tenant would
+		// resolve to whichever builder-schema GORM returned first (cross-tenant
+		// leak).
 		builderSchemaResolver := func(ctx context.Context) (string, error) {
 			if pgDB == nil {
 				return "", fmt.Errorf("no db")
 			}
 			var id string
-			if err := pgDB.WithContext(ctx).Raw("SELECT id FROM schemas WHERE name = ? LIMIT 1", builderSchemaName).Scan(&id).Error; err != nil {
+			q := pgDB.WithContext(ctx).Table("schemas").Select("id").Where("name = ?", builderSchemaName)
+			if tenantID := domain.TenantIDFromContext(ctx); tenantID != "" {
+				q = q.Where("tenant_id = ?", tenantID)
+			}
+			if err := q.Limit(1).Scan(&id).Error; err != nil {
 				return "", err
 			}
 			return id, nil
