@@ -317,6 +317,16 @@ function Step1ConnectLLM({
       onSuccess();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Connection failed.';
+      // ALREADY_EXISTS means a model with this display name is already
+      // persisted for the tenant — which is the exact end-state Step 1 is
+      // trying to reach. Treat as success so users who re-enter onboarding
+      // (e.g. after clicking Skip and returning) aren't stuck retyping
+      // different names. Any other error (400, auth, network) still surfaces.
+      if (/already exists|ALREADY_EXISTS/i.test(message)) {
+        setStatus({ kind: 'success', modelName: payload.name });
+        onSuccess();
+        return;
+      }
       setStatus({ kind: 'error', message });
     }
   }
