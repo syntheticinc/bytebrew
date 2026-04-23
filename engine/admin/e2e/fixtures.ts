@@ -74,14 +74,16 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
           await use(session);
           return;
         }
-        session.cloudAccessToken = login.body.access_token ?? '';
+        // cloud-api wraps responses as { data: { access_token, refresh_token, ... } }
+        session.cloudAccessToken = login.body?.data?.access_token ?? login.body?.access_token ?? '';
         const engine = await mintEngineToken(request, session.cloudAccessToken);
         if (engine.status !== 200) {
           session.blockedReason = `engine_token_${engine.status}: ${JSON.stringify(engine.body).slice(0, 200)}`;
           await use(session);
           return;
         }
-        session.engineToken = engine.body.engine_token ?? engine.body.token ?? engine.body.access_token ?? '';
+        // engine-token response shape: { data: { token: "..." } }
+        session.engineToken = engine.body?.data?.token ?? engine.body?.data?.engine_token ?? engine.body?.token ?? engine.body?.engine_token ?? engine.body?.access_token ?? '';
         session.available = !!session.engineToken;
         if (!session.available) session.blockedReason = 'engine_token_empty';
       } catch (e) {
