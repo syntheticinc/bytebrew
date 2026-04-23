@@ -189,6 +189,32 @@ export default function SchemaDetailPage() {
   const [chatEnabledLocal, setChatEnabledLocal] = useState<boolean | null>(null);
   const [chatEnabledSaving, setChatEnabledSaving] = useState(false);
   const [chatEnabledError, setChatEnabledError] = useState<string | null>(null);
+
+  // Restore to factory defaults — only applicable on system (builder) schema.
+  // Mirrors the same affordance on AgentDrillInPage for builder-assistant; the
+  // button was previously on the schemas list which was asymmetric — editing
+  // an agent is per-agent on its detail page, editing the builder schema is
+  // per-schema on its canvas, so the restore control belongs here too.
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const handleRestoreDefaults = useCallback(async () => {
+    const confirmed = window.confirm(
+      'Restore the builder schema to factory defaults? The system agent, schema, and chat flag are reset — user schemas are untouched.',
+    );
+    if (!confirmed) return;
+    setRestoring(true);
+    setRestoreError(null);
+    try {
+      await api.restoreBuilderAssistant();
+      refetchSchema();
+      refetchAgentNames();
+      refetchRelations();
+    } catch (err) {
+      setRestoreError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRestoring(false);
+    }
+  }, [refetchSchema, refetchAgentNames, refetchRelations]);
   useEffect(() => {
     if (schema) setChatEnabledLocal(schema.chat_enabled ?? false);
   }, [schema]);
@@ -359,13 +385,32 @@ export default function SchemaDetailPage() {
           <h1 className="text-xl font-semibold text-brand-light">
             {schema?.name ?? schemaId}
           </h1>
+          {schema?.is_system && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider bg-brand-shade3/10 text-brand-shade3 border border-brand-shade3/25 font-mono">
+              System
+            </span>
+          )}
           {chatEnabled && (
             <span className="text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
               chat enabled
             </span>
           )}
           <div className="flex-1" />
+          {schema?.is_system && (
+            <button
+              type="button"
+              onClick={handleRestoreDefaults}
+              disabled={restoring}
+              className="px-4 py-1.5 border border-amber-500/40 text-amber-400 rounded-btn text-sm font-medium font-mono hover:bg-amber-500/10 disabled:opacity-50 transition-colors"
+              title="Restore builder-assistant, builder-schema, and chat flag to factory defaults"
+            >
+              {restoring ? 'Restoring…' : 'Restore defaults'}
+            </button>
+          )}
         </div>
+        {restoreError && (
+          <div className="mt-2 text-[11px] text-rose-400">Restore failed: {restoreError}</div>
+        )}
 
         {/* Tabs */}
         <div className="flex items-center gap-1 mt-3">

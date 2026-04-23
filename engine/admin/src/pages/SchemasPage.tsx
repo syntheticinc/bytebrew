@@ -222,33 +222,20 @@ function SchemaCard({ schema }: { schema: Schema }) {
 
 export default function SchemasPage() {
   const [picking, setPicking] = useState(false);
-  const [resetting, setResetting] = useState(false);
-  const [resetError, setResetError] = useState<string | null>(null);
   const [systemExpanded, setSystemExpanded] = useState(false);
   const navigate = useNavigate();
-  const { data: schemas, loading, error, refetch } = useApi(() => api.listSchemas());
+  const { data: schemas, loading, error } = useApi(() => api.listSchemas());
 
   function handleForked(schemaId: string) {
     setPicking(false);
     navigate(`/schemas/${schemaId}`);
   }
 
-  async function handleResetBuilder() {
-    const confirmed = window.confirm(
-      'Reset builder-schema to factory defaults? This restores the system agent, schema, and chat trigger. User schemas are not affected.',
-    );
-    if (!confirmed) return;
-    setResetting(true);
-    setResetError(null);
-    try {
-      await api.restoreBuilderAssistant();
-      refetch();
-    } catch (err) {
-      setResetError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setResetting(false);
-    }
-  }
+  // "Restore to factory defaults" lives on the builder-schema detail page
+  // (SchemaDetailPage) and the builder-assistant agent detail page
+  // (AgentDrillInPage). Symmetric with agent editing — the restore affordance
+  // is tied to the entity being edited, not the list. Keeping it off the list
+  // avoids the surprise "why is there a reset here but not on Agents list".
 
   const all = schemas ?? [];
   const userSchemas = all.filter((s) => !s.is_system);
@@ -316,38 +303,24 @@ export default function SchemasPage() {
 
       {systemSchemas.length > 0 && (
         <div className="mt-10 pt-6 border-t border-brand-shade3/10">
-          <div className="flex items-center justify-between mb-3">
-            <button
-              onClick={() => setSystemExpanded((e) => !e)}
-              className="flex items-center gap-2 text-xs text-brand-shade3 hover:text-brand-shade2 transition-colors"
+          <button
+            onClick={() => setSystemExpanded((e) => !e)}
+            className="flex items-center gap-2 text-xs text-brand-shade3 hover:text-brand-shade2 transition-colors mb-3"
+          >
+            <svg
+              width="12" height="12" viewBox="0 0 14 14" fill="none"
+              className={`transition-transform ${systemExpanded ? 'rotate-180' : ''}`}
             >
-              <svg
-                width="12" height="12" viewBox="0 0 14 14" fill="none"
-                className={`transition-transform ${systemExpanded ? 'rotate-180' : ''}`}
-              >
-                <path d="M3 5L7 9L11 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span className="uppercase tracking-wider font-semibold">System Schemas</span>
-              <span className="text-brand-shade3/50">({systemSchemas.length})</span>
-            </button>
-            {systemExpanded && (
-              <button
-                onClick={handleResetBuilder}
-                disabled={resetting}
-                className="px-3 py-1.5 text-[11px] font-medium rounded-btn border bg-brand-dark-surface text-brand-shade2 border-brand-shade3/25 hover:border-brand-shade3/50 hover:text-brand-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {resetting ? 'Resetting…' : 'Reset to factory defaults'}
-              </button>
-            )}
-          </div>
+              <path d="M3 5L7 9L11 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="uppercase tracking-wider font-semibold">System Schemas</span>
+            <span className="text-brand-shade3/50">({systemSchemas.length})</span>
+          </button>
           {systemExpanded && (
             <>
               <p className="text-[11px] text-brand-shade3 mb-3">
-                Reserved for platform internals. Cannot be deleted. Reset restores factory defaults.
+                Reserved for platform internals. Cannot be deleted. Open a system schema to restore it to factory defaults.
               </p>
-              {resetError && (
-                <div className="mb-3 text-[11px] text-rose-400">Reset failed: {resetError}</div>
-              )}
               <div className="grid grid-cols-2 gap-4">
                 {systemSchemas.map((s) => (
                   <SchemaCard key={s.id} schema={s} />
