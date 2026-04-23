@@ -18,8 +18,7 @@ test.describe('Regression bug #4 — stale HS256 token recovery', () => {
   });
 
   test('admin SPA with stale HS256 token does not infinite-load', async ({ page }) => {
-    // REPRODUCES BUG #4: admin SPA infinite-loads on stale HS256 token instead of redirecting to login
-    test.fail(true, 'BUG #4: admin SPA infinite-loads on stale HS256 token — does not redirect to login');
+    // was: test.fail — BUG #4 fixed via auto-recovery in client.ts (no more reload loop)
 
     const hs256Token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6OTk5OTk5OTk5OX0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
 

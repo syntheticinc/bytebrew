@@ -12,14 +12,12 @@ test.describe('Settings CRUD', () => {
   });
 
   test('update a setting and verify persistence', async ({ request, adminToken }) => {
-    // Get current settings to find a safe key to update
-    const getRes = await apiFetch(request, '/settings', { token: adminToken });
-    const settings = await getRes.json();
-
-    // Use a non-critical setting if available
-    const safeKey = 'max_session_length_minutes';
-    const currentValue = settings[safeKey] ?? 60;
-    const newValue = currentValue === 60 ? 61 : 60;
+    // PUT /settings/{key} expects { value: string } — all values are strings.
+    // GET /settings returns [] when no custom settings have been written yet,
+    // so we cannot read a current value to restore — we write a known value
+    // and verify it round-trips.
+    const safeKey = 'admin_mode';
+    const newValue = 'false';
 
     const putRes = await apiFetch(request, `/settings/${safeKey}`, {
       method: 'PUT',
@@ -28,17 +26,12 @@ test.describe('Settings CRUD', () => {
     });
     // May be 200/204 or 404 if key not supported — either is acceptable to document
     if ([200, 204].includes(putRes.status())) {
-      // Verify persistence
+      // Verify persistence — GET returns array of {key,value} objects
       const verifyRes = await apiFetch(request, '/settings', { token: adminToken });
-      const verified = await verifyRes.json();
-      expect.soft(verified[safeKey]).toBe(newValue);
-
-      // Restore
-      await apiFetch(request, `/settings/${safeKey}`, {
-        method: 'PUT',
-        token: adminToken,
-        body: { value: currentValue },
-      });
+      const body = await verifyRes.json();
+      const settings = Array.isArray(body) ? body : [];
+      const entry = settings.find((s: { key: string }) => s.key === safeKey);
+      expect.soft(entry?.value).toBe(newValue);
     } else {
       // Document: setting key may be different
       expect([200, 204, 404]).toContain(putRes.status());

@@ -5,8 +5,7 @@ import { test, expect, apiFetch } from '../fixtures';
 
 test.describe('localStorage tampering', () => {
   test('tampered bearer token in localStorage causes 401 on API calls', async ({ page }) => {
-    // REPRODUCES BUG #4: admin SPA infinite-loads on tampered token instead of redirecting to login
-    test.fail(true, 'BUG #4: admin SPA does not redirect to login on tampered token — shows infinite loading instead');
+    // was: test.fail — BUG #4 fixed via auto-recovery in client.ts
 
     // Set a tampered token
     await page.addInitScript(() => {

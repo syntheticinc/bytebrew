@@ -7,8 +7,7 @@ import { test, expect } from '../fixtures';
 
 test.describe('Admin — stale/invalid token handling', () => {
   test('stale JWT in localStorage causes 401 and redirect away from admin', async ({ page }) => {
-    // REPRODUCES BUG #4: admin SPA infinite-loads on stale/invalid token instead of redirecting to login
-    test.fail(true, 'BUG #4: admin SPA does not redirect to login on stale token — shows infinite loading instead');
+    // was: test.fail — BUG #4 fixed via auto-recovery in client.ts + SessionRestoredBanner
 
     // Inject an obviously expired/invalid token
     await page.addInitScript(() => {

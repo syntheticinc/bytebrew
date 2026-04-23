@@ -13,7 +13,7 @@ test.describe('Models CRUD', () => {
       token: adminToken,
       body: {
         name: createdModelName,
-        type: 'openai_compatible',
+        kind: 'chat',
         provider: 'openrouter',
         model_name: 'openai/gpt-3.5-turbo',
         api_key: 'sk-or-test-placeholder',
@@ -32,7 +32,7 @@ test.describe('Models CRUD', () => {
       token: adminToken,
       body: {
         name,
-        type: 'openai_compatible',
+        kind: 'chat',
         provider: 'openrouter',
         model_name: 'openai/gpt-4o-mini',
         api_key: 'sk-or-test',
@@ -58,7 +58,7 @@ test.describe('Models CRUD', () => {
       token: adminToken,
       body: {
         name,
-        type: 'openai_compatible',
+        kind: 'chat',
         provider: 'openrouter',
         model_name: 'openai/gpt-4o-mini',
         api_key: 'sk-or-test',

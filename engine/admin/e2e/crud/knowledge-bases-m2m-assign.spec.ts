@@ -22,11 +22,12 @@ test.describe('Knowledge Base M2M agent assignment', () => {
     expect([200, 201, 204]).toContain(assignRes.status());
 
     // Verify link
+    // GET /knowledge-bases/{id} returns { linked_agents: string[] }
     const getRes = await apiFetch(request, `/knowledge-bases/${kbId}`, { token: adminToken });
     if (getRes.status() === 200) {
       const body = await getRes.json();
-      const agents: Array<{ name?: string }> = body.agents ?? body.agent_names ?? [];
-      expect.soft(agents.some(a => a.name === agentName || a === agentName)).toBe(true);
+      const agents: Array<{ name?: string } | string> = body.linked_agents ?? body.agents ?? body.agent_names ?? [];
+      expect.soft(agents.some(a => (typeof a === 'string' ? a : a.name) === agentName)).toBe(true);
     }
 
     // Unassign
@@ -40,8 +41,8 @@ test.describe('Knowledge Base M2M agent assignment', () => {
     const verifyRes = await apiFetch(request, `/knowledge-bases/${kbId}`, { token: adminToken });
     if (verifyRes.status() === 200) {
       const body = await verifyRes.json();
-      const agents: Array<{ name?: string }> = body.agents ?? body.agent_names ?? [];
-      expect.soft(agents.some(a => a.name === agentName || a === agentName)).toBe(false);
+      const agents: Array<{ name?: string } | string> = body.linked_agents ?? body.agents ?? body.agent_names ?? [];
+      expect.soft(agents.some(a => (typeof a === 'string' ? a : a.name) === agentName)).toBe(false);
     }
 
     // Teardown

@@ -11,7 +11,7 @@ test.describe('MCP Servers CRUD', () => {
       token: adminToken,
       body: {
         name,
-        transport: 'http',
+        type: 'http',
         url: 'http://localhost:9999/mcp',
         description: 'Test MCP server',
       },
@@ -30,7 +30,7 @@ test.describe('MCP Servers CRUD', () => {
     const createRes = await apiFetch(request, '/mcp-servers', {
       method: 'POST',
       token: adminToken,
-      body: { name, transport: 'http', url: 'http://localhost:9999/mcp' },
+      body: { name, type: 'http', url: 'http://localhost:9999/mcp' },
     });
     const created = await createRes.json();
     const id = created.id ?? created.name ?? name;
@@ -49,7 +49,7 @@ test.describe('MCP Servers CRUD', () => {
     const createRes = await apiFetch(request, '/mcp-servers', {
       method: 'POST',
       token: adminToken,
-      body: { name, transport: 'http', url: 'http://localhost:9999/mcp' },
+      body: { name, type: 'http', url: 'http://localhost:9999/mcp' },
     });
     const created = await createRes.json();
     const id = created.id ?? created.name ?? name;

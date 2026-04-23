@@ -17,8 +17,7 @@ test.describe('SCC-05 — expired JWT returns 401 with WWW-Authenticate', () => 
   });
 
   test('expired JWT response includes WWW-Authenticate header', async ({ request }) => {
-    // REAL BUG: engine returns 401 without WWW-Authenticate header (RFC 7235 §3.1 requires it on 401)
-    test.fail(true, 'REAL BUG: engine /api/v1/agents returns 401 without WWW-Authenticate header (RFC 7235)');
+    // was: test.fail — BUG fixed in auth_middleware.go writeUnauthorized helper (RFC 7235)
     const expiredToken = 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6MX0.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 
     const res = await request.get(`${BASE_URL}/api/v1/agents`, {

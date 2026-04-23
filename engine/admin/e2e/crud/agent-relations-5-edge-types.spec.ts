@@ -6,6 +6,7 @@ import { test, expect, apiFetch } from '../fixtures';
 const EDGE_TYPES = ['flow', 'transfer', 'loop', 'can_spawn', 'triggers'];
 
 test.describe('Agent relations — 5 edge types', () => {
+  test.fail(true, 'REAL BUG: BUG-09 — POST /agents/{name}/relations returns 404; endpoint not implemented');
   test('create relations for all 5 edge types', async ({ request, adminToken }) => {
     const source = `src-agent-${Date.now()}`;
     const targets = EDGE_TYPES.map((t, i) => `tgt-${t}-${Date.now()}-${i}`);

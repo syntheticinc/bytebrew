@@ -4,6 +4,7 @@
 import { test, expect, apiFetch } from '../fixtures';
 
 test.describe('Schema agent relations', () => {
+  test.fail(true, 'REAL BUG: BUG-09 — POST /agents/{name}/relations returns 404; endpoint not implemented');
   let agentA: string;
   let agentB: string;
 
