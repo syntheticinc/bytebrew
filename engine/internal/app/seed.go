@@ -143,32 +143,76 @@ var builderAssistantBuiltinTools = []string{
 	"admin_get_session",
 }
 
+// modelHasUsableKey reports whether the named model has a non-empty
+// api_key_encrypted field. Returns false if the lookup fails or the model
+// is missing — both cases treated as "unusable" so the caller can rebind
+// to a different model (2026-04-23 chat-401 regression guard).
+func modelHasUsableKey(ctx context.Context, db *gorm.DB, name string) bool {
+	if name == "" {
+		return false
+	}
+	llmRepo := configrepo.NewGORMLLMProviderRepository(db)
+	allModels, err := llmRepo.List(ctx)
+	if err != nil {
+		return false
+	}
+	for _, m := range allModels {
+		if m.Name == name {
+			return m.APIKeyEncrypted != ""
+		}
+	}
+	return false
+}
+
 // ensureDefaultModel returns the name of a model to assign to builder-assistant.
-// If models already exist, returns the first one. Otherwise creates a default
-// free-tier model (OpenRouter qwen3.6-plus:free) and returns its name.
+// Prefers existing models with a non-empty api_key_encrypted (user-configured
+// via onboarding). Falls back to creating a default model only when env
+// LLM_API_KEY is set; otherwise returns "" so the caller can leave the agent
+// unbound and let the onboarding wizard drive the user to configure a key.
 func ensureDefaultModel(ctx context.Context, db *gorm.DB) string {
 	llmRepo := configrepo.NewGORMLLMProviderRepository(db)
 	allModels, listErr := llmRepo.List(ctx)
-	if listErr == nil && len(allModels) > 0 {
-		slog.InfoContext(ctx, "builder-assistant: using existing model", "model", allModels[0].Name)
-		return allModels[0].Name
+	if listErr == nil {
+		// Prefer the first model with a usable key. The old code took
+		// allModels[0] unconditionally, which bound to an empty-key
+		// "default" left over from a prior seed even when the user had
+		// configured a valid key on their own model — that's the path
+		// that caused the 2026-04-23 chat-401 prod bug.
+		for _, m := range allModels {
+			if m.APIKeyEncrypted != "" {
+				slog.InfoContext(ctx, "builder-assistant: using existing usable model", "model", m.Name)
+				return m.Name
+			}
+		}
+		if len(allModels) > 0 {
+			slog.InfoContext(ctx, "builder-assistant: existing models all have empty api_key, attempting to seed a fresh default")
+		}
 	}
 
-	// No models — create a default one. Pull LLM_API_KEY from env so the
-	// default model is usable out of the box; if the env is empty the user
-	// must add a key via the Models page before chatting.
+	// No models and no LLM_API_KEY env — don't persist a broken default.
+	// Returning "" leaves builder-assistant unbound so the onboarding wizard
+	// forces the user to add their own key first. Persisting a model with
+	// an empty api_key_encrypted was the 2026-04-23 prod regression: every
+	// chat turn hit the provider with no Authorization header and got back
+	// "401 Unauthorized, message: No cookie auth credentials found".
+	envKey := os.Getenv("LLM_API_KEY")
+	if envKey == "" {
+		slog.InfoContext(ctx, "no models and no LLM_API_KEY — leaving builder-assistant unbound until user configures a model")
+		return ""
+	}
+
 	m := &models.LLMProviderModel{
 		Name:            defaultModelName,
 		Type:            defaultModelType,
 		BaseURL:         defaultModelBaseURL,
 		ModelName:       defaultModelLLM,
-		APIKeyEncrypted: os.Getenv("LLM_API_KEY"),
+		APIKeyEncrypted: envKey,
 	}
 	if err := llmRepo.Create(ctx, m); err != nil {
 		slog.WarnContext(ctx, "failed to seed default model", "error", err)
 		return ""
 	}
-	slog.InfoContext(ctx, "seeded default model", "name", defaultModelName, "llm", defaultModelLLM, "has_api_key", m.APIKeyEncrypted != "")
+	slog.InfoContext(ctx, "seeded default model", "name", defaultModelName, "llm", defaultModelLLM)
 	return defaultModelName
 }
 
@@ -236,7 +280,12 @@ func seedBuilderAssistant(ctx context.Context, db *gorm.DB) {
 		// Model assignment is preserved (user may have customized it).
 		defaults := builderAssistantDefaults()
 		defaults.ModelName = existing.ModelName
-		if defaults.ModelName == "" {
+		// Rebind when the currently-bound model is missing or has an empty
+		// API key — ensureDefaultModel returns "" when there is no usable
+		// option, which at least stops emitting 401s on every chat turn
+		// (2026-04-23 regression guard). Keeping a broken binding is worse
+		// than no binding: unbound agents surface a clean onboarding prompt.
+		if defaults.ModelName == "" || !modelHasUsableKey(ctx, db, defaults.ModelName) {
 			defaults.ModelName = ensureDefaultModel(ctx, db)
 		}
 		if err := agentRepo.Update(ctx, builderAssistantName, defaults); err != nil {
