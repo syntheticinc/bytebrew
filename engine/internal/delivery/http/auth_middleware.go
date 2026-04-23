@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -11,6 +12,24 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	pluginpkg "github.com/syntheticinc/bytebrew/engine/pkg/plugin"
 )
+
+// writeUnauthorized emits a 401 response with an RFC 7235 §3.1 compliant
+// `WWW-Authenticate: Bearer` challenge. errCode/description follow RFC 6750
+// §3: "invalid_request" | "invalid_token" | "insufficient_scope" — or empty
+// for the "credentials missing entirely" case where only a bare challenge is
+// appropriate.
+func writeUnauthorized(w http.ResponseWriter, errCode, description string) {
+	challenge := `Bearer realm="bytebrew"`
+	if errCode != "" {
+		challenge += fmt.Sprintf(`, error=%q, error_description=%q`, errCode, description)
+	}
+	w.Header().Set("WWW-Authenticate", challenge)
+	msg := errCode
+	if msg == "" {
+		msg = "unauthorized"
+	}
+	writeJSON(w, http.StatusUnauthorized, map[string]string{"error": msg})
+}
 
 type contextKey string
 
@@ -134,7 +153,7 @@ func (m *AuthMiddleware) Authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+			writeUnauthorized(w, "", "")
 			return
 		}
 		token := strings.TrimPrefix(authHeader, "Bearer ")
@@ -152,7 +171,7 @@ func (m *AuthMiddleware) authenticateAPIToken(w http.ResponseWriter, r *http.Req
 	hash := sha256Hash(token)
 	info, err := m.tokenVerifier.VerifyToken(r.Context(), hash)
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid api token"})
+		writeUnauthorized(w, "invalid_token", "invalid api token")
 		return
 	}
 	ctx := context.WithValue(r.Context(), ContextKeyActorType, "api_token")
@@ -170,12 +189,12 @@ func (m *AuthMiddleware) authenticateAPIToken(w http.ResponseWriter, r *http.Req
 
 func (m *AuthMiddleware) authenticateJWT(w http.ResponseWriter, r *http.Request, next http.Handler, token string) {
 	if m.jwtVerifier == nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "no jwt verifier configured"})
+		writeUnauthorized(w, "invalid_token", "no jwt verifier configured")
 		return
 	}
 	claims, err := m.jwtVerifier.Verify(token)
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+		writeUnauthorized(w, "invalid_token", "invalid or expired token")
 		return
 	}
 	// Scopes come straight from the verifier. The HMAC verifier grants
