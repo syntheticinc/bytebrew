@@ -1,11 +1,22 @@
 # ByteBrew Engine -- Quick Start
 
-## Prerequisites
+Two deployment paths are supported:
+
+- **Docker Compose** — single-host (VPS, on-prem, local dev). See "Docker Compose" below.
+- **Kubernetes (Helm)** — clustered (dev/staging/prod). See "Kubernetes (Helm)" below.
+
+Both ship the same engine binary + admin SPA bundle. Pick based on your infra.
+
+---
+
+## Docker Compose
+
+### Prerequisites
 
 - Docker and Docker Compose
 - LLM API key (OpenRouter, OpenAI, or Anthropic)
 
-## Setup
+### Setup
 
 ```bash
 cp .env.example .env
@@ -82,3 +93,59 @@ Rebuild after code changes:
 ```bash
 docker compose build engine && docker compose up -d engine
 ```
+
+---
+
+## Kubernetes (Helm)
+
+### Prerequisites
+
+- Kubernetes 1.24+
+- `kubectl` + `helm` v3/v4 installed and authenticated to your cluster
+- Ingress controller (nginx-ingress recommended) and optionally cert-manager for TLS
+- External PostgreSQL 15+ with `pgvector` extension (managed or in-cluster)
+- LLM API key
+
+### Setup
+
+```bash
+cd helm
+
+# Copy the example, fill fields marked <REQUIRED>
+cp bytebrew/values.example.yaml values.yaml
+$EDITOR values.yaml
+
+# Validate template rendering
+helm lint ./bytebrew
+helm template bytebrew ./bytebrew -f values.yaml
+
+# Install
+helm install bytebrew ./bytebrew -f values.yaml
+```
+
+Required fields in `values.yaml`:
+
+- `ingress.hosts[0].host` — your public hostname
+- `postgresql.external.host` / `username` / `password` — managed PG endpoint
+- `secrets.llmAPIKeys.openai` (or `anthropic` / `openrouter`) — at least one
+
+After pods are Ready, the engine is reachable at `https://<your-host>/admin/`.
+
+### Upgrade
+
+```bash
+helm upgrade bytebrew ./bytebrew -f values.yaml
+```
+
+### Rollback
+
+```bash
+helm history bytebrew
+helm rollback bytebrew <revision>
+```
+
+### Single-replica constraint
+
+`config.auth.mode: "local"` requires `replicaCount: 1` (Ed25519 keypair on a single PVC). For HA, switch to `auth.mode: "external"` and provide a pre-generated Ed25519 public key via ConfigMap/Secret.
+
+See [docs: production deployment](https://bytebrew.ai/docs/deployment/production) for the full walkthrough including TLS via cert-manager, Prometheus scraping, and operational checklist.
