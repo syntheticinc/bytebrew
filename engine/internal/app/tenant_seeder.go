@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -52,12 +54,25 @@ func (s *engineTenantSeeder) SeedTenant(ctx context.Context, tenantID, plan stri
 		ChatEnabled: false,
 	}
 	if err := s.schemaRepo.Create(ctx, record); err != nil {
-		return fmt.Errorf("seed default schema: %w", err)
+		// Provisioning is idempotent — treat duplicate-name errors as a
+		// signal that the tenant was seeded before and fall through to
+		// builder-assistant rebinding. Without this, an existing tenant
+		// that was stuck on an empty-api-key binding (2026-04-23 chat-401
+		// bug) never gets rebound on subsequent engine-token handoffs.
+		lower := strings.ToLower(err.Error())
+		alreadyExists := strings.Contains(lower, "duplicate") ||
+			strings.Contains(lower, "already exists") ||
+			strings.Contains(lower, "unique constraint")
+		if !alreadyExists {
+			return fmt.Errorf("seed default schema: %w", err)
+		}
+		slog.InfoContext(ctx, "default schema already exists — continuing with builder-assistant rebinding", "tenant_id", tenantID)
 	}
 
 	// Seed the AI Builder agent for this tenant. seedBuilderAssistant is
 	// tolerant of missing models (leaves ModelName empty) and idempotent
-	// (updates if already present).
+	// (updates if already present). Always reached on every provisioning
+	// call so a stuck tenant can recover once the user adds a real model.
 	seedBuilderAssistant(ctx, s.db)
 
 	// Seed the builder-schema so admin-assistant chat has a schema to
