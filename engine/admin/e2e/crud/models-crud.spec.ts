@@ -14,7 +14,7 @@ test.describe('Models CRUD', () => {
       body: {
         name: createdModelName,
         kind: 'chat',
-        provider: 'openrouter',
+        type: 'openrouter',
         model_name: 'openai/gpt-3.5-turbo',
         api_key: 'sk-or-test-placeholder',
         base_url: 'https://openrouter.ai/api/v1',
@@ -33,7 +33,7 @@ test.describe('Models CRUD', () => {
       body: {
         name,
         kind: 'chat',
-        provider: 'openrouter',
+        type: 'openrouter',
         model_name: 'openai/gpt-4o-mini',
         api_key: 'sk-or-test',
         base_url: 'https://openrouter.ai/api/v1',
@@ -59,7 +59,7 @@ test.describe('Models CRUD', () => {
       body: {
         name,
         kind: 'chat',
-        provider: 'openrouter',
+        type: 'openrouter',
         model_name: 'openai/gpt-4o-mini',
         api_key: 'sk-or-test',
         base_url: 'https://openrouter.ai/api/v1',

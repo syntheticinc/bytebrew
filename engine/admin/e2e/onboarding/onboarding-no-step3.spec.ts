@@ -7,7 +7,10 @@ import { test, expect } from '../fixtures';
 test.describe('Onboarding — step 3 does not exist (regression guard)', () => {
   test('after step 2 action, URL does not contain step=3 or "canvas"', async ({ authenticatedAdmin }) => {
     const page = authenticatedAdmin;
-    await page.goto('/admin/onboarding?step=2');
+    // The wizard uses React state (useState<1|2>), NOT URL query params.
+    // ?step=2 is ignored — the page always renders step 1 on first load.
+    await page.goto('/admin/onboarding');
+    await page.waitForLoadState('networkidle');
 
     const skipBtn = page.locator('button:has-text("Skip")').first();
     if (await skipBtn.count() > 0) {
@@ -19,10 +22,15 @@ test.describe('Onboarding — step 3 does not exist (regression guard)', () => {
       expect(url).not.toContain('step=3');
       expect(url).not.toMatch(/onboarding.*canvas/);
     } else {
-      // Already past onboarding — verify no step 3 route exists
-      const res = await page.request.get('/admin/onboarding?step=3');
-      // Should redirect away or show admin, not a dedicated step 3 UI
-      expect(res.url()).not.toContain('step=3');
+      // Already past onboarding (model exists) — the wizard is not shown.
+      // Verify that navigating to ?step=3 does not show a dedicated step 3 UI.
+      // The SPA will preserve the query string in the URL (no server redirect for SPAs),
+      // but the rendered content must not be a "step 3" screen.
+      await page.goto('/admin/onboarding?step=3');
+      await page.waitForLoadState('networkidle');
+      const bodyText = await page.textContent('body') ?? '';
+      // Step 3 never existed — page should show step 1, schemas list, or be redirected elsewhere
+      expect(bodyText).not.toMatch(/Step 3 of|step three/i);
     }
   });
 

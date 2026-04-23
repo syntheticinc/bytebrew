@@ -53,8 +53,10 @@ test.describe('MCP Servers CRUD', () => {
     });
     const created = await createRes.json();
     const id = created.id ?? created.name ?? name;
+    // DELETE route is /{name}, not /{id} — prefer the name field
+    const deletePath = created.name ?? name;
 
-    await apiFetch(request, `/mcp-servers/${id}`, { method: 'DELETE', token: adminToken });
+    await apiFetch(request, `/mcp-servers/${deletePath}`, { method: 'DELETE', token: adminToken });
 
     const listRes = await apiFetch(request, '/mcp-servers', { token: adminToken });
     const body = await listRes.json();
