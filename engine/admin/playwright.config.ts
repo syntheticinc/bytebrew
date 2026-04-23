@@ -19,7 +19,14 @@ export default defineConfig({
     actionTimeout: 10_000,
     navigationTimeout: 20_000,
   },
+  // Cross-browser matrix. Default local runs stay chromium-only for speed;
+  // opt into firefox / webkit explicitly via `--project=firefox` or run all
+  // via `--project=chromium --project=firefox --project=webkit`. CI pipelines
+  // can shard per-project. Install the engines once with
+  // `npx playwright install firefox webkit`.
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
   ],
 });
