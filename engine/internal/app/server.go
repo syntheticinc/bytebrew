@@ -426,7 +426,17 @@ func Run(sc ServerConfig) error {
 	}
 
 	// Register admin tools and reload registry.
-	if pgDB != nil && agentRegistry != nil {
+	//
+	// Admin tools (admin_list_agents, admin_create_schema, etc.) are tenant-
+	// agnostic at registration time — they scope queries via ctx at call time
+	// using domain.TenantIDFromContext. Previously this branch was gated on
+	// agentRegistry != nil, which in multi-tenant mode (sc.RequireTenant=true,
+	// i.e. Cloud) is always nil because Single() is only called in single-
+	// tenant mode. That caused builder-assistant to crash on every turn with
+	// "unknown builtin tool: admin_list_agents" since the builtin store was
+	// never populated. Registration only needs pgDB — the repos it captures
+	// are the global DB handles that honor the request context.
+	if pgDB != nil {
 
 		// Wire admin tools into builtin store for builder-assistant.
 		if components.AgentToolResolver != nil {

@@ -224,6 +224,7 @@ export default function SchemasPage() {
   const [picking, setPicking] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+  const [systemExpanded, setSystemExpanded] = useState(false);
   const navigate = useNavigate();
   const { data: schemas, loading, error, refetch } = useApi(() => api.listSchemas());
 
@@ -316,28 +317,44 @@ export default function SchemasPage() {
       {systemSchemas.length > 0 && (
         <div className="mt-10 pt-6 border-t border-brand-shade3/10">
           <div className="flex items-center justify-between mb-3">
-            <div>
-              <h2 className="text-sm font-semibold text-brand-light">System schemas</h2>
-              <p className="text-[11px] text-brand-shade3 mt-0.5">
+            <button
+              onClick={() => setSystemExpanded((e) => !e)}
+              className="flex items-center gap-2 text-xs text-brand-shade3 hover:text-brand-shade2 transition-colors"
+            >
+              <svg
+                width="12" height="12" viewBox="0 0 14 14" fill="none"
+                className={`transition-transform ${systemExpanded ? 'rotate-180' : ''}`}
+              >
+                <path d="M3 5L7 9L11 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="uppercase tracking-wider font-semibold">System Schemas</span>
+              <span className="text-brand-shade3/50">({systemSchemas.length})</span>
+            </button>
+            {systemExpanded && (
+              <button
+                onClick={handleResetBuilder}
+                disabled={resetting}
+                className="px-3 py-1.5 text-[11px] font-medium rounded-btn border bg-brand-dark-surface text-brand-shade2 border-brand-shade3/25 hover:border-brand-shade3/50 hover:text-brand-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {resetting ? 'Resetting…' : 'Reset to factory defaults'}
+              </button>
+            )}
+          </div>
+          {systemExpanded && (
+            <>
+              <p className="text-[11px] text-brand-shade3 mb-3">
                 Reserved for platform internals. Cannot be deleted. Reset restores factory defaults.
               </p>
-            </div>
-            <button
-              onClick={handleResetBuilder}
-              disabled={resetting}
-              className="px-3 py-1.5 text-[11px] font-medium rounded-btn border bg-brand-dark-surface text-brand-shade2 border-brand-shade3/25 hover:border-brand-shade3/50 hover:text-brand-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {resetting ? 'Resetting…' : 'Reset to factory defaults'}
-            </button>
-          </div>
-          {resetError && (
-            <div className="mb-3 text-[11px] text-rose-400">Reset failed: {resetError}</div>
+              {resetError && (
+                <div className="mb-3 text-[11px] text-rose-400">Reset failed: {resetError}</div>
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                {systemSchemas.map((s) => (
+                  <SchemaCard key={s.id} schema={s} />
+                ))}
+              </div>
+            </>
           )}
-          <div className="grid grid-cols-2 gap-4">
-            {systemSchemas.map((s) => (
-              <SchemaCard key={s.id} schema={s} />
-            ))}
-          </div>
         </div>
       )}
 
