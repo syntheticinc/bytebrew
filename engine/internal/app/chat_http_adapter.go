@@ -110,7 +110,6 @@ func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, schemaID, message, us
 	}
 
 	if !a.registry.HasSession(sessionID) {
-		isNewSession = true
 		a.registry.CreateSession(sessionID, "", userSub, "", "", agentName)
 	}
 
@@ -149,6 +148,8 @@ func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, schemaID, message, us
 	sseCh := make(chan deliveryhttp.SSEEvent, 64)
 	go func() {
 		defer close(sseCh)
+		defer a.registry.RemoveSession(sessionID)
+		defer a.processor.StopProcessing(sessionID)
 		defer cleanup()
 
 		for protoEvent := range eventCh {
