@@ -16,10 +16,10 @@ const EXPECTED_NAV_ITEMS = [
 ];
 
 test.describe('Admin navigation — sidebar links', () => {
-  // REAL BUG: BUG-11 — admin SPA in cloud stack (VITE_AUTH_MODE=external) ignores
-  // jwt localStorage token set by fixture and redirects to landing instead.
-  // Fixture uses localStorage injection but external-mode SPA only reads #at= hash fragment.
-  test.fail(true, 'REAL BUG: BUG-11 — admin SPA external-mode ignores localStorage jwt; redirects to landing');
+  // BUG-11 resolved: admin APIClient constructor reads localStorage.getItem('jwt')
+  // synchronously at init, so bootstrapAuth() finds an authenticated client and
+  // skips the redirect path — the fixture's addInitScript sets 'jwt' before any
+  // page scripts execute, which works for both local and external build modes.
   test('all expected sidebar links are visible', async ({ authenticatedAdmin }) => {
     const page = authenticatedAdmin;
     await page.waitForLoadState('networkidle');
