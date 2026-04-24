@@ -275,16 +275,11 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
         if (controller.signal.aborted) return;
         const restored = mapEventsToMessages(raw);
         setMessages(restored);
-        // Estimate context tokens from restored message content (chars / 4)
-        const totalChars = raw.reduce((sum, ev) => {
-          const content = (ev.payload as Record<string, unknown> | undefined)?.content;
-          return sum + (typeof content === 'string' ? content.length : 0);
-        }, 0);
-        if (totalChars > 0) {
-          const estimated = Math.ceil(totalChars / 4);
-          setContextTokens(estimated);
-          if (persistenceKey) safeSetItem(persistenceKey + '_ctx', String(estimated));
-        }
+        // Do NOT compute contextTokens from event content — that undercounts
+        // by 3-4x because it excludes the system prompt, which is what fills
+        // most of the context window for AI builder. Leave contextTokens
+        // null so ContextUsageBar falls back to baselineTokens (system prompt
+        // estimate). The real value arrives via the next SSE `done` event.
       } catch (err) {
         if (controller.signal.aborted) return;
         if ((err as Error).name !== 'AbortError') {
