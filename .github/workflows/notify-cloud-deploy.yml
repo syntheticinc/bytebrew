@@ -31,9 +31,13 @@ jobs:
             echo "::error::GH_PAT secret is not set — Deploy Cloud will not run"
             exit 1
           fi
+          # Do NOT inline the commit message in the payload — it contains
+          # newlines and quotes that break JSON framing (GitHub responds 400
+          # Invalid request). The SHA is enough for tracing; the full message
+          # is available in the engine repo by looking the SHA up.
           curl -sSfL -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             https://api.github.com/repos/syntheticinc/bytebrew-cloud-web/dispatches \
-            -d "{\"event_type\":\"engine-push\",\"client_payload\":{\"engine_sha\":\"${{ github.sha }}\",\"message\":\"${{ github.event.head_commit.message }}\"}}"
+            -d "{\"event_type\":\"engine-push\",\"client_payload\":{\"engine_sha\":\"${{ github.sha }}\"}}"
