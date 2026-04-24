@@ -70,10 +70,17 @@ func (r *AgentContextRepository) Save(ctx context.Context, snapshot *domain.Agen
 	return nil
 }
 
-// Load loads snapshot by session+agent ID
+// Load loads the most-recently-updated snapshot for (session_id, agent_id).
+// Multiple rows accumulate over a multi-turn session because Save leaves
+// completed turns in status=expired/compacted as history; without an explicit
+// order the resume path picked an arbitrary (often the first) row and the
+// agent lost context between turns.
 func (r *AgentContextRepository) Load(ctx context.Context, sessionID, agentID string) (*domain.AgentContextSnapshot, error) {
 	var model models.AgentContextSnapshotModel
-	result := r.db.WithContext(ctx).Where("session_id = ? AND agent_id = ?", sessionID, agentID).First(&model)
+	result := r.db.WithContext(ctx).
+		Where("session_id = ? AND agent_id = ?", sessionID, agentID).
+		Order("updated_at DESC").
+		First(&model)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
 			return nil, nil // Not found = fresh start

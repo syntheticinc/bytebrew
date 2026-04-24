@@ -68,8 +68,29 @@ func (s *EventStream) Send(event *domain.AgentEvent) error {
 	}
 
 	pbEvent.SessionId = s.sessionID
+	if isStreamingChunk(event) {
+		// In-flight chunks are broadcast to SSE subscribers in real time but
+		// not persisted — the DB keeps only the final aggregated message
+		// (EventTypeAnswer / EventTypeReasoning with IsComplete=true). This
+		// avoids hundreds of partial reasoning rows per turn.
+		s.publisher.PublishEvent(s.sessionID, pbEvent)
+		return nil
+	}
 	s.persistAndPublish(pbEvent)
 	return nil
+}
+
+// isStreamingChunk reports whether the event is an in-flight chunk whose final
+// aggregated form will be emitted separately. Chunks are published live to
+// clients but skipped by the event store.
+func isStreamingChunk(event *domain.AgentEvent) bool {
+	switch event.Type {
+	case domain.EventTypeAnswerChunk:
+		return true
+	case domain.EventTypeReasoning:
+		return !event.IsComplete
+	}
+	return false
 }
 
 // PublishProcessingStarted sends a PROCESSING_STARTED event.

@@ -279,9 +279,16 @@ func (mc *MessageCollector) handleAnswer(ctx context.Context, event *domain.Agen
 		"length", len(event.Content), "agent_id", mc.agentID)
 }
 
-// handleReasoning creates reasoning event (previously not persisted)
+// handleReasoning creates reasoning event (previously not persisted).
+// Skips intermediate streaming chunks — the callback emits one reasoning
+// event per accumulated chunk plus a final IsComplete=true event; we keep
+// only the final aggregated row so the messages table doesn't balloon with
+// dozens of partial snapshots per turn.
 func (mc *MessageCollector) handleReasoning(ctx context.Context, event *domain.AgentEvent) {
 	if event.Content == "" {
+		return
+	}
+	if !event.IsComplete {
 		return
 	}
 
