@@ -313,6 +313,12 @@ function Step1ConnectLLM({
       // On success we advance immediately — there is no value in showing a
       // separate "Connected" state before the user clicks again.
       await api.createModel(payload);
+      // Mark the tenant as onboarded so OnboardingGate doesn't send the
+      // user back here on the very next navigation. The gate re-mounts
+      // whenever the route group changes (/onboarding wrapper vs /*
+      // wrapper) and a read-after-write race against POST /models can
+      // otherwise surface an empty list and trigger a redirect loop.
+      try { sessionStorage.setItem('bb_onboarded', '1'); } catch { /* no-op */ }
       setStatus({ kind: 'success', modelName: payload.name });
       onSuccess();
     } catch (err) {
@@ -323,6 +329,7 @@ function Step1ConnectLLM({
       // (e.g. after clicking Skip and returning) aren't stuck retyping
       // different names. Any other error (400, auth, network) still surfaces.
       if (/already exists|ALREADY_EXISTS/i.test(message)) {
+        try { sessionStorage.setItem('bb_onboarded', '1'); } catch { /* no-op */ }
         setStatus({ kind: 'success', modelName: payload.name });
         onSuccess();
         return;
