@@ -196,6 +196,22 @@ function ModelsPageInner() {
     }
   }
 
+  // handleSetDefault promotes a chat model to default. The backend atomically
+  // clears the previous default and flips the target — we just refetch so the
+  // table reflects the swap. No-op for already-default rows (defensive — the
+  // UI hides the button in that case, but this keeps the call site safe if
+  // someone invokes it programmatically).
+  async function handleSetDefault(model: Model) {
+    if (model.is_default) return;
+    try {
+      await api.setDefaultModel(model.name);
+      refetch();
+      addToast(`"${model.name}" is now the default chat model`, 'success');
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Failed to set default model', 'error');
+    }
+  }
+
   const isEdit = editTarget !== null;
   const isBaseUrlReadOnly = form.type in PROVIDER_BASE_URLS;
   const providerHint = PROVIDER_HINTS[form.type];
@@ -206,6 +222,7 @@ function ModelsPageInner() {
       header: 'Name',
       render: (row: Model) => {
         const entry = findRegistryEntry(row.model_name);
+        const isDefault = row.is_default === true && row.kind === 'chat';
         return (
           <div className="flex items-center gap-2">
             <span>{row.name}</span>
@@ -213,6 +230,14 @@ function ModelsPageInner() {
               <TierBadge tier={entry.tier} />
             ) : (
               <CustomModelBadge />
+            )}
+            {isDefault && (
+              <span
+                title="Default chat model — used by agents that don't specify one explicitly"
+                className="px-1.5 py-0.5 bg-brand-accent/15 border border-brand-accent/40 rounded text-[10px] text-brand-accent font-semibold uppercase tracking-wider"
+              >
+                Default
+              </span>
             )}
           </div>
         );
@@ -334,9 +359,24 @@ function ModelsPageInner() {
               >
                 Edit
               </button>
+              {selected.kind === 'chat' && !selected.is_default && (
+                <button
+                  onClick={() => handleSetDefault(selected)}
+                  title="Promote this model to default for new agents"
+                  className="px-4 py-2 text-brand-accent border border-brand-accent/40 rounded-btn text-sm font-medium hover:bg-brand-accent/10 transition-colors"
+                >
+                  Set as default
+                </button>
+              )}
               <button
                 onClick={() => setDeleteTarget(selected.name)}
-                className="px-4 py-2 text-red-400 border border-red-500/30 rounded-btn text-sm font-medium hover:bg-red-500/10 transition-colors"
+                disabled={selected.is_default === true && selected.kind === 'chat'}
+                title={
+                  selected.is_default === true && selected.kind === 'chat'
+                    ? 'Promote another chat model to default before removing this one'
+                    : undefined
+                }
+                className="px-4 py-2 text-red-400 border border-red-500/30 rounded-btn text-sm font-medium hover:bg-red-500/10 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
               >
                 Remove
               </button>
@@ -379,6 +419,17 @@ function ModelsPageInner() {
                   <span className="text-brand-shade3 text-xs">Not set</span>
                 )}
               </DetailRow>
+              {selected.kind === 'chat' && (
+                <DetailRow label="Default">
+                  {selected.is_default ? (
+                    <span className="px-1.5 py-0.5 bg-brand-accent/15 border border-brand-accent/40 rounded text-[10px] text-brand-accent font-semibold uppercase tracking-wider">
+                      Default
+                    </span>
+                  ) : (
+                    <span className="text-brand-shade3 text-xs">No</span>
+                  )}
+                </DetailRow>
+              )}
             </DetailSection>
 
             {selectedRegistryEntry && (

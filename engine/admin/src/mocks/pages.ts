@@ -18,10 +18,13 @@ export const MOCK_HEALTH: HealthResponse = {
 };
 
 export const MOCK_MODELS_LIST: Model[] = [
-  { id: '1', name: 'claude-haiku-3', type: 'openai_compatible', kind: 'chat', model_name: 'claude-3-haiku-20240307', has_api_key: true, created_at: '2026-03-01T00:00:00Z' },
-  { id: '2', name: 'claude-sonnet-3.7', type: 'openai_compatible', kind: 'chat', model_name: 'claude-3-5-sonnet-20241022', has_api_key: true, created_at: '2026-03-01T00:00:00Z' },
-  { id: '3', name: 'claude-opus-4', type: 'openai_compatible', kind: 'chat', model_name: 'claude-opus-4-20260414', has_api_key: true, created_at: '2026-03-15T00:00:00Z' },
-  { id: '4', name: 'gpt-4o', type: 'openai_compatible', kind: 'chat', model_name: 'gpt-4o', has_api_key: true, base_url: 'https://api.openai.com/v1', created_at: '2026-03-10T00:00:00Z' },
+  // First chat model is marked default so the prototype UI renders the
+  // "Default" badge — mirrors the backend behaviour where the first chat
+  // model per tenant is auto-promoted on create.
+  { id: '1', name: 'claude-haiku-3', type: 'openai_compatible', kind: 'chat', model_name: 'claude-3-haiku-20240307', has_api_key: true, is_default: true, created_at: '2026-03-01T00:00:00Z' },
+  { id: '2', name: 'claude-sonnet-3.7', type: 'openai_compatible', kind: 'chat', model_name: 'claude-3-5-sonnet-20241022', has_api_key: true, is_default: false, created_at: '2026-03-01T00:00:00Z' },
+  { id: '3', name: 'claude-opus-4', type: 'openai_compatible', kind: 'chat', model_name: 'claude-opus-4-20260414', has_api_key: true, is_default: false, created_at: '2026-03-15T00:00:00Z' },
+  { id: '4', name: 'gpt-4o', type: 'openai_compatible', kind: 'chat', model_name: 'gpt-4o', has_api_key: true, is_default: false, base_url: 'https://api.openai.com/v1', created_at: '2026-03-10T00:00:00Z' },
   { id: '5', name: 'text-embed-3-small', type: 'embedding', kind: 'embedding', model_name: 'text-embedding-3-small', embedding_dim: 1536, has_api_key: true, base_url: 'https://api.openai.com/v1', created_at: '2026-03-12T00:00:00Z' },
 ];
 

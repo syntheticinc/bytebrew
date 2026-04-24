@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import DelegationTree from '../components/DelegationTree';
+import DelegationTree, { computeEntryAgent } from '../components/DelegationTree';
 import { api } from '../api/client';
 import { useApi } from '../hooks/useApi';
 import type { AgentDetail, Schema } from '../types';
@@ -261,20 +261,29 @@ export default function SchemaDetailPage() {
     [rawRelations],
   );
 
-  // Entry agent name: prefer explicit entry_agent_name from schema, then detect
-  // from the relation graph (agent with outgoing relations but no incoming ones),
-  // then fall back to the first agent name. This handles schemas where entry_agent_id
-  // was not set explicitly (e.g., created without it or before auto-assignment).
-  // Uses agentNames (available before full agent details load) instead of treeAgents
-  // to avoid a timing issue where treeAgents is empty when treeRelations first loads.
+  // Entry agent name: prefer explicit entry_agent_name from schema, then
+  // detect from the relation graph via the shared `computeEntryAgent` helper
+  // (agent with outgoing relations but no incoming ones). Returns an empty
+  // string if neither source can pick one — the canvas surfaces a clear
+  // placeholder in that case rather than silently picking the first agent
+  // in the array, which would hide missing-entry-agent bugs.
+  //
+  // Uses agentNames (available before full agent details load) to build the
+  // graph input so the heuristic is available even before the full agent
+  // details resolve.
   const entryAgentId = useMemo(() => {
     if (schema?.entry_agent_name) return schema.entry_agent_name;
-    if (treeRelations.length > 0 && (agentNames?.length ?? 0) > 0) {
-      const hasIncoming = new Set(treeRelations.map((r) => r.targetAgentId));
-      const sourceOnly = (agentNames ?? []).find((name) => !hasIncoming.has(name));
-      if (sourceOnly) return sourceOnly;
-    }
-    return agentNames?.[0] ?? '';
+    const names = agentNames ?? [];
+    if (names.length === 0) return '';
+    // Feed agent names as both id and name — SchemaDetailPage projects
+    // agents by name at this point in the pipeline (the full-detail fetch
+    // carrying UUIDs happens later).
+    const graphAgents = names.map((n) => ({ id: n, name: n }));
+    const graphRelations = treeRelations.map((r) => ({
+      sourceAgentId: r.sourceAgentId,
+      targetAgentId: r.targetAgentId,
+    }));
+    return computeEntryAgent(graphAgents, graphRelations) ?? '';
   }, [schema, treeRelations, agentNames]);
 
   const isLoading = schemaLoading || agentNamesLoading || relationsLoading || agentsLoading;
@@ -370,6 +379,12 @@ export default function SchemaDetailPage() {
   }
 
   const canvasEmpty = treeAgents.length === 0 && !isLoading;
+  // Distinguish "no agents at all" (canvasEmpty above) from "agents exist
+  // but nobody is the entry orchestrator" — e.g. a schema with one lone
+  // agent and no relations, or a cycle. Surface an explicit placeholder so
+  // the operator knows to add the first agent as entry rather than seeing
+  // a random pick.
+  const entryAgentMissing = !isLoading && treeAgents.length > 0 && !entryAgentId;
   const schemaAgentNames = agentNames ?? [];
 
   const chatEnabled = chatEnabledLocal ?? schema?.chat_enabled ?? false;
@@ -455,6 +470,34 @@ export default function SchemaDetailPage() {
                   >
                     + Add first agent
                   </button>
+                </div>
+              </div>
+            ) : entryAgentMissing ? (
+              <div className="h-full flex items-center justify-center p-6">
+                <div className="bg-brand-dark-surface border border-dashed border-brand-shade3/25 rounded-card p-8 max-w-md text-center">
+                  <h3 className="text-[14px] font-semibold text-brand-light mb-2">No entry agent set</h3>
+                  <p className="text-[12px] text-brand-shade3 mb-4">
+                    The first agent you add will become the orchestrator. Pick which agent should receive
+                    incoming chat requests and delegate to the rest.
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {schemaAgentNames.map((name) => (
+                      <button
+                        key={name}
+                        onClick={async () => {
+                          try {
+                            await api.updateSchema(schemaId, { entry_agent_id: name });
+                            refetchSchema();
+                          } catch {
+                            // silently ignore — user sees stale state
+                          }
+                        }}
+                        className="px-3 py-2 text-[12px] bg-brand-dark-alt border border-brand-shade3/25 rounded-btn text-brand-light hover:border-brand-accent/50 transition-colors"
+                      >
+                        Set <span className="text-brand-accent font-semibold">{name}</span> as entry
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : (

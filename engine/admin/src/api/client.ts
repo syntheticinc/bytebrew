@@ -239,12 +239,33 @@ class APIClient {
     return this.request<Model[]>('GET', `/models${query}`);
   }
   createModel(data: CreateModelRequest) {
-    if (this.isPrototype) return this.mock({ id: crypto.randomUUID(), ...data, kind: data.kind ?? 'chat', has_api_key: !!data.api_key, created_at: new Date().toISOString() } as Model);
+    if (this.isPrototype) return this.mock({ id: crypto.randomUUID(), ...data, kind: data.kind ?? 'chat', has_api_key: !!data.api_key, is_default: data.is_default ?? false, created_at: new Date().toISOString() } as Model);
     return this.request<Model>('POST', '/models', data);
   }
   updateModel(name: string, data: CreateModelRequest) {
     if (this.isPrototype) return this.mock({ ...data, kind: data.kind ?? 'chat', name } as Model);
     return this.request<Model>('PATCH', `/models/${encodeURIComponent(name)}`, data);
+  }
+  // setDefaultModel promotes a single model to default for its (tenant, kind)
+  // pair. The backend atomically clears the previous default and flips the
+  // target row in one transaction; the partial unique index on `models`
+  // guarantees the invariant at the DB level.
+  //
+  // The `name` param is actually the model's DB identifier as used by all
+  // other model endpoints (PATCH /models/:name). We keep the naming
+  // consistent with updateModel/deleteModel to avoid a one-off id vs name
+  // convention just for this action.
+  setDefaultModel(name: string) {
+    if (this.isPrototype) {
+      // Update the shared MOCK list in place so the subsequent refetch
+      // reflects the swap without a real backend call.
+      for (const m of MOCK_MODELS_LIST) {
+        if (m.kind === 'chat') m.is_default = m.name === name;
+      }
+      const target = MOCK_MODELS_LIST.find((m) => m.name === name);
+      return this.mock<Model>(target ?? ({ name } as Model));
+    }
+    return this.request<Model>('PATCH', `/models/${encodeURIComponent(name)}`, { is_default: true });
   }
   deleteModel(name: string) {
     if (this.isPrototype) return this.mock(undefined as unknown as void);

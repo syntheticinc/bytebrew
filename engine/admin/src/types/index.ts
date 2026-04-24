@@ -69,6 +69,11 @@ export interface Model {
   has_api_key: boolean;
   api_version?: string;
   embedding_dim?: number; // >0 for embedding models
+  // is_default marks the single default model per (tenant, kind) — backend
+  // enforces the "at most one default per kind" invariant via a partial
+  // unique index. Optional on the read side for backward compat with any
+  // stale response that predates the schema migration.
+  is_default?: boolean;
   created_at: string;
 }
 
@@ -81,6 +86,11 @@ export interface CreateModelRequest {
   api_key?: string;
   api_version?: string;
   embedding_dim?: number; // required when kind=embedding
+  // Optional — when true, the server atomically clears the previous default
+  // for this (tenant, kind) and sets this row as default in one transaction.
+  // The onboarding wizard does not need to pass this; the backend
+  // auto-promotes the first chat model per tenant on create.
+  is_default?: boolean;
 }
 
 export interface UpdateModelRequest extends CreateModelRequest {}

@@ -1,5 +1,11 @@
 import { useMemo } from 'react';
 import type { TreeAgent, TreeRelation } from '../mocks/schemas';
+import { computeEntryAgent } from '../lib/delegationGraph';
+
+// Re-export so SchemaDetailPage can share the same helper without reaching
+// into the `lib/` barrel directly. Keeps DelegationTree as the single import
+// point for everything delegation-graph shaped.
+export { computeEntryAgent };
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -32,13 +38,33 @@ function buildTree(
   relations: TreeRelation[],
   entryId: string,
 ): TreeNode | null {
+  // Build two parallel lookup maps. `TreeAgent.id` is the agent's display
+  // name after adaptation in SchemaDetailPage, but some admin endpoints
+  // return relations keyed by agent UUID rather than name — so we accept
+  // both keys when resolving each side of a relation.
   const byId = new Map(agents.map((a) => [a.id, a]));
+  const byName = new Map(agents.map((a) => [a.name, a]));
+
+  function resolveKey(key: string): string | null {
+    // Returns the canonical key (agent.id in TreeAgent space) or null if the
+    // relation references an agent that isn't part of this schema slice.
+    const a = byId.get(key) ?? byName.get(key);
+    return a ? a.id : null;
+  }
+
   const childrenByParent = new Map<string, string[]>();
   for (const r of relations) {
-    const list = childrenByParent.get(r.sourceAgentId) ?? [];
-    list.push(r.targetAgentId);
-    childrenByParent.set(r.sourceAgentId, list);
+    const parent = resolveKey(r.sourceAgentId);
+    const child = resolveKey(r.targetAgentId);
+    if (parent === null || child === null) continue;
+    const list = childrenByParent.get(parent) ?? [];
+    list.push(child);
+    childrenByParent.set(parent, list);
   }
+
+  // Resolve the entry id the same way — callers may pass the name or the UUID.
+  const resolvedEntryId = resolveKey(entryId);
+  if (resolvedEntryId === null) return null;
 
   const visited = new Set<string>();
   function build(id: string, depth: number): TreeNode | null {
@@ -53,7 +79,7 @@ function buildTree(
     return { agent, children, depth };
   }
 
-  return build(entryId, 0);
+  return build(resolvedEntryId, 0);
 }
 
 // ─── Card component ─────────────────────────────────────────────────────────
