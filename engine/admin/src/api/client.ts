@@ -43,8 +43,6 @@ import type {
   KnowledgeFile,
   KnowledgeStatus,
   CircuitBreakerState,
-  DeadLetterEntry,
-  StuckAgentEntry,
   MessageResponse,
   EventResponse,
 } from '../types';
@@ -685,6 +683,16 @@ class APIClient {
     return this.request<EventResponse[]>('GET', `/sessions/${sessionId}/messages`);
   }
 
+  async getBuilderLastSession(): Promise<string | null> {
+    if (this.isPrototype) return this.mock<string | null>(null);
+    try {
+      const res = await this.request<{ session_id: string }>('GET', '/admin/assistant/last-session');
+      return res.session_id ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   getSessionTrace(sessionId: string): Promise<SessionTrace> {
     if (this.isPrototype) {
       if (sessionId === MOCK_TRACE_ERROR.session_id) {
@@ -1008,18 +1016,6 @@ class APIClient {
   async resetCircuitBreaker(name: string): Promise<void> {
     if (this.isPrototype) return this.mock(undefined as unknown as void);
     await this.request<void>('POST', `/resilience/circuit-breakers/${encodeURIComponent(name)}/reset`);
-  }
-
-  async listDeadLetterTasks(): Promise<DeadLetterEntry[]> {
-    if (this.isPrototype) return [];
-    const data = await this.request<{ tasks: DeadLetterEntry[] }>('GET', '/resilience/dead-letter');
-    return data.tasks ?? [];
-  }
-
-  async listStuckAgents(): Promise<StuckAgentEntry[]> {
-    if (this.isPrototype) return [];
-    const data = await this.request<{ agents: StuckAgentEntry[] }>('GET', '/resilience/stuck-agents');
-    return data.agents ?? [];
   }
 
   // ─── Builder Assistant ───────────────────────────────────────────────────────

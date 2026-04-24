@@ -37,6 +37,9 @@ export interface UseSSEChatConfig {
   persistenceKey?: string;
   /** Injected fetch function for session event restore (keeps hook api-import-free). */
   fetchMessages?: (sessionId: string) => Promise<EventResponse[]>;
+  /** When provided, called on mount instead of reading from localStorage.
+   *  Return null to start a fresh session. Mutually exclusive with persistenceKey. */
+  resolveSessionId?: () => Promise<string | null>;
 }
 
 export interface UseSSEChatReturn {
@@ -203,7 +206,7 @@ function mapEventsToMessages(events: EventResponse[]): SSEMessage[] {
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
 export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
-  const { endpoint, schemaId, schemaContext, getHeaders, onToolResult, persistenceKey, fetchMessages } = config;
+  const { endpoint, schemaId, schemaContext, getHeaders, onToolResult, persistenceKey, fetchMessages, resolveSessionId } = config;
 
   const [messages, setMessages] = useState<SSEMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -225,7 +228,10 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
 
   // ── Restore session from backend on mount and persistenceKey change ──────
   useEffect(() => {
-    if (!persistenceKey || !fetchMessages) return;
+    const hasResolve = !!resolveSessionId;
+    const hasPersistence = !!persistenceKey && !!fetchMessages;
+    if (!hasResolve && !hasPersistence) return;
+    if (!fetchMessages) return;
 
     // Abort any active SSE stream on key change
     abortRef.current?.abort();
@@ -234,46 +240,68 @@ export function useSSEChat(config: UseSSEChatConfig): UseSSEChatReturn {
     // Abort any previous restore fetch
     restoreAbortRef.current?.abort();
 
-    const storedSid = safeGetItem(persistenceKey);
-    if (!storedSid) {
-      // No stored session — clear state, show empty
-      sessionIdRef.current = '';
-      setSessionId('');
-      setMessages([]);
-      return;
-    }
-
-    sessionIdRef.current = storedSid;
-    setSessionId(storedSid);
-
     const controller = new AbortController();
     restoreAbortRef.current = controller;
 
-    setIsRestoring(true);
-    fetchMessages(storedSid)
-      .then((raw) => {
+    const doRestore = async () => {
+      let sid: string | null = null;
+
+      if (hasResolve) {
+        try {
+          sid = await resolveSessionId!();
+        } catch {
+          sid = null;
+        }
+      } else {
+        sid = safeGetItem(persistenceKey!) ?? null;
+      }
+
+      if (controller.signal.aborted) return;
+
+      if (!sid) {
+        sessionIdRef.current = '';
+        setSessionId('');
+        setMessages([]);
+        return;
+      }
+
+      sessionIdRef.current = sid;
+      setSessionId(sid);
+      if (persistenceKey) safeSetItem(persistenceKey, sid);
+
+      setIsRestoring(true);
+      try {
+        const raw = await fetchMessages(sid);
         if (controller.signal.aborted) return;
-        setMessages(mapEventsToMessages(raw));
-      })
-      .catch((err) => {
+        const restored = mapEventsToMessages(raw);
+        setMessages(restored);
+        // Estimate context tokens from restored message content (chars / 4)
+        const totalChars = raw.reduce((sum, ev) => {
+          const content = (ev.payload as Record<string, unknown> | undefined)?.content;
+          return sum + (typeof content === 'string' ? content.length : 0);
+        }, 0);
+        if (totalChars > 0) {
+          const estimated = Math.ceil(totalChars / 4);
+          setContextTokens(estimated);
+          if (persistenceKey) safeSetItem(persistenceKey + '_ctx', String(estimated));
+        }
+      } catch (err) {
         if (controller.signal.aborted) return;
-        // Non-abort error: session expired/deleted — clear key, start fresh
         if ((err as Error).name !== 'AbortError') {
-          safeRemoveItem(persistenceKey);
+          if (persistenceKey) safeRemoveItem(persistenceKey);
           sessionIdRef.current = '';
           setSessionId('');
           setMessages([]);
         }
-      })
-      .finally(() => {
+      } finally {
         if (!controller.signal.aborted) setIsRestoring(false);
-      });
-
-    return () => {
-      controller.abort();
+      }
     };
+
+    doRestore();
+    return () => { controller.abort(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [persistenceKey]);
+  }, [persistenceKey, resolveSessionId]);
 
   const resetSession = useCallback(() => {
     sessionIdRef.current = '';

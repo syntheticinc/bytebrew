@@ -109,11 +109,11 @@ export default function BottomPanel() {
   // M-01: Pass schema context on ALL pages — lockedSchema (canvas) or selectedSchema (other pages)
   const effectiveSchema = lockedSchema ?? selectedSchema ?? undefined;
 
-  const assistantPersistenceKey = effectiveSchema ? `bb_assistant_${effectiveSchema}` : undefined;
+  const resolveBuilderSession = useCallback(() => api.getBuilderLastSession(), []);
   const { messages, sendMessage, isStreaming, isRestoring, resetSession, tokenUsage, contextTokens } = useSSEChat({
     endpoint: `/api/v1/admin/assistant/chat`,
     schemaContext: effectiveSchema === 'builder-schema' ? undefined : effectiveSchema,
-    persistenceKey: assistantPersistenceKey,
+    resolveSessionId: resolveBuilderSession,
     fetchMessages: (sid) => api.getSessionEvents(sid),
     onToolResult: (tool) => {
       if (tool.startsWith('admin_')) {

@@ -1391,9 +1391,10 @@ func Run(sc ServerConfig) error {
 			}
 			return id, nil
 		}
+		adminAssistantSessionRepo := configrepo.NewGORMSessionRepository(pgDB)
 		adminAssistantHandler := deliveryhttp.NewAdminAssistantHandler(chatService, builderSchemaResolver, func() []string {
 			return forwardHeadersStore.Load().([]string)
-		})
+		}, adminAssistantSessionRepo)
 		registerAdminAssistantRoutes := func(router chi.Router) {
 			router.Group(func(r chi.Router) {
 				if httpAuthMW != nil {
@@ -1401,6 +1402,7 @@ func Run(sc ServerConfig) error {
 					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
 				}
 				r.Post("/api/v1/admin/assistant/chat", adminAssistantHandler.Chat)
+				r.Get("/api/v1/admin/assistant/last-session", adminAssistantHandler.LastSession)
 			})
 		}
 		registerAdminAssistantRoutes(httpServer.Router())

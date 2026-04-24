@@ -123,6 +123,24 @@ func (r *GORMSessionRepository) TouchUpdatedAt(ctx context.Context, id string) e
 	return nil
 }
 
+// LastForSchema returns the ID of the most-recently-updated session for the given
+// schema and user within the current tenant. Returns ("", nil) when none exists.
+func (r *GORMSessionRepository) LastForSchema(ctx context.Context, schemaID, userSub string) (string, error) {
+	var session models.SessionModel
+	err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Where("schema_id = ? AND user_sub = ?", schemaID, userSub).
+		Order("updated_at DESC").
+		First(&session).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("last session for schema: %w", err)
+	}
+	return session.ID, nil
+}
+
 // GetUserSubBySessionID returns the user_sub (JWT sub) for a session
 // for ownership checks. Tenant-scoped. Returns ("", false, nil) if session not found.
 func (r *GORMSessionRepository) GetUserSubBySessionID(ctx context.Context, sessionID string) (string, bool, error) {

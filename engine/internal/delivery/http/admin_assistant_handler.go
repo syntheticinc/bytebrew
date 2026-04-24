@@ -15,6 +15,12 @@ import (
 // HTTP startup) is picked up without restarting the server.
 type BuilderSchemaResolver func(ctx context.Context) (string, error)
 
+// SessionLastFetcher returns the most-recently-active session ID for a schema+user pair.
+// Returns ("", nil) when no session exists.
+type SessionLastFetcher interface {
+	LastForSchema(ctx context.Context, schemaID, userSub string) (string, error)
+}
+
 // AdminAssistantHandler serves POST /api/v1/admin/assistant/chat.
 // Admin-only endpoint for the builder-assistant — always chats against the
 // seeded builder-schema. chat_enabled guard is applied by the underlying
@@ -23,11 +29,40 @@ type AdminAssistantHandler struct {
 	service          ChatService
 	resolveSchema    BuilderSchemaResolver
 	forwardHeadersFn func() []string
+	sessions         SessionLastFetcher
 }
 
 // NewAdminAssistantHandler creates a new AdminAssistantHandler.
-func NewAdminAssistantHandler(service ChatService, resolveSchema BuilderSchemaResolver, forwardHeadersFn func() []string) *AdminAssistantHandler {
-	return &AdminAssistantHandler{service: service, resolveSchema: resolveSchema, forwardHeadersFn: forwardHeadersFn}
+func NewAdminAssistantHandler(service ChatService, resolveSchema BuilderSchemaResolver, forwardHeadersFn func() []string, sessions SessionLastFetcher) *AdminAssistantHandler {
+	return &AdminAssistantHandler{service: service, resolveSchema: resolveSchema, forwardHeadersFn: forwardHeadersFn, sessions: sessions}
+}
+
+// LastSession handles GET /api/v1/admin/assistant/last-session.
+// Returns {"session_id":"<uuid>"} for the most recent builder session of the current user,
+// or 204 No Content if none exists yet.
+func (h *AdminAssistantHandler) LastSession(w http.ResponseWriter, r *http.Request) {
+	userSub := resolveUserSub(r, "")
+	if userSub == "" {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+		return
+	}
+
+	schemaID, err := h.resolveSchema(r.Context())
+	if err != nil || schemaID == "" {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "builder schema not ready"})
+		return
+	}
+
+	sid, err := h.sessions.LastForSchema(r.Context(), schemaID, userSub)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch session"})
+		return
+	}
+	if sid == "" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"session_id": sid})
 }
 
 // adminAssistantRequest extends chatRequest with an optional schema context.
