@@ -60,6 +60,7 @@ func (a *adminAgentRepoAdapter) Delete(ctx context.Context, name string) error {
 
 func toAdminAgentRecord(r configrepo.AgentRecord) admintools.AgentRecord {
 	return admintools.AgentRecord{
+		ID:            r.ID,
 		Name:          r.Name,
 		SystemPrompt:  r.SystemPrompt,
 		ModelName:     r.ModelName,
@@ -140,10 +141,39 @@ func (a *adminSchemaRepoAdapter) Create(ctx context.Context, record *admintools.
 	return nil
 }
 
+// Update applies the name/description/entry_agent_id/chat_enabled overrides
+// from the admin tool. Optional pointer fields on the admin record preserve
+// existing values when nil — the concrete SchemaRecord the GORM repo consumes
+// has value-typed fields that map directly to UPDATE columns, so we have to
+// merge by first loading the current row.
 func (a *adminSchemaRepoAdapter) Update(ctx context.Context, id string, record *admintools.SchemaRecord) error {
+	existing, err := a.repo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
 	cr := &configrepo.SchemaRecord{
-		Name:        record.Name,
-		Description: record.Description,
+		Name:         existing.Name,
+		Description:  existing.Description,
+		EntryAgentID: existing.EntryAgentID,
+		ChatEnabled:  existing.ChatEnabled,
+	}
+	if record.Name != "" {
+		cr.Name = record.Name
+	}
+	if record.Description != "" {
+		cr.Description = record.Description
+	}
+	if record.EntryAgentID != nil {
+		if *record.EntryAgentID == "" {
+			cr.EntryAgentID = nil
+		} else {
+			resolved := *record.EntryAgentID
+			cr.EntryAgentID = &resolved
+		}
+	}
+	if record.ChatEnabled != nil {
+		cr.ChatEnabled = *record.ChatEnabled
 	}
 	return a.repo.Update(ctx, id, cr)
 }
@@ -191,6 +221,7 @@ func (a *adminMCPServerRepoAdapter) Create(ctx context.Context, record *admintoo
 		URL:     record.URL,
 		Args:    marshalJSONPtr(record.Args),
 		EnvVars: marshalJSONPtr(record.EnvVars),
+		Enabled: record.Enabled,
 	}
 	if err := a.repo.Create(ctx, m); err != nil {
 		return err
@@ -207,6 +238,7 @@ func (a *adminMCPServerRepoAdapter) Update(ctx context.Context, id string, recor
 		URL:     record.URL,
 		Args:    marshalJSONPtr(record.Args),
 		EnvVars: marshalJSONPtr(record.EnvVars),
+		Enabled: record.Enabled,
 	}
 	return a.repo.Update(ctx, id, m)
 }
@@ -232,6 +264,7 @@ func toAdminMCPServerRecord(s models.MCPServerModel) admintools.MCPServerRecord 
 		URL:     s.URL,
 		Args:    args,
 		EnvVars: envVars,
+		Enabled: s.Enabled,
 	}
 }
 
@@ -289,6 +322,7 @@ func (a *adminModelRepoAdapter) Create(ctx context.Context, record *admintools.M
 		BaseURL:         record.BaseURL,
 		ModelName:       record.ModelName,
 		APIKeyEncrypted: record.APIKey,
+		IsDefault:       record.IsDefault,
 	}
 	if err := a.repo.Create(ctx, m); err != nil {
 		return err
@@ -303,6 +337,7 @@ func (a *adminModelRepoAdapter) Update(ctx context.Context, id string, record *a
 		Type:      record.Type,
 		BaseURL:   record.BaseURL,
 		ModelName: record.ModelName,
+		IsDefault: record.IsDefault,
 	}
 	if record.APIKey != "" {
 		m.APIKeyEncrypted = record.APIKey
@@ -312,6 +347,25 @@ func (a *adminModelRepoAdapter) Update(ctx context.Context, id string, record *a
 
 func (a *adminModelRepoAdapter) Delete(ctx context.Context, id string) error {
 	return a.repo.Delete(ctx, id)
+}
+
+// GetDefault exposes the tenant's default chat model to admin tools.
+func (a *adminModelRepoAdapter) GetDefault(ctx context.Context) (*admintools.ModelRecord, error) {
+	p, err := a.repo.GetDefault(ctx, "chat")
+	if err != nil {
+		return nil, err
+	}
+	if p == nil {
+		return nil, nil
+	}
+	rec := toAdminModelRecord(*p)
+	return &rec, nil
+}
+
+// SetDefault promotes the given model ID to the tenant's default chat model
+// — atomic swap, enforced by a partial unique index at the DB level.
+func (a *adminModelRepoAdapter) SetDefault(ctx context.Context, id string) error {
+	return a.repo.SetDefault(ctx, id)
 }
 
 func toAdminModelRecord(p models.LLMProviderModel) admintools.ModelRecord {
@@ -326,6 +380,7 @@ func toAdminModelRecord(p models.LLMProviderModel) admintools.ModelRecord {
 		BaseURL:   p.BaseURL,
 		ModelName: p.ModelName,
 		APIKey:    apiKey,
+		IsDefault: p.IsDefault,
 	}
 }
 

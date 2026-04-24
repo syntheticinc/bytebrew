@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - changeSet:
+      id: add-mcp-servers-enabled
+      author: bytebrew
+      comment: |
+        Add `enabled` column to mcp_servers so the builder-assistant (and
+        admin UI) can temporarily disable a server without deleting it.
+        Defaults to TRUE — every existing row stays enabled after upgrade.
+      changes:
+        - sql:
+            sql: |
+              ALTER TABLE mcp_servers
+                ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT TRUE;

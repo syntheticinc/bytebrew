@@ -53,6 +53,7 @@ func (m *modelServiceHTTPAdapter) ListModels(ctx context.Context) ([]deliveryhtt
 			HasAPIKey:    p.APIKeyEncrypted != "",
 			APIVersion:   p.APIVersion,
 			EmbeddingDim: p.EmbeddingDim(),
+			IsDefault:    p.IsDefault,
 			CreatedAt:    p.CreatedAt.Format(time.RFC3339),
 		})
 	}
@@ -64,6 +65,22 @@ func (m *modelServiceHTTPAdapter) CreateModel(ctx context.Context, req deliveryh
 	if kind == "" {
 		kind = "chat"
 	}
+
+	// Bootstrap: if this is the first chat model for the tenant and the
+	// caller didn't explicitly set is_default, auto-promote it so the tenant
+	// has a coherent default out of the box.
+	autoPromoted := false
+	if kind == "chat" && !req.IsDefault {
+		existingDefault, err := m.repo.GetDefault(ctx, "chat")
+		if err != nil {
+			return nil, fmt.Errorf("check existing default model: %w", err)
+		}
+		if existingDefault == nil {
+			req.IsDefault = true
+			autoPromoted = true
+		}
+	}
+
 	provider := &models.LLMProviderModel{
 		Name:            req.Name,
 		Type:            req.Type,
@@ -72,6 +89,12 @@ func (m *modelServiceHTTPAdapter) CreateModel(ctx context.Context, req deliveryh
 		ModelName:       req.ModelName,
 		APIKeyEncrypted: req.APIKey,
 		APIVersion:      req.APIVersion,
+	}
+	// Only set IsDefault on create for the bootstrap case — when the caller
+	// explicitly asked to promote and the tenant already has a default, we
+	// route through SetDefault (below) to preserve the atomic-swap invariant.
+	if kind == "chat" && autoPromoted {
+		provider.IsDefault = true
 	}
 	if req.EmbeddingDim > 0 {
 		provider.SetConfig(models.ModelConfig{EmbeddingDim: req.EmbeddingDim})
@@ -84,17 +107,20 @@ func (m *modelServiceHTTPAdapter) CreateModel(ctx context.Context, req deliveryh
 		return nil, fmt.Errorf("create model: %w", err)
 	}
 
-	// Back-fill builder-assistant's model_name when this is the first chat
-	// model for the tenant. Non-fatal — a failure here doesn't undo the
-	// successful model create.
-	if m.agentRepo != nil && kind == "chat" {
-		if ba, err := m.agentRepo.GetByName(ctx, builderAssistantName); err == nil && ba != nil && ba.ModelName == "" {
-			ba.ModelName = provider.Name
-			if uerr := m.agentRepo.Update(ctx, builderAssistantName, ba); uerr != nil {
-				// Log-only: the model is live, the user can set it manually later.
-				_ = uerr
-			}
+	// If caller asked for is_default=true on a model that wasn't the
+	// bootstrap case, flip the default now (atomic swap).
+	if kind == "chat" && req.IsDefault && !autoPromoted {
+		if err := m.repo.SetDefault(ctx, provider.ID); err != nil {
+			return nil, fmt.Errorf("promote to default: %w", err)
 		}
+		provider.IsDefault = true
+	}
+
+	// Back-fill every agent with ModelID IS NULL to the tenant default
+	// whenever a chat model becomes the default. Covers both the bootstrap
+	// (first chat model) and the explicit promote path. Non-fatal per-agent.
+	if kind == "chat" && provider.IsDefault {
+		m.backfillTenantAgentsToDefault(ctx, provider.ID)
 	}
 
 	return &deliveryhttp.ModelResponse{
@@ -107,8 +133,43 @@ func (m *modelServiceHTTPAdapter) CreateModel(ctx context.Context, req deliveryh
 		HasAPIKey:    provider.APIKeyEncrypted != "",
 		APIVersion:   provider.APIVersion,
 		EmbeddingDim: provider.EmbeddingDim(),
+		IsDefault:    provider.IsDefault,
 		CreatedAt:    provider.CreatedAt.Format(time.RFC3339),
 	}, nil
+}
+
+// backfillTenantAgentsToDefault sets ModelID on every agent in the current
+// tenant whose ModelID is nil — driving them onto the new default chat model.
+// Agents already bound to a specific model are left alone: user intent takes
+// precedence over automatic backfill. Per-agent failure is logged but does
+// not fail the caller (the model create already committed).
+func (m *modelServiceHTTPAdapter) backfillTenantAgentsToDefault(ctx context.Context, modelID string) {
+	if m.agentRepo == nil || modelID == "" {
+		return
+	}
+	agents, err := m.agentRepo.List(ctx)
+	if err != nil {
+		return
+	}
+	// Resolve model name once for the Update call — the existing AgentRecord
+	// update path keys on ModelName, not ModelID. Cheap: we already have the
+	// provider struct on the caller side, but looking up by ID keeps this
+	// helper reusable from SetDefault paths that only carry the ID.
+	provider, err := m.repo.GetByID(ctx, modelID)
+	if err != nil || provider == nil {
+		return
+	}
+	for i := range agents {
+		a := &agents[i]
+		if a.ModelID != nil && *a.ModelID != "" {
+			continue
+		}
+		a.ModelName = provider.Name
+		if uerr := m.agentRepo.Update(ctx, a.Name, a); uerr != nil {
+			// Log-only: failure to rebind one agent doesn't undo the model create.
+			_ = uerr
+		}
+	}
 }
 
 func (m *modelServiceHTTPAdapter) UpdateModel(ctx context.Context, name string, req deliveryhttp.CreateModelRequest) (*deliveryhttp.ModelResponse, error) {
@@ -139,6 +200,9 @@ func (m *modelServiceHTTPAdapter) UpdateModel(ctx context.Context, name string, 
 		BaseURL:    req.BaseURL,
 		ModelName:  req.ModelName,
 		APIVersion: req.APIVersion,
+		// Preserve default flag through the plain Update path — promotion
+		// goes through SetDefault to keep the atomic-swap invariant intact.
+		IsDefault:  existing.IsDefault,
 	}
 	if req.EmbeddingDim > 0 {
 		update.SetConfig(models.ModelConfig{EmbeddingDim: req.EmbeddingDim})
@@ -150,6 +214,18 @@ func (m *modelServiceHTTPAdapter) UpdateModel(ctx context.Context, name string, 
 
 	if err := m.repo.Update(ctx, existing.ID, update); err != nil {
 		return nil, fmt.Errorf("update model: %w", err)
+	}
+
+	// Handle explicit IsDefault promotion (PUT full-replace semantics): if the
+	// caller passed IsDefault=true on a model that isn't currently default,
+	// promote it via SetDefault to keep the atomic-swap invariant intact.
+	promotedDefault := false
+	if req.IsDefault && !existing.IsDefault {
+		if err := m.repo.SetDefault(ctx, existing.ID); err != nil {
+			return nil, fmt.Errorf("promote model to default: %w", err)
+		}
+		promotedDefault = true
+		m.backfillTenantAgentsToDefault(ctx, existing.ID)
 	}
 
 	// Invalidate cached client so next access picks up changes.
@@ -167,6 +243,11 @@ func (m *modelServiceHTTPAdapter) UpdateModel(ctx context.Context, name string, 
 		respName = existing.Name
 	}
 
+	isDefault := existing.IsDefault
+	if promotedDefault {
+		isDefault = true
+	}
+
 	return &deliveryhttp.ModelResponse{
 		ID:           existing.ID,
 		Name:         respName,
@@ -177,6 +258,7 @@ func (m *modelServiceHTTPAdapter) UpdateModel(ctx context.Context, name string, 
 		HasAPIKey:    hasKey,
 		APIVersion:   req.APIVersion,
 		EmbeddingDim: req.EmbeddingDim,
+		IsDefault:    isDefault,
 		CreatedAt:    existing.CreatedAt.Format(time.RFC3339),
 	}, nil
 }
@@ -242,8 +324,24 @@ func (m *modelServiceHTTPAdapter) PatchModel(ctx context.Context, name string, r
 		update.SetConfig(cfg)
 	}
 
+	// Preserve current IsDefault through the plain Update path — promotion
+	// goes through SetDefault to keep the atomic-swap invariant intact.
+	update.IsDefault = existing.IsDefault
+
 	if err := m.repo.Update(ctx, existing.ID, update); err != nil {
 		return nil, fmt.Errorf("patch model: %w", err)
+	}
+
+	// Promote to default when is_default=true and we aren't already the default.
+	// (is_default=false was rejected at the handler layer.)
+	promotedDefault := false
+	if req.IsDefault != nil && *req.IsDefault && !existing.IsDefault {
+		if err := m.repo.SetDefault(ctx, existing.ID); err != nil {
+			return nil, fmt.Errorf("promote model to default: %w", err)
+		}
+		promotedDefault = true
+		// Re-run agent backfill so any unbound agents pick up the new default.
+		m.backfillTenantAgentsToDefault(ctx, existing.ID)
 	}
 
 	if m.modelCache != nil {
@@ -253,6 +351,11 @@ func (m *modelServiceHTTPAdapter) PatchModel(ctx context.Context, name string, r
 	embDim := existing.EmbeddingDim()
 	if req.EmbeddingDim != nil {
 		embDim = *req.EmbeddingDim
+	}
+
+	isDefault := existing.IsDefault
+	if promotedDefault {
+		isDefault = true
 	}
 
 	return &deliveryhttp.ModelResponse{
@@ -265,6 +368,7 @@ func (m *modelServiceHTTPAdapter) PatchModel(ctx context.Context, name string, r
 		HasAPIKey:    update.APIKeyEncrypted != "",
 		APIVersion:   update.APIVersion,
 		EmbeddingDim: embDim,
+		IsDefault:    isDefault,
 		CreatedAt:    existing.CreatedAt.Format(time.RFC3339),
 	}, nil
 }

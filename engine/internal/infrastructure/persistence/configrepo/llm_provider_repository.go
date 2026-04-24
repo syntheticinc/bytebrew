@@ -101,6 +101,62 @@ func (r *GORMLLMProviderRepository) GetModelKind(ctx context.Context, id string)
 	return kind, nil
 }
 
+// GetDefault returns the tenant's default model for the given kind (usually "chat").
+// Returns (nil, nil) when no default has been set — callers should treat this as
+// "no usable default" rather than an error. Kind is stored as a plain discriminator
+// (no parameterisation beyond the string); the partial unique index keyed on
+// `(tenant_id) WHERE is_default=TRUE AND kind='chat'` means at most one row
+// can match for chat today.
+func (r *GORMLLMProviderRepository) GetDefault(ctx context.Context, kind string) (*models.LLMProviderModel, error) {
+	if kind == "" {
+		kind = "chat"
+	}
+	var provider models.LLMProviderModel
+	err := r.db.WithContext(ctx).
+		Scopes(tenantScope(ctx)).
+		Where("is_default = ? AND kind = ?", true, kind).
+		First(&provider).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get default %s model: %w", kind, err)
+	}
+	return &provider, nil
+}
+
+// SetDefault atomically promotes the given model to the tenant's default chat
+// model. In a single transaction: clears is_default=false on every other
+// chat model in the tenant, then flips the target to true. The partial unique
+// index idx_models_tenant_default_chat enforces the invariant at the DB level
+// — if two concurrent callers race, exactly one commits and the other gets
+// the underlying pq error back unwrapped so callers can detect the 23505
+// unique-violation code and retry.
+func (r *GORMLLMProviderRepository) SetDefault(ctx context.Context, modelID string) error {
+	tenantID := tenantIDFromCtx(ctx)
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 1. Clear the current default(s). Using WHERE is_default=TRUE keeps the
+		//    index happy: no row is ever simultaneously old-true and new-true.
+		if err := tx.Model(&models.LLMProviderModel{}).
+			Where("tenant_id = ? AND kind = 'chat' AND is_default = TRUE AND id != ?", tenantID, modelID).
+			Update("is_default", false).Error; err != nil {
+			return err
+		}
+		// 2. Promote the target row. Scoping by tenant prevents cross-tenant
+		//    hijacking via crafted modelID.
+		result := tx.Model(&models.LLMProviderModel{}).
+			Where("id = ? AND tenant_id = ?", modelID, tenantID).
+			Update("is_default", true)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return fmt.Errorf("model not found: %s", modelID)
+		}
+		return nil
+	})
+}
+
 // AgentsUsingModel returns the names of agents that reference the given model ID (tenant-scoped).
 func (r *GORMLLMProviderRepository) AgentsUsingModel(ctx context.Context, modelID string) ([]string, error) {
 	var names []string

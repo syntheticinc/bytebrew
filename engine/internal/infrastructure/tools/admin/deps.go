@@ -34,6 +34,16 @@ type AgentRepository interface {
 	Delete(ctx context.Context, name string) error
 }
 
+// AgentUUIDResolver returns an agent's UUID given either its name or UUID.
+// Consumer-side contract used by schema/attachment tools that accept either
+// form of agent reference from the LLM. Value "" means "preserve existing".
+//
+// Implementations should return the UUID unchanged when it is already a
+// canonical UUID (cheap string check), and resolve by name otherwise.
+type AgentUUIDResolver interface {
+	ResolveAgentID(ctx context.Context, ref string) (string, error)
+}
+
 // SchemaRepository provides schema CRUD for admin tools.
 //
 // V2: schema membership is derived from `agent_relations` (see
@@ -58,12 +68,20 @@ type MCPServerRepository interface {
 }
 
 // ModelRepository provides model CRUD for admin tools.
+//
+// GetDefault / SetDefault operate on the tenant's default chat model (kind
+// is hard-coded to 'chat' inside the implementation — admin tools do not
+// expose embedding defaults today). The partial unique index keyed on
+// (tenant_id, kind='chat') guarantees at most one chat default per tenant
+// at the DB layer.
 type ModelRepository interface {
 	List(ctx context.Context) ([]ModelRecord, error)
 	GetByID(ctx context.Context, id string) (*ModelRecord, error)
 	Create(ctx context.Context, record *ModelRecord) error
 	Update(ctx context.Context, id string, record *ModelRecord) error
 	Delete(ctx context.Context, id string) error
+	GetDefault(ctx context.Context) (*ModelRecord, error)
+	SetDefault(ctx context.Context, id string) error
 }
 
 // AgentRelationRepository provides agent-relation CRUD for admin tools.
@@ -89,6 +107,7 @@ type CapabilityRepository interface {
 
 // AgentRecord mirrors configrepo.AgentRecord fields needed by admin tools.
 type AgentRecord struct {
+	ID            string
 	Name          string
 	SystemPrompt  string
 	ModelName     string
@@ -102,11 +121,19 @@ type AgentRecord struct {
 }
 
 // SchemaRecord represents a schema for admin tools.
+//
+// EntryAgentID / ChatEnabled are optional write-side overrides plumbed through
+// to SchemaRepository.Update so admin_update_schema can flip chat access and
+// re-point the entry agent without going through the REST layer. Nil pointers
+// mean "preserve existing value" — zero values would incorrectly clear the
+// fields.
 type SchemaRecord struct {
-	ID          string
-	Name        string
-	Description string
-	AgentNames  []string
+	ID           string
+	Name         string
+	Description  string
+	AgentNames   []string
+	EntryAgentID *string
+	ChatEnabled  *bool
 }
 
 // MCPServerRecord represents an MCP server for admin tools.
@@ -118,6 +145,9 @@ type MCPServerRecord struct {
 	URL     string
 	Args    []string
 	EnvVars map[string]string
+	// Enabled reflects the row's `enabled` column. False means the server
+	// stays configured but is not injected into agents at runtime.
+	Enabled bool
 }
 
 // ModelRecord represents an LLM model configuration for admin tools.
@@ -128,6 +158,11 @@ type ModelRecord struct {
 	BaseURL   string
 	ModelName string
 	APIKey    string // write-only, masked on read
+	// IsDefault mirrors models.is_default. Readers use it to highlight the
+	// default chat model in UI / tool output; writers can set it true on
+	// create to explicitly promote the new row to default (otherwise the
+	// HTTP adapter auto-promotes the first chat model per tenant).
+	IsDefault bool
 }
 
 // AgentRelationRecord represents a delegation relation between agents in a

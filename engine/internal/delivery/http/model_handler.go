@@ -21,6 +21,9 @@ type ModelResponse struct {
 	HasAPIKey    bool   `json:"has_api_key"`
 	APIVersion   string `json:"api_version,omitempty"`
 	EmbeddingDim int    `json:"embedding_dim,omitempty"` // >0 for embedding models
+	// IsDefault flags the tenant's current default chat model (at most one
+	// per tenant, enforced by a partial unique DB index).
+	IsDefault    bool   `json:"is_default"`
 	CreatedAt    string `json:"created_at"`
 }
 
@@ -35,6 +38,10 @@ type CreateModelRequest struct {
 	APIKey       string `json:"api_key,omitempty"`
 	APIVersion   string `json:"api_version,omitempty"`
 	EmbeddingDim int    `json:"embedding_dim,omitempty"` // required when kind=embedding
+	// IsDefault, when true on a chat model, promotes it to tenant default
+	// (atomic swap). When not set on the first chat model created for a
+	// tenant, the server auto-promotes it (natural bootstrap).
+	IsDefault    bool   `json:"is_default,omitempty"`
 }
 
 // ModelVerifyResult contains the result of model connectivity verification.
@@ -59,6 +66,10 @@ type UpdateModelRequest struct {
 	APIKey       *string `json:"api_key,omitempty"`
 	APIVersion   *string `json:"api_version,omitempty"`
 	EmbeddingDim *int    `json:"embedding_dim,omitempty"`
+	// IsDefault: pointer so nil = "don't touch". *true = promote this model
+	// to tenant default. *false = rejected (you must promote a replacement
+	// instead; you can't clear the default without picking another).
+	IsDefault    *bool   `json:"is_default,omitempty"`
 }
 
 // ModelService provides LLM model CRUD operations.
@@ -280,6 +291,14 @@ func (h *ModelHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Kind != nil && !validModelKinds[*req.Kind] {
 		writeJSONError(w, http.StatusBadRequest, "kind must be one of: chat, embedding")
+		return
+	}
+	// Invariant: at most one default chat model per tenant. Clearing a default
+	// only makes sense in the context of promoting another model — we refuse
+	// a bare `is_default=false` so the client can't leave the tenant without
+	// a default.
+	if req.IsDefault != nil && !*req.IsDefault {
+		writeJSONError(w, http.StatusBadRequest, "cannot clear is_default; set another model's is_default=true instead")
 		return
 	}
 

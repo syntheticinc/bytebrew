@@ -158,30 +158,39 @@ func (t *adminCreateSchemaTool) InvokableRun(ctx context.Context, argsJSON strin
 // --- admin_update_schema ---
 
 type adminUpdateSchemaTool struct {
-	repo     SchemaRepository
-	reloader func()
+	repo      SchemaRepository
+	agentRepo AgentRepository
+	reloader  func()
 }
 
-func NewAdminUpdateSchemaTool(repo SchemaRepository, reloader func()) tool.InvokableTool {
-	return &adminUpdateSchemaTool{repo: repo, reloader: reloader}
+// NewAdminUpdateSchemaTool wires the update-schema tool. agentRepo is used to
+// resolve the `entry_agent_id` parameter when it comes in as an agent name
+// (the LLM finds name resolution more natural than UUIDs). Passing nil is
+// allowed — the tool then requires entry_agent_id to be a UUID.
+func NewAdminUpdateSchemaTool(repo SchemaRepository, agentRepo AgentRepository, reloader func()) tool.InvokableTool {
+	return &adminUpdateSchemaTool{repo: repo, agentRepo: agentRepo, reloader: reloader}
 }
 
 func (t *adminUpdateSchemaTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "admin_update_schema",
-		Desc: "Updates an existing schema by ID.",
+		Desc: "Updates an existing schema by ID. Set chat_enabled=true to let end users chat with this schema; set entry_agent_id (agent name or UUID) to point chat at the delegator root.",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"schema_id":   {Type: schema.String, Desc: "Schema ID to update", Required: true},
-			"name":        {Type: schema.String, Desc: "New name", Required: false},
-			"description": {Type: schema.String, Desc: "New description", Required: false},
+			"schema_id":       {Type: schema.String, Desc: "Schema ID to update", Required: true},
+			"name":            {Type: schema.String, Desc: "New name", Required: false},
+			"description":     {Type: schema.String, Desc: "New description", Required: false},
+			"entry_agent_id":  {Type: schema.String, Desc: "Entry agent: accepts either the agent name or its UUID. Pass empty string to clear.", Required: false},
+			"chat_enabled":    {Type: schema.Boolean, Desc: "When true, end-user chat through this schema is allowed.", Required: false},
 		}),
 	}, nil
 }
 
 type updateSchemaArgs struct {
-	SchemaID    string `json:"schema_id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	SchemaID     string  `json:"schema_id"`
+	Name         string  `json:"name"`
+	Description  string  `json:"description"`
+	EntryAgentID *string `json:"entry_agent_id,omitempty"`
+	ChatEnabled  *bool   `json:"chat_enabled,omitempty"`
 }
 
 func (t *adminUpdateSchemaTool) InvokableRun(ctx context.Context, argsJSON string, _ ...tool.Option) (string, error) {
@@ -196,6 +205,21 @@ func (t *adminUpdateSchemaTool) InvokableRun(ctx context.Context, argsJSON strin
 	record := &SchemaRecord{
 		Name:        args.Name,
 		Description: args.Description,
+		ChatEnabled: args.ChatEnabled,
+	}
+
+	if args.EntryAgentID != nil {
+		ref := *args.EntryAgentID
+		if ref == "" {
+			empty := ""
+			record.EntryAgentID = &empty
+		} else {
+			resolved, err := resolveAgentReference(ctx, t.agentRepo, ref)
+			if err != nil {
+				return fmt.Sprintf("[ERROR] %v", err), nil
+			}
+			record.EntryAgentID = &resolved
+		}
 	}
 
 	if err := t.repo.Update(ctx, args.SchemaID, record); err != nil {
@@ -211,6 +235,37 @@ func (t *adminUpdateSchemaTool) InvokableRun(ctx context.Context, argsJSON strin
 
 	slog.InfoContext(ctx, "[AdminUpdateSchema] updated schema", "id", args.SchemaID)
 	return fmt.Sprintf("Schema %s updated successfully.", args.SchemaID), nil
+}
+
+// resolveAgentReference returns a UUID given either a canonical UUID or an
+// agent name. A canonical UUID is short-circuited with a cheap shape check.
+// Name resolution goes through the supplied AgentRepository — when repo is
+// nil, name-shaped refs are rejected with a clear error.
+func resolveAgentReference(ctx context.Context, repo AgentRepository, ref string) (string, error) {
+	if isLikelyUUID(ref) {
+		return ref, nil
+	}
+	if repo == nil {
+		return "", fmt.Errorf("agent reference %q looks like a name but no AgentRepository is wired; pass a UUID instead", ref)
+	}
+	rec, err := repo.GetByName(ctx, ref)
+	if err != nil || rec == nil {
+		return "", fmt.Errorf("agent not found: %s", ref)
+	}
+	if rec.ID == "" {
+		return "", fmt.Errorf("agent %q has no resolvable UUID", ref)
+	}
+	return rec.ID, nil
+}
+
+// isLikelyUUID does a cheap length+dash check. Good enough to distinguish
+// "researcher" from "7f6b6b62-4be1-4d3f-b1c6-3c54c71b6d9d" at this layer —
+// the DB layer still validates the final value.
+func isLikelyUUID(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+	return s[8] == '-' && s[13] == '-' && s[18] == '-' && s[23] == '-'
 }
 
 // --- admin_delete_schema ---

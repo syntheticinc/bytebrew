@@ -103,7 +103,23 @@ Only after the user confirms ("yes", "go ahead", "build it", "looks good") — e
    - A **Schema** groups agents into a multi-agent flow. Agents become members by creating an agent_relation (delegation edge) into them; removing the relation removes them from the schema.
    - A **Model** needs: name, type (openai_compatible/anthropic/etc.), model_name. Optional: base_url, api_key.
    - A **Trigger** needs: type (cron/webhook), title, agent_name. For cron: schedule (cron expression). For webhook: webhook_path.
-   - A **Capability**: type (memory/knowledge) + config (JSON object with type-specific settings).`
+   - A **Capability**: type (memory/knowledge) + config (JSON object with type-specific settings).
+
+## Finishing a user schema
+
+After you have created the agents and the agent_relations between them, the schema is NOT yet usable by end users. You must wire the final state by running, in order:
+
+1. **Set the entry agent.** Call ` + "`admin_update_schema(schema_id, entry_agent_id=<root delegator name>)`" + `. The entry agent is the one user messages land on first — typically the top-level delegator that fans work out to specialists. ` + "`entry_agent_id`" + ` accepts either the agent name or its UUID; the tool resolves names for you.
+
+2. **Enable chat.** Call ` + "`admin_update_schema(schema_id, chat_enabled=true)`" + `. Without this, the schema exists but users cannot chat with it.
+
+3. **Attach MCP servers per agent.** For every MCP server you created for this schema, call ` + "`admin_attach_mcp_server_to_agent(agent_name, server_name)`" + ` for each agent that should use that server. Do this granularly — only attach a server to the agents that actually need it (e.g. web-search goes on the researcher, not on the synthesizer). This is the idempotent append-style tool; re-running it is safe.
+
+4. **Remind the user about API keys.** MCP servers that proxy external APIs (Tavily web search, OpenAI-style endpoints, etc.) need the user's API key. The key is typically supplied as a query parameter on the MCP server's URL or via an env var the user configures. Tell the user explicitly which key(s) they need to provide, and where to paste them.
+
+## Model assignment — do NOT override without reason
+
+New agents you create with ` + "`admin_create_agent`" + ` automatically inherit the tenant's default chat model (the engine back-fills ` + "`ModelID`" + ` on any agent that was created without one). **Do not set the ` + "`model`" + ` parameter on ` + "`admin_create_agent`" + ` unless the user explicitly asked for a specific model for that agent.** Leaving it unset is the correct default — it keeps all agents in the schema on one consistent model and lets the user swap the default in one place later.`
 
 var builderAssistantBuiltinTools = []string{
 	"admin_list_agents",
@@ -123,6 +139,11 @@ var builderAssistantBuiltinTools = []string{
 	"admin_create_mcp_server",
 	"admin_update_mcp_server",
 	"admin_delete_mcp_server",
+	"admin_set_mcp_server_enabled",
+	"admin_attach_mcp_server_to_agent",
+	"admin_detach_mcp_server_from_agent",
+	"admin_add_builtin_tool_to_agent",
+	"admin_remove_builtin_tool_from_agent",
 	"admin_list_models",
 	"admin_create_model",
 	"admin_update_model",
@@ -155,29 +176,41 @@ func modelHasUsableKey(ctx context.Context, db *gorm.DB, name string) bool {
 	return false
 }
 
-// ensureDefaultModel returns the name of a user-configured model with a
-// usable API key to assign to builder-assistant.
+// ensureDefaultModel returns the name of the tenant's default chat model
+// (the explicit `is_default=true` row). Falls back to the first user-created
+// chat model with a usable API key for backward compatibility with tenants
+// that were provisioned before the explicit-default flag existed. Never
+// seeds a model from env / config / hardcoded provider — the user picks the
+// provider and supplies the key, and this function surfaces that selection
+// to the builder-assistant.
 //
-// The model is ALWAYS chosen from user-created data (onboarding wizard,
-// Admin → Models, or POST /api/v1/models). Engine never seeds a default
-// model from env / config / hardcoded provider: CE and Cloud behave the
-// same way — the user picks the provider and supplies the key, and the
-// builder-assistant automatically back-fills from the first chat model
-// they create (see modelServiceHTTPAdapter.CreateModel).
-//
-// Returns "" when no model with a non-empty api_key exists. The caller
-// leaves builder-assistant unbound in that case, which surfaces a clean
+// Returns "" when no usable chat model exists. The caller leaves
+// builder-assistant unbound in that case, which surfaces a clean
 // "configure a model" prompt instead of a provider 401.
 func ensureDefaultModel(ctx context.Context, db *gorm.DB) string {
 	llmRepo := configrepo.NewGORMLLMProviderRepository(db)
+
+	// Preferred path: explicit tenant default.
+	if def, err := llmRepo.GetDefault(ctx, "chat"); err != nil {
+		slog.WarnContext(ctx, "builder-assistant: failed to read tenant default, falling back", "error", err)
+	} else if def != nil && def.APIKeyEncrypted != "" {
+		slog.InfoContext(ctx, "builder-assistant: using tenant default chat model", "model", def.Name)
+		return def.Name
+	}
+
+	// Fallback: first chat model with a usable key (legacy behaviour).
 	allModels, err := llmRepo.List(ctx)
 	if err != nil {
 		slog.WarnContext(ctx, "builder-assistant: failed to list models, leaving unbound", "error", err)
 		return ""
 	}
 	for _, m := range allModels {
+		// Skip embedding models — only chat models are usable by the assistant.
+		if m.Kind != "" && m.Kind != "chat" {
+			continue
+		}
 		if m.APIKeyEncrypted != "" {
-			slog.InfoContext(ctx, "builder-assistant: using existing usable model", "model", m.Name)
+			slog.InfoContext(ctx, "builder-assistant: using fallback chat model (no explicit default set)", "model", m.Name)
 			return m.Name
 		}
 	}

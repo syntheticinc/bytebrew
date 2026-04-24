@@ -21,6 +21,10 @@ type LLMProviderModel struct {
 	// DB CHECK constraint (chk_models_kind) enforces the allowed values.
 	// Application layer is the primary enforcement point.
 	Kind            string    `gorm:"type:varchar(20);not null;default:'chat'"`
+	// IsDefault flags the tenant-default model for this Kind. At most one
+	// row per (tenant_id, kind='chat') can have IsDefault=true — enforced
+	// by a partial unique index (idx_models_tenant_default_chat).
+	IsDefault       bool      `gorm:"not null;default:false" json:"is_default"`
 	BaseURL         string    `gorm:"type:varchar(500)"`
 	ModelName       string    `gorm:"type:varchar(255);not null"`
 	APIKeyEncrypted string    `gorm:"type:varchar(1000)"`

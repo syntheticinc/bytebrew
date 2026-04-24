@@ -41,7 +41,7 @@ func RegisterAdminTools(store *tools.BuiltinToolStore, deps AdminToolDependencie
 		return NewAdminCreateSchemaTool(deps.SchemaRepo, reloader)
 	})
 	store.Register("admin_update_schema", func(_ tools.ToolDependencies) tool.InvokableTool {
-		return NewAdminUpdateSchemaTool(deps.SchemaRepo, reloader)
+		return NewAdminUpdateSchemaTool(deps.SchemaRepo, deps.AgentRepo, reloader)
 	})
 	store.Register("admin_delete_schema", func(_ tools.ToolDependencies) tool.InvokableTool {
 		return NewAdminDeleteSchemaTool(deps.SchemaRepo, reloader)
@@ -76,6 +76,23 @@ func RegisterAdminTools(store *tools.BuiltinToolStore, deps AdminToolDependencie
 	store.Register("admin_delete_mcp_server", func(_ tools.ToolDependencies) tool.InvokableTool {
 		return NewAdminDeleteMCPServerTool(deps.MCPServerRepo, reloader)
 	})
+	store.Register("admin_set_mcp_server_enabled", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminSetMCPServerEnabledTool(deps.MCPServerRepo, reloader)
+	})
+
+	// Granular agent attachment tools (append-style wrappers around admin_update_agent)
+	store.Register("admin_attach_mcp_server_to_agent", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminAttachMCPServerToAgentTool(deps.AgentRepo, reloader)
+	})
+	store.Register("admin_detach_mcp_server_from_agent", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminDetachMCPServerFromAgentTool(deps.AgentRepo, reloader)
+	})
+	store.Register("admin_add_builtin_tool_to_agent", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminAddBuiltinToolToAgentTool(deps.AgentRepo, reloader)
+	})
+	store.Register("admin_remove_builtin_tool_from_agent", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminRemoveBuiltinToolFromAgentTool(deps.AgentRepo, reloader)
+	})
 
 	// Model tools
 	store.Register("admin_list_models", func(_ tools.ToolDependencies) tool.InvokableTool {
@@ -89,6 +106,9 @@ func RegisterAdminTools(store *tools.BuiltinToolStore, deps AdminToolDependencie
 	})
 	store.Register("admin_delete_model", func(_ tools.ToolDependencies) tool.InvokableTool {
 		return NewAdminDeleteModelTool(deps.ModelRepo, reloader)
+	})
+	store.Register("admin_set_default_model", func(_ tools.ToolDependencies) tool.InvokableTool {
+		return NewAdminSetDefaultModelTool(deps.ModelRepo, reloader)
 	})
 
 	// Capability tools

@@ -23,6 +23,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		name TEXT NOT NULL UNIQUE,
 		type VARCHAR(30) NOT NULL,
 		kind VARCHAR(20) NOT NULL DEFAULT 'chat',
+		is_default BOOLEAN NOT NULL DEFAULT FALSE,
 		base_url VARCHAR(500),
 		model_name VARCHAR(255) NOT NULL,
 		api_key_encrypted VARCHAR(1000),

@@ -43,6 +43,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			name TEXT NOT NULL UNIQUE,
 			type VARCHAR(30) NOT NULL,
 			kind VARCHAR(20) NOT NULL DEFAULT 'chat',
+			is_default BOOLEAN NOT NULL DEFAULT 0,
 			base_url VARCHAR(500),
 			model_name VARCHAR(255) NOT NULL,
 			api_key_encrypted VARCHAR(1000),
@@ -67,6 +68,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			auth_key_env VARCHAR(255),
 			auth_token_env VARCHAR(255),
 			auth_client_id VARCHAR(255),
+			enabled BOOLEAN NOT NULL DEFAULT 1,
 			tenant_id TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
 			created_at DATETIME,
 			updated_at DATETIME

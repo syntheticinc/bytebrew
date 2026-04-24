@@ -2,3 +2,9 @@ databaseChangeLog:
   - include:
       file: 001_initial_schema.yaml
       relativeToChangelogFile: true
+  - include:
+      file: add-mcp-servers-enabled.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: add-models-is-default.yaml
+      relativeToChangelogFile: true
