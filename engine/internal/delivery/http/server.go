@@ -19,6 +19,24 @@ import (
 // regardless of the admin API's CORS allowlist.
 const widgetPathPrefix = "/widget/"
 
+// isPublicWidgetChatPath reports whether the path is a public chat endpoint
+// invoked by the embeddable widget from a third-party origin. The widget
+// (loaded via <script src="…/widget.js"> on a customer site) calls
+// POST /api/v1/schemas/{id}/chat cross-origin — the request carries an Origin
+// header of the customer's domain, so the response must include a matching
+// Access-Control-Allow-Origin (or wildcard). Tenant isolation is enforced by
+// resolving schema_id → tenant_id in the handler, not by the CORS policy.
+func isPublicWidgetChatPath(path string) bool {
+	// Pattern: /api/v1/schemas/{id}/chat — single segment id, no subpaths.
+	const prefix = "/api/v1/schemas/"
+	const suffix = "/chat"
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
+		return false
+	}
+	middle := path[len(prefix) : len(path)-len(suffix)]
+	return middle != "" && !strings.Contains(middle, "/")
+}
+
 // Server is the HTTP server that hosts the REST API.
 type Server struct {
 	router     chi.Router
@@ -79,12 +97,29 @@ func NewServerWithCORS(port int, allowedOrigins []string) *Server {
 		})
 	}
 
-	// Dispatch CORS by path prefix: widget routes get the permissive policy,
+	// Widget chat CORS: same permissive policy as widgetCORS, but the widget
+	// posts JSON + reads an SSE stream — it needs POST and extra headers that
+	// the static-bundle policy doesn't allow.
+	widgetChatCORS := cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   []string{"POST", "OPTIONS"},
+		AllowedHeaders:   []string{"Content-Type", "Accept", "X-BYOK-Provider", "X-BYOK-API-Key", "X-BYOK-Model", "X-BYOK-Base-URL"},
+		ExposedHeaders:   []string{"Content-Type"},
+		AllowCredentials: false,
+		MaxAge:           86400,
+	})
+
+	// Dispatch CORS by path: widget static bundle and public widget chat
+	// endpoint get permissive policies (embeddable on any customer site),
 	// everything else gets the admin-API policy.
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			if strings.HasPrefix(req.URL.Path, widgetPathPrefix) {
 				widgetCORS(next).ServeHTTP(w, req)
+				return
+			}
+			if isPublicWidgetChatPath(req.URL.Path) {
+				widgetChatCORS(next).ServeHTTP(w, req)
 				return
 			}
 			apiCORS(next).ServeHTTP(w, req)

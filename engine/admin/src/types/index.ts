@@ -253,28 +253,6 @@ export interface CircuitBreakerState {
   last_failure?: string | null;
 }
 
-export interface DeadLetterEntry {
-  task_id: string;
-  agent_id: string;
-  agent_name?: string;
-  started_at: string;
-  moved_at?: string;
-  status: string;
-  reason?: string;
-  elapsed_ms?: number;
-  last_error?: string;
-}
-
-export interface StuckAgentEntry {
-  agent_id: string;
-  agent_name?: string;
-  agent_type: string;
-  last_heartbeat: string;
-  elapsed_ms: number;
-  status: string;
-  current_step?: string;
-}
-
 // ============================================================================
 // Health types
 // ============================================================================

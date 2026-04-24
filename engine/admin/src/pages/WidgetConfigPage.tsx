@@ -68,8 +68,9 @@ export default function WidgetConfigPage() {
 
   const snippet = useMemo(() => {
     if (!selectedSchema) return '';
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const attrs = [
-      'src="https://your-engine.example.com/widget.js"',
+      `src="${origin}/widget.js"`,
       `data-schema-id="${escapeAttr(selectedSchema.id)}"`,
       `data-position="${config.position}"`,
       `data-primary-color="${escapeAttr(config.primaryColor)}"`,

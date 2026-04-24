@@ -251,19 +251,22 @@ func TestWidgetSecurityHeadersMiddleware_ReadsPerTenantOrigins(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// CORS whitelist — SCC-02 variant: attacker origin blocked
+// CORS whitelist — SCC-02 variant: attacker origin blocked on admin APIs
 // ---------------------------------------------------------------------------
 
+// Admin-scope endpoints (anything under /api/v1/ that isn't the public widget
+// chat endpoint) must honour the configured allowlist — attacker origins get
+// no ACAO header, configured origins do.
 func TestCORSWhitelist_AttackerOriginBlocked(t *testing.T) {
 	srv := eehttp.NewServerWithCORS(0, []string{"https://legit.example.com"})
-	srv.Router().Post("/api/v1/schemas/test/chat", func(w nethttp.ResponseWriter, r *nethttp.Request) {
+	srv.Router().Get("/api/v1/agents", func(w nethttp.ResponseWriter, r *nethttp.Request) {
 		w.WriteHeader(nethttp.StatusOK)
 	})
 
 	t.Run("preflight from attacker origin gets no ACAO header", func(t *testing.T) {
-		req := httptest.NewRequest(nethttp.MethodOptions, "/api/v1/schemas/test/chat", nil)
+		req := httptest.NewRequest(nethttp.MethodOptions, "/api/v1/agents", nil)
 		req.Header.Set("Origin", "https://evil.example.com")
-		req.Header.Set("Access-Control-Request-Method", "POST")
+		req.Header.Set("Access-Control-Request-Method", "GET")
 		rec := httptest.NewRecorder()
 		srv.Router().ServeHTTP(rec, req)
 
@@ -272,9 +275,9 @@ func TestCORSWhitelist_AttackerOriginBlocked(t *testing.T) {
 	})
 
 	t.Run("preflight from legit origin gets ACAO header", func(t *testing.T) {
-		req := httptest.NewRequest(nethttp.MethodOptions, "/api/v1/schemas/test/chat", nil)
+		req := httptest.NewRequest(nethttp.MethodOptions, "/api/v1/agents", nil)
 		req.Header.Set("Origin", "https://legit.example.com")
-		req.Header.Set("Access-Control-Request-Method", "POST")
+		req.Header.Set("Access-Control-Request-Method", "GET")
 		rec := httptest.NewRecorder()
 		srv.Router().ServeHTTP(rec, req)
 
@@ -282,6 +285,36 @@ func TestCORSWhitelist_AttackerOriginBlocked(t *testing.T) {
 			rec.Header().Get("Access-Control-Allow-Origin"),
 			"legit origin must receive Access-Control-Allow-Origin")
 	})
+}
+
+// The public widget chat endpoint (POST /api/v1/schemas/{id}/chat) is embedded
+// on third-party customer sites — CORS must accept arbitrary origins. Tenant
+// isolation is enforced by the handler resolving schema_id → tenant_id, NOT by
+// the CORS policy. This is the standard model for public chat widgets
+// (Intercom, Crisp, Drift all operate the same way).
+func TestCORSPublic_WidgetChatEndpoint_AcceptsAnyOrigin(t *testing.T) {
+	srv := eehttp.NewServerWithCORS(0, []string{"https://legit.example.com"})
+	srv.Router().Post("/api/v1/schemas/{id}/chat", func(w nethttp.ResponseWriter, r *nethttp.Request) {
+		w.WriteHeader(nethttp.StatusOK)
+	})
+
+	for _, origin := range []string{
+		"https://customer-a.example.com",
+		"https://random-blog.example.net",
+		"https://evil.example.com",
+	} {
+		t.Run("preflight from "+origin+" is accepted", func(t *testing.T) {
+			req := httptest.NewRequest(nethttp.MethodOptions, "/api/v1/schemas/abc-123/chat", nil)
+			req.Header.Set("Origin", origin)
+			req.Header.Set("Access-Control-Request-Method", "POST")
+			req.Header.Set("Access-Control-Request-Headers", "Content-Type")
+			rec := httptest.NewRecorder()
+			srv.Router().ServeHTTP(rec, req)
+
+			assert.Equal(t, "*", rec.Header().Get("Access-Control-Allow-Origin"),
+				"public widget chat endpoint must accept any origin (wildcard)")
+		})
+	}
 }
 
 func TestCORSWhitelist_DefaultServer_NoWildcard(t *testing.T) {
