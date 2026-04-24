@@ -1,4 +1,5 @@
-// Package app provides common server setup shared between CE and server (legacy) entry points.
+// Package app provides the CE server bootstrap used by cmd/ce and the
+// integration test harness (cmd/testserver uses a cut-down variant).
 package app
 
 import (
@@ -93,7 +94,7 @@ type ServerConfig struct {
 }
 
 // Run starts the ByteBrew server with the given configuration.
-// This is the common entry point shared by CE and server (legacy) binaries.
+// Called from cmd/ce (CE binary) and pkg/server.Run (EE and integration tests).
 func Run(sc ServerConfig) error {
 	if sc.Plugin == nil {
 		sc.Plugin = pluginpkg.Noop{}
@@ -521,16 +522,10 @@ func Run(sc ServerConfig) error {
 		slog.InfoContext(ctx, "Tool timeout wired into AgentToolResolver", "timeout_ms", 30000)
 	}
 
-	// Resilience: HeartbeatMonitor — detects stuck agents (AC-RESIL-01/02)
-	heartbeatMonitor := resilience.NewHeartbeatMonitor(resilience.DefaultHeartbeatConfig(), heartbeatStuckCallback)
-	heartbeatMonitor.Start(ctx)
-	slog.InfoContext(ctx, "Heartbeat monitor started")
-
-	// Resilience: DeadLetterQueue — tracks timed-out tasks (AC-RESIL-07/08)
-	deadLetterQueue := resilience.NewDeadLetterQueue(resilience.DefaultDeadLetterConfig(), func(t resilience.TrackedTask, elapsed time.Duration) {
-		slog.WarnContext(ctx, "task timed out, moved to dead letter",
-			"task_id", t.TaskID, "agent_id", t.AgentID, "elapsed", elapsed)
-	})
+	// HeartbeatMonitor / DeadLetterQueue (AC-RESIL-01..04, 07..08) were planned
+	// but deferred — no producers were ever wired, so the admin endpoints that
+	// queried them always returned empty lists. The code was removed; only the
+	// live CircuitBreakerRegistry (AC-RESIL-05/06/09..12) is retained above.
 
 	// Wire per-agent capability config reader (memory max_entries, knowledge top_k)
 	var capReader *capabilityConfigReader
@@ -676,7 +671,13 @@ func Run(sc ServerConfig) error {
 		// is owned by the landing service.
 		var localSessionHandler *deliveryhttp.LocalSessionHandler
 		if localSessionPrivKey != nil {
-			localSessionHandler = deliveryhttp.NewLocalSessionHandler(localSessionPrivKey, time.Hour)
+			localSessionTTL := time.Hour
+			if raw := os.Getenv("BYTEBREW_LOCAL_SESSION_TTL"); raw != "" {
+				if parsed, err := time.ParseDuration(raw); err == nil && parsed > 0 {
+					localSessionTTL = parsed
+				}
+			}
+			localSessionHandler = deliveryhttp.NewLocalSessionHandler(localSessionPrivKey, localSessionTTL)
 		}
 
 		if internalHTTPServer != nil {
@@ -686,6 +687,7 @@ func Run(sc ServerConfig) error {
 			internalRouter.Get("/api/v1/models/registry/providers", registryHandler.ListProviders)
 			if localSessionHandler != nil {
 				internalRouter.Post("/api/v1/auth/local-session", localSessionHandler.Issue)
+				internalRouter.Post("/api/v1/auth/local-session/refresh", localSessionHandler.Refresh)
 			}
 		}
 		// Single-port or external: model registry + local session on main router
@@ -693,6 +695,7 @@ func Run(sc ServerConfig) error {
 		r.Get("/api/v1/models/registry/providers", registryHandler.ListProviders)
 		if localSessionHandler != nil {
 			r.Post("/api/v1/auth/local-session", localSessionHandler.Issue)
+			r.Post("/api/v1/auth/local-session/refresh", localSessionHandler.Refresh)
 		}
 
 		// TenantMiddleware enforces presence of tenant_id after auth.
@@ -1042,20 +1045,14 @@ func Run(sc ServerConfig) error {
 			toolCallLogHandlerOSS := deliveryhttp.NewToolCallLogHandler(&toolCallLogHTTPAdapter{repo: toolCallRepoOSS})
 			r.Get("/api/v1/audit/tool-calls", toolCallLogHandlerOSS.List)
 
-			// Resilience admin endpoints (AC-RESIL-08: dead letters visible, circuit breaker management)
+			// Resilience admin endpoints (AC-RESIL-09..12: circuit breaker observability).
 			resilienceHandler := deliveryhttp.NewResilienceHandler(
 				&circuitBreakerQuerierHTTPAdapter{registry: cbRegistry},
-				&deadLetterQuerierHTTPAdapter{queue: deadLetterQueue},
-				&heartbeatQuerierHTTPAdapter{monitor: heartbeatMonitor},
 			)
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireAdminSession)
-				// Resilience Observability page (admin UI). Read-only.
 				r.Get("/api/v1/resilience/circuit-breakers", resilienceHandler.ListCircuitBreakers)
 				r.Post("/api/v1/resilience/circuit-breakers/{name}/reset", resilienceHandler.ResetCircuitBreaker)
-				r.Get("/api/v1/resilience/dead-letter", resilienceHandler.ListDeadLetters)
-				r.Get("/api/v1/resilience/stuck-agents", resilienceHandler.ListStuckAgents)
-				r.Get("/api/v1/resilience/heartbeats", resilienceHandler.ListHeartbeats)
 			})
 
 			// Capability injector is wired into AgentToolResolver above (US-001).
@@ -1342,6 +1339,9 @@ func Run(sc ServerConfig) error {
 		respondHandler := deliveryhttp.NewRespondHandler(sessionRegistry)
 
 		// Register chat routes on external router (or single-port router).
+		// Per-IP rate limiting is an edge concern — configured on the reverse
+		// proxy (Caddy/nginx/traefik) in front of the engine. See
+		// docs/deployment/rate-limiting.md for Caddyfile/nginx snippets.
 		registerChatRoutes := func(router chi.Router) {
 			router.Group(func(r chi.Router) {
 				if httpAuthMW != nil {
@@ -1451,11 +1451,6 @@ func Run(sc ServerConfig) error {
 		}
 	}
 
-	// Cron scheduler wiring lives in the platform-services block above
-	// (taskrunner.StartCronScheduler). The legacy duplicate that used
-	// cronTaskCreatorHTTPAdapter was removed — it created a second scheduler
-	// that fired every trigger twice on boot.
-
 	// Create WS connection handler for local CLI clients
 	var agentCanceller ws.AgentCanceller
 	if components.AgentPool != nil {
@@ -1532,8 +1527,6 @@ func Run(sc ServerConfig) error {
 	}
 
 	loggerInstance.InfoContext(ctx, "Shutting down ByteBrew Server...")
-
-	// Cron scheduler is stopped via defer inside the platform-services block above.
 
 	// Stop plugin resources (license watcher, etc.) — no-op in CE.
 	sc.Plugin.Stop()

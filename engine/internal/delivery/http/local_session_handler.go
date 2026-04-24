@@ -3,6 +3,7 @@ package http
 import (
 	"crypto/ed25519"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -63,6 +64,68 @@ func (h *LocalSessionHandler) Issue(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Don't echo the underlying error — Ed25519 sign failures are
 		// internal and the message could leak key-material details.
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to sign session token"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, localSessionResponse{
+		AccessToken: signed,
+		ExpiresAt:   expiresAt.Format(time.RFC3339),
+		TokenType:   "Bearer",
+	})
+}
+
+// Refresh verifies the current Bearer local-session token and issues a fresh
+// one with the same claims and a new TTL. Stateless — CE trusts the network
+// perimeter, no revocation list needed.
+// POST /api/v1/auth/local-session/refresh
+func (h *LocalSessionHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	if h.privateKey == nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "local session signing key missing"})
+		return
+	}
+
+	authHeader := r.Header.Get("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
+		return
+	}
+	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+
+	pubKey := h.privateKey.Public()
+	parsed, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodEd25519); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return pubKey, nil
+	}, jwt.WithExpirationRequired())
+	if err != nil || !parsed.Valid {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid or expired token"})
+		return
+	}
+
+	claims, ok := parsed.Claims.(jwt.MapClaims)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token claims"})
+		return
+	}
+
+	sub, _ := claims["sub"].(string)
+	tenantID, _ := claims["tenant_id"].(string)
+
+	now := time.Now()
+	expiresAt := now.Add(h.ttl)
+
+	newClaims := jwt.MapClaims{
+		"sub":       sub,
+		"tenant_id": tenantID,
+		"iat":       now.Unix(),
+		"exp":       expiresAt.Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, newClaims)
+	signed, err := token.SignedString(h.privateKey)
+	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to sign session token"})
 		return
 	}

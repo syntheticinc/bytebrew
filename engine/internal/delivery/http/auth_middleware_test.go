@@ -154,7 +154,7 @@ func TestAuthMiddleware_ExpiredJWT(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
-	assert.Contains(t, rec.Body.String(), "invalid token")
+	assert.Contains(t, rec.Body.String(), "invalid_token")
 }
 
 func TestAuthMiddleware_WrongKeyJWT(t *testing.T) {
@@ -217,7 +217,7 @@ func TestAuthMiddleware_InvalidAPIToken(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
-	assert.Contains(t, rec.Body.String(), "invalid api token")
+	assert.Contains(t, rec.Body.String(), "invalid_token")
 }
 
 func TestRequireScope_Allowed(t *testing.T) {
