@@ -23,6 +23,13 @@ type MessageCollector struct {
 
 	// Track pending tool call for pairing with result
 	pendingToolCall *pendingToolCallInfo
+
+	// accumulatedAnswer holds text streamed via EventTypeAnswerChunk between tool
+	// calls / final answer. The streaming-finalize path sometimes emits
+	// EventTypeAnswer with empty content (the callback layer already drained
+	// accumulated text earlier); in that case handleAnswer falls back to this
+	// buffer so the final assistant row is never lost from history.
+	accumulatedAnswer string
 }
 
 type pendingToolCallInfo struct {
@@ -101,11 +108,23 @@ func (mc *MessageCollector) handleEvent(event *domain.AgentEvent) {
 		mc.handleAnswer(ctx, event)
 	case domain.EventTypeReasoning:
 		mc.handleReasoning(ctx, event)
+	case domain.EventTypeAnswerChunk:
+		// Track streaming chunks so handleAnswer can recover the full text
+		// when the callback layer emits EventTypeAnswer with empty content
+		// (streaming-finalize path).
+		if event.Content != "" {
+			mc.accumulatedAnswer += event.Content
+		}
 	}
 }
 
 // handleToolCall creates assistant message with tool call
 func (mc *MessageCollector) handleToolCall(ctx context.Context, event *domain.AgentEvent) {
+	// Any text streamed before this tool call is already captured via the
+	// tool_call event's assistant_content metadata. Drop our fallback buffer
+	// so it doesn't leak into a later EventTypeAnswer for the final turn.
+	mc.accumulatedAnswer = ""
+
 	metadata := event.Metadata
 	if metadata == nil {
 		slog.WarnContext(ctx, "tool_call event without metadata")
@@ -247,22 +266,33 @@ func (mc *MessageCollector) handleToolResult(ctx context.Context, event *domain.
 		"tool_name", toolName, "step", mc.stepCount, "agent_id", mc.agentID)
 }
 
-// handleAnswer creates final assistant message
+// handleAnswer creates final assistant message.
+// Falls back to accumulated streaming chunks when event.Content is empty —
+// this is the streaming-finalize path where the agent callback layer drains
+// the accumulated buffer before emitting EventTypeAnswer. Without the
+// fallback the final assistant row would be lost and disappear on reload.
 func (mc *MessageCollector) handleAnswer(ctx context.Context, event *domain.AgentEvent) {
-	if event.Content == "" {
+	content := event.Content
+	if content == "" {
+		content = mc.accumulatedAnswer
+	}
+	// Reset accumulator: any subsequent turn starts fresh.
+	mc.accumulatedAnswer = ""
+
+	if content == "" {
 		return
 	}
 
 	// Create assistant message
 	msg := &schema.Message{
 		Role:    schema.Assistant,
-		Content: event.Content,
+		Content: content,
 	}
 
 	mc.messages = append(mc.messages, msg)
 
 	// Save assistant message event
-	histMsg, err := domain.NewAssistantEvent(mc.sessionID, event.Content)
+	histMsg, err := domain.NewAssistantEvent(mc.sessionID, content)
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to create assistant event", "error", err)
 		return
@@ -276,7 +306,8 @@ func (mc *MessageCollector) handleAnswer(ctx context.Context, event *domain.Agen
 	}
 
 	slog.InfoContext(ctx, "collected answer event",
-		"length", len(event.Content), "agent_id", mc.agentID)
+		"length", len(content), "agent_id", mc.agentID,
+		"content_fallback", event.Content == "")
 }
 
 // handleReasoning creates reasoning event (previously not persisted).

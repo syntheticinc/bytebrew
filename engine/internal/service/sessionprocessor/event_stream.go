@@ -62,6 +62,29 @@ func (s *EventStream) Send(event *domain.AgentEvent) error {
 		event.SchemaVersion = domain.EventSchemaVersion
 	}
 
+	// Special case: EventTypeAnswer with already_streamed=true.
+	// The client already received every chunk via ANSWER_CHUNK, so we must
+	// NOT re-broadcast the full text (duplicate). We must, however, persist
+	// the final aggregated assistant message in the event store so it shows
+	// up on reload. convertEvent returns nil for this case (skip publish);
+	// we build the pb event manually here and call persistOnly.
+	if event.Type == domain.EventTypeAnswer {
+		if streamed, _ := event.Metadata["already_streamed"].(bool); streamed {
+			agentID := event.AgentID
+			if agentID == "" {
+				agentID = "supervisor"
+			}
+			pbEvent := &pb.SessionEvent{
+				SessionId: s.sessionID,
+				Type:      pb.SessionEventType_SESSION_EVENT_ANSWER,
+				Content:   SanitizeUTF8(event.Content),
+				AgentId:   agentID,
+			}
+			s.persistOnly(pbEvent)
+			return nil
+		}
+	}
+
 	pbEvent := s.convertEvent(event)
 	if pbEvent == nil {
 		return nil
@@ -169,6 +192,29 @@ func (s *EventStream) persistAndPublish(event *pb.SessionEvent) {
 	}
 
 	s.publisher.PublishEvent(s.sessionID, event)
+}
+
+// persistOnly stores the event in the event store but does NOT publish it.
+// Used for EventTypeAnswer events with already_streamed=true: the client has
+// already received the content via ANSWER_CHUNK chunks, so re-publishing the
+// full aggregated text would duplicate it on the wire. The store row is still
+// required so that GET /sessions/{id}/messages returns the final assistant
+// message on reload.
+func (s *EventStream) persistOnly(event *pb.SessionEvent) {
+	if s.store == nil {
+		return
+	}
+	jsonData := eventformat.SerializeForMobile(event)
+	eventType := eventformat.EventTypeString(event.GetType())
+
+	id, err := s.store.Append(s.sessionID, eventType, event, jsonData)
+	if err != nil {
+		slog.ErrorContext(context.Background(), "failed to persist event", "session_id", s.sessionID, "event_type", eventType, "error", err)
+		return
+	}
+	if id != "" {
+		event.EventId = id
+	}
 }
 
 func (s *EventStream) convertEvent(event *domain.AgentEvent) *pb.SessionEvent {

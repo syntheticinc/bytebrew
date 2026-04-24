@@ -17,9 +17,22 @@ func (m *mockPublisher) PublishEvent(_ string, event *pb.SessionEvent) {
 	m.events = append(m.events, event)
 }
 
-type mockStore struct{}
+type mockStore struct {
+	appends []mockStoreEntry
+}
 
-func (m *mockStore) Append(_, _ string, _ *pb.SessionEvent, _ map[string]interface{}) (string, error) {
+type mockStoreEntry struct {
+	sessionID string
+	eventType string
+	content   string
+}
+
+func (m *mockStore) Append(sessionID, eventType string, evt *pb.SessionEvent, _ map[string]interface{}) (string, error) {
+	content := ""
+	if evt != nil {
+		content = evt.Content
+	}
+	m.appends = append(m.appends, mockStoreEntry{sessionID: sessionID, eventType: eventType, content: content})
 	return "mock-event-id", nil
 }
 
@@ -74,11 +87,13 @@ func TestSend_ToolResult_FallsBackToContent(t *testing.T) {
 
 func TestSend_Answer_SkipsSSEWhenAlreadyStreamed(t *testing.T) {
 	pub := &mockPublisher{}
-	stream := NewEventStream("session-1", pub, &mockStore{})
+	store := &mockStore{}
+	stream := NewEventStream("session-1", pub, store)
 
+	content := "This text was already sent via message_delta chunks"
 	err := stream.Send(&domain.AgentEvent{
 		Type:    domain.EventTypeAnswer,
-		Content: "This text was already sent via message_delta chunks",
+		Content: content,
 		Metadata: map[string]interface{}{
 			"already_streamed": true,
 		},
@@ -86,6 +101,12 @@ func TestSend_Answer_SkipsSSEWhenAlreadyStreamed(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Empty(t, pub.events, "Should NOT publish SSE when already_streamed=true")
+	// Bug 1 regression guard: streamed final message MUST land in the store so
+	// GET /sessions/{id}/messages returns it on reload. Exactly once — not
+	// zero (the original bug) and not more than once (duplicate-persist guard).
+	require.Len(t, store.appends, 1, "Should persist exactly one row for already_streamed=true answer")
+	assert.Equal(t, "answer", store.appends[0].eventType)
+	assert.Equal(t, content, store.appends[0].content)
 }
 
 func TestSend_Answer_PublishesWhenNotStreamed(t *testing.T) {
