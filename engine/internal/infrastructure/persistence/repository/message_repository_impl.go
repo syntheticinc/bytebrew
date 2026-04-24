@@ -20,12 +20,17 @@ func NewMessageRepositoryImpl(db *gorm.DB) *MessageRepositoryImpl {
 	return &MessageRepositoryImpl{db: db}
 }
 
-// Create creates a new event
+// Create creates a new event, stamping the caller's tenant onto the row.
+// Without this every chat event was written under the CE default tenant
+// (00000000-...-001) regardless of which Cloud tenant the user belongs to,
+// and GET /sessions/{id}/messages (tenant-scoped) then returned an empty
+// list — the 2026-04-24 prod "chat history gone after reload" bug.
 func (r *MessageRepositoryImpl) Create(ctx context.Context, message *domain.Message) error {
 	model, err := adapters.EventToModel(message)
 	if err != nil {
 		return errors.Wrap(err, errors.CodeInvalidInput, "convert event to model")
 	}
+	model.TenantID = tenantIDFromCtx(ctx)
 	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
 		return errors.Wrap(err, errors.CodeInternal, "failed to create event")
 	}
