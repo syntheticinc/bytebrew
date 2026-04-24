@@ -6,10 +6,10 @@ name: Notify Cloud Deploy
 # existed engine commits never reached prod automatically — cloud-web's
 # path-filter only watches its own folders.
 #
-# Requires secret CLOUD_DEPLOY_PAT (fine-grained PAT with `actions:write`
-# and `contents:read` on syntheticinc/bytebrew-cloud-web). Create it at
-# github.com/settings/personal-access-tokens and add via repo Settings →
-# Secrets and variables → Actions.
+# Uses the same GH_PAT secret already configured in this repo — it just
+# needs `actions: read and write` on syntheticinc/bytebrew-cloud-web (in
+# addition to contents:read on bytebrew/bytebrew-ee/bytebrew-web-client
+# that the cloud-web deploy workflow also uses). One PAT covers both.
 
 on:
   push:
@@ -25,10 +25,10 @@ jobs:
     steps:
       - name: Dispatch engine-push to bytebrew-cloud-web
         env:
-          GH_TOKEN: ${{ secrets.CLOUD_DEPLOY_PAT }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "::error::CLOUD_DEPLOY_PAT secret is not set — Deploy Cloud will not run"
+            echo "::error::GH_PAT secret is not set — Deploy Cloud will not run"
             exit 1
           fi
           curl -sSfL -X POST \
