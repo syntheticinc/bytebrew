@@ -1,0 +1,39 @@
+name: Notify Cloud Deploy
+
+# On every push to main, tell the bytebrew-cloud-web repo that a new engine
+# revision is available so its Deploy Cloud workflow rebuilds the engine
+# Docker image and ships it to app.bytebrew.ai. Before this workflow
+# existed engine commits never reached prod automatically — cloud-web's
+# path-filter only watches its own folders.
+#
+# Requires secret CLOUD_DEPLOY_PAT (fine-grained PAT with `actions:write`
+# and `contents:read` on syntheticinc/bytebrew-cloud-web). Create it at
+# github.com/settings/personal-access-tokens and add via repo Settings →
+# Secrets and variables → Actions.
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: notify-cloud-deploy
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch engine-push to bytebrew-cloud-web
+        env:
+          GH_TOKEN: ${{ secrets.CLOUD_DEPLOY_PAT }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::CLOUD_DEPLOY_PAT secret is not set — Deploy Cloud will not run"
+            exit 1
+          fi
+          curl -sSfL -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/syntheticinc/bytebrew-cloud-web/dispatches \
+            -d "{\"event_type\":\"engine-push\",\"client_payload\":{\"engine_sha\":\"${{ github.sha }}\",\"message\":\"${{ github.event.head_commit.message }}\"}}"
