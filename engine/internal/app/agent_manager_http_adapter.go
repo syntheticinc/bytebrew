@@ -146,6 +146,26 @@ func (a *agentManagerHTTPAdapter) CreateAgent(ctx context.Context, req deliveryh
 		}
 	}
 
+	// Inherit the tenant's default chat model when the caller did not pick
+	// one explicitly. Keeps the AI-builder "create researcher/synthesizer"
+	// flow working end-to-end — otherwise those agents land unbound and
+	// every chat turn fails with "no model available". Skip when the
+	// tenant has no default (fresh install) or when the caller chose a
+	// specific model.
+	if req.ModelID == nil || *req.ModelID == "" {
+		tenantID := domain.TenantIDFromContext(ctx)
+		if tenantID == "" {
+			tenantID = domain.CETenantID
+		}
+		var def models.LLMProviderModel
+		if err := a.db.WithContext(ctx).
+			Where("tenant_id = ? AND is_default = ? AND kind = ?", tenantID, true, "chat").
+			First(&def).Error; err == nil {
+			id := def.ID
+			req.ModelID = &id
+		}
+	}
+
 	record := a.toAgentRecord(req)
 	if err := a.repo.Create(ctx, record); err != nil {
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "UNIQUE constraint") {
