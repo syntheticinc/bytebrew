@@ -10,9 +10,6 @@ services:
       # Engine auth: Ed25519 auto-generated on first boot. No JWT_SECRET needed.
       - BYTEBREW_AUTH_MODE=local
       - BYTEBREW_JWT_KEYS_DIR=/var/lib/bytebrew/keys
-      - LLM_PROVIDER=openrouter
-      - LLM_API_KEY=${LLM_API_KEY}           # set in .env or shell
-      - LLM_MODEL=qwen/qwen3-coder-next
     depends_on:
       db-migrate:
         condition: service_completed_successfully

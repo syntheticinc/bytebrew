@@ -69,13 +69,6 @@ spec:
                   name: {{ include "bytebrew-engine.fullname" . }}-secrets
                   key: metering-hmac-previous
             {{- end }}
-            {{- range $provider, $key := .Values.secrets.llmAPIKeys }}
-            - name: LLM_API_KEY_{{ $provider | upper }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "bytebrew-engine.fullname" $ }}-secrets
-                  key: llm-api-key-{{ $provider }}
-            {{- end }}
           livenessProbe:
             httpGet:
               path: /api/v1/health

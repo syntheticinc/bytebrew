@@ -27,15 +27,6 @@ func bytebrewDocsMCPEndpoint() string {
 	return "https://mcp.bytebrew.ai/sse"
 }
 
-// Default model seeded when no models exist — free tier, strong tool calling.
-const (
-	defaultModelName     = "default"
-	defaultModelType     = "openai_compatible"
-	defaultModelProvider = "openrouter"
-	defaultModelLLM      = "z-ai/glm-4.7"
-	defaultModelBaseURL  = "https://openrouter.ai/api/v1"
-)
-
 const builderAssistantPrompt = `You are the ByteBrew Builder Assistant — an AI architect embedded in the Admin Dashboard. Your role is to help users design, configure, and manage their ByteBrew multi-agent systems.
 
 ## CRITICAL RULES (never violate)
@@ -164,56 +155,34 @@ func modelHasUsableKey(ctx context.Context, db *gorm.DB, name string) bool {
 	return false
 }
 
-// ensureDefaultModel returns the name of a model to assign to builder-assistant.
-// Prefers existing models with a non-empty api_key_encrypted (user-configured
-// via onboarding). Falls back to creating a default model only when env
-// LLM_API_KEY is set; otherwise returns "" so the caller can leave the agent
-// unbound and let the onboarding wizard drive the user to configure a key.
+// ensureDefaultModel returns the name of a user-configured model with a
+// usable API key to assign to builder-assistant.
+//
+// The model is ALWAYS chosen from user-created data (onboarding wizard,
+// Admin → Models, or POST /api/v1/models). Engine never seeds a default
+// model from env / config / hardcoded provider: CE and Cloud behave the
+// same way — the user picks the provider and supplies the key, and the
+// builder-assistant automatically back-fills from the first chat model
+// they create (see modelServiceHTTPAdapter.CreateModel).
+//
+// Returns "" when no model with a non-empty api_key exists. The caller
+// leaves builder-assistant unbound in that case, which surfaces a clean
+// "configure a model" prompt instead of a provider 401.
 func ensureDefaultModel(ctx context.Context, db *gorm.DB) string {
 	llmRepo := configrepo.NewGORMLLMProviderRepository(db)
-	allModels, listErr := llmRepo.List(ctx)
-	if listErr == nil {
-		// Prefer the first model with a usable key. The old code took
-		// allModels[0] unconditionally, which bound to an empty-key
-		// "default" left over from a prior seed even when the user had
-		// configured a valid key on their own model — that's the path
-		// that caused the 2026-04-23 chat-401 prod bug.
-		for _, m := range allModels {
-			if m.APIKeyEncrypted != "" {
-				slog.InfoContext(ctx, "builder-assistant: using existing usable model", "model", m.Name)
-				return m.Name
-			}
-		}
-		if len(allModels) > 0 {
-			slog.InfoContext(ctx, "builder-assistant: existing models all have empty api_key, attempting to seed a fresh default")
-		}
-	}
-
-	// No models and no LLM_API_KEY env — don't persist a broken default.
-	// Returning "" leaves builder-assistant unbound so the onboarding wizard
-	// forces the user to add their own key first. Persisting a model with
-	// an empty api_key_encrypted was the 2026-04-23 prod regression: every
-	// chat turn hit the provider with no Authorization header and got back
-	// "401 Unauthorized, message: No cookie auth credentials found".
-	envKey := os.Getenv("LLM_API_KEY")
-	if envKey == "" {
-		slog.InfoContext(ctx, "no models and no LLM_API_KEY — leaving builder-assistant unbound until user configures a model")
+	allModels, err := llmRepo.List(ctx)
+	if err != nil {
+		slog.WarnContext(ctx, "builder-assistant: failed to list models, leaving unbound", "error", err)
 		return ""
 	}
-
-	m := &models.LLMProviderModel{
-		Name:            defaultModelName,
-		Type:            defaultModelType,
-		BaseURL:         defaultModelBaseURL,
-		ModelName:       defaultModelLLM,
-		APIKeyEncrypted: envKey,
+	for _, m := range allModels {
+		if m.APIKeyEncrypted != "" {
+			slog.InfoContext(ctx, "builder-assistant: using existing usable model", "model", m.Name)
+			return m.Name
+		}
 	}
-	if err := llmRepo.Create(ctx, m); err != nil {
-		slog.WarnContext(ctx, "failed to seed default model", "error", err)
-		return ""
-	}
-	slog.InfoContext(ctx, "seeded default model", "name", defaultModelName, "llm", defaultModelLLM)
-	return defaultModelName
+	slog.InfoContext(ctx, "builder-assistant: no usable model, leaving unbound until user configures one via onboarding / Admin → Models")
+	return ""
 }
 
 // builderAssistantDefaults returns the factory-default AgentRecord for builder-assistant.

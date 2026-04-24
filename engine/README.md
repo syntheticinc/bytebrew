@@ -56,10 +56,11 @@ Key environment variables:
 DATABASE_URL=postgresql://user:pass@host:5432/bytebrew
 ADMIN_USER=admin
 ADMIN_PASSWORD=changeme
-LLM_API_KEY=your-api-key
-LLM_PROVIDER=openrouter          # openrouter, anthropic, ollama, openai
-LLM_MODEL=anthropic/claude-sonnet-4-20250514
 ```
+
+LLM provider, model and API key are configured through the onboarding
+wizard on first launch (or later via Admin → Models). Engine does not
+read LLM credentials from env or config files.
 
 ## Architecture
 

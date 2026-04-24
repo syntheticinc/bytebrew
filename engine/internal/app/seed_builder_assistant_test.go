@@ -11,28 +11,17 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 )
 
-// TestSeedBuilderAssistant_EmptyAPIKey_DoesNotBindEmptyModel is the regression
-// guard for the 2026-04-23 prod bug where the engine's React agent chat node
-// returned `401 Unauthorized, message: No cookie auth credentials found` to
-// every chat turn on a fresh tenant.
+// TestEnsureDefaultModel_EmptyDB_PersistsNothing guards the invariant that
+// ensureDefaultModel never seeds a model from env or config. The original
+// 2026-04-23 prod bug persisted a `default` model with api_key_encrypted=""
+// sourced from an unset LLM_API_KEY env var, which bound builder-assistant
+// to an unauthenticated provider and 401'd every first chat turn.
 //
-// Chain of events reproduced here:
-//   1. Engine starts with LLM_API_KEY env unset.
-//   2. seedBuilderAssistant is called on a fresh database.
-//   3. ensureDefaultModel creates a `default` model with api_key_encrypted=""
-//      (from the empty env var).
-//   4. builder-assistant is bound to that empty-key model.
-//   5. The first chat turn hits OpenRouter without an Authorization header
-//      → 401 → user sees a cryptic stack trace instead of a useful message.
-//
-// The correct behaviour: if we don't have a working API key, don't seed a
-// broken model. Leave builder-assistant unbound so the onboarding wizard
-// forces the user to add their own key first (happy path) — and so the
-// chat handler can surface a clean "please configure a model" error
-// instead of a provider 401.
-func TestEnsureDefaultModel_EmptyAPIKey_DoesNotPersistBrokenModel(t *testing.T) {
+// The env-based seed path was removed entirely — builder-assistant is left
+// unbound on a fresh DB, and the onboarding wizard / Admin → Models is the
+// only way to register an LLM provider. This test ensures that remains so.
+func TestEnsureDefaultModel_EmptyDB_PersistsNothing(t *testing.T) {
 	_ = models.LLMProviderModel{} // keep import live for future assertions
-	t.Setenv("LLM_API_KEY", "")
 
 	db := setupTestDB(t)
 	ctx := context.Background()

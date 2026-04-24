@@ -22,7 +22,9 @@ Both ship the same engine binary + admin SPA bundle. Pick based on your infra.
 cp .env.example .env
 ```
 
-Edit `.env` -- set `LLM_API_KEY` at minimum.
+Edit `.env` -- set `POSTGRES_PASSWORD` at minimum (and any optional
+auth/bridge vars). LLM provider/model/API key are configured later
+through the onboarding wizard inside the Admin Dashboard.
 
 ```bash
 docker compose up -d
@@ -127,9 +129,10 @@ Required fields in `values.yaml`:
 
 - `ingress.hosts[0].host` — your public hostname
 - `postgresql.external.host` / `username` / `password` — managed PG endpoint
-- `secrets.llmAPIKeys.openai` (or `anthropic` / `openrouter`) — at least one
 
 After pods are Ready, the engine is reachable at `https://<your-host>/admin/`.
+On first login the onboarding wizard prompts for LLM provider and API key;
+nothing LLM-related is required in the Helm chart.
 
 ### Upgrade
 

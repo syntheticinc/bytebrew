@@ -70,11 +70,9 @@ config:
   embedDim: 768
 
 secrets:
-  # LLM provider API keys — at least one must be set.
-  llmAPIKeys:
-    openai: ""                                    # <REQUIRED: one of openai/anthropic/openrouter>
-    # anthropic: ""
-    # openrouter: ""
+  # LLM provider credentials are not set here — configure them
+  # post-install via the Admin Dashboard onboarding wizard or
+  # Admin → Models.
 
   # Cloud metering HMAC (leave empty for CE — no metering).
   meteringHMACCurrent: ""
