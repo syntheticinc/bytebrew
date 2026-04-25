@@ -177,7 +177,7 @@ func (a *configReloaderHTTPAdapter) reconnectMCPServers(ctx context.Context) {
 	}
 
 	a.mcpRegistry.CloseAll()
-	connectMCPServers(ctx, mcpServers, a.mcpRegistry, a.transportPolicy)
+	mcpcatalog.ConnectAll(ctx, mcpServers, a.mcpRegistry, a.transportPolicy)
 
 	// Update forward headers so ChatHandler picks up changes immediately
 	if a.forwardHeadersStore != nil {

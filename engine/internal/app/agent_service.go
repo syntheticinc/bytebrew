@@ -39,6 +39,10 @@ type InfraComponents struct {
 type InfraComponentsConfig struct {
 	Config config.Config
 	DB     *gorm.DB // PostgreSQL GORM DB for runtime storage
+	// ModelDebugDir, when non-empty, makes wrapWithDebugModel attach a
+	// request/response logger to every chat model. Sourced from the
+	// bootstrap config (Debug.ModelDebugDir, env BYTEBREW_DEBUG_MODEL).
+	ModelDebugDir string
 }
 
 // NewInfraComponents creates all infrastructure components including WorkManager and AgentPool.
@@ -55,7 +59,7 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 	modelName := getModelName(cfg)
 	slog.InfoContext(context.Background(), "agent service initialized", "model", modelName, "provider", cfg.LLM.DefaultProvider)
 
-	chatModel = wrapWithDebugModel(chatModel)
+	chatModel = wrapWithDebugModel(chatModel, icc.ModelDebugDir)
 	modelSelector := createModelSelector(cfg, chatModel, modelName)
 
 	// 2. Create model cache (for dynamic model resolution from DB)

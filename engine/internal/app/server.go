@@ -4,19 +4,14 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"runtime"
-	"strconv"
 	"sync/atomic"
-	"strings"
 	"syscall"
 	"time"
 
@@ -27,7 +22,6 @@ import (
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/engine/internal/delivery/ws"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
-	"github.com/syntheticinc/bytebrew/engine/internal/embedded"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agents/callbacks"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/taskrunner"
@@ -38,19 +32,17 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/indexing"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/knowledge"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/lsp"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/mcp"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/platform"
 	admintools "github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools/admin"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm/registry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/portfile"
 
 	mcpcatalog "github.com/syntheticinc/bytebrew/engine/internal/service/mcp"
-	svcschematemplate "github.com/syntheticinc/bytebrew/engine/internal/service/schematemplate"
-	ucschematemplate "github.com/syntheticinc/bytebrew/engine/internal/usecase/schematemplate"
+	memorysvc "github.com/syntheticinc/bytebrew/engine/internal/service/memory"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/capability"
-	svcknowledge "github.com/syntheticinc/bytebrew/engine/internal/service/knowledge"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/eventstore"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/lifecycle"
 
@@ -127,34 +119,20 @@ func Run(sc ServerConfig) error {
 			return fmt.Errorf("create managed directories: %w", err)
 		}
 
-		// If --config was not explicitly provided, use config from data dir
+		// If --config was not explicitly provided, use config from data dir.
+		// Managed mode requires an explicit config.yaml — auto-generation has
+		// been removed (legacy fallback). Operators must place a valid config
+		// at $DATA_DIR/config.yaml or pass --config explicitly.
 		if !sc.ConfigExplicit {
 			managedConfigPath := filepath.Join(dataDir, "config.yaml")
 			if _, err := os.Stat(managedConfigPath); os.IsNotExist(err) {
-				if err := generateDefaultConfig(managedConfigPath); err != nil {
-					return fmt.Errorf("generate default config: %w", err)
-				}
-				slog.InfoContext(context.Background(), "Generated default config", "path", managedConfigPath)
+				return fmt.Errorf("managed mode requires config.yaml at %s — pass --config to override", managedConfigPath)
 			}
 			configPath = managedConfigPath
 		}
 
-		// Generate default prompts.yaml if missing (from embedded)
-		managedPromptsPath := filepath.Join(dataDir, "prompts.yaml")
-		if _, err := os.Stat(managedPromptsPath); os.IsNotExist(err) {
-			if err := os.WriteFile(managedPromptsPath, embedded.DefaultPrompts, 0644); err != nil {
-				return fmt.Errorf("write default prompts: %w", err)
-			}
-			slog.InfoContext(context.Background(), "Generated default prompts", "path", managedPromptsPath)
-		}
-
-		// Generate default flows.yaml if missing (from embedded)
-		managedFlowsPath := filepath.Join(dataDir, "flows.yaml")
-		if _, err := os.Stat(managedFlowsPath); os.IsNotExist(err) {
-			if err := os.WriteFile(managedFlowsPath, embedded.DefaultFlows, 0644); err != nil {
-				return fmt.Errorf("write default flows: %w", err)
-			}
-			slog.InfoContext(context.Background(), "Generated default flows", "path", managedFlowsPath)
+		if err := EnsureManagedDefaults(dataDir); err != nil {
+			return err
 		}
 	}
 
@@ -184,21 +162,8 @@ func Run(sc ServerConfig) error {
 	}
 
 	// Check for already running server BEFORE touching log files.
-	portReader := portfile.NewReader(dataDir)
-	existingInfo, _ := portReader.Read()
-	if existingInfo != nil {
-		// Skip check if the recorded PID is our own process (Docker restart scenario)
-		if existingInfo.PID != os.Getpid() && portfile.IsProcessAlive(existingInfo.PID) {
-			return fmt.Errorf("server already running (PID %d, port %d). Kill it first or use a different config",
-				existingInfo.PID, existingInfo.Port)
-		}
-		// Stale port file from a crashed/killed server — clean up.
-		stalePortFile := filepath.Join(dataDir, "server.port")
-		if err := os.Remove(stalePortFile); err != nil && !os.IsNotExist(err) {
-			slog.WarnContext(context.Background(), "failed to remove stale port file", "error", err)
-		} else {
-			slog.InfoContext(context.Background(), "Removed stale port file", "pid", existingInfo.PID)
-		}
+	if err := portfile.AcquireLock(dataDir); err != nil {
+		return err
 	}
 
 	// Apply managed mode overrides
@@ -228,15 +193,6 @@ func Run(sc ServerConfig) error {
 	}
 
 	slog.SetDefault(loggerInstance.Logger)
-
-	// Start pprof HTTP server for diagnostics
-	go func() {
-		pprofAddr := "localhost:6060"
-		slog.InfoContext(context.Background(), "pprof server started", "addr", pprofAddr)
-		if err := http.ListenAndServe(pprofAddr, nil); err != nil {
-			slog.ErrorContext(context.Background(), "pprof server failed", "error", err)
-		}
-	}()
 
 	ctx := context.Background()
 	loggerInstance.InfoContext(ctx, "Starting ByteBrew Server",
@@ -305,56 +261,20 @@ func Run(sc ServerConfig) error {
 		// sub-request design hard-coded the loopback port and silently
 		// failed open whenever the engine bound a non-default port). CE's
 		// Noop plugin ignores the counter — safe to wire unconditionally.
-		schemaCounterRepo := configrepo.NewGORMSchemaRepository(pgDB)
-		sc.Plugin.SetSchemaCounter(pluginpkg.SchemaCounterFunc(
-			func(ctx context.Context, tenantID string) (int, error) {
-				if tenantID == "" {
-					return 0, nil
-				}
-				// Scope ctx to the plugin-supplied tenant so the repository
-				// applies the same tenant filter it would for an authenticated
-				// HTTP request.
-				scoped := domain.WithTenantID(ctx, tenantID)
-				recs, err := schemaCounterRepo.List(scoped)
-				if err != nil {
-					return 0, fmt.Errorf("count schemas: %w", err)
-				}
-				return len(recs), nil
-			},
-		))
-	}
-
-	// If no LLM configured in legacy config but models exist in DB, use the first one.
-	if cfg.LLM.DefaultProvider == "" && pgDB != nil {
-		var firstModel models.LLMProviderModel
-		if err := pgDB.First(&firstModel).Error; err == nil {
-			slog.InfoContext(ctx, "Auto-configuring LLM from database model",
-				"name", firstModel.Name, "provider", firstModel.Type, "model", firstModel.ModelName)
-			switch firstModel.Type {
-			case "ollama":
-				cfg.LLM.DefaultProvider = "ollama"
-				cfg.LLM.Ollama.Model = firstModel.ModelName
-				cfg.LLM.Ollama.BaseURL = firstModel.BaseURL
-			case "openai", "openai_compatible":
-				cfg.LLM.DefaultProvider = "openrouter"
-				cfg.LLM.OpenRouter.Model = firstModel.ModelName
-				cfg.LLM.OpenRouter.APIKey = firstModel.APIKeyEncrypted
-				if firstModel.BaseURL != "" {
-					cfg.LLM.OpenRouter.BaseURL = firstModel.BaseURL
-				}
-			case "anthropic":
-				cfg.LLM.DefaultProvider = "anthropic"
-				cfg.LLM.Anthropic.Model = firstModel.ModelName
-				cfg.LLM.Anthropic.APIKey = firstModel.APIKeyEncrypted
-			}
-		}
+		// The closure body lives in schema_counter.go so the per-tenant
+		// scope contract has its own test surface.
+		sc.Plugin.SetSchemaCounter(NewSchemaCounter(configrepo.NewGORMSchemaRepository(pgDB)))
 	}
 
 	// Create infrastructure components (AgentService + WorkManager + AgentPool)
-	components, err := NewInfraComponents(InfraComponentsConfig{
+	infraCfg := InfraComponentsConfig{
 		Config: *cfg,
 		DB:     pgDB,
-	})
+	}
+	if bootstrapCfg != nil {
+		infraCfg.ModelDebugDir = bootstrapCfg.Debug.ModelDebugDir
+	}
+	components, err := NewInfraComponents(infraCfg)
 	if err != nil {
 		return fmt.Errorf("create infrastructure components: %w", err)
 	}
@@ -365,25 +285,11 @@ func Run(sc ServerConfig) error {
 	var embeddingsClient *indexing.EmbeddingsClient
 	if pgDB != nil {
 		knowledgeRepo = configrepo.NewGORMKnowledgeRepository(pgDB)
-		embedURL := indexing.DefaultOllamaURL
-		if envURL := os.Getenv("EMBED_URL"); envURL != "" {
-			embedURL = envURL
+		var embedCfg config.EmbeddingsConfig
+		if bootstrapCfg != nil {
+			embedCfg = bootstrapCfg.Embeddings
 		}
-		embedModel := indexing.DefaultEmbedModel
-		if envModel := os.Getenv("EMBED_MODEL"); envModel != "" {
-			embedModel = envModel
-		}
-		embedDim := indexing.DefaultDimension
-		if envDim := os.Getenv("EMBED_DIM"); envDim != "" {
-			if d, err := strconv.Atoi(envDim); err == nil && d > 0 {
-				embedDim = d
-			}
-		}
-		embeddingsClient = indexing.NewEmbeddingsClient(
-			embedURL,
-			embedModel,
-			embedDim,
-		)
+		embeddingsClient = indexing.NewClient(embedCfg)
 		knowledgeIndexer = knowledge.NewIndexer(embeddingsClient, knowledgeRepo, slog.Default())
 	}
 
@@ -392,23 +298,20 @@ func Run(sc ServerConfig) error {
 	var forwardHeadersStore atomic.Value // shared with configReloaderHTTPAdapter for dynamic updates
 	forwardHeadersStore.Store([]string(nil))
 
-	// Seed builder-assistant and its MCP server BEFORE connectMCPServers,
-	// so the seeded bytebrew-docs MCP server is included in the first connect pass.
-	if pgDB != nil {
-		seedByteBrewDocsMCP(ctx, pgDB)
-		seedBuilderAssistant(ctx, pgDB)
-		seedBuilderSchema(ctx, pgDB)
-		// V2 Commit Group C (§5.5): the system-wide MCP catalog is now a
-		// DB table populated from mcp-catalog.yaml at boot via upsert.
-		seedMCPCatalog(ctx, pgDB)
-		// V2 Commit Group L (§2.2): schema starter templates catalog is a
-		// DB table populated from schema-templates.yaml at boot via upsert.
-		seedSchemaTemplates(ctx, pgDB)
-		// V2 Commit Group G (§5.8): per-end-user BYOK config seeds into
-		// the `settings` table (jsonb) once on first boot. Admin UI edits
-		// supersede this on subsequent boots.
-		seedBYOKConfig(ctx, pgDB, cfg.BYOK)
+	// Apply LSP installer toggle from bootstrap config (env BYTEBREW_DISABLE_LSP_DOWNLOAD).
+	// One-shot at startup; subsequent updates require restart.
+	if bootstrapCfg != nil {
+		lsp.SetInstallDisabled(bootstrapCfg.LSP.DisableDownload)
 	}
+
+	// Seed bootstrap data (builder-assistant, MCP catalog, schema templates, BYOK).
+	// Must run BEFORE the MCP connect pass so the seeded bytebrew-docs entry is
+	// included in the first connect cycle. Helper lives in seed.go.
+	var docsMCPURL string
+	if bootstrapCfg != nil {
+		docsMCPURL = bootstrapCfg.MCP.DocsURL
+	}
+	bootstrapSeeds(ctx, pgDB, cfg.BYOK, docsMCPURL)
 
 	if pgDB != nil {
 		mcpServerRepo := configrepo.NewGORMMCPServerRepository(pgDB)
@@ -416,7 +319,7 @@ func Run(sc ServerConfig) error {
 		if mcpErr != nil {
 			slog.WarnContext(context.Background(), "failed to load MCP servers from database", "error", mcpErr)
 		} else {
-			connectMCPServers(ctx, mcpServers, mcpRegistry, sc.Plugin.TransportPolicy())
+			mcpcatalog.ConnectAll(ctx, mcpServers, mcpRegistry, sc.Plugin.TransportPolicy())
 			forwardHeadersStore.Store(collectForwardHeaders(mcpServers))
 		}
 	}
@@ -652,18 +555,10 @@ func Run(sc ServerConfig) error {
 		// Audit logger
 		auditLogger := audit.NewLogger(pgDB)
 
-		// Update checker (non-blocking, air-gap safe)
-		updateChecker := versioncheck.NewUpdateChecker(sc.Version)
+		// Update checker (non-blocking, air-gap safe).
+		// Endpoint override comes from bootstrap config (env BYTEBREW_VERSIONS_URL).
+		updateChecker := versioncheck.NewUpdateChecker(sc.Version, bootstrapCfg.Updates.VersionsURL)
 		updateChecker.Start(ctx)
-
-		// Health (public) — available on both ports
-		healthHandler := deliveryhttp.NewHealthHandler(sc.Version, &agentCounterHTTPAdapter{registry: agentRegistry})
-		healthHandler.SetUpdateChecker(updateChecker)
-		r.Get("/api/v1/health", healthHandler.ServeHTTP)
-
-		// Model registry (public — read-only catalog, no auth needed)
-		modelRegistry := registry.New()
-		registryHandler := deliveryhttp.NewModelRegistryHandler(modelRegistry)
 
 		// Local admin session issuer (public) — only wired in local auth mode.
 		// Signs Ed25519 admin sessions with the local keypair generated at
@@ -671,31 +566,11 @@ func Run(sc ServerConfig) error {
 		// is owned by the landing service.
 		var localSessionHandler *deliveryhttp.LocalSessionHandler
 		if localSessionPrivKey != nil {
-			localSessionTTL := time.Hour
-			if raw := os.Getenv("BYTEBREW_LOCAL_SESSION_TTL"); raw != "" {
-				if parsed, err := time.ParseDuration(raw); err == nil && parsed > 0 {
-					localSessionTTL = parsed
-				}
+			localSessionTTL := bootstrapCfg.Security.LocalSessionTTL
+			if localSessionTTL <= 0 {
+				localSessionTTL = time.Hour
 			}
 			localSessionHandler = deliveryhttp.NewLocalSessionHandler(localSessionPrivKey, localSessionTTL)
-		}
-
-		if internalHTTPServer != nil {
-			// Two-port mode: register public routes on internal router too
-			internalRouter.Get("/api/v1/health", healthHandler.ServeHTTP)
-			internalRouter.Get("/api/v1/models/registry", registryHandler.List)
-			internalRouter.Get("/api/v1/models/registry/providers", registryHandler.ListProviders)
-			if localSessionHandler != nil {
-				internalRouter.Post("/api/v1/auth/local-session", localSessionHandler.Issue)
-				internalRouter.Post("/api/v1/auth/local-session/refresh", localSessionHandler.Refresh)
-			}
-		}
-		// Single-port or external: model registry + local session on main router
-		r.Get("/api/v1/models/registry", registryHandler.List)
-		r.Get("/api/v1/models/registry/providers", registryHandler.ListProviders)
-		if localSessionHandler != nil {
-			r.Post("/api/v1/auth/local-session", localSessionHandler.Issue)
-			r.Post("/api/v1/auth/local-session/refresh", localSessionHandler.Refresh)
 		}
 
 		// TenantMiddleware enforces presence of tenant_id after auth.
@@ -705,411 +580,46 @@ func Run(sc ServerConfig) error {
 		tenantExtractor := deliveryhttp.NewJWTTenantExtractor("tenant_id")
 		tenantMW := deliveryhttp.NewTenantMiddleware(tenantExtractor, sc.RequireTenant)
 
-		// Protected management routes — on internalRouter (= r in single-port mode)
-		internalRouter.Group(func(r chi.Router) {
-			r.Use(authMW.Authenticate)
-			r.Use(tenantMW.Handler)
-			r.Use(deliveryhttp.AuditMiddleware(&auditHTTPAdapter{logger: auditLogger}))
-
-			// Schema repo (created early because agent manager needs it for used_in_schemas)
-			schemaRepo := configrepo.NewGORMSchemaRepository(pgDB)
-
-			// Agents
-			agentRepo := configrepo.NewGORMAgentRepository(pgDB)
-			// kbRepo is used by PatchAgent/CreateAgent to apply
-			// knowledge_base_ids changes to the knowledge_base_agents M2M
-			// table. Without this the request body field was silently
-			// accepted and discarded (Bug 7).
-			agentKBRepo := configrepo.NewGORMKnowledgeBaseRepository(pgDB)
-			agentManager := &agentManagerHTTPAdapter{repo: agentRepo, registry: agentRegistry, registryMgr: registryMgr, db: pgDB, schemaRepo: schemaRepo, kbRepo: agentKBRepo}
-			agentHandler := deliveryhttp.NewAgentHandlerWithManager(agentManager)
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
-				r.Get("/api/v1/agents", agentHandler.List)
-				r.Get("/api/v1/agents/{name}", agentHandler.Get)
-			})
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsWrite))
-				r.Post("/api/v1/agents", agentHandler.Create)
-				r.Put("/api/v1/agents/{name}", agentHandler.Update)
-				r.Patch("/api/v1/agents/{name}", agentHandler.Patch)
-				r.Delete("/api/v1/agents/{name}", agentHandler.Delete)
-			})
-
-			// Agent Lifecycle
-			if lifecycleManager != nil && agentLifecycleReader != nil {
-				lifecycleProvider := newLifecycleHTTPAdapter(lifecycleManager, agentLifecycleReader)
-				lifecycleHandler := deliveryhttp.NewLifecycleHandler(lifecycleProvider)
-				r.Group(func(r chi.Router) {
-					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
-					r.Get("/api/v1/agents/{name}/lifecycle", lifecycleHandler.Status)
-				})
-			}
-
-			// Agent Capabilities
-			capRepo := configrepo.NewGORMCapabilityRepository(pgDB)
-			capHandler := deliveryhttp.NewCapabilityHandler(&capabilityServiceHTTPAdapter{repo: capRepo, registryMgr: registryMgr})
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
-				r.Get("/api/v1/agents/{name}/capabilities", capHandler.List)
-			})
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsWrite))
-				r.Post("/api/v1/agents/{name}/capabilities", capHandler.Add)
-				r.Put("/api/v1/agents/{name}/capabilities/{capId}", capHandler.Update)
-				r.Delete("/api/v1/agents/{name}/capabilities/{capId}", capHandler.Remove)
-			})
-
-			// Models
-			llmProviderRepo := configrepo.NewGORMLLMProviderRepository(pgDB)
-			modelService := &modelServiceHTTPAdapter{repo: llmProviderRepo, modelCache: components.ModelCache, agentRepo: agentRepo}
-			modelHandler := deliveryhttp.NewModelHandler(modelService)
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeModelsRead))
-				r.Get("/api/v1/models", modelHandler.List)
-			})
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeModelsWrite))
-				r.Post("/api/v1/models", modelHandler.Create)
-				r.Put("/api/v1/models/{name}", modelHandler.Update)
-				r.Patch("/api/v1/models/{name}", modelHandler.Patch)
-				r.Delete("/api/v1/models/{name}", modelHandler.Delete)
-				r.Post("/api/v1/models/{name}/verify", modelHandler.Verify)
-			})
-
-			// Tasks
-			taskHandler := deliveryhttp.NewTaskHandler(&taskServiceHTTPAdapter{
-				repo:          taskRepo,
-				manager:       components.TaskManager,
-				sessionReader: configrepo.NewGORMSessionRepository(pgDB),
-			})
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeTasks))
-				r.Post("/api/v1/tasks", taskHandler.Create)
-				r.Get("/api/v1/tasks", taskHandler.List)
-				r.Get("/api/v1/tasks/{id}", taskHandler.Get)
-				r.Delete("/api/v1/tasks/{id}", taskHandler.Cancel)
-				r.Get("/api/v1/tasks/{id}/subtasks", taskHandler.ListSubtasks)
-				r.Post("/api/v1/tasks/{id}/approve", taskHandler.Approve)
-				r.Post("/api/v1/tasks/{id}/start", taskHandler.Start)
-				r.Post("/api/v1/tasks/{id}/complete", taskHandler.Complete)
-				r.Post("/api/v1/tasks/{id}/fail", taskHandler.Fail)
-				r.Post("/api/v1/tasks/{id}/priority", taskHandler.SetPriority)
-			})
-
-			// Dispatch Tasks (lifecycle dispatcher queries)
-			if lifecycleDispatcher != nil {
-				dispatchHandler := deliveryhttp.NewDispatchHandler(lifecycleDispatcher)
-				r.Group(func(r chi.Router) {
-					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeTasks))
-					r.Get("/api/v1/dispatch/tasks/{taskId}", dispatchHandler.Get)
-					r.Get("/api/v1/sessions/{sessionId}/dispatch-tasks", dispatchHandler.ListBySession)
-				})
-			}
-
-			// Config
-			configHandler := deliveryhttp.NewConfigHandler(
-				&configReloaderHTTPAdapter{registry: agentRegistry, mcpRegistry: mcpRegistry, db: pgDB, forwardHeadersStore: &forwardHeadersStore, transportPolicy: sc.Plugin.TransportPolicy()},
-				&configImportExportHTTPAdapter{db: pgDB},
-			)
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeConfig))
-				r.Post("/api/v1/config/reload", configHandler.Reload)
-				r.Post("/api/v1/config/import", configHandler.Import)
-				r.Get("/api/v1/config/export", configHandler.Export)
-			})
-
-			// Knowledge
-			if knowledgeRepo != nil {
-				var reindexer deliveryhttp.KnowledgeReindexer
-				if knowledgeIndexer != nil {
-					reindexer = &knowledgeReindexerHTTPAdapter{
-						indexer:  knowledgeIndexer,
-						registry: agentRegistry,
-					}
-				}
-				kbRepo := configrepo.NewGORMKnowledgeBaseRepository(pgDB)
-				knowledgeHandler := deliveryhttp.NewKnowledgeHandler(
-					&knowledgeStatsHTTPAdapter{repo: knowledgeRepo, kbRepo: kbRepo},
-					reindexer,
-				)
-
-				dataDir := "data"
-				if envDir := os.Getenv("DATA_DIR"); envDir != "" {
-					dataDir = envDir
-				}
-
-				uploadSvc := svcknowledge.NewUploadService(knowledgeRepo, dataDir)
-				uploadSvc.SetEmbeddingResolver(&embeddingModelResolver{db: pgDB})
-				uploadSvc.SetKBEmbeddingResolver(&kbEmbeddingResolver{db: pgDB})
-				knowledgeHandler.SetFileUploader(&knowledgeUploadHTTPAdapter{svc: uploadSvc})
-				knowledgeHandler.SetFileLister(&knowledgeFileListerHTTPAdapter{svc: uploadSvc, kbRepo: kbRepo})
-
-				// Knowledge Bases (many-to-many) handler
-				kbHandler := deliveryhttp.NewKnowledgeBaseHandler(
-					&kbStoreAdapter{repo: kbRepo, db: pgDB},
-					&kbFileManagerAdapter{svc: uploadSvc},
-				)
-
-				// Legacy agent-scoped knowledge endpoints
-				r.Group(func(r chi.Router) {
-					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
-					r.Get("/api/v1/agents/{name}/knowledge/status", knowledgeHandler.Status)
-					r.Get("/api/v1/agents/{name}/knowledge/files", knowledgeHandler.ListFiles)
-				})
-				r.Group(func(r chi.Router) {
-					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsWrite))
-					r.Post("/api/v1/agents/{name}/knowledge/reindex", knowledgeHandler.Reindex)
-					r.Post("/api/v1/agents/{name}/knowledge/files", knowledgeHandler.UploadFile)
-					r.Delete("/api/v1/agents/{name}/knowledge/files/{file_id}", knowledgeHandler.DeleteFile)
-					r.Post("/api/v1/agents/{name}/knowledge/files/{file_id}/reindex", knowledgeHandler.ReindexFile)
-				})
-
-				// Knowledge Base CRUD + file management endpoints
-				r.Group(func(r chi.Router) {
-					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
-					r.Get("/api/v1/knowledge-bases", kbHandler.List)
-					r.Get("/api/v1/knowledge-bases/{id}", kbHandler.Get)
-					r.Get("/api/v1/knowledge-bases/{id}/files", kbHandler.ListFiles)
-				})
-				r.Group(func(r chi.Router) {
-					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsWrite))
-					r.Post("/api/v1/knowledge-bases", kbHandler.Create)
-					r.Put("/api/v1/knowledge-bases/{id}", kbHandler.Update)
-					r.Patch("/api/v1/knowledge-bases/{id}", kbHandler.PatchKB)
-					r.Delete("/api/v1/knowledge-bases/{id}", kbHandler.Delete)
-					r.Post("/api/v1/knowledge-bases/{id}/agents/{agent_name}", kbHandler.LinkAgent)
-					r.Delete("/api/v1/knowledge-bases/{id}/agents/{agent_name}", kbHandler.UnlinkAgent)
-					r.Post("/api/v1/knowledge-bases/{id}/files", kbHandler.UploadFile)
-					r.Delete("/api/v1/knowledge-bases/{id}/files/{file_id}", kbHandler.DeleteFile)
-					r.Post("/api/v1/knowledge-bases/{id}/files/{file_id}/reindex", kbHandler.ReindexFile)
-				})
-			}
-
-			auditRepo := configrepo.NewGORMAuditRepository(pgDB)
-			auditHandler := deliveryhttp.NewAuditHandler(&auditServiceHTTPAdapter{repo: auditRepo})
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireAdminSession)
-				r.Get("/api/v1/audit", auditHandler.List)
-			})
-
-			// API Tokens (admin-only)
-			tokenHandler := deliveryhttp.NewTokenHandler(&tokenRepoHTTPAdapter{repo: apiTokenRepo})
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireAdminSession)
-				r.Post("/api/v1/auth/tokens", tokenHandler.CreateToken)
-				r.Get("/api/v1/auth/tokens", tokenHandler.ListTokens)
-				r.Delete("/api/v1/auth/tokens/{id}", tokenHandler.DeleteToken)
-			})
-
-			// MCP Servers
-			mcpServerRepo := configrepo.NewGORMMCPServerRepository(pgDB)
-			mcpHandler := deliveryhttp.NewMCPHandler(&mcpServiceHTTPAdapter{repo: mcpServerRepo}, sc.Plugin.TransportPolicy())
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeMCPRead))
-				r.Get("/api/v1/mcp-servers", mcpHandler.List)
-			})
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeMCPWrite))
-				r.Post("/api/v1/mcp-servers", mcpHandler.Create)
-				r.Put("/api/v1/mcp-servers/{name}", mcpHandler.Update)
-				r.Patch("/api/v1/mcp-servers/{name}", mcpHandler.Patch)
-				r.Delete("/api/v1/mcp-servers/{name}", mcpHandler.Delete)
-			})
-
-			// Schemas (with agent_relations). Chat access on a schema is
-			// controlled by schemas.chat_enabled; edge graph lives in
-			// agent_relations (source→target delegation).
-			agentRelationRepo := configrepo.NewGORMAgentRelationRepository(pgDB)
-			schemaHandler := deliveryhttp.NewSchemaHandler(
-				&schemaServiceHTTPAdapter{repo: schemaRepo, db: pgDB},
-				&agentRelationServiceHTTPAdapter{repo: agentRelationRepo, agentRepo: agentRepo, schemaRepo: schemaRepo, db: pgDB},
-			)
-			schemaHandler.SetAgentDetailer(agentManager)
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeSchemasRead))
-				r.Get("/api/v1/schemas", schemaHandler.ListSchemas)
-				r.Get("/api/v1/schemas/{id}", schemaHandler.GetSchema)
-				r.Get("/api/v1/schemas/{id}/agents", schemaHandler.ListSchemaAgents)
-				r.Get("/api/v1/schemas/{id}/agent-relations", schemaHandler.ListAgentRelations)
-				r.Get("/api/v1/schemas/{id}/agent-relations/{relationId}", schemaHandler.GetAgentRelation)
-				r.Get("/api/v1/schemas/{id}/export", schemaHandler.ExportSchema)
-			})
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeSchemasWrite))
-				r.Post("/api/v1/schemas", schemaHandler.CreateSchema)
-				r.Post("/api/v1/schemas/import", schemaHandler.ImportSchema)
-				r.Put("/api/v1/schemas/{id}", schemaHandler.UpdateSchema)
-				r.Patch("/api/v1/schemas/{id}", schemaHandler.PatchSchema)
-				r.Delete("/api/v1/schemas/{id}", schemaHandler.DeleteSchema)
-				// V2: schema membership is derived from agent_relations
-				// (docs/architecture/agent-first-runtime.md §2.1) — the
-				// POST/DELETE schema-agent routes are gone; create or
-				// remove a delegation relation to add or remove a member.
-				r.Post("/api/v1/schemas/{id}/agent-relations", schemaHandler.CreateAgentRelation)
-				r.Put("/api/v1/schemas/{id}/agent-relations/{relationId}", schemaHandler.UpdateAgentRelation)
-				r.Delete("/api/v1/schemas/{id}/agent-relations/{relationId}", schemaHandler.DeleteAgentRelation)
-			})
-
-			// Widgets: V2 removes the server-side widgets entity. The admin
-			// UI is a pure snippet generator (docs/architecture/agent-first-runtime.md
-			// §4.3); no /api/v1/widgets routes are registered.
-
-			// Settings (admin-only)
-			settingRepo := configrepo.NewGORMSettingRepository(pgDB)
-			settingHandler := deliveryhttp.NewSettingHandler(&settingServiceHTTPAdapter{
-				repo:         settingRepo,
-				byokMW:       byokMW,
-				db:           pgDB,
-				byokFallback: cfg.BYOK,
-			})
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireAdminSession)
-				r.Get("/api/v1/settings", settingHandler.List)
-				r.Put("/api/v1/settings/{key}", settingHandler.Update)
-			})
-
-			// Builder-assistant restore (admin-only)
-			baHandler := deliveryhttp.NewBuilderAssistantHandler(&builderAssistantRestorerAdapter{db: pgDB, registry: agentRegistry})
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireAdminSession)
-				r.Post("/api/v1/admin/builder-assistant/restore", baHandler.Restore)
-			})
-
-			// Sessions (admin-only)
-			sessionRepo := configrepo.NewGORMSessionRepository(pgDB)
-			messageRepo := configrepo.NewGORMEventRepository(pgDB)
-			sessionHandler := deliveryhttp.NewSessionHandler(&sessionServiceHTTPAdapter{repo: sessionRepo, messageRepo: messageRepo})
-			sessionHandler.SetEventService(&eventServiceHTTPAdapter{repo: messageRepo})
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireAdminSession)
-				r.Mount("/api/v1/sessions", sessionHandler.Routes())
-			})
-
-			// Tool metadata (admin-only)
-			toolMetaHandler := deliveryhttp.NewToolMetadataHandler(&toolMetadataHTTPAdapter{})
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireAdminSession)
-				r.Get("/api/v1/tools/metadata", toolMetaHandler.List)
-			})
-
-			// Memory (per-schema)
-			memoryStorage := persistence.NewMemoryStorage(pgDB)
-			memoryHandler := deliveryhttp.NewMemoryHandler(
-				&memoryListerHTTPAdapter{storage: memoryStorage},
-				&memoryClearerHTTPAdapter{storage: memoryStorage},
-			)
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeSchemasRead))
-				r.Get("/api/v1/schemas/{id}/memory", memoryHandler.ListMemories)
-			})
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeSchemasWrite))
-				r.Delete("/api/v1/schemas/{id}/memory", memoryHandler.ClearMemories)
-				r.Delete("/api/v1/schemas/{id}/memory/{entry_id}", memoryHandler.DeleteMemory)
-			})
-
-			// MCP Catalog (read-only) — DB-backed (V2 Commit Group C, §5.5).
-			if pgDB != nil {
-				catalogRepo := configrepo.NewGORMMCPCatalogRepository(pgDB)
-				catalogSvc := mcpcatalog.NewCatalogService(catalogRepo)
-				catalogHandler := deliveryhttp.NewCatalogHandler(catalogSvc)
-				r.Get("/api/v1/mcp/catalog", catalogHandler.ListCatalog)
-			}
-
-			// Schema templates catalog + fork — DB-backed (V2 Commit Group L, §2.2).
-			// Reads are open to any authenticated user; fork requires the
-			// schemas-write scope (it creates new schemas/agents/triggers).
-			if pgDB != nil {
-				tmplRepo := configrepo.NewGORMSchemaTemplateRepository(pgDB)
-				forkSvc := svcschematemplate.NewForkService(pgDB, tmplRepo)
-				forkAdapter := svcschematemplate.NewUsecaseForkerAdapter(forkSvc)
-				tmplUC := ucschematemplate.New(tmplRepo, forkAdapter)
-				tmplHandler := deliveryhttp.NewSchemaTemplateHandler(tmplUC, "1.0")
-				r.Get("/api/v1/schema-templates", tmplHandler.List)
-				r.Get("/api/v1/schema-templates/{name}", tmplHandler.Get)
-				r.Group(func(r chi.Router) {
-					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeSchemasWrite))
-					r.Post("/api/v1/schema-templates/{name}/fork", tmplHandler.Fork)
-				})
-			}
-
-			// Usage (CE mode — unlimited)
-			usageHandler := deliveryhttp.NewUsageHandler(pgDB)
-			r.Get("/api/v1/usage", usageHandler.GetUsage)
-
-			// Tool Call Log — per-tool-call observability (OSS Phase 4).
-			// OSS users rely on this to debug agent behavior: which tools were called,
-			// with what args, how long they took, and whether they failed.
-			toolCallRepoOSS := configrepo.NewToolCallEventRepository(pgDB)
-			toolCallLogHandlerOSS := deliveryhttp.NewToolCallLogHandler(&toolCallLogHTTPAdapter{repo: toolCallRepoOSS})
-			r.Get("/api/v1/audit/tool-calls", toolCallLogHandlerOSS.List)
-
-			// Resilience admin endpoints (AC-RESIL-09..12: circuit breaker observability).
-			resilienceHandler := deliveryhttp.NewResilienceHandler(
-				&circuitBreakerQuerierHTTPAdapter{registry: cbRegistry},
-			)
-			r.Group(func(r chi.Router) {
-				r.Use(deliveryhttp.RequireAdminSession)
-				r.Get("/api/v1/resilience/circuit-breakers", resilienceHandler.ListCircuitBreakers)
-				r.Post("/api/v1/resilience/circuit-breakers/{name}/reset", resilienceHandler.ResetCircuitBreaker)
-			})
-
-			// Capability injector is wired into AgentToolResolver above (US-001).
-			// capRepo is also used here for capability CRUD HTTP handlers.
+		// Protected management routes + public health/registry/local-session
+		// — extracted to registerHTTPRoutes (see routes_register.go).
+		registerHTTPRoutes(routesDeps{
+			Ctx:                  ctx,
+			Version:              sc.Version,
+			DB:                   pgDB,
+			AgentRegistry:        agentRegistry,
+			RegistryMgr:          registryMgr,
+			Components:           components,
+			TaskRepo:             taskRepo,
+			APITokenRepo:         apiTokenRepo,
+			KnowledgeRepo:        knowledgeRepo,
+			KnowledgeIndexer:     knowledgeIndexer,
+			EmbeddingsClient:     embeddingsClient,
+			MCPRegistry:          mcpRegistry,
+			ForwardHeadersStore:  &forwardHeadersStore,
+			CBRegistry:           cbRegistry,
+			LifecycleManager:     lifecycleManager,
+			LifecycleDispatcher:  lifecycleDispatcher,
+			AgentLifecycleReader: agentLifecycleReader,
+			CapReader:            capReader,
+			AuthMW:               authMW,
+			TenantMW:             tenantMW,
+			BYOKMW:               byokMW,
+			AuditLogger:          auditLogger,
+			UpdateChecker:        updateChecker,
+			LocalSessionHandler:  localSessionHandler,
+			TransportPolicy:      sc.Plugin.TransportPolicy(),
+			Plugin:               sc.Plugin,
+			BYOKConfig:           cfg.BYOK,
+			ExternalRouter:       r,
+			InternalRouter:       internalRouter,
+			HasInternalServer:    internalHTTPServer != nil,
+			KnowledgeDataDir:     bootstrapCfg.Knowledge.DataDir,
 		})
 
-		// Extra HTTP routes contributed by the plugin (metrics, rate-limit
-		// usage, etc.). Noop plugin registers nothing.
-		sc.Plugin.RegisterHTTP(r, internalRouter)
+		// Serve Admin Dashboard SPA + Web Client SPA — internal only (extracted to spa_handler.go).
+		mountSPA(internalRouter, "/admin", "/usr/share/bytebrew/admin")
+		mountSPA(internalRouter, "/chat", "/usr/share/bytebrew/webclient")
 
-		// Serve Admin Dashboard SPA (static files) — internal only
-		adminDir := "/usr/share/bytebrew/admin"
-		if _, statErr := os.Stat(adminDir); statErr == nil {
-			spaFS := http.Dir(adminDir)
-			adminFileHandler := func(w http.ResponseWriter, req *http.Request) {
-				filePath := strings.TrimPrefix(req.URL.Path, "/admin")
-				if filePath == "" || filePath == "/" {
-					filePath = "/index.html"
-				}
-				if _, err := os.Stat(filepath.Join(adminDir, filePath)); os.IsNotExist(err) {
-					http.ServeFile(w, req, filepath.Join(adminDir, "index.html"))
-					return
-				}
-				http.StripPrefix("/admin", http.FileServer(spaFS)).ServeHTTP(w, req)
-			}
-			adminRedirect := func(w http.ResponseWriter, req *http.Request) {
-				http.Redirect(w, req, "/admin/", http.StatusMovedPermanently)
-			}
-			internalRouter.Get("/admin/*", adminFileHandler)
-			internalRouter.Get("/admin", adminRedirect)
-			slog.InfoContext(ctx, "Admin Dashboard served", "path", adminDir)
-		} else {
-			slog.InfoContext(ctx, "Admin Dashboard not found (optional)", "path", adminDir)
-		}
-
-		// Serve Web Client SPA (static files) — internal only
-		webclientDir := "/usr/share/bytebrew/webclient"
-		if _, statErr := os.Stat(webclientDir); statErr == nil {
-			chatSpaFS := http.Dir(webclientDir)
-			chatFileHandler := func(w http.ResponseWriter, req *http.Request) {
-				filePath := strings.TrimPrefix(req.URL.Path, "/chat")
-				if filePath == "" || filePath == "/" {
-					filePath = "/index.html"
-				}
-				if _, err := os.Stat(filepath.Join(webclientDir, filePath)); os.IsNotExist(err) {
-					http.ServeFile(w, req, filepath.Join(webclientDir, "index.html"))
-					return
-				}
-				http.StripPrefix("/chat", http.FileServer(chatSpaFS)).ServeHTTP(w, req)
-			}
-			chatRedirect := func(w http.ResponseWriter, req *http.Request) {
-				http.Redirect(w, req, "/chat/", http.StatusMovedPermanently)
-			}
-			internalRouter.Get("/chat/*", chatFileHandler)
-			internalRouter.Get("/chat", chatRedirect)
-			slog.InfoContext(ctx, "Web Client served", "path", webclientDir)
-		}
 
 		// Serve widget.js (static file) — external only (or both in single-port mode).
 		// V2: the admin generates a <script src="…/widget.js" data-agent="…" …>
@@ -1194,21 +704,10 @@ func Run(sc ServerConfig) error {
 	// Use AgentRegistry as FlowProvider (replaces legacy FlowManager for agent resolution).
 	// In multi-tenant mode agentRegistry is nil and we must dispatch per-request via the
 	// Manager, otherwise the static FlowManager has no agents (flows.yaml is empty).
-	var flowProvider turnexecutor.FlowProvider = components.FlowManager
-	var tenantAwareProvider *agentregistry.TenantAwareFlowProvider
-	if agentRegistry != nil {
-		flowProvider = agentRegistry
-	} else if registryMgr != nil {
-		tenantAwareProvider = agentregistry.NewTenantAwareFlowProvider(registryMgr)
-		flowProvider = tenantAwareProvider
-	}
-	// Resolve AgentModelResolver (nil-safe: factory handles nil gracefully)
-	var agentModelResolver turnexecutorfactory.AgentModelResolver
-	if agentRegistry != nil {
-		agentModelResolver = agentRegistry
-	} else if tenantAwareProvider != nil {
-		agentModelResolver = tenantAwareProvider
-	}
+	flowResolution := agentregistry.ResolveFlowProvider(agentRegistry, registryMgr, components.FlowManager)
+	flowProvider := flowResolution.Provider
+	tenantAwareProvider := flowResolution.TenantAware
+	agentModelResolver := agentregistry.ResolveAgentModelResolver(agentRegistry, tenantAwareProvider)
 
 	factory := turnexecutorfactory.New(
 		components.Engine,
@@ -1338,95 +837,42 @@ func Run(sc ServerConfig) error {
 		})
 		respondHandler := deliveryhttp.NewRespondHandler(sessionRegistry)
 
-		// Register chat routes on external router (or single-port router).
-		// Per-IP rate limiting is an edge concern — configured on the reverse
-		// proxy (Caddy/nginx/traefik) in front of the engine. See
-		// docs/deployment/rate-limiting.md for Caddyfile/nginx snippets.
-		registerChatRoutes := func(router chi.Router) {
-			router.Group(func(r chi.Router) {
-				if httpAuthMW != nil {
-					r.Use(httpAuthMW.Authenticate)
-				}
-				// V2 §5.8: BYOK runs AFTER auth so unauthenticated traffic
-				// never reaches the header-parsing path; the LLM factory
-				// reads ContextKeyBYOK* from the request context to decide
-				// between tenant-configured and user-supplied credentials.
-				if byokMW != nil {
-					r.Use(byokMW.InjectBYOK)
-				}
-				r.Group(func(r chi.Router) {
-					if httpAuthMW != nil {
-						r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeChat))
-					}
-					r.Post("/api/v1/schemas/{id}/chat", chatHandler.Chat)
-					r.Post("/api/v1/sessions/{id}/respond", respondHandler.Respond)
-				})
-			})
-		}
-
-		// Chat API available on external port (or single-port)
-		registerChatRoutes(httpServer.Router())
-		// In two-port mode, also register on internal port (for /chat/ web client)
-		if internalHTTPServer != nil {
-			registerChatRoutes(internalHTTPServer.Router())
-		}
-
 		// Admin assistant — admin JWT required, chats against the seeded
 		// builder-schema; the schema resolver runs per-request so a late seed
-		// is picked up without a restart. In multi-tenant (Cloud) mode, scope
-		// the lookup to the caller's tenant_id — otherwise every tenant would
-		// resolve to whichever builder-schema GORM returned first (cross-tenant
-		// leak).
-		builderSchemaResolver := func(ctx context.Context) (string, error) {
-			if pgDB == nil {
-				return "", fmt.Errorf("no db")
-			}
-			var id string
-			q := pgDB.WithContext(ctx).Table("schemas").Select("id").Where("name = ?", builderSchemaName)
-			if tenantID := domain.TenantIDFromContext(ctx); tenantID != "" {
-				q = q.Where("tenant_id = ?", tenantID)
-			}
-			if err := q.Limit(1).Scan(&id).Error; err != nil {
-				return "", err
-			}
-			return id, nil
-		}
+		// is picked up without a restart. The tenant-aware lookup body lives
+		// in builder_assistant.go (`NewBuilderSchemaResolver`) so the SCC-02
+		// gate has its own test surface.
+		builderSchemaResolver := NewBuilderSchemaResolver(pgDB, builderSchemaName)
 		adminAssistantSessionRepo := configrepo.NewGORMSessionRepository(pgDB)
 		adminAssistantHandler := deliveryhttp.NewAdminAssistantHandler(chatService, builderSchemaResolver, func() []string {
 			return forwardHeadersStore.Load().([]string)
 		}, adminAssistantSessionRepo)
-		registerAdminAssistantRoutes := func(router chi.Router) {
-			router.Group(func(r chi.Router) {
-				if httpAuthMW != nil {
-					r.Use(httpAuthMW.Authenticate)
-					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
-				}
-				r.Post("/api/v1/admin/assistant/chat", adminAssistantHandler.Chat)
-				r.Get("/api/v1/admin/assistant/last-session", adminAssistantHandler.LastSession)
-			})
-		}
-		registerAdminAssistantRoutes(httpServer.Router())
-		if internalHTTPServer != nil {
-			registerAdminAssistantRoutes(internalHTTPServer.Router())
+
+		chatDeps := chatRoutesDeps{
+			AuthMW:                httpAuthMW,
+			BYOKMW:                byokMW,
+			ChatHandler:           chatHandler,
+			RespondHandler:        respondHandler,
+			AdminAssistantHandler: adminAssistantHandler,
+			AgentManagerExt: &agentManagerHTTPAdapter{
+				repo:        configrepo.NewGORMAgentRepository(pgDB),
+				registry:    agentRegistry,
+				registryMgr: registryMgr,
+				db:          pgDB,
+				schemaRepo:  configrepo.NewGORMSchemaRepository(pgDB),
+				kbRepo:      configrepo.NewGORMKnowledgeBaseRepository(pgDB),
+			},
 		}
 
-		// Agent list endpoint on external router (read-only, requires ScopeAgentsRead)
+		// Chat API + admin assistant on external port (or single-port).
+		mountChatRoutes(httpServer.Router(), chatDeps)
+		mountAdminAssistantRoutes(httpServer.Router(), chatDeps)
+		// In two-port mode, also register on internal port (for /chat/ web client)
+		// and expose a read-only agent list on the external router.
 		if internalHTTPServer != nil {
-			httpServer.Router().Group(func(r chi.Router) {
-				if httpAuthMW != nil {
-					r.Use(httpAuthMW.Authenticate)
-					r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsRead))
-				}
-				r.Get("/api/v1/agents", deliveryhttp.NewAgentHandlerWithManager(
-					&agentManagerHTTPAdapter{
-						repo:        configrepo.NewGORMAgentRepository(pgDB),
-						registry:    agentRegistry,
-						registryMgr: registryMgr,
-						db:          pgDB,
-						schemaRepo:  configrepo.NewGORMSchemaRepository(pgDB),
-						kbRepo:      configrepo.NewGORMKnowledgeBaseRepository(pgDB),
-					}).List)
-			})
+			mountChatRoutes(internalHTTPServer.Router(), chatDeps)
+			mountAdminAssistantRoutes(internalHTTPServer.Router(), chatDeps)
+			mountSecondaryAgentList(httpServer.Router(), chatDeps)
 		}
 
 	}
@@ -1513,7 +959,7 @@ func Run(sc ServerConfig) error {
 
 	// Start memory retention cleanup goroutine (deletes expired entries based on per-agent config)
 	if pgDB != nil {
-		startMemoryRetentionCleanup(ctx, pgDB)
+		memorysvc.NewRetentionWorker(pgDB).Start(ctx)
 	}
 
 	// Wait for shutdown signal or server error
@@ -1597,32 +1043,12 @@ func initializeGRPCServer(cfg *config.Config, log *logger.Logger, extraOpts []go
 	return server, nil
 }
 
-// UserDataDir returns the platform-specific user data directory for ByteBrew.
+// UserDataDir is a thin alias around platform.UserDataDir kept here to avoid
+// churn at every call site (managed-mode init, port-file path, etc.). The
+// actual platform path resolution — and the only OS env reads outside
+// pkg/config — live in internal/infrastructure/platform.
 func UserDataDir() (string, error) {
-	switch runtime.GOOS {
-	case "windows":
-		appData := os.Getenv("APPDATA")
-		if appData == "" {
-			appData = filepath.Join(os.Getenv("USERPROFILE"), "AppData", "Roaming")
-		}
-		return filepath.Join(appData, "bytebrew"), nil
-	case "darwin":
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("get user home directory: %w", err)
-		}
-		return filepath.Join(home, "Library", "Application Support", "bytebrew"), nil
-	default:
-		xdgData := os.Getenv("XDG_DATA_HOME")
-		if xdgData != "" {
-			return filepath.Join(xdgData, "bytebrew"), nil
-		}
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("get user home directory: %w", err)
-		}
-		return filepath.Join(home, ".local", "share", "bytebrew"), nil
-	}
+	return platform.UserDataDir()
 }
 
 // ensureManagedDirs creates the required subdirectories in the data directory.
@@ -1639,179 +1065,3 @@ func ensureManagedDirs(dataDir string) error {
 	return nil
 }
 
-// generateDefaultConfig writes a minimal config.yaml suitable for managed mode.
-func generateDefaultConfig(path string) error {
-	content := `# ByteBrew Server Config (auto-generated for managed mode)
-server:
-  host: "127.0.0.1"
-  port: 0
-
-database:
-  host: localhost
-  port: 5499
-  user: postgres
-  password: postgres
-  database: bytebrew
-  ssl_mode: disable
-
-logging:
-  level: "info"
-  format: "text"
-  output: "file"
-  clear_on_startup: true
-
-llm:
-  default_provider: "ollama"
-  ollama:
-    model: "qwen2.5-coder:7b"
-    base_url: "http://localhost:11434"
-    timeout: 300s
-`
-	return os.WriteFile(path, []byte(content), 0644)
-}
-
-// connectMCPServers connects to MCP servers and registers them in the registry.
-// policy is consulted before opening stdio transports: Cloud deployments block
-// stdio to prevent host code execution; CE allows all transports.
-func connectMCPServers(ctx context.Context, mcpServers []models.MCPServerModel, registry *mcp.ClientRegistry, policy mcpcatalog.TransportPolicy) {
-	for _, srv := range mcpServers {
-		var forwardHeaders []string
-		if srv.ForwardHeaders != nil && *srv.ForwardHeaders != "" {
-			_ = json.Unmarshal([]byte(*srv.ForwardHeaders), &forwardHeaders)
-		}
-
-		var transport mcp.Transport
-		switch srv.Type {
-		case "stdio":
-			if err := policy.IsAllowed("stdio"); err != nil {
-				slog.WarnContext(context.Background(), "MCP stdio transport blocked by policy", "name", srv.Name, "reason", err.Error())
-				continue
-			}
-			var args []string
-			if srv.Args != nil && *srv.Args != "" {
-				_ = json.Unmarshal([]byte(*srv.Args), &args)
-			}
-			transport = mcp.NewStdioTransport(srv.Command, args, nil, forwardHeaders)
-		case "http":
-			transport = mcp.NewHTTPTransport(srv.URL, forwardHeaders)
-		case "sse":
-			transport = mcp.NewSSETransport(srv.URL, forwardHeaders)
-		case "streamable-http":
-			transport = mcp.NewStreamableHTTPTransport(srv.URL, forwardHeaders)
-		default:
-			slog.WarnContext(context.Background(), "unknown MCP server type, skipping", "name", srv.Name, "type", srv.Type)
-			continue
-		}
-
-		client := mcp.NewClient(srv.Name, transport)
-		connectCtx, connectCancel := context.WithTimeout(ctx, 10*time.Second)
-		if err := client.Connect(connectCtx); err != nil {
-			slog.WarnContext(context.Background(), "MCP server unavailable, skipping", "name", srv.Name, "error", err)
-			connectCancel()
-			continue
-		}
-		connectCancel()
-
-		tools := client.ListTools()
-		slog.InfoContext(context.Background(), "MCP server connected", "name", srv.Name, "tools", len(tools))
-		registry.Register(srv.Name, client)
-	}
-}
-
-// startMemoryRetentionCleanup launches a background goroutine that periodically
-// deletes expired memory entries based on per-agent retention_days config.
-func startMemoryRetentionCleanup(ctx context.Context, db *gorm.DB) {
-	ticker := time.NewTicker(1 * time.Hour)
-	go func() {
-		slog.InfoContext(ctx, "Memory retention cleanup goroutine started (every 1h)")
-		runMemoryRetentionCleanup(ctx, db) // run once on startup
-		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				slog.InfoContext(context.Background(), "Memory retention cleanup goroutine stopped")
-				return
-			case <-ticker.C:
-				runMemoryRetentionCleanup(ctx, db)
-			}
-		}
-	}()
-}
-
-// runMemoryRetentionCleanup iterates all memory capabilities and deletes expired entries.
-func runMemoryRetentionCleanup(ctx context.Context, db *gorm.DB) {
-	var caps []models.CapabilityModel
-	if err := db.WithContext(ctx).Where("type = ? AND enabled = ?", "memory", true).Find(&caps).Error; err != nil {
-		slog.WarnContext(ctx, "memory retention cleanup: failed to list capabilities", "error", err)
-		return
-	}
-
-	memStorage := persistence.NewMemoryStorage(db)
-	totalDeleted := int64(0)
-
-	for _, cap := range caps {
-		if cap.Config == "" {
-			continue
-		}
-		var config map[string]interface{}
-		if err := json.Unmarshal([]byte(cap.Config), &config); err != nil {
-			continue
-		}
-
-		unlimitedRetention, _ := config["unlimited_retention"].(bool)
-		if unlimitedRetention {
-			continue
-		}
-
-		retentionDays := 0
-		if rd, ok := config["retention_days"].(float64); ok {
-			retentionDays = int(rd)
-		}
-		if retentionDays <= 0 {
-			continue
-		}
-
-		// V2: derive schema_ids for this agent via agent_relations
-		// (docs/architecture/agent-first-runtime.md §2.1 — the
-		// `schema_agents` join table no longer exists).
-		var agentName string
-		if err := db.WithContext(ctx).
-			Raw("SELECT name FROM agents WHERE id = ?", cap.AgentID).
-			Scan(&agentName).Error; err != nil || agentName == "" {
-			slog.WarnContext(ctx, "memory retention cleanup: failed to resolve agent name",
-				"agent_id", cap.AgentID, "error", err)
-			continue
-		}
-		var agentID string
-		if err := db.WithContext(ctx).
-			Raw("SELECT id FROM agents WHERE name = ?", agentName).
-			Scan(&agentID).Error; err != nil || agentID == "" {
-			slog.WarnContext(ctx, "memory retention cleanup: failed to resolve agent id",
-				"agent_name", agentName, "error", err)
-			continue
-		}
-		var schemaIDs []string
-		if err := db.WithContext(ctx).
-			Raw(`SELECT DISTINCT schema_id FROM agent_relations
-				WHERE source_agent_id = ? OR target_agent_id = ?`, agentID, agentID).
-			Scan(&schemaIDs).Error; err != nil {
-			slog.WarnContext(ctx, "memory retention cleanup: failed to get schemas",
-				"agent", agentName, "error", err)
-			continue
-		}
-
-		for _, schemaID := range schemaIDs {
-			deleted, err := memStorage.CleanupExpiredBySchema(ctx, schemaID, retentionDays)
-			if err != nil {
-				slog.WarnContext(ctx, "memory retention cleanup failed",
-					"schema_id", schemaID, "retention_days", retentionDays, "error", err)
-				continue
-			}
-			totalDeleted += deleted
-		}
-	}
-
-	if totalDeleted > 0 {
-		slog.InfoContext(ctx, "memory retention cleanup completed", "total_deleted", totalDeleted)
-	}
-}

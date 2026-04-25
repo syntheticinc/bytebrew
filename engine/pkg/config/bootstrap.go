@@ -4,25 +4,46 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"time"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
 )
 
 // BootstrapConfig is the minimal config loaded from YAML before connecting to the database.
 // All runtime configuration (agents, models, etc.) lives in the database.
+//
+// Every field below is sourced from one of:
+//  1. YAML at the engine config path,
+//  2. an environment variable bound via Viper (see env_vars.go + bindEnvVars),
+//  3. or a built-in default (see setBootstrapDefaults).
+//
+// Adding a new env var requires:
+//   - a const in env_vars.go,
+//   - a typed field here,
+//   - a v.BindEnv() call in bindEnvVars,
+//   - a default in setBootstrapDefaults if applicable,
+//   - a line in .env.example.
 type BootstrapConfig struct {
-	Engine   EngineBootstrap   `mapstructure:"engine"`
-	Database BootstrapDatabase `mapstructure:"database"`
-	Security BootstrapSecurity `mapstructure:"security"`
-	Logging  BootstrapLogging  `mapstructure:"logging"`
+	Engine     EngineBootstrap    `mapstructure:"engine"`
+	Database   BootstrapDatabase  `mapstructure:"database"`
+	Security   BootstrapSecurity  `mapstructure:"security"`
+	Logging    BootstrapLogging   `mapstructure:"logging"`
+	Embeddings EmbeddingsConfig   `mapstructure:"embeddings"`
+	Debug      DebugConfig        `mapstructure:"debug"`
+	MCP        MCPBootstrap       `mapstructure:"mcp"`
+	Knowledge  KnowledgeBootstrap `mapstructure:"knowledge"`
+	LSP        LSPBootstrap       `mapstructure:"lsp"`
+	Updates    UpdatesConfig      `mapstructure:"updates"`
 }
 
 // EngineBootstrap holds the minimal engine settings needed at startup.
 type EngineBootstrap struct {
 	Host         string   `mapstructure:"host"`
-	Port         int      `mapstructure:"port"`           // External/data plane port (default 8443)
-	InternalPort int      `mapstructure:"internal_port"`  // Control plane port (default 0 = single-port mode)
-	CORSOrigins  []string `mapstructure:"cors_origins"`   // Allowed CORS origins for external port (empty = allow all)
+	Port         int      `mapstructure:"port"`          // External/data plane port (default 8443)
+	InternalPort int      `mapstructure:"internal_port"` // Control plane port (default 0 = single-port mode)
+	CORSOrigins  []string `mapstructure:"cors_origins"`  // Allowed CORS origins for external port (empty = allow all)
 	DataDir      string   `mapstructure:"data_dir"`
 }
 
@@ -66,17 +87,56 @@ type BootstrapSecurity struct {
 	// JWTPublicKeyPath is the path to the Ed25519 public key of the external
 	// issuer. Required when AuthMode == "external".
 	JWTPublicKeyPath string `mapstructure:"jwt_public_key_path"`
+
+	// LocalSessionTTL is the lifetime of admin sessions issued by
+	// /api/v1/auth/local-session in local mode. Defaults to 1h. Standard
+	// Go duration syntax (e.g. "30m", "2h").
+	LocalSessionTTL time.Duration `mapstructure:"local_session_ttl"`
 }
 
-// LoadBootstrap loads the bootstrap config from a YAML file.
-// If the config file is not found, falls back to environment variables:
-//   - DATABASE_URL — PostgreSQL connection string (required)
-//   - BYTEBREW_AUTH_MODE — "local" (default) or "external"
-//   - BYTEBREW_JWT_KEYS_DIR — directory for local-mode Ed25519 keypair
-//   - BYTEBREW_JWT_PUBLIC_KEY_PATH — path to external issuer public key
-//   - ENGINE_HOST / ENGINE_PORT — listen host/port (optional)
+// EmbeddingsConfig holds Ollama-style embeddings client settings. Empty fields
+// fall back to the indexing package defaults at the consumer.
+type EmbeddingsConfig struct {
+	URL   string `mapstructure:"url"`
+	Model string `mapstructure:"model"`
+	Dim   int    `mapstructure:"dim"`
+}
+
+// DebugConfig holds developer-only debug switches.
+type DebugConfig struct {
+	// ModelDebugDir, when non-empty, makes the LLM factory wrap chat models
+	// with a logger that dumps every request/response to that directory.
+	ModelDebugDir string `mapstructure:"model_debug_dir"`
+}
+
+// MCPBootstrap holds MCP-related bootstrap overrides (mostly for the seeded
+// bytebrew-docs catalog entry — useful in tests / staging).
+type MCPBootstrap struct {
+	DocsURL string `mapstructure:"docs_url"`
+}
+
+// KnowledgeBootstrap holds settings for the file-backed knowledge upload store.
+type KnowledgeBootstrap struct {
+	DataDir string `mapstructure:"data_dir"`
+}
+
+// LSPBootstrap holds language-server installer toggles.
+type LSPBootstrap struct {
+	DisableDownload bool `mapstructure:"disable_download"`
+}
+
+// UpdatesConfig overrides the version-check endpoint (default: api.bytebrew.ai).
+type UpdatesConfig struct {
+	VersionsURL string `mapstructure:"versions_url"`
+}
+
+// LoadBootstrap loads the bootstrap config from a YAML file plus environment
+// variables. Env vars are bound via Viper (see bindEnvVars) and take
+// precedence over YAML; YAML wins over built-in defaults.
 //
-// Environment variable placeholders (${VAR}) in YAML string fields are also expanded.
+// When the YAML path does not exist (or is empty) we still construct the
+// config from env vars + defaults — this enables zero-config Docker deploys
+// where DATABASE_URL is the only mandatory input.
 func LoadBootstrap(path string) (*BootstrapConfig, error) {
 	if path == "" {
 		return nil, fmt.Errorf("config path is required")
@@ -86,18 +146,33 @@ func LoadBootstrap(path string) (*BootstrapConfig, error) {
 	v.SetConfigFile(path)
 	v.SetConfigType("yaml")
 
-	if err := v.ReadInConfig(); err != nil {
-		// Config file not found — try environment variables
-		return loadBootstrapFromEnv()
+	bindEnvVars(v)
+	setBootstrapDefaults(v)
+
+	readErr := v.ReadInConfig()
+	if readErr != nil {
+		// Config file not found — env-only mode. Validation still runs because
+		// DATABASE_URL is required regardless of source.
+		var cfg BootstrapConfig
+		if err := unmarshalBootstrap(v, &cfg); err != nil {
+			return nil, fmt.Errorf("unmarshal env-only bootstrap: %w", err)
+		}
+		if cfg.Database.URL == "" {
+			return nil, fmt.Errorf("no config file found and DATABASE_URL environment variable is not set")
+		}
+		applySecurityDefaults(&cfg)
+		if err := validateBootstrap(&cfg); err != nil {
+			return nil, fmt.Errorf("validate env-based config: %w", err)
+		}
+		return &cfg, nil
 	}
 
 	var cfg BootstrapConfig
-	if err := v.Unmarshal(&cfg); err != nil {
+	if err := unmarshalBootstrap(v, &cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal bootstrap config: %w", err)
 	}
 
 	expandBootstrapEnvVars(&cfg)
-	applyBootstrapEnvOverrides(&cfg)
 	applySecurityDefaults(&cfg)
 
 	if err := validateBootstrap(&cfg); err != nil {
@@ -113,83 +188,100 @@ func LoadBootstrap(path string) (*BootstrapConfig, error) {
 	return &cfg, nil
 }
 
-// loadBootstrapFromEnv constructs BootstrapConfig from environment variables.
-// This enables zero-config Docker deployments where everything is passed via env.
-func loadBootstrapFromEnv() (*BootstrapConfig, error) {
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		return nil, fmt.Errorf("no config file found and DATABASE_URL environment variable is not set")
-	}
-
-	cfg := DefaultBootstrapConfig()
-	cfg.Database.URL = dbURL
-
-	if host := os.Getenv("ENGINE_HOST"); host != "" {
-		cfg.Engine.Host = host
-	} else {
-		cfg.Engine.Host = "0.0.0.0"
-	}
-
-	if portStr := os.Getenv("ENGINE_PORT"); portStr != "" {
-		port := 8443
-		fmt.Sscanf(portStr, "%d", &port)
-		cfg.Engine.Port = port
-	} else {
-		cfg.Engine.Port = 8443
-	}
-
-	if portStr := os.Getenv("BYTEBREW_INTERNAL_PORT"); portStr != "" {
-		var port int
-		fmt.Sscanf(portStr, "%d", &port)
-		cfg.Engine.InternalPort = port
-	}
-
-	if origins := os.Getenv("BYTEBREW_CORS_ORIGINS"); origins != "" {
-		cfg.Engine.CORSOrigins = splitAndTrim(origins, ",")
-	}
-
-	applyBootstrapEnvOverrides(cfg)
-	applySecurityDefaults(cfg)
-
-	if err := validateBootstrap(cfg); err != nil {
-		return nil, fmt.Errorf("validate env-based config: %w", err)
-	}
-
-	return cfg, nil
+// unmarshalBootstrap decodes Viper state into BootstrapConfig with the
+// hooks needed to handle slice-from-env (CORSOrigins) and duration parsing
+// (LocalSessionTTL).
+func unmarshalBootstrap(v *viper.Viper, cfg *BootstrapConfig) error {
+	return v.Unmarshal(cfg, viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
+		// Comma-separated env strings → []string for fields like CORSOrigins.
+		// Each element is trimmed; empty elements are dropped (matches the
+		// pre-Viper splitAndTrim semantics callers and tests rely on).
+		stringToTrimmedSliceHookFunc(","),
+		// "1h" / "30m" → time.Duration for LocalSessionTTL.
+		mapstructure.StringToTimeDurationHookFunc(),
+	)))
 }
 
-// applyBootstrapEnvOverrides applies BYTEBREW_* environment variable overrides
-// on top of YAML-loaded config. This allows env vars to override YAML settings
-// (e.g., BYTEBREW_INTERNAL_PORT=8444 enables two-port mode regardless of YAML).
-func applyBootstrapEnvOverrides(cfg *BootstrapConfig) {
-	if portStr := os.Getenv("BYTEBREW_INTERNAL_PORT"); portStr != "" {
-		var port int
-		fmt.Sscanf(portStr, "%d", &port)
-		cfg.Engine.InternalPort = port
+// stringToTrimmedSliceHookFunc returns a mapstructure DecodeHookFunc that
+// converts string → []string by splitting on sep and trimming whitespace
+// from each element. Empty elements are excluded. Mirrors the semantics of
+// the legacy splitAndTrim helper so the env vars `BYTEBREW_CORS_ORIGINS=
+// "a, b, c"` parse identically before and after the Viper migration.
+func stringToTrimmedSliceHookFunc(sep string) mapstructure.DecodeHookFunc {
+	return func(from reflect.Type, to reflect.Type, data any) (any, error) {
+		if from.Kind() != reflect.String {
+			return data, nil
+		}
+		if to != reflect.SliceOf(from) {
+			return data, nil
+		}
+		raw, ok := data.(string)
+		if !ok {
+			return data, nil
+		}
+		return splitAndTrim(raw, sep), nil
 	}
-	if origins := os.Getenv("BYTEBREW_CORS_ORIGINS"); origins != "" {
-		cfg.Engine.CORSOrigins = splitAndTrim(origins, ",")
+}
+
+// bindEnvVars maps each Viper key (mapstructure path) to its env var. This is
+// the single registry that must stay in sync with env_vars.go.
+func bindEnvVars(v *viper.Viper) {
+	bindings := map[string]string{
+		"database.url":                EnvDatabaseURL,
+		"engine.host":                 EnvEngineHost,
+		"engine.port":                 EnvEnginePort,
+		"engine.internal_port":        EnvInternalPort,
+		"engine.cors_origins":         EnvCORSOrigins,
+		"security.auth_mode":          EnvAuthMode,
+		"security.jwt_keys_dir":       EnvJWTKeysDir,
+		"security.jwt_public_key_path": EnvJWTPublicKeyPath,
+		"security.local_session_ttl":  EnvLocalSessionTTL,
+		"embeddings.url":              EnvEmbedURL,
+		"embeddings.model":            EnvEmbedModel,
+		"embeddings.dim":              EnvEmbedDim,
+		"debug.model_debug_dir":       EnvDebugModel,
+		"mcp.docs_url":                EnvDocsMCPURL,
+		"knowledge.data_dir":          EnvDataDir,
+		"lsp.disable_download":        EnvDisableLSPDownload,
+		"updates.versions_url":        EnvVersionsURL,
 	}
-	if mode := os.Getenv("BYTEBREW_AUTH_MODE"); mode != "" {
-		cfg.Security.AuthMode = mode
+	for key, env := range bindings {
+		// BindEnv associates a Viper key with one or more env var names.
+		// Errors only occur when the key is empty, which we control.
+		_ = v.BindEnv(key, env)
 	}
-	if dir := os.Getenv("BYTEBREW_JWT_KEYS_DIR"); dir != "" {
-		cfg.Security.JWTKeysDir = dir
-	}
-	if path := os.Getenv("BYTEBREW_JWT_PUBLIC_KEY_PATH"); path != "" {
-		cfg.Security.JWTPublicKeyPath = path
-	}
+}
+
+// setBootstrapDefaults registers built-in defaults. YAML and env vars layered
+// on top via Viper precedence (explicit Set > flag > env > config > default).
+//
+// We deliberately do NOT set defaults for engine.host / engine.port here —
+// pre-Viper LoadBootstrap left those zero when omitted from YAML, and
+// downstream code in server.go has its own fallback (port 8443, host
+// 0.0.0.0). Setting Viper defaults would change observable test behavior
+// for the minimal-YAML case. Env-only mode (DATABASE_URL without YAML)
+// still gets host/port via the env bindings.
+func setBootstrapDefaults(v *viper.Viper) {
+	v.SetDefault("security.auth_mode", AuthModeLocal)
+	v.SetDefault("security.local_session_ttl", time.Hour)
+	v.SetDefault("knowledge.data_dir", "data")
+	// Embeddings defaults intentionally omitted — the indexing package owns
+	// the canonical defaults (DefaultOllamaURL / DefaultEmbedModel /
+	// DefaultDimension); the consumer fills them when the field is empty.
 }
 
 // applySecurityDefaults fills missing auth settings with sensible defaults
-// after env overrides. Called after loadBootstrapFromEnv / LoadBootstrap so
-// YAML-provided keys win over defaults.
+// after env overrides. Called after LoadBootstrap so YAML-provided keys win
+// over defaults.
 func applySecurityDefaults(cfg *BootstrapConfig) {
 	if cfg.Security.AuthMode == "" {
 		cfg.Security.AuthMode = AuthModeLocal
 	}
 	if cfg.Security.AuthMode == AuthModeLocal && cfg.Security.JWTKeysDir == "" {
 		cfg.Security.JWTKeysDir = filepath.Join(cfg.Engine.DataDirOrDefault(), "keys")
+	}
+	if cfg.Security.LocalSessionTTL <= 0 {
+		cfg.Security.LocalSessionTTL = time.Hour
 	}
 }
 
@@ -202,6 +294,12 @@ func expandBootstrapEnvVars(cfg *BootstrapConfig) {
 	cfg.Security.JWTKeysDir = expandEnvVars(cfg.Security.JWTKeysDir)
 	cfg.Security.JWTPublicKeyPath = expandEnvVars(cfg.Security.JWTPublicKeyPath)
 	cfg.Logging.Level = expandEnvVars(cfg.Logging.Level)
+	cfg.Embeddings.URL = expandEnvVars(cfg.Embeddings.URL)
+	cfg.Embeddings.Model = expandEnvVars(cfg.Embeddings.Model)
+	cfg.Debug.ModelDebugDir = expandEnvVars(cfg.Debug.ModelDebugDir)
+	cfg.MCP.DocsURL = expandEnvVars(cfg.MCP.DocsURL)
+	cfg.Knowledge.DataDir = expandEnvVars(cfg.Knowledge.DataDir)
+	cfg.Updates.VersionsURL = expandEnvVars(cfg.Updates.VersionsURL)
 }
 
 // validateBootstrap checks that required bootstrap fields are present.
@@ -235,6 +333,10 @@ func validateBootstrap(cfg *BootstrapConfig) error {
 }
 
 // DefaultBootstrapConfig returns sensible defaults for BootstrapConfig.
+//
+// This is the legacy in-memory default used by tests and a few callers; the
+// LoadBootstrap path uses Viper-managed defaults instead. We keep the same
+// values so existing tests continue to pass.
 func DefaultBootstrapConfig() *BootstrapConfig {
 	return &BootstrapConfig{
 		Engine: EngineBootstrap{
@@ -245,7 +347,11 @@ func DefaultBootstrapConfig() *BootstrapConfig {
 			Level: "info",
 		},
 		Security: BootstrapSecurity{
-			AuthMode: AuthModeLocal,
+			AuthMode:        AuthModeLocal,
+			LocalSessionTTL: time.Hour,
+		},
+		Knowledge: KnowledgeBootstrap{
+			DataDir: "data",
 		},
 	}
 }
@@ -269,3 +375,4 @@ func (e *EngineBootstrap) DataDirOrDefault() string {
 	}
 	return filepath.Join(dir, "bytebrew")
 }
+

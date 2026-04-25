@@ -178,23 +178,22 @@ func TestInstallSpec_NoInstallForSomeServers(t *testing.T) {
 }
 
 func TestIsInstallDisabled(t *testing.T) {
-	t.Run("not set", func(t *testing.T) {
-		t.Setenv("BYTEBREW_DISABLE_LSP_DOWNLOAD", "")
+	// Restore at end so other tests in the package see the default.
+	t.Cleanup(func() { SetInstallDisabled(false) })
+
+	t.Run("default false", func(t *testing.T) {
+		SetInstallDisabled(false)
 		assert.False(t, isInstallDisabled())
 	})
 
-	t.Run("true", func(t *testing.T) {
-		t.Setenv("BYTEBREW_DISABLE_LSP_DOWNLOAD", "true")
+	t.Run("set true", func(t *testing.T) {
+		SetInstallDisabled(true)
 		assert.True(t, isInstallDisabled())
 	})
 
-	t.Run("1", func(t *testing.T) {
-		t.Setenv("BYTEBREW_DISABLE_LSP_DOWNLOAD", "1")
-		assert.True(t, isInstallDisabled())
-	})
-
-	t.Run("false", func(t *testing.T) {
-		t.Setenv("BYTEBREW_DISABLE_LSP_DOWNLOAD", "false")
+	t.Run("toggled back false", func(t *testing.T) {
+		SetInstallDisabled(true)
+		SetInstallDisabled(false)
 		assert.False(t, isInstallDisabled())
 	})
 }

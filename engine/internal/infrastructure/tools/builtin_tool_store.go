@@ -153,6 +153,7 @@ func (r *AgentToolResolver) SetCapabilityConfigReader(reader CapabilityConfigRea
 	r.capConfigReader = reader
 }
 
+
 // ResolveContext holds per-agent resolution context.
 type ResolveContext struct {
 	Agent            *agentregistry.RegisteredAgent

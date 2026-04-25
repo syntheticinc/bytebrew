@@ -7,12 +7,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
+	"github.com/syntheticinc/bytebrew/engine/pkg/secrets"
 )
 
 // NewDeclarativeTool creates an HTTP-based tool from YAML configuration.
@@ -102,7 +102,7 @@ func (t *declarativeTool) applyAuth(req *http.Request) {
 		return
 	}
 
-	token := os.Getenv(t.cfg.Auth.TokenEnv)
+	token := secrets.Lookup(t.cfg.Auth.TokenEnv)
 	if token == "" {
 		return
 	}

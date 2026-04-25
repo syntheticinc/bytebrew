@@ -75,7 +75,7 @@ func TestUpdateChecker_NoUpdate(t *testing.T) {
 	}))
 	defer server.Close()
 
-	uc := NewUpdateChecker("1.0.0")
+	uc := NewUpdateChecker("1.0.0", "")
 	uc.checkFromURL(server.URL)
 
 	assert.Equal(t, "1.0.0", uc.LatestVersion())
@@ -95,7 +95,7 @@ func TestUpdateChecker_UpdateAvailable(t *testing.T) {
 	}))
 	defer server.Close()
 
-	uc := NewUpdateChecker("1.0.0")
+	uc := NewUpdateChecker("1.0.0", "")
 	uc.checkFromURL(server.URL)
 
 	assert.Equal(t, "1.0.1", uc.LatestVersion())
@@ -108,7 +108,7 @@ func TestUpdateChecker_ServerError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	uc := NewUpdateChecker("1.0.0")
+	uc := NewUpdateChecker("1.0.0", "")
 	uc.checkFromURL(server.URL)
 
 	assert.Empty(t, uc.LatestVersion())
@@ -116,7 +116,7 @@ func TestUpdateChecker_ServerError(t *testing.T) {
 }
 
 func TestUpdateChecker_NetworkError(t *testing.T) {
-	uc := NewUpdateChecker("1.0.0")
+	uc := NewUpdateChecker("1.0.0", "")
 	uc.checkFromURL("http://127.0.0.1:1") // connection refused
 
 	assert.Empty(t, uc.LatestVersion())
@@ -130,7 +130,7 @@ func TestUpdateChecker_InvalidJSON(t *testing.T) {
 	}))
 	defer server.Close()
 
-	uc := NewUpdateChecker("1.0.0")
+	uc := NewUpdateChecker("1.0.0", "")
 	uc.checkFromURL(server.URL)
 
 	assert.Empty(t, uc.LatestVersion())
@@ -148,7 +148,7 @@ func TestUpdateChecker_EmptyLatest(t *testing.T) {
 	}))
 	defer server.Close()
 
-	uc := NewUpdateChecker("1.0.0")
+	uc := NewUpdateChecker("1.0.0", "")
 	uc.checkFromURL(server.URL)
 
 	assert.Empty(t, uc.LatestVersion())
@@ -156,7 +156,7 @@ func TestUpdateChecker_EmptyLatest(t *testing.T) {
 }
 
 func TestUpdateChecker_StartNonBlocking(t *testing.T) {
-	uc := NewUpdateChecker("1.0.0")
+	uc := NewUpdateChecker("1.0.0", "")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -188,7 +188,7 @@ func TestUpdateChecker_DevVersion(t *testing.T) {
 	}))
 	defer server.Close()
 
-	uc := NewUpdateChecker("dev-ce")
+	uc := NewUpdateChecker("dev-ce", "")
 	uc.checkFromURL(server.URL)
 
 	assert.Equal(t, "1.0.0", uc.LatestVersion())

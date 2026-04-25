@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 
 	"gorm.io/gorm"
@@ -12,19 +11,54 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
+	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 )
+
+// bootstrapSeeds runs the full bootstrap seed cascade against the global DB.
+// Called from Run() after the database is open and before MCP connect.
+//
+// Order matters: seedByteBrewDocsMCP MUST run before seedBuilderAssistant
+// (so the builder-assistant agent's MCPServers list resolves on first boot).
+// All seeders are idempotent and safe to re-run on every startup.
+//
+// docsMCPURL overrides the seeded bytebrew-docs MCP server URL when non-empty
+// (sourced from BootstrapConfig.MCP.DocsURL / env BYTEBREW_DOCS_MCP_URL).
+func bootstrapSeeds(ctx context.Context, db *gorm.DB, byok config.BYOKConfig, docsMCPURL string) {
+	if db == nil {
+		return
+	}
+	seedByteBrewDocsMCP(ctx, db, docsMCPURL)
+	seedBuilderAssistant(ctx, db)
+	seedBuilderSchema(ctx, db)
+	// V2 Commit Group C (§5.5): the system-wide MCP catalog is now a
+	// DB table populated from mcp-catalog.yaml at boot via upsert.
+	seedMCPCatalog(ctx, db)
+	// V2 Commit Group L (§2.2): schema starter templates catalog is a
+	// DB table populated from schema-templates.yaml at boot via upsert.
+	seedSchemaTemplates(ctx, db)
+	// V2 Commit Group G (§5.8): per-end-user BYOK config seeds into
+	// the `settings` table (jsonb) once on first boot. Admin UI edits
+	// supersede this on subsequent boots.
+	seedBYOKConfig(ctx, db, byok)
+}
 
 const builderAssistantName = "builder-assistant"
 
 // ByteBrew docs MCP server — public, no API key required.
 const bytebrewDocsMCPName = "bytebrew-docs"
 
-// bytebrewDocsMCPEndpoint returns the MCP URL, overridable via BYTEBREW_DOCS_MCP_URL env var.
-func bytebrewDocsMCPEndpoint() string {
-	if v := strings.TrimSpace(os.Getenv("BYTEBREW_DOCS_MCP_URL")); v != "" {
+// defaultBytebrewDocsMCPEndpoint is the canonical hosted SSE URL for the
+// bytebrew-docs MCP server. Used when no override comes from config.
+const defaultBytebrewDocsMCPEndpoint = "https://mcp.bytebrew.ai/sse"
+
+// bytebrewDocsMCPEndpoint returns the override URL when non-empty, else the
+// hosted default. The override is sourced from BootstrapConfig.MCP.DocsURL
+// (env var BYTEBREW_DOCS_MCP_URL); see pkg/config.
+func bytebrewDocsMCPEndpoint(override string) string {
+	if v := strings.TrimSpace(override); v != "" {
 		return v
 	}
-	return "https://mcp.bytebrew.ai/sse"
+	return defaultBytebrewDocsMCPEndpoint
 }
 
 const builderAssistantPrompt = `You are the ByteBrew Builder Assistant — an AI architect embedded in the Admin Dashboard. Your role is to help users design, configure, and manage their ByteBrew multi-agent systems.
@@ -235,7 +269,9 @@ func builderAssistantDefaults() *configrepo.AgentRecord {
 
 // seedByteBrewDocsMCP ensures the bytebrew-docs MCP server exists in the database.
 // Idempotent — skips if a server with the same name already exists.
-func seedByteBrewDocsMCP(ctx context.Context, db *gorm.DB) {
+//
+// urlOverride takes precedence over the hosted default when non-empty.
+func seedByteBrewDocsMCP(ctx context.Context, db *gorm.DB, urlOverride string) {
 	if db == nil {
 		return
 	}
@@ -251,7 +287,7 @@ func seedByteBrewDocsMCP(ctx context.Context, db *gorm.DB) {
 			return
 		}
 	}
-	mcpURL := bytebrewDocsMCPEndpoint()
+	mcpURL := bytebrewDocsMCPEndpoint(urlOverride)
 	server := &models.MCPServerModel{
 		Name: bytebrewDocsMCPName,
 		Type: models.MCPServerTypeSSE,
@@ -439,7 +475,9 @@ func restoreBuilderSchema(ctx context.Context, db *gorm.DB) error {
 	}
 
 	// 0. Ensure bytebrew-docs MCP server exists (may have been deleted by user).
-	seedByteBrewDocsMCP(ctx, db)
+	// Restore path uses the canonical hosted URL — if the operator overrode
+	// it on first boot via env, they can edit the URL in Admin afterward.
+	seedByteBrewDocsMCP(ctx, db, "")
 
 	// 1. Restore builder-assistant agent to factory defaults.
 	if err := restoreBuilderAssistant(ctx, db); err != nil {

@@ -2,36 +2,21 @@ package lsp
 
 import (
 	"os"
-	"path/filepath"
-	"runtime"
+
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/platform"
 )
 
-// ManagedBinDir returns the path to the managed binary directory for auto-installed LSP servers.
-//   - Windows: %APPDATA%/bytebrew/bin/
-//   - macOS:   ~/Library/Application Support/bytebrew/bin/
-//   - Linux:   ${XDG_DATA_HOME:-~/.local/share}/bytebrew/bin/
+// ManagedBinDir returns the path to the managed binary directory for
+// auto-installed LSP servers. Delegates to platform.LSPBinDir so platform
+// path resolution lives in one place (the only OS env reader outside
+// pkg/config). Returns an empty string on platform error — callers treat
+// this as "no managed dir" and fall back to PATH lookups.
 func ManagedBinDir() string {
-	switch runtime.GOOS {
-	case "windows":
-		appData := os.Getenv("APPDATA")
-		if appData == "" {
-			home, _ := os.UserHomeDir()
-			appData = filepath.Join(home, "AppData", "Roaming")
-		}
-		return filepath.Join(appData, "bytebrew", "bin")
-
-	case "darwin":
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, "Library", "Application Support", "bytebrew", "bin")
-
-	default: // linux and others
-		dataHome := os.Getenv("XDG_DATA_HOME")
-		if dataHome == "" {
-			home, _ := os.UserHomeDir()
-			dataHome = filepath.Join(home, ".local", "share")
-		}
-		return filepath.Join(dataHome, "bytebrew", "bin")
+	dir, err := platform.LSPBinDir()
+	if err != nil {
+		return ""
 	}
+	return dir
 }
 
 // EnsureBinDir creates the managed binary directory if it doesn't exist.

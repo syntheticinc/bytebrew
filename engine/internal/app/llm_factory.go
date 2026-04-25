@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
@@ -120,9 +119,10 @@ func (t *anthropicTransport) RoundTrip(req *http.Request) (*http.Response, error
 	return t.base.RoundTrip(req)
 }
 
-// wrapWithDebugModel wraps the chat model with debug logging if BYTEBREW_DEBUG_MODEL is set.
-func wrapWithDebugModel(chatModel model.ToolCallingChatModel) model.ToolCallingChatModel {
-	debugDir := os.Getenv("BYTEBREW_DEBUG_MODEL")
+// wrapWithDebugModel wraps the chat model with a request/response logger when
+// debugDir is non-empty. The directory comes from the bootstrap config
+// (Debug.ModelDebugDir, env var BYTEBREW_DEBUG_MODEL) — see pkg/config.
+func wrapWithDebugModel(chatModel model.ToolCallingChatModel, debugDir string) model.ToolCallingChatModel {
 	if debugDir == "" {
 		return chatModel
 	}

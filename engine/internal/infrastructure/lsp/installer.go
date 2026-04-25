@@ -19,6 +19,26 @@ import (
 	"time"
 )
 
+// installerEnv is the package-private toggle for auto-install. Set via
+// SetInstallDisabled at boot from BootstrapConfig.LSP.DisableDownload (env
+// BYTEBREW_DISABLE_LSP_DOWNLOAD). Package-private + setter rather than
+// constructor parameter because the Installer is currently created in
+// NewService() with no dependency on bootstrap; threading bootstrap through
+// every Service factory would touch unrelated code paths.
+var installerDisabled struct {
+	sync.RWMutex
+	disabled bool
+}
+
+// SetInstallDisabled sets the global flag that controls whether
+// Install() short-circuits with an error. Callers (the bootstrap path)
+// invoke this once at startup; everything else reads the flag.
+func SetInstallDisabled(disabled bool) {
+	installerDisabled.Lock()
+	defer installerDisabled.Unlock()
+	installerDisabled.disabled = disabled
+}
+
 // InstallSpec describes how to auto-install an LSP server binary.
 type InstallSpec struct {
 	Type    string // "npm", "go", "github-release"
@@ -103,9 +123,13 @@ func (ins *Installer) doInstall(ctx context.Context, serverID string, spec Insta
 	return nil
 }
 
+// isInstallDisabled reports whether the auto-install short-circuit is active.
+// The flag is set once at boot via SetInstallDisabled from the bootstrap
+// config (BootstrapConfig.LSP.DisableDownload, env BYTEBREW_DISABLE_LSP_DOWNLOAD).
 func isInstallDisabled() bool {
-	v := os.Getenv("BYTEBREW_DISABLE_LSP_DOWNLOAD")
-	return v == "true" || v == "1"
+	installerDisabled.RLock()
+	defer installerDisabled.RUnlock()
+	return installerDisabled.disabled
 }
 
 // --- NPM strategy ---

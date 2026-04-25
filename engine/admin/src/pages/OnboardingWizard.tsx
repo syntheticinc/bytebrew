@@ -3,20 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import type { CreateModelRequest } from '../types';
 
-// ────────────────────────────────────────────────────────────────────────────
-// BYOK Onboarding Wizard (mandatory)
-//
-// 3 steps:
-//   1. Add LLM API Key — required. User picks a provider, pastes key, tests
-//      connection by creating a model. Can't proceed without success.
-//   2. Choose a starter template (optional) — Support / Sales / Blank.
-//   3. Done — confetti-free success screen with "Open Canvas" CTA and an
-//      optional GitHub star invite.
-//
-// The wizard is rendered as a full-page route (/onboarding) — not a modal —
-// because it blocks the rest of the admin surface until the user has at least
-// one LLM configured. The gate logic lives in OnboardingGate (Layout wrapper).
-// ────────────────────────────────────────────────────────────────────────────
+// Mandatory BYOK wizard. Full-page route (not modal) because the admin
+// surface is blocked until a model is configured — see OnboardingGate.
 
 type Provider = {
   id: string;
@@ -76,27 +64,14 @@ const PROVIDERS: Provider[] = [
   },
 ];
 
-// ────────────────────────────────────────────────────────────────────────────
-// Templates (Step 2)
-// ────────────────────────────────────────────────────────────────────────────
-
 type TemplateId = 'support' | 'sales' | 'blank';
 
-// Template descriptor. For `support` and `sales` we hand off to the backend
-// fork endpoint (POST /api/v1/schema-templates/:name/fork) — it creates the
-// schema, agents, agent_relations, capabilities, and enables chat in one
-// transaction. See internal/service/schematemplate/fork.go. The wizard must
-// NOT try to synthesise relations client-side: the old path used
-// `createAgentRelation(schemaId, agentName, agentName)` (self-loop), which
-// the backend rejects with "source and target must be different", leaving
-// the schema with zero members.
-//
-// For `blank` we stay on the per-entity API (createSchema + createAgent +
-// updateSchema to set entry_agent_id) because there is no catalog entry for
-// an empty schema. Crucially, we do NOT create any agent_relation here —
-// a single entry agent with no delegates is a valid schema in V2
-// (membership is derived from entry_agent_id + agent_relations, and an
-// entry agent alone is enough for the canvas to render).
+// Catalog templates (support/sales) use the backend fork endpoint
+// (POST /api/v1/schema-templates/:name/fork) which creates schema +
+// agents + relations + capabilities atomically. Client-side relation
+// synthesis is rejected as a self-loop (source must differ from target).
+// `blank` uses the per-entity API and creates no relations — a single
+// entry agent is a valid schema.
 type Template = {
   id: TemplateId;
   label: string;
@@ -136,10 +111,7 @@ const TEMPLATES: Template[] = [
   },
 ];
 
-// ────────────────────────────────────────────────────────────────────────────
-// SVG icons (inline — lucide-react is not in package.json)
-// ────────────────────────────────────────────────────────────────────────────
-
+// SVG icons inline — lucide-react is not in package.json.
 function CheckIcon({ className = 'w-5 h-5' }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -173,10 +145,6 @@ function XIcon({ className = 'w-4 h-4' }: { className?: string }) {
     </svg>
   );
 }
-
-// ────────────────────────────────────────────────────────────────────────────
-// Progress header
-// ────────────────────────────────────────────────────────────────────────────
 
 function ProgressHeader({ step }: { step: 1 | 2 }) {
   const labels = ['Connect LLM', 'Starter template'];
@@ -226,10 +194,6 @@ function ProgressHeader({ step }: { step: 1 | 2 }) {
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Step 1 — Connect LLM
-// ────────────────────────────────────────────────────────────────────────────
-
 type TestStatus =
   | { kind: 'idle' }
   | { kind: 'testing' }
@@ -258,10 +222,8 @@ function Step1ConnectLLM({
     setStatus({ kind: 'idle' });
   }
 
-  // Map our onboarding provider id to the backend's provider type enum used
-  // in POST /models. "openai_compatible_custom" is an onboarding-only alias
-  // so we can show the Custom card separately; backend sees it as
-  // openai_compatible.
+  // "openai_compatible_custom" is an onboarding-only alias for the Custom
+  // provider card; backend's enum only knows "openai_compatible".
   function backendType(id: string): string {
     if (id === 'openai_compatible_custom') return 'openai_compatible';
     return id;
@@ -291,10 +253,8 @@ function Step1ConnectLLM({
     setStatus({ kind: 'testing' });
 
     const payload: CreateModelRequest = {
-      // Onboarding wizard only configures *chat* models — the embedding
-      // flow is a separate admin surface. Without `kind` the server
-      // rejects the create call with "kind is required", which surfaced
-      // as an unactionable error on step 1 of the wizard.
+      // `kind` is required by the server. Embedding models are configured
+      // on a separate admin surface.
       kind: 'chat',
       name: displayName.trim(),
       type: backendType(providerId),
@@ -304,30 +264,20 @@ function Step1ConnectLLM({
     };
 
     try {
-      // POST /models is the only synchronous validation path today — backend
-      // rejects malformed payloads (missing kind, empty name, etc.) and 201
-      // means "good enough to persist". Bad API keys surface on the first
-      // real chat call, not here; adding a provider-ping validate endpoint
-      // is a separate backend change tracked in the playwright-smoke plan.
-      //
-      // On success we advance immediately — there is no value in showing a
-      // separate "Connected" state before the user clicks again.
+      // Backend only validates payload shape; bad API keys surface later on
+      // the first real chat call.
       await api.createModel(payload);
-      // Mark the tenant as onboarded so OnboardingGate doesn't send the
-      // user back here on the very next navigation. The gate re-mounts
-      // whenever the route group changes (/onboarding wrapper vs /*
-      // wrapper) and a read-after-write race against POST /models can
-      // otherwise surface an empty list and trigger a redirect loop.
+      // Sticky flag for OnboardingGate — the gate re-mounts when the route
+      // group changes (/onboarding wrapper vs /* wrapper); a read-after-write
+      // race against POST /models would otherwise return an empty list and
+      // bounce the user back into the wizard.
       try { sessionStorage.setItem('bb_onboarded', '1'); } catch { /* no-op */ }
       setStatus({ kind: 'success', modelName: payload.name });
       onSuccess();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Connection failed.';
-      // ALREADY_EXISTS means a model with this display name is already
-      // persisted for the tenant — which is the exact end-state Step 1 is
-      // trying to reach. Treat as success so users who re-enter onboarding
-      // (e.g. after clicking Skip and returning) aren't stuck retyping
-      // different names. Any other error (400, auth, network) still surfaces.
+      // Treat ALREADY_EXISTS as success — re-entering onboarding (e.g. after
+      // Skip) must not force users to invent a new display name.
       if (/already exists|ALREADY_EXISTS/i.test(message)) {
         try { sessionStorage.setItem('bb_onboarded', '1'); } catch { /* no-op */ }
         setStatus({ kind: 'success', modelName: payload.name });
@@ -489,10 +439,6 @@ function Step1ConnectLLM({
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Step 2 — Template picker
-// ────────────────────────────────────────────────────────────────────────────
-
 function Step2Template({
   onDone,
 }: {
@@ -502,19 +448,8 @@ function Step2Template({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // createFromCatalog delegates the whole schema+agents+relations creation to
-  // the backend fork endpoint. This is the correct path for curated templates
-  // because:
-  //   1. The catalog YAML is the source of truth for multi-agent topologies
-  //      (support: triage → resolver; sales: qualifier → objection-handler).
-  //   2. The fork runs inside a single DB transaction — partial rows on
-  //      failure never persist.
-  //   3. It sets entry_agent_id and chat_enabled=true automatically, so the
-  //      resulting schema renders on the canvas with a live entry orchestrator.
-  //
-  // The previous wizard synthesised relations client-side with source=target,
-  // which the backend validator rejects as a self-loop → schema ended up
-  // empty and the onboarding flow left users at a dead end.
+  // Backend fork endpoint creates schema+agents+relations+capabilities in
+  // a single transaction and sets entry_agent_id + chat_enabled.
   async function createFromCatalog(template: Template): Promise<string> {
     if (!template.catalogName) {
       throw new Error(`template ${template.id} has no catalogName`);
@@ -523,17 +458,9 @@ function Step2Template({
     return forked.schema_id;
   }
 
-  // createBlankSchema is used only for the "blank canvas" path where no
-  // catalog entry applies. We create:
-  //   - one schema
-  //   - one agent (the entry orchestrator)
-  //   - PATCH the schema with entry_agent_id = agent.id (the schema API
-  //     accepts the agent *name* as entry_agent_id — see admin client)
-  //
-  // We do NOT create an agent_relation. The domain rejects self-loops
-  // (source == target) with "source and target must be different", and with
-  // a single-agent schema there is no valid edge to create. Entry agent
-  // alone is sufficient for the canvas to render the schema as non-empty.
+  // Blank-canvas path: schema + entry agent + PATCH entry_agent_id (the
+  // schema API accepts the agent *name*, not its UUID). No agent_relation
+  // — the domain rejects self-loops and a lone entry agent is valid.
   async function createBlankSchema(template: Template): Promise<string> {
     if (!template.agentName || !template.systemPrompt) {
       throw new Error('blank template missing agent definition');
@@ -544,8 +471,7 @@ function Step2Template({
       description: `Created from ${template.label} template during onboarding`,
     });
 
-    // Idempotent agent creation — if an agent with this name already exists
-    // (user re-ran onboarding), reuse it instead of failing.
+    // Idempotent: re-running onboarding must not fail on existing agent.
     try {
       await api.createAgent({
         name: template.agentName,
@@ -561,9 +487,6 @@ function Step2Template({
       if (!benign) throw err;
     }
 
-    // Wire the agent as the entry orchestrator. updateSchema accepts the
-    // agent name for entry_agent_id — handler resolves it to the UUID
-    // before persisting.
     await api.updateSchema(schema.id, { entry_agent_id: template.agentName });
 
     return schema.id;
@@ -629,10 +552,6 @@ function Step2Template({
       {selected && (() => {
         const t = TEMPLATES.find((x) => x.id === selected);
         if (!t) return null;
-        // Catalog templates (support/sales) fork the backend schema-templates
-        // catalog which ships preconfigured multi-agent topologies. Blank
-        // creates a single-agent schema locally. Describe both accurately so
-        // the user knows what they're about to click through to.
         const isCatalog = !!t.catalogName;
         return (
           <div className="mb-6 p-4 bg-brand-dark-alt border border-brand-shade3/15 rounded-card">
@@ -664,10 +583,8 @@ function Step2Template({
       <div className="flex items-center justify-end gap-3">
         <button
           type="button"
-          // Skip bypasses template creation entirely — call onDone with no
-          // schemaId so the wizard navigates to the schemas list (not a
-          // fabricated URL). Without the explicit wrapper React would pass
-          // the MouseEvent as the schemaId arg.
+          // Wrapper required — bare onClick={onDone} would forward the
+          // MouseEvent as the schemaId arg.
           onClick={() => onDone()}
           disabled={creating}
           className="px-4 py-2 bg-brand-dark border border-brand-shade3/30 text-brand-light rounded-btn text-sm font-medium hover:border-brand-shade3/60 transition-colors disabled:opacity-60"
@@ -694,25 +611,12 @@ function Step2Template({
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Wizard container
-// ────────────────────────────────────────────────────────────────────────────
-
 export default function OnboardingWizard() {
   const [step, setStep] = useState<1 | 2>(1);
   const navigate = useNavigate();
 
-  // After step 2 the user is dropped into the newly-created schema detail
-  // page (canvas) if we know its ID, otherwise into the schemas list.
-  //
-  // Previously we always navigated to /schemas, which worked for the list
-  // but hid the fresh workspace behind an extra click — worse, when the
-  // template creation silently produced an empty schema (Bug 3), users
-  // landed on an empty list and assumed onboarding did nothing.
-  //
-  // By navigating straight to /schemas/{id} we show the canvas with the
-  // agents the template created, which is the entire point of picking a
-  // starter.
+  // Drop into the new schema's canvas when we know its id; fall back to
+  // the schemas list (Skip path).
   const finish = (schemaId?: string) => {
     if (schemaId) {
       navigate(`/schemas/${schemaId}`);
