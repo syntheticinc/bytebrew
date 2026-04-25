@@ -63,7 +63,7 @@ kind create cluster --name "$CLUSTER_NAME" --wait 60s
 
 echo "==> Building engine image..."
 docker build \
-  -f bytebrew-ee/Dockerfile.cloud-test \
+  -f bytebrew-ee/Dockerfile \
   -t "$IMAGE_NAME" \
   . 2>&1 | tail -5
 

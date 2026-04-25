@@ -38,8 +38,11 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3010,
       proxy: {
+        // VITE_ENGINE_URL lets Tilt point this dev server at whichever engine
+        // is running (CE :9555, EE :9556, Cloud :19555). Default :8443 keeps
+        // the legacy single-port behavior for `make up MODE=ce` / direct dev.
         '/api': {
-          target: 'http://localhost:8443',
+          target: process.env.VITE_ENGINE_URL || 'http://localhost:8443',
           changeOrigin: true,
         },
       },
