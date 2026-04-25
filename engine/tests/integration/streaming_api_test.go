@@ -241,25 +241,6 @@ func TestStreamingAPI_ToolEventsInStream(t *testing.T) {
 	assert.True(t, hasToolStart, "should have TOOL_EXECUTION_START event for read_file")
 }
 
-// TC-G-09: Backward compatibility — old ExecuteFlow still works
-// This is verified by existing supervisor_flow_test.go tests.
-// Here we add a simple sanity check using ProductionHarness.
-func TestStreamingAPI_BackwardCompat_ExecuteFlow(t *testing.T) {
-	harness := NewProductionHarness(t, "echo")
-	defer harness.Cleanup()
-
-	sid, done := harness.CreateFlowAndWait(t, "Say hello")
-
-	assert.NotEmpty(t, sid, "session ID should be assigned")
-
-	select {
-	case <-done:
-		// Flow completed
-	case <-time.After(10 * time.Second):
-		t.Fatal("timed out waiting for ExecuteFlow to complete")
-	}
-}
-
 // TC-G-Cancel: CancelSession via streaming API
 func TestStreamingAPI_CancelSession(t *testing.T) {
 	harness := NewStreamingHarness(t, "echo")

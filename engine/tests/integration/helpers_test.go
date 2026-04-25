@@ -190,7 +190,6 @@ var tenantTables = []string{
 	"agents",
 	"mcp_servers",
 	"settings",
-	"llm_providers",
 	"engine_tasks",
 	"audit_logs",
 	"tool_call_events",

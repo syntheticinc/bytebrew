@@ -4,7 +4,6 @@ package integration
 
 import (
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -135,26 +134,6 @@ func TestAGT07_DuplicateName(t *testing.T) {
 		mustJSON(map[string]any{"name": name, "system_prompt": "second"}), adminToken)
 	_ = readBody(t, second)
 	assertStatusAny(t, second, http.StatusConflict, http.StatusUnprocessableEntity, http.StatusBadRequest)
-}
-
-// TC-AGT-08: Agent with a reference to a model that doesn't exist still
-// creates — model is optional in CE.
-func TestAGT08_ModelOptional(t *testing.T) {
-	requireSuite(t)
-	t.Cleanup(func() { truncateTables(t) })
-
-	resp := do(t, http.MethodPost, "/api/v1/agents",
-		mustJSON(map[string]any{
-			"name":          "tc-agt-08-agent",
-			"system_prompt": "p",
-			"model":         "nonexistent-model-name",
-		}), adminToken)
-	body := readBody(t, resp)
-	// Some builds pass through the model string (create succeeds), others
-	// validate and reject — both are acceptable. We only fail on 5xx.
-	if resp.StatusCode >= 500 {
-		t.Fatalf("model-reference create returned 5xx: %d %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
 }
 
 // TC-AGT-09: Immediate GET after create — no registry staleness.

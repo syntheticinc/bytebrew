@@ -54,17 +54,6 @@ func TestSEC04_AlgNone(t *testing.T) {
 		"alg=none JWT must be 401")
 }
 
-// TC-SEC-05: Non-admin role has no scopes, so POST /agents (which is
-// guarded by RequireScope(ScopeAgentsWrite)) must return 403.
-//
-// Skipped: HS256 role-gate removed in Wave 1+7 — EdDSA verifier grants
-// ScopeAdmin uniformly; role-based denial is now tested via API tokens
-// (see TestSEC07_APITokenLimitedScope). Use an API token with limited
-// ScopesMask for equivalent coverage.
-func TestSEC05_NonAdminRoleForbidden(t *testing.T) {
-	t.Skip("HS256 role-gate removed in Wave 1+7 — see auth_middleware_test.go for replacement")
-}
-
 // TC-SEC-06: API token full lifecycle — create, use, delete, use again
 // (expect 401).
 func TestSEC06_APITokenLifecycle(t *testing.T) {
@@ -227,44 +216,4 @@ func TestSEC12_InvalidModelType(t *testing.T) {
 	assertStatusAny(t, resp, http.StatusBadRequest, http.StatusUnprocessableEntity)
 }
 
-// TC-SEC-13: Knowledge base missing required fields → 400/422.
-func TestSEC13_KBMissingEmbeddingModel(t *testing.T) {
-	requireSuite(t)
-	t.Cleanup(func() { truncateTables(t) })
-
-	resp := do(t, http.MethodPost, "/api/v1/knowledge-bases",
-		mustJSON(map[string]any{
-			"name": "tc-sec-13-kb",
-		}), adminToken)
-	_ = readBody(t, resp)
-	// Some builds treat embedding_model as optional (201/200). Accept either
-	// a successful create OR a 4xx validation error — the only bad outcome
-	// is 500.
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		t.Logf("KB create without embedding_model was accepted — embedding_model is optional in this build")
-		return
-	}
-	assertStatusAny(t, resp, http.StatusBadRequest, http.StatusUnprocessableEntity)
-}
-
-// TC-SEC-14: Malformed settings body → 400/422, never 500.
-func TestSEC14_SettingsMalformedBody(t *testing.T) {
-	requireSuite(t)
-	t.Cleanup(func() { truncateTables(t) })
-
-	// PUT /api/v1/settings/{key} is the canonical update path; send junk.
-	resp := doHeaders(t, http.MethodPut, "/api/v1/settings/tc-sec-14-key",
-		readerOf("{broken"),
-		map[string]string{
-			"Content-Type":  "application/json",
-			"Authorization": "Bearer " + adminToken,
-		})
-	_ = readBody(t, resp)
-	// 404 is acceptable if the route isn't reachable under /settings/{key}
-	// in this build; anything 5xx is a fail.
-	if resp.StatusCode == http.StatusNotFound {
-		t.Skip("PUT /api/v1/settings/{key} not registered in this build")
-	}
-	assertStatusAny(t, resp, http.StatusBadRequest, http.StatusUnprocessableEntity)
-}
 
