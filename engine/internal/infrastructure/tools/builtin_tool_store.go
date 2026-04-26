@@ -186,7 +186,7 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 		if name == "knowledge_search" {
 			continue
 		}
-		// spawn_* tools are constructed below with spawner wiring — skip here.
+		// spawn_* handled below (per-target and generic spawn_agent).
 		if strings.HasPrefix(name, "spawn_") {
 			continue
 		}
@@ -205,16 +205,22 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 		tools = append(tools, t)
 	}
 
-	// Generate spawn_{name} tools for every spawn_* entry in DerivedTools.
+	// Generate spawn_{name} tools for every per-target spawn_* entry in DerivedTools.
+	// spawn_agent (Tier-1 generic) is handled separately below.
 	if rc.Spawner != nil {
 		for _, name := range rc.Agent.DerivedTools {
-			if !strings.HasPrefix(name, "spawn_") {
+			if !strings.HasPrefix(name, "spawn_") || name == "spawn_agent" {
 				continue
 			}
 			targetName := strings.TrimPrefix(name, "spawn_")
 			spawnTool := NewSpawnTool(targetName, rc.Deps.SessionID, rc.Spawner, rc.Inspector)
 			tools = append(tools, spawnTool)
 		}
+	}
+
+	// Generic spawn_agent tool: accepts agent_name + input, spawns any reachable agent.
+	if derivedSet["spawn_agent"] && rc.Spawner != nil {
+		tools = append(tools, NewGenericSpawnTool(rc.Deps.SessionID, rc.Spawner, rc.Inspector, rc.Deps.EngineTaskManager))
 	}
 
 	// Custom declarative tools: keep the full CustomToolRecord (Name + Config JSON)
@@ -397,22 +403,26 @@ func (r *AgentToolResolver) Resolve(ctx context.Context, toolNames []string, dep
 			"capability_injected", hasKnowledgeCapLegacy)
 	}
 
-	// Spawn tools via legacy Resolve path
-	if r.spawner != nil && len(deps.CanSpawn) > 0 {
+	// Spawn tools via legacy Resolve path.
+	// Generic spawn_agent is Tier-1: always available when spawner exists.
+	if r.spawner != nil {
+		resolved = append(resolved, NewGenericSpawnTool(deps.SessionID, r.spawner, r.inspector, deps.EngineTaskManager))
 		for _, targetName := range deps.CanSpawn {
 			spawnTool := NewSpawnTool(targetName, deps.SessionID, r.spawner, r.inspector)
 			resolved = append(resolved, spawnTool)
 		}
 	}
 
-	// MCP tools via legacy Resolve path
+	// MCP tools via legacy Resolve path. An unreachable MCP server fails the
+	// resolve so engine_adapter can surface the error as an `error` SSE event
+	// instead of silently dropping the agent's MCP-backed tool surface.
 	if r.mcpProvider != nil && len(deps.MCPServers) > 0 {
 		for _, serverName := range deps.MCPServers {
 			mcpTools, err := r.mcpProvider.GetMCPTools(serverName)
 			if err != nil {
-				slog.WarnContext(ctx, "failed to get MCP tools in legacy Resolve, skipping",
+				slog.WarnContext(ctx, "MCP server unreachable, failing tool resolve",
 					"server", serverName, "error", err)
-				continue
+				return nil, fmt.Errorf("mcp server %q unreachable: %w", serverName, err)
 			}
 			// AC-RESIL-05: Timeout is innermost — fires first, feeds timeout error to CB
 			// US-006: Circuit breaker wraps timeout

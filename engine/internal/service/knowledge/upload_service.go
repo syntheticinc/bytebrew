@@ -238,7 +238,8 @@ func (s *UploadService) resolveEmbeddingProvider(ctx context.Context, agentName 
 
 // indexFileAsyncKB chunks, embeds, and stores vector data for KB-scoped file.
 func (s *UploadService) indexFileAsyncKB(docID, tenantID, kbID, embeddingModelID, fileName, content string) {
-	ctx := context.Background()
+	// Tenant must be on ctx — repo applies tenantScope, status updates would silently no-op otherwise.
+	ctx := domain.WithTenantID(context.Background(), tenantID)
 
 	fileType := strings.TrimPrefix(strings.ToLower(filepath.Ext(fileName)), ".")
 	text, extractErr := infknowledge.ExtractText([]byte(content), fileType)
@@ -317,7 +318,7 @@ func (s *UploadService) indexFileAsyncKB(docID, tenantID, kbID, embeddingModelID
 
 // indexFileAsync chunks, embeds, and stores vector data (legacy agent-scoped).
 func (s *UploadService) indexFileAsync(docID, tenantID, agentName, fileName, content string) {
-	ctx := context.Background()
+	ctx := domain.WithTenantID(context.Background(), tenantID)
 
 	fileType := strings.TrimPrefix(strings.ToLower(filepath.Ext(fileName)), ".")
 	text, extractErr := infknowledge.ExtractText([]byte(content), fileType)
@@ -444,6 +445,22 @@ func docsToResponse(docs []models.KnowledgeDocument) []FileResponse {
 		files = append(files, f)
 	}
 	return files
+}
+
+// GetFileByKB returns a single file belonging to a KB, or nil if not found.
+func (s *UploadService) GetFileByKB(ctx context.Context, kbID, fileID string) (*FileResponse, error) {
+	doc, err := s.repo.GetDocumentByID(ctx, fileID)
+	if err != nil {
+		return nil, fmt.Errorf("get document: %w", err)
+	}
+	if doc == nil || doc.KnowledgeBaseID != kbID {
+		return nil, nil
+	}
+	files := docsToResponse([]models.KnowledgeDocument{*doc})
+	if len(files) == 0 {
+		return nil, nil
+	}
+	return &files[0], nil
 }
 
 // DeleteFileByKB removes a file belonging to a KB.

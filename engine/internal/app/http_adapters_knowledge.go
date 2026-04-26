@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
@@ -239,21 +240,29 @@ func (a *kbStoreAdapter) resolveAgentID(ctx context.Context, agentName string) (
 }
 
 func (a *kbStoreAdapter) toInfo(ctx context.Context, kb *models.KnowledgeBase) (*deliveryhttp.KnowledgeBaseInfo, error) {
-	agentIDs, _ := a.repo.ListLinkedAgentIDs(ctx, kb.ID)
-	// Resolve agent IDs to names for the API response
+	agentIDs, err := a.repo.ListLinkedAgentIDs(ctx, kb.ID)
+	if err != nil {
+		slog.WarnContext(ctx, "list linked agents for kb", "kb_id", kb.ID, "error", err)
+	}
 	agents := make([]string, 0, len(agentIDs))
 	for _, id := range agentIDs {
 		var name string
 		if err := a.db.WithContext(ctx).
 			Raw("SELECT name FROM agents WHERE id = ?", id).
-			Scan(&name).Error; err == nil && name != "" {
+			Scan(&name).Error; err != nil {
+			slog.WarnContext(ctx, "resolve agent name for kb link", "agent_id", id, "kb_id", kb.ID, "error", err)
+			continue
+		}
+		if name != "" {
 			agents = append(agents, name)
 		}
 	}
 
 	var fileCount int64
-	a.db.WithContext(ctx).Model(&models.KnowledgeDocument{}).
-		Where("knowledge_base_id = ?", kb.ID).Count(&fileCount)
+	if err := a.db.WithContext(ctx).Model(&models.KnowledgeDocument{}).
+		Where("knowledge_base_id = ?", kb.ID).Count(&fileCount).Error; err != nil {
+		slog.WarnContext(ctx, "count kb files", "kb_id", kb.ID, "error", err)
+	}
 
 	embModelID := ""
 	if kb.EmbeddingModelID != nil {
@@ -283,6 +292,17 @@ func (a *kbFileManagerAdapter) ListFiles(ctx context.Context, kbID string) ([]de
 		return nil, err
 	}
 	return svcFilesToHTTP(files), nil
+}
+
+func (a *kbFileManagerAdapter) GetFile(ctx context.Context, kbID, fileID string) (*deliveryhttp.KnowledgeFileResponse, error) {
+	f, err := a.svc.GetFileByKB(ctx, kbID, fileID)
+	if err != nil {
+		return nil, err
+	}
+	if f == nil {
+		return nil, nil
+	}
+	return svcFileToHTTP(f), nil
 }
 
 func (a *kbFileManagerAdapter) UploadFile(ctx context.Context, tenantID, kbID, embeddingModelID, fileName, fileType string, fileSize int64, fileHash string, content []byte) (*deliveryhttp.KnowledgeFileResponse, error) {
@@ -336,7 +356,18 @@ func (r *embeddingModelResolver) ResolveEmbeddingModel(ctx context.Context, agen
 
 	embModelID, _ := config["embedding_model_id"].(string)
 	if embModelID == "" {
-		return nil, fmt.Errorf("no embedding_model_id in knowledge config")
+		// Fall back to the embedding model configured on the linked KB.
+		var kbModelID string
+		r.db.WithContext(ctx).
+			Raw(`SELECT kb.embedding_model_id FROM knowledge_bases kb
+				JOIN knowledge_base_agents kba ON kba.knowledge_base_id = kb.id
+				WHERE kba.agent_id = ? AND kb.embedding_model_id IS NOT NULL
+				LIMIT 1`, agentID).
+			Scan(&kbModelID)
+		if kbModelID == "" {
+			return nil, nil
+		}
+		embModelID = kbModelID
 	}
 
 	return resolveEmbeddingModelByID(r.db, ctx, embModelID)

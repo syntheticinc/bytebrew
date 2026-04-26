@@ -19,7 +19,14 @@ const (
 	valueDeny           = "DENY"
 	valueReferrerPolicy = "strict-origin-when-cross-origin"
 	valueHSTS           = "max-age=31536000; includeSubDomains"
-	valueCSPDefault     = "default-src 'self'; frame-ancestors 'none'"
+	// 'unsafe-inline' restricted to style-src; admin SPA bundle emits inline styles + uses Google Fonts + data: SVGs.
+	valueCSPDefault = "default-src 'self'; " +
+		"script-src 'self'; " +
+		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+		"font-src 'self' https://fonts.gstatic.com data:; " +
+		"img-src 'self' data: https:; " +
+		"connect-src 'self'; " +
+		"frame-ancestors 'none'"
 )
 
 // WidgetEmbedOriginsLookup returns the allowed frame-ancestors for a tenant.
@@ -97,12 +104,18 @@ func isTLS(r *http.Request) bool {
 	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
-// buildWidgetCSP returns the Content-Security-Policy value for widget routes.
-// Origins are space-separated inside frame-ancestors. An empty list yields
-// the safe default frame-ancestors 'none' which blocks all embedding.
+// buildWidgetCSP returns the CSP for widget routes; same relaxations as
+// valueCSPDefault, only frame-ancestors differs (per-tenant allow-list).
 func buildWidgetCSP(origins []string) string {
-	if len(origins) == 0 {
-		return valueCSPDefault
+	frameAncestors := "'none'"
+	if len(origins) > 0 {
+		frameAncestors = strings.Join(origins, " ")
 	}
-	return "default-src 'self'; frame-ancestors " + strings.Join(origins, " ")
+	return "default-src 'self'; " +
+		"script-src 'self'; " +
+		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+		"font-src 'self' https://fonts.gstatic.com data:; " +
+		"img-src 'self' data: https:; " +
+		"connect-src 'self'; " +
+		"frame-ancestors " + frameAncestors
 }

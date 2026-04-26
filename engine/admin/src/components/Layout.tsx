@@ -2,7 +2,6 @@ import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import BottomPanel from './BottomPanel';
 import QuotaBanner from './QuotaBanner';
-import GitHubStarButton from './GitHubStarButton';
 import GitHubStarBanner from './GitHubStarBanner';
 import { PrototypeProvider, usePrototype } from '../hooks/usePrototype';
 import { BottomPanelProvider } from '../hooks/useBottomPanel';
@@ -36,7 +35,6 @@ function TopHeader() {
           <span className="w-px h-4 bg-brand-shade3/15 mx-1" aria-hidden="true" />
         </>
       )}
-      <GitHubStarButton />
     </div>
   );
 }

@@ -18,8 +18,12 @@ test.describe('Regression — admin auth handoff after cloud-web-spa login', () 
     }
 
     // Step 1: simulate a real login on /login (NOT inject token directly).
+    // 30s waitFor accommodates Vite dev cold-compile of /login on the first
+    // hit after a Tilt stack restart.
     await page.goto(`${BASE_URL}/login`);
-    await page.locator('input[type="email"], input[placeholder*="@" i]').fill(adminSession.email);
+    const email = page.locator('input[type="email"], input[placeholder*="@" i]');
+    await email.waitFor({ state: 'visible', timeout: 30_000 });
+    await email.fill(adminSession.email);
     await page.locator('input[type="password"]').fill(adminSession.password);
     await page.getByRole('button', { name: /sign in/i }).click();
     await page.waitForLoadState('networkidle');

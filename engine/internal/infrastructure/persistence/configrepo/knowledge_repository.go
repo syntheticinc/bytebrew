@@ -134,8 +134,8 @@ func (r *GORMKnowledgeRepository) SearchSimilarByKBs(ctx context.Context, kbIDs 
 			Raw(`SELECT kc.* FROM knowledge_chunks kc
 				JOIN knowledge_documents kd ON kd.id = kc.document_id
 				WHERE kc.tenant_id = ? AND kd.knowledge_base_id IN ?
-				AND (1 - (kc.embedding <=> ?)) >= ?
-				ORDER BY kc.embedding <=> ? LIMIT ?`,
+				AND (1 - (kc.embedding_vector <=> ?)) >= ?
+				ORDER BY kc.embedding_vector <=> ? LIMIT ?`,
 				tenantID, kbIDs, embedding, similarityThreshold, embedding, limit).
 			Scan(&chunks).Error
 	} else {
@@ -143,7 +143,7 @@ func (r *GORMKnowledgeRepository) SearchSimilarByKBs(ctx context.Context, kbIDs 
 			Raw(`SELECT kc.* FROM knowledge_chunks kc
 				JOIN knowledge_documents kd ON kd.id = kc.document_id
 				WHERE kc.tenant_id = ? AND kd.knowledge_base_id IN ?
-				ORDER BY kc.embedding <=> ? LIMIT ?`,
+				ORDER BY kc.embedding_vector <=> ? LIMIT ?`,
 				tenantID, kbIDs, embedding, limit).
 			Scan(&chunks).Error
 	}

@@ -62,7 +62,7 @@ type KnowledgeChunk struct {
 	TenantID   string          `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001';index:idx_knowledge_chunks_tenant"`
 	Content    string          `gorm:"type:text;not null"`
 	ChunkOrder int
-	Embedding  pgvector.Vector `gorm:"type:vector"` // variable dimension
+	Embedding  pgvector.Vector `gorm:"type:vector;column:embedding_vector"` // variable dimension
 	CreatedAt  time.Time
 
 	Document KnowledgeDocument `gorm:"foreignKey:DocumentID"`

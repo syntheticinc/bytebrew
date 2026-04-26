@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
@@ -153,6 +155,9 @@ func (a *schemaServiceHTTPAdapter) UpdateSchema(ctx context.Context, id string, 
 			if err != nil {
 				return err
 			}
+			if err := a.requireAgentInSchema(ctx, id, resolved); err != nil {
+				return err
+			}
 			record.EntryAgentID = &resolved
 		}
 	}
@@ -201,6 +206,33 @@ func (a *schemaServiceHTTPAdapter) resolveEntryAgentRef(ctx context.Context, ref
 		return "", pkgerrors.InvalidInput(fmt.Sprintf("agent not found: %s", ref))
 	}
 	return id, nil
+}
+
+// Entry agent must appear in the schema's agent_relations (source or target).
+// Fresh schemas with no relations get a pass — first entry agent is unconstrained.
+func (a *schemaServiceHTTPAdapter) requireAgentInSchema(ctx context.Context, schemaID, agentID string) error {
+	var totalRelations int64
+	if err := a.db.WithContext(ctx).
+		Raw(`SELECT COUNT(*) FROM agent_relations WHERE schema_id = ?`, schemaID).
+		Scan(&totalRelations).Error; err != nil {
+		return fmt.Errorf("count schema relations: %w", err)
+	}
+	if totalRelations == 0 {
+		return nil
+	}
+
+	var memberCount int64
+	if err := a.db.WithContext(ctx).Raw(
+		`SELECT COUNT(*) FROM agent_relations
+		 WHERE schema_id = ? AND (source_agent_id = ? OR target_agent_id = ?)`,
+		schemaID, agentID, agentID,
+	).Scan(&memberCount).Error; err != nil {
+		return fmt.Errorf("verify schema membership: %w", err)
+	}
+	if memberCount == 0 {
+		return pkgerrors.InvalidInput(fmt.Sprintf("agent %s is not a member of schema %s — add a delegation relation before assigning it as entry", agentID, schemaID))
+	}
+	return nil
 }
 
 // ListSchemaAgents returns the derived membership list for a schema (V2:
@@ -385,12 +417,6 @@ func (a *agentRelationServiceHTTPAdapter) CreateAgentRelation(ctx context.Contex
 		return nil, pkgerrors.InvalidInput("source and target must be different agents")
 	}
 
-	// Bug 2: reject circular delegation. We must prevent any cycle in the
-	// directed delegation graph for this schema. If a path target→source
-	// already exists, adding source→target closes a cycle. Reachability is
-	// computed via BFS over all existing relations for the schema (tenant-
-	// scoped by the repo). Graphs are tiny in practice (< hundreds of edges)
-	// so the per-create O(V+E) check is negligible.
 	if err := a.checkNoCycle(ctx, schemaID, sourceID, targetID); err != nil {
 		return nil, err
 	}
@@ -402,6 +428,9 @@ func (a *agentRelationServiceHTTPAdapter) CreateAgentRelation(ctx context.Contex
 		Config:        req.Config,
 	}
 	if err := a.repo.Create(ctx, record); err != nil {
+		if isAgentRelationFKViolation(err) {
+			return nil, pkgerrors.NotFound("source or target agent no longer exists (deleted concurrently)")
+		}
 		return nil, fmt.Errorf("create agent relation: %w", err)
 	}
 
@@ -439,9 +468,8 @@ func (a *agentRelationServiceHTTPAdapter) UpdateAgentRelation(ctx context.Contex
 		return pkgerrors.InvalidInput("source and target must be different agents")
 	}
 
-	// Bug 2: reject cycle-closing updates. We need the existing relation's
-	// schema_id to scope the check and to exclude the current edge from the
-	// graph (otherwise updating (A→B) to (A→B) would self-report a cycle).
+	// schema_id is needed to scope the cycle check; excluding `id` avoids a
+	// self-report when the update doesn't change the edge endpoints.
 	existing, err := a.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -537,6 +565,20 @@ func (a *agentRelationServiceHTTPAdapter) DeleteAgentRelation(ctx context.Contex
 		return fmt.Errorf("delete agent relation: %w", err)
 	}
 	return nil
+}
+
+// isAgentRelationFKViolation reports whether err is a Postgres FK violation on
+// the agent_id columns of agent_relations — the only FK that fires when an
+// agent is deleted between resolve-by-name and INSERT. Constraint names
+// fk_agent_relations_source_agent_id / fk_agent_relations_target_agent_id are
+// owned by migration 001.
+func isAgentRelationFKViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "23503" {
+		return false
+	}
+	return pgErr.ConstraintName == "fk_agent_relations_source_agent_id" ||
+		pgErr.ConstraintName == "fk_agent_relations_target_agent_id"
 }
 
 // agentSchemaListerHTTPAdapter bridges GORMSchemaRepository to the http.AgentSchemaLister interface.

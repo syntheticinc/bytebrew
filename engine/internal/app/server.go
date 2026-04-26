@@ -383,12 +383,20 @@ func Run(sc ServerConfig) error {
 	var lifecycleDispatcher *lifecycle.Dispatcher
 	var agentLifecycleReader AgentLifecycleReader
 	var poolRunner *poolBasedRunner
-	if components.AgentPoolAdapter != nil && agentRegistry != nil {
-		agentLifecycleReader = newAgentRegistryLifecycleAdapter(agentRegistry)
+	if components.AgentPoolAdapter != nil && registryMgr != nil {
 		poolRunner = &poolBasedRunner{pool: components.AgentPoolAdapter}
 		lifecycleManager = lifecycle.NewManager(poolRunner)
-		lifecycleManager.SetUUIDResolver(agentRegistry)
 		lifecycleDispatcher = lifecycle.NewDispatcher(lifecycleManager)
+
+		if agentRegistry != nil {
+			// Single-tenant: use pre-loaded singleton registry.
+			agentLifecycleReader = newAgentRegistryLifecycleAdapter(agentRegistry)
+			lifecycleManager.SetUUIDResolver(agentRegistry)
+		} else {
+			// Multi-tenant: resolve per-request via Manager.GetForContext.
+			agentLifecycleReader = newManagerLifecycleAdapter(registryMgr)
+			lifecycleManager.SetUUIDResolver(agentregistry.NewTenantAwareFlowProvider(registryMgr))
+		}
 
 		if components.AgentToolResolver != nil {
 			compositeSpawner := NewCompositeAgentSpawner(
@@ -420,11 +428,6 @@ func Run(sc ServerConfig) error {
 		components.AgentToolResolver.SetToolTimeout(30_000) // 30 seconds in ms
 		slog.InfoContext(ctx, "Tool timeout wired into AgentToolResolver", "timeout_ms", 30000)
 	}
-
-	// HeartbeatMonitor / DeadLetterQueue (AC-RESIL-01..04, 07..08) were planned
-	// but deferred — no producers were ever wired, so the admin endpoints that
-	// queried them always returned empty lists. The code was removed; only the
-	// live CircuitBreakerRegistry (AC-RESIL-05/06/09..12) is retained above.
 
 	// Wire per-agent capability config reader (memory max_entries, knowledge top_k)
 	var capReader *capabilityConfigReader

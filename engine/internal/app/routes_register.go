@@ -289,6 +289,7 @@ func registerHTTPRoutes(deps routesDeps) {
 				r.Get("/api/v1/knowledge-bases", kbHandler.List)
 				r.Get("/api/v1/knowledge-bases/{id}", kbHandler.Get)
 				r.Get("/api/v1/knowledge-bases/{id}/files", kbHandler.ListFiles)
+				r.Get("/api/v1/knowledge-bases/{id}/files/{file_id}", kbHandler.GetFile)
 			})
 			r.Group(func(r chi.Router) {
 				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeAgentsWrite))

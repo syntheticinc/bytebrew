@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
@@ -202,6 +203,90 @@ func (t *spawnTool) handleStop(args spawnToolArgs) (string, error) {
 	}
 
 	return fmt.Sprintf("Agent %s stopped", args.AgentID), nil
+}
+
+// NewGenericSpawnTool creates the legacy Tier-1 spawn_agent tool.
+// Unlike per-target spawn_<name> tools, it accepts agent_name as a parameter
+// so the LLM can select the target dynamically.
+func NewGenericSpawnTool(sessionID string, spawner GenericAgentSpawner, inspector GenericAgentInspector, taskManager EngineTaskManager) tool.InvokableTool {
+	return &genericSpawnTool{sessionID: sessionID, spawner: spawner, inspector: inspector, taskManager: taskManager}
+}
+
+type genericSpawnTool struct {
+	sessionID   string
+	spawner     GenericAgentSpawner
+	inspector   GenericAgentInspector
+	taskManager EngineTaskManager // nil when not wired; task rows silently skipped
+}
+
+type genericSpawnArgs struct {
+	AgentName string `json:"agent_name"`
+	Input     string `json:"input"`
+}
+
+func (t *genericSpawnTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
+	return &schema.ToolInfo{
+		Name: "spawn_agent",
+		Desc: "Spawn a sub-agent by name to handle a subtask. Blocks until the agent completes and returns its result.",
+		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
+			"agent_name": {Type: schema.String, Desc: "Name of the agent to spawn", Required: true},
+			"input":      {Type: schema.String, Desc: "Task description or input for the spawned agent", Required: true},
+		}),
+	}, nil
+}
+
+func (t *genericSpawnTool) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
+	var args genericSpawnArgs
+	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
+		return "", fmt.Errorf("parse args: %w", err)
+	}
+	if args.AgentName == "" {
+		return "[ERROR] agent_name is required", nil
+	}
+
+	if t.taskManager == nil {
+		slog.WarnContext(ctx, "spawn_agent: task manager not wired, skipping task persistence",
+			"session", t.sessionID, "target_agent", args.AgentName)
+	} else {
+		rootID, err := t.taskManager.CreateTask(ctx, CreateEngineTaskParams{
+			Title:     "Agent orchestration",
+			SessionID: t.sessionID,
+		})
+		if err != nil {
+			slog.ErrorContext(ctx, "spawn_agent: failed to create root task",
+				"session", t.sessionID, "target_agent", args.AgentName, "error", err)
+		} else {
+			if _, err := t.taskManager.CreateSubTask(ctx, rootID, CreateEngineTaskParams{
+				Title:       fmt.Sprintf("Spawn: %s", args.AgentName),
+				Description: args.Input,
+				SessionID:   t.sessionID,
+			}); err != nil {
+				slog.ErrorContext(ctx, "spawn_agent: failed to create child task",
+					"session", t.sessionID, "root_task_id", rootID, "target_agent", args.AgentName, "error", err)
+			}
+		}
+	}
+
+	agentID, err := t.spawner.SpawnAgent(ctx, SpawnParams{
+		SessionID:   t.sessionID,
+		AgentName:   args.AgentName,
+		Description: args.Input,
+		Blocking:    true,
+	})
+	if err != nil {
+		return fmt.Sprintf("[ERROR] spawn agent %q: %v", args.AgentName, err), nil
+	}
+	info, err := t.spawner.WaitForAgent(ctx, t.sessionID, agentID)
+	if err != nil {
+		return fmt.Sprintf("Agent %q spawned but wait failed: %v", args.AgentName, err), nil
+	}
+	if info.Status == "failed" || info.Error != "" {
+		return fmt.Sprintf("Agent %q failed: %s", args.AgentName, info.Error), nil
+	}
+	if info.Result != "" {
+		return fmt.Sprintf("Agent %q completed:\n%s", args.AgentName, info.Result), nil
+	}
+	return fmt.Sprintf("Agent %q completed (no output)", args.AgentName), nil
 }
 
 // AgentSummary holds completion summary for an agent (used in WaitResult.Summaries).

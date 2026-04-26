@@ -61,6 +61,40 @@ function parseHashToken(): string | null {
   return at;
 }
 
+// Exchange a same-origin cloud session for an engine token; null on miss.
+// 5s timeout caps the SPA at ~5s of "Authenticating…" before falling through
+// to redirectToLanding(); without it a hung engine pinned the SPA indefinitely.
+async function mintFromCloudSession(): Promise<string | null> {
+  let cloudToken: string | null = null;
+  try {
+    cloudToken = localStorage.getItem('bytebrew_access_token');
+  } catch {
+    return null;
+  }
+  if (!cloudToken) return null;
+
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 5000);
+  try {
+    const resp = await fetch('/api/v1/auth/engine-token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${cloudToken}`,
+      },
+      body: '{}',
+      signal: ctl.signal,
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    return json?.data?.token ?? json?.token ?? null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // redirectToLanding sends the user to the external login flow, passing
 // the current URL as `return_to` so the IdP can bounce back after auth.
 function redirectToLanding(): void {
@@ -84,6 +118,12 @@ export async function bootstrapAuth(): Promise<boolean> {
     const hashToken = parseHashToken();
     if (hashToken) {
       api.setToken(hashToken);
+      return true;
+    }
+    const minted = await mintFromCloudSession();
+    if (minted) {
+      api.setToken(minted);
+      try { localStorage.setItem('jwt', minted); } catch {}
       return true;
     }
     redirectToLanding();

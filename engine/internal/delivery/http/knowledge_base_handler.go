@@ -65,6 +65,7 @@ type KBStore interface {
 // KBFileManager provides file operations on a knowledge base.
 type KBFileManager interface {
 	ListFiles(ctx context.Context, kbID string) ([]KnowledgeFileResponse, error)
+	GetFile(ctx context.Context, kbID, fileID string) (*KnowledgeFileResponse, error)
 	UploadFile(ctx context.Context, tenantID, kbID, embeddingModelID, fileName, fileType string, fileSize int64, fileHash string, content []byte) (*KnowledgeFileResponse, error)
 	DeleteFile(ctx context.Context, kbID, fileID string) error
 	ReindexFile(ctx context.Context, kbID, embeddingModelID, fileID string) error
@@ -268,6 +269,33 @@ func (h *KnowledgeBaseHandler) UnlinkAgent(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "unlinked"})
+}
+
+// GetFile handles GET /api/v1/knowledge-bases/{id}/files/{file_id}.
+func (h *KnowledgeBaseHandler) GetFile(w http.ResponseWriter, r *http.Request) {
+	kbID, ok := parseKBID(w, r)
+	if !ok {
+		return
+	}
+	fileID := chi.URLParam(r, "file_id")
+	if fileID == "" {
+		writeJSONError(w, http.StatusBadRequest, "file_id is required")
+		return
+	}
+	if h.fileManager == nil {
+		writeJSONError(w, http.StatusNotImplemented, "Knowledge indexing requires an embedding model.")
+		return
+	}
+	file, err := h.fileManager.GetFile(r.Context(), kbID, fileID)
+	if err != nil {
+		writeDomainError(w, err)
+		return
+	}
+	if file == nil {
+		writeJSONError(w, http.StatusNotFound, "file not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, file)
 }
 
 // ListFiles handles GET /api/v1/knowledge-bases/{id}/files.

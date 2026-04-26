@@ -4,6 +4,7 @@ const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:18082';
 
 export default defineConfig({
   testDir: './e2e',
+  globalSetup: './e2e/global-setup.ts',
   timeout: 30_000,
   expect: { timeout: 5_000 },
   fullyParallel: false,

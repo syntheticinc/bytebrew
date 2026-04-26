@@ -11,7 +11,6 @@ import (
 
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
-	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
@@ -102,20 +101,21 @@ func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, schemaID, message, us
 	}
 	agentName := entryAgent.Record.Name
 
-	isNewSession := sessionID == ""
-	if isNewSession {
+	if sessionID == "" {
 		sessionID = uuid.New().String()
 	} else if _, err := uuid.Parse(sessionID); err != nil {
 		return nil, pkgerrors.InvalidInput("session_id must be a valid UUID")
 	}
 
-	if !a.registry.HasSession(sessionID) {
+	// "First seen" = not in the in-memory registry. This is what triggers
+	// session-row persistence; relying on a client-side `sessionID == ""`
+	// signal misses the case where the caller supplies a fresh UUID for
+	// tracking purposes (e.g., e2e tests), which would FK-fail when the
+	// first message/tool-event is written.
+	firstSeen := !a.registry.HasSession(sessionID)
+	if firstSeen {
 		a.registry.CreateSession(sessionID, "", userSub, "", "", agentName)
-	}
 
-	// On the first message stamp chat_last_fired_at and persist the session.
-	// Non-fatal on errors — chat must still stream if bookkeeping hiccups.
-	if isNewSession {
 		if markErr := a.schemas.MarkChatFired(ctx, schemaID); markErr != nil {
 			slog.WarnContext(ctx, "mark schema chat fired failed", "schema_id", schemaID, "error", markErr)
 		}
@@ -125,7 +125,6 @@ func (a *chatServiceHTTPAdapter) Chat(ctx context.Context, schemaID, message, us
 				SchemaID: schemaID,
 				UserSub:  userSub,
 				Status:   "active",
-				TenantID: domain.CETenantID,
 			}
 			if createErr := a.sessions.Create(ctx, m); createErr != nil {
 				slog.WarnContext(ctx, "persist chat session failed", "session_id", sessionID, "error", createErr)

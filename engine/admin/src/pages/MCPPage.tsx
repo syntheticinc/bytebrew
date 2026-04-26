@@ -38,7 +38,8 @@ export default function MCPPage() {
   const navigate = useNavigate();
   const { data: servers, loading, error, refetch } = useApi(() => api.listMCPServers());
   const { data: catalog } = useApi(() => api.listCatalog());
-  const { data: circuitBreakers } = useApi(() => api.listCircuitBreakers());
+  const { data: circuitBreakers, refetch: refetchCircuitBreakers } = useApi(() => api.listCircuitBreakers());
+  const [resetting, setResetting] = useState(false);
 
   const [selected, setSelected] = useState<MCPServer | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -319,6 +320,28 @@ export default function MCPPage() {
               >
                 Edit
               </button>
+              {(() => {
+                const cb = circuitStateMap[selected.name];
+                const isClosed = !cb || cb.state === 'closed';
+                return (
+                  <button
+                    onClick={async () => {
+                      setResetting(true);
+                      try {
+                        await api.resetCircuitBreaker(selected.name);
+                      } finally {
+                        refetchCircuitBreakers();
+                        setResetting(false);
+                      }
+                    }}
+                    disabled={resetting || isClosed}
+                    title={isClosed ? 'Breaker is closed — nothing to reset' : 'Force-close the open circuit breaker'}
+                    className="px-4 py-2 text-amber-400 border border-amber-500/30 rounded-btn text-sm font-medium hover:bg-amber-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {resetting ? 'Resetting…' : 'Reset Breaker'}
+                  </button>
+                );
+              })()}
               <button
                 onClick={() => setDeleteTarget(selected.name)}
                 className="px-4 py-2 text-red-400 border border-red-500/30 rounded-btn text-sm font-medium hover:bg-red-500/10 transition-colors"

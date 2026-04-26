@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
@@ -148,8 +149,11 @@ func (h *ToolEventHandler) OnToolEnd(ctx context.Context, info *callbacks.RunInf
 		Type:      domain.EventTypeToolResult,
 		Timestamp: time.Now(),
 		Step:      currentStep,
-		Content:   preview, // Preview for logs
+		Content:   preview,
 		Metadata:  metadata,
+	}
+	if strings.HasPrefix(output.Response, "[ERROR]") {
+		event.Error = &domain.AgentError{Code: "tool_error", Message: output.Response}
 	}
 
 	slog.InfoContext(ctx, "[CALLBACK] emitting ToolResult event",

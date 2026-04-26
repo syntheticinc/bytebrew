@@ -17,13 +17,11 @@ import (
 	pkgerrors "github.com/syntheticinc/bytebrew/engine/pkg/errors"
 )
 
-// agentManagerHTTPAdapter bridges GORMAgentRepository + AgentRegistry to the http.AgentManager interface.
+// agentManagerHTTPAdapter bridges GORMAgentRepository + AgentRegistry to the
+// http.AgentManager interface.
 //
-// `registryMgr` is the per-tenant cache owner; it may be nil (legacy wiring
-// still relies on `registry` alone). When non-nil we call InvalidateTenant on
-// the context's tenant after successful writes so that the next read loads
-// fresh data instead of the stale cached registry — otherwise multi-tenant
-// callers would continue to see the pre-write snapshot until restart.
+// registryMgr (when non-nil) owns the per-tenant registry cache; writes here
+// must invalidate it so reads on the same tenant see fresh data.
 type agentManagerHTTPAdapter struct {
 	repo        *configrepo.GORMAgentRepository
 	registry    *agentregistry.AgentRegistry
@@ -119,9 +117,10 @@ func (a *agentManagerHTTPAdapter) GetAgent(ctx context.Context, name string) (*d
 		MCPServers:      rec.MCPServers,
 	}
 
-	// Load MCP servers separately (GORM many2many has naming issues).
 	mcpNames, err := a.loadMCPServersForAgent(ctx, name)
-	if err == nil {
+	if err != nil {
+		slog.WarnContext(ctx, "load mcp servers for agent", "agent", name, "error", err)
+	} else {
 		detail.MCPServers = mcpNames
 	}
 
@@ -137,33 +136,62 @@ func (a *agentManagerHTTPAdapter) GetAgent(ctx context.Context, name string) (*d
 	return detail, nil
 }
 
-func (a *agentManagerHTTPAdapter) CreateAgent(ctx context.Context, req deliveryhttp.CreateAgentRequest) (*deliveryhttp.AgentDetail, error) {
-	// Wave 5: model_id must reference a chat model, not an embedding model.
-	if req.ModelID != nil {
+// resolveAgentModel resolves req.ModelID using (in order):
+//  1. explicit ModelID — rejected when it points at a non-chat model;
+//  2. by-name lookup via req.Model — 400 if name doesn't exist in tenant;
+//  3. tenant's default chat model — 400 if no default and nothing was supplied.
+//
+// Closes the silent-default loophole that masked unbound agents until first
+// chat (F16). Mutates req.ModelID in place.
+func (a *agentManagerHTTPAdapter) resolveAgentModel(ctx context.Context, req *deliveryhttp.CreateAgentRequest) error {
+	if req.ModelID != nil && *req.ModelID != "" {
 		var llm models.LLMProviderModel
-		if err := a.db.Where("id = ?", *req.ModelID).First(&llm).Error; err == nil && llm.Kind == "embedding" {
-			return nil, pkgerrors.InvalidInput(fmt.Sprintf("model_id must reference a chat model, got kind=embedding"))
+		if err := a.db.WithContext(ctx).Where("id = ?", *req.ModelID).First(&llm).Error; err == nil && llm.Kind == "embedding" {
+			return pkgerrors.InvalidInput("model_id must reference a chat model, got kind=embedding")
 		}
+		return nil
 	}
 
-	// Inherit the tenant's default chat model when the caller did not pick
-	// one explicitly. Keeps the AI-builder "create researcher/synthesizer"
-	// flow working end-to-end — otherwise those agents land unbound and
-	// every chat turn fails with "no model available". Skip when the
-	// tenant has no default (fresh install) or when the caller chose a
-	// specific model.
-	if req.ModelID == nil || *req.ModelID == "" {
-		tenantID := domain.TenantIDFromContext(ctx)
-		if tenantID == "" {
-			tenantID = domain.CETenantID
+	tenantID := domain.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = domain.CETenantID
+	}
+
+	if req.Model != "" {
+		var named models.LLMProviderModel
+		err := a.db.WithContext(ctx).
+			Where("tenant_id = ? AND name = ? AND kind = ?", tenantID, req.Model, "chat").
+			First(&named).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return pkgerrors.InvalidInput(fmt.Sprintf("model not found: %q (must be the name of an existing chat model in this tenant)", req.Model))
 		}
-		var def models.LLMProviderModel
-		if err := a.db.WithContext(ctx).
-			Where("tenant_id = ? AND is_default = ? AND kind = ?", tenantID, true, "chat").
-			First(&def).Error; err == nil {
-			id := def.ID
-			req.ModelID = &id
+		if err != nil {
+			return fmt.Errorf("resolve model by name: %w", err)
 		}
+		id := named.ID
+		req.ModelID = &id
+		return nil
+	}
+
+	var def models.LLMProviderModel
+	err := a.db.WithContext(ctx).
+		Where("tenant_id = ? AND is_default = ? AND kind = ?", tenantID, true, "chat").
+		First(&def).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return pkgerrors.InvalidInput("model is required: tenant has no default chat model, pass model_id or model")
+	}
+	if err != nil {
+		return fmt.Errorf("resolve default model: %w", err)
+	}
+	id := def.ID
+	req.ModelID = &id
+	slog.InfoContext(ctx, "agent inherits tenant default chat model", "agent", req.Name, "model", def.Name)
+	return nil
+}
+
+func (a *agentManagerHTTPAdapter) CreateAgent(ctx context.Context, req deliveryhttp.CreateAgentRequest) (*deliveryhttp.AgentDetail, error) {
+	if err := a.resolveAgentModel(ctx, &req); err != nil {
+		return nil, err
 	}
 
 	record := a.toAgentRecord(req)
@@ -174,9 +202,7 @@ func (a *agentManagerHTTPAdapter) CreateAgent(ctx context.Context, req deliveryh
 		return nil, fmt.Errorf("create agent: %w", err)
 	}
 
-	// Bug 7: apply knowledge_base_ids → knowledge_base_agents M2M link set
-	// when the request included the field. Empty slice = no links; nil = field
-	// not provided at all (no change).
+	// nil KnowledgeBaseIDs leaves links untouched; empty slice clears them.
 	if req.KnowledgeBaseIDs != nil && a.kbRepo != nil {
 		created, err := a.repo.GetByName(ctx, req.Name)
 		if err != nil || created == nil {
@@ -199,12 +225,8 @@ func (a *agentManagerHTTPAdapter) CreateAgent(ctx context.Context, req deliveryh
 }
 
 func (a *agentManagerHTTPAdapter) UpdateAgent(ctx context.Context, name string, req deliveryhttp.CreateAgentRequest) (*deliveryhttp.AgentDetail, error) {
-	// Wave 5: model_id must reference a chat model, not an embedding model.
-	if req.ModelID != nil {
-		var llm models.LLMProviderModel
-		if err := a.db.Where("id = ?", *req.ModelID).First(&llm).Error; err == nil && llm.Kind == "embedding" {
-			return nil, pkgerrors.InvalidInput(fmt.Sprintf("model_id must reference a chat model, got kind=embedding"))
-		}
+	if err := a.resolveAgentModel(ctx, &req); err != nil {
+		return nil, err
 	}
 
 	record := a.toAgentRecord(req)
@@ -240,9 +262,7 @@ func (a *agentManagerHTTPAdapter) UpdateAgent(ctx context.Context, name string, 
 		lookupName = name
 	}
 
-	// Bug 7: apply knowledge_base_ids if present on PUT full-replace. A nil
-	// slice preserves the existing KB membership; an empty slice removes
-	// all links.
+	// nil KnowledgeBaseIDs leaves links untouched; empty slice clears them.
 	if req.KnowledgeBaseIDs != nil && a.kbRepo != nil {
 		updated, err := a.repo.GetByName(ctx, lookupName)
 		if err != nil || updated == nil {
@@ -264,8 +284,7 @@ func (a *agentManagerHTTPAdapter) UpdateAgent(ctx context.Context, name string, 
 	return a.GetAgent(ctx, lookupName)
 }
 
-// PatchAgent applies only the non-nil fields in req to the existing agent record.
-// This fixes BUG-MT-03: partial updates no longer wipe unspecified fields.
+// PatchAgent applies only the non-nil fields in req; unspecified fields are preserved.
 func (a *agentManagerHTTPAdapter) PatchAgent(ctx context.Context, name string, req deliveryhttp.UpdateAgentRequest) (*deliveryhttp.AgentDetail, error) {
 	existing, err := a.repo.GetByName(ctx, name)
 	if err != nil || existing == nil {
@@ -352,10 +371,7 @@ func (a *agentManagerHTTPAdapter) PatchAgent(ctx context.Context, name string, r
 		return nil, fmt.Errorf("patch agent: %w", err)
 	}
 
-	// Bug 7: apply knowledge_base_ids when the caller explicitly included
-	// the field (non-nil slice). Nil preserves the existing membership;
-	// an empty slice unlinks the agent from all KBs. Mutations go through
-	// ReplaceAgentKBs which enforces tenant isolation on every KB touched.
+	// nil KnowledgeBaseIDs leaves links untouched; empty slice clears them.
 	if req.KnowledgeBaseIDs != nil && a.kbRepo != nil {
 		if err := a.kbRepo.ReplaceAgentKBs(ctx, existing.ID, *req.KnowledgeBaseIDs); err != nil {
 			if errors.Is(err, configrepo.ErrAgentNotInTenant) {
@@ -379,12 +395,8 @@ func (a *agentManagerHTTPAdapter) DeleteAgent(ctx context.Context, name string) 
 		return pkgerrors.Forbidden(fmt.Sprintf("system agent %q cannot be deleted", name))
 	}
 
-	// V2: triggers are schema-scoped (no agent_id column) and agent_relations
-	// are owned by schemas — both are torn down when the schema is deleted,
-	// not when a member agent is deleted. We only need to drop artefacts that
-	// reference the agent directly: capabilities and any schema entry_agent_id.
-
-	// BUG-004: Delete capabilities before agent to avoid FK constraint violation.
+	// Drop capabilities first to satisfy FK; triggers and agent_relations are
+	// schema-owned and cascade with the schema, not the agent.
 	if err := a.db.WithContext(ctx).
 		Where("agent_id IN (SELECT id FROM agents WHERE name = ?)", name).
 		Delete(&models.CapabilityModel{}).Error; err != nil {

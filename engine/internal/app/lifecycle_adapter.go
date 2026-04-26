@@ -55,7 +55,21 @@ func NewCompositeAgentSpawner(
 // session proxy and a registered code-agent flow — neither of which chat agents have.
 //
 // Code agents in spawn mode continue to use the original gRPC pool path.
+//
+// Spawn cycles (A → B → A) are detected via the ancestor chain on ctx: if the
+// target appears among ancestors the spawn fails fast with [ERROR] cycle, which
+// the spawn tool surfaces as a tool_result instead of letting the recursion
+// hang the SSE stream.
 func (c *CompositeAgentSpawner) SpawnAgent(ctx context.Context, params tools.SpawnParams) (string, error) {
+	ancestors := domain.SpawnAncestorsFromContext(ctx)
+	for _, a := range ancestors {
+		if a == params.AgentName {
+			chain := strings.Join(append(ancestors, params.AgentName), " → ")
+			return "", fmt.Errorf("spawn cycle detected: %s", chain)
+		}
+	}
+	ctx = domain.WithSpawnAncestor(ctx, params.AgentName)
+
 	mode := c.agents.GetLifecycleMode(ctx, params.AgentName)
 
 	if mode != domain.LifecycleModePersistent && !isChatAgent(params.AgentName) {
@@ -66,6 +80,7 @@ func (c *CompositeAgentSpawner) SpawnAgent(ctx context.Context, params tools.Spa
 		"agent", params.AgentName,
 		"mode", mode,
 		"session", params.SessionID,
+		"ancestor_depth", len(ancestors),
 	)
 
 	maxContext := c.agents.GetMaxContextSize(ctx, params.AgentName)
@@ -165,6 +180,13 @@ func (r *poolBasedRunner) runCodeAgent(ctx context.Context, agentName, input, se
 	info, err := r.pool.WaitForAgent(ctx, sessionID, agentID)
 	if err != nil {
 		return "", fmt.Errorf("wait for agent %s: %w", agentID, err)
+	}
+	if info.Status == "failed" || info.Error != "" {
+		reason := info.Error
+		if reason == "" {
+			reason = "agent failed without diagnostic"
+		}
+		return "", fmt.Errorf("agent %s failed: %s", agentID, reason)
 	}
 	return info.Result, nil
 }
