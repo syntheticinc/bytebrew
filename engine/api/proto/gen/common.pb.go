@@ -4,6 +4,11 @@
 // 	protoc        v4.25.1
 // source: common.proto
 
+// NOTE: Frozen along with flow_service.pb.go after the Wave 1 legacy cleanup
+// (2026-04-26). The .proto source is retained, but no regeneration pipeline
+// runs — surviving types back SSE chat persistence and structured event
+// payloads. See plan 1-2-golden-teapot.md.
+
 package bytebrewv1
 
 import (

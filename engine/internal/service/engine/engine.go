@@ -130,7 +130,7 @@ func (e *Engine) Execute(ctx context.Context, cfg ExecutionConfig) (*ExecutionRe
 	// 2. Build react.AgentConfig
 	// Tool execution mode comes from the agent's per-agent `tool_execution`
 	// setting (domain.Flow.ToolExecution). Orchestrator/entry agents are
-	// configured as `sequential` so ask_user + spawn_* cannot run in parallel;
+	// configured as `sequential` so show_structured_output + spawn_* cannot run in parallel;
 	// worker agents default to `parallel`.
 	sequentialTools := cfg.Flow == nil || cfg.Flow.ToolExecution != "parallel"
 

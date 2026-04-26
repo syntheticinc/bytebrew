@@ -131,10 +131,6 @@ func (m *mockClientProxy) ExecuteCommand(ctx context.Context, sessionID, command
 	return "output", nil
 }
 
-func (m *mockClientProxy) AskUserQuestionnaire(ctx context.Context, sessionID, questionsJSON string) (string, error) {
-	return `[{"question":"mock","answer":"answer"}]`, nil
-}
-
 func (m *mockClientProxy) LspRequest(ctx context.Context, sessionID, symbolName, operation string) (string, error) {
 	return "", nil
 }

@@ -37,9 +37,9 @@ func BuildSystemPrompt(def *config.AgentDefinition, configDir string) (string, e
 	}
 
 	if len(def.ConfirmBefore) > 0 {
-		sb.WriteString("\n\n## Confirmation required\nAsk user before calling: ")
+		sb.WriteString("\n\n## Confirmation required\nThe runtime will request user confirmation before executing: ")
 		sb.WriteString(strings.Join(def.ConfirmBefore, ", "))
-		sb.WriteString("\nWhen asking for confirmation, include the tool_name parameter in the ask_user call.\n")
+		sb.WriteString("\n")
 	}
 
 	return sb.String(), nil

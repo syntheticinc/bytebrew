@@ -6,7 +6,7 @@ import "strings"
 type ToolTier int
 
 const (
-	// ToolTierCore (Tier 1) — always available: ask_user, show_structured_output, spawn_*, manage_tasks, wait
+	// ToolTierCore (Tier 1) — always available: show_structured_output, spawn_*, manage_tasks, wait
 	ToolTierCore ToolTier = 1
 
 	// ToolTierCapability (Tier 2) — auto-injected by capabilities: memory_recall, memory_store, knowledge_search
@@ -22,7 +22,6 @@ const (
 // CoreToolNames returns the Tier 1 tool names that are always available.
 func CoreToolNames() []string {
 	return []string{
-		"ask_user",
 		"show_structured_output",
 		"manage_tasks",
 		"manage_subtasks",

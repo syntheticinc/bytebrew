@@ -13,7 +13,6 @@ func TestGetToolMetadata_KnownTool(t *testing.T) {
 		toolName string
 		wantZone SecurityZone
 	}{
-		{"ask_user", "ask_user", ZoneSafe},
 		{"manage_tasks", "manage_tasks", ZoneSafe},
 		{"manage_subtasks", "manage_subtasks", ZoneSafe},
 		{"spawn_agent", "spawn_agent", ZoneSafe},

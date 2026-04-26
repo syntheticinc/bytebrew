@@ -12,7 +12,10 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 )
 
-// StructuredOutputTool displays structured data blocks (summary tables, action buttons) to the user.
+// StructuredOutputTool emits a structured data block to the user (summary tables,
+// action buttons, or form-mode input requests). It is **non-blocking**: the
+// tool returns immediately after emitting the event, and the agent's turn ends.
+// In form mode the user's reply arrives as a normal chat message in a later turn.
 type StructuredOutputTool struct {
 	emitter   ToolEventEmitter
 	sessionID string
@@ -24,32 +27,54 @@ func NewStructuredOutputTool(emitter ToolEventEmitter, sessionID string) tool.In
 }
 
 type structuredOutputArgs struct {
-	OutputType  string                  `json:"output_type"`
-	Title       string                  `json:"title,omitempty"`
-	Description string                  `json:"description,omitempty"`
-	Rows        []domain.StructuredRow  `json:"rows,omitempty"`
+	OutputType  string                    `json:"output_type"`
+	Title       string                    `json:"title,omitempty"`
+	Description string                    `json:"description,omitempty"`
+	Rows        []domain.StructuredRow    `json:"rows,omitempty"`
 	Actions     []domain.StructuredAction `json:"actions,omitempty"`
+	Questions   json.RawMessage           `json:"questions,omitempty"` // accept array or JSON-encoded string
 }
+
+const (
+	maxQuestions      = 5
+	maxQuestionOpts   = 5
+	questionTypeText  = "text"
+	questionTypeSel   = "select"
+	questionTypeMulti = "multiselect"
+)
 
 func (t *StructuredOutputTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "show_structured_output",
-		Desc: `Display structured data to the user (summary tables, action buttons).
+		Desc: `Emit a structured data block to the user. Non-blocking: the tool returns immediately and the agent's turn ends. The user's reply (for form mode) arrives as the next chat message.
 
-Use this to present organized information like project summaries, configuration overviews, or action choices.
+Modes (via "output_type"):
+- "summary_table" — present rows + optional action buttons
+- "info" — title/description only
+- "form" — collect 1-5 inputs from the user (replaces the legacy ask_user blocking pattern)
 
-Parameters:
-- "output_type" (required): Type of output, e.g. "summary_table"
-- "title" (optional): Title of the output block
-- "description" (optional): Description text
-- "rows" (optional): Array of {label, value} rows for tables
-- "actions" (optional): Array of {label, type, value} action buttons (type: "primary" or "secondary")`,
+Common params:
+- "output_type" (required): "summary_table" | "form" | "info"
+- "title" (optional): block title
+- "description" (optional): description text
+- "rows" (optional): [{"label":"Name","value":"MyProject"}] — table rows
+- "actions" (optional): [{"label":"Deploy","type":"primary","value":"deploy"}] — buttons (type: "primary"|"secondary")
+- "questions" (form mode): [{"id":"platform","label":"Platform?","type":"select","options":[{"label":"iOS"},{"label":"Android"}]}]
+
+Question fields:
+- "id" (required): stable identifier, returned with the answer
+- "label" (required): prompt text
+- "type" (required): "text" | "select" | "multiselect"
+- "options" (required for select/multiselect): 2-5 options with "label" (and optional "value")
+- "default" (optional): default value
+`,
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"output_type": {Type: schema.String, Desc: `Type of structured output, e.g. "summary_table"`, Required: true},
+			"output_type": {Type: schema.String, Desc: `"summary_table" | "form" | "info"`, Required: true},
 			"title":       {Type: schema.String, Desc: "Title of the output block"},
 			"description": {Type: schema.String, Desc: "Description text"},
 			"rows":        {Type: schema.String, Desc: `JSON array of rows: [{"label":"Name","value":"MyProject"}]`},
 			"actions":     {Type: schema.String, Desc: `JSON array of actions: [{"label":"Deploy","type":"primary","value":"deploy"}]`},
+			"questions":   {Type: schema.String, Desc: `JSON array of form inputs: [{"id":"platform","label":"Platform?","type":"select","options":[{"label":"iOS"},{"label":"Android"}]}]`},
 		}),
 	}, nil
 }
@@ -64,12 +89,22 @@ func (t *StructuredOutputTool) InvokableRun(ctx context.Context, argumentsInJSON
 		return "[ERROR] output_type is required", nil
 	}
 
+	questions, err := parseStructuredQuestions(args.Questions)
+	if err != nil {
+		return fmt.Sprintf("[ERROR] %s", err), nil
+	}
+
+	if validationErr := validateStructuredQuestions(args.OutputType, questions); validationErr != "" {
+		return "[ERROR] " + validationErr, nil
+	}
+
 	output := domain.StructuredOutput{
 		OutputType:  args.OutputType,
 		Title:       args.Title,
 		Description: args.Description,
 		Rows:        args.Rows,
 		Actions:     args.Actions,
+		Questions:   questions,
 	}
 
 	contentJSON, err := json.Marshal(output)
@@ -80,7 +115,8 @@ func (t *StructuredOutputTool) InvokableRun(ctx context.Context, argumentsInJSON
 	slog.InfoContext(ctx, "[structured_output] emitting event",
 		"output_type", args.OutputType,
 		"rows", len(args.Rows),
-		"actions", len(args.Actions))
+		"actions", len(args.Actions),
+		"questions", len(questions))
 
 	if t.emitter != nil {
 		_ = t.emitter.Send(&domain.AgentEvent{
@@ -91,4 +127,71 @@ func (t *StructuredOutputTool) InvokableRun(ctx context.Context, argumentsInJSON
 	}
 
 	return "Structured output displayed to user.", nil
+}
+
+// parseStructuredQuestions accepts either a raw JSON array or a string-encoded
+// JSON array (LLMs frequently emit string-typed schema fields), or empty.
+func parseStructuredQuestions(raw json.RawMessage) ([]domain.Question, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+
+	// Try string-encoded JSON first (typical LLM output for schema.String fields).
+	var asString string
+	if err := json.Unmarshal(raw, &asString); err == nil {
+		if asString == "" {
+			return nil, nil
+		}
+		var qs []domain.Question
+		if err := json.Unmarshal([]byte(asString), &qs); err != nil {
+			return nil, fmt.Errorf("failed to parse questions string: %w", err)
+		}
+		return qs, nil
+	}
+
+	// Fallback: direct array.
+	var qs []domain.Question
+	if err := json.Unmarshal(raw, &qs); err != nil {
+		return nil, fmt.Errorf("failed to parse questions: %w", err)
+	}
+	return qs, nil
+}
+
+// validateStructuredQuestions returns "" when questions are valid for the given
+// output_type, else a short error message.
+func validateStructuredQuestions(outputType string, questions []domain.Question) string {
+	if outputType == "form" && len(questions) == 0 {
+		return "form output_type requires at least one question"
+	}
+	if len(questions) > maxQuestions {
+		return fmt.Sprintf("too many questions: maximum %d allowed", maxQuestions)
+	}
+
+	for i, q := range questions {
+		if q.ID == "" {
+			return fmt.Sprintf("question %d: id is required", i+1)
+		}
+		if q.Label == "" {
+			return fmt.Sprintf("question %d: label is required", i+1)
+		}
+		switch q.Type {
+		case questionTypeText:
+			// no options expected
+		case questionTypeSel, questionTypeMulti:
+			if len(q.Options) < 2 {
+				return fmt.Sprintf("question %d: %s requires at least 2 options", i+1, q.Type)
+			}
+			if len(q.Options) > maxQuestionOpts {
+				return fmt.Sprintf("question %d: too many options, maximum %d", i+1, maxQuestionOpts)
+			}
+			for j, opt := range q.Options {
+				if opt.Label == "" {
+					return fmt.Sprintf("question %d option %d: label is required", i+1, j+1)
+				}
+			}
+		default:
+			return fmt.Sprintf("question %d: unsupported type %q (use text|select|multiselect)", i+1, q.Type)
+		}
+	}
+	return ""
 }

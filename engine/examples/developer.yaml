@@ -52,7 +52,7 @@ agents:
         - get_project_tree
         - execute_command
         - manage_tasks
-        - ask_user
+        - show_structured_output
     can_spawn: ["code-agent", "reviewer", "researcher"]
     kit: "developer"
     max_steps: 50

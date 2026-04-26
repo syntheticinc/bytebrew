@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSerializeForMobile(t *testing.T) {
+func TestSerializeSessionEvent(t *testing.T) {
 	tests := []struct {
 		name     string
 		event    *pb.SessionEvent
@@ -231,7 +231,7 @@ func TestSerializeForMobile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := SerializeForMobile(tt.event)
+			result := SerializeSessionEvent(tt.event)
 
 			if tt.expected == nil {
 				assert.Nil(t, result)
@@ -250,14 +250,14 @@ func TestSerializeForMobile(t *testing.T) {
 	}
 }
 
-func TestSerializeForMobile_EmptyContent(t *testing.T) {
+func TestSerializeSessionEvent_EmptyContent(t *testing.T) {
 	event := &pb.SessionEvent{
 		Type:    pb.SessionEventType_SESSION_EVENT_ANSWER,
 		Content: "",
 		AgentId: "",
 	}
 
-	result := SerializeForMobile(event)
+	result := SerializeSessionEvent(event)
 	require.NotNil(t, result)
 	assert.Equal(t, "MessageCompleted", result["type"])
 	assert.Equal(t, "", result["content"])

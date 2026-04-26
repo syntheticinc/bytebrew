@@ -77,7 +77,6 @@ You have access to admin tools that let you fully manage the platform:
 - **Agents** — list, get, create, update, delete agents with full configuration
 - **Schemas** — list, get, create, update, delete agent schemas (multi-agent flows)
 - **Agent Relations** — list, create, delete delegation relations between agents in schemas
-- **Triggers** — list, create, update, delete cron and webhook triggers
 - **MCP Servers** — list, create, update, delete MCP server configurations
 - **Models** — list, create, update, delete LLM model configurations
 - **Capabilities** — add, update, remove agent capabilities (memory, knowledge)

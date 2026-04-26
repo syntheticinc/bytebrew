@@ -51,10 +51,10 @@ var TaskDescriptionWithFilePathsRubric = JudgeRubric{
 	Name: "Task Description: File Paths & Concreteness",
 	Criteria: []string{
 		"Description references SPECIFIC FILE PATHS from the actual codebase (not generic paths)",
-		"File paths are concrete enough that a developer can find them (e.g. 'internal/delivery/grpc/flow_handler.go', not just 'the server')",
+		"File paths are concrete enough that a developer can find them (e.g. 'internal/delivery/http/chat_handler.go', not just 'the server')",
 		"Description shows the agent actually READ and UNDERSTOOD the codebase before writing the task",
 		"Technical details (interfaces, methods, protocols) come from actual code, not generic assumptions",
-		"If the task involves gRPC — the description references specific .proto files, services, or methods",
+		"If the task touches the HTTP/SSE chat path — the description references specific handlers, routes, or response shapes",
 		"If the task involves modifying existing code — the description references the current implementation with paths",
 	},
 	PassScore: 4,

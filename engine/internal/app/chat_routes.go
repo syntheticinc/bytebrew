@@ -7,21 +7,19 @@ import (
 )
 
 // chatRoutesDeps bundles the dependencies needed to mount the chat-facing
-// HTTP routes (schema chat, session respond, admin assistant, secondary
-// agent list).
+// HTTP routes (schema chat, admin assistant, secondary agent list).
 type chatRoutesDeps struct {
 	AuthMW                *deliveryhttp.AuthMiddleware
 	BYOKMW                *deliveryhttp.BYOKMiddleware
 	ChatHandler           *deliveryhttp.ChatHandler
-	RespondHandler        *deliveryhttp.RespondHandler
 	AdminAssistantHandler *deliveryhttp.AdminAssistantHandler
 	AgentManagerExt       *agentManagerHTTPAdapter
 }
 
-// mountChatRoutes registers the schema chat + session respond endpoints under
-// auth + BYOK + ScopeChat middleware. Per-IP rate limiting is an edge concern
-// — configured on the reverse proxy (Caddy/nginx/traefik) in front of the
-// engine. See docs/deployment/rate-limiting.md for snippets.
+// mountChatRoutes registers the schema chat endpoint under auth + BYOK +
+// ScopeChat middleware. Per-IP rate limiting is an edge concern — configured
+// on the reverse proxy (Caddy/nginx/traefik) in front of the engine.
+// See docs/deployment/rate-limiting.md for snippets.
 func mountChatRoutes(router chi.Router, deps chatRoutesDeps) {
 	router.Group(func(r chi.Router) {
 		if deps.AuthMW != nil {
@@ -39,7 +37,6 @@ func mountChatRoutes(router chi.Router, deps chatRoutesDeps) {
 				r.Use(deliveryhttp.RequireScope(deliveryhttp.ScopeChat))
 			}
 			r.Post("/api/v1/schemas/{id}/chat", deps.ChatHandler.Chat)
-			r.Post("/api/v1/sessions/{id}/respond", deps.RespondHandler.Respond)
 		})
 	})
 }

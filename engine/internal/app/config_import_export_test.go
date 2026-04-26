@@ -171,7 +171,7 @@ func seedTestData(t *testing.T, db *gorm.DB) {
 		AgentID: agent.ID, ToolType: "builtin", ToolName: "web_search", SortOrder: 0,
 	}).Error)
 	require.NoError(t, db.Create(&models.AgentToolModel{
-		AgentID: agent.ID, ToolType: "builtin", ToolName: "ask_user", SortOrder: 1,
+		AgentID: agent.ID, ToolType: "builtin", ToolName: "show_structured_output", SortOrder: 1,
 	}).Error)
 
 	// Agent MCP server link
@@ -222,7 +222,7 @@ func TestExportYAML(t *testing.T) {
 	assert.Equal(t, "gpt-4o", sales.ModelName)
 	assert.Equal(t, "persistent", sales.Lifecycle)
 	assert.Equal(t, 30, sales.MaxSteps)
-	assert.Equal(t, []string{"web_search", "ask_user"}, sales.Tools)
+	assert.Equal(t, []string{"web_search", "show_structured_output"}, sales.Tools)
 	assert.Equal(t, []string{"researcher"}, sales.CanSpawn)
 	assert.Equal(t, []string{"shop-api"}, sales.MCPServers)
 	assert.Equal(t, []string{"delete_order", "refund"}, sales.ConfirmBefore)
@@ -341,7 +341,7 @@ agents:
     max_steps: 50
     max_context_size: 32000
     tools:
-      - ask_user
+      - show_structured_output
       - web_search
 `
 	require.NoError(t, adapter.ImportYAML(context.Background(), []byte(yamlData2)))

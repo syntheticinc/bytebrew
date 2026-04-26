@@ -59,12 +59,6 @@ func (m *MockChatModel) Generate(ctx context.Context, input []*schema.Message, o
 		}
 		return toolCallMessage("execute_command", `{"command":"echo test"}`), nil
 
-	case "ask-user":
-		if hasToolResult {
-			return textMessage(fmt.Sprintf("User said: %s", extractLastToolResult(input))), nil
-		}
-		return toolCallMessage("ask_user", `{"questions":"[{\"text\":\"Approve?\",\"options\":[{\"label\":\"approved\"},{\"label\":\"rejected\"}],\"default\":\"approved\"}]"}`), nil
-
 	case "multi-tool":
 		toolCount := countToolResults(input)
 		switch {

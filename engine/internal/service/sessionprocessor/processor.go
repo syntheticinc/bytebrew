@@ -2,7 +2,6 @@ package sessionprocessor
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -16,6 +15,13 @@ import (
 )
 
 // SessionRegistry provides session context and message channel (consumer-side interface).
+//
+// RegisterAskUser/UnregisterAskUser/SendAskUserReply remain on the registry
+// because confirm_before reuses the same per-session reply-channel mechanism
+// (callID → channel) to await the user's confirm/cancel decision. The names
+// are historical — the legacy ask_user tool that originally needed them was
+// replaced by show_structured_output(form), which is non-blocking and does
+// not register a reply channel.
 type SessionRegistry interface {
 	GetSessionContext(sessionID string) (projectRoot, platform, projectKey, userID, agentName string, ok bool)
 	MessageChannel(sessionID string) <-chan string
@@ -170,57 +176,17 @@ func (p *Processor) processMessage(ctx context.Context, sessionID, message strin
 
 	eventStream.PublishProcessingStarted()
 
-	// Create proxy with blocking ask_user handler: publishes event to client,
-	// registers reply channel, and blocks until client sends ask_user_reply.
-	askUserHandler := func(ctx context.Context, sid, questionsJSON string) (string, error) {
-		callID := fmt.Sprintf("ask-%d", time.Now().UnixNano())
-		replyCh := p.registry.RegisterAskUser(sid, callID)
-		defer p.registry.UnregisterAskUser(sid, callID)
-
-		// Try to extract tool_name from envelope format {"questions": [...], "tool_name": "..."}
-		// sent by AskUserTool when confirm_before is active.
-		toolName := ""
-		content := questionsJSON
-		var envelope struct {
-			Questions json.RawMessage `json:"questions"`
-			ToolName  string          `json:"tool_name"`
-		}
-		if json.Unmarshal([]byte(questionsJSON), &envelope) == nil && len(envelope.Questions) > 0 {
-			toolName = envelope.ToolName
-			content = string(envelope.Questions)
-		}
-
-		// Publish AskUserRequested event so the client sees the questions
-		eventStream.Send(&domain.AgentEvent{
-			Type:    domain.EventTypeUserQuestion,
-			Content: content,
-			Metadata: map[string]interface{}{
-				"call_id":   callID,
-				"tool_name": toolName,
-			},
-		})
-
-		// Dedicated timeout prevents indefinite hang when client never responds
-		// (e.g., wrong call_id, client disconnect). This is BUG-001 defensive fix.
-		askTimeout := 60 * time.Second
-		select {
-		case reply := <-replyCh:
-			return reply, nil
-		case <-time.After(askTimeout):
-			slog.WarnContext(ctx, "[askUserHandler] timed out waiting for user response",
-				"session_id", sid, "call_id", callID, "timeout", askTimeout)
-			return "[TIMEOUT] User did not respond within 60 seconds. Inform the user that the operation was not completed due to timeout.", nil
-		case <-ctx.Done():
-			return "", ctx.Err()
-		}
-	}
+	// confirm_before tools share the per-session reply-channel mechanism with
+	// the legacy ask_user handler that lived here previously. ask_user has
+	// been removed (replaced by show_structured_output in non-blocking form
+	// mode); the underlying RegisterAskUser/SendAskUserReply primitives are
+	// retained because confirm_before still needs them.
 	confirmRequester := &sseConfirmationRequester{
 		sessionID:   sessionID,
 		registry:    p.registry,
 		eventStream: eventStream,
 	}
 	proxy := tools.NewInProcessProxy(
-		tools.WithAskUserHandler(askUserHandler),
 		tools.WithConfirmRequester(confirmRequester),
 	)
 	defer proxy.Dispose()

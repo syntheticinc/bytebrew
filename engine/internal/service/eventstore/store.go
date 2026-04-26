@@ -107,7 +107,7 @@ func scanEventModels(ms []models.SessionEventLogModel) ([]StoredEvent, error) {
 		pbEvent.EventId = m.ID
 
 		// Generate JSON on-the-fly from proto (json_data column dropped in migration 029).
-		jsonData := eventformat.SerializeForMobile(pbEvent)
+		jsonData := eventformat.SerializeSessionEvent(pbEvent)
 
 		events = append(events, StoredEvent{
 			ID:        m.ID,

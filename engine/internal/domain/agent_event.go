@@ -25,7 +25,7 @@ import (
 //   - plan_created/plan_progress/plan_completed: plan lifecycle
 //   - error: agent error (includes error.code + error.message)
 //   - agent_spawned/agent_completed/agent_failed: sub-agent lifecycle
-//   - user_question: ask_user prompt for client
+//   - user_question: confirm_before prompt for client (awaiting user approval)
 //   - structured_output: tables, action buttons
 //   - state_changed: agent lifecycle state transition (metadata: agent_name, old_state, new_state, reason)
 //   - flow.*: flow pipeline events (flow.step_started, flow.step_completed, flow.completed, flow.failed)
@@ -44,7 +44,7 @@ const (
 	EventTypeAgentSpawned     AgentEventType = "agent_spawned"     // Code Agent spawned
 	EventTypeAgentCompleted   AgentEventType = "agent_completed"   // Code Agent completed
 	EventTypeAgentFailed      AgentEventType = "agent_failed"      // Code Agent failed
-	EventTypeUserQuestion     AgentEventType = "user_question"     // ask_user question to client
+	EventTypeUserQuestion     AgentEventType = "user_question"     // confirm_before prompt awaiting user approval
 	EventTypeStructuredOutput AgentEventType = "structured_output" // structured data display (tables, actions)
 	EventTypeStateChanged     AgentEventType = "state_changed"     // Agent lifecycle state transition (AC-STATE-02)
 	EventTypeTokenUsage       AgentEventType = "token_usage"       // Cumulative token usage for the turn (metadata: total_tokens, prompt_tokens, completion_tokens)

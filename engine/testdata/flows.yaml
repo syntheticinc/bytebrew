@@ -16,13 +16,12 @@ flows:
       - manage_tasks
       - manage_subtasks
       - spawn_agent
-      - ask_user
+      - show_structured_output
     max_steps: 0
     max_context_size: 16000
     lifecycle:
       suspend_on:
         - final_answer
-        - ask_user
       report_to: user
     spawn_policy:
       allowed_flows:

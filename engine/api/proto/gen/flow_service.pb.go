@@ -4,6 +4,13 @@
 // 	protoc        v4.25.1
 // source: flow_service.proto
 
+// NOTE: This file is no longer regenerated. The .proto source was removed in
+// the Wave 1 legacy cleanup (2026-04-26, see plan 1-2-golden-teapot.md).
+// The remaining types (SessionEvent, SessionEventType, PlanStep, SubQuery,
+// SubResult) are kept as a frozen wire format for SSE chat persistence — they
+// back the session_event_log.proto_data column. To change them, restore a
+// .proto source or migrate to a hand-written domain type.
+
 package bytebrewv1
 
 import (

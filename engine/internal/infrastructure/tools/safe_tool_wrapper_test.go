@@ -149,7 +149,6 @@ func TestGetContentRiskLevel_AllTools(t *testing.T) {
 		{"manage_tasks", RiskNone},
 		{"manage_subtasks", RiskNone},
 		{"spawn_agent", RiskNone},
-		{"ask_user", RiskNone},
 		{"show_structured_output", RiskNone},
 		// Capability / MCP tools — default to high so their content is wrapped.
 		{"memory_recall", RiskHigh},

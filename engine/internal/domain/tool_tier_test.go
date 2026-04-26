@@ -10,7 +10,6 @@ func TestClassifyToolTier(t *testing.T) {
 		expected ToolTier
 	}{
 		// Tier 1 — Core
-		{"ask_user", ToolTierCore},
 		{"show_structured_output", ToolTierCore},
 		{"manage_tasks", ToolTierCore},
 		{"manage_subtasks", ToolTierCore},

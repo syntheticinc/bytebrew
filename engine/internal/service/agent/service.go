@@ -17,7 +17,10 @@ type ChatModel interface {
 	model.ToolCallingChatModel
 }
 
-// ClientOperationsProxy defines interface for gRPC client operations
+// ClientOperationsProxy defines interface for gRPC client operations.
+// AskUserQuestionnaire was removed alongside the legacy ask_user tool —
+// show_structured_output in form mode is non-blocking and emits an event
+// directly via the session event stream rather than via this proxy.
 type ClientOperationsProxy interface {
 	ReadFile(ctx context.Context, sessionID, filePath string, startLine, endLine int32) (string, error)
 	WriteFile(ctx context.Context, sessionID, filePath, content string) (string, error)
@@ -30,7 +33,6 @@ type ClientOperationsProxy interface {
 	ExecuteSubQueries(ctx context.Context, sessionID string, subQueries []*pb.SubQuery) ([]*pb.SubResult, error)
 	ExecuteCommand(ctx context.Context, sessionID, command, cwd string, timeout int32) (string, error)
 	ExecuteCommandFull(ctx context.Context, sessionID string, arguments map[string]string) (string, error)
-	AskUserQuestionnaire(ctx context.Context, sessionID, questionsJSON string) (string, error)
 	LspRequest(ctx context.Context, sessionID, symbolName, operation string) (string, error)
 }
 

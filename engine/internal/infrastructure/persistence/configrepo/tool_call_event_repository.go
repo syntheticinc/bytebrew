@@ -182,7 +182,7 @@ func uniqueSessionIDs(events []models.SessionEventLogModel) []string {
 	return result
 }
 
-// protoToJSON deserializes ProtoData and converts to JSON map via eventformat.SerializeForMobile.
+// protoToJSON deserializes ProtoData and converts to JSON map via eventformat.SerializeSessionEvent.
 func protoToJSON(protoData []byte) map[string]interface{} {
 	if len(protoData) == 0 {
 		return nil
@@ -191,7 +191,7 @@ func protoToJSON(protoData []byte) map[string]interface{} {
 	if err := proto.Unmarshal(protoData, pbEvent); err != nil {
 		return nil
 	}
-	return eventformat.SerializeForMobile(pbEvent)
+	return eventformat.SerializeSessionEvent(pbEvent)
 }
 
 // extractCallIDFromProto extracts call_id from ProtoData via JSON conversion.

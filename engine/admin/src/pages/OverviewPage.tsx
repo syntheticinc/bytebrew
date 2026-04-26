@@ -331,10 +331,9 @@ function OverviewProduction() {
               </div>
             )}
             {activeSessions.map((s) => (
-              <Link
+              <div
                 key={s.session_id}
-                to={`/inspect?session=${s.session_id}`}
-                className="flex items-center gap-3 px-5 py-3 hover:bg-brand-shade3/5 transition-colors group"
+                className="flex items-center gap-3 px-5 py-3"
               >
                 <span className="font-mono text-[11px] text-brand-shade3 shrink-0">
                   {s.session_id.slice(0, 8)}
@@ -345,10 +344,7 @@ function OverviewProduction() {
                     started {formatRelativeTime(s.created_at)}
                   </div>
                 </div>
-                <span className="text-[11px] text-brand-shade3 group-hover:text-brand-accent transition-colors shrink-0">
-                  Inspect →
-                </span>
-              </Link>
+              </div>
             ))}
           </div>
         </div>

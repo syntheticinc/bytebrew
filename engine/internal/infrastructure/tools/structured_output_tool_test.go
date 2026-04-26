@@ -133,5 +133,125 @@ func TestStructuredOutput_ToolInfo(t *testing.T) {
 	info, err := tool.Info(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "show_structured_output", info.Name)
-	assert.Contains(t, info.Desc, "structured data")
+	assert.Contains(t, info.Desc, "Non-blocking")
+	assert.Contains(t, info.Desc, "form")
+}
+
+func TestStructuredOutput_FormMode(t *testing.T) {
+	emitter := &mockEventEmitter{}
+	tool := NewStructuredOutputTool(emitter, "sess-1")
+
+	args := `{
+		"output_type": "form",
+		"title": "Configure project",
+		"questions": [
+			{"id": "platform", "label": "Target platform?", "type": "select", "options": [{"label": "iOS"}, {"label": "Android"}]},
+			{"id": "name", "label": "Project name?", "type": "text"}
+		]
+	}`
+
+	result, err := tool.InvokableRun(context.Background(), args)
+	require.NoError(t, err)
+	assert.Equal(t, "Structured output displayed to user.", result)
+
+	require.Len(t, emitter.events, 1)
+	event := emitter.events[0]
+	assert.Equal(t, domain.EventTypeStructuredOutput, event.Type)
+
+	var output domain.StructuredOutput
+	require.NoError(t, json.Unmarshal([]byte(event.Content), &output))
+	assert.Equal(t, "form", output.OutputType)
+	require.Len(t, output.Questions, 2)
+	assert.Equal(t, "platform", output.Questions[0].ID)
+	assert.Equal(t, "select", output.Questions[0].Type)
+	require.Len(t, output.Questions[0].Options, 2)
+	assert.Equal(t, "iOS", output.Questions[0].Options[0].Label)
+	assert.Equal(t, "name", output.Questions[1].ID)
+	assert.Equal(t, "text", output.Questions[1].Type)
+}
+
+func TestStructuredOutput_FormMode_QuestionsAsJSONString(t *testing.T) {
+	emitter := &mockEventEmitter{}
+	tool := NewStructuredOutputTool(emitter, "sess-1")
+
+	// LLMs typically emit schema.String params as JSON-encoded strings.
+	args := `{
+		"output_type": "form",
+		"questions": "[{\"id\":\"q1\",\"label\":\"Why?\",\"type\":\"text\"}]"
+	}`
+
+	result, err := tool.InvokableRun(context.Background(), args)
+	require.NoError(t, err)
+	assert.Equal(t, "Structured output displayed to user.", result)
+
+	require.Len(t, emitter.events, 1)
+	var output domain.StructuredOutput
+	require.NoError(t, json.Unmarshal([]byte(emitter.events[0].Content), &output))
+	require.Len(t, output.Questions, 1)
+	assert.Equal(t, "q1", output.Questions[0].ID)
+}
+
+func TestStructuredOutput_FormMode_RequiresQuestions(t *testing.T) {
+	emitter := &mockEventEmitter{}
+	tool := NewStructuredOutputTool(emitter, "sess-1")
+
+	args := `{"output_type": "form", "title": "Empty"}`
+	result, err := tool.InvokableRun(context.Background(), args)
+	require.NoError(t, err)
+	assert.Contains(t, result, "[ERROR]")
+	assert.Contains(t, result, "form output_type requires at least one question")
+	assert.Empty(t, emitter.events)
+}
+
+func TestStructuredOutput_FormMode_RejectsUnknownType(t *testing.T) {
+	emitter := &mockEventEmitter{}
+	tool := NewStructuredOutputTool(emitter, "sess-1")
+
+	args := `{
+		"output_type": "form",
+		"questions": [{"id": "q1", "label": "?", "type": "slider"}]
+	}`
+	result, err := tool.InvokableRun(context.Background(), args)
+	require.NoError(t, err)
+	assert.Contains(t, result, "[ERROR]")
+	assert.Contains(t, result, "unsupported type")
+	assert.Empty(t, emitter.events)
+}
+
+func TestStructuredOutput_FormMode_RejectsTooManyQuestions(t *testing.T) {
+	emitter := &mockEventEmitter{}
+	tool := NewStructuredOutputTool(emitter, "sess-1")
+
+	// 6 questions exceeds maxQuestions=5.
+	args := `{
+		"output_type": "form",
+		"questions": [
+			{"id":"q1","label":"a","type":"text"},
+			{"id":"q2","label":"b","type":"text"},
+			{"id":"q3","label":"c","type":"text"},
+			{"id":"q4","label":"d","type":"text"},
+			{"id":"q5","label":"e","type":"text"},
+			{"id":"q6","label":"f","type":"text"}
+		]
+	}`
+	result, err := tool.InvokableRun(context.Background(), args)
+	require.NoError(t, err)
+	assert.Contains(t, result, "[ERROR]")
+	assert.Contains(t, result, "too many questions")
+	assert.Empty(t, emitter.events)
+}
+
+func TestStructuredOutput_FormMode_SelectRequiresMinTwoOptions(t *testing.T) {
+	emitter := &mockEventEmitter{}
+	tool := NewStructuredOutputTool(emitter, "sess-1")
+
+	args := `{
+		"output_type": "form",
+		"questions": [{"id":"q1","label":"?","type":"select","options":[{"label":"only"}]}]
+	}`
+	result, err := tool.InvokableRun(context.Background(), args)
+	require.NoError(t, err)
+	assert.Contains(t, result, "[ERROR]")
+	assert.Contains(t, result, "requires at least 2 options")
+	assert.Empty(t, emitter.events)
 }

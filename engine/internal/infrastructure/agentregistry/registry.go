@@ -240,7 +240,7 @@ func toFlow(rec configrepo.AgentRecord) *domain.Flow {
 	lifecycle := domain.LifecyclePolicy{}
 	switch rec.Lifecycle {
 	case "persistent":
-		lifecycle.SuspendOn = []string{"final_answer", "ask_user"}
+		lifecycle.SuspendOn = []string{"final_answer"}
 		lifecycle.ReportTo = "user"
 	case "spawn":
 		lifecycle.ReportTo = "parent_agent"
@@ -248,11 +248,13 @@ func toFlow(rec configrepo.AgentRecord) *domain.Flow {
 
 	// Append confirm_before instruction to system prompt (mirrors prompt_builder.go logic).
 	// This ensures DB-configured confirm_before is applied in the SSE/HTTP path.
+	// The confirmation flow is driven by the runtime ConfirmationWrapper —
+	// the agent does not need a separate user-prompt tool; the wrapper
+	// surfaces the confirmation event when these tools are invoked.
 	systemPrompt := rec.SystemPrompt
 	if len(rec.ConfirmBefore) > 0 {
-		systemPrompt += "\n\n## Confirmation required\nAsk user before calling: " +
-			strings.Join(rec.ConfirmBefore, ", ") +
-			"\nWhen asking for confirmation, include the tool_name parameter in the ask_user call."
+		systemPrompt += "\n\n## Confirmation required\nThe runtime will request user confirmation before executing: " +
+			strings.Join(rec.ConfirmBefore, ", ")
 	}
 
 	return &domain.Flow{

@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,11 +15,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	googlegrpc "google.golang.org/grpc"
 
-	"github.com/syntheticinc/bytebrew/engine/internal/delivery/grpc"
 	deliveryhttp "github.com/syntheticinc/bytebrew/engine/internal/delivery/http"
-	"github.com/syntheticinc/bytebrew/engine/internal/delivery/ws"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agents/callbacks"
@@ -616,9 +612,8 @@ func Run(sc ServerConfig) error {
 			KnowledgeDataDir:     bootstrapCfg.Knowledge.DataDir,
 		})
 
-		// Serve Admin Dashboard SPA + Web Client SPA — internal only (extracted to spa_handler.go).
+		// Serve Admin Dashboard SPA — internal only (extracted to spa_handler.go).
 		mountSPA(internalRouter, "/admin", "/usr/share/bytebrew/admin")
-		mountSPA(internalRouter, "/chat", "/usr/share/bytebrew/webclient")
 
 
 		// Serve widget.js (static file) — external only (or both in single-port mode).
@@ -653,32 +648,6 @@ func Run(sc ServerConfig) error {
 		// so the chat endpoint can be wired with all required dependencies.
 	}
 
-	// Initialize gRPC server.
-	// When HTTP REST API is active (bootstrap mode), gRPC uses a random port
-	// to avoid port conflicts. CLI discovers the gRPC port via the port file.
-	grpcUsesRandomPort := httpServer != nil
-	if grpcUsesRandomPort {
-		cfg.Server.Port = 0 // force random port for gRPC
-	}
-	// Tenant-aware gRPC interceptors: extract tenant_id from authorization
-	// metadata and inject into context for downstream handlers.
-	var jwtVerifierForGRPC pluginpkg.JWTVerifier
-	if httpAuthMW != nil {
-		jwtVerifierForGRPC = httpAuthMW.JWTVerifier()
-	}
-	extraGRPCOpts := []googlegrpc.ServerOption{
-		googlegrpc.ChainUnaryInterceptor(grpc.TenantUnaryInterceptor(jwtVerifierForGRPC, sc.RequireTenant)),
-		googlegrpc.ChainStreamInterceptor(grpc.TenantStreamInterceptor(jwtVerifierForGRPC, sc.RequireTenant)),
-	}
-	extraGRPCOpts = append(extraGRPCOpts, sc.Plugin.GRPCServerOptions()...)
-	grpcServer, err := initializeGRPCServer(cfg, loggerInstance, extraGRPCOpts, sc.Managed || grpcUsesRandomPort)
-	if err != nil {
-		return fmt.Errorf("initialize gRPC server: %w", err)
-	}
-
-	// Create flow registry for managing active flows
-	flowRegistry := flowregistry.NewInMemoryRegistry()
-
 	// Create event store (PostgreSQL) for reliable event replay on reconnect
 	eventStore, err := eventstore.New(pgDB)
 	if err != nil {
@@ -687,18 +656,6 @@ func Run(sc ServerConfig) error {
 
 	// Create session registry for server-streaming API and bridge
 	sessionRegistry := flowregistry.NewSessionRegistry(eventStore)
-
-	// Create FlowHandler with multi-agent support
-	pingInterval := 2 * time.Second
-	flowHandlerCfg := grpc.FlowHandlerConfig{
-		AgentService: components.AgentService,
-		PingInterval: pingInterval,
-		FlowRegistry: flowRegistry,
-		SessionRegistry: sessionRegistry,
-	}
-	if components.AgentService != nil {
-		flowHandlerCfg.ToolCallHistoryCleaner = components.AgentService.GetToolCallHistoryReminder()
-	}
 
 	// Engine components are always available
 	// Use AgentRegistry as FlowProvider (replaces legacy FlowManager for agent resolution).
@@ -725,7 +682,6 @@ func Run(sc ServerConfig) error {
 		components.ModelCache,
 		agentModelResolver,
 	)
-	flowHandlerCfg.TurnExecutorFactory = factory
 
 	// Wire agent UUID resolver so engine execution context uses uuid FK, not agent name.
 	if agentRegistry != nil {
@@ -762,7 +718,6 @@ func Run(sc ServerConfig) error {
 
 	// Create shared SessionProcessor
 	sessProcessor := sessionprocessor.New(sessionRegistry, factory, eventStore)
-	flowHandlerCfg.SessionProcessor = sessProcessor
 
 	// Wire TurnExecutorFactory into poolBasedRunner so chat agents delegated via
 	// lifecycle.Manager use the SSE path instead of the code-agent pool path.
@@ -788,9 +743,6 @@ func Run(sc ServerConfig) error {
 
 	// Wire up agent pool if available (multi-agent mode)
 	if components.AgentPool != nil && components.AgentPoolAdapter != nil {
-		flowHandlerCfg.AgentPoolProxy = components.AgentPool
-		flowHandlerCfg.AgentPoolAdapter = components.AgentPoolAdapter
-		flowHandlerCfg.WorkManager = components.TaskManager
 		// SessionStorage removed (V2 Group N: runtime_sessions table dropped).
 		sessProcessor.SetAgentPoolRegistrar(components.AgentPool)
 		// Re-wire AgentPool with AgentRegistry as FlowProvider (replaces legacy FlowManager)
@@ -807,13 +759,6 @@ func Run(sc ServerConfig) error {
 	} else {
 		loggerInstance.InfoContext(ctx, "Single-agent mode (no WorkStorage)")
 	}
-
-	flowHandler, err := grpc.NewFlowHandlerWithConfig(flowHandlerCfg)
-	if err != nil {
-		return fmt.Errorf("create flow handler: %w", err)
-	}
-
-	grpcServer.RegisterServices(flowHandler)
 
 	// Wire chat endpoint and start HTTP server(s) now that SessionProcessor is ready.
 	// In multi-tenant mode agentRegistry is nil (per-tenant registries loaded on demand),
@@ -835,7 +780,6 @@ func Run(sc ServerConfig) error {
 		chatHandler := deliveryhttp.NewChatHandler(chatService, func() []string {
 			return forwardHeadersStore.Load().([]string)
 		})
-		respondHandler := deliveryhttp.NewRespondHandler(sessionRegistry)
 
 		// Admin assistant — admin JWT required, chats against the seeded
 		// builder-schema; the schema resolver runs per-request so a late seed
@@ -852,7 +796,6 @@ func Run(sc ServerConfig) error {
 			AuthMW:                httpAuthMW,
 			BYOKMW:                byokMW,
 			ChatHandler:           chatHandler,
-			RespondHandler:        respondHandler,
 			AdminAssistantHandler: adminAssistantHandler,
 			AgentManagerExt: &agentManagerHTTPAdapter{
 				repo:        configrepo.NewGORMAgentRepository(pgDB),
@@ -867,7 +810,7 @@ func Run(sc ServerConfig) error {
 		// Chat API + admin assistant on external port (or single-port).
 		mountChatRoutes(httpServer.Router(), chatDeps)
 		mountAdminAssistantRoutes(httpServer.Router(), chatDeps)
-		// In two-port mode, also register on internal port (for /chat/ web client)
+		// In two-port mode, also register on internal port for the embeddable widget,
 		// and expose a read-only agent list on the external router.
 		if internalHTTPServer != nil {
 			mountChatRoutes(internalHTTPServer.Router(), chatDeps)
@@ -897,38 +840,10 @@ func Run(sc ServerConfig) error {
 		}
 	}
 
-	// Create WS connection handler for local CLI clients
-	var agentCanceller ws.AgentCanceller
-	if components.AgentPool != nil {
-		agentCanceller = components.AgentPool
-	}
-	wsHandler := ws.NewConnectionHandler(sessionRegistry, sessProcessor, components.AgentService, agentCanceller, sc.Plugin)
-
-	// Create WS server (localhost only, random port)
-	wsServer, err := ws.NewServer(wsHandler)
-	if err != nil {
-		return fmt.Errorf("create WS server: %w", err)
-	}
-
-	// Start WS server in goroutine
-	go func() {
-		if err := wsServer.Start(ctx); err != nil {
-			slog.ErrorContext(context.Background(), "WS server error", "error", err)
-		}
-	}()
-
-	// Start gRPC server in goroutine
-	serverErrChan := make(chan error, 1)
-	go func() {
-		if err := grpcServer.Start(ctx); err != nil {
-			serverErrChan <- err
-		}
-	}()
-
 	loggerInstance.InfoContext(ctx, "ByteBrew Server started successfully",
 		"host", cfg.Server.Host,
-		"grpc_port", grpcServer.ActualPort(),
-		"ws_port", wsServer.Port(),
+		"http_port", httpPort,
+		"internal_port", internalHTTPPort,
 	)
 
 	// Write port file for CLI discovery BEFORE emitting READY.
@@ -939,8 +854,6 @@ func Run(sc ServerConfig) error {
 	portWriter := portfile.NewWriter(dataDir)
 	if err := portWriter.Write(portfile.PortInfo{
 		PID:          os.Getpid(),
-		Port:         grpcServer.ActualPort(),
-		WsPort:       wsServer.Port(),
 		HTTPPort:     httpPort,
 		InternalPort: internalHTTPPort,
 		Host:         portFileHost,
@@ -953,7 +866,11 @@ func Run(sc ServerConfig) error {
 
 	// In managed mode, emit READY protocol AFTER port file is written.
 	if sc.Managed {
-		fmt.Printf("READY:%d\n", grpcServer.ActualPort())
+		readyPort := httpPort
+		if readyPort == 0 {
+			readyPort = internalHTTPPort
+		}
+		fmt.Printf("READY:%d\n", readyPort)
 		os.Stdout.Sync()
 	}
 
@@ -962,15 +879,10 @@ func Run(sc ServerConfig) error {
 		memorysvc.NewRetentionWorker(pgDB).Start(ctx)
 	}
 
-	// Wait for shutdown signal or server error
-	select {
-	case sig := <-sigChan:
-		loggerInstance.InfoContext(ctx, "Received shutdown signal", "signal", sig)
-		cancel()
-	case err := <-serverErrChan:
-		loggerInstance.ErrorContext(ctx, "Server error", "error", err)
-		cancel()
-	}
+	// Wait for shutdown signal
+	sig := <-sigChan
+	loggerInstance.InfoContext(ctx, "Received shutdown signal", "signal", sig)
+	cancel()
 
 	loggerInstance.InfoContext(ctx, "Shutting down ByteBrew Server...")
 
@@ -991,10 +903,6 @@ func Run(sc ServerConfig) error {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
-	if err := wsServer.Shutdown(shutdownCtx); err != nil {
-		slog.WarnContext(context.Background(), "WS server shutdown error", "error", err)
-	}
-
 	if httpServer != nil {
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
 			slog.WarnContext(context.Background(), "HTTP server shutdown error", "error", err)
@@ -1006,41 +914,8 @@ func Run(sc ServerConfig) error {
 		}
 	}
 
-	if err := grpcServer.Shutdown(shutdownCtx); err != nil {
-		loggerInstance.ErrorContext(ctx, "Error during shutdown", "error", err)
-	}
-
 	loggerInstance.InfoContext(ctx, "ByteBrew Server stopped")
 	return nil
-}
-
-// initializeGRPCServer creates the gRPC server, choosing between config-based
-// listener and OS-assigned port based on managed mode. extraOpts are appended
-// to the CE option chain (used by EE to inject license interceptors).
-func initializeGRPCServer(cfg *config.Config, log *logger.Logger, extraOpts []googlegrpc.ServerOption, managed bool) (*grpc.Server, error) {
-	if managed && cfg.Server.Port == 0 {
-		listener, err := net.Listen("tcp4", "127.0.0.1:0")
-		if err != nil {
-			return nil, fmt.Errorf("listen on random port: %w", err)
-		}
-		return grpc.NewServerWithListener(listener, cfg.Server, log, extraOpts), nil
-	}
-
-	server, err := grpc.NewServer(cfg.Server, log, extraOpts)
-	if err != nil {
-		slog.WarnContext(context.Background(), "Configured port busy, using random port",
-			"port", cfg.Server.Port, "error", err)
-		host := cfg.Server.Host
-		if host == "" {
-			host = "0.0.0.0"
-		}
-		listener, listenErr := net.Listen("tcp4", fmt.Sprintf("%s:0", host))
-		if listenErr != nil {
-			return nil, fmt.Errorf("listen on random port after fallback: %w", listenErr)
-		}
-		return grpc.NewServerWithListener(listener, cfg.Server, log, extraOpts), nil
-	}
-	return server, nil
 }
 
 // UserDataDir is a thin alias around platform.UserDataDir kept here to avoid

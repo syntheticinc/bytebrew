@@ -20,7 +20,7 @@ func TestFlowManager_GetFlow_AllTypes(t *testing.T) {
 				MaxSteps:        50,
 				MaxContextSize:  16000,
 				Lifecycle: config.LifecycleConfig{
-					SuspendOn: []string{"final_answer", "ask_user"},
+					SuspendOn: []string{"final_answer"},
 					ReportTo:  "user",
 				},
 				SpawnPolicy: config.SpawnConfig{

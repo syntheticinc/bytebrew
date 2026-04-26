@@ -20,7 +20,7 @@ var domainToSSE = map[string]string{
 	"agent_spawned":   "agent_spawn",
 	"agent_completed": "agent_result",
 	"agent_failed":    "agent_result",
-	// User interaction (ask_user tool with structured choices)
+	// User confirmation prompt for confirm_before tools (reply channel awaits user decision)
 	"user_question": "user_input_required",
 	// Structured output (summary tables, action buttons)
 	"structured_output": "structured_output",

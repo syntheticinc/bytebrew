@@ -11,13 +11,12 @@
 ## Features
 
 - **Multi-Agent Orchestration** — agents spawn and coordinate with each other via ReAct framework
-- **MCP Tool Ecosystem** — connect any Model Context Protocol server (stdio, SSE, HTTP, Docker)
-- **Visual Admin Dashboard** — configure agents, models, tools, and triggers from a web UI
-- **Task System** — async background tasks with priorities, dependencies, approval gates, and webhooks
-- **Cron & Webhook Triggers** — schedule agents or trigger them from external events
+- **MCP Tool Ecosystem** — connect any Model Context Protocol server (stdio, SSE, HTTP, WebSocket, Docker)
+- **Visual Admin Dashboard** — configure agents, models, schemas, and tools from a web UI
+- **Task System** — async background tasks with priorities, dependencies, and approval gates
 - **Knowledge Base / RAG** — vector search over uploaded documents with pgvector
 - **Agent Memory** — cross-session persistent memory per agent
-- **Multiple Clients** — REST API + SSE, gRPC, WebSocket (via bridge)
+- **Headless API** — REST + SSE chat for any frontend (web, mobile, CLI). No proprietary clients.
 - **BYOK** — bring your own keys for any OpenAI-compatible LLM provider
 - **Self-Hosted** — deploy on your infrastructure with Docker, Kubernetes, or bare metal
 
@@ -73,7 +72,7 @@ internal/
   usecase/           Business logic + consumer-side interfaces
   service/           Task worker, scheduler, completion hooks
   infrastructure/    DB, LLM, MCP, agents, tools
-  delivery/          HTTP & gRPC handlers
+  delivery/          HTTP handlers
   app/               Application bootstrap
 admin/               React/TypeScript admin dashboard
 ```
@@ -92,9 +91,9 @@ admin/               React/TypeScript admin dashboard
 |---------|:-:|:-:|
 | Unlimited agents, models, MCP servers | :white_check_mark: | :white_check_mark: |
 | Multi-agent spawn orchestration | :white_check_mark: | :white_check_mark: |
-| Cron triggers, webhooks, background tasks | :white_check_mark: | :white_check_mark: |
+| Background task queue | :white_check_mark: | :white_check_mark: |
 | Knowledge Base / RAG | :white_check_mark: | :white_check_mark: |
-| REST API + SSE + WebSocket | :white_check_mark: | :white_check_mark: |
+| REST API + SSE chat | :white_check_mark: | :white_check_mark: |
 | Admin Dashboard | :white_check_mark: | :white_check_mark: |
 | API tokens with scopes | :white_check_mark: | :white_check_mark: |
 | Session Explorer | | :white_check_mark: |

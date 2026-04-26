@@ -4,7 +4,7 @@ package tools
 type SecurityZone string
 
 const (
-	ZoneSafe      SecurityZone = "safe"      // No risk: ask_user, manage_tasks, memory, knowledge
+	ZoneSafe      SecurityZone = "safe"      // No risk: manage_tasks, memory, knowledge, show_structured_output
 	ZoneCaution   SecurityZone = "caution"   // Medium risk: MCP / unknown external tools
 	ZoneDangerous SecurityZone = "dangerous" // High risk: self-hosted file system and shell (not available after parking)
 )
@@ -24,11 +24,6 @@ type ToolMetadata struct {
 // bytebrew-archive; their metadata was removed along with the tool code.
 var toolMetadataRegistry = map[string]ToolMetadata{
 	// === SAFE ZONE — coordination and capability tools ===
-	"ask_user": {
-		Name:         "ask_user",
-		Description:  "Asks the user a question and waits for their response. Used for clarification, confirmation, or gathering input during task execution.",
-		SecurityZone: ZoneSafe,
-	},
 	"manage_tasks": {
 		Name:         "manage_tasks",
 		Description:  "Creates, updates, and manages work tasks. The agent uses this to plan work, track progress, and organize subtasks for delegation to other agents.",

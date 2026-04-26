@@ -1,4 +1,4 @@
-package ws
+package eventformat
 
 import (
 	"testing"
@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSerializeEvent_ToolResult_IncludesFullResult(t *testing.T) {
+func TestSerializeSessionEvent_ToolResult_IncludesFullResult(t *testing.T) {
 	fullResult := "device1: iPhone 14 Pro\ndevice2: Pixel 8\ndevice3: Samsung Galaxy S24\ndevice4: OnePlus 12\ndevice5: Xiaomi 14"
 	summary := "5 devices found"
 
@@ -22,7 +22,7 @@ func TestSerializeEvent_ToolResult_IncludesFullResult(t *testing.T) {
 		AgentId:           "supervisor",
 	}
 
-	result := serializeEvent(event)
+	result := SerializeSessionEvent(event)
 
 	require.NotNil(t, result)
 	assert.Equal(t, "ToolExecutionCompleted", result["type"])

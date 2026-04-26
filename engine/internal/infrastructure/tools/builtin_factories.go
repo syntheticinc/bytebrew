@@ -15,15 +15,8 @@ func RegisterAllBuiltins(store *BuiltinToolStore) {
 		return NewEngineManageTasksTool(deps.EngineTaskManager, deps.SessionID)
 	})
 
-	// User interaction — disabled in background mode (cron/webhook tasks have no user)
-	store.Register("ask_user", func(deps ToolDependencies) tool.InvokableTool {
-		if deps.BackgroundMode {
-			return nil // tool not available in background mode
-		}
-		return NewAskUserTool(deps.Proxy, deps.SessionID)
-	})
-
 	// Structured output — display rich data blocks (tables, action buttons) to the user
+	// and collect non-blocking form input (output_type=form). Replaces the legacy ask_user tool.
 	store.Register("show_structured_output", func(deps ToolDependencies) tool.InvokableTool {
 		return NewStructuredOutputTool(deps.EventEmitter, deps.SessionID)
 	})

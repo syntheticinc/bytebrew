@@ -27,7 +27,6 @@ func TestLoadFlowsConfig(t *testing.T) {
     lifecycle:
       suspend_on:
         - final_answer
-        - ask_user
       report_to: user
     spawn_policy:
       allowed_flows:
@@ -160,7 +159,7 @@ func TestToDomainFlow_Supervisor(t *testing.T) {
 				MaxSteps:        50,
 				MaxContextSize:  16000,
 				Lifecycle: LifecycleConfig{
-					SuspendOn: []string{"final_answer", "ask_user"},
+					SuspendOn: []string{"final_answer"},
 					ReportTo:  "user",
 				},
 				SpawnPolicy: SpawnConfig{
@@ -185,7 +184,7 @@ func TestToDomainFlow_Supervisor(t *testing.T) {
 	assert.Equal(t, []string{"read_file", "spawn_agent"}, flow.ToolNames)
 	assert.Equal(t, 50, flow.MaxSteps)
 	assert.Equal(t, 16000, flow.MaxContextSize)
-	assert.Equal(t, []string{"final_answer", "ask_user"}, flow.Lifecycle.SuspendOn)
+	assert.Equal(t, []string{"final_answer"}, flow.Lifecycle.SuspendOn)
 	assert.Equal(t, "user", flow.Lifecycle.ReportTo)
 	assert.Equal(t, []string{"coder", "reviewer"}, flow.Spawn.AllowedFlows)
 }

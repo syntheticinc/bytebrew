@@ -85,8 +85,9 @@ func TestTASK05_DeleteNonexistent(t *testing.T) {
 	}
 }
 
-// TC-TASK-06: Respond endpoint — requires an active ask_user flow. Skip if
-// unavailable in this build.
+// TC-TASK-06: Respond endpoint historically delivered ask_user replies. The
+// endpoint and the legacy tool were removed (replaced by show_structured_output
+// in non-blocking form mode). Skip if unavailable in this build.
 func TestTASK06_RespondEndpoint(t *testing.T) {
 	requireSuite(t)
 

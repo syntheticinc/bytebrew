@@ -26,8 +26,8 @@ func AcquireLock(dataDir string) error {
 
 	// Skip check if the recorded PID is our own process (Docker restart scenario)
 	if existing.PID != os.Getpid() && IsProcessAlive(existing.PID) {
-		return fmt.Errorf("server already running (PID %d, port %d). Kill it first or use a different config",
-			existing.PID, existing.Port)
+		return fmt.Errorf("server already running (PID %d, http_port %d). Kill it first or use a different config",
+			existing.PID, existing.HTTPPort)
 	}
 
 	// Stale port file from a crashed/killed server — clean up.

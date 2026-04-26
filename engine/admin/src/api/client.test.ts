@@ -68,14 +68,25 @@ describe('APIClient', () => {
     });
     vi.stubGlobal('fetch', mockFetch);
 
-    const reloadMock = vi.fn();
+    let assignedHref = '';
+    const locationStub = {
+      pathname: '/admin/overview',
+    };
+    Object.defineProperty(locationStub, 'href', {
+      get() {
+        return assignedHref;
+      },
+      set(value: string) {
+        assignedHref = value;
+      },
+    });
     Object.defineProperty(window, 'location', {
-      value: { reload: reloadMock },
+      value: locationStub,
       writable: true,
     });
 
     await expect(api.listAgents()).rejects.toThrow('Unauthorized');
-    expect(reloadMock).toHaveBeenCalledTimes(1);
+    expect(assignedHref).toContain('/login');
     expect(localStorage.getItem('jwt')).toBeNull();
   });
 

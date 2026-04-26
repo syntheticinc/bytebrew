@@ -3,8 +3,9 @@ package tools
 import "github.com/syntheticinc/bytebrew/engine/internal/domain"
 
 // DefaultToolClassifier implements domain.ToolClassifier for the runtime
-// streaming layer. After self-hosted tools were parked, only ask_user still
-// goes through the client-side gRPC proxy; everything else runs server-side.
+// streaming layer. After self-hosted tools were parked and ask_user was
+// removed, every builtin tool runs server-side; the proxied set is empty
+// but kept for forward compatibility (e.g. future client-proxy tools).
 type DefaultToolClassifier struct {
 	proxiedTools    map[string]bool
 	serverSideTools map[string]bool
@@ -13,9 +14,7 @@ type DefaultToolClassifier struct {
 // NewToolClassifier creates a new DefaultToolClassifier with predefined tool classifications.
 func NewToolClassifier() *DefaultToolClassifier {
 	return &DefaultToolClassifier{
-		proxiedTools: map[string]bool{
-			"ask_user": true, // Uses proxy.AskUserQuestionnaire → stream TOOL_CALL
-		},
+		proxiedTools: map[string]bool{},
 		serverSideTools: map[string]bool{
 			"manage_tasks":    true,
 			"manage_subtasks": true,

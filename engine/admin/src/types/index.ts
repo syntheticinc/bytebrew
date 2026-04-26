@@ -461,62 +461,16 @@ export interface UpdateCapabilityRequest {
   enabled?: boolean;
 }
 
-// ============================================================================
-// V2: Memory types
-// ============================================================================
-
-export interface MemoryEntry {
-  id: string;
-  schema_id: string;
-  user_id?: string;
-  content: string;
-  metadata?: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-}
-
 export const CAPABILITY_META: Record<CapabilityType, { label: string; icon: string; description: string }> = {
   memory:        { label: 'Memory',           icon: 'brain',          description: 'Per-schema cross-session persistence' },
   knowledge:     { label: 'Knowledge',        icon: 'book-open',      description: 'RAG sources (PDF, DOCX, TXT, MD, CSV)' },
 };
 
 // ============================================================================
-// V2: Inspect types
+// V2: Sessions
 // ============================================================================
 
-export type InspectStepKind =
-  | 'reasoning'
-  | 'tool_call'
-  | 'memory_recall'
-  | 'knowledge_search'
-  | 'guardrail_check'
-  | 'final_answer'
-  | 'error'
-  | 'escalation'
-  | 'task_dispatch'
-  | 'task_timeout';
-
 export type SessionStatus = 'running' | 'completed' | 'failed' | 'blocked' | 'timeout';
-
-export interface InspectStep {
-  id: string;
-  kind: InspectStepKind;
-  label: string;
-  input?: string;
-  output?: string;
-  duration_ms: number;
-  tokens?: number;
-}
-
-export interface SessionTrace {
-  session_id: string;
-  agent_name: string;
-  status: SessionStatus;
-  steps: InspectStep[];
-  total_duration_ms: number;
-  total_tokens: number;
-  created_at: string;
-}
 
 export interface SessionSummary {
   session_id: string;

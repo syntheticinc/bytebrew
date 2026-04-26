@@ -7,7 +7,7 @@ import (
 func TestTierEnforcer_CE_AllowsAll(t *testing.T) {
 	enforcer := NewTierEnforcer(DeploymentModeCE)
 
-	tools := []string{"ask_user", "memory_recall", "read_file", "execute_command", "web_search"}
+	tools := []string{"show_structured_output", "memory_recall", "read_file", "execute_command", "web_search"}
 	for _, tool := range tools {
 		if err := enforcer.IsAllowed(tool); err != nil {
 			t.Errorf("CE mode should allow %q, got: %v", tool, err)
@@ -29,7 +29,7 @@ func TestTierEnforcer_Cloud_BlocksTier3(t *testing.T) {
 func TestTierEnforcer_Cloud_AllowsTier1(t *testing.T) {
 	enforcer := NewTierEnforcer(DeploymentModeCloud)
 
-	allowed := []string{"ask_user", "show_structured_output", "manage_tasks", "wait", "spawn_agent"}
+	allowed := []string{"show_structured_output", "manage_tasks", "wait", "spawn_agent"}
 	for _, tool := range allowed {
 		if err := enforcer.IsAllowed(tool); err != nil {
 			t.Errorf("Cloud mode should allow Tier 1 %q, got: %v", tool, err)
@@ -62,7 +62,7 @@ func TestTierEnforcer_Cloud_AllowsTier4(t *testing.T) {
 func TestTierEnforcer_FilterAllowed(t *testing.T) {
 	enforcer := NewTierEnforcer(DeploymentModeCloud)
 
-	tools := []string{"ask_user", "read_file", "memory_recall", "execute_command", "web_search"}
+	tools := []string{"show_structured_output", "read_file", "memory_recall", "execute_command", "web_search"}
 	allowed, blocked := enforcer.FilterAllowed(tools)
 
 	if len(allowed) != 3 {
@@ -75,7 +75,7 @@ func TestTierEnforcer_FilterAllowed(t *testing.T) {
 
 func TestClassifyTool(t *testing.T) {
 	// Just verify the convenience wrapper works
-	tier := ClassifyTool("ask_user")
+	tier := ClassifyTool("show_structured_output")
 	if tier != 1 {
 		t.Errorf("expected tier 1, got %d", tier)
 	}

@@ -35,14 +35,6 @@ jobs:
           token: ${{ secrets.WORKSPACE_CLONE_TOKEN }}
           path: bytebrew-cloud-web
 
-      - name: Build web-client assets for engine Dockerfile.test
-        run: |
-          cd bytebrew-cloud-web/cloud-web-spa
-          npm ci
-          npm run build
-          mkdir -p ../../bytebrew/engine/webclient-dist
-          cp -r dist/* ../../bytebrew/engine/webclient-dist/
-
       - name: Start Cloud-full stack (with auto-verify email)
         run: |
           cd bytebrew/local-dev

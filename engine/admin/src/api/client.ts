@@ -32,9 +32,7 @@ import type {
   ForkTemplateResponse,
   PaginatedSessions,
   SessionSummary,
-  SessionTrace,
   UsageData,
-  MemoryEntry,
   Capability,
   CreateCapabilityRequest,
   UpdateCapabilityRequest,
@@ -58,7 +56,7 @@ import {
   MOCK_CONFIG_YAML,
 } from '../mocks/pages';
 import { MOCK_AGENTS } from '../mocks/agents';
-import { MOCK_SESSIONS_LIST, MOCK_TRACE, MOCK_TRACE_ERROR } from '../mocks/inspect';
+import { MOCK_SESSIONS_LIST } from '../mocks/sessions';
 import { MOCK_SCHEMA_TEMPLATES } from '../mocks/schemaTemplates';
 import { mockSchemas, mockAgentRelations } from '../mocks/schemas';
 
@@ -714,16 +712,6 @@ class APIClient {
     }
   }
 
-  getSessionTrace(sessionId: string): Promise<SessionTrace> {
-    if (this.isPrototype) {
-      if (sessionId === MOCK_TRACE_ERROR.session_id) {
-        return this.mock(MOCK_TRACE_ERROR);
-      }
-      return this.mock({ ...MOCK_TRACE, session_id: sessionId });
-    }
-    return this.request<SessionTrace>('GET', `/sessions/${sessionId}`);
-  }
-
   // ─── Widgets ─────────────────────────────────────────────────────────────────
   // V2: widgets are not a domain entity — the admin page is a pure snippet
   // generator that emits a <script> tag client-side. No API calls needed.
@@ -747,30 +735,6 @@ class APIClient {
       });
     }
     return this.request<UsageData>('GET', '/usage');
-  }
-
-  // ─── Memory ──────────────────────────────────────────────────────────────────
-
-  async listMemories(schemaId: string): Promise<MemoryEntry[]> {
-    if (this.isPrototype) {
-      return this.mock<MemoryEntry[]>([
-        { id: 'mem_1', schema_id: schemaId, content: 'User prefers concise responses', metadata: { source: 'conversation' }, created_at: '2026-04-01T10:00:00Z', updated_at: '2026-04-01T10:00:00Z' },
-        { id: 'mem_2', schema_id: schemaId, user_id: 'user_42', content: 'Customer is on Enterprise plan, prefers email communication', metadata: { source: 'crm_sync' }, created_at: '2026-04-02T14:30:00Z', updated_at: '2026-04-02T14:30:00Z' },
-        { id: 'mem_3', schema_id: schemaId, content: 'Product FAQ: refund policy is 30 days', metadata: { source: 'knowledge_base' }, created_at: '2026-04-03T09:15:00Z', updated_at: '2026-04-03T09:15:00Z' },
-        { id: 'mem_4', schema_id: schemaId, user_id: 'user_99', content: 'Reported bug with checkout flow — escalated to engineering', metadata: { source: 'conversation', priority: 'high' }, created_at: '2026-04-04T16:45:00Z', updated_at: '2026-04-04T16:45:00Z' },
-      ]);
-    }
-    return this.request<MemoryEntry[]>('GET', `/schemas/${encodeURIComponent(schemaId)}/memory`);
-  }
-
-  async clearMemories(schemaId: string): Promise<void> {
-    if (this.isPrototype) return this.mock(undefined as unknown as void);
-    return this.request<void>('DELETE', `/schemas/${encodeURIComponent(schemaId)}/memory`);
-  }
-
-  async deleteMemory(schemaId: string, entryId: string): Promise<void> {
-    if (this.isPrototype) return this.mock(undefined as unknown as void);
-    return this.request<void>('DELETE', `/schemas/${encodeURIComponent(schemaId)}/memory/${encodeURIComponent(entryId)}`);
   }
 
   // ─── MCP Catalog ───────────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ import "fmt"
 
 // LifecyclePolicy defines when a flow should suspend and where to report
 type LifecyclePolicy struct {
-	SuspendOn []string // events that cause suspension: "final_answer", "ask_user"
+	SuspendOn []string // events that cause suspension, e.g. "final_answer"
 	ReportTo  string   // "user" or "parent_agent"
 }
 

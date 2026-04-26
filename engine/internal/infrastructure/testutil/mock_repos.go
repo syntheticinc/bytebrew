@@ -380,7 +380,7 @@ func TestFlowConfig() (*config.FlowsConfig, *config.PromptsConfig) {
 					"manage_tasks",
 					"read_file", "write_file", "edit_file",
 					"search_code", "get_project_tree", "smart_search", "grep_search", "glob",
-					"execute_command", "ask_user",
+					"execute_command", "show_structured_output",
 					"spawn_agent",
 					"lsp",
 				},

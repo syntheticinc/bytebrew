@@ -179,7 +179,7 @@ func (s *EventStream) PublishAnswerChunk(chunk string) {
 // before publishing so subscribers see a stable numeric ID.
 func (s *EventStream) persistAndPublish(event *pb.SessionEvent) {
 	if s.store != nil {
-		jsonData := eventformat.SerializeForMobile(event)
+		jsonData := eventformat.SerializeSessionEvent(event)
 		eventType := eventformat.EventTypeString(event.GetType())
 
 		id, err := s.store.Append(s.sessionID, eventType, event, jsonData)
@@ -204,7 +204,7 @@ func (s *EventStream) persistOnly(event *pb.SessionEvent) {
 	if s.store == nil {
 		return
 	}
-	jsonData := eventformat.SerializeForMobile(event)
+	jsonData := eventformat.SerializeSessionEvent(event)
 	eventType := eventformat.EventTypeString(event.GetType())
 
 	id, err := s.store.Append(s.sessionID, eventType, event, jsonData)

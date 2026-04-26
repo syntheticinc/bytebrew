@@ -1,4 +1,4 @@
-package ws
+package eventformat
 
 import (
 	"context"
@@ -7,8 +7,9 @@ import (
 	pb "github.com/syntheticinc/bytebrew/engine/api/proto/gen"
 )
 
-// serializeEvent converts a proto SessionEvent to a flat JSON map.
-func serializeEvent(event *pb.SessionEvent) map[string]interface{} {
+// SerializeSessionEvent converts a proto SessionEvent into the flat JSON shape
+// used for SSE persistence (session_event_log) and admin/widget event payloads.
+func SerializeSessionEvent(event *pb.SessionEvent) map[string]interface{} {
 	switch event.GetType() {
 	case pb.SessionEventType_SESSION_EVENT_ANSWER:
 		return map[string]interface{}{
@@ -60,7 +61,6 @@ func serializeEvent(event *pb.SessionEvent) map[string]interface{} {
 		return map[string]interface{}{
 			"type":     "AskUserRequested",
 			"question": event.GetQuestion(),
-			"call_id":  event.GetCallId(),
 			"options":  event.GetOptions(),
 			"agent_id": event.GetAgentId(),
 		}
@@ -111,7 +111,37 @@ func serializeEvent(event *pb.SessionEvent) map[string]interface{} {
 		}
 
 	default:
-		slog.WarnContext(context.Background(), "[WS] unknown session event type", "type", event.GetType().String())
+		slog.WarnContext(context.Background(), "unknown session event type for serialization", "type", event.GetType().String())
 		return nil
+	}
+}
+
+// EventTypeString returns a human-readable event type string from a proto SessionEventType.
+func EventTypeString(t pb.SessionEventType) string {
+	switch t {
+	case pb.SessionEventType_SESSION_EVENT_USER_MESSAGE:
+		return "user_message"
+	case pb.SessionEventType_SESSION_EVENT_PROCESSING_STARTED:
+		return "processing_started"
+	case pb.SessionEventType_SESSION_EVENT_PROCESSING_STOPPED:
+		return "processing_stopped"
+	case pb.SessionEventType_SESSION_EVENT_ANSWER:
+		return "answer"
+	case pb.SessionEventType_SESSION_EVENT_ANSWER_CHUNK:
+		return "answer_chunk"
+	case pb.SessionEventType_SESSION_EVENT_TOOL_EXECUTION_START:
+		return "tool_call_start"
+	case pb.SessionEventType_SESSION_EVENT_TOOL_EXECUTION_END:
+		return "tool_call_end"
+	case pb.SessionEventType_SESSION_EVENT_REASONING:
+		return "reasoning"
+	case pb.SessionEventType_SESSION_EVENT_ASK_USER:
+		return "ask_user"
+	case pb.SessionEventType_SESSION_EVENT_ERROR:
+		return "error"
+	case pb.SessionEventType_SESSION_EVENT_PLAN_UPDATE:
+		return "plan_update"
+	default:
+		return "unknown"
 	}
 }

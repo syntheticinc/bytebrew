@@ -187,17 +187,13 @@ func TestFlow_ShouldSuspendOn(t *testing.T) {
 		MaxSteps:       10,
 		MaxContextSize: 1000,
 		Lifecycle: LifecyclePolicy{
-			SuspendOn: []string{"final_answer", "ask_user"},
+			SuspendOn: []string{"final_answer"},
 			ReportTo:  "user",
 		},
 	}
 
 	if !flow.ShouldSuspendOn("final_answer") {
 		t.Error("expected flow to suspend on final_answer")
-	}
-
-	if !flow.ShouldSuspendOn("ask_user") {
-		t.Error("expected flow to suspend on ask_user")
 	}
 }
 

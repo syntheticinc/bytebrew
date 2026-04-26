@@ -188,7 +188,7 @@ func TestToFlow_LifecyclePersistent(t *testing.T) {
 	}
 
 	flow := toFlow(rec)
-	assert.Equal(t, []string{"final_answer", "ask_user"}, flow.Lifecycle.SuspendOn)
+	assert.Equal(t, []string{"final_answer"}, flow.Lifecycle.SuspendOn)
 	assert.Equal(t, "user", flow.Lifecycle.ReportTo)
 }
 
@@ -256,7 +256,6 @@ func TestToFlow_ConfirmBeforeInjectsPromptInstruction(t *testing.T) {
 	flow := toFlow(rec)
 	assert.Contains(t, flow.SystemPrompt, "## Confirmation required")
 	assert.Contains(t, flow.SystemPrompt, "delete_user, execute_command")
-	assert.Contains(t, flow.SystemPrompt, "tool_name parameter")
 	assert.True(t, len(flow.SystemPrompt) > len("Base prompt."))
 }
 

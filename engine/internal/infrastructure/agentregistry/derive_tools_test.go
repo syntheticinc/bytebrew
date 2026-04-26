@@ -19,38 +19,38 @@ func TestDeriveRuntimeTools_BaseOnly(t *testing.T) {
 // scenario 2: memory capability enabled → base + memory_recall + memory_store
 func TestDeriveRuntimeTools_MemoryEnabled(t *testing.T) {
 	agent := configrepo.AgentRecord{
-		BuiltinTools: []string{"ask_user"},
+		BuiltinTools: []string{"show_structured_output"},
 	}
 	caps := []configrepo.CapabilityRecord{
 		{Type: "memory", Enabled: true},
 	}
 	got := DeriveRuntimeTools(agent, caps)
-	assert.Equal(t, []string{"ask_user", "memory_recall", "memory_store"}, got)
+	assert.Equal(t, []string{"memory_recall", "memory_store", "show_structured_output"}, got)
 }
 
 // scenario 3: memory capability disabled → base only
 func TestDeriveRuntimeTools_MemoryDisabled(t *testing.T) {
 	agent := configrepo.AgentRecord{
-		BuiltinTools: []string{"ask_user"},
+		BuiltinTools: []string{"show_structured_output"},
 	}
 	caps := []configrepo.CapabilityRecord{
 		{Type: "memory", Enabled: false},
 	}
 	got := DeriveRuntimeTools(agent, caps)
-	assert.Equal(t, []string{"ask_user"}, got)
+	assert.Equal(t, []string{"show_structured_output"}, got)
 }
 
 // scenario 4: knowledge enabled + can_spawn=[worker] → base + knowledge_search + spawn_worker
 func TestDeriveRuntimeTools_KnowledgeAndSpawn(t *testing.T) {
 	agent := configrepo.AgentRecord{
-		BuiltinTools: []string{"ask_user"},
+		BuiltinTools: []string{"show_structured_output"},
 		CanSpawn:     []string{"worker"},
 	}
 	caps := []configrepo.CapabilityRecord{
 		{Type: "knowledge", Enabled: true},
 	}
 	got := DeriveRuntimeTools(agent, caps)
-	assert.Equal(t, []string{"ask_user", "knowledge_search", "spawn_worker"}, got)
+	assert.Equal(t, []string{"knowledge_search", "show_structured_output", "spawn_worker"}, got)
 }
 
 // scenario 5: overlap — agent.BuiltinTools already contains memory_store,
@@ -71,7 +71,7 @@ func TestDeriveRuntimeTools_NoDeduplication(t *testing.T) {
 // scenario 6: order stability — shuffle CanSpawn and capabilities, output is always sorted
 func TestDeriveRuntimeTools_DeterministicOrder(t *testing.T) {
 	agent1 := configrepo.AgentRecord{
-		BuiltinTools: []string{"ask_user"},
+		BuiltinTools: []string{"show_structured_output"},
 		CanSpawn:     []string{"zebra", "alpha"},
 	}
 	caps1 := []configrepo.CapabilityRecord{
@@ -80,7 +80,7 @@ func TestDeriveRuntimeTools_DeterministicOrder(t *testing.T) {
 	}
 
 	agent2 := configrepo.AgentRecord{
-		BuiltinTools: []string{"ask_user"},
+		BuiltinTools: []string{"show_structured_output"},
 		CanSpawn:     []string{"alpha", "zebra"},
 	}
 	caps2 := []configrepo.CapabilityRecord{

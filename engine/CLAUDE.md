@@ -1,21 +1,20 @@
 # ByteBrew Server (Go)
 
 ## Stack
-- Go 1.24+, gRPC bidirectional streaming
+- Go 1.25+, HTTP REST + SSE chat
 - Cloudwego Eino (ReAct agent framework)
-- SQLite + GORM, Viper + YAML config
+- PostgreSQL + GORM, Viper + YAML config
 - OpenAI-compatible API, slog logging
 
 ## Structure
 ```
-bytebrew-srv/
+bytebrew/engine/
 ├── cmd/ce/                # Production entry point (Community Edition)
-├── cmd/testserver/        # Test server with MockChatModel
 ├── internal/
 │   ├── domain/            # Pure entities (NO external deps, NO tags)
 │   ├── usecase/           # Business logic + consumer-side interfaces
 │   ├── service/           # Reusable helpers
-│   ├── delivery/grpc/     # gRPC handlers (thin!)
+│   ├── delivery/http/     # HTTP handlers (thin!)
 │   └── infrastructure/    # DB, APIs, tools, agents
 ├── tests/prompt_regression/ # Prompt regression tests
 └── logs/                  # Session logs + context snapshots
@@ -55,9 +54,7 @@ slog.ErrorContext(ctx, "failed to save", "error", err)
 ## Testing
 
 ### Integration Tests (Level 1)
-- `cmd/testserver/` — сервер с MockChatModel, сценарии через `--scenario`
-- Добавить сценарий: `mock_chat_model.go` (switch by scenario name)
-- Новые tools: `helpers.go` → `testFlowConfig()`
+- `tests/integration/` — integration suite hitting the running engine via HTTP REST + SSE.
 
 ### Prompt Regression (Level 2)
 - `tests/prompt_regression/fixtures/` — JSON fixtures из логов

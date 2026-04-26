@@ -200,7 +200,7 @@ func (r *AgentToolResolver) ResolveForAgent(ctx context.Context, rc ResolveConte
 		}
 		t := factory(rc.Deps)
 		if t == nil {
-			continue // tool disabled (e.g. ask_user in background mode)
+			continue // tool disabled in this dependency context
 		}
 		tools = append(tools, t)
 	}
