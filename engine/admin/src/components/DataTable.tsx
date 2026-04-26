@@ -62,6 +62,7 @@ export default function DataTable<T extends Record<string, any>>({
             return (
               <tr
                 key={rowKey}
+                data-testid={`row-${rowKey}`}
                 onClick={() => onRowClick?.(row)}
                 className={[
                   'transition-all duration-150',

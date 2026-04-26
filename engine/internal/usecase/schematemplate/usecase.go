@@ -34,9 +34,11 @@ type ForkResult struct {
 }
 
 // Forker runs the transactional fork. Implemented by
-// service/schematemplate.ForkService.
+// service/schematemplate.ForkService. The implementation reads tenant_id
+// from ctx (`domain.TenantIDFromContext`) — callers don't pass it
+// separately, matching the rest of the engine's tenant-aware services.
 type Forker interface {
-	Fork(ctx context.Context, tenantID, templateName, newSchemaName string) (*ForkResult, error)
+	Fork(ctx context.Context, templateName, newSchemaName string) (*ForkResult, error)
 }
 
 // Usecase bundles catalog reads + the Fork action so delivery handlers see
@@ -76,8 +78,9 @@ func (u *Usecase) GetByName(ctx context.Context, name string) (*domain.SchemaTem
 }
 
 // ForkTemplate clones the named template into a new tenant-owned schema
-// graph. Delegates to the injected Forker — see
-// service/schematemplate.ForkService for the transactional implementation.
-func (u *Usecase) ForkTemplate(ctx context.Context, tenantID, templateName, newSchemaName string) (*ForkResult, error) {
-	return u.forker.Fork(ctx, tenantID, templateName, newSchemaName)
+// graph. Tenant scope is taken from ctx by the underlying Forker.
+// Delegates to the injected Forker — see service/schematemplate.ForkService
+// for the transactional implementation.
+func (u *Usecase) ForkTemplate(ctx context.Context, templateName, newSchemaName string) (*ForkResult, error) {
+	return u.forker.Fork(ctx, templateName, newSchemaName)
 }

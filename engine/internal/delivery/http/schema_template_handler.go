@@ -52,7 +52,7 @@ type ForkTemplateResponse struct {
 type SchemaTemplateUsecase interface {
 	List(ctx context.Context, category, query string) ([]domain.SchemaTemplate, error)
 	GetByName(ctx context.Context, name string) (*domain.SchemaTemplate, error)
-	ForkTemplate(ctx context.Context, tenantID, templateName, newSchemaName string) (*ucschematemplate.ForkResult, error)
+	ForkTemplate(ctx context.Context, templateName, newSchemaName string) (*ucschematemplate.ForkResult, error)
 }
 
 // SchemaTemplateHandler serves /api/v1/schema-templates.
@@ -140,13 +140,10 @@ func (h *SchemaTemplateHandler) Fork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// tenantID is threaded through for forward compatibility — the V2
-	// current schema has no tenant_id column on schemas/agents, but the
-	// target schema will add it. Leaving the plumbing in place means no
-	// breaking API change when that lands.
-	tenantID := domain.TenantIDFromContext(r.Context())
-
-	forked, err := h.uc.ForkTemplate(r.Context(), tenantID, name, req.SchemaName)
+	// Tenant scope is read inside the service via
+	// domain.TenantIDFromContext(ctx) — same pattern as every other
+	// tenant-aware handler in this package.
+	forked, err := h.uc.ForkTemplate(r.Context(), name, req.SchemaName)
 	switch {
 	case errors.Is(err, svcschematemplate.ErrTemplateNotFound):
 		writeJSONError(w, http.StatusNotFound, "template not found")

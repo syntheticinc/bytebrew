@@ -531,6 +531,7 @@ function Step2Template({
             <button
               key={t.id}
               type="button"
+              data-testid={`template-${t.id}`}
               onClick={() => setSelected(t.id)}
               disabled={creating}
               className={`text-left p-4 rounded-card border transition-colors ${

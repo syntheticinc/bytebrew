@@ -69,14 +69,17 @@ func NewForkService(db *gorm.DB, repo TemplateReader) *ForkService {
 	return &ForkService{db: db, repo: repo}
 }
 
-// Fork clones `templateName` into a new schema called `newSchemaName`. The
-// optional `tenantID` is accepted for future per-tenant ownership (V2
-// current schema keeps single-tenant columns — the field is threaded
-// through for forward compatibility but not persisted today).
+// Fork clones `templateName` into a new schema called `newSchemaName`,
+// scoped to the tenant carried in `ctx` (matches the rest of the engine's
+// services — tenant_id is read from context, never passed as an argument).
+// The new schema, agents, capabilities and relations inherit that tenant_id
+// so subsequent tenant-filtered queries (`GET /schemas`, `GET /agents`) can
+// see the freshly forked rows.
 //
 // All writes happen inside a single transaction; any error rolls back the
 // entire fork so a failed attempt never leaves half-built rows.
-func (s *ForkService) Fork(ctx context.Context, tenantID, templateName, newSchemaName string) (*ForkedSchema, error) {
+func (s *ForkService) Fork(ctx context.Context, templateName, newSchemaName string) (*ForkedSchema, error) {
+	tenantID := domain.TenantIDFromContext(ctx)
 	newSchemaName = strings.TrimSpace(newSchemaName)
 	if newSchemaName == "" {
 		return nil, fmt.Errorf("schema name is required")
@@ -101,19 +104,23 @@ func (s *ForkService) Fork(ctx context.Context, tenantID, templateName, newSchem
 	var result ForkedSchema
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Guard against a duplicate schema name up front — the unique index
-		// would catch it on insert, but the early check gives a clean
-		// typed error for the HTTP 409 path.
+		// (idx_schemas_tenant_name) would catch it on insert, but the early
+		// check gives a clean typed error for the HTTP 409 path. Scoping by
+		// tenant_id mirrors the index, so two tenants can each fork the
+		// same template name independently.
 		var existing int64
-		if err := tx.Model(&models.SchemaModel{}).
-			Where("name = ?", newSchemaName).
-			Count(&existing).Error; err != nil {
+		q := tx.Model(&models.SchemaModel{}).Where("name = ?", newSchemaName)
+		if tenantID != "" {
+			q = q.Where("tenant_id = ?", tenantID)
+		}
+		if err := q.Count(&existing).Error; err != nil {
 			return fmt.Errorf("check schema name: %w", err)
 		}
 		if existing > 0 {
 			return ErrSchemaNameTaken
 		}
 
-		forked, err := s.forkInTx(tx, tmpl, newSchemaName)
+		forked, err := s.forkInTx(tx, tenantID, tmpl, newSchemaName)
 		if err != nil {
 			return err
 		}
@@ -127,12 +134,16 @@ func (s *ForkService) Fork(ctx context.Context, tenantID, templateName, newSchem
 }
 
 // forkInTx performs the actual row-creation inside an open transaction. All
-// errors propagate to the outer Transaction closure → rollback.
-func (s *ForkService) forkInTx(tx *gorm.DB, tmpl *domain.SchemaTemplate, newSchemaName string) (ForkedSchema, error) {
+// errors propagate to the outer Transaction closure → rollback. Every
+// row written here carries `tenantID` so tenant-filtered listings can see
+// the fork (the column default is the single-tenant sentinel UUID, which
+// would otherwise hide the rows from a real tenant).
+func (s *ForkService) forkInTx(tx *gorm.DB, tenantID string, tmpl *domain.SchemaTemplate, newSchemaName string) (ForkedSchema, error) {
 	def := tmpl.Definition
 
 	// 1. Create the schema row.
 	schema := models.SchemaModel{
+		TenantID:    tenantID,
 		Name:        newSchemaName,
 		Description: tmpl.Description,
 	}
@@ -149,10 +160,11 @@ func (s *ForkService) forkInTx(tx *gorm.DB, tmpl *domain.SchemaTemplate, newSche
 	for _, a := range def.Agents {
 		newAgentName := fmt.Sprintf("%s__%s", newSchemaName, a.Name)
 		model := models.AgentModel{
-			Name:         newAgentName,
-			SystemPrompt: a.SystemPrompt,
-			Lifecycle:    "persistent",
-			ToolExecution: "sequential",
+			TenantID:        tenantID,
+			Name:            newAgentName,
+			SystemPrompt:    a.SystemPrompt,
+			Lifecycle:       "persistent",
+			ToolExecution:   "sequential",
 			MaxContextSize:  16000,
 			MaxTurnDuration: 120,
 		}
@@ -173,10 +185,11 @@ func (s *ForkService) forkInTx(tx *gorm.DB, tmpl *domain.SchemaTemplate, newSche
 				configJSON = string(raw)
 			}
 			capModel := models.CapabilityModel{
-				AgentID: model.ID,
-				Type:    cap.Type,
-				Config:  configJSON,
-				Enabled: true,
+				TenantID: tenantID,
+				AgentID:  model.ID,
+				Type:     cap.Type,
+				Config:   configJSON,
+				Enabled:  true,
 			}
 			if err := tx.Create(&capModel).Error; err != nil {
 				return ForkedSchema{}, fmt.Errorf("attach capability %q to agent %q: %w", cap.Type, newAgentName, err)
@@ -208,6 +221,7 @@ func (s *ForkService) forkInTx(tx *gorm.DB, tmpl *domain.SchemaTemplate, newSche
 			return ForkedSchema{}, fmt.Errorf("relation target %q: %w", rel.Target, ErrInvalidTemplate)
 		}
 		relModel := models.AgentRelationModel{
+			TenantID:      tenantID,
 			SchemaID:      schema.ID,
 			SourceAgentID: sourceID,
 			TargetAgentID: targetID,

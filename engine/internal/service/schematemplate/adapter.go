@@ -22,8 +22,8 @@ func NewUsecaseForkerAdapter(svc *ForkService) *UsecaseForkerAdapter {
 }
 
 // Fork implements usecase/schematemplate.Forker.
-func (a *UsecaseForkerAdapter) Fork(ctx context.Context, tenantID, templateName, newSchemaName string) (*ucschematemplate.ForkResult, error) {
-	forked, err := a.svc.Fork(ctx, tenantID, templateName, newSchemaName)
+func (a *UsecaseForkerAdapter) Fork(ctx context.Context, templateName, newSchemaName string) (*ucschematemplate.ForkResult, error) {
+	forked, err := a.svc.Fork(ctx, templateName, newSchemaName)
 	if err != nil {
 		return nil, err
 	}
