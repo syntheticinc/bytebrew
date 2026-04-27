@@ -27,11 +27,8 @@ func DeriveRuntimeTools(agent configrepo.AgentRecord, capabilities []configrepo.
 		add(ct.Name)
 	}
 
-	if len(agent.CanSpawn) > 0 {
-		add("spawn_agent")
-		for _, name := range agent.CanSpawn {
-			add("spawn_" + name)
-		}
+	for _, name := range agent.CanSpawn {
+		add("spawn_" + name)
 	}
 
 	for _, c := range capabilities {

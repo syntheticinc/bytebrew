@@ -25,7 +25,7 @@ func createModelForTest(t *testing.T, name string) modelCreateResp {
 		mustJSON(map[string]any{
 			"name":       name,
 			"type":       "openai_compatible",
-			"provider":   "openrouter",
+			"kind":       "chat",
 			"model_name": "test-model",
 			"api_key":    "test-key",
 			"base_url":   "https://api.test.com",
@@ -83,7 +83,7 @@ func TestMDL03_UpdateModel(t *testing.T) {
 		mustJSON(map[string]any{
 			"name":        m.Name,
 			"type":        "openai_compatible",
-			"provider":    "openrouter",
+			"kind":        "chat",
 			"model_name":  "test-model",
 			"api_key":     "test-key",
 			"base_url":    "https://api.test.com",

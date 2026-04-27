@@ -9,12 +9,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// resilienceEndpoints is the canonical list of read endpoints.
+// resilienceEndpoints is the canonical list of read endpoints. Only
+// circuit-breakers is registered in V2 — dead-letter / heartbeats /
+// stuck-agents were removed.
 var resilienceEndpoints = []string{
 	"/api/v1/resilience/circuit-breakers",
-	"/api/v1/resilience/dead-letter",
-	"/api/v1/resilience/heartbeats",
-	"/api/v1/resilience/stuck-agents",
 }
 
 // TC-RES-01: Circuit breakers list → 200 JSON.
@@ -29,33 +28,6 @@ func TestRES01_CircuitBreakers(t *testing.T) {
 		assert.True(t, first == '[' || first == '{',
 			"circuit-breakers response should be JSON: %s", body)
 	}
-}
-
-// TC-RES-02: Dead letter queue list → 200.
-func TestRES02_DeadLetter(t *testing.T) {
-	requireSuite(t)
-
-	resp := do(t, http.MethodGet, "/api/v1/resilience/dead-letter", nil, adminToken)
-	_ = readBody(t, resp)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-}
-
-// TC-RES-03: Heartbeats list → 200.
-func TestRES03_Heartbeats(t *testing.T) {
-	requireSuite(t)
-
-	resp := do(t, http.MethodGet, "/api/v1/resilience/heartbeats", nil, adminToken)
-	_ = readBody(t, resp)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-}
-
-// TC-RES-04: Stuck agents list → 200.
-func TestRES04_StuckAgents(t *testing.T) {
-	requireSuite(t)
-
-	resp := do(t, http.MethodGet, "/api/v1/resilience/stuck-agents", nil, adminToken)
-	_ = readBody(t, resp)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
 // TC-RES-05: Reset an unknown circuit breaker → 200 (idempotent) or 404.

@@ -12,7 +12,13 @@ test.describe('Circuit breaker manual reset', () => {
     }
     expect(res.status()).toBe(200);
     const body = await res.json();
-    expect(Array.isArray(body) || Array.isArray(body.circuit_breakers) || Array.isArray(body.data)).toBe(true);
+    // Engine returns { "breakers": [...] }; legacy shapes also accepted.
+    expect(
+      Array.isArray(body) ||
+        Array.isArray(body.breakers) ||
+        Array.isArray(body.circuit_breakers) ||
+        Array.isArray(body.data)
+    ).toBe(true);
   });
 
   test('POST /resilience/circuit-breakers/{name}/reset returns 200 or 404', async ({ request, adminToken }) => {

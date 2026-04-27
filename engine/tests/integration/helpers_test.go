@@ -190,9 +190,8 @@ var tenantTables = []string{
 	"agents",
 	"mcp_servers",
 	"settings",
-	"engine_tasks",
+	"tasks",
 	"audit_logs",
-	"tool_call_events",
 }
 
 // ensureTableName guards truncateTables against typos / rename drift and

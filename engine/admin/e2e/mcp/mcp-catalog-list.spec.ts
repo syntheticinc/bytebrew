@@ -16,15 +16,17 @@ test.describe('MCP catalog — list', () => {
     await page.goto('/admin/mcp');
     await page.waitForLoadState('networkidle');
 
-    const catalogBtn = page.locator('button:has-text("catalog"), button:has-text("Catalog"), a:has-text("catalog")').first();
+    const catalogBtn = page.locator('button:has-text("Add from Catalog"), button:has-text("catalog"), button:has-text("Catalog")').first();
     if (await catalogBtn.count() === 0) {
       test.skip(true, 'No catalog button found — MCP catalog UI may not be implemented yet');
       return;
     }
     await catalogBtn.click();
 
-    // Modal or panel should open
-    const modal = page.locator('[role="dialog"], [data-testid="catalog-modal"], .modal').first();
+    // Native <dialog> element opens via .showModal() — match by element name +
+    // ARIA role + class fallbacks. We don't add a specific test-id to keep
+    // the production-side change surface minimal.
+    const modal = page.locator('dialog[open], [role="dialog"], [data-testid="catalog-modal"], .modal').first();
     await expect(modal).toBeVisible({ timeout: 5000 });
   });
 

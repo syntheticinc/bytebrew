@@ -116,30 +116,27 @@ func TestSCH05_DeleteSchema(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, getResp.StatusCode)
 }
 
-// TC-SCH-06: Create one agent-relation with an entry agent.
+// TC-SCH-06: Create a delegation relation source→target between two agents.
 //
-// V2 agent-relations use agent *names* as source/target (the admin API
-// normalises IDs). A single-node "self-edge" satisfies the minimum schema.
+// V2 agent-relations API: POST /api/v1/schemas/{id}/agent-relations with
+// {"source": <name|uuid>, "target": <name|uuid>}. Self-loops are rejected
+// ("source and target must be different agents"), so we use two agents.
+// The created relation auto-promotes source to schema.entry_agent_id when
+// none is set.
 func TestSCH06_EntryAgentRelation(t *testing.T) {
 	requireSuite(t)
 	t.Cleanup(func() { truncateTables(t) })
 
-	agentName := "tc-sch-06-entry"
-	_ = createAgentForTest(t, agentName)
+	_ = createAgentForTest(t, "tc-sch-06-entry")
+	_ = createAgentForTest(t, "tc-sch-06-target")
 	s := createSchemaForTest(t, map[string]any{"name": "tc-sch-06-schema"})
 
 	resp := do(t, http.MethodPost, "/api/v1/schemas/"+s.ID+"/agent-relations",
 		mustJSON(map[string]any{
-			"source_agent_id": agentName,
-			"target_agent_id": agentName,
-			"label":           "entry",
+			"source": "tc-sch-06-entry",
+			"target": "tc-sch-06-target",
 		}), adminToken)
-	body := readBody(t, resp)
-	// Some builds require a different shape; skip gracefully if validation
-	// rejects the single-node edge.
-	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-		t.Skipf("agent-relations create rejected (%d): %s — entry-agent shape differs in this build", resp.StatusCode, string(body))
-	}
+	_ = readBody(t, resp)
 	assertStatusAny(t, resp, http.StatusOK, http.StatusCreated)
 }
 
@@ -154,14 +151,10 @@ func TestSCH07_TransferEdge(t *testing.T) {
 
 	resp := do(t, http.MethodPost, "/api/v1/schemas/"+s.ID+"/agent-relations",
 		mustJSON(map[string]any{
-			"source_agent_id": "tc-sch-07-a",
-			"target_agent_id": "tc-sch-07-b",
-			"label":           "transfer",
+			"source": "tc-sch-07-a",
+			"target": "tc-sch-07-b",
 		}), adminToken)
-	body := readBody(t, resp)
-	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-		t.Skipf("transfer-edge rejected (%d): %s", resp.StatusCode, string(body))
-	}
+	_ = readBody(t, resp)
 	assertStatusAny(t, resp, http.StatusOK, http.StatusCreated)
 }
 
@@ -176,14 +169,10 @@ func TestSCH08_DeleteRelation(t *testing.T) {
 
 	createResp := do(t, http.MethodPost, "/api/v1/schemas/"+s.ID+"/agent-relations",
 		mustJSON(map[string]any{
-			"source_agent_id": "tc-sch-08-a",
-			"target_agent_id": "tc-sch-08-b",
-			"label":           "transfer",
+			"source": "tc-sch-08-a",
+			"target": "tc-sch-08-b",
 		}), adminToken)
 	createBody := readBody(t, createResp)
-	if createResp.StatusCode >= 400 && createResp.StatusCode < 500 {
-		t.Skipf("create rejected: %d %s", createResp.StatusCode, string(createBody))
-	}
 	assertStatusAny(t, createResp, http.StatusOK, http.StatusCreated)
 
 	var parsed struct {

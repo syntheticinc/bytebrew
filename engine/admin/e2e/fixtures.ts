@@ -86,6 +86,29 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         session.engineToken = engine.body?.data?.token ?? engine.body?.data?.engine_token ?? engine.body?.token ?? engine.body?.engine_token ?? engine.body?.access_token ?? '';
         session.available = !!session.engineToken;
         if (!session.available) session.blockedReason = 'engine_token_empty';
+        // Seed a default chat model so agent creation (which now requires a
+        // resolvable model — see resolveAgentModel C1 fix) succeeds without
+        // each test repeating the boilerplate. The model carries
+        // is_default=true so resolveAgentModel falls back to it when
+        // model/model_id is omitted.
+        if (session.available) {
+          const seed = await request.post(`${ENGINE_API}/models`, {
+            headers: { Authorization: `Bearer ${session.engineToken}`, 'Content-Type': 'application/json' },
+            data: {
+              name: 'e2e-default-chat',
+              type: 'openai_compatible',
+              kind: 'chat',
+              model_name: 'e2e-test-model',
+              api_key: 'e2e-test-key',
+              base_url: 'https://api.test.example',
+              is_default: true,
+            },
+          });
+          if (seed.status() !== 201 && seed.status() !== 200 && seed.status() !== 409) {
+            session.blockedReason = `seed_default_model_${seed.status()}: ${(await seed.text()).slice(0, 200)}`;
+            session.available = false;
+          }
+        }
       } catch (e) {
         session.blockedReason = (e as Error).message;
       }

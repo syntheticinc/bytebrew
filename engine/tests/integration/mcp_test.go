@@ -83,9 +83,10 @@ func TestMCP03_UpdateServer(t *testing.T) {
 
 	updResp := do(t, http.MethodPut, "/api/v1/mcp-servers/"+mcpPathKey(m),
 		mustJSON(map[string]any{
-			"name": m.Name,
-			"type": "http",
-			"url":  "http://updated.example.com",
+			"name":      m.Name,
+			"type":      "http",
+			"url":       "http://updated.example.com",
+			"auth_type": "none",
 		}), adminToken)
 	_ = readBody(t, updResp)
 	assertStatusAny(t, updResp, http.StatusOK, http.StatusNoContent)

@@ -166,7 +166,7 @@ func TestCONC05_ConcurrentModelCreate(t *testing.T) {
 				mustJSON(map[string]any{
 					"name":       fmt.Sprintf("tc-conc-05-%d", i),
 					"type":       "openai_compatible",
-					"provider":   "openrouter",
+					"kind":       "chat",
 					"model_name": "test-model",
 					"api_key":    "k",
 					"base_url":   "https://api.test.com",

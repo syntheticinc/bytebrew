@@ -33,6 +33,7 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/auth"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
 	ceserver "github.com/syntheticinc/bytebrew/engine/pkg/server"
 )
 
@@ -191,7 +192,32 @@ func setupSuite(ctx context.Context) (func(), error) {
 	// going through /auth/login. Signed with the engine's Ed25519 private key.
 	adminToken = tokenFor("local-admin")
 
+	// Seed a tenant-default chat model. Engine refuses to create agents
+	// without one (resolveAgentModel returns 400 — see C1 fix). This model
+	// survives truncateTables (llm_provider_models is intentionally not in
+	// the tenant-truncate list), so every test downstream of suite setup
+	// can call createAgentForTest without seeding its own model.
+	if err := seedDefaultChatModel(db); err != nil {
+		return cleanup, fmt.Errorf("seed default chat model: %w", err)
+	}
+
 	return cleanup, nil
+}
+
+// seedDefaultChatModel inserts a single chat model with is_default=true so
+// that POST /api/v1/agents (which calls resolveAgentModel) can resolve a
+// tenant default without a per-test setup step.
+func seedDefaultChatModel(db *gorm.DB) error {
+	m := models.LLMProviderModel{
+		Name:      "integration-default-chat",
+		Type:      "openai_compatible",
+		Kind:      "chat",
+		IsDefault: true,
+		ModelName: "test-chat-model",
+		BaseURL:   "https://api.test.example",
+		Config:    "{}",
+	}
+	return db.Create(&m).Error
 }
 
 // cleanupStack is a tiny LIFO teardown stack. Panics in one cleanup don't
