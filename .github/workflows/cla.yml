@@ -22,7 +22,7 @@ jobs:
           sparse-checkout: .github/cla-signers.json
 
       - name: Check CLA status
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
@@ -111,7 +111,7 @@ jobs:
           ref: main
 
       - name: Record CLA signature
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
