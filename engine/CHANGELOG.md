@@ -46,16 +46,3 @@ prior production clients, no upgrade path.
 - All `slog` calls use the `*Context` variant; ctx-lint + slog-lint enforce
   in CI.
 
-### Metering + License (EE/Cloud)
-- Metering events: `{event_id, tenant_id, occurred_at, steps, model}`. Landing
-  dedupes on `event_id` (`ON CONFLICT DO NOTHING`) — duplicate POSTs count
-  once.
-- HMAC: dual-secret rotation (`_CURRENT` + `_PREVIOUS`) for zero-downtime
-  90-day rotation windows.
-- License revoke: `POST /api/v1/internal/licenses/{tenant_id}/revoke`
-  flips the subscription to `revoked`; engine enforces within the
-  license-poll window by returning `402 Payment Required`.
-
-### Fail-closed
-- When landing is unreachable, quota/metering calls return `503` immediately.
-  No grace period — billing integrity is the priority.

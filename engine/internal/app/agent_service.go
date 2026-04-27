@@ -13,6 +13,7 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/service/engine"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	"github.com/syntheticinc/bytebrew/engine/pkg/errors"
+	pluginpkg "github.com/syntheticinc/bytebrew/engine/pkg/plugin"
 	"gorm.io/gorm"
 )
 
@@ -43,10 +44,12 @@ type InfraComponentsConfig struct {
 	// request/response logger to every chat model. Sourced from the
 	// bootstrap config (Debug.ModelDebugDir, env BYTEBREW_DEBUG_MODEL).
 	ModelDebugDir string
+	// Plugin is the runtime extension point. nil defaults to pluginpkg.Noop{}.
+	// CE uses Noop so PrepareModelSelector is a no-op.
+	Plugin pluginpkg.Plugin
 }
 
 // NewInfraComponents creates all infrastructure components including WorkManager and AgentPool.
-// License is passed via InfraComponentsConfig; nil means CE mode (no license checks).
 func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 	cfg := icc.Config
 
@@ -60,7 +63,11 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 	slog.InfoContext(context.Background(), "agent service initialized", "model", modelName, "provider", cfg.LLM.DefaultProvider)
 
 	chatModel = wrapWithDebugModel(chatModel, icc.ModelDebugDir)
-	modelSelector := createModelSelector(cfg, chatModel, modelName)
+	plug := icc.Plugin
+	if plug == nil {
+		plug = pluginpkg.Noop{}
+	}
+	modelSelector := createModelSelector(plug, chatModel, modelName)
 
 	// 2. Create model cache (for dynamic model resolution from DB)
 	var modelCache *llm.ModelCache
@@ -134,9 +141,9 @@ func NewInfraComponents(icc InfraComponentsConfig) (*InfraComponents, error) {
 		FlowManager:       ec.FlowManager,
 		AgentToolResolver: ec.AgentToolResolver,
 		ToolDepsProvider:  ec.ToolDepsProvider,
-		ModelName:   modelName,
-		ModelCache:  modelCache,
-		AgentConfig: agentConfig,
+		ModelName:         modelName,
+		ModelCache:        modelCache,
+		AgentConfig:       agentConfig,
 	}, nil
 }
 
@@ -159,4 +166,3 @@ func applyAgentConfigDefaults(agentConfig *config.AgentConfig) *config.AgentConf
 
 	return agentConfig
 }
-

@@ -7,8 +7,8 @@ import (
 	"syscall"
 )
 
-// IsProcessAlive проверяет жив ли процесс по PID.
-// Используется для определения stale port file.
+// IsProcessAlive reports whether a process with the given PID is alive.
+// Used to detect a stale port file.
 func IsProcessAlive(pid int) bool {
 	if pid <= 0 {
 		return false
@@ -19,9 +19,9 @@ func IsProcessAlive(pid int) bool {
 		return false
 	}
 
-	// Signal 0 проверяет существование процесса без отправки сигнала.
-	// nil — процесс существует и доступен.
-	// EPERM — процесс существует, но нет прав (всё равно жив).
+	// Signal 0 checks for process existence without sending an actual signal.
+	// nil — process exists and is accessible.
+	// EPERM — process exists but we lack permission (still alive).
 	err = proc.Signal(syscall.Signal(0))
 	return err == nil || err == syscall.EPERM
 }

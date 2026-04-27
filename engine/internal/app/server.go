@@ -20,9 +20,6 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agentregistry"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/agents/callbacks"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/taskrunner"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/turnexecutorfactory"
-	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/versioncheck"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/audit"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/auth"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/flowregistry"
@@ -33,14 +30,17 @@ import (
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/platform"
-	admintools "github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools/admin"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/portfile"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/taskrunner"
+	admintools "github.com/syntheticinc/bytebrew/engine/internal/infrastructure/tools/admin"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/turnexecutorfactory"
+	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/versioncheck"
 
-	mcpcatalog "github.com/syntheticinc/bytebrew/engine/internal/service/mcp"
-	memorysvc "github.com/syntheticinc/bytebrew/engine/internal/service/memory"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/capability"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/eventstore"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/lifecycle"
+	mcpcatalog "github.com/syntheticinc/bytebrew/engine/internal/service/mcp"
+	memorysvc "github.com/syntheticinc/bytebrew/engine/internal/service/memory"
 
 	"github.com/syntheticinc/bytebrew/engine/internal/service/resilience"
 	"github.com/syntheticinc/bytebrew/engine/internal/service/sessionprocessor"
@@ -82,17 +82,17 @@ type ServerConfig struct {
 }
 
 // Run starts the ByteBrew server with the given configuration.
-// Called from cmd/ce (CE binary) and pkg/server.Run (EE and integration tests).
+// Called from cmd/ce (CE binary) and pkg/server.Run (integration tests).
 func Run(sc ServerConfig) error {
 	if sc.Plugin == nil {
 		sc.Plugin = pluginpkg.Noop{}
 	}
 
-	// Wire the agent-step observer hook so plugins (EE metering, etc.) are
-	// notified after every runtime step. The callbacks package uses a process-
-	// global callback because the StepCounter lives deep in the agent
-	// infrastructure; plumbing a dependency through four constructor layers
-	// for a single observer hook would be disproportionate.
+	// Wire the agent-step observer hook so plugins are notified after every
+	// runtime step. The callbacks package uses a process-global callback
+	// because the StepCounter lives deep in the agent infrastructure;
+	// plumbing a dependency through four constructor layers for a single
+	// observer hook would be disproportionate.
 	plugin := sc.Plugin
 	callbacks.SetStepCallback(func(ctx context.Context) error {
 		return plugin.OnAgentStep(ctx, domain.TenantIDFromContext(ctx), pluginpkg.StepsLimitFromContext(ctx))
@@ -243,22 +243,22 @@ func Run(sc ServerConfig) error {
 			slog.InfoContext(ctx, "Multi-tenant mode: agent registries loaded per-tenant on first request")
 		}
 
-		// Wire the tenant seeder so plugins (EE Cloud provisioning) can populate
-		// newly-created tenants with default data via engine repositories rather
-		// than reimplementing schema/agent creation. CE's Noop plugin ignores
-		// the seeder, so this is safe to wire unconditionally.
+		// Wire the tenant seeder so plugins that handle tenant provisioning can
+		// populate newly-created tenants with default data via engine repositories
+		// rather than reimplementing schema/agent creation. CE's Noop plugin
+		// ignores the seeder, so this is safe to wire unconditionally.
 		sc.Plugin.SetTenantSeeder(&engineTenantSeeder{
 			schemaRepo: configrepo.NewGORMSchemaRepository(pgDB),
 			db:         pgDB,
 		})
 
-		// Wire the schema counter so EE quota middleware can enforce
-		// SchemasLimit without making an internal HTTP sub-request (the old
-		// sub-request design hard-coded the loopback port and silently
-		// failed open whenever the engine bound a non-default port). CE's
-		// Noop plugin ignores the counter — safe to wire unconditionally.
-		// The closure body lives in schema_counter.go so the per-tenant
-		// scope contract has its own test surface.
+		// Wire the schema counter so plugins can enforce per-tenant schema
+		// quotas without making an internal HTTP sub-request (the old sub-request
+		// design hard-coded the loopback port and silently failed open whenever
+		// the engine bound a non-default port). CE's Noop plugin ignores the
+		// counter — safe to wire unconditionally. The closure body lives in
+		// schema_counter.go so the per-tenant scope contract has its own test
+		// surface.
 		sc.Plugin.SetSchemaCounter(NewSchemaCounter(configrepo.NewGORMSchemaRepository(pgDB)))
 	}
 
@@ -266,6 +266,7 @@ func Run(sc ServerConfig) error {
 	infraCfg := InfraComponentsConfig{
 		Config: *cfg,
 		DB:     pgDB,
+		Plugin: sc.Plugin,
 	}
 	if bootstrapCfg != nil {
 		infraCfg.ModelDebugDir = bootstrapCfg.Debug.ModelDebugDir
@@ -303,9 +304,16 @@ func Run(sc ServerConfig) error {
 	// Seed bootstrap data (builder-assistant, MCP catalog, schema templates, BYOK).
 	// Must run BEFORE the MCP connect pass so the seeded bytebrew-docs entry is
 	// included in the first connect cycle. Helper lives in seed.go.
+	//
+	// docsMCPURL precedence: env override (BYTEBREW_DOCS_MCP_URL via bootstrap)
+	// wins over plugin default. CE's Noop returns "" so the seeder no-ops when
+	// nothing is configured.
 	var docsMCPURL string
 	if bootstrapCfg != nil {
 		docsMCPURL = bootstrapCfg.MCP.DocsURL
+	}
+	if docsMCPURL == "" {
+		docsMCPURL = sc.Plugin.DocsMCPEndpoint()
 	}
 	bootstrapSeeds(ctx, pgDB, cfg.BYOK, docsMCPURL)
 
@@ -330,9 +338,9 @@ func Run(sc ServerConfig) error {
 	// Admin tools (admin_list_agents, admin_create_schema, etc.) are tenant-
 	// agnostic at registration time — they scope queries via ctx at call time
 	// using domain.TenantIDFromContext. Previously this branch was gated on
-	// agentRegistry != nil, which in multi-tenant mode (sc.RequireTenant=true,
-	// i.e. Cloud) is always nil because Single() is only called in single-
-	// tenant mode. That caused builder-assistant to crash on every turn with
+	// agentRegistry != nil, which in multi-tenant mode (sc.RequireTenant=true)
+	// is always nil because Single() is only called in single-tenant mode.
+	// That caused builder-assistant to crash on every turn with
 	// "unknown builtin tool: admin_list_agents" since the builtin store was
 	// never populated. Registration only needs pgDB — the repos it captures
 	// are the global DB handles that honor the request context.
@@ -341,13 +349,13 @@ func Run(sc ServerConfig) error {
 		// Wire admin tools into builtin store for builder-assistant.
 		if components.AgentToolResolver != nil {
 			admintools.RegisterAdminTools(components.AgentToolResolver.BuiltinStore(), admintools.AdminToolDependencies{
-				AgentRepo:      newAdminAgentRepoAdapter(configrepo.NewGORMAgentRepository(pgDB)),
-				SchemaRepo:     newAdminSchemaRepoAdapter(configrepo.NewGORMSchemaRepository(pgDB)),
-				MCPServerRepo:  newAdminMCPServerRepoAdapter(configrepo.NewGORMMCPServerRepository(pgDB)),
-				ModelRepo:      newAdminModelRepoAdapter(configrepo.NewGORMLLMProviderRepository(pgDB)),
+				AgentRepo:         newAdminAgentRepoAdapter(configrepo.NewGORMAgentRepository(pgDB)),
+				SchemaRepo:        newAdminSchemaRepoAdapter(configrepo.NewGORMSchemaRepository(pgDB)),
+				MCPServerRepo:     newAdminMCPServerRepoAdapter(configrepo.NewGORMMCPServerRepository(pgDB)),
+				ModelRepo:         newAdminModelRepoAdapter(configrepo.NewGORMLLMProviderRepository(pgDB)),
 				AgentRelationRepo: newAdminAgentRelationRepoAdapter(configrepo.NewGORMAgentRelationRepository(pgDB), configrepo.NewGORMAgentRepository(pgDB)),
-				SessionRepo:    newAdminSessionRepoAdapter(configrepo.NewGORMSessionRepository(pgDB)),
-				CapabilityRepo: newAdminCapabilityRepoAdapter(configrepo.NewGORMCapabilityRepository(pgDB)),
+				SessionRepo:       newAdminSessionRepoAdapter(configrepo.NewGORMSessionRepository(pgDB)),
+				CapabilityRepo:    newAdminCapabilityRepoAdapter(configrepo.NewGORMCapabilityRepository(pgDB)),
 				Reloader: func() {
 					if registryMgr != nil {
 						registryMgr.InvalidateAll()
@@ -444,7 +452,7 @@ func Run(sc ServerConfig) error {
 	//   Single-port (default): all routes on one port (backward compatible)
 	//   Two-port: external (data plane) + internal (control plane)
 	var httpServer *deliveryhttp.Server         // main server (single-port) or external (two-port)
-	var internalHTTPServer *deliveryhttp.Server  // nil in single-port mode
+	var internalHTTPServer *deliveryhttp.Server // nil in single-port mode
 	var httpPort int
 	var internalHTTPPort int
 	var httpAuthMW *deliveryhttp.AuthMiddleware
@@ -502,9 +510,9 @@ func Run(sc ServerConfig) error {
 		//
 		// Local mode: engine generates its own Ed25519 keypair on first boot,
 		// signs short-lived admin sessions via POST /auth/local-session.
-		// External mode (Cloud): engine loads the issuer's public key; token
-		// issuance is owned by the landing service.
-		// The plugin may override the default verifier entirely (EE) — the
+		// External mode: engine loads a pre-provisioned public key; token
+		// issuance is owned by an external issuer.
+		// The plugin may override the default verifier entirely — the
 		// middleware uses whatever it gets as long as the interface matches.
 		var jwtVerifier pluginpkg.JWTVerifier
 		var localSessionPrivKey []byte // non-nil in local mode, enables /auth/local-session route below
@@ -561,8 +569,8 @@ func Run(sc ServerConfig) error {
 
 		// Local admin session issuer (public) — only wired in local auth mode.
 		// Signs Ed25519 admin sessions with the local keypair generated at
-		// boot. External/Cloud mode never exposes this route; token issuance
-		// is owned by the landing service.
+		// boot. External mode never exposes this route; token issuance
+		// is owned by an external issuer.
 		var localSessionHandler *deliveryhttp.LocalSessionHandler
 		if localSessionPrivKey != nil {
 			localSessionTTL := bootstrapCfg.Security.LocalSessionTTL
@@ -617,7 +625,6 @@ func Run(sc ServerConfig) error {
 
 		// Serve Admin Dashboard SPA — internal only (extracted to spa_handler.go).
 		mountSPA(internalRouter, "/admin", "/usr/share/bytebrew/admin")
-
 
 		// Serve widget.js (static file) — external only (or both in single-port mode).
 		// V2: the admin generates a <script src="…/widget.js" data-agent="…" …>
@@ -889,7 +896,7 @@ func Run(sc ServerConfig) error {
 
 	loggerInstance.InfoContext(ctx, "Shutting down ByteBrew Server...")
 
-	// Stop plugin resources (license watcher, etc.) — no-op in CE.
+	// Stop plugin resources — no-op in CE.
 	sc.Plugin.Stop()
 	slog.InfoContext(context.Background(), "plugin stopped")
 
@@ -942,4 +949,3 @@ func ensureManagedDirs(dataDir string) error {
 	}
 	return nil
 }
-

@@ -1,44 +1,6 @@
 package domain
 
-import (
-	"context"
-	"fmt"
-	"time"
-)
-
-// Tenant represents a customer workspace in Cloud mode.
-type Tenant struct {
-	ID        string
-	Email     string
-	Plan      CloudPlan
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
-// NewTenant creates a new Tenant with validation.
-func NewTenant(email string, plan CloudPlan) (*Tenant, error) {
-	t := &Tenant{
-		Email:     email,
-		Plan:      plan,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-	if err := t.Validate(); err != nil {
-		return nil, err
-	}
-	return t, nil
-}
-
-// Validate validates the Tenant.
-func (t *Tenant) Validate() error {
-	if t.Email == "" {
-		return fmt.Errorf("tenant email is required")
-	}
-	if !t.Plan.IsValid() {
-		return fmt.Errorf("invalid plan: %s", t.Plan)
-	}
-	return nil
-}
+import "context"
 
 // CETenantID is the fixed tenant UUID used in Community Edition (single-tenant) mode.
 // All tenant-scoped tables default to this value so CE works without multi-tenancy.

@@ -141,11 +141,11 @@ func TestSerializeDeserializeSchemaMessages_Unicode(t *testing.T) {
 	messages := []*schema.Message{
 		{
 			Role:    schema.User,
-			Content: "Привет! Как дела? 你好！",
+			Content: "Привет! Как дела? 你好！ مرحبا! こんにちは！",
 		},
 		{
 			Role:    schema.Assistant,
-			Content: "Всё отлично, спасибо! 很好，谢谢！",
+			Content: "Всё отлично, спасибо! 很好，谢谢！ شكرا جزيلا! ありがとう！",
 		},
 	}
 
@@ -158,9 +158,9 @@ func TestSerializeDeserializeSchemaMessages_Unicode(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, restored, 2)
 
-	// Verify unicode preserved
-	assert.Equal(t, "Привет! Как дела? 你好！", restored[0].Content)
-	assert.Equal(t, "Всё отлично, спасибо! 很好，谢谢！", restored[1].Content)
+	// Verify unicode preserved across cyrillic, chinese, arabic, japanese.
+	assert.Equal(t, "Привет! Как дела? 你好！ مرحبا! こんにちは！", restored[0].Content)
+	assert.Equal(t, "Всё отлично, спасибо! 很好，谢谢！ شكرا جزيلا! ありがとう！", restored[1].Content)
 }
 
 func TestAgentContextSnapshotToModel_Roundtrip(t *testing.T) {

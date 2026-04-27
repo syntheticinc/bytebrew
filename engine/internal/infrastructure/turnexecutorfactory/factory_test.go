@@ -297,7 +297,7 @@ func TestFactory_CreateForSession_NilProxy(t *testing.T) {
 	require.NotNil(t, executor, "TurnExecutor should not be nil even with nil proxy")
 }
 
-// --- Safety net tests for context reminders (Этап 0) ---
+// --- Safety net tests for context reminders (Phase 0) ---
 
 // mockContextReminderForFactory implements turnexecutor.ContextReminderProvider for testing
 type mockContextReminderForFactory struct {

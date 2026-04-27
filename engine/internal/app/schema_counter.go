@@ -14,7 +14,7 @@ type SchemaListerByTenant interface {
 	List(ctx context.Context) ([]configrepo.SchemaRecord, error)
 }
 
-// NewSchemaCounter returns a SchemaCounterFunc for the EE/Cloud quota
+// NewSchemaCounter returns a SchemaCounterFunc for plugin-provided quota
 // middleware to enforce SchemasLimit. Empty tenant_id short-circuits to 0
 // (CE single-tenant has no quota plugin wired).
 func NewSchemaCounter(repo SchemaListerByTenant) pluginpkg.SchemaCounterFunc {

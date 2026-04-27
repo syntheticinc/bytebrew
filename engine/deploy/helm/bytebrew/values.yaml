@@ -46,7 +46,7 @@ config:
   # local   — engine auto-generates an Ed25519 keypair on first boot and stores it
   #           under auth.jwtKeysPath (must be a persistent volume). Single-replica only.
   # external — engine receives only the public key via auth.jwtPublicKeyPath; the
-  #           private key lives in an external identity service (e.g. bytebrew Cloud).
+  #           private key lives in an external identity service.
   auth:
     mode: "local"
     # PVC mount path where the local-mode keypair is persisted.
@@ -55,9 +55,6 @@ config:
     # Path to the Ed25519 public-key file (hex-encoded).
     # Used only when auth.mode = "external". Mount via a ConfigMap or Secret.
     jwtPublicKeyPath: ""
-
-  # License
-  licensePath: /etc/bytebrew/license.jwt
 
   # Embedding model
   embedURL: ""
@@ -68,13 +65,6 @@ secrets:
   # LLM provider credentials are not supplied via Helm — configure them
   # post-install through the Admin Dashboard onboarding wizard or
   # Admin → Models. Engine does not read LLM env vars.
-
-  # Cloud-mode metering HMAC secrets (EE/Cloud binary only).
-  # meteringHMACCurrent is required when cloud metering is enabled.
-  # meteringHMACPrevious is set only during a 90-day key rotation window;
-  # remove it once all engine pods have been rolled with the new current key.
-  meteringHMACCurrent: ""
-  meteringHMACPrevious: ""  # leave empty when no rotation is in progress
 
 persistence:
   # Ed25519 keypair storage (local auth mode only).

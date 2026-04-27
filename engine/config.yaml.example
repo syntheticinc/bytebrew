@@ -26,7 +26,7 @@ database:
 
 llm:
   default_provider: openrouter
-  streaming: false  # Отключён - используем non-streaming для корректного сохранения assistant content в историю
+  streaming: false  # Disabled - non-streaming is required for correct persistence of assistant content to history
   
   ollama:
     base_url: http://localhost:11434

@@ -57,10 +57,10 @@ trap cleanup EXIT
 echo "==> Building engine binary (linux/amd64)..."
 mkdir -p "$(dirname "$BINARY_PATH")"
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 GOWORK=off \
-  go build -C bytebrew-ee \
+  go build -C bytebrew/engine \
   -ldflags "-s -w" \
-  -o "../$BINARY_PATH" \
-  ./cmd/ee 2>&1 | tail -5
+  -o "../../$BINARY_PATH" \
+  ./cmd/ce 2>&1 | tail -5
 
 echo "==> Binary built: $BINARY_PATH"
 

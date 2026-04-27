@@ -196,6 +196,16 @@ func TestFirstLine(t *testing.T) {
 			expected: "Привет мир! Это очень длинная строка на русском языке котора...",
 		},
 		{
+			name:     "chinese truncation (UTF-8 safe)",
+			input:    strings.Repeat("你", 70),
+			expected: strings.Repeat("你", 60) + "...",
+		},
+		{
+			name:     "arabic truncation (UTF-8 safe)",
+			input:    strings.Repeat("ا", 70),
+			expected: strings.Repeat("ا", 60) + "...",
+		},
+		{
 			name:     "emoji truncation (UTF-8 safe)",
 			input:    strings.Repeat("😀", 70),
 			expected: strings.Repeat("😀", 60) + "...",

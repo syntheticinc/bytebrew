@@ -62,3 +62,25 @@ temp/
 # QA testing artifacts
 qa-results/
 webclient-dist
+
+# Private keys / secrets
+*.pem
+*.key
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+*.p12
+*.pfx
+secrets/
+credentials*.json
+service-account*.json
+# Auth state
+cookies.txt
+auth.json
+storageState*.json
+# Local env overrides
+.env.local
+.env.*.local
+.env.production
+.env.staging

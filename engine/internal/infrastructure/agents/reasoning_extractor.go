@@ -34,7 +34,7 @@ func (r *ReasoningExtractor) ExtractReasoning(msg *schema.Message) (string, bool
 // cleanReasoningContent fixes garbled content from OpenRouter streaming.
 // When eino-ext reads "reasoning" from ExtraFields, it doesn't JSON-decode
 // the value, so each streamed chunk includes JSON quotes.
-// This results in content like: "П""ользователь"" просит""
+// This results in content like: "H""ello"" world""
 // We need to remove these spurious quotes.
 func cleanReasoningContent(content string) string {
 	// Check if content looks garbled (contains "" pattern which indicates

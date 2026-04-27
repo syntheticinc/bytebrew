@@ -9,7 +9,7 @@ import (
 
 const fileName = "server.port"
 
-// PortInfo содержит информацию о запущенном сервере.
+// PortInfo holds information about the running server.
 type PortInfo struct {
 	PID          int    `json:"pid"`
 	HTTPPort     int    `json:"http_port,omitempty"`     // External HTTP (data plane)
@@ -18,19 +18,19 @@ type PortInfo struct {
 	StartedAt    string `json:"startedAt"`
 }
 
-// Writer записывает port file в dataDir.
+// Writer writes the port file to dataDir.
 type Writer struct {
 	path string
 }
 
-// NewWriter создаёт Writer. Port file будет по пути: dataDir/server.port.
+// NewWriter creates a Writer. The port file path is: dataDir/server.port.
 func NewWriter(dataDir string) *Writer {
 	return &Writer{
 		path: filepath.Join(dataDir, fileName),
 	}
 }
 
-// Write записывает PortInfo в файл атомарно (write tmp → rename).
+// Write writes PortInfo to disk atomically (write tmp → rename).
 func (w *Writer) Write(info PortInfo) error {
 	data, err := json.MarshalIndent(info, "", "  ")
 	if err != nil {
@@ -52,7 +52,7 @@ func (w *Writer) Write(info PortInfo) error {
 	return nil
 }
 
-// Remove удаляет port file (вызывается при graceful shutdown).
+// Remove deletes the port file (called during graceful shutdown).
 func (w *Writer) Remove() error {
 	if err := os.Remove(w.path); err != nil {
 		if os.IsNotExist(err) {
@@ -63,7 +63,7 @@ func (w *Writer) Remove() error {
 	return nil
 }
 
-// Path возвращает путь к port file.
+// Path returns the path to the port file.
 func (w *Writer) Path() string {
 	return w.path
 }

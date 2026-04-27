@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/cloudwego/eino/components/model"
 	"github.com/go-chi/chi/v5"
 	"google.golang.org/grpc"
 )
@@ -43,6 +44,17 @@ func (Noop) SetSchemaCounter(SchemaCounter) {}
 
 // TransportPolicy returns PermissiveTransportPolicy — CE allows all transports.
 func (Noop) TransportPolicy() TransportPolicy { return PermissiveTransportPolicy{} }
+
+// PrepareModelSelector is a no-op. CE has no per-agent model selection — all
+// agents use the default BYOK model.
+func (Noop) PrepareModelSelector(_ ModelSelectorConfigurator, _ model.ToolCallingChatModel) {}
+
+// UsageExtras returns nil. CE exposes only the built-in counters via GET
+// /api/v1/usage; there are no extra billing fields to surface.
+func (Noop) UsageExtras(_ context.Context, _ string) map[string]any { return nil }
+
+// DocsMCPEndpoint returns "". CE seed data does not include a Docs MCP entry.
+func (Noop) DocsMCPEndpoint() string { return "" }
 
 // Stop is a no-op.
 func (Noop) Stop() {}
