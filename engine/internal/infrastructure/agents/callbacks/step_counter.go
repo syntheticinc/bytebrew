@@ -6,10 +6,10 @@ import (
 )
 
 // stepCallback is optionally set at process startup (server.go) and invoked
-// after every step increment. Used by EE plugin for metering. Global because
-// the callbacks package is deep in the agent infrastructure and plumbing a
-// callback through 4 layers of constructors would be disproportionate for a
-// single observer hook.
+// after every step increment. Used by plugins for usage observation. Global
+// because the callbacks package is deep in the agent infrastructure and
+// plumbing a callback through 4 layers of constructors would be
+// disproportionate for a single observer hook.
 var (
 	stepCallback   func(ctx context.Context) error
 	stepCallbackMu sync.RWMutex
@@ -56,9 +56,8 @@ func (c *StepCounter) GetStep() int {
 }
 
 // IncrementStep increments the step counter and fires the global step
-// callback (if set) for metering/observability. Returns the callback error
-// (e.g. ErrStepsQuotaExceeded) so callers can cancel the request context.
-// Thread-safe.
+// callback (if set) for observability/quota enforcement. Returns the callback
+// error so callers can cancel the request context. Thread-safe.
 func (c *StepCounter) IncrementStep(ctx context.Context) error {
 	c.mu.Lock()
 	c.step++

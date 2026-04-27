@@ -7,13 +7,13 @@ import (
 	"unsafe"
 )
 
-// IsProcessAlive проверяет жив ли процесс по PID.
-// Используется для определения stale port file.
+// IsProcessAlive reports whether a process with the given PID is alive.
+// Used to detect a stale port file.
 //
-// На Windows просто OpenProcess недостаточно — handle может быть валидным
-// для уже завершённого процесса (если его держит IDE, debugger и т.д.).
-// Поэтому дополнительно проверяем GetExitCodeProcess: STILL_ACTIVE (259)
-// означает что процесс действительно работает.
+// On Windows, OpenProcess alone is not enough — the handle can be valid
+// for a process that has already exited (if held by an IDE, debugger, etc.).
+// We additionally check GetExitCodeProcess: STILL_ACTIVE (259) means the
+// process is actually still running.
 func IsProcessAlive(pid int) bool {
 	if pid <= 0 {
 		return false

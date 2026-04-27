@@ -449,7 +449,7 @@ func registerHTTPRoutes(deps routesDeps) {
 		}
 
 		// Usage
-		usageHandler := deliveryhttp.NewUsageHandler(pgDB)
+		usageHandler := deliveryhttp.NewUsageHandler(pgDB, plugin)
 		r.Get("/api/v1/usage", usageHandler.GetUsage)
 
 		// Tool Call Log — per-tool-call observability for debugging agent behavior.

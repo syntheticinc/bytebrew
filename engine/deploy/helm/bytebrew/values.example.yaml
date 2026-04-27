@@ -1,8 +1,8 @@
-# values.example.yaml — минимальный пример для production deploy CE в K8s.
-# Скопируйте в values.yaml, заполните отмеченные поля, примените:
+# values.example.yaml — minimal example for production CE deploy on K8s.
+# Copy to values.yaml, fill in the marked fields, then apply:
 #   helm install bytebrew ./bytebrew -f values.yaml
 #
-# Обязательные поля помечены <REQUIRED>. Всё остальное — sensible defaults.
+# Required fields are marked <REQUIRED>. Everything else uses sensible defaults.
 
 replicaCount: 1                                   # local auth mode supports 1 replica only
 
@@ -61,8 +61,6 @@ config:
     jwtKeysPath: "/var/lib/bytebrew/keys"
     jwtPublicKeyPath: ""
 
-  licensePath: /etc/bytebrew/license.jwt          # EE license path (empty for CE)
-
   # Embedding model for Knowledge Base RAG (optional).
   # Leave empty to disable knowledge capability.
   embedURL: ""
@@ -73,10 +71,6 @@ secrets:
   # LLM provider credentials are not set here — configure them
   # post-install via the Admin Dashboard onboarding wizard or
   # Admin → Models.
-
-  # Cloud metering HMAC (leave empty for CE — no metering).
-  meteringHMACCurrent: ""
-  meteringHMACPrevious: ""
 
 persistence:
   keys:

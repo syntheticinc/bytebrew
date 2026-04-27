@@ -7,21 +7,21 @@ import (
 	"path/filepath"
 )
 
-// Reader читает port file из dataDir.
+// Reader reads the port file from dataDir.
 type Reader struct {
 	path string
 }
 
-// NewReader создаёт Reader для чтения port file.
+// NewReader creates a Reader for reading the port file.
 func NewReader(dataDir string) *Reader {
 	return &Reader{
 		path: filepath.Join(dataDir, fileName),
 	}
 }
 
-// Read читает PortInfo из файла.
-// Возвращает nil, nil если файл не существует.
-// Возвращает nil, err если файл повреждён.
+// Read reads PortInfo from disk.
+// Returns nil, nil if the file does not exist.
+// Returns nil, err if the file is corrupted.
 func (r *Reader) Read() (*PortInfo, error) {
 	data, err := os.ReadFile(r.path)
 	if err != nil {

@@ -23,9 +23,9 @@ services:
       - "8443:8443"
     environment:
       - BYTEBREW_ADMIN_USER=admin
-      - BYTEBREW_ADMIN_PASSWORD=changeme
+      - BYTEBREW_ADMIN_PASSWORD=${BYTEBREW_ADMIN_PASSWORD:?BYTEBREW_ADMIN_PASSWORD is required}
       - DB_USER=bytebrew
-      - DB_PASSWORD=bytebrew
+      - DB_PASSWORD=${DB_PASSWORD:?DB_PASSWORD is required}
     depends_on:
       postgres:
         condition: service_healthy

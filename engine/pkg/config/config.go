@@ -22,10 +22,7 @@ type Config struct {
 	Agent         AgentConfig         `mapstructure:"agent"`
 	PlanStorage   PlanStorageConfig   `mapstructure:"plan_storage"`
 	WorkStorage   WorkStorageConfig   `mapstructure:"work_storage"`
-	License       LicenseConfig       `mapstructure:"license"`
-	Provider      ProviderConfig      `mapstructure:"provider"`
 	BYOK          BYOKConfig          `mapstructure:"byok"`
-	Relay         RelayConfig         `mapstructure:"relay"`
 	RateLimits    []RateLimitRule     `mapstructure:"rate_limits"`
 
 	// ConfigDir is the directory containing config files (set by Load, not from YAML)
@@ -42,7 +39,6 @@ type Config struct {
 // the user supplies is accepted). Disable BYOK entirely with Enabled=false.
 
 // RateLimitRule defines a configurable rate limiting rule based on request headers.
-// Used by Enterprise Edition for per-header rate limiting (e.g. per-org, per-user).
 type RateLimitRule struct {
 	Name        string                   `mapstructure:"name" yaml:"name" json:"name"`
 	KeyHeader   string                   `mapstructure:"key_header" yaml:"key_header" json:"key_header"`
@@ -58,27 +54,9 @@ type RateLimitTier struct {
 	Unlimited bool   `mapstructure:"unlimited" yaml:"unlimited" json:"unlimited"`
 }
 
-// ProviderConfig holds LLM provider routing configuration.
-type ProviderConfig struct {
-	Mode        string `mapstructure:"mode"`          // "proxy" | "byok" | "auto" (default: "byok")
-	CloudAPIURL string `mapstructure:"cloud_api_url"` // e.g. https://api.bytebrew.dev
-}
-
 // WorkStorageConfig holds work storage (stories + tasks) configuration
 type WorkStorageConfig struct {
 	DBPath string `mapstructure:"db_path"`
-}
-
-// LicenseConfig holds license validation configuration.
-type LicenseConfig struct {
-	PublicKeyHex string `mapstructure:"public_key_hex"` // Ed25519 public key in hex
-	LicensePath  string `mapstructure:"license_path"`   // Path to license.jwt file (default: ~/.bytebrew/license.jwt)
-}
-
-// RelayConfig holds relay service configuration for On-Premises deployments.
-// When Address is set, bytebrew-srv validates licenses through the relay instead of file-based validation.
-type RelayConfig struct {
-	Address string `mapstructure:"address"` // e.g. "http://relay.internal:8080"
 }
 
 // PlanStorageConfig holds plan storage configuration

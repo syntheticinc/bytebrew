@@ -94,7 +94,7 @@ func TestIsProcessAlive_CurrentProcess(t *testing.T) {
 }
 
 func TestIsProcessAlive_DeadProcess(t *testing.T) {
-	// PID 99999999 практически наверняка не существует.
+	// PID 99999999 is virtually guaranteed to not exist.
 	assert.False(t, IsProcessAlive(99999999))
 }
 

@@ -17,20 +17,20 @@ type flowEntry struct {
 	messageSink interface{ PublishUserMessage(string) error }
 }
 
-// InMemoryRegistry in-memory реализация flow registry
+// InMemoryRegistry is an in-memory implementation of the flow registry.
 type InMemoryRegistry struct {
 	mu    sync.RWMutex
 	flows map[string]*flowEntry
 }
 
-// NewInMemoryRegistry создает новый InMemoryRegistry
+// NewInMemoryRegistry creates a new InMemoryRegistry.
 func NewInMemoryRegistry() *InMemoryRegistry {
 	return &InMemoryRegistry{
 		flows: make(map[string]*flowEntry),
 	}
 }
 
-// Register регистрирует активный flow с его cancel function.
+// Register registers an active flow with its cancel function.
 // If a flow already exists for this session, its cancel func is called and the flow is replaced.
 // cancel may be nil if cancellation is not needed.
 func (r *InMemoryRegistry) Register(sessionID string, flow *domain.ActiveFlow, cancel context.CancelFunc) error {
@@ -49,7 +49,7 @@ func (r *InMemoryRegistry) Register(sessionID string, flow *domain.ActiveFlow, c
 	return nil
 }
 
-// Unregister удаляет flow из реестра (idempotent — no error if not found)
+// Unregister removes a flow from the registry (idempotent — no error if not found).
 func (r *InMemoryRegistry) Unregister(sessionID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -78,7 +78,7 @@ func (r *InMemoryRegistry) UnregisterIfCurrent(sessionID string, expected *domai
 	return true
 }
 
-// Get возвращает активный flow по session_id
+// Get returns the active flow by session_id.
 func (r *InMemoryRegistry) Get(sessionID string) (*domain.ActiveFlow, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -90,7 +90,7 @@ func (r *InMemoryRegistry) Get(sessionID string) (*domain.ActiveFlow, bool) {
 	return entry.flow, true
 }
 
-// IsActive проверяет, есть ли активный flow для сессии
+// IsActive reports whether the session has an active running flow.
 func (r *InMemoryRegistry) IsActive(sessionID string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

@@ -29,14 +29,14 @@ go test -tags prompt -v -timeout 300s ./tests/prompt_regression/...  # Prompt re
 
 ## Go Code Style
 
-### Early Returns (обязательно)
-Ошибки сверху, happy path внизу. Flat structure.
+### Early Returns (mandatory)
+Errors first, happy path last. Flat structure.
 
-### Запрещено
-- goto — НИКОГДА
-- else после return — убирать
-- Глубокая вложенность — инвертировать условия
-- Игнорировать ошибки — `_ = err` запрещено
+### Forbidden
+- goto — NEVER
+- else after return — remove it
+- Deep nesting — invert conditions
+- Ignoring errors — `_ = err` is forbidden
 
 ### Error Handling
 ```go
@@ -57,10 +57,10 @@ slog.ErrorContext(ctx, "failed to save", "error", err)
 - `tests/integration/` — integration suite hitting the running engine via HTTP REST + SSE.
 
 ### Prompt Regression (Level 2)
-- `tests/prompt_regression/fixtures/` — JSON fixtures из логов
+- `tests/prompt_regression/fixtures/` — JSON fixtures from logs
 - Build tag: `//go:build prompt`
-- Fixtures из `logs/<session>/supervisor_step_N_context.json`
+- Fixtures from `logs/<session>/supervisor_step_N_context.json`
 
 ### Context Logger
 - `internal/infrastructure/agents/context_logger.go`
-- Логирует контекст LLM в `logs/<session>/step_N_context.json`
+- Logs LLM context to `logs/<session>/step_N_context.json`

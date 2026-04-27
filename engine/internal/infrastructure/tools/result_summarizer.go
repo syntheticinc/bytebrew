@@ -10,9 +10,9 @@ import (
 // Pre-compiled regex for performance (staticcheck SA6000)
 var webSearchResultPattern = regexp.MustCompile(`^\d+\.`)
 
-// SummarizeToolResult вычисляет краткое описание результата tool для UI.
-// Чистая функция: детерминистический парсинг строки, без I/O, без LLM.
-// Возвращает пустую строку если summary не может быть вычислен.
+// SummarizeToolResult computes a short description of a tool result for the UI.
+// Pure function: deterministic string parsing, no I/O, no LLM.
+// Returns an empty string when no summary can be derived.
 func SummarizeToolResult(toolName, result string) string {
 	if result == "" {
 		return ""
@@ -34,7 +34,7 @@ func SummarizeToolResult(toolName, result string) string {
 	}
 }
 
-// summarizeSmartSearch парсит формат "Found N results:\n\n1. path:line [source] ..."
+// summarizeSmartSearch parses the format "Found N results:\n\n1. path:line [source] ..."
 func summarizeSmartSearch(result string) string {
 	// Real format: "Found N results:\n\n1. file:10 [vector] ..."
 	if strings.HasPrefix(result, "Found ") {
@@ -65,7 +65,7 @@ func summarizeSmartSearch(result string) string {
 	return fmt.Sprintf("%d citations", count)
 }
 
-// firstLine возвращает первую строку, обрезанную до 60 рун (UTF-8 safe)
+// firstLine returns the first line, truncated to 60 runes (UTF-8 safe).
 func firstLine(s string) string {
 	lines := strings.SplitN(s, "\n", 2)
 	if len(lines) == 0 {
@@ -79,7 +79,7 @@ func firstLine(s string) string {
 	return line
 }
 
-// humanizeBytes преобразует байты в читаемый формат (bytes/KB/MB)
+// humanizeBytes converts bytes to a human-readable format (bytes/KB/MB)
 func humanizeBytes(n int) string {
 	if n < 1024 {
 		return fmt.Sprintf("%d bytes", n)
@@ -92,7 +92,7 @@ func humanizeBytes(n int) string {
 	return fmt.Sprintf("%.1f MB", mb)
 }
 
-// countOccurrences подсчитывает количество вхождений подстроки
+// countOccurrences returns the number of occurrences of substr in s
 func countOccurrences(s, substr string) int {
 	return strings.Count(s, substr)
 }

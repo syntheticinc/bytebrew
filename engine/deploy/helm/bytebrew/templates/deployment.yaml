@@ -55,20 +55,6 @@ spec:
             - name: EMBED_DIM
               value: {{ .Values.config.embedDim | quote }}
             {{- end }}
-            {{- if .Values.secrets.meteringHMACCurrent }}
-            - name: BYTEBREW_METERING_HMAC_CURRENT
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "bytebrew-engine.fullname" . }}-secrets
-                  key: metering-hmac-current
-            {{- end }}
-            {{- if .Values.secrets.meteringHMACPrevious }}
-            - name: BYTEBREW_METERING_HMAC_PREVIOUS
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "bytebrew-engine.fullname" . }}-secrets
-                  key: metering-hmac-previous
-            {{- end }}
           livenessProbe:
             httpGet:
               path: /api/v1/health

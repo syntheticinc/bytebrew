@@ -316,7 +316,10 @@ func TestSanitizeForSystemPrompt_NormalInput(t *testing.T) {
 		{"short ascii", "hello world", 500, "hello world"},
 		{"empty string", "", 500, ""},
 		{"exact limit", "abc", 3, "abc"},
-		{"unicode preserved", "привет мир", 500, "привет мир"},
+		{"cyrillic preserved", "привет мир", 500, "привет мир"},
+		{"chinese preserved", "你好世界", 500, "你好世界"},
+		{"arabic preserved", "مرحبا بالعالم", 500, "مرحبا بالعالم"},
+		{"japanese preserved", "こんにちは世界", 500, "こんにちは世界"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -340,10 +343,22 @@ func TestSanitizeForSystemPrompt_Truncation(t *testing.T) {
 			"abcde...",
 		},
 		{
-			"unicode over limit",
+			"cyrillic over limit",
 			"абвгдежзик",
 			4,
 			"абвг...",
+		},
+		{
+			"chinese over limit",
+			"你好世界这是测试",
+			4,
+			"你好世界...",
+		},
+		{
+			"arabic over limit",
+			"مرحبابكمأهلاسلام",
+			4,
+			"مرحب...",
 		},
 		{
 			"500 rune limit",

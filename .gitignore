@@ -21,10 +21,6 @@ downloads/
 eggs/
 .eggs/
 lib/
-!bytebrew-cli/src/lib/
-!bytebrew-cloud-web/src/lib/
-!bytebrew/cloud-web/src/lib/
-!bytebrew-mobile-app/lib/
 lib64/
 parts/
 sdist/
@@ -46,23 +42,14 @@ venv/
 ENV/
 **/.venv/
 
-# GetTrace specific
-.gettrace/
+# Local databases / fixtures
 *.db
 *.sqlite
 
 # ByteBrew CLI - local indexing storage
 .bytebrew/
 
-# Test fixtures - Qdrant local storage
-gettrace-server/tests/manual/code_analysis/fixtures/qdrant/
-gettrace-server/tests/manual/code_analysis/fixtures/snapshot.pkl
-
-# Temporary clone directories (nested git repos)
-gettrace-cli/
-gettrace-srv/
-
-# Docs - защита от восстановления удаленных файлов
+# Docs - prevent recovery of deleted files
 docs/ARCHITECTURE-AUDIT-REPORT.md
 docs/README.md
 docs/analysis/
@@ -90,7 +77,6 @@ docs/processes/session-context-management.md
 *.exe
 # Compiled Go server binary (not the source directory)
 /server
-bytebrew-srv/server
 
 /docs/*
 
@@ -99,7 +85,6 @@ test-project
 
 *.bun-build
 *.tsbuildinfo
-bytebrew-cloud-web/node_modules
 **/node_modules/
 **/.vite/
 
@@ -108,23 +93,39 @@ bytebrew-cloud-web/node_modules
 
 # Screenshots (testing artifacts)
 *.png
-# Allow PNGs in web assets
-!cloud-web-astro/public/**/*.png
-!cloud-web/public/**/*.png
-!docs-site/src/**/*.png
 
 # Vite build output
 **/dist/
 
-query.txt# Claude Code workspace files (not in git)
+query.txt
+
+# Claude Code workspace files (not in git)
 .agents/
 .claude/
 CLAUDE.md
 .mcp.json
-!cloud-web/public/screenshots/*.png
-docs-site/dist/
-docs-site/node_modules/
 
 # Local dev configs
 config.yaml
 .env.local
+
+# Private keys / secrets
+*.pem
+*.key
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+*.p12
+*.pfx
+secrets/
+credentials*.json
+service-account*.json
+# Auth state
+cookies.txt
+auth.json
+storageState*.json
+# Local env overrides
+.env.*.local
+.env.production
+.env.staging

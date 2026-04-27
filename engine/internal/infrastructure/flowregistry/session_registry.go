@@ -349,7 +349,7 @@ func (r *SessionRegistry) Cancel(sessionID string) bool {
 
 	entry.cancelled.Store(true)
 
-	// Прервать текущий turn если он выполняется
+	// Interrupt the current turn if it is executing.
 	entry.mu.Lock()
 	if entry.turnCancelFn != nil {
 		entry.turnCancelFn()

@@ -63,10 +63,23 @@ func TestCleanReasoningContent_Normal(t *testing.T) {
 
 func TestCleanReasoningContent_GarbledQuotes(t *testing.T) {
 	// OpenRouter streaming produces garbled content like this:
-	// each chunk is a JSON string, concatenated together
-	content := `"Пользователь""просит""помощь"`
-	cleaned := cleanReasoningContent(content)
-	assert.Equal(t, "Пользовательпроситпомощь", cleaned)
+	// each chunk is a JSON string, concatenated together. Test multiple
+	// scripts to ensure UTF-8 byte handling stays correct outside ASCII.
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"cyrillic", `"Пользователь""просит""помощь"`, "Пользовательпроситпомощь"},
+		{"chinese", `"用户""请求""帮助"`, "用户请求帮助"},
+		{"arabic", `"المستخدم""يطلب""المساعدة"`, "المستخدميطلبالمساعدة"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cleaned := cleanReasoningContent(tt.input)
+			assert.Equal(t, tt.expected, cleaned)
+		})
+	}
 }
 
 func TestCleanReasoningContent_JSONString(t *testing.T) {

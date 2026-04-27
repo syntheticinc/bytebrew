@@ -6,11 +6,12 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/cloudwego/eino/components/model"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/llm"
 	"github.com/syntheticinc/bytebrew/engine/pkg/config"
 	"github.com/syntheticinc/bytebrew/engine/pkg/errors"
-	"github.com/cloudwego/eino-ext/components/model/openai"
-	"github.com/cloudwego/eino/components/model"
+	pluginpkg "github.com/syntheticinc/bytebrew/engine/pkg/plugin"
 )
 
 // createChatModel creates a ToolCallingChatModel based on provider config.
@@ -130,15 +131,11 @@ func wrapWithDebugModel(chatModel model.ToolCallingChatModel, debugDir string) m
 	return llm.NewDebugChatModelWrapper(chatModel, debugDir, "global")
 }
 
-// createModelSelector creates a ModelSelector via ProviderResolver.
-func createModelSelector(cfg config.Config, chatModel model.ToolCallingChatModel, modelName string) *llm.ModelSelector {
-	return llm.ResolveModelSelector(llm.ProviderResolverConfig{
-		Mode:          cfg.Provider.Mode,
-		CloudAPIURL:   cfg.Provider.CloudAPIURL,
-		AccessToken:   "", // TODO: populate from auth storage in a future phase
-		BYOKModel:     chatModel,
-		BYOKModelName: modelName,
-	})
+// createModelSelector creates a ModelSelector and lets the plugin register per-agent models.
+func createModelSelector(plug pluginpkg.Plugin, chatModel model.ToolCallingChatModel, modelName string) *llm.ModelSelector {
+	selector := llm.NewModelSelector(chatModel, modelName)
+	plug.PrepareModelSelector(selector, chatModel)
+	return selector
 }
 
 // getModelName returns model name based on LLM provider config.

@@ -10,9 +10,16 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/cloudwego/eino/components/model"
 	"github.com/go-chi/chi/v5"
 	"google.golang.org/grpc"
 )
+
+// ModelSelectorConfigurator is a minimal interface for registering per-agent models.
+// Implemented by *llm.ModelSelector (internal CE type).
+type ModelSelectorConfigurator interface {
+	SetModel(agentName string, m model.ToolCallingChatModel, displayName string)
+}
 
 // stepsLimitKey is the private context key used to propagate the per-tenant
 // step limit from EE entitlements middleware to the step callback.
@@ -92,6 +99,20 @@ type Plugin interface {
 	// transports allowed). Cloud / managed deployments return
 	// RestrictedTransportPolicy (stdio blocked to prevent host code execution).
 	TransportPolicy() TransportPolicy
+
+	// PrepareModelSelector is called once at server startup. The plugin may
+	// register per-agent models on the selector; CE's Noop leaves the
+	// selector untouched so all agents use the default BYOK model.
+	PrepareModelSelector(selector ModelSelectorConfigurator, byok model.ToolCallingChatModel)
+
+	// UsageExtras returns additional fields to merge into GET /api/v1/usage.
+	// CE's Noop returns nil so only the built-in counters are exposed.
+	UsageExtras(ctx context.Context, tenantID string) map[string]any
+
+	// DocsMCPEndpoint returns an optional URL for a hosted Docs MCP server to
+	// install in seed data. CE's Noop returns "" so seed does not create a
+	// Docs MCP entry.
+	DocsMCPEndpoint() string
 
 	// Stop releases any background resources held by the plugin
 	// (watchers, tickers, etc.).

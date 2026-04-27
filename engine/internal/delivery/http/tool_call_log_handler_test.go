@@ -40,7 +40,7 @@ func newToolCallRouter(handler *ToolCallLogHandler) *chi.Mux {
 	return r
 }
 
-func TestToolCallLogHandler_List_WithEELicense(t *testing.T) {
+func TestToolCallLogHandler_List(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	svc := &mockToolCallQuerier{
 		entries: []ToolCallEntry{

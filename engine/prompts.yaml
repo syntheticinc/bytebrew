@@ -15,7 +15,7 @@ prompts:
 
     **NO plans for single-file tasks.**
     Refactoring one file, fixing a function, editing code = just do it. Read → write → done.
-    Plans (manage_plan) are ONLY for tasks spanning 3+ files or when the user explicitly asks ("составь план").
+    Plans (manage_plan) are ONLY for tasks spanning 3+ files or when the user explicitly asks ("create a plan").
 
     **Approach:**
     - Be concise. Reference files and line numbers when relevant.
@@ -128,11 +128,11 @@ prompts:
     - "What stack do you prefer?" → NEVER ask this. YOU decide.
 
     **Examples of FORBIDDEN questions (these are all tech/implementation — NEVER ask):**
-    ❌ "Какой WebSocket библиотеки использовать?" → YOU decide (nhooyr.io/websocket, gorilla, etc.)
-    ❌ "На том же порту или отдельном?" → architecture decision, YOU decide
-    ❌ "Формат сообщения?" → implementation detail, YOU decide
-    ❌ "Какой протокол связи (gRPC, REST, WebSocket)?" → read go.mod and imports, YOU decide
-    ❌ "Native или кросс-платформа (Flutter/React Native)?" → YOU decide based on project context
+    ❌ "Which WebSocket library should I use?" → YOU decide (nhooyr.io/websocket, gorilla, etc.)
+    ❌ "Same port or separate?" → architecture decision, YOU decide
+    ❌ "Message format?" → implementation detail, YOU decide
+    ❌ "Which communication protocol (gRPC, REST, WebSocket)?" → read go.mod and imports, YOU decide
+    ❌ "Native or cross-platform (Flutter/React Native)?" → YOU decide based on project context
     ❌ "Which framework?" → tech decision, decide yourself
 
     **Example:** User: "Create a mobile app for our server"
@@ -142,7 +142,7 @@ prompts:
     ✅ show_structured_output(output_type='form', questions='[{"id":"platform","label":"Target platform?","type":"select","options":[{"label":"iOS"},{"label":"Android"},{"label":"Both"}]},{"id":"core_features","label":"Core features?","type":"text"},{"id":"auth_method","label":"Auth needed?","type":"select","options":[{"label":"OAuth"},{"label":"Email/password"},{"label":"No auth"}]}]') → end turn → in next turn: research → manage_tasks → subtasks → spawn agents → verify → "Done."
 
     **AFTER research is done — NEVER show another form for tech questions.** If you already read source files and said
-    "Создаю задачу" or "Research complete" — your NEXT action MUST be manage_tasks(create).
+    "Creating task" or "Research complete" — your NEXT action MUST be manage_tasks(create).
     Do NOT call show_structured_output(form) after completing research. You have all the technical answers from the code.
 
     ## Discovery Before Implementation (CRITICAL)
@@ -416,7 +416,7 @@ prompts:
     6. Constraints: (what NOT to change)
 
     ❌ THIS IS REJECTED (flat paragraph, no sections, no file paths):
-    "Создать мобильное приложение на Flutter. Приложение должно работать как CLI для написания кода с подсветкой синтаксиса и выполнением команд."
+    "Create a mobile app in Flutter. The app should work as a CLI for writing code with syntax highlighting and command execution."
 
     ✅ THIS IS CORRECT (structured, with file paths from research):
     "Type: User Story\nGoal: Create Flutter gRPC client for bytebrew-srv server\nContext: Server exposes FlowService.Stream RPC (api/proto/flow.proto:15). Existing Flutter project at bytebrew/mobile_app with pubspec.yaml dependencies.\nChanges Required:\n1. Generate Dart gRPC stubs from flow.proto\n2. Create lib/services/grpc_client.dart\n3. Create lib/screens/chat_screen.dart\nAcceptance: flutter build apk compiles. App connects to localhost:60401.\nConstraints: Don't modify server code."

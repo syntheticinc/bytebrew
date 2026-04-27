@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"gorm.io/gorm"
 
@@ -46,20 +45,6 @@ const builderAssistantName = "builder-assistant"
 
 // ByteBrew docs MCP server — public, no API key required.
 const bytebrewDocsMCPName = "bytebrew-docs"
-
-// defaultBytebrewDocsMCPEndpoint is the canonical hosted SSE URL for the
-// bytebrew-docs MCP server. Used when no override comes from config.
-const defaultBytebrewDocsMCPEndpoint = "https://mcp.bytebrew.ai/sse"
-
-// bytebrewDocsMCPEndpoint returns the override URL when non-empty, else the
-// hosted default. The override is sourced from BootstrapConfig.MCP.DocsURL
-// (env var BYTEBREW_DOCS_MCP_URL); see pkg/config.
-func bytebrewDocsMCPEndpoint(override string) string {
-	if v := strings.TrimSpace(override); v != "" {
-		return v
-	}
-	return defaultBytebrewDocsMCPEndpoint
-}
 
 const builderAssistantPrompt = `You are the ByteBrew Builder Assistant — an AI architect embedded in the Admin Dashboard. Your role is to help users design, configure, and manage their ByteBrew multi-agent systems.
 
@@ -269,9 +254,10 @@ func builderAssistantDefaults() *configrepo.AgentRecord {
 // seedByteBrewDocsMCP ensures the bytebrew-docs MCP server exists in the database.
 // Idempotent — skips if a server with the same name already exists.
 //
-// urlOverride takes precedence over the hosted default when non-empty.
-func seedByteBrewDocsMCP(ctx context.Context, db *gorm.DB, urlOverride string) {
-	if db == nil {
+// When url is empty the seeder is a no-op. Operators can supply a URL via
+// BYTEBREW_DOCS_MCP_URL or via a plugin's DocsMCPEndpoint() implementation.
+func seedByteBrewDocsMCP(ctx context.Context, db *gorm.DB, url string) {
+	if url == "" || db == nil {
 		return
 	}
 	mcpRepo := configrepo.NewGORMMCPServerRepository(db)
@@ -286,17 +272,16 @@ func seedByteBrewDocsMCP(ctx context.Context, db *gorm.DB, urlOverride string) {
 			return
 		}
 	}
-	mcpURL := bytebrewDocsMCPEndpoint(urlOverride)
 	server := &models.MCPServerModel{
 		Name: bytebrewDocsMCPName,
 		Type: models.MCPServerTypeSSE,
-		URL:  mcpURL,
+		URL:  url,
 	}
 	if err := mcpRepo.Create(ctx, server); err != nil {
 		slog.ErrorContext(ctx, "failed to seed bytebrew-docs MCP server", "error", err)
 		return
 	}
-	slog.InfoContext(ctx, "seeded bytebrew-docs MCP server", "url", mcpURL)
+	slog.InfoContext(ctx, "seeded bytebrew-docs MCP server", "url", url)
 }
 
 // seedBuilderAssistant ensures the builder-assistant agent exists in the database.
