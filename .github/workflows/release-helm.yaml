@@ -1,0 +1,66 @@
+name: Release Helm Chart
+
+on:
+  push:
+    tags:
+      - 'helm/v*.*.*'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    name: Publish Helm Chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Lint chart
+        run: helm lint engine/deploy/helm/bytebrew
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#helm/v}" >> "$GITHUB_OUTPUT"
+
+      - name: Package chart
+        run: |
+          helm package engine/deploy/helm/bytebrew \
+            -d dist/ \
+            --version ${{ steps.version.outputs.version }} \
+            --app-version ${{ steps.version.outputs.version }}
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push to OCI registry
+        run: |
+          for chart in dist/*.tgz; do
+            helm push "$chart" oci://ghcr.io/syntheticinc/charts
+          done
+
+      - name: Upload as GitHub Release artifact
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.tgz
+          tag_name: ${{ github.ref_name }}
+          name: Helm Chart ${{ github.ref_name }}
+          body: |
+            Helm chart `bytebrew-engine` ${{ steps.version.outputs.version }}.
+
+            **Install:**
+            ```
+            helm install bytebrew oci://ghcr.io/syntheticinc/charts/bytebrew-engine --version ${{ steps.version.outputs.version }}
+            ```
+
+            See [chart README](https://github.com/syntheticinc/bytebrew/tree/main/engine/deploy/helm/bytebrew) for configuration.

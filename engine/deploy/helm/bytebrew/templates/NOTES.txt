@@ -44,3 +44,26 @@ BREAKING CHANGE (Wave 1+7):
 Health check:
   kubectl exec deploy/{{ include "bytebrew-engine.fullname" . }} -- \
     wget -qO- http://localhost:8443/api/v1/health
+
+3. Configure declarative config-as-code (optional):
+
+   a. Generate an admin API token via the Admin Dashboard
+        (https://<host>/admin -> API Keys -> Create).
+
+   b. Create the token Secret:
+        kubectl create secret generic bytebrew-token \
+          --from-literal=token=bb_xxx \
+          -n {{ .Release.Namespace }}
+
+   c. (Optional) Create a Secret with LLM API keys:
+        kubectl create secret generic bytebrew-api-keys \
+          --from-literal=OPENROUTER_API_KEY=sk-or-... \
+          --from-literal=TAVILY_API_KEY=tvly-... \
+          -n {{ .Release.Namespace }}
+
+   d. Re-deploy with configApply enabled:
+        helm upgrade {{ .Release.Name }} . \
+          --set configApply.enabled=true \
+          --set configApply.tokenSecret=bytebrew-token \
+          --set configApply.apiKeysSecret=bytebrew-api-keys \
+          --set-file configApply.config=./bytebrew.yaml

@@ -106,3 +106,36 @@ serviceMonitor:
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+migrations:
+  enabled: true
+  image:
+    repository: bytebrew/engine-migrations
+    tag: ""
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  activeDeadlineSeconds: 600
+
+configApply:
+  enabled: false
+  image:
+    repository: ghcr.io/syntheticinc/brewctl
+    tag: v0.1.0
+    pullPolicy: IfNotPresent
+  config: ""
+  existingConfigMap: ""
+  tokenSecret: ""
+  apiKeysSecret: ""
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+  activeDeadlineSeconds: 300

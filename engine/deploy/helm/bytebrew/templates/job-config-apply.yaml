@@ -1,0 +1,65 @@
+{{- if .Values.configApply.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "bytebrew-engine.fullname" . }}-config-apply
+  labels:
+    {{- include "bytebrew-engine.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  activeDeadlineSeconds: {{ .Values.configApply.activeDeadlineSeconds }}
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "bytebrew-engine.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: config-apply
+    spec:
+      restartPolicy: OnFailure
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: wait-for-engine
+          image: curlimages/curl:8.5.0
+          command:
+            - sh
+            - -c
+            - |
+              until curl -sf http://{{ include "bytebrew-engine.fullname" . }}:{{ .Values.service.port }}/api/v1/health; do
+                echo "waiting for engine...";
+                sleep 2;
+              done
+      containers:
+        - name: brewctl-apply
+          image: "{{ .Values.configApply.image.repository }}:{{ .Values.configApply.image.tag }}"
+          imagePullPolicy: {{ .Values.configApply.image.pullPolicy }}
+          command: ["brewctl", "apply", "-f", "/etc/bytebrew/config", "--yes"]
+          env:
+            - name: BREWCTL_ENGINE_URL
+              value: "http://{{ include "bytebrew-engine.fullname" . }}:{{ .Values.service.port }}"
+            - name: BREWCTL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.configApply.tokenSecret }}
+                  key: token
+          {{- if .Values.configApply.apiKeysSecret }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.configApply.apiKeysSecret }}
+          {{- end }}
+          volumeMounts:
+            - name: bytebrew-config
+              mountPath: /etc/bytebrew/config
+              readOnly: true
+          resources:
+            {{- toYaml .Values.configApply.resources | nindent 12 }}
+      volumes:
+        - name: bytebrew-config
+          configMap:
+            name: {{ if .Values.configApply.existingConfigMap }}{{ .Values.configApply.existingConfigMap }}{{ else }}{{ include "bytebrew-engine.fullname" . }}-bytebrew-config{{ end }}
+{{- end }}
