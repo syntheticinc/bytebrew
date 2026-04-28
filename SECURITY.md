@@ -28,7 +28,7 @@ Instead, email us at **[info@bytebrew.ai](mailto:info@bytebrew.ai)** with:
 
 - ByteBrew Engine (this repository)
 - Admin Dashboard (embedded in this repository)
-- Docker images published by Synthetic Inc.
+- Docker images published by Synthetic AI Inc.
 
 ### Out of Scope
 

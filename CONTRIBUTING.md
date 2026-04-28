@@ -134,4 +134,4 @@ Found a vulnerability? Please report it privately. See [SECURITY.md](SECURITY.md
 
 ## License
 
-By contributing, you agree to the terms of our [Contributor License Agreement](CLA.md). Your contributions will be licensed under the [BSL 1.1](LICENSE) license. The CLA grants Synthetic Inc. the right to sublicense contributions, which is required for the BSL → Apache 2.0 conversion on the Change Date.
+By contributing, you agree to the terms of our [Contributor License Agreement](CLA.md). Your contributions will be licensed under the [BSL 1.1](LICENSE) license. The CLA grants Synthetic AI Inc. the right to sublicense contributions, which is required for the BSL → Apache 2.0 conversion on the Change Date.
