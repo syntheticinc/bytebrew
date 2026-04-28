@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 
+	"github.com/cloudwego/eino/components"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 
@@ -69,4 +70,13 @@ func (w *modelParamsWrapper) WithTools(tools []*schema.ToolInfo) (model.ToolCall
 		return nil, err
 	}
 	return &modelParamsWrapper{inner: inner, params: w.params}, nil
+}
+
+// IsCallbacksEnabled forwards the inner model's callback aspect status.
+// Without this, eino's components.IsCallbacksEnabled type-assertion fails on the
+// wrapper and the framework auto-injects an aspect on top of the inner model's
+// own manual callbacks.OnEndWithStreamOutput dispatch — producing every chunk
+// twice on the SSE wire.
+func (w *modelParamsWrapper) IsCallbacksEnabled() bool {
+	return components.IsCallbacksEnabled(w.inner)
 }

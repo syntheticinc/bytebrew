@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cloudwego/eino/components"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 )
@@ -209,4 +210,12 @@ func (w *DebugChatModelWrapper) WithTools(tools []*schema.ToolInfo) (model.ToolC
 		logDir:    w.logDir,
 		sessionID: w.sessionID,
 	}, nil
+}
+
+// IsCallbacksEnabled forwards the inner model's callback aspect status so eino's
+// components.Checker type-assertion succeeds on the wrapper and the framework
+// does not auto-inject a duplicate aspect on top of the inner model's manual
+// callbacks dispatch (which would emit every streamed chunk twice).
+func (w *DebugChatModelWrapper) IsCallbacksEnabled() bool {
+	return components.IsCallbacksEnabled(w.inner)
 }

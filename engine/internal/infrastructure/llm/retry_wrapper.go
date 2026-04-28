@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cloudwego/eino/components"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 )
@@ -76,6 +77,14 @@ func (w *RetryWrapper) WithTools(tools []*schema.ToolInfo) (model.ToolCallingCha
 		baseDelay:  w.baseDelay,
 		timeout:    w.timeout,
 	}, nil
+}
+
+// IsCallbacksEnabled forwards the inner model's callback aspect status so eino's
+// components.Checker type-assertion succeeds on the wrapper and the framework
+// does not auto-inject a duplicate aspect on top of the inner model's manual
+// callbacks dispatch (which would emit every streamed chunk twice).
+func (w *RetryWrapper) IsCallbacksEnabled() bool {
+	return components.IsCallbacksEnabled(w.inner)
 }
 
 // isRetriable determines whether an error is transient and worth retrying.
