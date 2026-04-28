@@ -1,0 +1,154 @@
+# V2 Schema Templates — curated catalog (§2.2).
+#
+# Source of truth for the schema_templates DB table. Engine boot calls
+# `seedSchemaTemplates` which upserts each entry by its unique `name` key.
+# Hot-updates propagate via YAML bump + restart — no Liquibase changeset
+# needed per catalog edit.
+#
+# Fork semantics: the admin "Use template" button calls
+# POST /api/v1/schema-templates/:name/fork → usecase creates new agents,
+# schema, agent_relations, triggers, capabilities in one transaction. Agent
+# references inside `relations` / `triggers` / `entry_agent_name` are
+# logical names — the fork service resolves them to freshly-minted uuids at
+# fork time. Forked rows are independent of the catalog (no FK back).
+#
+# Out of scope for V2 (see checklist Group L): user-created templates,
+# marketplace sharing, refresh-from-source. All templates here are
+# system-wide and global.
+
+catalog_version: "1.0"
+
+templates:
+  # ──────────────────────────────────────────────────────────────────────
+  # SUPPORT — 2-agent triage → resolver, chat trigger, Knowledge capability.
+  # ──────────────────────────────────────────────────────────────────────
+  - name: "customer-support-basic"
+    display: "Customer Support (Basic)"
+    description: "Triage orchestrator that delegates resolution to a knowledge-backed resolver. Start here for FAQ-style help desks."
+    category: "support"
+    icon: "headset"
+    version: "1.0"
+    definition:
+      entry_agent_name: "triage"
+      agents:
+        - name: "triage"
+          system_prompt: |
+            You are the triage orchestrator. Classify incoming customer requests
+            and delegate the response to the resolver. Return a concise final
+            reply based on the resolver's output.
+          model: ""
+          capabilities:
+            - type: "memory"
+              config: {}
+        - name: "resolver"
+          system_prompt: |
+            You resolve customer questions using the knowledge base. Be concise,
+            accurate, and cite the source when helpful.
+          model: ""
+          capabilities:
+            - type: "knowledge"
+              config: {}
+      relations:
+        - source: "triage"
+          target: "resolver"
+      triggers:
+        - type: "chat"
+          title: "Main Chat"
+          enabled: true
+          config: {}
+
+  # ──────────────────────────────────────────────────────────────────────
+  # SALES — lead-qualifier → objection-handler, chat trigger, Memory.
+  # ──────────────────────────────────────────────────────────────────────
+  - name: "sales-qualifier-basic"
+    display: "Sales Qualifier (Basic)"
+    description: "Qualifier that captures needs / budget / timeline and delegates objection handling to a specialist. Chat entry point."
+    category: "sales"
+    icon: "cart"
+    version: "1.0"
+    definition:
+      entry_agent_name: "lead-qualifier"
+      agents:
+        - name: "lead-qualifier"
+          system_prompt: |
+            You qualify inbound leads. Ask about needs, budget, decision
+            authority, and timeline. When the prospect raises an objection,
+            delegate to the objection handler.
+          model: ""
+          capabilities:
+            - type: "memory"
+              config: {}
+        - name: "objection-handler"
+          system_prompt: |
+            You address common sales objections (price, timing, competition).
+            Respond with empathy and return a concise rebuttal.
+          model: ""
+          capabilities: []
+      relations:
+        - source: "lead-qualifier"
+          target: "objection-handler"
+      triggers:
+        - type: "chat"
+          title: "Sales Chat"
+          enabled: true
+          config: {}
+
+  # ──────────────────────────────────────────────────────────────────────
+  # INTERNAL — HR-assistant → docs-search, chat trigger, Knowledge.
+  # ──────────────────────────────────────────────────────────────────────
+  - name: "internal-hr-assistant"
+    display: "Internal HR Assistant"
+    description: "HR front-desk agent that delegates policy lookups to a docs-search specialist. Use for internal company knowledge bases."
+    category: "internal"
+    icon: "building"
+    version: "1.0"
+    definition:
+      entry_agent_name: "hr-assistant"
+      agents:
+        - name: "hr-assistant"
+          system_prompt: |
+            You answer employee HR questions (policies, benefits, time off).
+            Delegate to the docs-search agent for specific policy lookups.
+          model: ""
+          capabilities: []
+        - name: "docs-search"
+          system_prompt: |
+            You search the HR knowledge base and return the cited policy text
+            verbatim along with its source document.
+          model: ""
+          capabilities:
+            - type: "knowledge"
+              config: {}
+      relations:
+        - source: "hr-assistant"
+          target: "docs-search"
+      triggers:
+        - type: "chat"
+          title: "HR Chat"
+          enabled: true
+          config: {}
+
+  # ──────────────────────────────────────────────────────────────────────
+  # GENERIC — single-agent hello-world, chat trigger.
+  # ──────────────────────────────────────────────────────────────────────
+  - name: "generic-hello-world"
+    display: "Generic Assistant"
+    description: "Single-agent starter. A helpful assistant with a chat trigger — minimal scaffold for custom use cases."
+    category: "generic"
+    icon: "sparkles"
+    version: "1.0"
+    definition:
+      entry_agent_name: "assistant"
+      agents:
+        - name: "assistant"
+          system_prompt: |
+            You are a helpful assistant. Answer the user's questions concisely
+            and ask clarifying questions when needed.
+          model: ""
+          capabilities: []
+      relations: []
+      triggers:
+        - type: "chat"
+          title: "Chat"
+          enabled: true
+          config: {}

@@ -1,0 +1,769 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001_extensions
+      author: bytebrew
+      changes:
+        - sql:
+            sql: |
+              CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+              CREATE EXTENSION IF NOT EXISTS "vector";
+
+  - changeSet:
+      id: 002_tables
+      author: bytebrew
+      comment: |
+        Initial schema — final state.
+        Identity: no `users` table. Admin/system identity is external (JWT `sub`)
+        persisted as varchar wherever it appears (api_tokens.user_sub,
+        audit_logs.actor_sub). Models carry an explicit `kind` discriminator
+        (chat | embedding) used by application-layer validation.
+      changes:
+        - sql:
+            sql: |
+              -- =============================================================================
+              -- CONFIG — Models (kind splits chat vs embedding)
+              -- =============================================================================
+
+              CREATE TABLE models (
+                id                uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id         uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                name              varchar(255) NOT NULL,
+                type              varchar(30)  NOT NULL,
+                kind              varchar(20)  NOT NULL DEFAULT 'chat',
+                base_url          varchar(500),
+                model_name        varchar(255) NOT NULL,
+                api_key_encrypted varchar(1000),
+                api_version       varchar(30)  DEFAULT '',
+                config            jsonb        NOT NULL DEFAULT '{}',
+                created_at        timestamptz  NOT NULL DEFAULT now(),
+                updated_at        timestamptz  NOT NULL DEFAULT now(),
+                CONSTRAINT pk_models PRIMARY KEY (id)
+              );
+
+              -- =============================================================================
+              -- CONFIG — MCP Catalog (global, no tenant)
+              -- =============================================================================
+
+              CREATE TABLE mcp_catalog (
+                id             uuid         NOT NULL DEFAULT gen_random_uuid(),
+                name           varchar(255) NOT NULL,
+                display        varchar(255) NOT NULL,
+                description    text,
+                category       varchar(30)  NOT NULL,
+                verified       boolean      NOT NULL DEFAULT false,
+                packages       jsonb        NOT NULL,
+                provided_tools jsonb,
+                created_at     timestamptz  NOT NULL DEFAULT now(),
+                updated_at     timestamptz  NOT NULL DEFAULT now(),
+                CONSTRAINT pk_mcp_catalog PRIMARY KEY (id),
+                CONSTRAINT uq_mcp_catalog_name UNIQUE (name)
+              );
+
+              -- =============================================================================
+              -- CONFIG — Schema Templates (global, no tenant)
+              -- =============================================================================
+
+              CREATE TABLE schema_templates (
+                id          uuid         NOT NULL DEFAULT gen_random_uuid(),
+                name        varchar(255) NOT NULL,
+                display     varchar(255) NOT NULL,
+                description text,
+                category    varchar(30)  NOT NULL,
+                icon        varchar(64),
+                version     varchar(32)  NOT NULL DEFAULT '1.0',
+                definition  jsonb        NOT NULL,
+                created_at  timestamptz  NOT NULL DEFAULT now(),
+                updated_at  timestamptz  NOT NULL DEFAULT now(),
+                CONSTRAINT pk_schema_templates PRIMARY KEY (id),
+                CONSTRAINT uq_schema_templates_name UNIQUE (name)
+              );
+
+              -- =============================================================================
+              -- CONFIG — Agents
+              -- =============================================================================
+
+              CREATE TABLE agents (
+                id                uuid             NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id         uuid             NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                name              varchar(255)     NOT NULL,
+                model_id          uuid,
+                system_prompt     text             NOT NULL,
+                lifecycle         varchar(20)      NOT NULL DEFAULT 'persistent',
+                tool_execution    varchar(20)      NOT NULL DEFAULT 'sequential',
+                max_steps         int              NOT NULL DEFAULT 0,
+                max_context_size  int              NOT NULL DEFAULT 16000,
+                max_turn_duration int              NOT NULL DEFAULT 120,
+                temperature       double precision,
+                top_p             double precision,
+                max_tokens        int,
+                stop_sequences    jsonb,
+                confirm_before    jsonb,
+                is_system         boolean          NOT NULL DEFAULT false,
+                created_at        timestamptz      NOT NULL DEFAULT now(),
+                updated_at        timestamptz      NOT NULL DEFAULT now(),
+                CONSTRAINT pk_agents PRIMARY KEY (id)
+              );
+
+              -- =============================================================================
+              -- CONFIG — Agent Tools
+              -- =============================================================================
+
+              CREATE TABLE agent_tools (
+                id         uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id  uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                agent_id   uuid         NOT NULL,
+                tool_type  varchar(20)  NOT NULL,
+                tool_name  varchar(255) NOT NULL,
+                config     jsonb,
+                sort_order int          NOT NULL DEFAULT 0,
+                CONSTRAINT pk_agent_tools PRIMARY KEY (id)
+              );
+
+              -- =============================================================================
+              -- CONFIG — MCP Servers (tenant-scoped instances)
+              -- =============================================================================
+
+              CREATE TABLE mcp_servers (
+                id              uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id       uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                name            varchar(255) NOT NULL,
+                type            varchar(20)  NOT NULL,
+                command         varchar(500),
+                args            jsonb,
+                url             varchar(500),
+                env_vars        jsonb,
+                forward_headers jsonb,
+                auth_type       varchar(30)  NOT NULL DEFAULT 'none',
+                auth_key_env    varchar(255),
+                auth_token_env  varchar(255),
+                auth_client_id  varchar(255),
+                created_at      timestamptz  NOT NULL DEFAULT now(),
+                updated_at      timestamptz  NOT NULL DEFAULT now(),
+                CONSTRAINT pk_mcp_servers PRIMARY KEY (id)
+              );
+
+              -- =============================================================================
+              -- CONFIG — Agent ↔ MCP Servers (M2M composite PK)
+              -- =============================================================================
+
+              CREATE TABLE agent_mcp_servers (
+                tenant_id     uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                agent_id      uuid NOT NULL,
+                mcp_server_id uuid NOT NULL,
+                CONSTRAINT pk_agent_mcp_servers PRIMARY KEY (agent_id, mcp_server_id)
+              );
+
+              -- =============================================================================
+              -- CONFIG — Capabilities (memory | knowledge — bundled tools)
+              -- =============================================================================
+
+              CREATE TABLE capabilities (
+                id         uuid        NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id  uuid        NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                agent_id   uuid        NOT NULL,
+                type       varchar(50) NOT NULL,
+                config     jsonb,
+                enabled    boolean     NOT NULL DEFAULT true,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                updated_at timestamptz NOT NULL DEFAULT now(),
+                CONSTRAINT pk_capabilities PRIMARY KEY (id)
+              );
+
+              -- =============================================================================
+              -- CONFIG — Settings (per-tenant KV, composite PK)
+              -- =============================================================================
+
+              CREATE TABLE settings (
+                tenant_id  uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                key        varchar(255) NOT NULL,
+                value      jsonb        NOT NULL DEFAULT '{}',
+                updated_at timestamptz  NOT NULL DEFAULT now(),
+                CONSTRAINT pk_settings_tenant_key PRIMARY KEY (tenant_id, key)
+              );
+
+              -- =============================================================================
+              -- SCHEMAS — Schemas (chat_enabled flag gates chat access)
+              -- =============================================================================
+
+              CREATE TABLE schemas (
+                id                 uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id          uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                name               varchar(255) NOT NULL,
+                description        text,
+                entry_agent_id     uuid,
+                chat_enabled       boolean      NOT NULL DEFAULT false,
+                chat_last_fired_at timestamptz,
+                is_system          boolean      NOT NULL DEFAULT false,
+                created_at         timestamptz  NOT NULL DEFAULT now(),
+                updated_at         timestamptz  NOT NULL DEFAULT now(),
+                CONSTRAINT pk_schemas PRIMARY KEY (id)
+              );
+
+              -- =============================================================================
+              -- SCHEMAS — Agent Relations (delegation edges)
+              -- =============================================================================
+
+              CREATE TABLE agent_relations (
+                id              uuid        NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id       uuid        NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                schema_id       uuid        NOT NULL,
+                source_agent_id uuid        NOT NULL,
+                target_agent_id uuid        NOT NULL,
+                config          jsonb,
+                created_at      timestamptz NOT NULL DEFAULT now(),
+                updated_at      timestamptz NOT NULL DEFAULT now(),
+                CONSTRAINT pk_agent_relations PRIMARY KEY (id)
+              );
+
+              -- =============================================================================
+              -- KNOWLEDGE — Knowledge Bases
+              -- =============================================================================
+
+              CREATE TABLE knowledge_bases (
+                id                 uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id          uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                name               varchar(255) NOT NULL,
+                description        text,
+                embedding_model_id uuid,
+                created_at         timestamptz  NOT NULL DEFAULT now(),
+                updated_at         timestamptz  NOT NULL DEFAULT now(),
+                CONSTRAINT pk_knowledge_bases PRIMARY KEY (id)
+              );
+
+              -- =============================================================================
+              -- KNOWLEDGE — Knowledge Base Agents (M2M composite PK)
+              -- =============================================================================
+
+              CREATE TABLE knowledge_base_agents (
+                tenant_id         uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                knowledge_base_id uuid NOT NULL,
+                agent_id          uuid NOT NULL,
+                CONSTRAINT pk_knowledge_base_agents PRIMARY KEY (knowledge_base_id, agent_id)
+              );
+
+              -- =============================================================================
+              -- KNOWLEDGE — Documents
+              -- =============================================================================
+
+              CREATE TABLE knowledge_documents (
+                id                uuid        NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id         uuid        NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                knowledge_base_id uuid        NOT NULL,
+                file_path         text        NOT NULL,
+                file_type         varchar(20) NOT NULL DEFAULT 'txt',
+                file_size         bigint      NOT NULL DEFAULT 0,
+                file_hash         varchar(64) NOT NULL,
+                status            varchar(20) NOT NULL DEFAULT 'uploading',
+                status_msg        text,
+                chunk_count       int         DEFAULT 0,
+                indexed_at        timestamptz,
+                created_at        timestamptz NOT NULL DEFAULT now(),
+                updated_at        timestamptz NOT NULL DEFAULT now(),
+                CONSTRAINT pk_knowledge_documents PRIMARY KEY (id)
+              );
+
+              -- =============================================================================
+              -- KNOWLEDGE — Chunks (pgvector)
+              -- =============================================================================
+
+              CREATE TABLE knowledge_chunks (
+                id               uuid        NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id        uuid        NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                document_id      uuid        NOT NULL,
+                content          text        NOT NULL,
+                chunk_order      int         NOT NULL,
+                embedding_vector vector,
+                created_at       timestamptz NOT NULL DEFAULT now(),
+                CONSTRAINT pk_knowledge_chunks PRIMARY KEY (id)
+              );
+
+              -- =============================================================================
+              -- RUNTIME — Sessions (user_sub varchar, external identity)
+              -- =============================================================================
+
+              CREATE TABLE sessions (
+                id           uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id    uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                schema_id    uuid         NOT NULL,
+                user_sub     varchar(255) NOT NULL,
+                title        varchar(500),
+                status       varchar(20)  NOT NULL DEFAULT 'active',
+                created_at   timestamptz  NOT NULL DEFAULT now(),
+                updated_at   timestamptz  NOT NULL DEFAULT now(),
+                completed_at timestamptz,
+                CONSTRAINT pk_sessions PRIMARY KEY (id)
+              );
+
+              -- =============================================================================
+              -- RUNTIME — Messages
+              -- =============================================================================
+
+              CREATE TABLE messages (
+                id         uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id  uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                session_id uuid         NOT NULL,
+                event_type varchar(20)  NOT NULL,
+                agent_id   uuid,
+                call_id    varchar(100),
+                payload    jsonb        NOT NULL DEFAULT '{}',
+                created_at timestamptz  NOT NULL DEFAULT now(),
+                CONSTRAINT pk_messages PRIMARY KEY (id)
+              );
+
+              -- =============================================================================
+              -- RUNTIME — Session Event Log (protobuf-serialized for gRPC replay)
+              -- =============================================================================
+
+              CREATE TABLE session_event_log (
+                id         uuid        NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id  uuid        NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                session_id uuid        NOT NULL,
+                event_type varchar(50) NOT NULL,
+                proto_data bytea       NOT NULL,
+                created_at timestamptz NOT NULL DEFAULT now(),
+                CONSTRAINT pk_session_event_log PRIMARY KEY (id)
+              );
+
+              -- =============================================================================
+              -- RUNTIME — Tasks (self-ref for subtasks)
+              -- =============================================================================
+
+              CREATE TABLE tasks (
+                id                  uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id           uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                session_id          uuid         NOT NULL,
+                parent_task_id      uuid,
+                title               varchar(500) NOT NULL,
+                description         text,
+                acceptance_criteria jsonb,
+                status              varchar(20)  NOT NULL DEFAULT 'pending',
+                mode                varchar(20)  NOT NULL DEFAULT 'interactive',
+                priority            int          NOT NULL DEFAULT 0,
+                blocked_by          jsonb,
+                result              text,
+                error               text,
+                created_at          timestamptz  NOT NULL DEFAULT now(),
+                updated_at          timestamptz  NOT NULL DEFAULT now(),
+                approved_at         timestamptz,
+                started_at          timestamptz,
+                completed_at        timestamptz,
+                CONSTRAINT pk_tasks PRIMARY KEY (id)
+              );
+
+              -- =============================================================================
+              -- RUNTIME — Memories (user_sub varchar, external identity)
+              -- =============================================================================
+
+              CREATE TABLE memories (
+                id         uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id  uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                schema_id  uuid         NOT NULL,
+                user_sub   varchar(255) NOT NULL,
+                content    text         NOT NULL,
+                metadata   jsonb,
+                created_at timestamptz  NOT NULL DEFAULT now(),
+                updated_at timestamptz  NOT NULL DEFAULT now(),
+                CONSTRAINT pk_memories PRIMARY KEY (id)
+              );
+
+              -- =============================================================================
+              -- RUNTIME — Agent Runs
+              -- =============================================================================
+
+              CREATE TABLE agent_runs (
+                id           uuid        NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id    uuid        NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                task_id      uuid,
+                session_id   uuid        NOT NULL,
+                agent_id     uuid        NOT NULL,
+                status       varchar(20) NOT NULL,
+                result       text,
+                error        text,
+                started_at   timestamptz NOT NULL DEFAULT now(),
+                completed_at timestamptz,
+                CONSTRAINT pk_agent_runs PRIMARY KEY (id)
+              );
+
+              -- =============================================================================
+              -- RUNTIME — Agent Context Snapshots
+              -- =============================================================================
+
+              CREATE TABLE agent_context_snapshots (
+                id             uuid        NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id      uuid        NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                session_id     uuid        NOT NULL,
+                agent_id       uuid        NOT NULL,
+                schema_version int         NOT NULL DEFAULT 1,
+                context_data   bytea       NOT NULL,
+                step_number    int         NOT NULL DEFAULT 0,
+                token_count    int         NOT NULL DEFAULT 0,
+                status         varchar(20) NOT NULL DEFAULT 'active',
+                created_at     timestamptz NOT NULL DEFAULT now(),
+                updated_at     timestamptz NOT NULL DEFAULT now(),
+                CONSTRAINT pk_agent_context_snapshots PRIMARY KEY (id)
+              );
+
+              -- =============================================================================
+              -- OBSERVABILITY — Audit Logs (actor identity via actor_sub, no FK)
+              -- =============================================================================
+
+              CREATE TABLE audit_logs (
+                id          uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id   uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                occurred_at timestamptz  NOT NULL DEFAULT now(),
+                actor_type  varchar(20)  NOT NULL,
+                actor_sub   varchar(255),
+                action      varchar(50)  NOT NULL,
+                resource    varchar(500),
+                details     jsonb,
+                session_id  uuid,
+                task_id     uuid,
+                CONSTRAINT pk_audit_logs PRIMARY KEY (id)
+              );
+
+              -- =============================================================================
+              -- AUTH — API Tokens (user_sub varchar, no FK to a users table)
+              -- =============================================================================
+
+              CREATE TABLE api_tokens (
+                id           uuid         NOT NULL DEFAULT gen_random_uuid(),
+                tenant_id    uuid         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+                user_sub     varchar(255) NOT NULL DEFAULT '',
+                name         varchar(255) NOT NULL,
+                token_hash   char(64)     NOT NULL,
+                scopes_mask  int          NOT NULL DEFAULT 0,
+                created_at   timestamptz  NOT NULL DEFAULT now(),
+                last_used_at timestamptz,
+                revoked_at   timestamptz,
+                CONSTRAINT pk_api_tokens PRIMARY KEY (id),
+                CONSTRAINT uq_api_tokens_token_hash UNIQUE (token_hash)
+              );
+
+  - changeSet:
+      id: 003_indexes
+      author: bytebrew
+      changes:
+        - sql:
+            sql: |
+              -- models
+              CREATE UNIQUE INDEX idx_models_tenant_name ON models (tenant_id, name);
+              CREATE INDEX idx_models_tenant_id ON models (tenant_id);
+
+              -- agents
+              CREATE UNIQUE INDEX idx_agents_tenant_name ON agents (tenant_id, name);
+              CREATE INDEX idx_agents_model_id ON agents (model_id);
+              CREATE INDEX idx_agents_tenant_id ON agents (tenant_id);
+
+              -- agent_tools
+              CREATE UNIQUE INDEX idx_agent_tool_type_name ON agent_tools (agent_id, tool_type, tool_name);
+              CREATE INDEX idx_agent_tools_tenant_id ON agent_tools (tenant_id);
+
+              -- mcp_servers
+              CREATE UNIQUE INDEX idx_mcp_servers_tenant_name ON mcp_servers (tenant_id, name);
+
+              -- agent_mcp_servers
+              CREATE INDEX idx_agent_mcp_servers_mcp ON agent_mcp_servers (mcp_server_id);
+              CREATE INDEX idx_agent_mcp_servers_tenant_id ON agent_mcp_servers (tenant_id);
+
+              -- capabilities
+              CREATE UNIQUE INDEX idx_capabilities_agent_type ON capabilities (agent_id, type);
+
+              -- settings
+              CREATE INDEX idx_settings_tenant_id ON settings (tenant_id);
+
+              -- schemas
+              CREATE UNIQUE INDEX idx_schemas_tenant_name ON schemas (tenant_id, name);
+              CREATE INDEX idx_schemas_entry_agent_id ON schemas (entry_agent_id);
+              CREATE INDEX idx_schemas_tenant_id ON schemas (tenant_id);
+
+              -- agent_relations
+              CREATE INDEX idx_agent_relations_schema_id ON agent_relations (schema_id);
+              CREATE INDEX idx_agent_relations_tenant_id ON agent_relations (tenant_id);
+              CREATE UNIQUE INDEX idx_agent_relations_pair ON agent_relations (schema_id, source_agent_id, target_agent_id);
+              CREATE INDEX idx_agent_relations_target_agent_id ON agent_relations (target_agent_id);
+
+              -- knowledge_bases
+              CREATE UNIQUE INDEX idx_knowledge_bases_tenant_name ON knowledge_bases (tenant_id, name);
+              CREATE INDEX idx_knowledge_bases_embedding_model_id ON knowledge_bases (embedding_model_id);
+              CREATE INDEX idx_knowledge_bases_tenant_id ON knowledge_bases (tenant_id);
+
+              -- knowledge_base_agents
+              CREATE INDEX idx_knowledge_base_agents_agent_id ON knowledge_base_agents (agent_id);
+              CREATE INDEX idx_knowledge_base_agents_tenant_id ON knowledge_base_agents (tenant_id);
+
+              -- knowledge_documents
+              CREATE INDEX idx_knowledge_documents_knowledge_base_id ON knowledge_documents (knowledge_base_id);
+              CREATE INDEX idx_knowledge_documents_tenant_id ON knowledge_documents (tenant_id);
+
+              -- knowledge_chunks
+              CREATE INDEX idx_knowledge_chunks_document_id ON knowledge_chunks (document_id);
+              CREATE INDEX idx_knowledge_chunks_tenant_id ON knowledge_chunks (tenant_id);
+
+              -- sessions
+              CREATE INDEX idx_sessions_tenant_user_chrono ON sessions (tenant_id, user_sub, created_at);
+              CREATE INDEX idx_sessions_isolation ON sessions (tenant_id, schema_id, user_sub);
+              CREATE INDEX idx_sessions_schema_id ON sessions (schema_id);
+              CREATE INDEX idx_sessions_status ON sessions (status);
+
+              -- messages
+              CREATE INDEX idx_messages_tenant_session_chrono ON messages (tenant_id, session_id, created_at);
+              CREATE INDEX idx_messages_call_id ON messages (session_id, call_id);
+              CREATE INDEX idx_messages_agent_id ON messages (agent_id);
+
+              -- session_event_log
+              CREATE INDEX idx_session_event_log_lookup ON session_event_log (session_id, created_at);
+
+              -- tasks
+              CREATE INDEX idx_tasks_tenant_status_chrono ON tasks (tenant_id, status, created_at);
+              CREATE INDEX idx_tasks_session_id ON tasks (session_id);
+              CREATE INDEX idx_tasks_parent_task_id ON tasks (parent_task_id);
+
+              -- memories
+              CREATE INDEX idx_memories_isolation ON memories (tenant_id, schema_id, user_sub);
+              CREATE INDEX idx_memories_created_at ON memories (created_at);
+
+              -- agent_runs
+              CREATE INDEX idx_agent_runs_session_status ON agent_runs (session_id, status);
+              CREATE INDEX idx_agent_runs_task_id ON agent_runs (task_id);
+              CREATE INDEX idx_agent_runs_agent_id ON agent_runs (agent_id);
+              CREATE INDEX idx_agent_runs_tenant_id ON agent_runs (tenant_id);
+
+              -- agent_context_snapshots
+              CREATE INDEX idx_ctx_snapshots_session_agent ON agent_context_snapshots (session_id, agent_id);
+              CREATE UNIQUE INDEX idx_ctx_active ON agent_context_snapshots (session_id, agent_id) WHERE status = 'active';
+
+              -- audit_logs
+              CREATE INDEX idx_audit_tenant_time ON audit_logs (tenant_id, occurred_at);
+              CREATE INDEX idx_audit_logs_actor_sub ON audit_logs (actor_sub);
+              CREATE INDEX idx_audit_logs_session_id ON audit_logs (session_id);
+              CREATE INDEX idx_audit_logs_task_id ON audit_logs (task_id);
+              CREATE INDEX idx_audit_logs_actor_type ON audit_logs (actor_type);
+              CREATE INDEX idx_audit_logs_action ON audit_logs (action);
+
+              -- api_tokens — no uniqueness on name (token name is a label,
+              -- not an identifier; token_hash is the only required unique).
+              -- idx_api_tokens_tenant removed intentionally; insert traffic is
+              -- tenant-scoped but lookups are by token_hash (already unique).
+
+  - changeSet:
+      id: 004_foreign_keys
+      author: bytebrew
+      changes:
+        - sql:
+            sql: |
+              -- agents
+              ALTER TABLE agents
+                ADD CONSTRAINT fk_agents_model_id
+                FOREIGN KEY (model_id) REFERENCES models(id) ON DELETE SET NULL;
+
+              -- agent_tools
+              ALTER TABLE agent_tools
+                ADD CONSTRAINT fk_agent_tools_agent_id
+                FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE;
+
+              -- agent_mcp_servers
+              ALTER TABLE agent_mcp_servers
+                ADD CONSTRAINT fk_agent_mcp_servers_agent_id
+                FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE;
+              ALTER TABLE agent_mcp_servers
+                ADD CONSTRAINT fk_agent_mcp_servers_mcp_server_id
+                FOREIGN KEY (mcp_server_id) REFERENCES mcp_servers(id) ON DELETE CASCADE;
+
+              -- capabilities
+              ALTER TABLE capabilities
+                ADD CONSTRAINT fk_capabilities_agent_id
+                FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE;
+
+              -- schemas
+              ALTER TABLE schemas
+                ADD CONSTRAINT fk_schemas_entry_agent_id
+                FOREIGN KEY (entry_agent_id) REFERENCES agents(id) ON DELETE RESTRICT;
+
+              -- agent_relations
+              ALTER TABLE agent_relations
+                ADD CONSTRAINT fk_agent_relations_schema_id
+                FOREIGN KEY (schema_id) REFERENCES schemas(id) ON DELETE CASCADE;
+              ALTER TABLE agent_relations
+                ADD CONSTRAINT fk_agent_relations_source_agent_id
+                FOREIGN KEY (source_agent_id) REFERENCES agents(id) ON DELETE CASCADE;
+              ALTER TABLE agent_relations
+                ADD CONSTRAINT fk_agent_relations_target_agent_id
+                FOREIGN KEY (target_agent_id) REFERENCES agents(id) ON DELETE CASCADE;
+
+              -- knowledge_bases
+              ALTER TABLE knowledge_bases
+                ADD CONSTRAINT fk_knowledge_bases_embedding_model_id
+                FOREIGN KEY (embedding_model_id) REFERENCES models(id) ON DELETE SET NULL;
+
+              -- knowledge_base_agents
+              ALTER TABLE knowledge_base_agents
+                ADD CONSTRAINT fk_knowledge_base_agents_knowledge_base_id
+                FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases(id) ON DELETE CASCADE;
+              ALTER TABLE knowledge_base_agents
+                ADD CONSTRAINT fk_knowledge_base_agents_agent_id
+                FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE;
+
+              -- knowledge_documents
+              ALTER TABLE knowledge_documents
+                ADD CONSTRAINT fk_knowledge_documents_knowledge_base_id
+                FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases(id) ON DELETE CASCADE;
+
+              -- knowledge_chunks
+              ALTER TABLE knowledge_chunks
+                ADD CONSTRAINT fk_knowledge_chunks_document_id
+                FOREIGN KEY (document_id) REFERENCES knowledge_documents(id) ON DELETE CASCADE;
+
+              -- sessions
+              ALTER TABLE sessions
+                ADD CONSTRAINT fk_sessions_schema_id
+                FOREIGN KEY (schema_id) REFERENCES schemas(id) ON DELETE RESTRICT;
+
+              -- messages
+              ALTER TABLE messages
+                ADD CONSTRAINT fk_messages_session_id
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE;
+              ALTER TABLE messages
+                ADD CONSTRAINT fk_messages_agent_id
+                FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE SET NULL;
+
+              -- session_event_log
+              ALTER TABLE session_event_log
+                ADD CONSTRAINT fk_session_event_log_session_id
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE;
+
+              -- tasks
+              ALTER TABLE tasks
+                ADD CONSTRAINT fk_tasks_session_id
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE;
+              ALTER TABLE tasks
+                ADD CONSTRAINT fk_tasks_parent_task_id
+                FOREIGN KEY (parent_task_id) REFERENCES tasks(id) ON DELETE CASCADE;
+
+              -- memories
+              ALTER TABLE memories
+                ADD CONSTRAINT fk_memories_schema_id
+                FOREIGN KEY (schema_id) REFERENCES schemas(id) ON DELETE CASCADE;
+
+              -- agent_runs
+              ALTER TABLE agent_runs
+                ADD CONSTRAINT fk_agent_runs_task_id
+                FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL;
+              ALTER TABLE agent_runs
+                ADD CONSTRAINT fk_agent_runs_session_id
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE;
+              ALTER TABLE agent_runs
+                ADD CONSTRAINT fk_agent_runs_agent_id
+                FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE;
+
+              -- agent_context_snapshots
+              ALTER TABLE agent_context_snapshots
+                ADD CONSTRAINT fk_agent_context_snapshots_session_id
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE;
+              ALTER TABLE agent_context_snapshots
+                ADD CONSTRAINT fk_agent_context_snapshots_agent_id
+                FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE;
+
+              -- audit_logs
+              ALTER TABLE audit_logs
+                ADD CONSTRAINT fk_audit_logs_session_id
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL;
+              ALTER TABLE audit_logs
+                ADD CONSTRAINT fk_audit_logs_task_id
+                FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL;
+
+  - changeSet:
+      id: 005_check_constraints
+      author: bytebrew
+      changes:
+        - sql:
+            sql: |
+              -- agents
+              ALTER TABLE agents
+                ADD CONSTRAINT chk_agents_lifecycle
+                CHECK (lifecycle IN ('persistent','spawn'));
+              ALTER TABLE agents
+                ADD CONSTRAINT chk_agents_tool_execution
+                CHECK (tool_execution IN ('sequential','parallel'));
+
+              -- agent_tools
+              ALTER TABLE agent_tools
+                ADD CONSTRAINT chk_agent_tools_tool_type
+                CHECK (tool_type IN ('builtin','custom'));
+
+              -- capabilities
+              ALTER TABLE capabilities
+                ADD CONSTRAINT chk_capabilities_type
+                CHECK (type IN ('memory','knowledge'));
+
+              -- models
+              ALTER TABLE models
+                ADD CONSTRAINT chk_models_type
+                CHECK (type IN ('ollama','openai_compatible','anthropic','azure_openai'));
+              ALTER TABLE models
+                ADD CONSTRAINT chk_models_kind
+                CHECK (kind IN ('chat','embedding'));
+
+              -- mcp_catalog
+              ALTER TABLE mcp_catalog
+                ADD CONSTRAINT chk_mcp_catalog_category
+                CHECK (category IN ('search','data','communication','dev-tools','productivity','payments','generic'));
+
+              -- mcp_servers
+              ALTER TABLE mcp_servers
+                ADD CONSTRAINT chk_mcp_servers_type
+                CHECK (type IN ('stdio','http','sse','streamable-http'));
+              ALTER TABLE mcp_servers
+                ADD CONSTRAINT chk_mcp_servers_auth_type
+                CHECK (auth_type IN ('none','api_key','forward_headers','oauth2','service_account'));
+
+              -- schema_templates
+              ALTER TABLE schema_templates
+                ADD CONSTRAINT chk_schema_templates_category
+                CHECK (category IN ('support','sales','internal','generic'));
+
+              -- knowledge_documents
+              ALTER TABLE knowledge_documents
+                ADD CONSTRAINT chk_knowledge_documents_file_type
+                CHECK (file_type IN ('pdf','docx','doc','txt','md','csv'));
+              ALTER TABLE knowledge_documents
+                ADD CONSTRAINT chk_knowledge_documents_status
+                CHECK (status IN ('uploading','indexing','ready','error'));
+
+              -- sessions
+              ALTER TABLE sessions
+                ADD CONSTRAINT chk_sessions_status
+                CHECK (status IN ('active','completed','expired','failed'));
+
+              -- messages
+              ALTER TABLE messages
+                ADD CONSTRAINT chk_messages_event_type
+                CHECK (event_type IN ('user_message','assistant_message','tool_call','tool_result','reasoning','system'));
+
+              -- tasks
+              ALTER TABLE tasks
+                ADD CONSTRAINT chk_tasks_status
+                CHECK (status IN ('pending','in_progress','completed','failed','needs_input','cancelled'));
+              ALTER TABLE tasks
+                ADD CONSTRAINT chk_tasks_mode
+                CHECK (mode IN ('interactive','background'));
+
+              -- agent_runs
+              ALTER TABLE agent_runs
+                ADD CONSTRAINT chk_agent_runs_status
+                CHECK (status IN ('running','completed','failed','cancelled'));
+              ALTER TABLE agent_runs
+                ADD CONSTRAINT chk_agent_runs_completed_after_started
+                CHECK (completed_at IS NULL OR completed_at >= started_at);
+
+              -- agent_context_snapshots
+              ALTER TABLE agent_context_snapshots
+                ADD CONSTRAINT chk_agent_context_snapshots_status
+                CHECK (status IN ('active','compacted','expired'));
+
+              -- audit_logs
+              ALTER TABLE audit_logs
+                ADD CONSTRAINT chk_audit_logs_actor_type
+                CHECK (actor_type IN ('admin','api_token','system'));
+              ALTER TABLE audit_logs
+                ADD CONSTRAINT chk_audit_logs_actor_presence
+                CHECK (actor_type = 'system' OR actor_sub IS NOT NULL);

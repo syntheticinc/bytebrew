@@ -1,0 +1,105 @@
+package engine
+
+import (
+	"context"
+	"sync"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/syntheticinc/bytebrew/engine/internal/domain"
+)
+
+// captureCtxHistoryRepo records the ctx passed to every Create call. Used to
+// verify that MessageCollector propagates the tenant_id from its constructor
+// ctx into DB writes — without it, Cloud users lose their assistant/tool/
+// reasoning rows on reload (the 2026-04-27 "last AI message disappears" bug).
+type captureCtxHistoryRepo struct {
+	mu       sync.Mutex
+	ctxs     []context.Context
+	messages []*domain.Message
+}
+
+func (r *captureCtxHistoryRepo) Create(ctx context.Context, message *domain.Message) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ctxs = append(r.ctxs, ctx)
+	r.messages = append(r.messages, message)
+	return nil
+}
+
+// TestMessageCollector_PropagatesTenantToHandleEvent reproduces the bug where
+// streamed assistant messages were written under CETenantID instead of the
+// caller's tenant. handleEvent must inherit the ctx given at construction so
+// that MessageRepositoryImpl.Create can stamp the right tenant_id.
+func TestMessageCollector_PropagatesTenantToHandleEvent(t *testing.T) {
+	const tenant = "9238e024-adbd-ef67-933d-51465a5a5280"
+	repo := &captureCtxHistoryRepo{}
+
+	parentCtx := domain.WithTenantID(context.Background(), tenant)
+	mc := NewMessageCollector(parentCtx, "session-1", "supervisor", repo)
+
+	cb := mc.WrapEventCallback(nil)
+
+	// Streamed final assistant message — the path that vanished on reload.
+	require.NoError(t, cb(&domain.AgentEvent{
+		Type:    domain.EventTypeAnswer,
+		Content: "Echo: hi",
+	}))
+
+	// Tool call + result so we cover the other handleEvent branches too.
+	require.NoError(t, cb(&domain.AgentEvent{
+		Type: domain.EventTypeToolCall,
+		Metadata: map[string]interface{}{
+			"id":                 "call-1",
+			"tool_name":          "echo_message",
+			"function_arguments": `{"text":"hi"}`,
+		},
+	}))
+	require.NoError(t, cb(&domain.AgentEvent{
+		Type: domain.EventTypeToolResult,
+		Metadata: map[string]interface{}{
+			"tool_name":   "echo_message",
+			"full_result": "ok",
+		},
+		Content: "ok",
+	}))
+
+	// Reasoning gets persisted only when IsComplete=true.
+	require.NoError(t, cb(&domain.AgentEvent{
+		Type:       domain.EventTypeReasoning,
+		Content:    "I'll echo it back.",
+		IsComplete: true,
+	}))
+
+	require.NotEmpty(t, repo.ctxs, "MessageCollector must persist at least one event")
+
+	for i, ctx := range repo.ctxs {
+		got := domain.TenantIDFromContext(ctx)
+		assert.Equalf(t, tenant, got,
+			"event #%d (%s) lost tenant_id — got %q, want %q",
+			i, repo.messages[i].Type, got, tenant)
+	}
+}
+
+// TestMessageCollector_NilCtxFallsBackToBackground guards the safety net in
+// handleEvent: if a caller forgets to pass ctx, writes still succeed (with the
+// CETenantID default) instead of panicking.
+func TestMessageCollector_NilCtxFallsBackToBackground(t *testing.T) {
+	repo := &captureCtxHistoryRepo{}
+	mc := &MessageCollector{
+		sessionID:   "session-2",
+		agentID:     "supervisor",
+		historyRepo: repo,
+	}
+
+	cb := mc.WrapEventCallback(nil)
+	require.NoError(t, cb(&domain.AgentEvent{
+		Type:    domain.EventTypeAnswer,
+		Content: "fallback",
+	}))
+
+	require.Len(t, repo.ctxs, 1)
+	assert.NotNil(t, repo.ctxs[0])
+}

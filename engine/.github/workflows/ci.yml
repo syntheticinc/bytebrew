@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main, feature/*]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: Build
+        run: go build ./...
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+      - name: Test
+        run: go test ./...
+      - name: ctx-lint (resolver methods must take ctx)
+        run: bash scripts/ctx-lint.sh
+      - name: slog-lint (all slog calls must use Context variant)
+        run: bash scripts/slog-lint.sh
+      - name: Security Gate (SCC-01 unauthenticated → 401)
+        run: go test ./internal/delivery/http/... -run TestSecurityGate -v
+      - name: Security scan
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./...
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm run build
+      - run: npx tsc --noEmit
+
+  # contract-tests runs on every PR — fast, no Docker needed.
+  # Validates that the engine metering wire format and HMAC algorithm
+  # match the shared contract in docs/contracts/.
+  contract-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Contract tests reference both engine and cloud-api source, so
+          # check out the full monorepo workspace root (parent of bytebrew/engine).
+          path: workspace
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Contract tests — engine side
+        working-directory: workspace/bytebrew/engine
+        run: GOWORK=off go test -tags=contract ./tests/contracts/... -v -timeout 60s
+      - name: Contract tests — cloud-api side
+        working-directory: workspace/bytebrew-cloud-web/cloud-api
+        run: GOWORK=off go test -tags=contract ./tests/contracts/... -v -timeout 120s
+
+  # e2e-money-flow runs on a daily schedule and on pushes to main.
+  # Brings up the full stack (engine + cloud-api + stripe-mock + postgres)
+  # via docker-compose-cloud-full.yml and exercises the money flow end-to-end.
+  e2e-money-flow:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: workspace
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Start full stack
+        working-directory: workspace
+        run: |
+          docker compose -f docker-compose-cloud-full.yml up -d --wait --timeout 120
+      - name: Run money-flow E2E tests
+        working-directory: workspace/bytebrew-ee
+        env:
+          CLOUD_FULL_ENGINE_URL: http://localhost:19555
+          CLOUD_FULL_LANDING_URL: http://localhost:13002
+        run: GOWORK=off go test -tags=e2e ./tests/e2e/... -v -timeout 5m
+      - name: Collect logs on failure
+        if: failure()
+        working-directory: workspace
+        run: docker compose -f docker-compose-cloud-full.yml logs --no-color
+      - name: Tear down full stack
+        if: always()
+        working-directory: workspace
+        run: docker compose -f docker-compose-cloud-full.yml down -v
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t bytebrew/engine:test -f Dockerfile .

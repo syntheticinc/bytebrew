@@ -1,0 +1,53 @@
+# Test config: legacy fields + new bootstrap fields (PostgreSQL)
+
+server:
+  host: "0.0.0.0"
+  port: 60466
+
+# Database — legacy fields + new url for PostgreSQL config storage
+database:
+  host: localhost
+  port: 5499
+  user: postgres
+  password: postgres
+  database: bytebrew
+  ssl_mode: disable
+  url: "postgresql://bytebrew:bytebrew@localhost:5436/bytebrew_test"
+
+# NEW: Bootstrap engine settings
+engine:
+  host: "0.0.0.0"
+  port: 9443
+
+# Test fixture: local mode auto-generates an Ed25519 keypair at boot.
+# Wave 1+7 (2026-04-21): jwt_secret/users-table removed.
+security:
+  auth_mode: "local"
+
+logging:
+  level: info
+  format: text
+  output: file
+  file_path: logs/bytebrew-srv.log
+  clear_on_startup: true
+
+llm:
+  default_provider: openrouter
+  streaming: false
+  ollama:
+    base_url: http://localhost:11434
+    model: qwen3-coder:30b
+    timeout: 300s
+    thinking: false
+  openrouter:
+    api_key: ${OPENROUTER_API_KEY}  # set via environment variable
+    base_url: https://openrouter.ai/api/v1
+    model: qwen/qwen3-coder-next
+    timeout: 120s
+
+agent:
+  max_steps: 50
+  max_context_size: 48000
+
+license:
+  public_key_hex: "${LICENSE_PUBLIC_KEY_HEX}"  # set via environment variable

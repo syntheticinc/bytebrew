@@ -1,0 +1,20 @@
+databaseChangeLog:
+  - changeSet:
+      id: add-models-is-default
+      author: bytebrew
+      comment: |
+        Add `is_default` column to models so tenants can explicitly flag one
+        chat model as the tenant default (used for agent backfill when an
+        agent is created without an explicit model). The partial unique index
+        enforces at the DB level that AT MOST ONE row per (tenant_id) can
+        have is_default=TRUE AND kind='chat' — so neither a bug nor a
+        concurrency race nor raw SQL can create two defaults.
+      changes:
+        - sql:
+            sql: |
+              ALTER TABLE models
+                ADD COLUMN IF NOT EXISTS is_default BOOLEAN NOT NULL DEFAULT FALSE;
+
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_models_tenant_default_chat
+                ON models (tenant_id)
+                WHERE is_default = TRUE AND kind = 'chat';
