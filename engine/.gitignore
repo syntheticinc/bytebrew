@@ -1,0 +1,86 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# Protobuf generated (use api/proto/gen/ only)
+/*.pb.go
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# AI tooling state
+.claude/agent-memory/
+.omc/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config
+config.yaml
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+data/
+
+# Temporary files
+tmp/
+temp/
+
+# QA testing artifacts
+qa-results/
+webclient-dist
+
+# Private keys / secrets
+*.pem
+*.key
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+*.p12
+*.pfx
+secrets/
+credentials*.json
+service-account*.json
+# Auth state
+cookies.txt
+auth.json
+storageState*.json
+# Local env overrides
+.env.local
+.env.*.local
+.env.production
+.env.staging

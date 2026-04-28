@@ -1,0 +1,131 @@
+# OMC (oh-my-claudecode)
+.omc/
+
+# Windsurf / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+.env
+.venv/
+.venv
+env/
+venv/
+ENV/
+**/.venv/
+
+# Local databases / fixtures
+*.db
+*.sqlite
+
+# ByteBrew CLI - local indexing storage
+.bytebrew/
+
+# Docs - prevent recovery of deleted files
+docs/ARCHITECTURE-AUDIT-REPORT.md
+docs/README.md
+docs/analysis/
+docs/dependencies-review.md
+docs/discovery-plan.md
+docs/entity-model-*.dbml
+docs/interfaces-and-use-cases.md
+docs/lean-canvas-to-user-stories-mapping.md
+docs/normalization-decisions.md
+docs/traceability-matrix.md
+docs/validation-checklist.md
+docs/tasks-v2/
+docs/tasks/0*.md
+docs/tasks/1*.md
+docs/tasks/README.md
+docs/architecture/poc-architecture.md
+docs/processes/README.md
+docs/processes/agent-prompts-overview.md
+docs/processes/coordinator-decision-logic.md
+docs/processes/scenario-*.md
+docs/processes/session-context-management.md
+
+/docs/agreement.*
+/docs/context/*
+*.exe
+# Compiled Go server binary (not the source directory)
+/server
+
+/docs/*
+
+test-output
+test-project
+
+*.bun-build
+*.tsbuildinfo
+**/node_modules/
+**/.vite/
+
+# Playwright MCP
+.playwright-mcp/
+
+# Screenshots (testing artifacts)
+*.png
+
+# Vite build output
+**/dist/
+
+query.txt
+
+# Claude Code workspace files (not in git)
+.agents/
+.claude/
+CLAUDE.md
+.mcp.json
+
+# Local dev configs
+config.yaml
+.env.local
+
+# Private keys / secrets
+*.pem
+*.key
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+*.p12
+*.pfx
+secrets/
+credentials*.json
+service-account*.json
+# Auth state
+cookies.txt
+auth.json
+storageState*.json
+# Local env overrides
+.env.*.local
+.env.production
+.env.staging

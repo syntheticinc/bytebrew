@@ -1,0 +1,29 @@
+package models
+
+import "time"
+
+// SessionModel maps to the "sessions" table.
+//
+// Q.5: dropped agent_name and agent_id — a session belongs to a schema
+// (schema_id), not a single agent. The entry agent is resolved via
+// schemas.entry_agent_id at dispatch time. schema_id is now NOT NULL.
+//
+// Identity model: sessions carry the end-user's JWT sub claim (user_sub)
+// rather than a FK to users. End-users are external — authentication is
+// delegated (per docs/database/target-schema.dbml). Isolation key:
+// (tenant_id, schema_id, user_sub).
+type SessionModel struct {
+	ID          string     `gorm:"primaryKey;type:uuid"`
+	TenantID    string     `gorm:"type:uuid;not null;default:'00000000-0000-0000-0000-000000000001';index:idx_sessions_isolation,priority:1;index:idx_sessions_tenant_user_chrono,priority:1" json:"tenant_id"`
+	SchemaID    string     `gorm:"type:uuid;not null;index;index:idx_sessions_isolation,priority:2" json:"schema_id"`
+	UserSub     string     `gorm:"column:user_sub;type:varchar(255);not null;index:idx_sessions_isolation,priority:3;index:idx_sessions_tenant_user_chrono,priority:2" json:"user_sub"`
+	Title       string     `gorm:"type:varchar(500)"`
+	Status      string     `gorm:"type:varchar(20);not null;default:active;index"`
+	CreatedAt   time.Time  `gorm:"autoCreateTime;index:idx_sessions_tenant_user_chrono,priority:3"`
+	UpdatedAt   time.Time  `gorm:"autoUpdateTime"`
+	CompletedAt *time.Time
+
+	Tasks []TaskModel `gorm:"foreignKey:SessionID"`
+}
+
+func (SessionModel) TableName() string { return "sessions" }

@@ -1,0 +1,5 @@
+# Minimal config for local regression testing
+# Most settings come from environment variables in docker-compose
+agents:
+  - name: test-agent
+    system_prompt: "You are a helpful assistant for regression testing."

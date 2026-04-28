@@ -1,0 +1,76 @@
+# ByteBrew Engine — Sales Assistant Example
+# Demonstrates: custom tools, BYOK, triggers
+
+engine:
+  host: "0.0.0.0"
+  port: 8443
+
+database:
+  url: "postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/bytebrew"
+
+security:
+  # Wave 1+7 (2026-04-21): jwt_secret + admin CLI removed. Engine signs admin
+  # sessions with an Ed25519 keypair generated on first boot under
+  # <data_dir>/keys. Set auth_mode=external + jwt_public_key_path when tokens
+  # are issued by an external service (Cloud / SSO gateway).
+  auth_mode: "local"
+
+logging:
+  level: "info"
+
+# --- Runtime config (stored in DB) ---
+
+models:
+  providers:
+    - name: "gpt-4"
+      type: "openai-compatible"
+      base_url: "https://api.openai.com/v1"
+      model: "gpt-4o"
+      api_key: "${OPENAI_API_KEY}"
+  byok:
+    enabled: true
+    allowed_providers: ["openai", "anthropic"]
+
+agents:
+  - name: "sales"
+    model: "gpt-4"
+    system_prompt: |
+      You are a sales assistant for an e-commerce store.
+      Help customers find products, answer questions about orders,
+      and process purchases. Be friendly and helpful.
+
+      Always confirm before creating orders or processing refunds.
+    tools:
+      custom:
+        - name: "search_products"
+          description: "Search product catalog"
+          endpoint: "GET https://api.store.com/products"
+          method: "GET"
+          params:
+            - name: "query"
+              type: "string"
+              description: "Search query"
+              required: true
+            - name: "category"
+              type: "string"
+              description: "Product category filter"
+              required: false
+          auth:
+            type: "bearer"
+            token_env: "STORE_API_KEY"
+        - name: "create_order"
+          description: "Create a new order"
+          endpoint: "POST https://api.store.com/orders"
+          method: "POST"
+          auth:
+            type: "bearer"
+            token_env: "STORE_API_KEY"
+    confirm_before:
+      - create_order
+    max_steps: 30
+    triggers:
+      - type: "webhook"
+        title: "New customer inquiry"
+        path: "new-inquiry"
+        description: "Handle incoming customer inquiry"
+        agent: "sales"

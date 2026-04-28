@@ -1,0 +1,2 @@
+FROM liquibase/liquibase:4.30
+COPY migrations/ /liquibase/migrations/

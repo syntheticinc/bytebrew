@@ -1,0 +1,88 @@
+flows:
+  supervisor:
+    name: "Supervisor Agent"
+    system_prompt_ref: "supervisor_prompt"
+    tools:
+      - read_file
+      - write_file
+      - edit_file
+      # - smart_search    # disabled: testing with grep_search + glob only
+      # - search_code     # disabled: replaced by grep_search + glob
+      - grep_search
+      - glob
+      - lsp
+      - get_project_tree
+      - execute_command
+      - manage_tasks
+      - manage_subtasks
+      - spawn_agent
+      - show_structured_output
+    max_steps: 0
+    max_context_size: 16000
+    lifecycle:
+      suspend_on:
+        - final_answer
+      report_to: user
+    spawn_policy:
+      allowed_flows:
+        - coder
+        - reviewer
+        - researcher
+      max_concurrent: 3
+
+  coder:
+    name: "Code Agent"
+    system_prompt_ref: "code_agent_prompt"
+    tools:
+      - read_file
+      - write_file
+      - edit_file
+      - grep_search
+      - glob
+      - lsp
+      - get_project_tree
+      - execute_command
+    max_steps: 100
+    max_context_size: 16000
+    lifecycle:
+      suspend_on:
+        - final_answer
+      report_to: parent_agent
+    spawn_policy:
+      allowed_flows: []
+
+  reviewer:
+    name: "Code Reviewer"
+    system_prompt_ref: "reviewer_prompt"
+    tools:
+      - read_file
+      - grep_search
+      - glob
+      - lsp
+      - get_project_tree
+      - execute_command
+    max_steps: 80
+    max_context_size: 16000
+    lifecycle:
+      suspend_on:
+        - final_answer
+      report_to: parent_agent
+    spawn_policy:
+      allowed_flows: []
+
+  researcher:
+    name: "Researcher"
+    system_prompt_ref: "researcher_prompt"
+    tools:
+      - read_file
+      - grep_search
+      - glob
+      - get_project_tree
+    max_steps: 80
+    max_context_size: 16000
+    lifecycle:
+      suspend_on:
+        - final_answer
+      report_to: parent_agent
+    spawn_policy:
+      allowed_flows: []

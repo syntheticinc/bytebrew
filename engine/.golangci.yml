@@ -1,0 +1,44 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    # Existing
+    - unused
+    - ineffassign
+    - staticcheck
+    - govet
+    # Code quality
+    - nestif       # Detects deeply nested if statements (STRICT - always bad)
+    - funlen       # Detects long functions (SOFT - sometimes justified)
+    - cyclop       # Cyclomatic complexity
+    - gocognit     # Cognitive complexity
+
+  settings:
+    nestif:
+      min-complexity: 3    # Strict: nesting > 3 = always bad
+
+    funlen:
+      lines: 80            # Soft limit: function > 80 lines
+      statements: 50       # Soft limit: > 50 statements
+
+    cyclop:
+      max-complexity: 15   # Moderate: cyclomatic complexity
+
+    gocognit:
+      min-complexity: 20   # Moderate: cognitive complexity
+
+  exclusions:
+    rules:
+      # Test files: allow long functions and high cognitive complexity
+      # (test functions with subtests are naturally long — that's OK)
+      # But nestif is still enforced — deep nesting is bad everywhere
+      - path: "_test\\.go$"
+        linters:
+          - funlen
+          - gocognit
+          - cyclop
+
+run:
+  timeout: 5m
+  tests: true

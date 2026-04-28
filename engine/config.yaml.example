@@ -1,0 +1,92 @@
+# Vector Server Configuration
+# This file should be copied to config.yaml in the project root
+# Environment variables can override any setting (e.g., OPENROUTER_API_KEY)
+
+server:
+  host: "0.0.0.0"
+  port: 60401
+  grpc:
+    max_recv_msg_size: 104857600  # 100MB
+    max_send_msg_size: 104857600  # 100MB
+    keepalive:
+      time: 60s
+      timeout: 20s
+    connection_timeout: 120s
+
+database:
+  host: localhost
+  port: 5499
+  user: postgres
+  password: postgres
+  database: vector_srv
+  ssl_mode: disable
+  max_open_conns: 25
+  max_idle_conns: 5
+  conn_max_lifetime: 5m
+
+llm:
+  default_provider: openrouter
+  streaming: false  # Disabled - non-streaming is required for correct persistence of assistant content to history
+  
+  ollama:
+    base_url: http://localhost:11434
+    model: glm-fix
+    timeout: 300s
+    # Note: thinking: true only works with models that support it (qwq, deepseek-r1, etc.)
+  
+  openrouter:
+    api_key: ${OPENROUTER_API_KEY}  # set via environment variable
+    base_url: https://openrouter.ai/api/v1
+    model: z-ai/glm-4.7:nitro
+    timeout: 120s
+  
+  anthropic:
+    api_key: ${ANTHROPIC_API_KEY}
+    model: claude-3-5-sonnet-20241022
+    timeout: 120s
+
+logging:
+  level: info  # debug, info, warn, error
+  format: text  # json, text
+  output: file  # stdout, file
+  file_path: logs/vector-srv.log
+  clear_on_startup: true  # Clear logs directory on server startup
+
+observability:
+  enable_metrics: true
+  enable_tracing: true
+  
+  otlp:
+    endpoint: localhost:4317
+    insecure: true
+  
+  metrics:
+    port: 9090
+    path: /metrics
+
+security:
+  api_key: ${API_KEY}
+  enable_auth: false
+
+qa:
+  snapshot_path: ./qa-results/snapshot.json
+  enable_realistic_responses: true
+
+agent:
+  max_steps: 0
+  max_context_size: 32000 # Maximum context size in TOKENS (not characters). 1 token ≈ 4 chars.
+  tool_return_directly: []
+  enable_enhanced_tool_call_checker: true
+
+# Per-end-user BYOK (V2 §5.8 "Settings + BYOK").
+# When enabled, end users can override the tenant-configured model with
+# their own credentials by sending X-BYOK-Provider, X-BYOK-API-Key,
+# X-BYOK-Model (and optionally X-BYOK-Base-URL) headers on the chat
+# endpoint. Empty allowed_providers means "no allowlist enforcement".
+#
+# These values are written into the `settings` table (jsonb) on first
+# boot. Admin UI toggles update the same settings rows and are picked up
+# live by the BYOK middleware — restart not required.
+byok:
+  enabled: false
+  allowed_providers: []  # e.g. [openai, anthropic, openrouter]
