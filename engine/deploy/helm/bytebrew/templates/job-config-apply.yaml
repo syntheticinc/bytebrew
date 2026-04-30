@@ -23,21 +23,39 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      serviceAccountName: {{ include "bytebrew-engine.serviceAccountName" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       initContainers:
         - name: wait-for-engine
           image: curlimages/curl:8.5.0
+          env:
+            - name: ENGINE_URL
+              value: "http://{{ include "bytebrew-engine.fullname" . }}:{{ .Values.service.port }}"
           command:
             - sh
             - -c
             - |
-              until curl -sf http://{{ include "bytebrew-engine.fullname" . }}:{{ .Values.service.port }}/api/v1/health; do
-                echo "waiting for engine...";
-                sleep 2;
+              for i in $(seq 1 150); do
+                if curl -sf "$ENGINE_URL/api/v1/health" > /dev/null; then
+                  echo "Engine ready after $i attempts"
+                  exit 0
+                fi
+                echo "Waiting for engine... ($i/150)"
+                sleep 2
               done
+              echo "Engine did not become ready after 5 minutes" >&2
+              exit 1
       containers:
         - name: brewctl-apply
           image: "{{ .Values.configApply.image.repository }}:{{ .Values.configApply.image.tag }}"
           imagePullPolicy: {{ .Values.configApply.image.pullPolicy }}
+          {{- with .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command: ["brewctl", "apply", "-f", "/etc/bytebrew/config", "--yes"]
           env:
             - name: BREWCTL_ENGINE_URL
@@ -45,7 +63,7 @@ spec:
             - name: BREWCTL_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.configApply.tokenSecret }}
+                  name: {{ required "configApply.tokenSecret is required when configApply.enabled=true. Create a Secret with the admin token first (kubectl create secret generic bytebrew-token --from-literal=token=bb_xxx)." .Values.configApply.tokenSecret }}
                   key: token
           {{- if .Values.configApply.apiKeysSecret }}
           envFrom:

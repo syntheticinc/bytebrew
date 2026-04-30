@@ -2,14 +2,29 @@ replicaCount: 1
 
 image:
   repository: bytebrew/engine
+  # WARN: set to a specific version (e.g. v1.0.0) for production. "latest" is
+  # rejected by the migrations Job to ensure reproducible schema upgrades.
   tag: "latest"
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
 
+serviceAccount:
+  create: true
+  # Override the generated name. Defaults to the fullname of the release.
+  name: ""
+  # Annotations added to the ServiceAccount — use for AWS IRSA or GCP Workload Identity:
+  #   eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/bytebrew-engine
+  #   iam.gke.io/gcp-service-account: bytebrew-engine@my-project.iam.gserviceaccount.com
+  annotations: {}
+  labels: {}
+
 service:
   type: ClusterIP
   port: 8443
+  # Annotations for cloud load-balancer hints, e.g.:
+  #   service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+  annotations: {}
 
 ingress:
   enabled: false
@@ -36,7 +51,11 @@ postgresql:
     username: bytebrew
     password: ""
     sslmode: disable
-    # existingSecret: ""  # alternative to password
+    # Alternative to password: reference an existing Secret that contains DATABASE_URL.
+    # When set, the chart does not create its own Secret; host/username/password are ignored.
+    existingSecret: ""
+    # Key inside existingSecret that holds the full DATABASE_URL connection string.
+    existingSecretKey: DATABASE_URL
 
 config:
   # agents.yaml content (mounted as ConfigMap)
@@ -103,6 +122,89 @@ serviceMonitor:
   interval: 30s
   path: /metrics
 
+httpRoute:
+  # Enable Gateway API HTTPRoute (opt-in). Requires gateway.networking.k8s.io/v1 CRDs.
+  # Tested with Envoy Gateway, Cilium Gateway API, and Istio Gateway.
+  enabled: false
+  routes: []
+  # Example (Envoy Gateway / chirp-mono2 pattern):
+  # routes:
+  #   - nameSuffix: api
+  #     hostnames:
+  #       - bytebrew.dev.example.com
+  #     parentRefs:
+  #       - name: internal
+  #         namespace: envoy-gateway-system
+  #         sectionName: https-dev-example-com
+  #     rules:
+  #       - matches:
+  #           - path: /
+  #             pathType: PathPrefix
+  #         servicePort: 8443
+
+networkPolicy:
+  # Enable NetworkPolicy (opt-in). Has no effect on clusters without a CNI
+  # that enforces NetworkPolicy (e.g. plain kubenet).
+  enabled: false
+  ingressFrom:
+    - podSelector: {}    # allow ingress from all pods in the same namespace by default
+    # - namespaceSelector:
+    #     matchLabels:
+    #       kubernetes.io/metadata.name: envoy-gateway-system
+
+# Pod-level security context applied to Deployment and Job pods.
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Container-level security context applied to all engine/migrations/brewctl containers.
+# IMPORTANT: readOnlyRootFilesystem is false by default. Engine, Liquibase, and GORM
+# write temp files to /tmp. Enabling readOnly requires adding an emptyDir /tmp volume.
+# See README "Integrations — Read-only root filesystem" for the opt-in pattern.
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop: [ALL]
+  seccompProfile:
+    type: RuntimeDefault
+
+# Extra environment variables appended to engine, migrations, and brewctl containers.
+# Useful for CSI-mounted secrets or custom runtime config.
+extraEnv: []
+# - name: MY_VAR
+#   value: "my-value"
+# - name: SECRET_VAR
+#   valueFrom:
+#     secretKeyRef:
+#       name: my-secret
+#       key: my-key
+
+# Extra envFrom entries (SecretRef / ConfigMapRef) appended to engine containers.
+extraEnvFrom: []
+# - secretRef:
+#     name: my-secret
+
+# Extra volumes added to Deployment and Job pod specs.
+extraVolumes: []
+# - name: tmp
+#   emptyDir: {}
+
+# Extra volumeMounts added to engine, migrations, and brewctl containers.
+extraVolumeMounts: []
+# - name: tmp
+#   mountPath: /tmp
+
+# Extra init containers injected before the main engine container.
+extraInitContainers: []
+
+# Annotations added to every pod (Deployment + Jobs).
+podAnnotations: {}
+
+# Extra labels added to every pod (Deployment + Jobs).
+podLabels: {}
+
 nodeSelector: {}
 tolerations: []
 affinity: {}
@@ -111,6 +213,8 @@ migrations:
   enabled: true
   image:
     repository: bytebrew/engine-migrations
+    # Pin to a specific version. Falls back to image.tag when empty.
+    # Must not be "latest" — reproducible migrations require a pinned version.
     tag: ""
   resources:
     limits:
@@ -119,23 +223,45 @@ migrations:
     requests:
       cpu: 100m
       memory: 128Mi
-  activeDeadlineSeconds: 600
+  # Increase for cold-start large schemas.
+  activeDeadlineSeconds: 1800
 
+# Optional: declarative GitOps reconcile via the brewctl CLI.
+# Requires a published brewctl Docker image (ghcr.io/syntheticinc/brewctl:vX.Y.Z).
+# See https://github.com/syntheticinc/bytebrew-brewctl
 configApply:
+  # Set to true to enable post-install/upgrade declarative config reconcile.
   enabled: false
+
   image:
+    # brewctl Docker image. Pin to specific version for reproducibility.
     repository: ghcr.io/syntheticinc/brewctl
     tag: v0.1.0
     pullPolicy: IfNotPresent
+
+  # Inline bytebrew.yaml content (multi-document YAML). Use env-var
+  # placeholders for secrets — never plaintext.
   config: ""
+
+  # Alternative to `config`: name of an existing ConfigMap with key `bytebrew.yaml`.
   existingConfigMap: ""
+
+  # Required when enabled=true. Name of a Secret with key `token` containing
+  # the admin API token (bb_xxx). Create via:
+  #   kubectl create secret generic bytebrew-token --from-literal=token=bb_xxx
   tokenSecret: ""
+
+  # Optional. Name of a Secret with LLM API keys (OPENROUTER_API_KEY etc).
+  # All keys in this Secret are exposed as env vars to the brewctl container.
   apiKeysSecret: ""
+
   resources:
+    # Increase memory if config has many resources (50+ MCP/agents/schemas).
     limits:
       cpu: 500m
-      memory: 256Mi
+      memory: 512Mi
     requests:
       cpu: 50m
-      memory: 64Mi
-  activeDeadlineSeconds: 300
+      memory: 128Mi
+
+  activeDeadlineSeconds: 600

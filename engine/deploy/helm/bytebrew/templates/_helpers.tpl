@@ -52,9 +52,44 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{/*
 Build the DATABASE_URL from postgresql values.
+Only used when postgresql.external.existingSecret is not set.
 */}}
 {{- define "bytebrew-engine.databaseURL" -}}
 {{- with .Values.postgresql.external -}}
 postgres://{{ .username }}:{{ .password }}@{{ .host }}:{{ .port }}/{{ .database }}?sslmode={{ .sslmode }}
 {{- end }}
+{{- end }}
+
+{{/*
+Return the name of the Secret that holds DATABASE_URL.
+Uses existingSecret when provided, otherwise the chart-managed Secret.
+*/}}
+{{- define "bytebrew-engine.databaseSecretName" -}}
+{{- if .Values.postgresql.external.existingSecret -}}
+{{- .Values.postgresql.external.existingSecret -}}
+{{- else -}}
+{{- printf "%s-secrets" (include "bytebrew-engine.fullname" .) -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Return the Secret key that holds DATABASE_URL.
+*/}}
+{{- define "bytebrew-engine.databaseSecretKey" -}}
+{{- if .Values.postgresql.external.existingSecret -}}
+{{- .Values.postgresql.external.existingSecretKey | default "DATABASE_URL" -}}
+{{- else -}}
+database-url
+{{- end -}}
+{{- end }}
+
+{{/*
+Return the ServiceAccount name.
+*/}}
+{{- define "bytebrew-engine.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create -}}
+{{- default (include "bytebrew-engine.fullname" .) .Values.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.serviceAccount.name -}}
+{{- end -}}
 {{- end }}

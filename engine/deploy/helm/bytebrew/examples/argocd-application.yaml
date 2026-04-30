@@ -1,3 +1,9 @@
+# NOTE: Argo CD respects Helm pre/post-install hooks via Sync waves.
+# Make sure your Argo CD version is v2.6+ (Helm hook → Argo wave mapping).
+# If your Argo CD ignores hooks, the migrations Job and config-apply Job
+# will not run. Workaround: add `argocd.argoproj.io/hook: PreSync` /
+# `argocd.argoproj.io/hook: PostSync` annotations manually in templates.
+#
 # Argo CD Application examples for bytebrew-engine.
 #
 # These manifests assume a client-side GitOps repo with the following layout:

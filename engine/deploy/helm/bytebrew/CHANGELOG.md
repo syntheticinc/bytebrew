@@ -7,7 +7,18 @@ and this chart adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
-## [0.3.0] - 2026-04-28
+## [0.4.0] - 2026-04-30
+
+### Added
+- HTTPRoute template (Gateway API support) — opt-in via `httpRoute.enabled`. Tested with Envoy Gateway, Cilium Gateway API, and Istio Gateway.
+- ServiceAccount template with configurable annotations for AWS IRSA and GCP Workload Identity. Toggle via `serviceAccount.create` (default: `true`).
+- NetworkPolicy template — opt-in via `networkPolicy.enabled`. Configurable `ingressFrom` selectors; egress unrestricted by default (DNS, Postgres, LLM API).
+- Escape hatches: `extraEnv`, `extraEnvFrom`, `extraVolumes`, `extraVolumeMounts`, `extraInitContainers`, `podAnnotations`, `podLabels` — applied to Deployment and Job pods.
+- `podSecurityContext` (defaults: `fsGroup: 1000`, `runAsNonRoot: true`, `runAsUser: 1000`) and `containerSecurityContext` (defaults: `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: false`, `capabilities.drop: [ALL]`, `seccompProfile: RuntimeDefault`). `readOnlyRootFilesystem` is `false` by default to avoid CrashLoopBackOff from engine `/tmp` writes; opt-in pattern documented in README.
+- `service.annotations` for cloud load-balancer hints (e.g. `service.beta.kubernetes.io/aws-load-balancer-internal`).
+- README "Integrations" section with copy-paste examples for helmfile, External Secrets Operator + Vault, AWS IRSA, GCP Workload Identity, Argo CD, and read-only root filesystem opt-in.
+
+## [0.3.0] - 2026-04-29
 
 ### Added
 - Liquibase migrations Job (`pre-install,pre-upgrade` Helm hook). Runs the
@@ -17,11 +28,12 @@ and this chart adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
   declarative GitOps reconcile via the `brewctl` CLI. Waits for engine
   readiness via an init container before applying. Optional via
   `configApply.enabled` (default: `false`).
+  **Prerequisites:** brewctl Docker image (`ghcr.io/syntheticinc/brewctl:v0.1.0`
+  or later) must be published before enabling `configApply.enabled=true`. See
+  [bytebrew-brewctl releases](https://github.com/syntheticinc/bytebrew-brewctl/releases).
 - ConfigMap template (`configmap-bytebrew.yaml`) for inline `bytebrew.yaml`
   config-as-code. Rendered only when `configApply.enabled=true` and
   `configApply.config` is non-empty and `configApply.existingConfigMap` is unset.
-- Example values for ByteBrew EE on-prem (`values-ee.yaml`) and Cloud
-  multi-tenant (`values-cloud.yaml`).
 - Argo CD Application example (`examples/argocd-application.yaml`) with both
   Git-based and OCI-based source variants.
 - GitHub Actions workflow `release-helm.yaml` publishing chart to

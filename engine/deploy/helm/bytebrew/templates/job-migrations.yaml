@@ -1,4 +1,8 @@
 {{- if .Values.migrations.enabled }}
+{{- $tag := .Values.migrations.image.tag | default .Values.image.tag -}}
+{{- if eq $tag "latest" -}}
+{{- fail "migrations.image.tag (or image.tag) must be set to a specific version (e.g. v1.0.0), not 'latest', for reproducible migrations. Set image.tag in values.yaml." -}}
+{{- end -}}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -23,16 +27,40 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      serviceAccountName: {{ include "bytebrew-engine.serviceAccountName" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: migrations
-          image: "{{ .Values.migrations.image.repository }}:{{ .Values.migrations.image.tag | default .Values.image.tag }}"
+          image: "{{ .Values.migrations.image.repository }}:{{ $tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           env:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "bytebrew-engine.fullname" . }}-secrets
-                  key: database-url
+                  name: {{ include "bytebrew-engine.databaseSecretName" . }}
+                  key: {{ include "bytebrew-engine.databaseSecretKey" . }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.extraEnvFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           resources:
             {{- toYaml .Values.migrations.resources | nindent 12 }}
+          {{- with .Values.extraVolumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.extraVolumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
 {{- end }}

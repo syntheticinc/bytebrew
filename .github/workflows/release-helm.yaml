@@ -1,3 +1,5 @@
+# Uses softprops/action-gh-release pinned to v2. Consider pinning to commit
+# SHA for supply-chain security: https://github.com/softprops/action-gh-release/releases
 name: Release Helm Chart
 
 on:
@@ -28,6 +30,20 @@ jobs:
       - name: Extract version from tag
         id: version
         run: echo "version=${GITHUB_REF_NAME#helm/v}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate semver
+        run: |
+          if [[ ! "${{ steps.version.outputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9.]+)?$ ]]; then
+            echo "::error::Invalid version format: ${{ steps.version.outputs.version }}. Expected: X.Y.Z or X.Y.Z-prerelease"
+            exit 1
+          fi
+
+      - name: Check chart version not already published
+        run: |
+          if helm pull oci://ghcr.io/syntheticinc/charts/bytebrew-engine --version ${{ steps.version.outputs.version }} 2>/dev/null; then
+            echo "::error::Chart version ${{ steps.version.outputs.version }} already published. Bump version in Chart.yaml and create a new tag."
+            exit 1
+          fi
 
       - name: Package chart
         run: |
