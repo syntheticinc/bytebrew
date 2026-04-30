@@ -36,6 +36,7 @@ type BootstrapConfig struct {
 	Knowledge  KnowledgeBootstrap `mapstructure:"knowledge"`
 	LSP        LSPBootstrap       `mapstructure:"lsp"`
 	Updates    UpdatesConfig      `mapstructure:"updates"`
+	Seed       SeedConfig         `mapstructure:"seed"`
 }
 
 // EngineBootstrap holds the minimal engine settings needed at startup.
@@ -128,6 +129,19 @@ type LSPBootstrap struct {
 // UpdatesConfig overrides the version-check endpoint (default: api.bytebrew.ai).
 type UpdatesConfig struct {
 	VersionsURL string `mapstructure:"versions_url"`
+}
+
+// SeedConfig holds seed-time overrides applied once on engine startup.
+type SeedConfig struct {
+	// BootstrapAdminToken, when non-empty, causes the engine to seed an admin
+	// API token in the api_tokens table (idempotent — skipped when a token
+	// named "bootstrap-admin" already exists). Enables automated k8s GitOps
+	// reconcile without manual Admin UI token generation.
+	//
+	// Format: bb_<64 lowercase hex chars>.
+	// Generate: echo "bb_$(openssl rand -hex 32)"
+	// Scope: admin (mask=16). Name: "bootstrap-admin".
+	BootstrapAdminToken string `mapstructure:"bootstrap_admin_token"`
 }
 
 // LoadBootstrap loads the bootstrap config from a YAML file plus environment
@@ -242,8 +256,9 @@ func bindEnvVars(v *viper.Viper) {
 		"debug.model_debug_dir":       EnvDebugModel,
 		"mcp.docs_url":                EnvDocsMCPURL,
 		"knowledge.data_dir":          EnvDataDir,
-		"lsp.disable_download":        EnvDisableLSPDownload,
-		"updates.versions_url":        EnvVersionsURL,
+		"lsp.disable_download":           EnvDisableLSPDownload,
+		"updates.versions_url":           EnvVersionsURL,
+		"seed.bootstrap_admin_token":     EnvBootstrapAdminToken,
 	}
 	for key, env := range bindings {
 		// BindEnv associates a Viper key with one or more env var names.
@@ -300,6 +315,7 @@ func expandBootstrapEnvVars(cfg *BootstrapConfig) {
 	cfg.MCP.DocsURL = expandEnvVars(cfg.MCP.DocsURL)
 	cfg.Knowledge.DataDir = expandEnvVars(cfg.Knowledge.DataDir)
 	cfg.Updates.VersionsURL = expandEnvVars(cfg.Updates.VersionsURL)
+	cfg.Seed.BootstrapAdminToken = expandEnvVars(cfg.Seed.BootstrapAdminToken)
 }
 
 // validateBootstrap checks that required bootstrap fields are present.

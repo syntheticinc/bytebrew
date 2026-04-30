@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased] — 2026-04-28
+
+### Added
+- `BYTEBREW_BOOTSTRAP_ADMIN_TOKEN` env support: when set, engine seeds an admin
+  API token in `api_tokens` on first boot (idempotent — skipped when
+  `name="bootstrap-admin"` already exists). Enables automated declarative
+  GitOps reconcile via `brewctl config-apply` in k8s deployments without
+  manual Admin UI token generation.
+  Format: `bb_<64-hex>`. Generate: `echo "bb_$(openssl rand -hex 32)"`.
+  Scope: admin (mask=16). Name: `bootstrap-admin`.
+
 ## Architecture — CE/EE/Cloud Unification (pre-release)
 
 Initial canonical architecture for ByteBrew Engine. Frozen pre-release — no

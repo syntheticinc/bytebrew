@@ -2,8 +2,11 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -22,7 +25,10 @@ import (
 //
 // docsMCPURL overrides the seeded bytebrew-docs MCP server URL when non-empty
 // (sourced from BootstrapConfig.MCP.DocsURL / env BYTEBREW_DOCS_MCP_URL).
-func bootstrapSeeds(ctx context.Context, db *gorm.DB, byok config.BYOKConfig, docsMCPURL string) {
+//
+// bootstrapAdminToken, when non-empty, seeds an admin API token (idempotent).
+// Sourced from BootstrapConfig.Seed.BootstrapAdminToken / env BYTEBREW_BOOTSTRAP_ADMIN_TOKEN.
+func bootstrapSeeds(ctx context.Context, db *gorm.DB, byok config.BYOKConfig, docsMCPURL, bootstrapAdminToken string) {
 	if db == nil {
 		return
 	}
@@ -39,6 +45,55 @@ func bootstrapSeeds(ctx context.Context, db *gorm.DB, byok config.BYOKConfig, do
 	// the `settings` table (jsonb) once on first boot. Admin UI edits
 	// supersede this on subsequent boots.
 	seedBYOKConfig(ctx, db, byok)
+	seedBootstrapAdminToken(ctx, db, bootstrapAdminToken)
+}
+
+const bootstrapAdminTokenName = "bootstrap-admin"
+
+// scopeAdmin is the bitmask value for the admin scope, mirroring ScopeAdmin in
+// internal/delivery/http/auth_middleware.go. Kept local to avoid a cross-layer
+// import — the value is stable (16) and tested in seed_bootstrap_token_test.go.
+const scopeAdmin = 16
+
+// seedBootstrapAdminToken idempotently seeds an admin API token when
+// bootstrapAdminToken is non-empty. The token is stored as a SHA-256 hex hash
+// (same algorithm as token_handler.go). Subsequent boots skip creation when a
+// token named "bootstrap-admin" already exists.
+//
+// Token format: bb_<64 lowercase hex chars>  (32 random bytes, hex-encoded).
+// Generate:     echo "bb_$(openssl rand -hex 32)"
+func seedBootstrapAdminToken(ctx context.Context, db *gorm.DB, bootstrapAdminToken string) {
+	if bootstrapAdminToken == "" {
+		return
+	}
+
+	if !strings.HasPrefix(bootstrapAdminToken, "bb_") || len(bootstrapAdminToken) != 67 {
+		slog.WarnContext(ctx, "bootstrap admin token has invalid format (expected bb_<64-hex>), skipping seed")
+		return
+	}
+
+	repo := configrepo.NewGORMAPITokenRepository(db)
+
+	tokens, err := repo.List(ctx)
+	if err != nil {
+		slog.WarnContext(ctx, "seed bootstrap admin token: failed to list", "error", err)
+		return
+	}
+	for _, t := range tokens {
+		if t.Name == bootstrapAdminTokenName {
+			slog.InfoContext(ctx, "bootstrap admin token already exists, skipping seed")
+			return
+		}
+	}
+
+	hash := sha256.Sum256([]byte(bootstrapAdminToken))
+	tokenHash := hex.EncodeToString(hash[:])
+
+	if _, err := repo.Create(ctx, "", bootstrapAdminTokenName, tokenHash, scopeAdmin); err != nil {
+		slog.ErrorContext(ctx, "seed bootstrap admin token: create failed", "error", err)
+		return
+	}
+	slog.InfoContext(ctx, "bootstrap admin token seeded", "name", bootstrapAdminTokenName, "scope", "admin")
 }
 
 const builderAssistantName = "builder-assistant"

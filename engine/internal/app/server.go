@@ -315,7 +315,11 @@ func Run(sc ServerConfig) error {
 	if docsMCPURL == "" {
 		docsMCPURL = sc.Plugin.DocsMCPEndpoint()
 	}
-	bootstrapSeeds(ctx, pgDB, cfg.BYOK, docsMCPURL)
+	var bootstrapAdminToken string
+	if bootstrapCfg != nil {
+		bootstrapAdminToken = bootstrapCfg.Seed.BootstrapAdminToken
+	}
+	bootstrapSeeds(ctx, pgDB, cfg.BYOK, docsMCPURL, bootstrapAdminToken)
 
 	if pgDB != nil {
 		mcpServerRepo := configrepo.NewGORMMCPServerRepository(pgDB)

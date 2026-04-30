@@ -24,6 +24,7 @@ const (
 	EnvDebugModel         = "BYTEBREW_DEBUG_MODEL"
 	EnvDocsMCPURL         = "BYTEBREW_DOCS_MCP_URL"
 	EnvDataDir            = "DATA_DIR"
-	EnvDisableLSPDownload = "BYTEBREW_DISABLE_LSP_DOWNLOAD"
-	EnvVersionsURL        = "BYTEBREW_VERSIONS_URL"
+	EnvDisableLSPDownload    = "BYTEBREW_DISABLE_LSP_DOWNLOAD"
+	EnvVersionsURL           = "BYTEBREW_VERSIONS_URL"
+	EnvBootstrapAdminToken   = "BYTEBREW_BOOTSTRAP_ADMIN_TOKEN"
 )
