@@ -76,6 +76,13 @@ spec:
             - name: EMBED_DIM
               value: {{ .Values.config.embedDim | quote }}
             {{- end }}
+            {{- if .Values.bootstrapAdminToken.enabled }}
+            - name: BYTEBREW_BOOTSTRAP_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "bootstrapAdminToken.existingSecret is required when bootstrapAdminToken.enabled=true" .Values.bootstrapAdminToken.existingSecret }}
+                  key: {{ .Values.bootstrapAdminToken.existingSecretKey | default "token" }}
+            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

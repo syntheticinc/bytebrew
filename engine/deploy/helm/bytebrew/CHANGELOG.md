@@ -7,6 +7,21 @@ and this chart adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-04-30
+
+### Added
+- `bootstrapAdminToken` section: when enabled, engine pod receives
+  `BYTEBREW_BOOTSTRAP_ADMIN_TOKEN` env from a Secret. Engine v1.0.1+ seeds
+  an admin API token in `api_tokens` on first boot, enabling single-shot
+  GitOps deploy with `configApply.enabled=true` (no manual Admin UI token
+  generation).
+- Pair with `configApply.tokenSecret` pointing at the same Secret/key for
+  DRY config: one Vault entry, two consumers (engine boot + brewctl Job).
+
+### Changed
+- Bumped `appVersion` to `1.0.1` (BOOTSTRAP_ADMIN_TOKEN feature requires it).
+- Bumped chart `version` to `0.4.1`.
+
 ## [0.4.0] - 2026-04-30
 
 ### Added

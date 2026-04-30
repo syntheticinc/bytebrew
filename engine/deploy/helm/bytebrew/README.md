@@ -137,3 +137,27 @@ networkPolicy:
         matchLabels:
           kubernetes.io/metadata.name: envoy-gateway-system
 ```
+
+### Single-shot deployment with `bootstrapAdminToken`
+
+For fully-automated GitOps deploys (no manual Admin UI step), pre-mint
+an admin token and reference it from both `bootstrapAdminToken.existingSecret`
+(engine) and `configApply.tokenSecret` (brewctl Job):
+
+```yaml
+bootstrapAdminToken:
+  enabled: true
+  existingSecret: bytebrew-config
+
+configApply:
+  enabled: true
+  tokenSecret: bytebrew-config
+  apiKeysSecret: bytebrew-config
+```
+
+Engine seeds the token into `api_tokens` on first boot (idempotent — safe
+to re-apply). Token format: `bb_<64-hex>` — generate via
+`echo "bb_$(openssl rand -hex 32)"`.
+
+Requires engine image **v1.0.1 or later** (`BYTEBREW_BOOTSTRAP_ADMIN_TOKEN`
+env support).

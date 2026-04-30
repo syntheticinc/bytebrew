@@ -265,3 +265,22 @@ configApply:
       memory: 128Mi
 
   activeDeadlineSeconds: 600
+
+# Bootstrap admin API token for automated GitOps reconcile.
+# When enabled, engine reads BYTEBREW_BOOTSTRAP_ADMIN_TOKEN env on first boot
+# and idempotently seeds an admin API token in api_tokens table. This token
+# can then be used by configApply Job (or external CI/CD) to authenticate
+# without manual token generation via Admin UI.
+#
+# Pair with configApply.tokenSecret pointing at the same Secret/key for
+# single-shot deployment.
+#
+# Format: bb_<64-hex chars>. Generate via: echo "bb_$(openssl rand -hex 32)"
+# Requires engine v1.0.1+.
+bootstrapAdminToken:
+  enabled: false
+  # Name of an existing Secret holding the token (typically same Secret as
+  # configApply.tokenSecret — DRY).
+  existingSecret: ""
+  # Key within the Secret. Default 'token' aligns with configApply default.
+  existingSecretKey: token

@@ -47,6 +47,35 @@ Health check:
 
 Optional: declarative config-as-code (brewctl)
 
+3. Single-shot bootstrap (recommended):
+   Pre-mint an admin API token, store in Secret, enable BOTH bootstrap and configApply:
+
+   a. Mint token: TOKEN="bb_$(openssl rand -hex 32)"
+   b. Create Secret with token + LLM keys:
+        kubectl create secret generic bytebrew-config \
+          --from-literal=token=$TOKEN \
+          --from-literal=DATABASE_URL=postgres://... \
+          --from-literal=OPENROUTER_API_KEY=sk-or-... \
+          -n {{ .Release.Namespace }}
+   c. Helm install with both enabled:
+        helm install bytebrew oci://ghcr.io/syntheticinc/charts/bytebrew-engine \
+          --version 0.4.1 \
+          --set bootstrapAdminToken.enabled=true \
+          --set bootstrapAdminToken.existingSecret=bytebrew-config \
+          --set configApply.enabled=true \
+          --set configApply.tokenSecret=bytebrew-config \
+          --set configApply.apiKeysSecret=bytebrew-config \
+          --set-file configApply.config=./bytebrew.yaml
+
+   On first boot engine seeds the token into api_tokens (idempotent: re-deploy
+   won't duplicate). brewctl Job then uses the same token to apply config.
+
+   IMPORTANT: bytebrew.yaml must reference secrets via env-var placeholders
+   (api_key: ${OPENROUTER_API_KEY}), never plaintext. Plaintext keys leak
+   into ConfigMaps which any user with `secrets:get` RBAC can read.
+
+Alternative: post-deploy manual token gen (legacy / recovery):
+
    1. Generate an admin API token via the Admin Dashboard
         (https://<host>/admin -> API Keys -> Create).
 
@@ -67,7 +96,3 @@ Optional: declarative config-as-code (brewctl)
           --set configApply.tokenSecret=bytebrew-token \
           --set configApply.apiKeysSecret=bytebrew-api-keys \
           --set-file configApply.config=./bytebrew.yaml
-
-   IMPORTANT: bytebrew.yaml must reference secrets via env-var placeholders
-   (api_key: ${OPENROUTER_API_KEY}), never plaintext. Plaintext keys leak
-   into ConfigMaps which any user with `secrets:get` RBAC can read.
