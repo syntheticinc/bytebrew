@@ -319,7 +319,9 @@ func Run(sc ServerConfig) error {
 	if bootstrapCfg != nil {
 		bootstrapAdminToken = bootstrapCfg.Seed.BootstrapAdminToken
 	}
-	bootstrapSeeds(ctx, pgDB, cfg.BYOK, docsMCPURL, bootstrapAdminToken)
+	if err := bootstrapSeeds(ctx, pgDB, cfg.BYOK, docsMCPURL, bootstrapAdminToken); err != nil {
+		return fmt.Errorf("bootstrap seed: %w", err)
+	}
 
 	if pgDB != nil {
 		mcpServerRepo := configrepo.NewGORMMCPServerRepository(pgDB)

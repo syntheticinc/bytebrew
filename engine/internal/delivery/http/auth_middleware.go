@@ -2,14 +2,13 @@ package http
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/syntheticinc/bytebrew/engine/internal/authprim"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	pluginpkg "github.com/syntheticinc/bytebrew/engine/pkg/plugin"
 )
@@ -169,7 +168,7 @@ func (m *AuthMiddleware) Authenticate(next http.Handler) http.Handler {
 }
 
 func (m *AuthMiddleware) authenticateAPIToken(w http.ResponseWriter, r *http.Request, next http.Handler, token string) {
-	hash := sha256Hash(token)
+	hash := authprim.Hash(token)
 	info, err := m.tokenVerifier.VerifyToken(r.Context(), hash)
 	if err != nil {
 		slog.WarnContext(r.Context(), "auth: api token verification failed",
@@ -240,7 +239,7 @@ func (m *AuthMiddleware) AuthenticateOptional(next http.Handler) http.Handler {
 		token := strings.TrimPrefix(authHeader, "Bearer ")
 
 		if strings.HasPrefix(token, "bb_") {
-			hash := sha256Hash(token)
+			hash := authprim.Hash(token)
 			info, err := m.tokenVerifier.VerifyToken(r.Context(), hash)
 			if err != nil || info.TenantID == "" {
 				next.ServeHTTP(w, r)
@@ -297,7 +296,3 @@ func RequireAdminSession(next http.Handler) http.Handler {
 	})
 }
 
-func sha256Hash(s string) string {
-	h := sha256.Sum256([]byte(s))
-	return hex.EncodeToString(h[:])
-}

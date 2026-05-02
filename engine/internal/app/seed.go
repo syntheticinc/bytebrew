@@ -2,14 +2,12 @@ package app
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"gorm.io/gorm"
 
+	"github.com/syntheticinc/bytebrew/engine/internal/authprim"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/models"
@@ -28,9 +26,13 @@ import (
 //
 // bootstrapAdminToken, when non-empty, seeds an admin API token (idempotent).
 // Sourced from BootstrapConfig.Seed.BootstrapAdminToken / env BYTEBREW_BOOTSTRAP_ADMIN_TOKEN.
-func bootstrapSeeds(ctx context.Context, db *gorm.DB, byok config.BYOKConfig, docsMCPURL, bootstrapAdminToken string) {
+//
+// Returns an error only for hard misconfiguration (e.g. invalid bootstrap
+// admin token format). Soft seed failures (DB list/create errors on
+// non-essential rows) are logged as warnings and do not propagate.
+func bootstrapSeeds(ctx context.Context, db *gorm.DB, byok config.BYOKConfig, docsMCPURL, bootstrapAdminToken string) error {
 	if db == nil {
-		return
+		return nil
 	}
 	seedByteBrewDocsMCP(ctx, db, docsMCPURL)
 	seedBuilderAssistant(ctx, db)
@@ -45,7 +47,10 @@ func bootstrapSeeds(ctx context.Context, db *gorm.DB, byok config.BYOKConfig, do
 	// the `settings` table (jsonb) once on first boot. Admin UI edits
 	// supersede this on subsequent boots.
 	seedBYOKConfig(ctx, db, byok)
-	seedBootstrapAdminToken(ctx, db, bootstrapAdminToken)
+	if err := seedBootstrapAdminToken(ctx, db, bootstrapAdminToken); err != nil {
+		return fmt.Errorf("bootstrap admin token: %w", err)
+	}
+	return nil
 }
 
 const bootstrapAdminTokenName = "bootstrap-admin"
@@ -57,19 +62,23 @@ const scopeAdmin = 16
 
 // seedBootstrapAdminToken idempotently seeds an admin API token when
 // bootstrapAdminToken is non-empty. The token is stored as a SHA-256 hex hash
-// (same algorithm as token_handler.go). Subsequent boots skip creation when a
-// token named "bootstrap-admin" already exists.
+// (same algorithm the auth middleware uses to verify incoming Bearer tokens —
+// see internal/auth/token.go for the shared primitive). Subsequent boots skip
+// creation when a token named "bootstrap-admin" already exists.
 //
 // Token format: bb_<64 lowercase hex chars>  (32 random bytes, hex-encoded).
 // Generate:     echo "bb_$(openssl rand -hex 32)"
-func seedBootstrapAdminToken(ctx context.Context, db *gorm.DB, bootstrapAdminToken string) {
+//
+// Returns a non-nil error for invalid format so the caller can fail fast on
+// boot. DB list/create failures stay non-fatal (logged as warning) — they are
+// transient and the operator can retry by restarting the pod.
+func seedBootstrapAdminToken(ctx context.Context, db *gorm.DB, bootstrapAdminToken string) error {
 	if bootstrapAdminToken == "" {
-		return
+		return nil
 	}
 
-	if !strings.HasPrefix(bootstrapAdminToken, "bb_") || len(bootstrapAdminToken) != 67 {
-		slog.WarnContext(ctx, "bootstrap admin token has invalid format (expected bb_<64-hex>), skipping seed")
-		return
+	if err := authprim.ValidateFormat(bootstrapAdminToken); err != nil {
+		return err
 	}
 
 	repo := configrepo.NewGORMAPITokenRepository(db)
@@ -77,23 +86,21 @@ func seedBootstrapAdminToken(ctx context.Context, db *gorm.DB, bootstrapAdminTok
 	tokens, err := repo.List(ctx)
 	if err != nil {
 		slog.WarnContext(ctx, "seed bootstrap admin token: failed to list", "error", err)
-		return
+		return nil
 	}
 	for _, t := range tokens {
 		if t.Name == bootstrapAdminTokenName {
 			slog.InfoContext(ctx, "bootstrap admin token already exists, skipping seed")
-			return
+			return nil
 		}
 	}
 
-	hash := sha256.Sum256([]byte(bootstrapAdminToken))
-	tokenHash := hex.EncodeToString(hash[:])
-
-	if _, err := repo.Create(ctx, "", bootstrapAdminTokenName, tokenHash, scopeAdmin); err != nil {
+	if _, err := repo.Create(ctx, "", bootstrapAdminTokenName, authprim.Hash(bootstrapAdminToken), scopeAdmin); err != nil {
 		slog.ErrorContext(ctx, "seed bootstrap admin token: create failed", "error", err)
-		return
+		return nil
 	}
 	slog.InfoContext(ctx, "bootstrap admin token seeded", "name", bootstrapAdminTokenName, "scope", "admin")
+	return nil
 }
 
 const builderAssistantName = "builder-assistant"
