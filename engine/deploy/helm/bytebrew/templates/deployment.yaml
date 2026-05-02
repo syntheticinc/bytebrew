@@ -65,7 +65,7 @@ spec:
             # With runAsUser=1000 and no allocated home dir, $HOME defaults to "/" which is
             # not writable for non-root. Pin HOME to a writable path inside the container.
             - name: HOME
-              value: /tmp
+              value: "/tmp"
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
