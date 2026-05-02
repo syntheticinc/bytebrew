@@ -236,7 +236,7 @@ configApply:
   image:
     # brewctl Docker image. Pin to specific version for reproducibility.
     repository: ghcr.io/syntheticinc/brewctl
-    tag: v0.1.0
+    tag: "0.1.0"
     pullPolicy: IfNotPresent
 
   # Inline bytebrew.yaml content (multi-document YAML). Use env-var
