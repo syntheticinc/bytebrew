@@ -68,7 +68,9 @@ jobs:
           R=/tmp/r-irsa.yaml
           helm template smoke engine/deploy/helm/bytebrew \
             -f engine/deploy/helm/bytebrew/tests/values/irsa.yaml > "$R"
-          grep -q 'eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/bytebrew-engine-test"' "$R"
+          # Helm's toYaml normalizes string quoting based on content — match
+          # both `value` and `"value"` forms.
+          grep -qE 'eks\.amazonaws\.com/role-arn: "?arn:aws:iam::123456789012:role/bytebrew-engine-test"?' "$R"
 
       - name: Render — HTTPRoute (Gateway API)
         run: |
