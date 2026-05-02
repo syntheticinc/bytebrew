@@ -116,8 +116,10 @@ jobs:
           rm -f /tmp/helmpkg/bytebrew-engine-*.tgz
           PKG=$(helm package engine/deploy/helm/bytebrew --destination /tmp/helmpkg | awk '{print $NF}')
           test -n "$PKG"
-          # Forbid: tests/, _scratch/, .git/, editor backups, .helmignore itself, OWNERS
-          LEAKED=$(tar -tzf "$PKG" | grep -E '(^|/)(\.git|tests|_scratch|examples)/|\.(bak|swp|orig|tmp|sw[a-p])$|\.helmignore$|/OWNERS$' || true)
+          # Forbid: tests/, _scratch/, .git/, editor backups, OWNERS.
+          # Do NOT forbid `.helmignore` (helm packages it by design) or
+          # `examples/` (intentional chart contents — argocd Application sample).
+          LEAKED=$(tar -tzf "$PKG" | grep -E '(^|/)(\.git|tests|_scratch)/|\.(bak|swp|orig|tmp|sw[a-p])$|/OWNERS$' || true)
           if [ -n "$LEAKED" ]; then
             echo "FAIL: leaked into chart package:"
             echo "$LEAKED"
