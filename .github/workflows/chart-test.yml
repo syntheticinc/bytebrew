@@ -1,0 +1,314 @@
+name: chart-test
+
+on:
+  pull_request:
+    paths:
+      - 'engine/deploy/helm/bytebrew/**'
+      - '.github/workflows/chart-test.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'engine/deploy/helm/bytebrew/**'
+      - '.github/workflows/chart-test.yml'
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.15.0
+
+      - name: helm lint
+        run: helm lint engine/deploy/helm/bytebrew
+
+      - name: Render — default scenario
+        run: |
+          helm template smoke engine/deploy/helm/bytebrew \
+            -f engine/deploy/helm/bytebrew/tests/values/default.yaml > /tmp/r-default.yaml
+          test -s /tmp/r-default.yaml
+
+      - name: Render — single-shot (regression-pinned for known v0.4.2 bugs)
+        run: |
+          set -euo pipefail
+          R=/tmp/r-single-shot.yaml
+          helm template smoke engine/deploy/helm/bytebrew \
+            -f engine/deploy/helm/bytebrew/tests/values/single-shot.yaml > "$R"
+          # SA hook annotations
+          grep -q '"helm.sh/hook": pre-install,pre-upgrade' "$R"
+          grep -q '"helm.sh/hook-weight": "-10"' "$R"
+          # Engine HOME=/tmp env
+          grep -A1 '            - name: HOME' "$R" | grep -q 'value: "/tmp"'
+          # Migrations Job invokes liquibase entrypoint
+          grep -q '/liquibase/docker-entrypoint.sh' "$R"
+          # configApply Job uses args (not command) — entrypoint /brewctl preserved
+          awk '/name: brewctl-apply/{flag=1} flag && /args:/{print "OK"; exit} flag && /command:/{print "FAIL"; exit 1}' "$R" | grep -q OK
+          # Bootstrap admin token + configApply hook
+          grep -q 'BYTEBREW_BOOTSTRAP_ADMIN_TOKEN' "$R"
+          grep -q 'config-apply' "$R"
+
+      - name: Render — restricted-security (auto /tmp emptyDir on readOnlyRootFS)
+        run: |
+          set -euo pipefail
+          R=/tmp/r-restricted.yaml
+          helm template smoke engine/deploy/helm/bytebrew \
+            -f engine/deploy/helm/bytebrew/tests/values/restricted-security.yaml > "$R"
+          # readOnlyRootFilesystem applied to deployment + 2 jobs
+          test "$(grep -c 'readOnlyRootFilesystem: true' "$R")" -ge 3
+          # NetworkPolicy rendered
+          grep -q 'kind: NetworkPolicy' "$R"
+          # /tmp emptyDir auto-mounted
+          grep -q 'name: tmp' "$R"
+          grep -q 'emptyDir: {}' "$R"
+
+      - name: Render — IRSA (annotation correctness)
+        run: |
+          set -euo pipefail
+          R=/tmp/r-irsa.yaml
+          helm template smoke engine/deploy/helm/bytebrew \
+            -f engine/deploy/helm/bytebrew/tests/values/irsa.yaml > "$R"
+          grep -q 'eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/bytebrew-engine-test"' "$R"
+
+      - name: Render — HTTPRoute (Gateway API)
+        run: |
+          set -euo pipefail
+          R=/tmp/r-httproute.yaml
+          helm template smoke engine/deploy/helm/bytebrew \
+            -f engine/deploy/helm/bytebrew/tests/values/httproute.yaml > "$R"
+          grep -q 'kind: HTTPRoute' "$R"
+          grep -q 'apiVersion: gateway.networking.k8s.io/v1' "$R"
+
+      - name: replicaCount=local guard
+        run: |
+          set -euo pipefail
+          # Must fail at template time when replicaCount > 1 with auth.mode=local.
+          if helm template smoke engine/deploy/helm/bytebrew \
+              -f engine/deploy/helm/bytebrew/tests/values/single-shot.yaml \
+              --set replicaCount=3 > /tmp/r-multi.yaml 2>/tmp/err-multi.txt; then
+            echo "FAIL: chart should have rejected replicaCount=3 with auth.mode=local"
+            exit 1
+          fi
+          grep -q 'auth.mode=local supports only replicaCount=1' /tmp/err-multi.txt
+          echo "OK: replicaCount guard fired with expected message"
+
+      - name: HPA guard with auth.mode=local
+        run: |
+          set -euo pipefail
+          # Must fail at template time when autoscaling.maxReplicas>1 with auth.mode=local.
+          # Catches regression of MAJOR-1 — HPA was previously bypassing the multi-replica check.
+          if helm template smoke engine/deploy/helm/bytebrew \
+              -f engine/deploy/helm/bytebrew/tests/values/single-shot.yaml \
+              --set autoscaling.enabled=true \
+              --set autoscaling.maxReplicas=5 > /tmp/r-hpa.yaml 2>/tmp/err-hpa.txt; then
+            echo "FAIL: chart should have rejected HPA with auth.mode=local + maxReplicas>1"
+            exit 1
+          fi
+          grep -q 'autoscaling.enabled and maxReplicas>1 is unsafe' /tmp/err-hpa.txt
+          echo "OK: HPA guard fired with expected message"
+
+      - name: Verify .helmignore keeps tests/ + scratch + dotfiles out of OCI artefact
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/helmpkg
+          rm -f /tmp/helmpkg/bytebrew-engine-*.tgz
+          PKG=$(helm package engine/deploy/helm/bytebrew --destination /tmp/helmpkg | awk '{print $NF}')
+          test -n "$PKG"
+          # Forbid: tests/, _scratch/, .git/, editor backups, .helmignore itself, OWNERS
+          LEAKED=$(tar -tzf "$PKG" | grep -E '(^|/)(\.git|tests|_scratch|examples)/|\.(bak|swp|orig|tmp|sw[a-p])$|\.helmignore$|/OWNERS$' || true)
+          if [ -n "$LEAKED" ]; then
+            echo "FAIL: leaked into chart package:"
+            echo "$LEAKED"
+            exit 1
+          fi
+          echo "OK: package clean"
+
+  integration:
+    runs-on: ubuntu-latest
+    needs: static
+    strategy:
+      fail-fast: false
+      matrix:
+        k8s: [v1.28.0, v1.30.0, v1.31.0]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: helm/kind-action@v1
+        with:
+          node_image: kindest/node:${{ matrix.k8s }}
+          # Run ID + attempt avoids cluster-name collision when two CI runs hit
+          # the same self-hosted runner concurrently or a previous run leaked.
+          cluster_name: chart-test-${{ matrix.k8s }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.15.0
+
+      - name: Apply postgres-pgvector fixture
+        run: |
+          kubectl apply -f engine/deploy/helm/bytebrew/tests/fixtures/postgres-pgvector.yaml
+          kubectl wait --for=condition=ready pod \
+            -l app=postgres-pgvector --timeout=300s
+
+      - name: helm install — single-shot
+        run: |
+          helm install bb engine/deploy/helm/bytebrew \
+            -f engine/deploy/helm/bytebrew/tests/values/single-shot.yaml \
+            --wait --timeout 15m
+
+      - name: Verify migrations Job actually ran Liquibase
+        run: |
+          set -euo pipefail
+          kubectl logs job/bb-bytebrew-engine-migrations \
+            | grep -E 'Update has been successful|UPDATE SUMMARY|Liquibase command .update. was executed successfully'
+          kubectl exec postgres-pgvector-0 -- \
+            psql -U postgres -d bytebrew -tAc "SELECT count(*) FROM databasechangelog" \
+            | awk '{ if ($1+0 < 1) { print "FAIL: databasechangelog empty"; exit 1 } else { print "OK: " $1 " changesets applied" } }'
+
+      - name: Smoke — install
+        run: |
+          set -euo pipefail
+          kubectl port-forward svc/bb-bytebrew-engine 18443:8443 >/tmp/pf.log 2>&1 &
+          PF_PID=$!
+          trap "kill $PF_PID 2>/dev/null || true" EXIT
+          # Wait for engine pod ready (not just deployment apply). Engine
+          # serves 503 on /health for a few seconds while it loads agents.
+          kubectl wait --for=condition=available deploy/bb-bytebrew-engine --timeout=300s
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:18443/api/v1/health >/dev/null && break
+            sleep 2
+          done
+          ADMIN_TOKEN=$(kubectl get secret postgres-credentials \
+            -o jsonpath='{.data.token}' | base64 -d) \
+            ENGINE_URL=http://localhost:18443 \
+            bash engine/deploy/helm/bytebrew/tests/scripts/smoke.sh
+
+      # Catches: SA hook re-creation race, migrations idempotency, engine PVC
+      # persistence (JWT keypair), configApply re-runs as "No changes."
+      - name: helm upgrade — same chart, --reuse-values
+        run: |
+          helm upgrade bb engine/deploy/helm/bytebrew \
+            -f engine/deploy/helm/bytebrew/tests/values/single-shot.yaml \
+            --reuse-values --wait --timeout 10m
+
+      - name: Smoke — upgrade
+        run: |
+          set -euo pipefail
+          kubectl port-forward svc/bb-bytebrew-engine 18443:8443 >/tmp/pf2.log 2>&1 &
+          PF_PID=$!
+          trap "kill $PF_PID 2>/dev/null || true" EXIT
+          # Wait for engine pod ready (not just deployment apply). Engine
+          # serves 503 on /health for a few seconds while it loads agents.
+          kubectl wait --for=condition=available deploy/bb-bytebrew-engine --timeout=300s
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:18443/api/v1/health >/dev/null && break
+            sleep 2
+          done
+          ADMIN_TOKEN=$(kubectl get secret postgres-credentials \
+            -o jsonpath='{.data.token}' | base64 -d) \
+            ENGINE_URL=http://localhost:18443 \
+            bash engine/deploy/helm/bytebrew/tests/scripts/smoke.sh
+          # configApply on upgrade must be no-op
+          kubectl logs -l app.kubernetes.io/component=config-apply --tail=20 \
+            | grep -q 'No changes\|Apply complete'
+
+      - name: helm rollback — release 1
+        run: |
+          helm rollback bb 1 --wait --timeout 10m
+
+      - name: Smoke — rollback
+        run: |
+          set -euo pipefail
+          kubectl port-forward svc/bb-bytebrew-engine 18443:8443 >/tmp/pf3.log 2>&1 &
+          PF_PID=$!
+          trap "kill $PF_PID 2>/dev/null || true" EXIT
+          # Wait for engine pod ready (not just deployment apply). Engine
+          # serves 503 on /health for a few seconds while it loads agents.
+          kubectl wait --for=condition=available deploy/bb-bytebrew-engine --timeout=300s
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:18443/api/v1/health >/dev/null && break
+            sleep 2
+          done
+          ADMIN_TOKEN=$(kubectl get secret postgres-credentials \
+            -o jsonpath='{.data.token}' | base64 -d) \
+            ENGINE_URL=http://localhost:18443 \
+            bash engine/deploy/helm/bytebrew/tests/scripts/smoke.sh
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get pods -A
+          kubectl describe pod -l app.kubernetes.io/instance=bb || true
+          kubectl logs -l app.kubernetes.io/instance=bb --all-containers --tail=200 || true
+          kubectl logs job/bb-bytebrew-engine-migrations --tail=200 || true
+          kubectl logs job/bb-bytebrew-engine-config-apply --tail=200 || true
+          kubectl logs postgres-pgvector-0 --tail=100 || true
+
+  # Separate job: install restricted-security scenario on a single k8s version.
+  # Validates that auto /tmp emptyDir wiring lets engine boot under
+  # readOnlyRootFilesystem: true (chart-test would silently miss the
+  # CrashLoopBackOff if this scenario stayed render-only).
+  integration-restricted:
+    runs-on: ubuntu-latest
+    needs: static
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: helm/kind-action@v1
+        with:
+          node_image: kindest/node:v1.30.0
+          cluster_name: chart-test-restricted-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.15.0
+
+      - name: Apply postgres-pgvector fixture
+        run: |
+          kubectl apply -f engine/deploy/helm/bytebrew/tests/fixtures/postgres-pgvector.yaml
+          kubectl wait --for=condition=ready pod \
+            -l app=postgres-pgvector --timeout=300s
+
+      - name: helm install — restricted-security (readOnlyRootFilesystem=true)
+        run: |
+          helm install bb engine/deploy/helm/bytebrew \
+            -f engine/deploy/helm/bytebrew/tests/values/restricted-security.yaml \
+            --wait --timeout 15m
+
+      - name: Verify engine + jobs ran with read-only root
+        run: |
+          set -euo pipefail
+          # Confirm spec actually carries readOnlyRootFilesystem=true.
+          POD=$(kubectl get pod -l app.kubernetes.io/name=bytebrew-engine -o name | head -1)
+          test "$(kubectl get $POD -o jsonpath='{.spec.containers[0].securityContext.readOnlyRootFilesystem}')" = "true"
+          # /tmp must be mounted (auto emptyDir).
+          kubectl get $POD -o jsonpath='{.spec.containers[0].volumeMounts[*].mountPath}' | grep -q '/tmp'
+          # Migrations succeeded, changelog populated.
+          kubectl exec postgres-pgvector-0 -- \
+            psql -U postgres -d bytebrew -tAc "SELECT count(*) FROM databasechangelog" \
+            | awk '{ if ($1+0 < 1) { print "FAIL"; exit 1 } else { print "OK: " $1 } }'
+
+      - name: Smoke
+        run: |
+          set -euo pipefail
+          kubectl port-forward svc/bb-bytebrew-engine 18443:8443 >/tmp/pf.log 2>&1 &
+          PF_PID=$!
+          trap "kill $PF_PID 2>/dev/null || true" EXIT
+          kubectl wait --for=condition=available deploy/bb-bytebrew-engine --timeout=300s
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:18443/api/v1/health >/dev/null && break
+            sleep 2
+          done
+          ADMIN_TOKEN=$(kubectl get secret postgres-credentials \
+            -o jsonpath='{.data.token}' | base64 -d) \
+            ENGINE_URL=http://localhost:18443 \
+            bash engine/deploy/helm/bytebrew/tests/scripts/smoke.sh
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get pods -A
+          kubectl describe pod -l app.kubernetes.io/instance=bb || true
+          kubectl logs -l app.kubernetes.io/instance=bb --all-containers --tail=200 || true
+          kubectl logs job/bb-bytebrew-engine-migrations --tail=200 || true
+          kubectl logs job/bb-bytebrew-engine-config-apply --tail=200 || true

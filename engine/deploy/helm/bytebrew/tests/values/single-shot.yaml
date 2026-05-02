@@ -1,0 +1,65 @@
+# Test scenario: chirp-mono2-style single-shot deploy.
+# bootstrapAdminToken seeds admin token at engine boot.
+# configApply Job runs as post-install hook with same token + applies smoke YAML.
+# Validates the full helmfile-equivalent flow.
+replicaCount: 1
+
+image:
+  repository: bytebrew/engine
+  tag: "1.0.1"
+  pullPolicy: IfNotPresent
+
+postgresql:
+  external:
+    existingSecret: postgres-credentials
+    existingSecretKey: DATABASE_URL
+
+config:
+  auth:
+    mode: local
+    jwtKeysPath: /var/lib/bytebrew/keys
+
+persistence:
+  keys:
+    enabled: true
+    size: 1Mi
+    storageClass: standard
+
+ingress:
+  enabled: false
+
+httpRoute:
+  enabled: false
+
+migrations:
+  enabled: true
+  image:
+    repository: bytebrew/engine-migrations
+    tag: "1.0.1"
+
+bootstrapAdminToken:
+  enabled: true
+  existingSecret: postgres-credentials
+  existingSecretKey: token
+
+# brewctl applies smoke YAML right after engine becomes healthy.
+# Empty `models: []` keeps it from requiring a real LLM API key in CI —
+# this is a chart-flow test, not an LLM integration test.
+# apiKeysSecret intentionally omitted: nothing in the smoke config references
+# env vars, and reusing postgres-credentials here would inject postgres
+# password + DSN into brewctl's env (harmless but conceptually wrong).
+configApply:
+  enabled: true
+  tokenSecret: postgres-credentials
+  config: |
+    apiVersion: bytebrew/v1
+    kind: Config
+    models: []
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

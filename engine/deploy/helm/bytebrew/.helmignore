@@ -1,0 +1,26 @@
+# Patterns to ignore when building Helm packages.
+# Each line of this file is a pattern. Same syntax as .gitignore.
+
+# Common VCS / IDE / OS metadata
+.DS_Store
+.git/
+.gitignore
+.bzr/
+.hg/
+.hgignore
+.svn/
+*.swp
+*.tmp
+*.bak
+*.orig
+*~
+.project
+.idea/
+.vscode/
+
+# Mac OS X metadata
+__MACOSX/
+
+# Helm test scaffolding — not part of the deployable chart artefact.
+# Keeps test admin-token fixtures and smoke scripts out of the OCI package.
+tests/
