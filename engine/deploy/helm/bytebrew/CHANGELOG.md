@@ -54,6 +54,25 @@ re-running `helmfile -e dev sync` reconciles via `helm upgrade` →
 configApply Job re-runs with the file path fix → brewctl actually creates
 the smoke bundle.
 
+### Compatibility matrix
+- chart 0.4.3 + engine 1.0.3 (matching `appVersion`) — recommended; full
+  fix coverage including PATCH alias normalization (Patch handler now
+  mirrors Create).
+- chart 0.4.3 + engine 1.0.2 — works as long as `configApply.config`
+  uses canonical types (`openai_compatible`, not the `openrouter`
+  alias). With the alias, first install succeeds (Create normalizes)
+  but the second `helm upgrade` reconcile triggers PATCH, which engine
+  1.0.2 rejects on `chk_models_type`. Stay on canonical types or bump
+  the engine.
+- chart 0.4.3 + engine 1.0.1 — same constraint as 1.0.2 plus loses
+  fail-fast on invalid bootstrap admin token (silent skip-seed instead).
+
+### Operator constraint — `configApply.existingConfigMap`
+If you bring your own ConfigMap via `configApply.existingConfigMap`, the
+data key MUST be `bytebrew.yaml` — the Job invokes brewctl with the
+explicit file path `/etc/bytebrew/config/bytebrew.yaml`. Configurable
+filename is tracked for chart v0.5.x.
+
 ## [0.4.2] - 2026-04-30
 
 ### Fixed

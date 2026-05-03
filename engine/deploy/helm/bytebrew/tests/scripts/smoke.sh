@@ -2,12 +2,16 @@
 # Chart smoke — runs after `helm install` against an in-cluster engine
 # reachable via kubectl port-forward.
 #
-# NOTE: tests/values/*.yaml currently pin engine image.tag to "1.0.1" because
-# 1.0.2 may not yet be on Docker Hub at PR-author time. Chart appVersion is
-# 1.0.2 (engine fail-fast on invalid bootstrap token); valid-token happy path
-# is identical between 1.0.1 and 1.0.2 so smoke runs identically. Bump pins
-# to "1.0.2" in a follow-up once the cloud-web deploy workflow has published
-# bytebrew/engine:1.0.2 + bytebrew/engine-migrations:1.0.2.
+# NOTE: tests/values/*.yaml pin engine image.tag to "1.0.1". Chart appVersion is
+# 1.0.3 (engine fail-fast on invalid bootstrap token + PATCH alias normalize).
+# Valid-token / canonical-type happy path is identical between 1.0.1 / 1.0.2 /
+# 1.0.3, so kind smoke runs identically. The new PATCH normalization in v1.0.3
+# is covered by go unit test (TestModelHandler_Patch_NormalizesAlias) — kind
+# smoke does NOT exercise it because fixtures use canonical type already.
+# Bump pins to "1.0.3" in a follow-up after the cloud-web deploy workflow has
+# published bytebrew/engine:1.0.3 + bytebrew/engine-migrations:1.0.3, and at
+# that point flipping single-shot.yaml to `type: openrouter` would also
+# exercise the v1.0.3 fix end-to-end in CI.
 #
 # Required env:
 #   ADMIN_TOKEN   bb_<64-hex> Bearer token for engine REST

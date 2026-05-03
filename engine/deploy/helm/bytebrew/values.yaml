@@ -267,7 +267,12 @@ configApply:
   #         chat_enabled: true
   config: ""
 
-  # Alternative to `config`: name of an existing ConfigMap with key `bytebrew.yaml`.
+  # Alternative to `config`: name of an existing ConfigMap.
+  # IMPORTANT: the ConfigMap MUST expose the bundle under the data key
+  # `bytebrew.yaml` — the Job invokes brewctl with the explicit file path
+  # `/etc/bytebrew/config/bytebrew.yaml` (a directory path makes brewctl walk
+  # subdirs only and silently no-op on top-level files). Future configurable
+  # filename: tracked under chart v0.5.x.
   existingConfigMap: ""
 
   # Required when enabled=true. Name of a Secret with key `token` containing
