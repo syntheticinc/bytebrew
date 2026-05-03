@@ -54,7 +54,11 @@ configApply:
   config: |
     models:
       - name: kind-smoke-model
-        type: openrouter
+        # `openai_compatible` is the canonical form engine stores. Aliases like
+        # `openrouter` get canonicalized on POST but rejected on PATCH (engine
+        # chk_models_type constraint), so brewctl's first reconcile sees `drift`
+        # and the second helm upgrade fails. Use canonical form here.
+        type: openai_compatible
         model_kind: chat        # brewctl bundle field; collides with top-level `kind` if named `kind`
         base_url: https://openrouter.ai/api/v1
         model_name: openai/gpt-4o-mini
