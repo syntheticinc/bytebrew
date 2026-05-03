@@ -3,7 +3,7 @@ name: bytebrew-engine
 description: ByteBrew AI Agent Engine (Community Edition) — Helm chart for Kubernetes
 type: application
 version: 0.4.3
-appVersion: "1.0.2"
+appVersion: "1.0.3"
 keywords:
   - ai
   - agents

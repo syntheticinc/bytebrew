@@ -64,9 +64,10 @@ bootstrapAdminToken:
 configApply:
   enabled: true
   tokenSecret: postgres-credentials
+  # No-op brewctl bundle — restricted-security suite validates engine boots
+  # with readOnlyRootFilesystem=true; the brewctl-creates-resources path
+  # is covered by the single-shot scenario.
   config: |
-    apiVersion: bytebrew/v1
-    kind: Config
     models: []
 
 resources:

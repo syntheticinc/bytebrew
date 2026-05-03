@@ -9,7 +9,15 @@ and this chart adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [0.4.3] - 2026-05-03
 
-### Fixed
+### Fixed (engine v1.0.3)
+- **PATCH /models did not normalize type aliases.** POST /models accepts
+  `type: openrouter` and canonicalizes to `openai_compatible` (chk_models_type
+  enum: ollama, openai_compatible, anthropic, azure_openai). PATCH had no
+  matching normalization, so brewctl reconcile after a Create-with-alias hit
+  API 500 → Job BackoffLimitExceeded → Helm upgrade failed. Patch now mirrors
+  Create's validation + alias rewrite. Bumped engine appVersion 1.0.2 → 1.0.3.
+
+### Fixed (chart)
 - **configApply Job silently no-op'd on real deploys** — chart pointed brewctl
   at `-f /etc/bytebrew/config` (a ConfigMap-mounted directory). brewctl's
   loader walks subdirectories `models/`, `agents/`, `schemas/` only and

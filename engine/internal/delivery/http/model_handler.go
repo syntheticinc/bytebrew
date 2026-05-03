@@ -293,6 +293,27 @@ func (h *ModelHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "kind must be one of: chat, embedding")
 		return
 	}
+	// Validate + normalize Type alias the same way Create does. Without this,
+	// `type: openrouter` (a valid Create input) reaches DB unchanged on PATCH
+	// and trips chk_models_type — which only enumerates the canonical set
+	// {ollama, openai_compatible, anthropic, azure_openai}. brewctl reconcile
+	// then fails with API 500 on the second sync.
+	if req.Type != nil {
+		validTypes := map[string]bool{"ollama": true, "openai_compatible": true, "anthropic": true, "azure_openai": true, "openrouter": true}
+		if !validTypes[*req.Type] {
+			writeJSONError(w, http.StatusBadRequest, "type must be one of: ollama, openai_compatible, anthropic, azure_openai, openrouter")
+			return
+		}
+		if *req.Type == "openrouter" {
+			canonical := "openai_compatible"
+			req.Type = &canonical
+			// Default base URL only when caller did not pin one.
+			if req.BaseURL == nil || *req.BaseURL == "" {
+				defaultURL := "https://openrouter.ai/api/v1"
+				req.BaseURL = &defaultURL
+			}
+		}
+	}
 	// Invariant: at most one default chat model per tenant. Clearing a default
 	// only makes sense in the context of promoting another model — we refuse
 	// a bare `is_default=false` so the client can't leave the tenant without
