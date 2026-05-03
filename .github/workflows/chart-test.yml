@@ -190,6 +190,7 @@ jobs:
           ADMIN_TOKEN=$(kubectl get secret postgres-credentials \
             -o jsonpath='{.data.token}' | base64 -d) \
             ENGINE_URL=http://localhost:18443 \
+            EXPECT_BREWCTL_RESOURCES=true \
             bash engine/deploy/helm/bytebrew/tests/scripts/smoke.sh
 
       # Catches: SA hook re-creation race, migrations idempotency, engine PVC
@@ -216,6 +217,7 @@ jobs:
           ADMIN_TOKEN=$(kubectl get secret postgres-credentials \
             -o jsonpath='{.data.token}' | base64 -d) \
             ENGINE_URL=http://localhost:18443 \
+            EXPECT_BREWCTL_RESOURCES=true \
             bash engine/deploy/helm/bytebrew/tests/scripts/smoke.sh
           # configApply on upgrade must be no-op
           kubectl logs -l app.kubernetes.io/component=config-apply --tail=20 \
@@ -241,6 +243,7 @@ jobs:
           ADMIN_TOKEN=$(kubectl get secret postgres-credentials \
             -o jsonpath='{.data.token}' | base64 -d) \
             ENGINE_URL=http://localhost:18443 \
+            EXPECT_BREWCTL_RESOURCES=true \
             bash engine/deploy/helm/bytebrew/tests/scripts/smoke.sh
 
       - name: Diagnostics on failure
@@ -316,6 +319,7 @@ jobs:
           ADMIN_TOKEN=$(kubectl get secret postgres-credentials \
             -o jsonpath='{.data.token}' | base64 -d) \
             ENGINE_URL=http://localhost:18443 \
+            EXPECT_BREWCTL_RESOURCES=true \
             bash engine/deploy/helm/bytebrew/tests/scripts/smoke.sh
 
       - name: Diagnostics on failure

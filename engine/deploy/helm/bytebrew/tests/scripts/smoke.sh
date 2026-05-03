@@ -55,18 +55,25 @@ if kubectl -n "$NAMESPACE" get \
   # missed top-level ConfigMap-mounted bytebrew.yaml → "No changes" → Job
   # Completed → looked successful but ZERO resources created. Assert the
   # smoke bundle actually landed in engine.
-  echo "==> Assert configApply created the smoke resources"
-  models=$(curl -fsS "$ENGINE_URL/api/v1/models" \
-    -H "Authorization: Bearer $TOKEN" | jq -e 'map(select(.name == "kind-smoke-model")) | length')
-  agents=$(curl -fsS "$ENGINE_URL/api/v1/agents" \
-    -H "Authorization: Bearer $TOKEN" | jq -e 'map(select(.name == "kind-smoke-agent")) | length')
-  schemas=$(curl -fsS "$ENGINE_URL/api/v1/schemas" \
-    -H "Authorization: Bearer $TOKEN" | jq -e 'map(select(.name == "kind-smoke-schema")) | length')
-  if [ "$models" != "1" ] || [ "$agents" != "1" ] || [ "$schemas" != "1" ]; then
-    echo "FAIL: brewctl reported success but smoke resources missing — models=$models agents=$agents schemas=$schemas"
-    exit 1
+  #
+  # Gated behind EXPECT_BREWCTL_RESOURCES=true so scenarios that intentionally
+  # ship an empty `models: []` bundle (e.g. restricted-security, where the
+  # focus is engine-boot-under-readOnlyRootFilesystem, not brewctl flow)
+  # don't trip on missing resources.
+  if [ "${EXPECT_BREWCTL_RESOURCES:-}" = "true" ]; then
+    echo "==> Assert configApply created the smoke resources"
+    models=$(curl -fsS "$ENGINE_URL/api/v1/models" \
+      -H "Authorization: Bearer $TOKEN" | jq -e 'map(select(.name == "kind-smoke-model")) | length')
+    agents=$(curl -fsS "$ENGINE_URL/api/v1/agents" \
+      -H "Authorization: Bearer $TOKEN" | jq -e 'map(select(.name == "kind-smoke-agent")) | length')
+    schemas=$(curl -fsS "$ENGINE_URL/api/v1/schemas" \
+      -H "Authorization: Bearer $TOKEN" | jq -e 'map(select(.name == "kind-smoke-schema")) | length')
+    if [ "$models" != "1" ] || [ "$agents" != "1" ] || [ "$schemas" != "1" ]; then
+      echo "FAIL: brewctl reported success but smoke resources missing — models=$models agents=$agents schemas=$schemas"
+      exit 1
+    fi
+    echo "OK: brewctl created kind-smoke-{model,agent,schema}"
   fi
-  echo "OK: brewctl created kind-smoke-{model,agent,schema}"
 fi
 
 echo "✅ Smoke pass"
