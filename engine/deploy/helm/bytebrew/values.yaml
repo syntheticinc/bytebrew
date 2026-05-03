@@ -239,8 +239,32 @@ configApply:
     tag: "0.1.0"
     pullPolicy: IfNotPresent
 
-  # Inline bytebrew.yaml content (multi-document YAML). Use env-var
-  # placeholders for secrets — never plaintext.
+  # Inline bytebrew.yaml content. Format: bundle YAML with top-level
+  # `models:`, `mcp_servers:`, `knowledge_bases:`, `agents:`, `schemas:`
+  # arrays. Do NOT wrap with `apiVersion: bytebrew/v1` + `kind: Config` —
+  # brewctl's loader treats that as a single-resource file and rejects
+  # `kind: Config` as unknown. Use env-var placeholders (`${VAR}`) for
+  # secrets — never plaintext.
+  #
+  # Example:
+  #   config: |
+  #     models:
+  #       - name: openrouter-default
+  #         type: openrouter
+  #         model_kind: chat       # NB: `model_kind`, NOT `kind` — collides with top-level resource kind
+  #         base_url: https://openrouter.ai/api/v1
+  #         model_name: openai/gpt-4o-mini
+  #         api_key: ${OPENROUTER_API_KEY}
+  #         is_default: true
+  #     agents:
+  #       - name: assistant
+  #         model: openrouter-default
+  #         lifecycle: persistent
+  #         system_prompt: "You are a helpful assistant."
+  #     schemas:
+  #       - name: main
+  #         entry_agent: assistant
+  #         chat_enabled: true
   config: ""
 
   # Alternative to `config`: name of an existing ConfigMap with key `bytebrew.yaml`.

@@ -58,7 +58,14 @@ spec:
           {{- end }}
           # Image entrypoint is /brewctl (binary at root, not in PATH).
           # Pass arguments via `args` so the entrypoint stays in effect.
-          args: ["apply", "-f", "/etc/bytebrew/config", "--yes"]
+          #
+          # Path is the explicit ConfigMap-rendered file (`bytebrew.yaml`), NOT
+          # the parent directory. `brewctl apply -f <dir>` walks subdirectories
+          # `models/`, `agents/`, `schemas/` only — top-level files in the dir
+          # are NOT read. ConfigMap volume mounts each data key as a top-level
+          # file, so we must point brewctl at the file directly. See
+          # bytebrew-brewctl/internal/loader/loader.go (loadFromDirectory).
+          args: ["apply", "-f", "/etc/bytebrew/config/bytebrew.yaml", "--yes"]
           env:
             - name: BREWCTL_ENGINE_URL
               value: "http://{{ include "bytebrew-engine.fullname" . }}:{{ .Values.service.port }}"
