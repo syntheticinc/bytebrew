@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/syntheticinc/bytebrew/engine/internal/authprim"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/auth"
 )
 
@@ -57,7 +58,7 @@ func newMockTokenVerifier() *mockTokenVerifier {
 }
 
 func (m *mockTokenVerifier) addToken(rawToken string, name string, scopes int) {
-	hash := sha256Hash(rawToken)
+	hash := authprim.Hash(rawToken)
 	m.tokens[hash] = APITokenInfo{Name: name, ScopesMask: scopes}
 }
 
@@ -319,15 +320,15 @@ func TestRequireAdminSession(t *testing.T) {
 }
 
 func TestSha256Hash(t *testing.T) {
-	hash := sha256Hash("bb_test123")
+	hash := authprim.Hash("bb_test123")
 	require.NotEmpty(t, hash)
 	assert.Len(t, hash, 64) // SHA-256 hex = 64 chars
 
 	// Same input produces same hash
-	assert.Equal(t, hash, sha256Hash("bb_test123"))
+	assert.Equal(t, hash, authprim.Hash("bb_test123"))
 
 	// Different input produces different hash
-	assert.NotEqual(t, hash, sha256Hash("bb_test456"))
+	assert.NotEqual(t, hash, authprim.Hash("bb_test456"))
 }
 
 // captureLogs swaps slog.Default for the duration of t with a JSON handler

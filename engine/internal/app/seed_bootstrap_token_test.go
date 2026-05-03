@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -12,6 +13,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
+	"github.com/syntheticinc/bytebrew/engine/internal/authprim"
 	"github.com/syntheticinc/bytebrew/engine/internal/infrastructure/persistence/configrepo"
 )
 
@@ -59,7 +61,7 @@ func TestSeedBootstrapAdminToken_EmptyToken_NoOp(t *testing.T) {
 	db := setupTokenTestDB(t)
 	ctx := context.Background()
 
-	seedBootstrapAdminToken(ctx, db, "")
+	require.NoError(t, seedBootstrapAdminToken(ctx, db, ""))
 
 	repo := configrepo.NewGORMAPITokenRepository(db)
 	tokens, err := repo.List(ctx)
@@ -67,12 +69,15 @@ func TestSeedBootstrapAdminToken_EmptyToken_NoOp(t *testing.T) {
 	assert.Empty(t, tokens, "empty token must not create any rows")
 }
 
-func TestSeedBootstrapAdminToken_InvalidFormat_NoOp(t *testing.T) {
+func TestSeedBootstrapAdminToken_InvalidFormat_ReturnsError(t *testing.T) {
 	db := setupTokenTestDB(t)
 	ctx := context.Background()
 
 	for _, bad := range []string{"xxx", "bb_short", "aa_" + hex.EncodeToString(make([]byte, 32))} {
-		seedBootstrapAdminToken(ctx, db, bad)
+		err := seedBootstrapAdminToken(ctx, db, bad)
+		require.Error(t, err, "invalid token %q must return error to fail-fast at boot", bad)
+		assert.True(t, errors.Is(err, authprim.ErrInvalidTokenFormat),
+			"error must wrap authprim.ErrInvalidTokenFormat for stable matching")
 	}
 
 	repo := configrepo.NewGORMAPITokenRepository(db)
@@ -86,7 +91,7 @@ func TestSeedBootstrapAdminToken_ValidToken_CreatesRow(t *testing.T) {
 	ctx := context.Background()
 
 	raw := validToken()
-	seedBootstrapAdminToken(ctx, db, raw)
+	require.NoError(t, seedBootstrapAdminToken(ctx, db, raw))
 
 	repo := configrepo.NewGORMAPITokenRepository(db)
 	tokens, err := repo.List(ctx)
@@ -111,8 +116,8 @@ func TestSeedBootstrapAdminToken_Idempotent(t *testing.T) {
 	raw := validToken()
 
 	// Call twice — must not duplicate.
-	seedBootstrapAdminToken(ctx, db, raw)
-	seedBootstrapAdminToken(ctx, db, raw)
+	require.NoError(t, seedBootstrapAdminToken(ctx, db, raw))
+	require.NoError(t, seedBootstrapAdminToken(ctx, db, raw))
 
 	repo := configrepo.NewGORMAPITokenRepository(db)
 	tokens, err := repo.List(ctx)

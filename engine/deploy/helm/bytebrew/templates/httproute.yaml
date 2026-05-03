@@ -14,9 +14,14 @@ spec:
   parentRefs:
     {{- range .parentRefs }}
     - name: {{ .name }}
-      namespace: {{ .namespace }}
+      {{- with .namespace }}
+      namespace: {{ . }}
+      {{- end }}
       {{- with .sectionName }}
       sectionName: {{ . }}
+      {{- end }}
+      {{- with .port }}
+      port: {{ . }}
       {{- end }}
     {{- end }}
   hostnames:

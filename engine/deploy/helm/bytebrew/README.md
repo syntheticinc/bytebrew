@@ -2,12 +2,61 @@
 
 Helm chart for deploying the **ByteBrew AI Agent Engine** (Community Edition) on Kubernetes.
 
+## Stability
+
+Per OSS testing transparency convention (Kubernetes feature gates / Helm Artifact
+Hub maturity / Apache Incubator pattern), each chart feature is labelled with how
+it has been validated. Pick what your environment supports and treat
+`Beta`/`Experimental` paths as community-feedback territory.
+
+| Feature                                | Tier         | Tested how |
+|----------------------------------------|--------------|------------|
+| Default install (single-shot)          | **Stable**   | CI gate (kind v1.28/1.30/1.31, install + upgrade + rollback) + chirp-mono2 dev canary |
+| External Postgres + ESO + Vault        | **Stable**   | CI gate + chirp-mono2 dev canary |
+| Bootstrap admin token + configApply    | **Stable**   | CI gate (full single-shot flow) |
+| Migrations Job (Liquibase)             | **Stable**   | CI gate asserts `databasechangelog` populated |
+| HTTPRoute (Gateway API v1)             | **Stable**   | CI render-validated + chirp-mono2 dev canary against Envoy Gateway |
+| `containerSecurityContext.readOnlyRootFilesystem: true` (auto /tmp emptyDir) | **Stable** | CI render-validated; smoke runs render-only on kind |
+| `replicaCount=1` enforcement (`auth.mode=local`) | **Stable** | CI gate (template `fail` on `replicaCount > 1`) |
+| AWS IRSA annotations                   | **Beta**     | CI render-validated only — no AWS account in CI; community feedback welcome |
+| GCP Workload Identity annotations      | **Beta**     | CI render-validated only — no GCP account in CI |
+| NetworkPolicy enabled                  | **Beta**     | CI render-validated only — kind default CNI does NOT enforce NetworkPolicy |
+| Argo CD pull GitOps                    | **Experimental** | Example-only (`examples/argocd-application.yaml`); not exercised in CI |
+| Flux CD HelmRelease                    | **Experimental** | Not exercised in CI |
+| Multi-replica HA (`auth.mode=external`)| **Out of CE** | EE feature — requires external JWT IdP, not in this chart |
+
+**Known limitations (v0.4.2):**
+
+- **ServiceAccount as hook.** Rendered as a Helm pre-install/pre-upgrade hook
+  so it exists in time for the migrations Job. Side effects: SA is not deleted
+  on `helm uninstall` (orphan; clean up via `kubectl delete sa
+  <release>-bytebrew-engine` or by deleting the namespace), and during
+  `helm upgrade` there is a sub-second window during SA recreation where new
+  pods cannot schedule. Both will be removed in v0.5.0 by relocating
+  migrations from a hook to a Deployment init container.
+
+- **`helm rollback` does NOT downgrade the database schema.** Liquibase
+  `update` is forward-only. After rolling back to an older chart revision,
+  the engine pod will still see the newer schema applied by the previous
+  upgrade. If the older engine image references columns/tables that no
+  longer exist (or expects narrower schema), it will crash on first DB read.
+  **To roll back the engine version safely, also restore the database
+  from a pre-upgrade snapshot** (e.g. `pg_dump` taken before `helm upgrade`).
+  The chart cannot do this for you because rollback semantics are
+  application-specific.
+
+- **HPA + `auth.mode=local` is rejected at template time.** Local auth
+  persists the JWT keypair on a single-writer PVC; multi-replica races and
+  produces intermittent auth failures. The chart `fail`s at render if
+  `autoscaling.enabled=true` while `autoscaling.maxReplicas > 1`. Use
+  `auth.mode=external` for HA.
+
 ## Quick Install
 
 ```bash
 helm install bytebrew-engine oci://ghcr.io/syntheticinc/charts/bytebrew-engine \
-  --version 0.4.0 \
-  --set image.tag=v1.0.0 \
+  --version 0.4.2 \
+  --set image.tag=1.0.2 \
   --set postgresql.external.host=my-postgres \
   --set postgresql.external.password=secret
 ```
@@ -159,5 +208,8 @@ Engine seeds the token into `api_tokens` on first boot (idempotent — safe
 to re-apply). Token format: `bb_<64-hex>` — generate via
 `echo "bb_$(openssl rand -hex 32)"`.
 
-Requires engine image **v1.0.1 or later** (`BYTEBREW_BOOTSTRAP_ADMIN_TOKEN`
-env support).
+Requires engine image **v1.0.1 or later** for `BYTEBREW_BOOTSTRAP_ADMIN_TOKEN`
+soft seeding (invalid format → WARN log + skip seed). Engine **v1.0.2+** adds
+fail-fast on invalid token format — process exits with a clear cause logged,
+producing CrashLoopBackOff visible in `kubectl describe pod` (chart `appVersion`
+1.0.2 reflects this).

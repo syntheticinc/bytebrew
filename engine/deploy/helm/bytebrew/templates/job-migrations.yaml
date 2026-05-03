@@ -40,6 +40,54 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          # Image is stock liquibase/liquibase (entrypoint /liquibase/docker-entrypoint.sh,
+          # default Cmd is --help). Convert libpq DATABASE_URL → JDBC parts and invoke
+          # `liquibase update` against the bundled changelog.
+          #
+          # Credentials are passed via LIQUIBASE_COMMAND_USERNAME/PASSWORD env so they
+          # never appear in process argv (no leak via `ps` / kubectl logs / k8s events).
+          # User and password are URL-decoded — real DSNs commonly contain %40 (@),
+          # %2F (/), %3A (:) etc. JDBC PostgreSQL does NOT URL-decode credentials, so
+          # we must decode here before handing off.
+          #
+          # /bin/bash required: printf '%b' \xHH escapes are bash-only (POSIX dash
+          # doesn't support hex byte escapes). Liquibase image is Ubuntu 22.04 →
+          # bash is present at /bin/bash.
+          command: ["/bin/bash", "-eu", "-c"]
+          args:
+            - |
+              # URL-decode: + → space, %XX → byte. Requires bash's printf '%b'.
+              urldecode() {
+                printf '%b' "$(printf '%s' "$1" | sed 's/+/ /g; s/%\([0-9a-fA-F][0-9a-fA-F]\)/\\x\1/g')"
+              }
+
+              URL_NO_PROTO="${DATABASE_URL#postgres://}"
+              URL_NO_PROTO="${URL_NO_PROTO#postgresql://}"
+
+              USERPASS_RAW="${URL_NO_PROTO%@*}"        # greedy strip: handles @ in pwd
+              HOSTPATH="${URL_NO_PROTO##*@}"
+              DB_USER_RAW="${USERPASS_RAW%%:*}"
+              DB_PASS_RAW="${USERPASS_RAW#*:}"
+
+              QUERY=""
+              case "$HOSTPATH" in
+                *\?*) QUERY="?${HOSTPATH#*\?}"; HOSTPATH_NO_Q="${HOSTPATH%%\?*}" ;;
+                *)    HOSTPATH_NO_Q="$HOSTPATH" ;;
+              esac
+              HOSTPORT="${HOSTPATH_NO_Q%%/*}"
+              DB_NAME="${HOSTPATH_NO_Q#*/}"
+
+              JDBC_URL="jdbc:postgresql://${HOSTPORT}/${DB_NAME}${QUERY}"
+
+              # Export creds via env so they stay off argv. exec replaces shell so
+              # the env stays scoped to liquibase process only.
+              export LIQUIBASE_COMMAND_USERNAME="$(urldecode "$DB_USER_RAW")"
+              export LIQUIBASE_COMMAND_PASSWORD="$(urldecode "$DB_PASS_RAW")"
+
+              exec /liquibase/docker-entrypoint.sh \
+                --url="$JDBC_URL" \
+                --changeLogFile=migrations/db.changelog-master.yaml \
+                update
           env:
             - name: DATABASE_URL
               valueFrom:
@@ -55,12 +103,25 @@ spec:
           {{- end }}
           resources:
             {{- toYaml .Values.migrations.resources | nindent 12 }}
-          {{- with .Values.extraVolumeMounts }}
+          {{- if or .Values.containerSecurityContext.readOnlyRootFilesystem .Values.extraVolumeMounts }}
           volumeMounts:
+            {{- if .Values.containerSecurityContext.readOnlyRootFilesystem }}
+            # Liquibase writes temp parser cache + lock files to /tmp.
+            - name: tmp
+              mountPath: /tmp
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- end }}
-      {{- with .Values.extraVolumes }}
+      {{- if or .Values.containerSecurityContext.readOnlyRootFilesystem .Values.extraVolumes }}
       volumes:
+        {{- if .Values.containerSecurityContext.readOnlyRootFilesystem }}
+        - name: tmp
+          emptyDir: {}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- end }}
 {{- end }}

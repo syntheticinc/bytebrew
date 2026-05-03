@@ -2,14 +2,13 @@ package http
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/syntheticinc/bytebrew/engine/internal/authprim"
 	"github.com/syntheticinc/bytebrew/engine/internal/domain"
 )
 
@@ -88,14 +87,14 @@ func (h *TokenHandler) CreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rawToken, err := generateAPIToken()
+	rawToken, err := authprim.Generate()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "generate token failed"})
 		return
 	}
 
 	userSub := domain.UserSubFromContext(r.Context())
-	hash := sha256Hash(rawToken)
+	hash := authprim.Hash(rawToken)
 	id, err := h.repo.Create(r.Context(), userSub, req.Name, hash, mask)
 	if err != nil {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": fmt.Sprintf("create token: %s", err)})
@@ -137,11 +136,3 @@ func (h *TokenHandler) DeleteToken(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// generateAPIToken creates a random API token with bb_ prefix.
-func generateAPIToken() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("generate random bytes: %w", err)
-	}
-	return "bb_" + hex.EncodeToString(b), nil
-}

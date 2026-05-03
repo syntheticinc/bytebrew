@@ -1,3 +1,11 @@
+{{- if eq .Values.config.auth.mode "local" -}}
+  {{- if gt (int .Values.replicaCount) 1 -}}
+{{- fail "auth.mode=local supports only replicaCount=1 (single-writer JWT keypair on PVC). For HA use auth.mode=external with a pre-provisioned public key." -}}
+  {{- end -}}
+  {{- if and .Values.autoscaling.enabled (gt (int .Values.autoscaling.maxReplicas) 1) -}}
+{{- fail "auth.mode=local with autoscaling.enabled and maxReplicas>1 is unsafe — HPA would scale past a single-writer JWT keypair PVC and cause auth races. Disable autoscaling, set maxReplicas=1, or use auth.mode=external for HA." -}}
+  {{- end -}}
+{{- end -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -53,6 +61,11 @@ spec:
               containerPort: 8443
               protocol: TCP
           env:
+            # Engine writes a runtime port-file to $HOME/.local/share/bytebrew/server.port.
+            # With runAsUser=1000 and no allocated home dir, $HOME defaults to "/" which is
+            # not writable for non-root. Pin HOME to a writable path inside the container.
+            - name: HOME
+              value: "/tmp"
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -119,6 +132,12 @@ spec:
             - name: knowledge
               mountPath: /etc/bytebrew/knowledge
             {{- end }}
+            {{- if .Values.containerSecurityContext.readOnlyRootFilesystem }}
+            # Auto-mounted when readOnlyRootFilesystem is enabled. Engine writes
+            # server.port discovery file (HOME=/tmp), Liquibase + GORM stage temp.
+            - name: tmp
+              mountPath: /tmp
+            {{- end }}
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -137,6 +156,10 @@ spec:
         - name: knowledge
           persistentVolumeClaim:
             claimName: {{ include "bytebrew-engine.fullname" . }}-knowledge
+        {{- end }}
+        {{- if .Values.containerSecurityContext.readOnlyRootFilesystem }}
+        - name: tmp
+          emptyDir: {}
         {{- end }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}

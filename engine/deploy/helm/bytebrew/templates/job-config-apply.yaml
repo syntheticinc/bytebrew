@@ -56,7 +56,9 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          command: ["brewctl", "apply", "-f", "/etc/bytebrew/config", "--yes"]
+          # Image entrypoint is /brewctl (binary at root, not in PATH).
+          # Pass arguments via `args` so the entrypoint stays in effect.
+          args: ["apply", "-f", "/etc/bytebrew/config", "--yes"]
           env:
             - name: BREWCTL_ENGINE_URL
               value: "http://{{ include "bytebrew-engine.fullname" . }}:{{ .Values.service.port }}"
@@ -65,19 +67,41 @@ spec:
                 secretKeyRef:
                   name: {{ required "configApply.tokenSecret is required when configApply.enabled=true. Create a Secret with the admin token first (kubectl create secret generic bytebrew-token --from-literal=token=bb_xxx)." .Values.configApply.tokenSecret }}
                   key: token
-          {{- if .Values.configApply.apiKeysSecret }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- if or .Values.configApply.apiKeysSecret .Values.extraEnvFrom }}
           envFrom:
+            {{- if .Values.configApply.apiKeysSecret }}
             - secretRef:
                 name: {{ .Values.configApply.apiKeysSecret }}
+            {{- end }}
+            {{- with .Values.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- end }}
           volumeMounts:
             - name: bytebrew-config
               mountPath: /etc/bytebrew/config
               readOnly: true
+            {{- if .Values.containerSecurityContext.readOnlyRootFilesystem }}
+            - name: tmp
+              mountPath: /tmp
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           resources:
             {{- toYaml .Values.configApply.resources | nindent 12 }}
       volumes:
         - name: bytebrew-config
           configMap:
             name: {{ if .Values.configApply.existingConfigMap }}{{ .Values.configApply.existingConfigMap }}{{ else }}{{ include "bytebrew-engine.fullname" . }}-bytebrew-config{{ end }}
+        {{- if .Values.containerSecurityContext.readOnlyRootFilesystem }}
+        - name: tmp
+          emptyDir: {}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
 {{- end }}
