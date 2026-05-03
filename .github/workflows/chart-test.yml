@@ -316,10 +316,12 @@ jobs:
             curl -sf http://localhost:18443/api/v1/health >/dev/null && break
             sleep 2
           done
+          # restricted-security: configApply.config is intentionally `models: []`
+          # — scenario tests engine boot under readOnlyRootFilesystem, not the
+          # brewctl resource-creation path. Do NOT set EXPECT_BREWCTL_RESOURCES.
           ADMIN_TOKEN=$(kubectl get secret postgres-credentials \
             -o jsonpath='{.data.token}' | base64 -d) \
             ENGINE_URL=http://localhost:18443 \
-            EXPECT_BREWCTL_RESOURCES=true \
             bash engine/deploy/helm/bytebrew/tests/scripts/smoke.sh
 
       - name: Diagnostics on failure
