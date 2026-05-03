@@ -151,6 +151,11 @@ jobs:
       - name: Apply postgres-pgvector fixture
         run: |
           kubectl apply -f engine/deploy/helm/bytebrew/tests/fixtures/postgres-pgvector.yaml
+          # rollout status waits for the StatefulSet controller to create the
+          # pod AND for the pod to become ready. Plain `kubectl wait --for=ready`
+          # races: apply returns before the pod object exists, kubectl wait
+          # then fails immediately with "no matching resources found".
+          kubectl rollout status statefulset/postgres-pgvector --timeout=300s
           kubectl wait --for=condition=ready pod \
             -l app=postgres-pgvector --timeout=300s
 
@@ -270,6 +275,11 @@ jobs:
       - name: Apply postgres-pgvector fixture
         run: |
           kubectl apply -f engine/deploy/helm/bytebrew/tests/fixtures/postgres-pgvector.yaml
+          # rollout status waits for the StatefulSet controller to create the
+          # pod AND for the pod to become ready. Plain `kubectl wait --for=ready`
+          # races: apply returns before the pod object exists, kubectl wait
+          # then fails immediately with "no matching resources found".
+          kubectl rollout status statefulset/postgres-pgvector --timeout=300s
           kubectl wait --for=condition=ready pod \
             -l app=postgres-pgvector --timeout=300s
 
