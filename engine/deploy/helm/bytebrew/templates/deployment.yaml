@@ -16,6 +16,21 @@ spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
+  # Deployment strategy.
+  # auth.mode=local pins replicaCount=1 with a ReadWriteOnce PVC for the JWT
+  # keypair. K8s default RollingUpdate creates the new pod BEFORE deleting the
+  # old one — the new pod then deadlocks on Pending because the old pod still
+  # holds the RWO PVC attachment. `helm upgrade --atomic` times out and rolls
+  # back. Default to Recreate for local mode (kill old → release PVC → start
+  # new); users on auth.mode=external (HA) keep RollingUpdate semantics.
+  # Override via .Values.deploymentStrategy when needed (RWX storage etc).
+  {{- if .Values.deploymentStrategy }}
+  strategy:
+    {{- toYaml .Values.deploymentStrategy | nindent 4 }}
+  {{- else if eq .Values.config.auth.mode "local" }}
+  strategy:
+    type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       {{- include "bytebrew-engine.selectorLabels" . | nindent 6 }}

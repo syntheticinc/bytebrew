@@ -1,5 +1,17 @@
 replicaCount: 1
 
+# Deployment update strategy. Default behavior (when this is empty/null):
+#   - auth.mode=local → strategy.type=Recreate (avoids RWO PVC deadlock on
+#     `helm upgrade`: kill old pod → release JWT keypair PVC → create new pod).
+#   - auth.mode=external → unset (k8s default RollingUpdate, multi-replica HA).
+# Override here to force RollingUpdate (e.g. RWX storage) or tune surge:
+#   deploymentStrategy:
+#     type: RollingUpdate
+#     rollingUpdate:
+#       maxSurge: 25%
+#       maxUnavailable: 25%
+deploymentStrategy: {}
+
 image:
   repository: bytebrew/engine
   # WARN: set to a specific version (e.g. v1.0.0) for production. "latest" is
