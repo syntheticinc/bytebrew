@@ -18,6 +18,7 @@ type mockModelService struct {
 	listFunc   func(ctx context.Context) ([]ModelResponse, error)
 	createFunc func(ctx context.Context, req CreateModelRequest) (*ModelResponse, error)
 	updateFunc func(ctx context.Context, name string, req CreateModelRequest) (*ModelResponse, error)
+	patchFunc  func(ctx context.Context, name string, req UpdateModelRequest) (*ModelResponse, error)
 	deleteFunc func(ctx context.Context, name string) error
 	verifyFunc func(ctx context.Context, name string) (*ModelVerifyResult, error)
 }
@@ -58,6 +59,9 @@ func (m *mockModelService) VerifyModel(ctx context.Context, name string) (*Model
 }
 
 func (m *mockModelService) PatchModel(ctx context.Context, name string, req UpdateModelRequest) (*ModelResponse, error) {
+	if m.patchFunc != nil {
+		return m.patchFunc(ctx, name, req)
+	}
 	return &ModelResponse{Name: name}, nil
 }
 
@@ -423,6 +427,68 @@ func TestModelHandler_Create_OpenRouterPreset(t *testing.T) {
 
 			assert.Equal(t, tt.wantType, capturedReq.Type)
 			assert.Equal(t, tt.wantBaseURL, capturedReq.BaseURL)
+		})
+	}
+}
+
+// TestModelHandler_Patch_NormalizesAlias guards against the regression caught
+// by chirp-mono2 dev canary: brewctl reconcile after engine canonicalized
+// `type: openrouter` → `openai_compatible` on Create. Bundle reapply then
+// PATCHed with `type: openrouter` (the desired form), but Patch handler did
+// not re-run the same alias normalization Create does. Result: type=openrouter
+// reached DB → chk_models_type constraint rejected (enum has no openrouter)
+// → API 500 → brewctl exits non-zero → Job BackoffLimitExceeded → Helm
+// upgrade fails. PATCH must mirror Create's normalization so reconcile is
+// idempotent.
+func TestModelHandler_Patch_NormalizesAlias(t *testing.T) {
+	tests := []struct {
+		name            string
+		path            string
+		body            string
+		wantStatus      int
+		wantPatchedType string
+	}{
+		{
+			name:            "openrouter alias normalized to openai_compatible",
+			path:            "/my-router",
+			body:            `{"type":"openrouter","model_name":"openai/gpt-4o-mini"}`,
+			wantStatus:      http.StatusOK,
+			wantPatchedType: "openai_compatible",
+		},
+		{
+			name:            "non-alias type passes through",
+			path:            "/my-anthropic",
+			body:            `{"type":"anthropic"}`,
+			wantStatus:      http.StatusOK,
+			wantPatchedType: "anthropic",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var captured UpdateModelRequest
+			svc := &mockModelService{
+				patchFunc: func(ctx context.Context, name string, req UpdateModelRequest) (*ModelResponse, error) {
+					captured = req
+					tp := ""
+					if req.Type != nil {
+						tp = *req.Type
+					}
+					return &ModelResponse{Name: name, Type: tp}, nil
+				},
+			}
+			h := NewModelHandler(svc)
+			r := chi.NewRouter()
+			r.Mount("/api/v1/models", h.Routes())
+
+			req := httptest.NewRequest(http.MethodPatch, "/api/v1/models"+tt.path, bytes.NewBufferString(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			require.Equal(t, tt.wantStatus, w.Code, "body: %s", w.Body.String())
+			require.NotNil(t, captured.Type, "service must receive a non-nil Type pointer")
+			assert.Equal(t, tt.wantPatchedType, *captured.Type)
 		})
 	}
 }

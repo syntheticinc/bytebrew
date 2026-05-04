@@ -7,6 +7,72 @@ and this chart adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-05-03
+
+### Fixed (engine v1.0.3)
+- **PATCH /models did not normalize type aliases.** POST /models accepts
+  `type: openrouter` and canonicalizes to `openai_compatible` (chk_models_type
+  enum: ollama, openai_compatible, anthropic, azure_openai). PATCH had no
+  matching normalization, so brewctl reconcile after a Create-with-alias hit
+  API 500 → Job BackoffLimitExceeded → Helm upgrade failed. Patch now mirrors
+  Create's validation + alias rewrite. Bumped engine appVersion 1.0.2 → 1.0.3.
+
+### Fixed (chart)
+- **configApply Job silently no-op'd on real deploys** — chart pointed brewctl
+  at `-f /etc/bytebrew/config` (a ConfigMap-mounted directory). brewctl's
+  loader walks subdirectories `models/`, `agents/`, `schemas/` only and
+  ignores top-level files in the dir. The ConfigMap renders the inline
+  `configApply.config` value as a single file `bytebrew.yaml` at the dir
+  root, so brewctl found zero subdirs → empty desired state → "No changes"
+  → Job Completed → false success. Caught by chirp-mono2 dev canary deploy:
+  Job logs said `No changes.` but engine had no smoke model/agent/schema.
+  Now points brewctl at `-f /etc/bytebrew/config/bytebrew.yaml` (explicit
+  file path).
+- **`configApply.config` example removed `apiVersion + kind: Config` wrapper**
+  — brewctl's loader treats any file with a `kind` field as a single-resource
+  manifest (Model | MCPServer | KnowledgeBase | Agent | Schema). `Config` is
+  not in that list, so the loader would have errored if it had reached the
+  file. Bundle format uses top-level `models:`, `agents:`, `schemas:` etc
+  arrays only — no `apiVersion`/`kind` wrapper at the top.
+
+### Changed
+- `tests/values/single-shot.yaml` now applies a real bundle (1 model + 1
+  agent + 1 schema) instead of `models: []`. The empty-array form passed
+  v0.4.2 chart-test as a false positive.
+- `tests/scripts/smoke.sh` now asserts the smoke resources actually landed
+  in engine (`/api/v1/{models,agents,schemas}` each contains one
+  `kind-smoke-*` row) — guards against the regression class above.
+- `tests/fixtures/postgres-pgvector.yaml` Secret carries a placeholder
+  `OPENROUTER_API_KEY` so `${OPENROUTER_API_KEY}` substitution in the
+  smoke model definition resolves. Smoke does not invoke real LLM.
+
+### Why this matters for chirp-mono2 dev
+The chirp install:dev pipeline reported success (engine 1/1 Running, Job
+Completed), but `/api/v1/models` came back empty — brewctl had silently
+no-op'd. Bumping chirp's `helmfile.yaml.gotmpl` to `version: 0.4.3` and
+re-running `helmfile -e dev sync` reconciles via `helm upgrade` →
+configApply Job re-runs with the file path fix → brewctl actually creates
+the smoke bundle.
+
+### Compatibility matrix
+- chart 0.4.3 + engine 1.0.3 (matching `appVersion`) — recommended; full
+  fix coverage including PATCH alias normalization (Patch handler now
+  mirrors Create).
+- chart 0.4.3 + engine 1.0.2 — works as long as `configApply.config`
+  uses canonical types (`openai_compatible`, not the `openrouter`
+  alias). With the alias, first install succeeds (Create normalizes)
+  but the second `helm upgrade` reconcile triggers PATCH, which engine
+  1.0.2 rejects on `chk_models_type`. Stay on canonical types or bump
+  the engine.
+- chart 0.4.3 + engine 1.0.1 — same constraint as 1.0.2 plus loses
+  fail-fast on invalid bootstrap admin token (silent skip-seed instead).
+
+### Operator constraint — `configApply.existingConfigMap`
+If you bring your own ConfigMap via `configApply.existingConfigMap`, the
+data key MUST be `bytebrew.yaml` — the Job invokes brewctl with the
+explicit file path `/etc/bytebrew/config/bytebrew.yaml`. Configurable
+filename is tracked for chart v0.5.x.
+
 ## [0.4.2] - 2026-04-30
 
 ### Fixed

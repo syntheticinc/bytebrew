@@ -42,19 +42,38 @@ bootstrapAdminToken:
   existingSecret: postgres-credentials
   existingSecretKey: token
 
-# brewctl applies smoke YAML right after engine becomes healthy.
-# Empty `models: []` keeps it from requiring a real LLM API key in CI —
-# this is a chart-flow test, not an LLM integration test.
-# apiKeysSecret intentionally omitted: nothing in the smoke config references
-# env vars, and reusing postgres-credentials here would inject postgres
-# password + DSN into brewctl's env (harmless but conceptually wrong).
+# brewctl applies a real smoke bundle right after engine becomes healthy.
+# Validates that brewctl actually creates resources (was caught as a v0.4.2
+# false-positive: empty `models: []` would let brewctl say "No changes" even
+# if the chart-side ConfigMap mount path was broken — see chirp-mono2 deploy).
+# apiKeysSecret needed because models[].api_key references ${OPENROUTER_API_KEY}.
 configApply:
   enabled: true
   tokenSecret: postgres-credentials
+  apiKeysSecret: postgres-credentials
   config: |
-    apiVersion: bytebrew/v1
-    kind: Config
-    models: []
+    models:
+      - name: kind-smoke-model
+        # Use canonical type form for stability across engine versions. Engine
+        # v1.0.3+ also normalizes the `openrouter` alias on PATCH (matches POST),
+        # so reconcile is idempotent in either case. Earlier engines (1.0.2)
+        # would reject alias on PATCH due to chk_models_type — keep canonical to
+        # stay forward-and-back compatible.
+        type: openai_compatible
+        model_kind: chat        # brewctl bundle field; collides with top-level `kind` if named `kind`
+        base_url: https://openrouter.ai/api/v1
+        model_name: openai/gpt-4o-mini
+        api_key: ${OPENROUTER_API_KEY}
+        is_default: true
+    agents:
+      - name: kind-smoke-agent
+        model: kind-smoke-model
+        lifecycle: persistent
+        system_prompt: "Kind smoke test agent — chart-flow validation only."
+    schemas:
+      - name: kind-smoke-schema
+        entry_agent: kind-smoke-agent
+        chat_enabled: true
 
 resources:
   requests:
