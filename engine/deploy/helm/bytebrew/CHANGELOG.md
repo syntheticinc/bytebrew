@@ -7,6 +7,33 @@ and this chart adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-05-04
+
+### Fixed
+- **Deployment update strategy deadlocked single-replica + RWO PVC.** Chart
+  did not set `spec.strategy`, so k8s used the default RollingUpdate
+  (maxSurge=25%, maxUnavailable=25%). For `auth.mode=local`, the chart pins
+  replicaCount=1 with a ReadWriteOnce PVC for the JWT keypair. RollingUpdate
+  creates the new pod *before* deleting the old one — but the new pod
+  deadlocks Pending because the old pod still holds the RWO PVC attachment.
+  `helm upgrade --atomic` times out and rolls back to the previous chart
+  version. Caught by chirp-mono2 dev when bumping 0.4.2 → 0.4.3 — atomic
+  rollback fired ~10 min in.
+- Now defaults to `strategy.type: Recreate` whenever `auth.mode=local`. Old
+  pod is killed first → PVC released → new pod attaches and starts.
+  `auth.mode=external` (HA, no PVC contention) keeps the k8s default
+  RollingUpdate.
+
+### Added
+- `deploymentStrategy:` value for explicit override. Empty (default) →
+  the auto-rule above kicks in. Set to a full strategy block (e.g.
+  `{type: RollingUpdate, rollingUpdate: {maxSurge: 25%, maxUnavailable: 25%}}`)
+  to force RollingUpdate on RWX storage or other non-RWO setups.
+
+### Changed
+- Bumped chart `version` to `0.4.4`. `appVersion` stays at `1.0.3` — no
+  engine code change in this release.
+
 ## [0.4.3] - 2026-05-03
 
 ### Fixed (engine v1.0.3)
